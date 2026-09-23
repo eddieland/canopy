@@ -1,6 +1,6 @@
 ---
 name: tracker-jira
-description: How a canopy overseer or worker reads and writes Jira tickets through the Atlassian MCP server. Load when canopy's tracker provider is jira, before the first tracker call.
+description: How canopy agents use Jira through the Atlassian MCP server. Load when the tracker provider is jira.
 ---
 
 # Jira for canopy agents

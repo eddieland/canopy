@@ -1,6 +1,6 @@
 ---
 name: tracker-github
-description: How a canopy overseer or worker uses GitHub Issues as the ticket tracker through the GitHub MCP server. Load when canopy's tracker provider is github, before the first tracker call.
+description: How canopy agents use GitHub Issues as the tracker via the GitHub MCP. Load when the provider is github.
 ---
 
 # GitHub Issues for canopy agents

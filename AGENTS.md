@@ -46,6 +46,18 @@ entry says otherwise.
   servers. The harness knows nothing about Jira or GitHub beyond strings in
   config and prompts.
 
+## Formatting
+
+**Maximum line length is 120 characters. For every file type, not just Python.**
+
+- This covers Python, Markdown, TOML, YAML, SQL, shell, prompts, and anything else in the repo.
+- `.editorconfig` is the source of truth for whitespace: `max_line_length = 120`, UTF-8, LF line endings, final
+  newline, 4-space indent (2 for TOML, YAML, JSON, SQL; tabs in `Makefile`). Configure your editor to honor it.
+- `ruff` enforces 120 for Python (`[tool.ruff] line-length = 120` in `pyproject.toml`). Keep the two in sync.
+- Do not introduce any other line-length target (80, 88, 100). Do not reflow existing text just to fill 120 columns;
+  wrap new or edited prose at 120.
+- The only exceptions are lines that cannot be broken: long URLs, and generated files such as `uv.lock`.
+
 ## Code conventions
 
 - Fully typed. `ty` clean.

@@ -133,7 +133,15 @@ Consequences: the file agents already read in order also carries the
 outcomes. `ROADMAP.md` stays editable, unlike this file.
 Revisit: if status notes grow long enough to crowd out the plan.
 
-## D013. Tracker-agnostic: MCP plus a contract, with optional provider skills
+## D013. 120-character line length everywhere
+
+Context: ruff was set to 100 and nothing governed non-Python files, so editors and agents picked their own widths.
+Decision: 120 columns for every file type. `.editorconfig` sets it (plus charset, line endings, indentation) for all
+editors; `pyproject.toml` sets ruff's `line-length` to match. AGENTS.md states the rule.
+Consequences: one number to remember; existing text wrapped narrower is left alone rather than reflowed.
+Revisit: if a tool we adopt cannot be configured to 120.
+
+## D014. Tracker-agnostic: MCP plus a contract, with optional provider skills
 
 Context: D003 put tracker access behind the runtime's MCP servers, but config
 (`jql`), prompts ("Tracker MCP (Atlassian)"), and docs still assumed Jira. The

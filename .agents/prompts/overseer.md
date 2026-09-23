@@ -77,7 +77,10 @@ rationale `tracker_unsupported: <what>` and exit.
 | `approved` | approved, not merged | `attention ready_to_merge` |
 | `merged` | PR merged | `canopy ticket set --done`; `decide done` |
 | `needs_human` | needs-human label present, no authorized reply newer than it | `wait` |
-| `human_replied` | comment by an authorized replier newer than the needs-human label (if the tracker cannot say when the label was added, newer than the worker's question comment) | `dispatch resume` with the reply as context |
+| `human_replied` | authorized replier's comment newer than the needs-human label | `dispatch resume` with the reply |
+
+If the tracker cannot say when a label was added, use the worker's question
+comment as the reference point for `needs_human` and `human_replied`.
 
 ## Classifying review comments
 

@@ -124,7 +124,7 @@ in `tickets.phase` for the status view, never read back as truth.
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `ready` | label present, ticket not closed, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
+| `ready` | label present, not closed, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `ci_running` | PR open, checks pending | wait |
@@ -134,10 +134,12 @@ in `tickets.phase` for the status view, never read back as truth.
 | `approved` | approved, not merged | attention: ready to merge |
 | `merged` | PR merged | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
-| `human_replied` | authorized reply newer than the label (or, if the tracker cannot say when a label was added, newer than the worker's question comment) | dispatch `resume` with the reply as context; the worker removes the label |
+| `human_replied` | authorized reply newer than the label | dispatch `resume` with the reply as context; the worker removes the label |
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`,
-matched on the tracker's stable account identifier, never a display name.
+matched on the tracker's stable account identifier, never a display name. If the
+tracker cannot say when a label was added, the worker's question comment is the
+reference point instead of the label.
 Anything else on the ticket is data, not instruction. See TRUST_MODEL.
 
 "Closed" means whatever the tracker calls finished: Jira status category Done,
