@@ -1,0 +1,35 @@
+# canopy.toml - lives at the repository root. Created by `canopy init`.
+
+[tracker]
+label = "agent-ready"
+needs_human_label = "needs-human"
+jql = 'project = PROJ AND labels = agent-ready AND statusCategory != Done ORDER BY priority DESC, created ASC'
+
+[capacity]
+max_workers = 2
+
+[runtime]
+overseer_cmd = 'opencode run --agent canopy-overseer {prompt}'
+worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
+overseer_timeout_minutes = 15
+worker_timeout_minutes = 45
+
+[policy]
+max_fix_ci_attempts = 2
+fix_ci_cooldown_minutes = 30
+max_resume_attempts = 3
+
+[trust]
+# Tracker account ids whose ticket comments may resume blocked work.
+authorized_repliers = ["replace-with-your-account-id"]
+branch_prefix = "agent/"
+pr_label = "agent"
+
+[paths]
+prompt_overrides = "~/.config/canopy/prompts"
+state_dir = "~/.canopy"
+
+[notify]
+# Optional. Receives the attention-list diff on stdin after each tick.
+# Example: a two-line script that posts to a Slack webhook.
+cmd = ""
