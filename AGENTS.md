@@ -17,6 +17,10 @@ entry says otherwise.
 
 - Work one milestone at a time. Do not start milestone N+1 until milestone N
   meets its acceptance criteria.
+- Keep the milestone's `Status:` line in `docs/ROADMAP.md` current. The PR
+  that meets the acceptance criteria marks it done with the date, what was
+  learned, and how that changes next steps. The format is at the top of that
+  file. Read earlier milestones' `Learned` and `Next` before starting a new one.
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that
   changes the tick algorithm and does not touch `docs/DESIGN.md` is incomplete.
