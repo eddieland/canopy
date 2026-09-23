@@ -58,7 +58,7 @@ canopy (harness, Python)
   cli.py         tick, tick --dry-run, status, init, dispatch, decide, attention, _run
   lock.py        flock on ~/.canopy/lock; a tick that cannot lock exits 0 with a log line
   db.py          SQLite journal, migrations
-  config.py      canopy.toml loading and validation
+  config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
   treehouse.py   status --json, get --lease --json, return --force --if-lease-id
   dispatch.py    capacity guard, lease, spawn detached _run
   attention.py   render attention.md from the journal, diff, notify
@@ -100,7 +100,7 @@ Roles:
      `runs` row and `lease_holder` matching our prefix: return it, log it.
    - Compute `capacity = max_workers - count(runs where status='running')`.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block containing
-   config (tracker provider, label, query, capacity, limits), the `tickets` table summary (phase, cursors, attempts,
+   config (tracker provider, labels, query, capacity, limits), the `tickets` table summary (phase, cursors, attempts,
    cooldown until), running workers, and the current tick id.
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root,
    timeout `overseer_timeout_minutes`. In `--dry-run`, the state block says so
@@ -120,7 +120,7 @@ in `tickets.phase` for the status view, never read back as truth.
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `ready` | label present, not closed, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
+| `ready` | one of `tracker.labels` present, not closed, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `ci_running` | PR open, checks pending | wait |
@@ -227,14 +227,59 @@ Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
 
 ## 12. Configuration
 
-`canopy.toml` at the repository root, created by `canopy init`:
+Configuration is layered. Each layer overrides the one before it, key by key:
+
+1. Built-in defaults in `config.py`.
+2. **Repository file**, `canopy.toml` at the repository root. Committed and shared by everyone who runs canopy on the
+   repository. Optional.
+3. **User file**, `$XDG_CONFIG_HOME/canopy/config.toml` (default `~/.config/canopy/config.toml`). Personal to the
+   operator, never committed. Required.
+
+Every key has a scope. A **shared** key may be set in either file, and the user file wins. A **user-only** key may be
+set only in the user file. A repository file that sets a user-only key is a config error: canopy names the key and
+refuses to run. Unknown keys are errors in both files.
+
+| Key | Scope | Why |
+|---|---|---|
+| `tracker.provider` | shared | a property of the repository's tracker |
+| `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
+| `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
+| `tracker.labels` | user-only | defines this operator's queue |
+| `policy.*` | shared; the repository may only tighten | limits spend and retries |
+| `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
+| `trust.authorized_repliers` | user-only | who may steer this operator's workers |
+| `capacity.*` | user-only | the operator's machine and spend |
+| `runtime.*` | user-only | commands run on the operator's machine |
+| `notify.*` | user-only | a command run on the operator's machine |
+| `paths.*` | user-only | where prompts and state are read from |
+
+Anyone who can push to the repository, or any branch the operator happens to have checked out, controls the repository
+file. That is why keys that run commands, choose prompts, spend money, or authorize anyone are user-only. See
+TRUST_MODEL T7.
+
+Repository file, committed:
 
 ```toml
 [tracker]
 provider = "jira"            # jira | github | linear | any name; selects tracker-<provider> skill
-label = "agent-ready"
 needs_human_label = "needs-human"
-query = 'project = PROJ AND labels = agent-ready AND statusCategory != Done'
+query = 'project = PROJ AND statusCategory != Done'
+
+[policy]
+max_fix_ci_attempts = 2
+fix_ci_cooldown_minutes = 30
+max_resume_attempts = 3
+
+[trust]
+branch_prefix = "agent/"
+pr_label = "agent"
+```
+
+User file, personal:
+
+```toml
+[tracker]
+labels = ["agent-ready-yourname"]
 
 [capacity]
 max_workers = 2
@@ -245,14 +290,8 @@ worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
-[policy]
-max_fix_ci_attempts = 2
-fix_ci_cooldown_minutes = 30
-max_resume_attempts = 3
-
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
-branch_prefix = "agent/"
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -262,13 +301,32 @@ state_dir = "~/.canopy"
 cmd = ""   # optional; receives the attention diff on stdin
 ```
 
+Built-in defaults are the values shown above, except `tracker.provider`, `tracker.query`, and `tracker.labels`, which
+have no default and must be set, and `trust.authorized_repliers`, which defaults to empty (nobody can resume blocked
+work).
+
+Rules:
+
+- **Queues are per operator.** `tracker.labels` is a non-empty list. A ticket is in this operator's queue if it carries
+  any of them. Two operators must never share a label: the guards (one worker per ticket, attempt limits, cooldowns)
+  see only the local journal, so two loops on one label both work the same tickets. canopy cannot detect this; choosing
+  distinct labels is an operator responsibility (TRUST_MODEL §7).
+- **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is
+  stricter than the built-in default: a lower attempt limit or a longer cooldown. Otherwise the default stands. The user
+  file may set any value.
+- `trust.branch_prefix` must be non-empty and end in `/`.
+- `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
+  label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
+- Merging is stdlib: `tomllib` plus a key-by-key dict merge.
+
 `{prompt}` is substituted with a shell-quoted prompt string. Overrides in
 `prompt_overrides` replace files of the same name in `prompts/`.
 
 `tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, and `canopy init`
 installs the `tracker-<provider>` skill if one ships. `tracker.query` is how the overseer finds candidates: in the
 tracker's own search syntax where it has one (JQL, GitHub issue search), otherwise a plain-language description. It
-finds tickets; it does not authorize them. See §17.
+finds tickets; it does not authorize them. See §17. The repository's query usually leaves the label out; an operator
+can override it in the user file to include their labels and save the overseer some reads.
 
 ## 13. Agent runtime
 
@@ -317,6 +375,9 @@ dismissal.
   or the overseer posting via MCP. Default to `notify.cmd`.
 - Whether `merged` should trigger a tracker transition. Default no; humans own
   ticket state.
+- One operator on several repositories. The user file is shared across them, and `state_dir` and the lock are global.
+  Whether the user file needs per-repository tables, and whether state should be per repository, stays open until
+  someone does it.
 
 ## 17. Trackers
 
@@ -325,8 +386,8 @@ no tracker code in the harness. What differs between trackers is handled in thre
 
 1. **The contract below.** Agents can map it onto the tools a tracker's MCP server exposes without being told how. This
    is the default for any tracker.
-2. **Config.** `tracker.provider`, `tracker.query`, the two labels, and `trust.authorized_repliers` in the tracker's own
-   identity format.
+2. **Config.** `tracker.provider`, `tracker.query`, the queue labels, `needs_human_label`, and
+   `trust.authorized_repliers` in the tracker's own identity format.
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action
    (closing keywords, smart commits). Skills ship for `jira` and `github`. A skill is optional; add one when the
@@ -353,8 +414,8 @@ the operator fixes the MCP setup or writes a skill.
 
 ### Authorization is the same everywhere
 
-The query only finds tickets. A ticket is a candidate only if reading it shows `tracker.label` present and the ticket
-not closed. A sloppy or plain-language query can therefore waste a tick, but it cannot authorize work. Replies are
+The query only finds tickets. A ticket is a candidate only if reading it shows one of `tracker.labels` present and the
+ticket not closed. A sloppy or plain-language query can therefore waste a tick, but it cannot authorize work. Replies are
 authorized only by `trust.authorized_repliers`, compared against the author's stable account id (Jira `accountId`,
 GitHub login), never a display name.
 

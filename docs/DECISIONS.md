@@ -167,3 +167,22 @@ everywhere except `src/canopy/procs.py`. Tests follow the same rule: they run th
 Consequences: a stray `import subprocess` fails `make check`. `os.exec*`, `os.spawn*`, and `pty` are not banned; add
 them if anything reaches for them.
 Revisit: never for the rule itself; widen the banned list if a new way to start processes shows up.
+
+## D016. Layered config: shared repository file, personal user file
+
+Context: `canopy.toml` was one file at the repository root, written by each operator's `canopy init`. Most of its keys
+are personal: the queue, machine capacity, runtime commands, authorized repliers, notify. A committed file can be
+changed by anyone who can push, and a checked-out branch carries its own version. The queue label must be personal:
+the guards see only the local journal and multi-machine coordination is out of scope, so two operators sharing a label
+would both work the same tickets.
+Decision: built-in defaults, then the repository's `canopy.toml` (committed, shared keys only), then the user's
+`$XDG_CONFIG_HOME/canopy/config.toml`, merged key by key. Every key is shared or user-only (DESIGN §12); a user-only
+key in the repository file is an error. Keys that run commands, choose prompts, spend, or authorize are user-only.
+Repository `policy.*` may only tighten. `tracker.label` becomes `tracker.labels`, a list, user-only and required.
+Stdlib only: `tomllib` and a dict merge.
+Consequences: a second operator on a repository runs `canopy init` and gets only a user file. Operators must choose
+distinct labels, and canopy cannot check that. Rejected: a gitignored `canopy.local.toml` per repository (easy to
+commit by accident, a third file to explain); a shared label with an assignee filter in the query (the query finds
+tickets but does not authorize them, D014).
+Revisit: when one operator runs canopy on several repositories and needs different labels or state per repository
+(DESIGN §16), or when a team wants a shared authorized-replier list.

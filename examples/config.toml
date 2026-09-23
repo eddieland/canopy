@@ -1,0 +1,33 @@
+# ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
+# Written by `canopy init` if missing. Overrides the repository's canopy.toml key by key.
+# Keys marked user-only in DESIGN.md §12 may be set only here.
+
+[tracker]
+# Your queue. A ticket is yours if it carries any of these labels. Never share a
+# label with another operator: both loops would work the same tickets.
+labels = ["agent-ready-yourname"]
+# Optional: narrow the repository's query to your labels to save the overseer reads.
+# query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
+
+[capacity]
+max_workers = 2
+
+[runtime]
+overseer_cmd = 'opencode run --agent canopy-overseer {prompt}'
+worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
+overseer_timeout_minutes = 15
+worker_timeout_minutes = 45
+
+[trust]
+# Tracker account ids whose ticket comments may resume your blocked work. Use the
+# tracker's stable id, not a display name: Jira accountId, GitHub login.
+authorized_repliers = ["replace-with-your-account-id"]
+
+[paths]
+prompt_overrides = "~/.config/canopy/prompts"
+state_dir = "~/.canopy"
+
+[notify]
+# Optional. Receives the attention-list diff on stdin after each tick.
+# Example: a two-line script that posts to a Slack webhook.
+cmd = ""
