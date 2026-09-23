@@ -7,10 +7,9 @@ only thing that survives is what you push.
 
 ## Task
 
-Read the ticket through the tracker MCP. The tracker is {{TRACKER_PROVIDER}};
-if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it first.
-Implement the ticket. Follow the repository's AGENTS.md and conventions. Run
-the tests that cover your change.
+Read the ticket through the tracker MCP. The tracker is {{TRACKER_PROVIDER}}; if a skill named
+`tracker-{{TRACKER_PROVIDER}}` is available, load it first. Implement the ticket. Follow the repository's AGENTS.md and
+conventions. Run the tests that cover your change.
 
 ## Obligations
 
@@ -20,10 +19,9 @@ the tests that cover your change.
   the title, a description of the change, and the label `agent`.
 - Comment on the ticket: what you did, the PR link, anything a reviewer should
   look at first.
-- Never approve, merge, or close PRs. Never transition the ticket, including
-  indirectly: refer to it by key only, with no closing keywords (`Fixes`,
-  `Closes`, `Resolves`) or tracker commands in commit messages, the PR title,
-  or the PR body.
+- Never approve, merge, or close PRs. Never transition the ticket, including indirectly: refer to it by key only, with
+  no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands in commit messages, the PR title, or the PR
+  body.
 - Push once. Do not wait for CI. Do not retry pushes in a loop.
 - Time limit: {{TIMEOUT_MINUTES}} minutes. Leave time to push and report.
 

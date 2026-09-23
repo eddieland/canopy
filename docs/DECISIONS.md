@@ -143,20 +143,15 @@ Revisit: if a tool we adopt cannot be configured to 120.
 
 ## D014. Tracker-agnostic: MCP plus a contract, with optional provider skills
 
-Context: D003 put tracker access behind the runtime's MCP servers, but config
-(`jql`), prompts ("Tracker MCP (Atlassian)"), and docs still assumed Jira. The
-goal is that any tracker with an MCP server works: Jira, GitHub Issues,
+Context: D003 put tracker access behind the runtime's MCP servers, but config (`jql`), prompts ("Tracker MCP
+(Atlassian)"), and docs still assumed Jira. The goal is that any tracker with an MCP server works: Jira, GitHub Issues,
 Linear, others.
-Decision: the harness stays tracker-blind. Config names a free-form
-`tracker.provider` and a `tracker.query` in the tracker's own syntax (or plain
-language). DESIGN §17 states a provider-neutral contract of capabilities the
-loop needs. Per-provider knowledge goes in optional skills
-(`tracker-<provider>`), shipped for `jira` and `github`, loaded by the agents
-when present. No adapter interface, consistent with AGENTS.md.
-Consequences: a new tracker is config plus, if agents misread it, a skill. The
-label, not the query, authorizes work, so a vague query cannot widen scope.
-Keys are validated by a regex guard in the CLI, since they end up in branch
-names, paths, and shell arguments. Skill loading depends on the runtime.
-Revisit: if the `decisions` table shows agents ignoring skills, have the
-harness inline the skill body into the rendered prompt instead. If a tracker
-needs code to be usable, record why here before writing it.
+Decision: the harness stays tracker-blind. Config names a free-form `tracker.provider` and a `tracker.query` in the
+tracker's own syntax (or plain language). DESIGN §17 states a provider-neutral contract of capabilities the loop needs.
+Per-provider knowledge goes in optional skills (`tracker-<provider>`), shipped for `jira` and `github`, loaded by the
+agents when present. No adapter interface, consistent with AGENTS.md.
+Consequences: a new tracker is config plus, if agents misread it, a skill. The label, not the query, authorizes work, so
+a vague query cannot widen scope. Keys are validated by a regex guard in the CLI, since they end up in branch names,
+paths, and shell arguments. Skill loading depends on the runtime.
+Revisit: if the `decisions` table shows agents ignoring skills, have the harness inline the skill body into the rendered
+prompt instead. If a tracker needs code to be usable, record why here before writing it.

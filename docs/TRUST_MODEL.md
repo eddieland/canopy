@@ -53,12 +53,10 @@ Controls:
 - Workers can push only to `trust.branch_prefix` branches. Enforced by the
   worker prompt and by repository branch protection, which the operator must
   configure. canopy `init` prints the required protection rules.
-- Workers never approve, merge, close PRs, or move tickets to Done, directly
-  or through text the tracker acts on (GitHub closing keywords, Jira smart
-  commits). Enforced by prompt and by the worker agent's tool permissions (no
-  merge tools; MCP write scope limited to comments, labels, PR create/update).
-- Authorized repliers are matched on the tracker's stable account id, never a
-  display name, whatever the tracker.
+- Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
+  closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
+  MCP write scope limited to comments, labels, PR create/update).
+- Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
 
@@ -141,10 +139,8 @@ until then this risk is accepted and documented.
 - Configure branch protection: no direct pushes to protected branches, required
   reviews, no self-approval.
 - Keep `trust.authorized_repliers` short.
-- Check who can add `tracker.label` in your tracker. That permission is the
-  authorization to start work, and it differs by tracker (Jira: edit issue;
-  GitHub: triage or above on the repository). canopy inherits whatever the
-  tracker allows.
+- Check who can add `tracker.label` in your tracker. That permission is the authorization to start work, and it differs
+  by tracker (Jira: edit issue; GitHub: triage or above on the repository). canopy inherits whatever the tracker allows.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.

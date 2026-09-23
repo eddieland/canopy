@@ -40,12 +40,9 @@ Status: not started.
 ## M1. Read-only tick
 
 - `config.py`, `db.py` with migrations, `lock.py`, `treehouse.py`.
-- `canopy init` writes `canopy.toml` (asking for the tracker provider),
-  installs agent definitions to `.opencode/agent/` and the
-  `tracker-<provider>` skill if one ships, prints required branch protection
-  rules.
-- Ticket key validation (`[A-Za-z0-9][A-Za-z0-9_-]*`) in every CLI
-  subcommand that takes a key.
+- `canopy init` writes `canopy.toml` (asking for the tracker provider), installs agent definitions to `.opencode/agent/`
+  and the `tracker-<provider>` skill if one ships, prints required branch protection rules.
+- Ticket key validation (`[A-Za-z0-9][A-Za-z0-9_-]*`) in every CLI subcommand that takes a key.
 - `canopy tick --dry-run`: lock, migrate, reconcile (no-op on fresh state),
   render the overseer prompt with state block, run `overseer_cmd`, record
   `ticks` and `decisions`. `canopy dispatch` refuses in dry-run.
@@ -93,8 +90,8 @@ Status: not started.
 
 ## M4. Dependencies and stacking
 
-- Blocker detection via the tracker's blocker relations in the overseer prompt
-  (DESIGN §17; Jira links and GitHub dependencies via their skills).
+- Blocker detection via the tracker's blocker relations in the overseer prompt (DESIGN §17; Jira links and GitHub
+  dependencies via their skills).
 - `dispatch --base` and PR base handling in `_run` and the worker prompt.
 
 Accept: two linked tickets are worked in order; the second's PR targets the
