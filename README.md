@@ -32,9 +32,10 @@ standing write access to your repositories, your tracker, or your internal tools
 2. Install canopy: `uv tool install canopy`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
-4. In your repository: `canopy init`. This writes your personal config (`~/.config/canopy/config.toml`, with a queue
-   label of your own), writes a shared `canopy.toml` if the repository has none, installs the overseer and worker agent
-   definitions, and installs the tracker skill for your provider if one ships.
+4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
+   default `~/.config/canopy/config.toml`, with a queue label of your own), writes a shared `canopy.toml` if the
+   repository has none, installs the overseer and worker agent definitions, and installs the tracker skill for your
+   provider if one ships.
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy tick`. Schedule it with cron or launchd
    once you trust it.
 

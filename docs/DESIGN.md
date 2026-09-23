@@ -313,7 +313,9 @@ Rules:
   distinct labels is an operator responsibility (TRUST_MODEL §7).
 - **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is
   stricter than the built-in default: a lower attempt limit or a longer cooldown. Otherwise the default stands. The user
-  file may set any value.
+  file may set any value, including a looser one: repository policy is a shared default, not a limit a team can impose
+  on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their machine could not enforce one
+  anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
   label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
@@ -415,8 +417,8 @@ the operator fixes the MCP setup or writes a skill.
 ### Authorization is the same everywhere
 
 The query only finds tickets. A ticket is a candidate only if reading it shows one of `tracker.labels` present and the
-ticket not closed. A sloppy or plain-language query can therefore waste a tick, but it cannot authorize work. Replies are
-authorized only by `trust.authorized_repliers`, compared against the author's stable account id (Jira `accountId`,
+ticket not closed. A sloppy or plain-language query can therefore waste a tick, but it cannot authorize work. Replies
+are authorized only by `trust.authorized_repliers`, compared against the author's stable account id (Jira `accountId`,
 GitHub login), never a display name.
 
 ### Ticket keys
