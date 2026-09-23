@@ -1,9 +1,20 @@
 # canopy.toml - lives at the repository root. Created by `canopy init`.
 
 [tracker]
+# Any tracker your agent runtime reaches through an MCP server. Free-form name;
+# it tells agents what they are talking to and selects the optional
+# tracker-<provider> skill. Skills ship for "jira" and "github".
+provider = "jira"
 label = "agent-ready"
 needs_human_label = "needs-human"
-jql = 'project = PROJ AND labels = agent-ready AND statusCategory != Done ORDER BY priority DESC, created ASC'
+# How to find candidate tickets: the tracker's own search syntax, or plain
+# language if it has none. Finding is not authorizing; the label is checked on
+# every ticket regardless of what the query returns.
+query = 'project = PROJ AND labels = agent-ready AND statusCategory != Done ORDER BY priority DESC, created ASC'
+
+# GitHub Issues instead:
+# provider = "github"
+# query = 'repo:owner/name is:issue is:open label:agent-ready'
 
 [capacity]
 max_workers = 2
@@ -20,7 +31,8 @@ fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
 
 [trust]
-# Tracker account ids whose ticket comments may resume blocked work.
+# Tracker account ids whose ticket comments may resume blocked work. Use the
+# tracker's stable id, not a display name: Jira accountId, GitHub login.
 authorized_repliers = ["replace-with-your-account-id"]
 branch_prefix = "agent/"
 pr_label = "agent"
