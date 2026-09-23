@@ -30,10 +30,10 @@ standing write access to your repositories, your tracker, or your internal tools
 
 1. Install [treehouse](https://github.com/kunchenguid/treehouse).
 2. Install canopy: `uv tool install canopy`.
-3. In your agent runtime (OpenCode), connect the Atlassian and GitHub remote MCP
-   servers. Your runtime holds the tokens; canopy never sees them.
-4. In your repository: `canopy init`. This writes `canopy.toml` and installs the
-   overseer and worker agent definitions.
+3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
+   with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
+4. In your repository: `canopy init`. This writes `canopy.toml`, installs the overseer and worker agent definitions, and
+   installs the tracker skill for your provider if one ships.
 5. Add the `agent-ready` label to a ticket, then run `canopy tick`. Schedule it
    with cron or launchd once you trust it.
 
@@ -58,6 +58,9 @@ canopy tick
     update the attention list
   exit
 ```
+
+canopy has no tracker code. Agents reach the tracker through its MCP server, guided by a short provider-neutral contract
+and, where it helps, a provider skill (Jira and GitHub Issues ship). See [docs/DESIGN.md](docs/DESIGN.md) §17.
 
 State lives in a SQLite journal. Facts about the world (ticket status, PRs,
 CI, reviews) are always re-read from their source of truth, never from the DB.
