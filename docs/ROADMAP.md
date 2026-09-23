@@ -52,9 +52,11 @@ Next:
 
 ## M1. Read-only tick
 
-- `config.py`, `db.py` with migrations, `lock.py`, `treehouse.py`.
-- `canopy init` writes `canopy.toml` (asking for the tracker provider), installs agent definitions to `.opencode/agent/`
-  and the `tracker-<provider>` skill if one ships, prints required branch protection rules.
+- `config.py` (layered repository and user files with per-key scope checks, DESIGN §12), `db.py` with migrations,
+  `lock.py`, `treehouse.py`.
+- `canopy init` writes the user config if missing (default label `agent-ready-<$USER>`), writes `canopy.toml` if the
+  repository has none (asking for the tracker provider), installs agent definitions to `.opencode/agent/` and the
+  `tracker-<provider>` skill if one ships, prints required branch protection rules. It never overwrites either config.
 - Ticket key validation (`[A-Za-z0-9][A-Za-z0-9_-]*`) in every CLI subcommand that takes a key.
 - `canopy tick --dry-run`: lock, migrate, reconcile (no-op on fresh state),
   render the overseer prompt with state block, run `overseer_cmd`, record
