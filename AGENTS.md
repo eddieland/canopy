@@ -38,6 +38,7 @@ entry says otherwise.
 - `uv` for everything: `uv sync`, `uv run`, `uv tool install`.
 - `ruff` for formatting and linting. `ty` and `pyrefly` for type checking. `pytest` for tests.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
+- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
 - Stdlib first: `argparse`, `sqlite3`, `tomllib`, `subprocess`, `fcntl`,
   `json`, `logging`. Add a third-party dependency only when stdlib makes the
   code materially worse, and record why.
@@ -65,7 +66,7 @@ entry says otherwise.
   processes and reads their output.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`)
   goes through `src/canopy/procs.py`. Nothing else calls `subprocess`. This is
-  the seam tests use.
+  the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if anything else imports it.
 - Modules are small and named for what they own: `db.py`, `lock.py`,
   `treehouse.py`, `dispatch.py`, `attention.py`, `config.py`, `cli.py`.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
@@ -87,6 +88,10 @@ entry says otherwise.
   temp file. It is put on `PATH` by fixtures.
 - The fake agent command is `tests/fakes/agent`, a script that prints a
   configurable final JSON line. Tests configure it through an env var.
+- Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file), and
+  `agent_log` (what each fake agent run saw). Each fake's docstring lists the env vars and state keys it reads.
+- Test directories have no `__init__.py`. `tests/canopy/__init__.py` would make pytest import that directory as a
+  package named `canopy` and shadow `src/canopy`.
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts
   on the `decisions` and `ticks` tables.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's

@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""Fake agent runtime for tests. Stands in for `overseer_cmd` and `worker_cmd`.
+
+Prints a few lines of chatter, then a final line, then exits. Configured through the environment:
+
+    FAKE_AGENT_RESULT   the final stdout line, verbatim. Default: a `done` worker result. Set it to invalid JSON, or
+                        to the empty string for no final line, to exercise result parsing.
+    FAKE_AGENT_EXIT     exit code. Default 0.
+    FAKE_AGENT_SLEEP    seconds to sleep before printing the final line, to exercise timeouts. Default 0.
+    FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "..."} is appended to this file per run.
+
+Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
+"""
+
+import json
+import os
+import sys
+import time
+
+DEFAULT_RESULT = {
+    "status": "done",
+    "branch": None,
+    "pr": None,
+    "summary": "fake agent: nothing to do",
+}
+
+
+def main(argv: list[str]) -> int:
+    log = os.environ.get("FAKE_AGENT_LOG")
+    if log:
+        with open(log, "a") as f:
+            f.write(json.dumps({"argv": argv, "cwd": os.getcwd()}) + "\n")
+
+    print("fake agent: starting")
+    print(f"fake agent: {len(argv)} argument(s)", flush=True)
+    time.sleep(float(os.environ.get("FAKE_AGENT_SLEEP", "0")))
+
+    result = os.environ.get("FAKE_AGENT_RESULT", json.dumps(DEFAULT_RESULT))
+    if result:
+        print(result)
+    return int(os.environ.get("FAKE_AGENT_EXIT", "0"))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
