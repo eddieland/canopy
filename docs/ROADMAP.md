@@ -4,6 +4,23 @@ Milestones are sequential. Each has acceptance criteria that must be met before
 the next begins. Acceptance criteria that involve running against real systems
 are the operator's job; the agent building the repo stops and asks.
 
+Each milestone ends with a `Status:` line. It is the only place milestone
+progress is tracked. Keep it current in the same PR that changes it:
+
+- `Status: not started.` or `Status: in progress.` while work is open.
+- When the acceptance criteria are met, replace it with:
+
+  ```
+  Status: done YYYY-MM-DD.
+  Learned: what surprised us or turned out different from the plan.
+  Next: how that changes later milestones, docs, or open questions.
+  ```
+
+  Keep `Learned` and `Next` to a few bullets or sentences each. Anything that
+  deserves a lasting rationale goes in `DECISIONS.md`. The entry here just
+  points to it. Edit a later milestone's bullets directly when `Next`
+  calls for it.
+
 ## M0. Skeleton
 
 - Repository layout per `DESIGN.md` §5. `pyproject.toml`, `Makefile`,
@@ -17,6 +34,8 @@ are the operator's job; the agent building the repo stops and asks.
 - `procs.py` with the single subprocess boundary and a fake-able runner.
 
 Accept: CI green; fakes exercised by at least one test each.
+
+Status: not started.
 
 ## M1. Read-only tick
 
@@ -40,6 +59,8 @@ Accept: e2e test against fakes passes. Operator runs `canopy tick --dry-run`
 on a real repository daily for several days and judges the recorded plans
 sensible. No dispatches happen.
 
+Status: not started.
+
 ## M2. Dispatch implement
 
 - `dispatch.py` guards, lease, detached `_run`.
@@ -52,6 +73,8 @@ sensible. No dispatches happen.
 Accept: one real ticket goes from label to open PR unattended, with the slot
 returned and a correct `runs` row. A killed worker is detected on the next tick
 and its slot returned.
+
+Status: not started.
 
 ## M3. Fix-CI and resume
 
@@ -66,6 +89,8 @@ Accept: a PR with a failing check gets exactly one fix attempt per cooldown
 window and stops at the limit. A blocked worker's question appears on the
 ticket; an authorized reply resumes it; an unauthorized reply does not.
 
+Status: not started.
+
 ## M4. Dependencies and stacking
 
 - Blocker detection via the tracker's blocker relations in the overseer prompt
@@ -74,6 +99,8 @@ ticket; an authorized reply resumes it; an unauthorized reply does not.
 
 Accept: two linked tickets are worked in order; the second's PR targets the
 first's branch when the first is open and green.
+
+Status: not started.
 
 ## M5. Shareable
 
@@ -84,6 +111,8 @@ first's branch when the first is open and green.
 - License decided and added.
 
 Accept: a coworker runs it against their own ticket.
+
+Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 

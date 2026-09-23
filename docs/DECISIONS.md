@@ -122,7 +122,18 @@ Decision: `ty`.
 Revisit: if `ty` blocks on a needed feature; swapping checkers is a Makefile
 change.
 
-## D012. Tracker-agnostic: MCP plus a contract, with optional provider skills
+## D012. Milestone status lives in ROADMAP.md
+
+Context: there was nowhere to record that a milestone was finished, or what
+building it taught us, so the next agent started without that context.
+Decision: each milestone in `ROADMAP.md` ends with a `Status:` line. When the
+milestone is done it gets a date, a `Learned` note, and a `Next` note. No
+separate status file.
+Consequences: the file agents already read in order also carries the
+outcomes. `ROADMAP.md` stays editable, unlike this file.
+Revisit: if status notes grow long enough to crowd out the plan.
+
+## D013. Tracker-agnostic: MCP plus a contract, with optional provider skills
 
 Context: D003 put tracker access behind the runtime's MCP servers, but config
 (`jql`), prompts ("Tracker MCP (Atlassian)"), and docs still assumed Jira. The
