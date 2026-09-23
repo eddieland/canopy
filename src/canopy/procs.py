@@ -90,10 +90,15 @@ class SubprocessRunner:
                 text=True,
                 start_new_session=True,
             )
-        except FileNotFoundError as e:
-            raise CommandNotFoundError(f"command not found: {argv[0]}") from e
-        except PermissionError as e:
-            raise CommandNotFoundError(f"command not executable: {argv[0]}") from e
+        except OSError as e:
+            # A bad cwd raises the same exception types as a bad executable; `filename` says which one failed.
+            if cwd is not None and e.filename is not None and os.fspath(e.filename) == os.fspath(cwd):
+                raise ProcError(f"cannot use working directory {cwd}: {e.strerror}") from e
+            if isinstance(e, FileNotFoundError):
+                raise CommandNotFoundError(f"command not found: {argv[0]}") from e
+            if isinstance(e, PermissionError):
+                raise CommandNotFoundError(f"command not executable: {argv[0]}") from e
+            raise
 
         try:
             stdout, stderr = proc.communicate(stdin, timeout=timeout)

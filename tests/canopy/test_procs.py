@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.procs import CommandNotFoundError, SubprocessRunner
+from canopy.procs import CommandNotFoundError, ProcError, SubprocessRunner
 
 
 def test_captures_stdout_and_exit_code(agent_log: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,3 +51,9 @@ def test_stdin_is_passed(fakes_on_path: Path, tmp_path: Path) -> None:
 def test_missing_command_raises(tmp_path: Path) -> None:
     with pytest.raises(CommandNotFoundError, match="command not found"):
         SubprocessRunner().run([str(tmp_path / "no-such-command")])
+
+
+def test_missing_cwd_is_not_reported_as_missing_command(agent_log: Path, tmp_path: Path) -> None:
+    with pytest.raises(ProcError, match="working directory") as exc:
+        SubprocessRunner().run(["agent"], cwd=tmp_path / "gone")
+    assert not isinstance(exc.value, CommandNotFoundError)
