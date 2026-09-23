@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all fmt lint test
+.PHONY: help all check fmt lint test
 
 ##@ General
 
@@ -9,7 +9,9 @@ help: ## Show this help
 		/^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2} \
 		/^##@ / {printf "\n\033[1m%s\033[0m\n", substr($$0, 5)}' $(MAKEFILE_LIST)
 
-all: fmt lint test ## Everything to run before committing: fmt, lint, test
+all: fmt check ## Everything to run before committing: fmt, then check
+
+check: lint test ## Verify without modifying files: lint, test (what CI runs)
 
 ##@ Development
 

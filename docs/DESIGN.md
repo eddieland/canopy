@@ -62,7 +62,7 @@ canopy (harness, Python)
   treehouse.py   status --json, get --lease --json, return --force --if-lease-id
   dispatch.py    capacity guard, lease, spawn detached _run
   attention.py   render attention.md from the journal, diff, notify
-  procs.py       the only module that runs subprocesses
+  procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group
 
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
 agents/          OpenCode agent definitions: canopy-overseer, canopy-worker

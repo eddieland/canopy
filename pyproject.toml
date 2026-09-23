@@ -27,10 +27,21 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+# The fakes are extensionless executables; lint and format them as Python too.
+extend-include = ["tests/fakes/agent", "tests/fakes/treehouse"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "PL"]
+select = ["E", "F", "I", "UP", "B", "SIM", "PL", "TID"]
 ignore = ["PLR0913"]
+
+# procs.py is the only module that runs subprocesses (AGENTS.md, DESIGN.md §5).
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"subprocess".msg = "Run external processes through canopy.procs."
+"os.system".msg = "Run external processes through canopy.procs."
+"os.popen".msg = "Run external processes through canopy.procs."
+
+[tool.ruff.lint.per-file-ignores]
+"src/canopy/procs.py" = ["TID251"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -35,7 +35,20 @@ progress is tracked. Keep it current in the same PR that changes it:
 
 Accept: CI green; fakes exercised by at least one test each.
 
-Status: not started.
+Status: done 2026-09-23.
+Learned:
+- `tests/canopy/__init__.py` made pytest import the test directory as a package named `canopy`, shadowing
+  `src/canopy`. Test directories now have no `__init__.py`.
+- treehouse's real shapes, read from its source (commit `1185dc6`): `status --json` is an array whose `name` is a
+  string and whose `leased_at` is `null` when unleased; `get --lease --json` also returns `base_branch`; `return` exits
+  0 returned, 1 failed or lease mismatch, 3 dirty and not forced. The fake follows these.
+- The subprocess boundary is enforced by ruff's banned-api rule rather than by review (D015). A timeout kills the
+  child's whole process group, since agent runtimes spawn children of their own.
+Next:
+- M1's `treehouse.py` should treat `return` exit 3 as distinct from 1: retrying a dirty return loops. canopy always
+  passes `--force`, so 3 should not happen; if it does, it is an attention item, not a retry.
+- M1 code that runs processes takes a `procs.Runner`. The PATH fakes cover most tests; add an in-process fake runner
+  only when a test needs one.
 
 ## M1. Read-only tick
 
