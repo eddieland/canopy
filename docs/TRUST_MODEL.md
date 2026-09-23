@@ -23,7 +23,7 @@ controls below keep the blast radius to "a branch nobody merged."
 ## 3. Actors
 
 - **Operator**: the developer running canopy. Fully trusted.
-- **Authorized repliers**: accounts listed in `trust.authorized_repliers`.
+- **Authorized repliers**: accounts listed in `trust.authorized_repliers` in the operator's user config.
   Their ticket comments may resume blocked work. Trusted to instruct workers.
 - **Org members**: anyone who can write ticket descriptions, comments, PR
   reviews. Their text is data. It is never treated as instruction.
@@ -48,7 +48,7 @@ reviewer comment tells the worker to disable tests.
 
 Controls:
 - Authorization comes only from things with permission semantics: who can add
-  `tracker.label`, and whose replies count for resuming blocked work
+  one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
 - Workers can push only to `trust.branch_prefix` branches. Enforced by the
   worker prompt and by repository branch protection, which the operator must
@@ -124,6 +124,26 @@ Controls:
 Residual: real. Sandboxing and egress controls are the eventual answer;
 until then this risk is accepted and documented.
 
+### T7. Hostile repository config
+
+The repository's `canopy.toml` is read on every tick, from whatever the operator's checkout contains. Anyone who can
+push to the repository can change it, and a checkout of someone else's unreviewed branch carries their version. Unlike
+build scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent
+starts. If it could set the runtime commands, `notify.cmd`, prompt paths, capacity, queue labels, or authorized
+repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who steers
+their workers.
+
+Controls, in code:
+- Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A repository file
+  that sets one is a config error and the tick does not run.
+- `policy.*` values from the repository file apply only when stricter than the built-in defaults.
+- `trust.branch_prefix` must be non-empty and end in `/`.
+
+Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, and the branch
+prefix. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs, or agent branches under
+an unexpected prefix, which branch protection (§7) still governs. The agent definitions `canopy init` installs into the
+repository are exposed in the same way and are not covered by this control yet.
+
 ## 6. What canopy must never do
 
 - Approve, merge, or close a PR.
@@ -133,14 +153,17 @@ until then this risk is accepted and documented.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
+- Take runtime or notify commands, prompt paths, capacity, queue labels, or authorized repliers from the repository.
 
 ## 7. Operator responsibilities
 
 - Configure branch protection: no direct pushes to protected branches, required
   reviews, no self-approval.
 - Keep `trust.authorized_repliers` short.
-- Check who can add `tracker.label` in your tracker. That permission is the authorization to start work, and it differs
-  by tracker (Jira: edit issue; GitHub: triage or above on the repository). canopy inherits whatever the tracker allows.
+- Check who can add your `tracker.labels` in your tracker. That permission is the authorization to start work, and it
+  differs by tracker (Jira: edit issue; GitHub: triage or above on the repository). canopy inherits whatever the tracker
+  allows.
+- Use queue labels no other operator uses. Two loops on one label work the same tickets, and neither can see the other.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
