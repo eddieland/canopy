@@ -74,6 +74,8 @@ skills/          canopy/: teaches an agent the canopy CLI
 migrations/      NNNN_name.sql
 ```
 
+`prompts/`, `agents/`, and `skills/` live under `.agents/` in this repository.
+
 Roles:
 
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer
@@ -336,9 +338,9 @@ differs between trackers is handled in three places, in order of preference:
    server exposes without being told how. This is the default for any tracker.
 2. **Config.** `tracker.provider`, `tracker.query`, the two labels, and
    `trust.authorized_repliers` in the tracker's own identity format.
-3. **A provider skill**, `skills/tracker-<provider>/SKILL.md`, for what an agent
-   would otherwise get wrong: identity fields, how "closed" is expressed,
-   where blockers live, and text that silently triggers a tracker action
+3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for
+   what an agent would otherwise get wrong: identity fields, how "closed" is
+   expressed, where blockers live, and text that silently triggers a tracker action
    (closing keywords, smart commits). Skills ship for `jira` and `github`.
    A skill is optional; add one when the `decisions` table shows the loop
    misreading a tracker, not in advance.
