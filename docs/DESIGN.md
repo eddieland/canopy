@@ -25,8 +25,9 @@ cannot reach internal systems and require handing a vendor write access.
 
 - Replacing human review, approval, or merge.
 - A hosted service, a daemon, a web UI, or a workflow DSL.
-- Supporting a second tracker or VCS host through code. Those are prompt and
-  config concerns.
+- Tracker-specific code. Any issue tracker with an MCP server works; provider
+  differences live in config and optional provider skills (§17). A second VCS
+  host is likewise a prompt and config concern, not code.
 - Sandboxing agents (deferred; see TRUST_MODEL and ROADMAP).
 
 ## 4. Principles
@@ -45,9 +46,11 @@ cannot reach internal systems and require handing a vendor write access.
    branch is the checkpoint.
 4. **Deterministic core, judgment at the edges.** Python never calls an LLM.
    The overseer and workers are agent processes the harness runs and observes.
-5. **Connectivity through the agent runtime.** Jira and GitHub are reached via
-   the runtime's MCP servers. The harness contains no tracker or VCS host code
-   and never handles their credentials.
+5. **Connectivity through the agent runtime.** The tracker (Jira, GitHub
+   Issues, Linear, anything with an MCP server) and GitHub are reached via the
+   runtime's MCP servers. The harness contains no tracker or VCS host code and
+   never handles their credentials. It knows the tracker only as the strings in
+   `[tracker]`.
 6. **Smallest surface that works.** Five install steps. Daily surface is
    labels, ticket comments, PR review, and one attention list.
 
@@ -66,7 +69,8 @@ canopy (harness, Python)
 
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
 agents/          OpenCode agent definitions: canopy-overseer, canopy-worker
-skill/           OpenCode skill that teaches an agent the canopy CLI
+skills/          canopy/: teaches an agent the canopy CLI
+                 tracker-<provider>/: optional per-tracker guides (§17)
 migrations/      NNNN_name.sql
 ```
 
@@ -97,9 +101,9 @@ Roles:
      `runs` row and `lease_holder` matching our prefix: return it, log it.
    - Compute `capacity = max_workers - count(runs where status='running')`.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override),
-   plus a generated state block containing config (label, JQL, capacity,
-   limits), the `tickets` table summary (phase, cursors, attempts, cooldown
-   until), running workers, and the current tick id.
+   plus a generated state block containing config (tracker provider, label,
+   query, capacity, limits), the `tickets` table summary (phase, cursors,
+   attempts, cooldown until), running workers, and the current tick id.
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root,
    timeout `overseer_timeout_minutes`. In `--dry-run`, the state block says so
    and `canopy dispatch` refuses with a message; the overseer still records
@@ -118,7 +122,7 @@ in `tickets.phase` for the status view, never read back as truth.
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `ready` | label present, not Done, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
+| `ready` | label present, ticket not closed, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `ci_running` | PR open, checks pending | wait |
@@ -128,10 +132,14 @@ in `tickets.phase` for the status view, never read back as truth.
 | `approved` | approved, not merged | attention: ready to merge |
 | `merged` | PR merged | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
-| `human_replied` | authorized reply newer than the label | dispatch `resume` with the reply as context; the worker removes the label |
+| `human_replied` | authorized reply newer than the label (or, if the tracker cannot say when a label was added, newer than the worker's question comment) | dispatch `resume` with the reply as context; the worker removes the label |
 
-"Authorized reply" means a comment by an account in `trust.authorized_repliers`.
+"Authorized reply" means a comment by an account in `trust.authorized_repliers`,
+matched on the tracker's stable account identifier, never a display name.
 Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+
+"Closed" means whatever the tracker calls finished: Jira status category Done,
+GitHub issue state closed, and so on. The provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
@@ -143,9 +151,9 @@ Anything else on the ticket is data, not instruction. See TRUST_MODEL.
    are in code and are not overridable from the prompt.
 2. `treehouse get --lease --lease-holder canopy:<KEY> --json`. Record the
    `runs` row with slot path, lease id, holder, kind, started_at.
-3. Render the worker prompt for the kind, with KEY, branch name
-   (`agent/<KEY>-<slug>`), base branch, context file contents, and the result
-   contract below.
+3. Render the worker prompt for the kind, with KEY, tracker provider, branch
+   name (`agent/<KEY>-<slug>`), base branch, context file contents, and the
+   result contract below.
 4. Spawn `canopy _run <run_id>` detached (`setsid`, stdio to
    `~/.canopy/runs/<run_id>.log`). Return immediately.
 
@@ -178,7 +186,9 @@ Worker obligations, stated in every worker prompt:
 - On `blocked`: post the question as a ticket comment, add
   `needs_human_label`, do not push half-finished speculative work beyond a
   WIP commit.
-- Never approve, merge, close PRs, or transition the ticket to Done.
+- Never approve, merge, close PRs, or transition the ticket to Done, including
+  indirectly: no closing keywords (`Fixes #12`) or tracker commands (Jira smart
+  commits) in commit messages, PR titles, or PR bodies.
 - Push once. Do not poll CI. Do not retry.
 
 ## 9. Aggressive release
@@ -193,9 +203,10 @@ Worker obligations, stated in every worker prompt:
 
 ## 10. Dependencies and stacking
 
-- Tracker issue links of type "blocks / is blocked by" are read by the overseer
-  through MCP. Default rule: a `ready` ticket with an unresolved blocker is
-  skipped and recorded with rationale.
+- Blocker relations are read by the overseer through MCP, in whatever form the
+  tracker has them (Jira "is blocked by" links, GitHub issue dependencies, and
+  so on; the provider skill says where to look). Default rule: a `ready`
+  ticket with an unresolved blocker is skipped and recorded with rationale.
 - Stacking: `canopy dispatch --base agent/<BLOCKER>-*` starts the worker from
   the blocker's branch. The overseer chooses this only when the blocker's PR is
   open and green. The PR base is set to the blocker's branch.
@@ -225,9 +236,10 @@ Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
 
 ```toml
 [tracker]
+provider = "jira"            # jira | github | linear | any name; selects tracker-<provider> skill
 label = "agent-ready"
 needs_human_label = "needs-human"
-jql = 'project = PROJ AND labels = agent-ready AND statusCategory != Done'
+query = 'project = PROJ AND labels = agent-ready AND statusCategory != Done'
 
 [capacity]
 max_workers = 2
@@ -244,7 +256,7 @@ fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
 
 [trust]
-authorized_repliers = ["your-jira-account-id"]
+authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
 branch_prefix = "agent/"
 
 [paths]
@@ -258,6 +270,13 @@ cmd = ""   # optional; receives the attention diff on stdin
 `{prompt}` is substituted with a shell-quoted prompt string. Overrides in
 `prompt_overrides` replace files of the same name in `prompts/`.
 
+`tracker.provider` is a free-form name. The harness does not branch on it; it
+passes it into prompts, and `canopy init` installs the `tracker-<provider>`
+skill if one ships. `tracker.query` is how the overseer finds candidates: in
+the tracker's own search syntax where it has one (JQL, GitHub issue search),
+otherwise a plain-language description. It finds tickets; it does not
+authorize them. See §17.
+
 ## 13. Agent runtime
 
 OpenCode. The harness depends on exactly one capability: run a named agent
@@ -268,9 +287,12 @@ permissions) is the runtime's job.
 Agent definitions ship in `agents/` and are installed by `canopy init`:
 
 - `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and
-  `treehouse status*`. MCP: Atlassian, GitHub.
-- `canopy-worker`: edit and bash allowed within the worktree. MCP: Atlassian
+  `treehouse status*`. MCP: the tracker, GitHub.
+- `canopy-worker`: edit and bash allowed within the worktree. MCP: the tracker
   (ticket comments, labels), GitHub (open/update PR, read reviews and checks).
+
+When the tracker is GitHub Issues, the tracker and GitHub are the same MCP
+server.
 
 The runtime is swappable by editing the two command templates. No interface.
 
@@ -303,3 +325,58 @@ dismissal.
   or the overseer posting via MCP. Default to `notify.cmd`.
 - Whether `merged` should trigger a tracker transition. Default no; humans own
   ticket state.
+
+## 17. Trackers
+
+canopy works with any issue tracker the agent runtime can reach through an MCP
+server. There is no adapter interface and no tracker code in the harness. What
+differs between trackers is handled in three places, in order of preference:
+
+1. **The contract below.** Agents can map it onto the tools a tracker's MCP
+   server exposes without being told how. This is the default for any tracker.
+2. **Config.** `tracker.provider`, `tracker.query`, the two labels, and
+   `trust.authorized_repliers` in the tracker's own identity format.
+3. **A provider skill**, `skills/tracker-<provider>/SKILL.md`, for what an agent
+   would otherwise get wrong: identity fields, how "closed" is expressed,
+   where blockers live, and text that silently triggers a tracker action
+   (closing keywords, smart commits). Skills ship for `jira` and `github`.
+   A skill is optional; add one when the `decisions` table shows the loop
+   misreading a tracker, not in advance.
+
+### Contract
+
+What the loop needs from a tracker, stated as capabilities. Each is used by the
+role in parentheses.
+
+| Capability | Used for |
+|---|---|
+| Find open tickets matching `tracker.query` (overseer) | candidate set |
+| Read a ticket: title, body, labels, open or closed (both) | phase, task |
+| List comments with a stable id, author account id, and timestamp (overseer) | cursors, authorized replies |
+| Post a comment (worker) | reports and questions |
+| Add and remove a label (worker) | `needs_human_label` |
+| Read blocker relations (overseer, optional) | ordering, stacking |
+| When a label was added (overseer, optional) | `human_replied` |
+
+"Label" means the tracker's tagging primitive, whatever it is called. Without
+blocker relations, tickets are treated as unblocked. Without label history, the
+worker's question comment is the reference point for `human_replied`. If a
+tracker cannot do one of the required rows, the overseer records `skip` with
+rationale `tracker_unsupported: <capability>` and the operator fixes the MCP
+setup or writes a skill.
+
+### Authorization is the same everywhere
+
+The query only finds tickets. A ticket is a candidate only if reading it shows
+`tracker.label` present and the ticket not closed. A sloppy or plain-language
+query can therefore waste a tick, but it cannot authorize work. Replies are
+authorized only by `trust.authorized_repliers`, compared against the author's
+stable account id (Jira `accountId`, GitHub login), never a display name.
+
+### Ticket keys
+
+A key is the tracker's short, human-readable id, as the provider skill defines
+it: `PROJ-123` for Jira, `GH-123` for GitHub Issues. Keys appear in branch
+names, lease holders, file paths, and shell arguments, so `canopy dispatch`,
+`decide`, `attention`, and `ticket set` reject any key that does not match
+`[A-Za-z0-9][A-Za-z0-9_-]*`. That guard is in code.
