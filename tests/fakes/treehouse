@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""Fake treehouse for tests. Speaks the subset of the treehouse CLI canopy uses.
+
+    treehouse status --json
+    treehouse get --lease [--lease-holder H] [--json] [--base B] [--no-fetch]
+    treehouse return [--force] [--if-lease-id ID] [--if-lease-holder H] <path|name>
+
+Output shapes and exit codes follow treehouse's own (`status --json` array fields, `get --lease --json` allocation,
+`return` exits 0 returned, 1 failed or lease mismatch, 3 dirty and not forced).
+
+State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is an empty pool. Keys:
+
+    max_trees   int, default 4. `get` fails once this many slots exist and none is available.
+    pool_dir    str, default "<state file dir>/pool". New slot directories are created under it.
+    slots       list of {name, path, status, lease_id, lease_holder, leased_at, base_branch}.
+                Tests may set status to "dirty" or "in-use" to simulate those states.
+    calls       list of argv lists, one per invocation, appended by the fake for assertions.
+
+Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
+"""
+
+import argparse
+import fcntl
+import json
+import os
+import sys
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+
+
+def load(path: Path) -> dict:
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
+
+
+def save(path: Path, state: dict) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2) + "\n")
+    tmp.replace(path)
+
+
+def status_entry(slot: dict) -> dict:
+    return {
+        "name": slot["name"],
+        "path": slot["path"],
+        "status": slot["status"],
+        "branch": "",
+        "detached": True,
+        "flavor": "git",
+        "lease_id": slot.get("lease_id", ""),
+        "lease_holder": slot.get("lease_holder", ""),
+        "leased_at": slot.get("leased_at") or None,
+        "processes": [],
+    }
+
+
+def cmd_status(state: dict, args: argparse.Namespace) -> int:
+    slots = state.get("slots", [])
+    if args.json:
+        print(json.dumps([status_entry(s) for s in slots]))
+    else:
+        for s in slots:
+            print(f"{s['name']:<5} {s['status']:<12} {s['path']}")
+    return 0
+
+
+def cmd_get(state: dict, args: argparse.Namespace, state_path: Path) -> int:
+    if not args.lease:
+        print("fake treehouse: only `get --lease` is supported", file=sys.stderr)
+        return 2
+    slots = state.setdefault("slots", [])
+    slot = next((s for s in slots if s["status"] == "available"), None)
+    if slot is None:
+        if len(slots) >= state.get("max_trees", 4):
+            print("treehouse: no available worktree and max_trees reached", file=sys.stderr)
+            return 1
+        name = str(len(slots) + 1)
+        pool_dir = Path(state.get("pool_dir", state_path.parent / "pool"))
+        slot = {"name": name, "path": str(pool_dir / name / "repo")}
+        slots.append(slot)
+    Path(slot["path"]).mkdir(parents=True, exist_ok=True)
+    slot.update(
+        status="leased",
+        lease_id=uuid.uuid4().hex,
+        lease_holder=args.lease_holder
+        if args.lease_holder is not None
+        else os.environ.get("TREEHOUSE_LEASE_HOLDER", ""),
+        leased_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        base_branch=args.base or "main",
+    )
+    if args.json:
+        keys = ("path", "lease_id", "lease_holder", "leased_at", "base_branch")
+        print(json.dumps({k: slot[k] for k in keys}))
+    else:
+        print(slot["path"])
+    return 0
+
+
+def cmd_return(state: dict, args: argparse.Namespace) -> int:
+    slots = state.get("slots", [])
+    target = args.target
+    slot = next((s for s in slots if target in (s["name"], s["path"])), None)
+    if slot is None:
+        print(f"treehouse: no managed worktree {target!r}", file=sys.stderr)
+        return 1
+    conditional = args.if_lease_id is not None or args.if_lease_holder is not None
+    if conditional and slot["status"] != "leased":
+        print("treehouse: worktree is not leased", file=sys.stderr)
+        return 1
+    if args.if_lease_id is not None and slot.get("lease_id") != args.if_lease_id:
+        print("treehouse: lease id mismatch", file=sys.stderr)
+        return 1
+    if args.if_lease_holder is not None and slot.get("lease_holder") != args.if_lease_holder:
+        print("treehouse: lease holder mismatch", file=sys.stderr)
+        return 1
+    if slot["status"] == "dirty" and not args.force:
+        print(f"treehouse: worktree has uncommitted changes; retry: treehouse return --force {target}", file=sys.stderr)
+        return 3
+    slot.update(status="available", lease_id="", lease_holder="", leased_at=None)
+    slot.pop("base_branch", None)
+    return 0
+
+
+def parse(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="treehouse")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    status = sub.add_parser("status")
+    status.add_argument("--json", action="store_true")
+
+    get = sub.add_parser("get")
+    get.add_argument("--lease", action="store_true")
+    get.add_argument("--lease-holder")
+    get.add_argument("--json", action="store_true")
+    get.add_argument("--base")
+    get.add_argument("--no-fetch", action="store_true")
+
+    ret = sub.add_parser("return")
+    ret.add_argument("--force", action="store_true")
+    ret.add_argument("--if-lease-id")
+    ret.add_argument("--if-lease-holder")
+    ret.add_argument("target")
+
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str]) -> int:
+    state_env = os.environ.get("FAKE_TREEHOUSE_STATE")
+    if not state_env:
+        print("fake treehouse: FAKE_TREEHOUSE_STATE is not set", file=sys.stderr)
+        return 2
+    state_path = Path(state_env)
+    args = parse(argv)
+    # Like treehouse, every command reads and writes pool state under a lock.
+    with state_path.with_suffix(".lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        state = load(state_path)
+        state.setdefault("calls", []).append(argv)
+        if args.command == "status":
+            code = cmd_status(state, args)
+        elif args.command == "get":
+            code = cmd_get(state, args, state_path)
+        else:
+            code = cmd_return(state, args)
+        save(state_path, state)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

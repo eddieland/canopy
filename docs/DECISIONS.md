@@ -155,3 +155,15 @@ a vague query cannot widen scope. Keys are validated by a regex guard in the CLI
 paths, and shell arguments. Skill loading depends on the runtime.
 Revisit: if the `decisions` table shows agents ignoring skills, have the harness inline the skill body into the rendered
 prompt instead. If a tracker needs code to be usable, record why here before writing it.
+
+## D015. The subprocess boundary is enforced by lint
+
+Context: AGENTS.md says every external process goes through `procs.py`, because that is the seam tests fake and the
+place timeouts and process-group handling live. A rule only reviewers check erodes.
+Decision: ruff's `flake8-tidy-imports` banned-api rule (`TID251`) bans `subprocess`, `os.system`, and `os.popen`
+everywhere except `src/canopy/procs.py`. Tests follow the same rule: they run the fakes through
+`procs.SubprocessRunner`. The fakes in `tests/fakes/` are stdlib-only Python executables, linted by ruff through
+`extend-include`.
+Consequences: a stray `import subprocess` fails `make check`. `os.exec*`, `os.spawn*`, and `pty` are not banned; add
+them if anything reaches for them.
+Revisit: never for the rule itself; widen the banned list if a new way to start processes shows up.

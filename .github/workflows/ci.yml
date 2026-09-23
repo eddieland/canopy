@@ -35,10 +35,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      # `make all` would run `fmt`, which rewrites files; CI only verifies.
-      # `lint` includes `ruff format --check`, so unformatted code still fails.
-      - name: Lint and type check
-        run: make lint
-
-      - name: Test
-        run: make test
+      # `make all` would run `fmt`, which rewrites files; `make check` only verifies.
+      # It includes `ruff format --check`, so unformatted code still fails.
+      - name: Lint, type check, and test
+        run: make check
