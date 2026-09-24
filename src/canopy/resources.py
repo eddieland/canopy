@@ -1,0 +1,36 @@
+"""Where canopy's own files are: migrations, prompts, agent definitions, skills.
+
+In a source checkout they sit at the repository root (`migrations/`, `.agents/`). In an installed wheel they are
+bundled inside the package (`canopy/_data/`, see `[tool.hatch.build.targets.wheel.force-include]` in pyproject.toml).
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+_PACKAGE = Path(__file__).resolve().parent
+_BUNDLED = _PACKAGE / "_data"
+_SOURCE = _PACKAGE.parent.parent
+
+
+def _find(bundled: str, source: str) -> Path:
+    for candidate in (_BUNDLED / bundled, _SOURCE / source):
+        if candidate.is_dir():
+            return candidate
+    raise FileNotFoundError(f"canopy's {bundled} directory is missing from this installation")
+
+
+def migrations_dir() -> Path:
+    return _find("migrations", "migrations")
+
+
+def prompts_dir() -> Path:
+    return _find("prompts", ".agents/prompts")
+
+
+def agents_dir() -> Path:
+    return _find("agents", ".agents/agents")
+
+
+def skills_dir() -> Path:
+    return _find("skills", ".agents/skills")

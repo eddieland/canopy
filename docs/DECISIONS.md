@@ -231,3 +231,70 @@ Consequences: test basenames may repeat across directories. Removing `tests/__in
 `INP001` catches that. Rejected: `--import-mode=importlib`, which avoids the shadowing without packages but changes
 how `conftest.py` and test helpers are imported for no gain here.
 Revisit: if pytest's default import mode changes.
+
+## D020. The overseer reaches the journal through the CLI, keyed by `CANOPY_TICK_ID`
+
+Context: M1's dry-run tick has to record the overseer's plan. The overseer is an agent process; it writes only through
+`canopy dispatch`, `decide`, `attention`, and `ticket set`, each a separate process that must know which tick it
+belongs to. The schema has no attention table, and a dry run must not change what a later live tick sees.
+Decision: the tick sets `CANOPY_TICK_ID` in the overseer's environment. `dispatch`, `decide`, and `attention` refuse
+without it, or when it names a tick that is not `running`; `ticket set` uses it only to learn whether this is a dry run.
+Attention items are decisions with action `attention:<reason>`, and the current list is those of the latest `ok` tick.
+In a dry run, `dispatch` records `dispatch:<kind>` and starts nothing, and `ticket set` records phases but not cursors.
+Until M2, `canopy tick` without `--dry-run` is refused, and a dispatch outside a dry run records
+`refused:not_implemented`.
+Consequences: no prompt change and no new table. Commands run by hand outside a tick are refused, which is the point:
+the journal only holds what the loop did. Dry-run decisions are the evaluation corpus the M1 acceptance run reads.
+Revisit: if the runtime stops passing the environment to its bash tool (then add a `--tick` flag and a prompt line), or
+if attention items need state that survives a failed overseer run (then a table, with a migration).
+
+## D021. OpenCode permissions under `opencode run` (the M1 canary)
+
+Context: DESIGN §16 asked whether `ask` permissions block or auto-deny under `opencode run`, and D006 noted a report
+that denies were ignored. The answer decides whether agent permissions are a real second layer.
+Finding, from OpenCode 1.18.32's source (`anomalyco/opencode`): `opencode run` auto-rejects every `ask` unless run with
+`--auto` or `--dangerously-skip-permissions`, and a rejection ends the agent's turn (`cli/cmd/run.ts`,
+`session/processor.ts`). `deny` is enforced before any prompt; the model sees an error and continues
+(`permission/index.ts`). The last matching rule wins, so a catch-all `"*"` must come before its exceptions. Bash
+compound commands are checked command by command. A `tools:` map in agent frontmatter is deprecated in favor of
+`permission:`. Project agents are read from `.opencode/agent/` or `.opencode/agents/`, skills from
+`.opencode/skill/<name>/SKILL.md` or `.opencode/skills/`.
+Decision: the overseer definition puts `"*": deny` first under `bash`. The old order denied every command, `canopy`
+included. It drops the deprecated `tools:` map and denies `task`, since subagents run with their own, wider
+permissions. `canopy init` installs to `.opencode/agent/` and `.opencode/skill/`. The live canary
+(`tests/canopy/test_opencode_canary.py`) is opt-in (`CANOPY_OPENCODE_CANARY=1`) because it needs a model and spends
+tokens. It includes a positive control, so a model that does nothing cannot pass.
+Consequences: `ask` is safe to use under `opencode run`: it never hangs a tick, and it behaves as a deny that also
+stops the turn. Agent permissions remain defense in depth, not the boundary.
+Revisit: when the operator first runs the canary against a real model; record the result here in a new entry. Also on
+any OpenCode major version change.
+
+## D022. Runtime files are bundled into the wheel
+
+Context: canopy reads `migrations/` and `.agents/` (prompts, agent definitions, skills) at run time. They live at the
+repository root, outside `src/canopy/`, so `uv tool install` would not ship them.
+Decision: hatch's `force-include` copies them into the wheel under `canopy/_data/`. `resources.py` looks there first,
+then at the repository root for a source checkout or editable install. The layout of DESIGN §5 stays as it is.
+Consequences: one place knows where the files are. A new top-level runtime directory needs a `force-include` line.
+Revisit: if moving the directories under `src/canopy/` becomes simpler than keeping the two lookups.
+
+## D023. Command templates are split into argv; no shell runs
+
+Context: DESIGN §12 said `{prompt}` is replaced by a shell-quoted string, which implies running the template through a
+shell. The prompt contains ticket state the overseer wrote, and later ticket text; a quoting mistake there is command
+execution on the operator's machine.
+Decision: `shlex.split` the template, then replace `{prompt}` inside each word, and run the argv directly. The template
+must contain `{prompt}`.
+Consequences: the prompt is always exactly one argument. Templates cannot use pipes, redirection, or `$VAR`; a wrapper
+such as a sandbox is written as a prefix (`bwrap ... opencode run ...`) or as a script. Linux caps one argument at
+128 KiB, far above today's overseer prompt.
+Revisit: if a runtime needs the prompt on stdin or in a file, or the prompt approaches the argument limit.
+
+## D024. The fake agent may start processes
+
+Context: D015 bans `subprocess` everywhere but `procs.py`, tests included. The M1 end-to-end test needs a fake overseer
+that runs `canopy decide` and friends, as a real agent does through its bash tool.
+Decision: `tests/fakes/agent` imports `subprocess` with a `noqa: TID251` naming this entry. It is a stand-in for an
+external agent runtime, not canopy code, and runs as its own process.
+Consequences: the e2e test exercises the real CLI in separate processes, environment variables included.
+Revisit: if a second fake needs the same, move the exception to `per-file-ignores` for `tests/fakes/`.
