@@ -257,6 +257,39 @@ def cmd_status(click_ctx: click.Context) -> int:
     return 0
 
 
+@cli.command("decisions")
+@click.argument("tick_id", required=False, type=click.IntRange(min=1))
+@click.pass_context
+def cmd_decisions(click_ctx: click.Context, tick_id: int | None) -> int:
+    """Print a tick's decisions: what the overseer did, or in a dry run would have done. Default: the latest tick."""
+    ctx = _open(click_ctx)
+    row = db.last_tick(ctx.conn) if tick_id is None else db.get_tick(ctx.conn, tick_id)
+    if row is None:
+        if tick_id is not None:
+            raise CliError(f"no tick {tick_id}")
+        click.echo("No ticks yet.")
+        return 0
+    dry = " (dry run)" if row["dry_run"] else ""
+    started = f"started {row['started_at']} ({attention.age(row['started_at'])} ago)"
+    click.echo(f"Tick {row['id']}: {row['status']}{dry}, {started}")
+    if row["summary"]:
+        click.echo(f"  {row['summary']}")
+    output = ctx.state_dir / "ticks" / f"{row['id']}.log"
+    if output.exists():
+        click.echo(f"  overseer output: {output}")
+    rows = db.decisions_for_tick(ctx.conn, int(row["id"]))
+    click.echo(f"\nDecisions ({len(rows)}):")
+    keys = [str(d["ticket_key"] or "-") for d in rows]
+    key_width = max((len(k) for k in keys), default=0)
+    action_width = max((len(str(d["action"])) for d in rows), default=0)
+    for key, d in zip(keys, rows, strict=True):
+        rationale = " ".join(str(d["rationale"]).split())
+        click.echo(f"  {key:<{key_width}}  {d['action']:<{action_width}}  {rationale}")
+    if not rows:
+        click.echo("  none")
+    return 0
+
+
 @cli.command("dispatch")
 @click.argument("key", type=TICKET_KEY)
 @click.option("--kind", required=True, type=click.Choice(policy.KINDS))
@@ -296,22 +329,15 @@ def cmd_dispatch(
     tick_id = int(current["id"])
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
-    if current["dry_run"]:
-        if kind == "implement":
-            slug = slug or dispatch.DEFAULT_SLUG
-        extras = [
-            f"slug={slug}" if slug else "",
-            f"base={base}" if base else "",
-            *(f"cursor {name}={value}" for name, value in cursor_pairs),
-            f"context={context}" if context else "",
-        ]
-        detail = "; ".join(e for e in extras if e)
-        db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", f"dry run: not dispatched ({detail})")
-        log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
-        click.echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
-        return 0
+    dry_run = bool(current["dry_run"])
     try:
-        started = dispatch.start(ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base, context=context)
+        # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
+        if dry_run:
+            branch = dispatch.check(ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base)
+            started = None
+        else:
+            started = dispatch.start(ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base, context=context)
+            branch = started.branch
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         if r.guard == "attempt_limit":
@@ -319,6 +345,16 @@ def cmd_dispatch(
             db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}attempt_limit", r.reason)
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    if started is None:
+        extras = [
+            *(f"cursor {name}={value}" for name, value in cursor_pairs),
+            f"context={context}" if context else "",
+        ]
+        rationale = truncate("; ".join(e for e in [f"dry run: not dispatched; would work on {branch}", *extras] if e))
+        db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
+        log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
+        click.echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
+        return 0
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
     rationale = f"run {started.run_id}: {started.branch} in {started.slot}"
@@ -409,10 +445,15 @@ def cmd_ticket_set(
     """Record a ticket's phase, cursors, or done flag."""
     ctx = _open(click_ctx)
     current = _optional_tick(ctx)
-    cursors = dict(cursor_pairs)
-    # A dry run must not advance cursors: the first live tick would then miss everything the dry runs saw.
-    skipped = bool(cursors) and current is not None and bool(current["dry_run"])
-    db.set_ticket(ctx.conn, key, ctx.repo, phase=phase, cursors={} if skipped else cursors, done=done)
-    note = "; dry run, cursors not advanced" if skipped else ""
+    # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
+    # runs saw, or never see the ticket at all.
+    dry_run = current is not None and bool(current["dry_run"])
+    ignored = [
+        *(["cursors not advanced"] if dry_run and cursor_pairs else []),
+        *(["not marked done"] if dry_run and done else []),
+    ]
+    cursors = {} if dry_run else dict(cursor_pairs)
+    db.set_ticket(ctx.conn, key, ctx.repo, phase=phase, cursors=cursors, done=done and not dry_run)
+    note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
     click.echo(f"updated {key}{note}")
     return 0

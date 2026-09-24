@@ -46,6 +46,7 @@ standing write access to your repositories, your tracker, or your internal tools
 - Review PRs. Humans approve and merge; the agent never does.
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. Set `notify.cmd` to have changes piped to a
   command of your own.
+- Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
 
 ## How it works, briefly
 

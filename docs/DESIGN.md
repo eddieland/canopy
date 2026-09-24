@@ -55,7 +55,8 @@ cannot reach internal systems and require handing a vendor write access.
 
 ```
 canopy (harness, Python)
-  cli.py         tick, tick --dry-run, status, init, dispatch, decide, attention, ticket set, _run; key validation
+  cli.py         tick, tick --dry-run, status, decisions, init, dispatch, decide, attention, ticket set, _run; key
+                 validation
   tick.py        the tick sequence (§6): lock, migrate, reconcile, run the overseer, close the tick
   prompts.py     prompt files and overrides, the overseer's state block
   lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
@@ -125,12 +126,17 @@ Roles:
    which tick they belong to, and refuse if it is unset or names a tick that is not running (D020). The overseer's
    stdout and stderr go to `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal.
    The run succeeded if it exited 0 and the last non-empty line of stdout is `tick complete`; anything else closes the
-   tick as `overseer_failed`.
-   In `--dry-run`, the state block says so; `canopy dispatch` starts nothing and records the decision as
-   `dispatch:<kind>` with rationale `dry run: not dispatched`; `canopy ticket set` records phases but neither it nor
-   `canopy dispatch --cursor` advances cursors, so the first live tick still sees everything as new. The overseer
-   otherwise behaves as in a live tick, and so does reconcile: it closes dead runs and returns stale leases in a dry run
-   too.
+   tick as `overseer_failed`. A run that succeeded but recorded a tick-wide `skip` (`mcp_unavailable`,
+   `tracker_unsupported`) closes the tick as `skipped`: the overseer could not see the world, so the tick is not `ok`
+   and does not replace the attention list (D037).
+   In `--dry-run`, the state block says so. `canopy dispatch` checks the same guards as in a live tick (§8), counting
+   each dispatch this dry run already recorded as a running run, and records a refusal the same way; a dispatch the
+   guards allow starts nothing and is recorded as `dispatch:<kind>` with rationale `dry run: not dispatched; would work
+   on <branch>` and its cursors and context. `canopy ticket set` records phases, but in a dry run neither it nor
+   `canopy dispatch --cursor` advances cursors, and `--done` does not mark the ticket done, so the first live tick still
+   sees everything as new (D036). The overseer otherwise behaves as in a live tick, and so does the rest of the tick:
+   reconcile closes dead runs and returns stale leases, and a dry-run tick's attention items are the attention list and
+   are notified like a live tick's.
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
    Everything the overseer writes is rendered into the next tick's prompt, so the CLI bounds it: keys and attention
    reasons are validated, phases come from the table in §7, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and
@@ -138,8 +144,8 @@ Roles:
 6. Close the `ticks` row with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, and if `notify.cmd` is set and the list
    changed since the last notification, pipe the change to it. This comes after the tick is closed because the list is
-   the latest `ok` tick's, and this tick may be it. It runs after a failed tick too, when the list is the one before. A
-   failure here is logged and does not change the tick's status. Release the lock.
+   the latest `ok` tick's, and this tick may be it. It runs after a failed or skipped tick too, when the list is the one
+   before. A failure here is logged and does not change the tick's status. Release the lock.
 
 Workers dispatched during a tick outlive the tick. They are detached processes
 owned by `canopy _run`.
@@ -181,10 +187,11 @@ provider skill says which.
 `canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context TEXT]
 [--cursor NAME=ID]...`:
 
-1. Refuse if `--dry-run` tick, if capacity is zero, if a `runs` row for KEY
-   is `running`, or if the kind's attempt limit or cooldown blocks it. Guards
-   are in code and are not overridable from the prompt. A refusal is recorded as a decision `refused:<guard>` with the
-   reason, and the command exits 1. Guards, in the order they are checked:
+1. Refuse if capacity is zero, if a `runs` row for KEY is `running`, or if the kind's attempt limit or cooldown blocks
+   it. Guards are in code and are not overridable from the prompt. A refusal is recorded as a decision
+   `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and then stops, with
+   each dry-run dispatch already recorded this tick counting as a running run for `running` and `capacity` (§6, D036).
+   Guards, in the order they are checked:
    - `not_implemented`: `--base`, until stacking in M4.
    - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
@@ -285,9 +292,10 @@ Worker obligations, stated in every worker prompt:
 
 Schema in `migrations/0001_init.sql`. Tables and purpose:
 
-- `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `overseer_failed`,
-  `reconcile_failed`, or `abandoned`. A tick that cannot take the lock writes no row, although the schema comment lists
-  `lock_busy`.
+- `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `skipped`,
+  `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick and its decisions,
+  the latest tick by default: the way to read a dry run's plan. A tick that cannot take the lock writes no row,
+  although the schema comment lists `lock_busy`.
 - `tickets`: one row per ticket key seen; last derived phase, branch, PR URL, cursors
   (`last_comment_id`, `last_review_id`, `last_ci_run_id`), done flag. Cursors make ticks incremental. Attempt counts
   and the fix-ci cooldown are not stored; they are derived from `runs` (D030, migration 0003).
@@ -453,8 +461,8 @@ dispatch such a ticket again until an authorized replier has commented after the
 The overseer records an item with `canopy attention <KEY> <reason> --detail "<link or text>"`, every tick the cause
 holds. It is stored as a decision with action `attention:<reason>`; there is no separate table (D020). The current list
 is the attention decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a
-failed tick leaves the previous list standing. An item's age runs from the first tick of its unbroken run. Reasons must
-match `[a-z][a-z0-9_]*`.
+failed or `skipped` tick leaves the previous list standing. Dry-run ticks count like live ones. An item's age runs from
+the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
 
 `attempt_limit` is raised both ways: the overseer records it when the state block shows a ticket at its limit for the
 work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
@@ -481,8 +489,9 @@ going away is new again.
 - Overseer timeout or bad output: tick closes with `overseer_failed`; nothing
   is dispatched; next tick retries. Three consecutive failures produce an
   attention item.
-- MCP unavailable: the overseer reports it; the tick records it; no decisions
-  are made on partial data. The overseer prompt says so explicitly.
+- MCP unavailable: the overseer reports it with a tick-wide `skip`; the tick closes as `skipped` and `canopy tick`
+  exits 1; no decisions are made on partial data, and the attention list stays as it was (D037). The overseer prompt
+  says so explicitly.
 - Overseer asks for something the guards refuse: the refusal is recorded as a
   decision with the guard's reason.
 
@@ -848,7 +857,8 @@ first of:
 - `not_due`: less than `every_minutes` since this chore's latest run started, whatever that run ended as.
 - `chore_capacity`: `capacity.max_chores` chore runs are running.
 
-In a dry run it records `dispatch:chore` with rationale `dry run: not dispatched` and starts nothing. Chore decisions
+In a dry run it checks the same guards, records `dispatch:chore` with rationale `dry run: not dispatched` or the
+refusal, and starts nothing (D036). Chore decisions
 are `decisions` rows with the chore's name in a new `chore` column and no ticket key: `dispatch:chore`, `wait`, and
 `refused:<guard>`. Chore runs are serialized with dispatches by the same `dispatch.lock`.
 

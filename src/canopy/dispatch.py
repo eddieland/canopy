@@ -10,6 +10,7 @@ import contextlib
 import json
 import re
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -89,9 +90,7 @@ def start(
         Refusal: a guard refused, or the slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased.
     """
-    if base is not None:
-        raise Refusal("not_implemented", "--base arrives with stacking (ROADMAP M4)")
-    branch = _branch(ctx, key, kind, slug)
+    branch = _branch(ctx, key, kind, slug, base)
 
     # One dispatch at a time, so two cannot both pass the capacity check. Held across the lease and the spawn.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
@@ -110,7 +109,30 @@ def start(
             raise
 
 
-def _branch(ctx: Context, key: str, kind: str, slug: str | None) -> str:
+def check(ctx: Context, *, tick_id: int, key: str, kind: str, slug: str | None, base: str | None) -> str:
+    """Check the guards a live dispatch would, for a dry run, and return the branch the run would work on (D036).
+
+    Nothing is leased, recorded, or spawned. The dry-run dispatches this tick already recorded stand in for the runs
+    they would have started, so the `running` and `capacity` guards refuse what a live tick would. The lease, prompt,
+    and spawn are not tried, so `no_slot`, `bad_prompt`, and `spawn_failed` never appear in a dry run.
+
+    Raises:
+        Refusal: a guard refused.
+    """
+    branch = _branch(ctx, key, kind, slug, base)
+    planned = [
+        str(d["ticket_key"])
+        for d in db.decisions_for_tick(ctx.conn, tick_id)
+        if str(d["action"]).startswith("dispatch:") and d["ticket_key"] is not None
+    ]
+    with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        _guard(ctx, key, kind, planned=planned)
+    return branch
+
+
+def _branch(ctx: Context, key: str, kind: str, slug: str | None, base: str | None) -> str:
+    if base is not None:
+        raise Refusal("not_implemented", "--base arrives with stacking (ROADMAP M4)")
     if kind == "implement":
         slug = DEFAULT_SLUG if slug is None else slug
         if not valid_slug(slug):
@@ -124,20 +146,27 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None) -> str:
     return str(ticket["branch"])
 
 
-def _guard(ctx: Context, key: str, kind: str) -> int:
-    """Refuse unless a `kind` run for `key` may start now. Returns the attempt number the run would be."""
+def _guard(ctx: Context, key: str, kind: str, *, planned: Sequence[str] = ()) -> int:
+    """Refuse unless a `kind` run for `key` may start now. Returns the attempt number the run would be.
+
+    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run.
+    """
     running = db.running_runs(ctx.conn)
     for run in running:
         if run["ticket_key"] == key:
             raise Refusal("running", f"run {run['id']} is already working {key}")
+    if key in planned:
+        raise Refusal("running", f"this dry run already dispatched {key}")
     counts = policy.ticket_attempts(ctx.conn, key)
     cooldown = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC)).get(key)
     refused = policy.blocked(key, kind, counts=counts, limit=policy.limits(ctx.config)[kind], cooldown_until=cooldown)
     if refused is not None:
         raise Refusal(*refused)
     limit = ctx.config.capacity.max_workers
-    if len(running) >= limit:
-        raise Refusal("capacity", f"{len(running)} of {limit} workers are running")
+    busy = len(running) + len(planned)
+    if busy >= limit:
+        planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
+        raise Refusal("capacity", f"{busy} of {limit} workers are running{planned_note}")
     return counts[kind] + 1
 
 
