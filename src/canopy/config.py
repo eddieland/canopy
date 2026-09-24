@@ -13,6 +13,7 @@ direction is stricter. `load` enforces scopes and the tighten rule per file, mer
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import tomllib
 from dataclasses import dataclass
@@ -52,9 +53,14 @@ def _non_blank(value: str) -> str:
     return value
 
 
+# One or more plain ref components, each followed by "/". Branch names reach git's argv, so none may start with "-" or
+# hold anything git treats specially ("..", "@{", a leading "."). The repository file can set this key (TRUST_MODEL T7).
+BRANCH_PREFIX_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
+
+
 def _branch_prefix(value: str) -> str:
-    if not value or not value.endswith("/"):
-        raise ValueError("must be non-empty and end in '/'")
+    if not BRANCH_PREFIX_RE.fullmatch(value):
+        raise ValueError("must be non-empty, end in '/', and use only letters, digits, '_', '-' and '/'")
     return value
 
 

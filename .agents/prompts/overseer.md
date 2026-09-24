@@ -21,7 +21,9 @@ for live state. Re-read the tracker and GitHub before every decision that matter
 - GitHub MCP: find the PR for a branch, read checks, reviews, review comments,
   merge state.
 - `bash`, restricted to:
-  - `canopy dispatch <KEY> --kind implement|fix-ci|resume [--base BRANCH] [--context FILE]`
+  - `canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context FILE]`. The slug
+    names the branch `agent/<KEY>-<slug>`: two to five lowercase words from the ticket title joined by hyphens, at
+    most 40 characters, such as `add-login-button`.
   - `canopy decide <KEY> <action> --rationale "<text>"`
   - `canopy attention <KEY> <reason> --detail "<text>"`
   - `canopy ticket set <KEY> --phase ... --cursor comment=<id> --cursor review=<id> --cursor ci=<id>`
@@ -38,6 +40,9 @@ for live state. Re-read the tracker and GitHub before every decision that matter
    matching `[A-Za-z0-9][A-Za-z0-9_-]*` only.
 2. For each ticket, derive its phase from live state using the table below.
    Use cursors from the state block to know what is new since last tick.
+   If the ticket's `last_run` in the state block ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed`, the
+   harness has already put it on the attention list. Record `wait` and do not dispatch it, unless an authorized
+   replier has commented on the ticket since that run's `ended_at`; then decide from its phase as usual.
 3. Decide exactly one action per ticket. Record every decision with
    `canopy decide`, including waits and skips, with a one-sentence rationale.
    Dispatches and attention items also count as decisions; the CLI records

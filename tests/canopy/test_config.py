@@ -103,6 +103,11 @@ def test_repository_file_is_optional_but_required_keys_are_not(canopy_env: Canop
         ("[trust]\nauthorized_repliers = [1]\n", r"trust\.authorized_repliers\[0\]: Input should be a valid string"),
         ("[trust]\nauthorized_repliers = ['  ']\n", "must not be empty"),
         ("[trust]\nbranch_prefix = 'agent'\n", "end in '/'"),
+        ("[trust]\nbranch_prefix = '-c/'\n", "end in '/'"),
+        ("[trust]\nbranch_prefix = 'a/../'\n", "end in '/'"),
+        ("[trust]\nbranch_prefix = 'a b/'\n", "end in '/'"),
+        ("[trust]\nbranch_prefix = 'agent//'\n", "end in '/'"),
+        ("[trust]\nbranch_prefix = '/'\n", "end in '/'"),
         ("[notify]\ncmd = 3\n", "Input should be a valid string"),
     ],
 )

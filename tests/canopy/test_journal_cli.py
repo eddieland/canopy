@@ -90,15 +90,6 @@ def test_attention_reason_format(
     assert main(["attention", "PROJ-1", "Needs Reviewer", "--detail", "d"]) == 2
 
 
-def test_dispatch_outside_dry_run_is_refused_and_recorded(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tick_id = in_tick(conn, monkeypatch, dry_run=False)
-    assert main(["dispatch", "PROJ-1", "--kind", "fix-ci"]) == 1
-    [row] = db.decisions_for_tick(conn, tick_id)
-    assert row["action"] == "refused:not_implemented"
-
-
 def test_dry_run_dispatch_records_base_and_context(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -107,7 +98,7 @@ def test_dry_run_dispatch_records_base_and_context(
     assert main(args) == 0
     [row] = db.decisions_for_tick(conn, tick_id)
     assert row["action"] == "dispatch:implement"
-    assert row["rationale"] == "dry run: not dispatched (base=agent/PROJ-1-x; context=ctx.md)"
+    assert row["rationale"] == "dry run: not dispatched (slug=work; base=agent/PROJ-1-x; context=ctx.md)"
 
 
 def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

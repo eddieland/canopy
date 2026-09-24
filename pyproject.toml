@@ -73,6 +73,7 @@ ban-relative-imports = "all"
 "tests/**" = [
     "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
     "D",       # Docstrings are optional in tests and unchecked when present; test names are the documentation.
+    "PLR0917", # pytest passes fixtures as positional arguments; a test's signature is its fixture list.
     "PLR2004", # Expected exit codes and counts are clearer inline than as named constants.
     "S101",    # pytest asserts.
 ]

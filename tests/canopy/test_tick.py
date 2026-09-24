@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -133,11 +133,15 @@ class TimingOutAgent:
         env: Mapping[str, str] | None = None,
         stdin: str | None = None,
         timeout: float | None = None,
+        on_start: Callable[[int], None] | None = None,
     ) -> procs.Result:
         if args[0] == "agent":
             assert timeout == 15 * 60
             return procs.Result(tuple(args), -9, "fake agent: starting\n", "", timed_out=True)
-        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout)
+        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+
+    def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
+        return procs.SubprocessRunner().spawn(args, cwd=cwd, log_path=log_path)
 
 
 def test_overseer_timeout(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
@@ -176,11 +180,6 @@ def test_busy_lock_exits_zero_without_a_tick(
     assert journal(canopy_env).execute("SELECT count(*) FROM sqlite_master WHERE name = 'ticks'").fetchone()[0] == 0
 
 
-def test_live_tick_is_refused_until_dispatch_exists(canopy_env: CanopyEnv, agent_log: Path) -> None:
-    assert main(["tick"]) == 2
-    assert not agent_log.exists()
-
-
 def test_unfinished_tick_is_abandoned(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -190,19 +189,6 @@ def test_unfinished_tick_is_abandoned(
     dead = db.start_tick(conn, dry_run=True)
     assert main(["tick", "--dry-run"]) == 0
     assert conn.execute("SELECT status FROM ticks WHERE id = ?", (dead,)).fetchone()[0] == "abandoned"
-
-
-def test_stale_canopy_lease_is_logged_not_returned(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    overseer_does(monkeypatch)
-    slot = {"name": "1", "path": "/pool/1/repo", "status": "leased", "lease_id": "abc", "lease_holder": "canopy:P-1"}
-    treehouse_state.write_text(json.dumps({"slots": [slot]}))
-    assert main(["tick", "--dry-run"]) == 0
-    calls = json.loads(treehouse_state.read_text())["calls"]
-    assert [c[0] for c in calls] == ["status"]
-    log = (canopy_env.state_dir / "canopy.log").read_text()
-    assert '"lease_holder": "canopy:P-1"' in log
 
 
 def test_prompt_override(

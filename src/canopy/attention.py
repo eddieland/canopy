@@ -1,16 +1,29 @@
 """The attention list: what needs a human, derived from the journal (DESIGN §14).
 
-The overseer records attention items as decisions with action `attention:<reason>` every tick the cause holds. The
+Attention items are decisions with action `attention:<reason>`, recorded every tick the cause holds: by the overseer
+for what it reads in the world, and by the harness for runs that ended in a way a human must look at (`from_runs`). The
 current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
 longer records it. Rendering `attention.md`, diffing, and `notify.cmd` arrive in M3.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 
+from canopy import db
+
 ACTION_PREFIX = "attention:"
+# Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
+# worker left no usable result line.
+RUN_REASONS = {
+    "crashed": "crashed",
+    "unpushed": "unpushed",
+    "unknown": "unknown_result",
+    "timeout": "unknown_result",
+    "failed": "worker_failed",
+}
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
 
@@ -58,3 +71,44 @@ def current(conn: sqlite3.Connection) -> list[Item]:
             since = earlier[1]
         items.append(Item(item_id[0], item_id[1], detail, since))
     return items
+
+
+@dataclass(frozen=True)
+class RunItem:
+    """An attention item the harness raises for a run."""
+
+    ticket_key: str
+    reason: str
+    detail: str
+
+
+def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
+    """Return an item for each open ticket whose latest run ended in a status listed in RUN_REASONS.
+
+    The cause holds until a newer run starts for the ticket or the ticket is marked done.
+    """
+    done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
+    items: list[RunItem] = []
+    for key, run in sorted(db.latest_runs(conn).items()):
+        reason = RUN_REASONS.get(str(run["status"]))
+        if reason is None or key in done:
+            continue
+        items.append(RunItem(key, reason, _detail(run)))
+    return items
+
+
+def _detail(run: sqlite3.Row) -> str:
+    note = ""
+    if run["result_json"]:
+        try:
+            result: object = json.loads(str(run["result_json"]))
+        except json.JSONDecodeError:
+            result = None
+        if isinstance(result, dict):
+            harness: object = result.get("harness")
+            summary: object = result.get("summary")
+            note = str(harness or summary or "")
+    text = f"run {run['id']} ({run['kind']}, {run['branch']}) ended {run['status']}"
+    if note:
+        text += f": {note}"
+    return f"{text}; log {run['log_path']}"[:2000]

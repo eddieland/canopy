@@ -14,9 +14,11 @@ conventions. Run the tests that cover your change.
 ## Obligations
 
 - Stay inside {{SLOT}}. Do not touch files outside it.
-- Commit with clear messages. Push only to `{{BRANCH}}`.
+- Commit with clear messages. Keep the agent runtime's attribution trailer, or add
+  `Co-authored-by: canopy worker <noreply@canopy.invalid>`: agent work is never disguised as human work.
+- Push only to `{{BRANCH}}`, with a plain `git push origin {{BRANCH}}`. Never force.
 - Open a PR against `{{BASE}}` through the GitHub MCP, with the ticket key in
-  the title, a description of the change, and the label `agent`.
+  the title, a description of the change, and the label `{{PR_LABEL}}`.
 - Comment on the ticket: what you did, the PR link, anything a reviewer should
   look at first.
 - Never approve, merge, or close PRs. Never transition the ticket, including indirectly: refer to it by key only, with

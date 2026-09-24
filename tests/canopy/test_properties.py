@@ -9,8 +9,9 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from canopy import config, init
+from canopy import config, dispatch, init
 from canopy.cli import CURSOR_VALUE_RE, KEY_RE, MAX_TEXT, REASON_RE, CursorType, TextType, valid_key
+from canopy.procs import SubprocessRunner
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
@@ -42,7 +43,9 @@ def test_every_key_the_pattern_describes_is_accepted(value: str) -> None:
     assert valid_key(value)
 
 
-@pytest.mark.parametrize("pattern", [KEY_RE, REASON_RE, CURSOR_VALUE_RE, init.PROVIDER_RE])
+@pytest.mark.parametrize(
+    "pattern", [KEY_RE, REASON_RE, CURSOR_VALUE_RE, init.PROVIDER_RE, dispatch.SLUG_RE, config.BRANCH_PREFIX_RE]
+)
 @given(data=st.data())
 def test_patterns_accept_nothing_around_a_valid_value(pattern: re.Pattern[str], data: st.DataObject) -> None:
     value = data.draw(near(pattern))
@@ -134,3 +137,26 @@ def test_repository_file_cannot_set_user_only_keys(tmp_path: Path, name: str) ->
     user.write_text('[tracker]\nlabels = ["mine"]\n')
     with pytest.raises(config.ConfigError, match="user-only"):
         config.load(tmp_path, user)
+
+
+@settings(max_examples=50, deadline=None)
+@given(
+    st.from_regex(config.BRANCH_PREFIX_RE, fullmatch=True),
+    st.from_regex(KEY_RE, fullmatch=True),
+    st.from_regex(dispatch.SLUG_RE, fullmatch=True),
+)
+def test_branch_names_are_plain_git_branches(prefix: str, key: str, slug: str) -> None:
+    # Branch names reach git's argv. git must read each as a branch name, never an option or a revision expression.
+    branch = dispatch.branch_name(prefix, key, slug)
+    assert not branch.startswith("-")
+    assert not {"..", "@{", "//", " "} & {branch[i : i + 2] for i in range(len(branch))}
+    result = SubprocessRunner().run(["git", "check-ref-format", "--branch", branch])
+    assert result.ok, (branch, result.stderr)
+    assert result.stdout.strip() == branch
+
+
+@given(near(dispatch.SLUG_RE))
+def test_accepted_slugs_are_short_and_plain(value: str) -> None:
+    if dispatch.valid_slug(value):
+        assert 1 <= len(value) <= 40
+        assert set(value) <= set(string.ascii_lowercase + string.digits + "-")

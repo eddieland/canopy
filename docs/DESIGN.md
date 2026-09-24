@@ -62,13 +62,16 @@ canopy (harness, Python)
   db.py          SQLite journal, migrations
   config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
   treehouse.py   status --json, get --lease --json, return --force --if-lease-id
-  dispatch.py    capacity guard, lease, spawn detached _run
+  dispatch.py    guards, lease, render the worker prompt, spawn detached _run
+  worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
   attention.py   the attention list from the journal; later render attention.md, diff, notify
   init.py        canopy init: config files, agent definitions, tracker skill, branch protection text
-  logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id
+  logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
   context.py     the Context every command passes around: config, repository root, db connection, runner
   resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
-  procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group
+  procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
+                 detached spawns and pid liveness
+  __main__.py    python -m canopy, how dispatch starts _run from the same installation
 
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
 agents/          OpenCode agent definitions: canopy-overseer, canopy-worker
@@ -101,17 +104,20 @@ Roles:
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
    is gone. Insert a `ticks` row; its id tags all logs.
 3. **Reconcile local state.**
-   - For each `runs` row with `status='running'`: if the pid is dead, mark
-     `crashed`, run `treehouse return --force --if-lease-id` on its slot,
-     record it.
+   - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
+     kill the process group of the worker `_run` started, if any of it is left (`runs.worker_pid`); mark the run
+     `crashed`; run `treehouse return --force --if-lease-id` on its slot; log it. A zombie counts as dead. A pid
+     reused by an unrelated process reads as alive, so that run is left running; this is a residual, not a guard.
    - For each leased slot in `treehouse status --json` with no live
      `runs` row and `lease_holder` matching our prefix: return it, log it.
    - Compute `capacity = max_workers - count(runs where status='running')`.
-   - If `treehouse status` fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
+   - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
+   - Record the harness's attention items for runs (§14) as this tick's decisions.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block: a `## State`
    section holding one JSON object with the tick id, whether it is a dry run, the repository root, tracker config
    (provider, query, labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity,
-   policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, attempts, cooldown until).
+   policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, attempts, cooldown until,
+   and the ticket's latest run: id, kind, status, branch, start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root, timeout `overseer_timeout_minutes`, and
    `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention` read that variable to know
    which tick they belong to, and refuse if it is unset or names a tick that is not running (D020). The overseer's
@@ -120,7 +126,8 @@ Roles:
    tick as `overseer_failed`.
    In `--dry-run`, the state block says so; `canopy dispatch` starts nothing and records the decision as
    `dispatch:<kind>` with rationale `dry run: not dispatched`; `canopy ticket set` records phases but does not advance
-   cursors, so the first live tick still sees everything as new. The overseer otherwise behaves as in a live tick.
+   cursors, so the first live tick still sees everything as new. The overseer otherwise behaves as in a live tick, and
+   so does reconcile: it closes dead runs and returns stale leases in a dry run too.
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
    Everything the overseer writes is rendered into the next tick's prompt, so the CLI bounds it: keys and attention
    reasons are validated, phases come from the table in §7, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and
@@ -160,33 +167,53 @@ provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --kind implement|fix-ci|resume [--base BRANCH]
+`canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH]
 [--context FILE]`:
 
 1. Refuse if `--dry-run` tick, if capacity is zero, if a `runs` row for KEY
    is `running`, or if the kind's attempt limit or cooldown blocks it. Guards
-   are in code and are not overridable from the prompt.
+   are in code and are not overridable from the prompt. A refusal is recorded as a decision `refused:<guard>` with the
+   reason, and the command exits 1. Guards: `capacity`, `running`, `not_implemented` (`fix-ci`, `resume`, and
+   `--context` until attempt limits and cooldowns exist in M3; `--base` until stacking in M4), `bad_slug`. Failures
+   after the guards are recorded the same way: `no_slot` (the lease failed), `bad_prompt` (the worker prompt did not
+   render), `spawn_failed`. None of them leaves a slot leased.
+   Dispatches are serialized by a blocking `flock` on `<state_dir>/dispatch.lock`, held from the guard checks through
+   the spawn, so two dispatches cannot both pass the capacity check.
 2. `treehouse get --lease --lease-holder canopy:<KEY> --json`. Record the
-   `runs` row with slot path, lease id, holder, kind, started_at.
-3. Render the worker prompt for the kind, with KEY, tracker provider, branch name (`agent/<KEY>-<slug>`), base branch,
-   context file contents, and the result contract below.
-4. Spawn `canopy _run <run_id>` detached (`setsid`, stdio to
-   `~/.canopy/runs/<run_id>.log`). Return immediately.
+   `runs` row with slot path, lease id, holder, kind, base branch (treehouse's), branch, started_at.
+3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, base branch, PR label, needs-human
+   label, timeout, context file contents, and the result contract below. The branch is
+   `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title, lowercase words joined by
+   single hyphens, at most 40 characters, `work` if it gives none. Placeholders are `{{NAME}}`, replaced in one pass;
+   an unknown one is `bad_prompt`. The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the
+   operator.
+4. Spawn `python -m canopy _run <run_id>` with the interpreter canopy runs under, detached (`setsid`, stdin from
+   `/dev/null`, stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository root). Record its
+   pid in the run. Return immediately.
 
-`canopy _run <run_id>`:
+`canopy _run <run_id>` (hidden from `--help`):
 
-1. In the slot: `git fetch origin`; if `origin/<branch>` exists,
-   `git checkout -B <branch> origin/<branch>`, else `git checkout -b <branch>
-   origin/<base>`.
-2. Run `worker_cmd` with cwd = slot, timeout `worker_timeout_minutes`.
-3. Parse the last line of stdout as JSON. Missing or invalid means
-   `status='unknown'`.
-4. Verify the branch is pushed (`git rev-parse origin/<branch>` equals HEAD).
-   If not and the tree has commits, push once. If still not pushed, record
+1. Claim the run: set its pid to this process's pid, only if the run is `running` and its pid is unset or already this
+   pid. Anything else is refused, so the overseer cannot start a second worker on a run. Drop `CANOPY_TICK_ID` from the
+   environment, so the worker cannot act as the overseer of the tick that dispatched it.
+2. In the slot: `git fetch origin`; if `origin/<branch>` exists,
+   `git checkout -B <branch> origin/<branch>`, else `git checkout --no-track -B <branch>
+   origin/<base>`. `-B` because a branch left in the pool's repository by an earlier run on another slot would make
+   `-b` fail; `--no-track` so that a bare `git push` never targets the base. Note the branch's commit.
+3. Run `worker_cmd` with cwd = slot, timeout `worker_timeout_minutes`. Record the worker's pid in `runs.worker_pid`;
+   the worker leads its own process group. The worker's stdout and stderr go to the run log.
+4. Parse the last non-empty line of stdout as the result contract. Missing or invalid means `status='unknown'`; a
+   timeout means `status='timeout'`.
+5. Verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local branch).
+   If not and the branch has commits since step 2, push once, without force. If still not pushed, record
    `status='unpushed'`; the checkpoint invariant failed and a human looks.
-5. Always: `treehouse return --force --if-lease-id <id> --if-lease-holder
-   <holder> <slot>`. Trap ensures this runs on any exit path.
-6. Update the `runs` row: ended_at, status, result_json.
+6. Always: `treehouse return --force --if-lease-id <id> --if-lease-holder
+   <holder> <slot>`. Trap ensures this runs on any exit path: a normal exit, an exception, and SIGTERM, SIGHUP, or
+   SIGINT (the run is then `crashed`). SIGKILL cannot be trapped; reconcile handles it.
+7. Update the `runs` row: ended_at, status, result_json. A git failure before or after the worker is `crashed`.
+   `result_json` holds the validated result, text fields cut at 2000 characters, plus a `harness` note saying why the
+   status differs from what the worker reported. A reported `pr` that is a plain `https://` URL is copied to
+   `tickets.pr_url` for display.
 
 Worker result contract, one JSON line, last line of stdout:
 
@@ -197,7 +224,8 @@ Worker result contract, one JSON line, last line of stdout:
 
 Worker obligations, stated in every worker prompt:
 
-- Work only inside the worktree. Push only to `agent/<KEY>-*`.
+- Work only inside the worktree. Push only to `agent/<KEY>-*`, never with force.
+- Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
 - Leave a comment on the ticket describing what was done and linking the PR.
 - On `blocked`: post the question as a ticket comment, add
   `needs_human_label`, do not push half-finished speculative work beyond a
@@ -237,8 +265,10 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
 - `tickets`: one row per ticket key seen; last derived phase, cursors
   (`last_comment_id`, `last_review_id`, `last_ci_run_id`), attempt counters,
   cooldown_until, done flag. Cursors make ticks incremental.
-- `runs`: one row per worker execution; kind, slot, lease identity, pid,
-  status, result_json. Source for capacity, crash detection, attempt counts.
+- `runs`: one row per worker execution; kind, slot, lease identity, pid of `canopy _run`, pid of the worker agent
+  (`worker_pid`, migration 0002), status, result_json. Status is `running`, `done`, `blocked`, `failed` (the three the
+  worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for capacity, crash detection, attempt
+  counts.
 - `decisions`: one row per overseer decision; tick id, ticket, action,
   rationale. Audit log and prompt-evaluation corpus.
 - `notifications`: fingerprint of each attention item sent, so the attention
@@ -337,7 +367,8 @@ Rules:
   file may set any value, including a looser one: repository policy is a shared default, not a limit a team can impose
   on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their machine could not enforce one
   anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
-- `trust.branch_prefix` must be non-empty and end in `/`.
+- `trust.branch_prefix` must be non-empty and end in `/`, and is made of plain ref components: letters, digits, `_`,
+  and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
 - `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
   label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
 - Reading is `tomllib`, merging is a key-by-key dict merge, and validation is pydantic models that carry each key's
@@ -377,9 +408,16 @@ The runtime is swappable by editing the two command templates. No interface.
 
 Rendered to `~/.canopy/attention.md`, grouped by reason, one line per item:
 ticket key, reason, link, age. Reasons are exactly the attention rows in the
-phase table plus `crashed`, `unpushed`, `unknown_result`, `attempt_limit`.
+phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`.
 `canopy status` prints it. Items disappear when their cause is gone; no manual
 dismissal.
+
+The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
+ended `crashed` is `crashed`; `unpushed` is `unpushed`; `unknown` or `timeout` is `unknown_result`; `failed` is
+`worker_failed`. The detail names the run, its kind and branch, the harness note or the worker's summary, and the run
+log. The cause is gone when a newer run starts for the ticket or the ticket is marked done. The overseer does not
+dispatch such a ticket again until an authorized replier has commented after the run ended; that is how a human says
+"try again".
 
 The overseer records an item with `canopy attention <KEY> <reason> --detail "<link or text>"`, every tick the cause
 holds. It is stored as a decision with action `attention:<reason>`; there is no separate table (D020). The current list
@@ -389,8 +427,11 @@ match `[a-z][a-z0-9_]*`.
 
 ## 15. Failure handling
 
-- Worker crash: detected by pid liveness in reconcile; slot returned; ticket
-  goes to attention with `crashed`. Not auto-redispatched.
+- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; slot returned; ticket
+  goes to attention with `crashed`. Not auto-redispatched: the harness never restarts a run, and the overseer prompt
+  waits for an authorized reply (§14). `implement` has no attempt limit in code yet (ROADMAP M3).
+- Worker exits without a result, times out, reports `failed`, or leaves commits unpushed: `_run` returns the slot and
+  records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.
 - treehouse unavailable or failing in reconcile: tick closes with `reconcile_failed`; the overseer does not run.
 - Overseer timeout or bad output: tick closes with `overseer_failed`; nothing
