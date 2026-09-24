@@ -6,26 +6,19 @@ from canopy.cli import main
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exc:
-        main(["--version"])
-    assert exc.value.code == 0
+    assert main(["--version"]) == 0
     assert capsys.readouterr().out.strip() == f"canopy {version('canopy')}"
 
 
-def test_help(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exc:
-        main(["--help"])
-    assert exc.value.code == 0
-    assert capsys.readouterr().out.startswith("usage: canopy")
-
-
-def test_no_arguments_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main([]) == 0
-    assert capsys.readouterr().out.startswith("usage: canopy")
+@pytest.mark.parametrize("argv", [["--help"], ["-h"], []])
+def test_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
+    assert main(argv) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("Usage: canopy")
+    for command in ("init", "tick", "status", "dispatch", "decide", "attention", "ticket"):
+        assert f"  {command} " in out
 
 
 def test_unknown_argument_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as exc:
-        main(["--no-such-flag"])
-    assert exc.value.code == 2
-    assert "unrecognized arguments" in capsys.readouterr().err
+    assert main(["--no-such-flag"]) == 2
+    assert "No such option '--no-such-flag'" in capsys.readouterr().err

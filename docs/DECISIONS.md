@@ -298,3 +298,44 @@ Decision: `tests/fakes/agent` imports `subprocess` with a `noqa: TID251` naming 
 external agent runtime, not canopy code, and runs as its own process.
 Consequences: the e2e test exercises the real CLI in separate processes, environment variables included.
 Revisit: if a second fake needs the same, move the exception to `per-file-ignores` for `tests/fakes/`.
+
+## D025. click for the CLI
+
+Context: `argparse` was enough for M1, but the CLI is the surface both the operator and the overseer use, and it grows
+with every milestone. Custom argument types, per-command help, and exit codes were being rebuilt by hand.
+Decision: `click`. `cli.main` runs the click group in non-standalone mode and returns an exit code, so tests call it
+directly. Usage errors exit 2, refusals (`CliError`) exit 1, config and migration errors exit 2. Ticket keys, reasons,
+cursors, and journal text are click parameter types. `decide [KEY] ACTION` keeps its syntax, which the overseer prompt
+uses, by parsing its positionals by hand: click has no optional positional before a required one.
+Consequences: one runtime dependency with no dependencies of its own. Help text lives in docstrings. Error wording
+changed (`Error: ...`); nothing parses it.
+Revisit: if click's typing forces suppressions under pyrefly strict. Click 8.5's generic `ParamType` needed explicit
+type parameters but no suppressions.
+
+## D026. pydantic for validating config and other programs' output
+
+Context: `config.py` carried a key table, a type checker, and a builder that duplicated each other, and `treehouse.py`
+hand-checked JSON field by field. The worker result contract in M2 is more untrusted JSON of the same kind.
+Decision: pydantic v2 models. Config sections are models whose fields carry their scope and tighten direction as
+`Annotated` metadata, so the schema is in one place. `Strict*` types keep `max_workers = true` and quoted numbers
+errors. Defaults are validated too, which is what expands `~` in the default `state_dir`. The scope and tighten checks
+stay plain code that runs per file before the merge (TRUST_MODEL T7); pydantic validates the merged result, and errors
+are mapped back to the file each value came from. treehouse output is parsed with models that ignore unknown fields.
+This supersedes the "stdlib only" line in D016; the layering itself is unchanged.
+Consequences: pydantic-core is a compiled wheel; `uv tool install` handles it, but M5's clean-machine install check
+covers it. Error messages use pydantic's wording. pydantic-settings is deliberately not used: its environment and
+dotenv sources are the kind of back door T7 closes.
+Revisit: if the compiled dependency causes install friction on a coworker machine.
+
+## D027. hypothesis for property tests of validators (dev only)
+
+Context: the validators between agent-written text and paths, argv, and prompts are the harness's security surface.
+Example tests check the cases someone thought of. Writing the first property tests found that `$` in a Python regex
+matches before a trailing newline, so `PROJ-1\n` was a valid key. That bug had shipped in M1; it is fixed there by
+using `fullmatch`.
+Decision: `hypothesis` as a dev dependency. Property tests live in `tests/canopy/test_properties.py` and cover
+keys, reasons, cursors, journal text, command rendering, and repository policy. Strategies generate near-valid inputs
+(a valid value with junk around it), since uniformly random text almost never lands where anchoring bugs are.
+Consequences: a slower test run by a couple of seconds. Hypothesis keeps an example database in `.hypothesis/`,
+already gitignored.
+Revisit: if the suite's runtime becomes a problem; lower `max_examples` before dropping tests.

@@ -35,10 +35,9 @@ def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_ru
 def test_every_key_taking_command_rejects_bad_keys(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], argv: list[str], key: str
 ) -> None:
-    with pytest.raises(SystemExit) as exc:
-        main([a.replace("{key}", key) for a in argv])
-    assert exc.value.code == 2
-    assert "invalid ticket key" in capsys.readouterr().err or key.startswith("-")
+    assert main([a.replace("{key}", key) for a in argv]) == 2
+    err = capsys.readouterr().err
+    assert "invalid ticket key" in err or (key.startswith("-") and "No such option" in err)
 
 
 def test_journal_commands_need_a_running_tick(
@@ -70,10 +69,9 @@ def test_decide_needs_a_key_except_for_skip(
 ) -> None:
     in_tick(conn, monkeypatch)
     assert main(["decide", "wait", "--rationale", "r"]) == 2
-    with pytest.raises(SystemExit):
-        main(["decide", "PROJ-1", "dispatch:implement", "--rationale", "r"])
-    with pytest.raises(SystemExit):
-        main(["decide", "PROJ-1", "wait", "--rationale", "   "])
+    assert main(["decide", "PROJ-1", "dispatch:implement", "--rationale", "r"]) == 2
+    assert main(["decide", "PROJ-1", "wait", "--rationale", "   "]) == 2
+    assert main(["decide", "PROJ-1", "wait", "extra", "--rationale", "r"]) == 2
 
 
 def test_long_text_is_truncated(
@@ -89,8 +87,7 @@ def test_attention_reason_format(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     in_tick(conn, monkeypatch)
-    with pytest.raises(SystemExit):
-        main(["attention", "PROJ-1", "Needs Reviewer", "--detail", "d"])
+    assert main(["attention", "PROJ-1", "Needs Reviewer", "--detail", "d"]) == 2
 
 
 def test_dispatch_outside_dry_run_is_refused_and_recorded(
@@ -122,8 +119,7 @@ def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn:
 
 @pytest.mark.parametrize("value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)"])
 def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
-    with pytest.raises(SystemExit):
-        main(["ticket", "set", "PROJ-1", "--cursor", value])
+    assert main(["ticket", "set", "PROJ-1", "--cursor", value]) == 2
 
 
 def test_status_and_attention_ages(
@@ -166,10 +162,7 @@ def test_trailing_line_breaks_are_not_part_of_a_valid_key(
 ) -> None:
     # `$` in a Python regex also matches before a trailing newline; validation must use the whole string.
     in_tick(conn, monkeypatch)
-    with pytest.raises(SystemExit):
-        main(["decide", key, "wait", "--rationale", "r"])
-    with pytest.raises(SystemExit):
-        main(["attention", "PROJ-1", "needs_reviewer\n", "--detail", "d"])
-    with pytest.raises(SystemExit):
-        main(["ticket", "set", "PROJ-1", "--cursor", "comment=1\n"])
+    assert main(["decide", key, "wait", "--rationale", "r"]) == 2
+    assert main(["attention", "PROJ-1", "needs_reviewer\n", "--detail", "d"]) == 2
+    assert main(["ticket", "set", "PROJ-1", "--cursor", "comment=1\n"]) == 2
     assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0

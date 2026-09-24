@@ -41,9 +41,10 @@ entry says otherwise.
   narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
-- Stdlib first: `argparse`, `sqlite3`, `tomllib`, `subprocess`, `fcntl`,
-  `json`, `logging`. Add a third-party dependency only when stdlib makes the
-  code materially worse, and record why.
+- Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only
+  when stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic`
+  for validating config and anything parsed from another program's output (D026), and `hypothesis` for property tests
+  of input validators (D027, dev only).
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no
   GitHub client. Connectivity to those systems is the agent runtime's MCP
   servers. The harness knows nothing about Jira or GitHub beyond strings in

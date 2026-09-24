@@ -340,7 +340,9 @@ Rules:
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
   label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
-- Merging is stdlib: `tomllib` plus a key-by-key dict merge.
+- Reading is `tomllib`, merging is a key-by-key dict merge, and validation is pydantic models that carry each key's
+  type, default, scope, and tighten direction (D026). Scope and tighten checks run per file before the merge, so errors
+  name the file that caused them.
 
 A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
 word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must

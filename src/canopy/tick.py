@@ -90,7 +90,7 @@ def reconcile(ctx: Context, log: logs.TickAdapter) -> prompts.Capacity:
                 "canopy lease with no running worker; not returned until M2",
                 extra={"slot": str(slot.path), "lease_holder": slot.lease_holder, "lease_id": slot.lease_id},
             )
-    capacity = prompts.Capacity(max_workers=ctx.config.max_workers, running=len(running))
+    capacity = prompts.Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running))
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
     return capacity
 

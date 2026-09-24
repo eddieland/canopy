@@ -18,7 +18,7 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.policy.max_fix_ci_attempts == 2
     assert cfg.trust.branch_prefix == "agent/"
     assert cfg.trust.authorized_repliers == ()
-    assert cfg.max_workers == 2
+    assert cfg.capacity.max_workers == 2
     assert cfg.paths.state_dir == canopy_env.state_dir
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
 
@@ -87,38 +87,53 @@ def test_missing_user_file_says_run_init(canopy_env: CanopyEnv) -> None:
 
 def test_repository_file_is_optional_but_required_keys_are_not(canopy_env: CanopyEnv) -> None:
     canopy_env.repo_file.unlink()
-    with pytest.raises(ConfigError, match=r"tracker\.provider, tracker\.query"):
+    with pytest.raises(ConfigError) as exc:
         load(canopy_env.repo, canopy_env.user_file)
+    assert "missing required key tracker.provider" in str(exc.value)
+    assert "missing required key tracker.query" in str(exc.value)
 
 
 @pytest.mark.parametrize(
     ("user_extra", "message"),
     [
-        ("[capacity]\nmax_workers = true\n", "must be an integer"),
-        ("[capacity]\nmax_workers = -1\n", "must not be negative"),
-        ("[trust]\nauthorized_repliers = [1]\n", "must be a list of strings"),
+        ("[capacity]\nmax_workers = true\n", r"capacity\.max_workers: Input should be a valid integer"),
+        ("[capacity]\nmax_workers = '2'\n", r"capacity\.max_workers: Input should be a valid integer"),
+        ("[capacity]\nmax_workers = -1\n", "greater than or equal to 0"),
+        ("[runtime]\nworker_timeout_minutes = 0\n", "greater than or equal to 1"),
+        ("[trust]\nauthorized_repliers = [1]\n", r"trust\.authorized_repliers\[0\]: Input should be a valid string"),
+        ("[trust]\nauthorized_repliers = ['  ']\n", "must not be empty"),
         ("[trust]\nbranch_prefix = 'agent'\n", "end in '/'"),
-        ("[notify]\ncmd = 3\n", "must be a string"),
+        ("[notify]\ncmd = 3\n", "Input should be a valid string"),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n" + user_extra)
+    header, line = user_extra.rstrip("\n").split("\n", 1)
+    text = canopy_env.user_file.read_text()
+    # Add the key to its table, creating the table if the file has none; TOML forbids repeating a header.
+    text = text.replace(header, f"{header}\n{line}", 1) if header in text else f"{text}\n{header}\n{line}\n"
+    canopy_env.write_user(text)
     with pytest.raises(ConfigError, match=message):
         load(canopy_env.repo, canopy_env.user_file)
 
 
 def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace('["agent-ready-tester"]', "[]"))
-    with pytest.raises(ConfigError, match="at least one label"):
+    with pytest.raises(ConfigError, match="at least 1 item"):
         load(canopy_env.repo, canopy_env.user_file)
 
 
 @pytest.mark.parametrize(
-    "replacement", ["canopy-overseer", "canopy-overseer {prompt} --copy {prompt}", "{prompt}{prompt}"]
+    ("replacement", "message"),
+    [
+        ("canopy-overseer", r"runtime\.overseer_cmd: Value error, must contain \{prompt\} exactly once"),
+        ("canopy-overseer {prompt} --copy {prompt}", r"must contain \{prompt\} exactly once"),
+        ("{prompt}{prompt}", r"must contain \{prompt\} exactly once"),
+        ('canopy-overseer "{prompt}', "No closing quotation"),
+    ],
 )
-def test_command_template_needs_prompt_exactly_once(canopy_env: CanopyEnv, replacement: str) -> None:
+def test_command_template_is_checked(canopy_env: CanopyEnv, replacement: str, message: str) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace("canopy-overseer {prompt}", replacement))
-    with pytest.raises(ConfigError, match=r"must contain \{prompt\} exactly once"):
+    with pytest.raises(ConfigError, match=message):
         load(canopy_env.repo, canopy_env.user_file)
 
 

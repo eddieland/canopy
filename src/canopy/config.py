@@ -4,6 +4,10 @@ Every key has a scope (DESIGN §12). A shared key may be set in either file and 
 be set only in the user file; a repository file that sets one is an error, because anyone who can push to the
 repository controls that file (TRUST_MODEL T7). Unknown keys are errors in both files. Repository `policy.*` values
 apply only when stricter than the built-in defaults.
+
+The models below are the schema: each field carries its type, default, and scope, and policy fields say which
+direction is stricter. `load` enforces scopes and the tighten rule per file, merges, then lets pydantic validate
+(D026).
 """
 
 from __future__ import annotations
@@ -14,7 +18,12 @@ import tomllib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Annotated
+
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
+
+if TYPE_CHECKING:
+    from pydantic.fields import FieldInfo
 
 REPO_FILE_NAME = "canopy.toml"
 
@@ -30,103 +39,160 @@ class Scope(Enum):
     USER = "user-only"
 
 
-type Kind = Literal["str", "int", "strlist"]
-type Value = str | int | list[str]
-type Tighten = Literal["lower", "higher"] | None
+class Tighten(Enum):
+    """For repository policy: which direction is stricter than the default."""
+
+    LOWER = "lower"
+    HIGHER = "higher"
 
 
-@dataclass(frozen=True)
-class KeySpec:
-    """One config key: its type, default, scope, and which direction is stricter for policy."""
-
-    name: str
-    scope: Scope
-    kind: Kind
-    default: Value | None  # None: no default; the key must be set.
-    tighten: Tighten = None  # For repository policy: which direction is stricter.
+def _non_blank(value: str) -> str:
+    if not value.strip():
+        raise ValueError("must not be empty")
+    return value
 
 
-KEYS: tuple[KeySpec, ...] = (
-    KeySpec("tracker.provider", Scope.SHARED, "str", None),
-    KeySpec("tracker.query", Scope.SHARED, "str", None),
-    KeySpec("tracker.needs_human_label", Scope.SHARED, "str", "needs-human"),
-    KeySpec("tracker.labels", Scope.USER, "strlist", None),
-    KeySpec("policy.max_fix_ci_attempts", Scope.SHARED, "int", 2, "lower"),
-    KeySpec("policy.fix_ci_cooldown_minutes", Scope.SHARED, "int", 30, "higher"),
-    KeySpec("policy.max_resume_attempts", Scope.SHARED, "int", 3, "lower"),
-    KeySpec("trust.branch_prefix", Scope.SHARED, "str", "agent/"),
-    KeySpec("trust.pr_label", Scope.SHARED, "str", "agent"),
-    KeySpec("trust.authorized_repliers", Scope.USER, "strlist", []),
-    KeySpec("capacity.max_workers", Scope.USER, "int", 2),
-    KeySpec("runtime.overseer_cmd", Scope.USER, "str", "opencode run --agent canopy-overseer {prompt}"),
-    KeySpec("runtime.worker_cmd", Scope.USER, "str", "opencode run --agent canopy-worker {prompt}"),
-    KeySpec("runtime.overseer_timeout_minutes", Scope.USER, "int", 15),
-    KeySpec("runtime.worker_timeout_minutes", Scope.USER, "int", 45),
-    # Empty means "prompts/ next to the user file"; resolved in `load`, since it depends on XDG_CONFIG_HOME.
-    KeySpec("paths.prompt_overrides", Scope.USER, "str", ""),
-    KeySpec("paths.state_dir", Scope.USER, "str", "~/.canopy"),
-    KeySpec("notify.cmd", Scope.USER, "str", ""),
-)
-SPECS: dict[str, KeySpec] = {k.name: k for k in KEYS}
+def _branch_prefix(value: str) -> str:
+    if not value or not value.endswith("/"):
+        raise ValueError("must be non-empty and end in '/'")
+    return value
 
 
-@dataclass(frozen=True)
-class Tracker:
+def command_words(template: str) -> list[str]:
+    """Split a command template into words, as `render_command` does. It must mention `{prompt}` exactly once."""
+    words = shlex.split(template)
+    if not words:
+        raise ValueError("must not be empty")
+    # Exactly once: the prompt must land in one argument, not be copied into several (D023).
+    if sum(w.count("{prompt}") for w in words) != 1:
+        raise ValueError("must contain {prompt} exactly once")
+    return words
+
+
+def _command_template(value: str) -> str:
+    command_words(value)
+    return value
+
+
+def _expand(value: Path) -> Path:
+    return value.expanduser()
+
+
+# bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
+NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
+Count = Annotated[StrictInt, Field(ge=0)]
+Minutes = Annotated[StrictInt, Field(ge=1)]
+CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
+UserPath = Annotated[Path, AfterValidator(_expand)]
+
+
+class Section(BaseModel):
+    """Base for config tables: unknown keys are errors, values are frozen, defaults are validated."""
+
+    # validate_default: defaults go through the same validators as file values, so `~/.canopy` is expanded.
+    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
+
+
+class Tracker(Section):
     """The `[tracker]` table."""
 
-    provider: str
-    query: str
-    needs_human_label: str
-    labels: tuple[str, ...]
+    provider: Annotated[NonBlank, Scope.SHARED]
+    query: Annotated[NonBlank, Scope.SHARED]
+    needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
+    labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
 
 
-@dataclass(frozen=True)
-class Policy:
+class Policy(Section):
     """The `[policy]` table: attempt limits and cooldowns."""
 
-    max_fix_ci_attempts: int
-    fix_ci_cooldown_minutes: int
-    max_resume_attempts: int
+    max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
+    fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
+    max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
 
 
-@dataclass(frozen=True)
-class Trust:
+class Trust(Section):
     """The `[trust]` table."""
 
-    branch_prefix: str
-    pr_label: str
-    authorized_repliers: tuple[str, ...]
+    branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
+    pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
+    authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
 
 
-@dataclass(frozen=True)
-class Runtime:
+class Capacity(Section):
+    """The `[capacity]` table."""
+
+    max_workers: Annotated[Count, Scope.USER] = 2
+
+
+class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    overseer_cmd: str
-    worker_cmd: str
-    overseer_timeout_minutes: int
-    worker_timeout_minutes: int
+    overseer_cmd: Annotated[CommandTemplate, Scope.USER] = "opencode run --agent canopy-overseer {prompt}"
+    worker_cmd: Annotated[CommandTemplate, Scope.USER] = "opencode run --agent canopy-worker {prompt}"
+    overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
+    worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
 
 
-@dataclass(frozen=True)
-class Paths:
+class Paths(Section):
     """The `[paths]` table."""
 
-    prompt_overrides: Path
-    state_dir: Path
+    # No static default: `load` supplies `prompts/` next to the user file, which depends on XDG_CONFIG_HOME.
+    prompt_overrides: Annotated[UserPath, Scope.USER]
+    state_dir: Annotated[UserPath, Scope.USER] = Path("~/.canopy")
 
 
-@dataclass(frozen=True)
-class Config:
+class Notify(Section):
+    """The `[notify]` table."""
+
+    cmd: Annotated[StrictStr, Scope.USER] = ""
+
+
+class Config(Section):
     """The merged, validated configuration."""
 
     tracker: Tracker
     policy: Policy
     trust: Trust
-    max_workers: int
+    capacity: Capacity
     runtime: Runtime
     paths: Paths
-    notify_cmd: str
+    notify: Notify
+
+
+SECTIONS: dict[str, type[Section]] = {
+    "tracker": Tracker,
+    "policy": Policy,
+    "trust": Trust,
+    "capacity": Capacity,
+    "runtime": Runtime,
+    "paths": Paths,
+    "notify": Notify,
+}
+
+
+@dataclass(frozen=True)
+class KeySpec:
+    """One config key's scope and tighten direction, read from its field's metadata."""
+
+    name: str
+    scope: Scope
+    tighten: Tighten | None
+    field: FieldInfo
+
+
+def _spec(section: str, key: str, field: FieldInfo) -> KeySpec:
+    scopes = [m for m in field.metadata if isinstance(m, Scope)]
+    tightens = [m for m in field.metadata if isinstance(m, Tighten)]
+    if len(scopes) != 1:
+        raise TypeError(f"{section}.{key} must declare exactly one Scope")
+    return KeySpec(f"{section}.{key}", scopes[0], tightens[0] if tightens else None, field)
+
+
+SPECS: dict[str, KeySpec] = {
+    f"{section}.{key}": _spec(section, key, field)
+    for section, model in SECTIONS.items()
+    for key, field in model.model_fields.items()
+}
 
 
 def user_config_dir() -> Path:
@@ -154,7 +220,7 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
     user_file = user_file or user_config_path()
     repo_file = repo_root / REPO_FILE_NAME
 
-    repo_values: dict[str, Value] = _read(repo_file) if repo_file.exists() else {}
+    repo_values: dict[str, object] = _read(repo_file) if repo_file.exists() else {}
     for name in repo_values:
         if SPECS[name].scope is Scope.USER:
             raise ConfigError(
@@ -164,24 +230,25 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
         raise ConfigError(f"no user config at {user_file}; run `canopy init`")
     user_values = _read(user_file)
 
-    merged: dict[str, Value] = {}
-    for spec in KEYS:
-        if spec.default is not None:
-            merged[spec.name] = spec.default
-        if spec.name in repo_values:
-            value = repo_values[spec.name]
-            if spec.tighten is None or _stricter(spec, value):
-                merged[spec.name] = value
-        if spec.name in user_values:
-            merged[spec.name] = user_values[spec.name]
+    merged: dict[str, dict[str, object]] = {section: {} for section in SECTIONS}
+    origin: dict[str, Path] = {}
+    for source, values in ((repo_file, repo_values), (user_file, user_values)):
+        for name, value in values.items():
+            spec = SPECS[name]
+            if source == repo_file and spec.tighten is not None and not _stricter(spec, value):
+                continue
+            section, key = name.split(".", 1)
+            merged[section][key] = value
+            origin[name] = source
+    merged["paths"].setdefault("prompt_overrides", str(user_file.parent / "prompts"))
 
-    missing = [s.name for s in KEYS if s.name not in merged]
-    if missing:
-        raise ConfigError(f"missing required key(s): {', '.join(missing)}; set them in {repo_file} or {user_file}")
-    return _build(merged, user_file)
+    try:
+        return Config.model_validate(merged)
+    except ValidationError as e:
+        raise ConfigError(_describe(e, origin, repo_file, user_file)) from e
 
 
-def _read(path: Path) -> dict[str, Value]:
+def _read(path: Path) -> dict[str, object]:
     try:
         with path.open("rb") as f:
             doc = tomllib.load(f)
@@ -190,148 +257,50 @@ def _read(path: Path) -> dict[str, Value]:
     except OSError as e:
         raise ConfigError(f"{path}: {e.strerror}") from e
 
-    values: dict[str, Value] = {}
+    values: dict[str, object] = {}
     for section, table in doc.items():
         if not isinstance(table, dict):
             raise ConfigError(f"{path}: unknown key {section}")
         for key, raw in table.items():
             name = f"{section}.{key}"
-            spec = SPECS.get(name)
-            if spec is None:
+            if name not in SPECS:
                 raise ConfigError(f"{path}: unknown key {name}")
-            values[name] = _check_type(path, spec, raw)
+            values[name] = raw
     return values
 
 
-def _check_type(path: Path, spec: KeySpec, raw: object) -> Value:
-    if spec.kind == "str" and isinstance(raw, str):
-        return raw
-    # bool is a subclass of int; `max_workers = true` is a mistake, not 1.
-    if spec.kind == "int" and isinstance(raw, int) and not isinstance(raw, bool):
-        if raw < 0:
-            raise ConfigError(f"{path}: {spec.name} must not be negative")
-        return raw
-    if spec.kind == "strlist" and isinstance(raw, list):
-        items: list[str] = []
-        for item in raw:
-            if not isinstance(item, str):
-                break
-            items.append(item)
+def _stricter(spec: KeySpec, value: object) -> bool:
+    """Return whether a repository policy value may replace the default.
+
+    A value of the wrong type is kept, so that validation reports it against the repository file instead of silently
+    dropping it.
+    """
+    default = spec.field.default
+    if not isinstance(value, int) or isinstance(value, bool) or not isinstance(default, int):
+        return True
+    return value < default if spec.tighten is Tighten.LOWER else value > default
+
+
+def _describe(error: ValidationError, origin: dict[str, Path], repo_file: Path, user_file: Path) -> str:
+    lines: list[str] = []
+    for e in error.errors():
+        loc = [str(p) for p in e["loc"]]
+        name = ".".join(loc[:2])
+        where = name + "".join(f"[{p}]" for p in loc[2:])
+        if e["type"] == "missing":
+            files = str(user_file) if SPECS[name].scope is Scope.USER else f"{repo_file} or {user_file}"
+            lines.append(f"missing required key {name}; set it in {files}")
         else:
-            return items
-    expected = {"str": "a string", "int": "an integer", "strlist": "a list of strings"}[spec.kind]
-    raise ConfigError(f"{path}: {spec.name} must be {expected}")
-
-
-def _stricter(spec: KeySpec, value: Value) -> bool:
-    if not isinstance(value, int) or not isinstance(spec.default, int):
-        raise TypeError(f"{spec.name}: policy keys are integers")
-    return value < spec.default if spec.tighten == "lower" else value > spec.default
-
-
-# Typed reads from the merged values, which `_check_type` has already checked per key.
-
-
-def _str(v: dict[str, Value], name: str) -> str:
-    value = v[name]
-    if not isinstance(value, str):
-        raise TypeError(name)
-    return value
-
-
-def _int(v: dict[str, Value], name: str) -> int:
-    value = v[name]
-    if not isinstance(value, int):
-        raise TypeError(name)
-    return value
-
-
-def _list(v: dict[str, Value], name: str) -> tuple[str, ...]:
-    value = v[name]
-    if not isinstance(value, list):
-        raise TypeError(name)
-    return tuple(value)
-
-
-def _validate(v: dict[str, Value], user_file: Path) -> None:
-    labels = _list(v, "tracker.labels")
-    if not labels:
-        raise ConfigError(f"{user_file}: tracker.labels must list at least one label")
-    if not all(label.strip() for label in labels):
-        raise ConfigError(f"{user_file}: tracker.labels entries must not be empty")
-    for name in ("tracker.provider", "tracker.query", "tracker.needs_human_label"):
-        if not _str(v, name).strip():
-            raise ConfigError(f"{name} must not be empty")
-    prefix = _str(v, "trust.branch_prefix")
-    if not prefix or not prefix.endswith("/"):
-        raise ConfigError(f"trust.branch_prefix must be non-empty and end in '/', got {prefix!r}")
-    for name in ("runtime.overseer_cmd", "runtime.worker_cmd"):
-        check_command_template(name, _str(v, name))
-    for name in ("runtime.overseer_timeout_minutes", "runtime.worker_timeout_minutes"):
-        if _int(v, name) == 0:
-            raise ConfigError(f"{name} must be at least 1")
-
-
-def _build(v: dict[str, Value], user_file: Path) -> Config:
-    _validate(v, user_file)
-
-    def s(name: str) -> str:
-        return _str(v, name)
-
-    def i(name: str) -> int:
-        return _int(v, name)
-
-    overrides = s("paths.prompt_overrides")
-    return Config(
-        tracker=Tracker(
-            provider=s("tracker.provider"),
-            query=s("tracker.query"),
-            needs_human_label=s("tracker.needs_human_label"),
-            labels=_list(v, "tracker.labels"),
-        ),
-        policy=Policy(
-            max_fix_ci_attempts=i("policy.max_fix_ci_attempts"),
-            fix_ci_cooldown_minutes=i("policy.fix_ci_cooldown_minutes"),
-            max_resume_attempts=i("policy.max_resume_attempts"),
-        ),
-        trust=Trust(
-            branch_prefix=s("trust.branch_prefix"),
-            pr_label=s("trust.pr_label"),
-            authorized_repliers=_list(v, "trust.authorized_repliers"),
-        ),
-        max_workers=i("capacity.max_workers"),
-        runtime=Runtime(
-            overseer_cmd=s("runtime.overseer_cmd"),
-            worker_cmd=s("runtime.worker_cmd"),
-            overseer_timeout_minutes=i("runtime.overseer_timeout_minutes"),
-            worker_timeout_minutes=i("runtime.worker_timeout_minutes"),
-        ),
-        paths=Paths(
-            prompt_overrides=Path(overrides).expanduser() if overrides else user_file.parent / "prompts",
-            state_dir=Path(s("paths.state_dir")).expanduser(),
-        ),
-        notify_cmd=s("notify.cmd"),
-    )
-
-
-def check_command_template(name: str, template: str) -> list[str]:
-    """Split a command template into words, as `render_command` will. It must mention `{prompt}` exactly once."""
-    try:
-        words = shlex.split(template)
-    except ValueError as e:
-        raise ConfigError(f"{name}: {e}") from e
-    if not words:
-        raise ConfigError(f"{name} must not be empty")
-    # Exactly once: the prompt must land in one argument, not be copied into several (D023).
-    if sum(w.count("{prompt}") for w in words) != 1:
-        raise ConfigError(f"{name} must contain {{prompt}} exactly once")
-    return words
+            source = origin.get(name)
+            prefix = f"{source}: " if source is not None else ""
+            lines.append(f"{prefix}{where}: {e['msg']}")
+    return "\n".join(lines)
 
 
 def render_command(template: str, prompt: str) -> list[str]:
-    """Turn a command template into argv. No shell runs.
+    """Turn a command template into argv. No shell runs (D023).
 
     The template is split with shell word rules, then `{prompt}` is replaced inside each word. The prompt therefore
     always lands in exactly one argument, whatever it contains.
     """
-    return [w.replace("{prompt}", prompt) for w in check_command_template("command", template)]
+    return [w.replace("{prompt}", prompt) for w in command_words(template)]

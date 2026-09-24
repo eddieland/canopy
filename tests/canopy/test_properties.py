@@ -1,0 +1,136 @@
+"""Property tests (D027) for the validators that stand between agent-written text and paths, argv, and prompts."""
+
+import re
+import string
+from pathlib import Path
+
+import click
+import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
+from canopy import config, init
+from canopy.cli import CURSOR_VALUE_RE, KEY_RE, MAX_TEXT, REASON_RE, CursorType, TextType, valid_key
+
+# Characters that mean something to a shell, a path, a glob, or a git ref.
+UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
+fixtures = [HealthCheck.function_scoped_fixture]
+
+
+def near(pattern: re.Pattern[str]) -> st.SearchStrategy[str]:
+    """Strings that match `pattern`, with a little junk around them. Random text almost never lands one character away
+    from a valid value, which is where anchoring bugs live (a trailing newline once passed as part of a key)."""
+    junk = st.text(max_size=3) | st.sampled_from(["\n", "\r\n", " ", "/", ";"])
+    return st.builds(_concat, junk | st.just(""), st.from_regex(pattern, fullmatch=True), junk)
+
+
+def _concat(before: str, value: str, after: str) -> str:
+    return before + value + after
+
+
+@given(st.text() | near(KEY_RE))
+def test_accepted_keys_are_inert(value: str) -> None:
+    if valid_key(value):
+        assert value
+        assert not value.startswith("-")
+        assert not set(value) & UNSAFE
+        assert value.isascii()
+
+
+@given(st.from_regex(KEY_RE, fullmatch=True))
+def test_every_key_the_pattern_describes_is_accepted(value: str) -> None:
+    assert valid_key(value)
+
+
+@pytest.mark.parametrize("pattern", [KEY_RE, REASON_RE, CURSOR_VALUE_RE, init.PROVIDER_RE])
+@given(data=st.data())
+def test_patterns_accept_nothing_around_a_valid_value(pattern: re.Pattern[str], data: st.DataObject) -> None:
+    value = data.draw(near(pattern))
+    if pattern.fullmatch(value):
+        assert "\n" not in value
+        assert "\r" not in value
+        assert " " not in value
+
+
+@given(st.text())
+def test_accepted_cursor_ids_are_short_and_unbroken(value: str) -> None:
+    try:
+        name, cursor_id = CursorType().convert(f"comment={value}", None, None)
+    except click.BadParameter:
+        return
+    assert name == "comment"
+    assert cursor_id == value
+    assert 0 < len(value) <= 200
+    assert not any(c.isspace() for c in value)
+
+
+@given(st.text())
+def test_text_is_stripped_non_empty_and_bounded(value: str) -> None:
+    try:
+        text = TextType().convert(value, None, None)
+    except click.BadParameter:
+        assert not value.strip()
+        return
+    assert text == text.strip() or text.endswith("...")
+    assert 0 < len(text) <= MAX_TEXT
+
+
+WORDS = st.text(alphabet=string.ascii_letters + string.digits + "-_", min_size=1, max_size=12)
+
+
+@given(st.lists(WORDS, min_size=1, max_size=4), st.text())
+def test_the_prompt_is_always_exactly_one_argument(words: list[str], prompt: str) -> None:
+    argv = config.render_command(" ".join([*words, "{prompt}"]), prompt)
+    assert argv == [*words, prompt]
+
+
+@given(st.text())
+def test_the_prompt_survives_quoting_in_the_template(prompt: str) -> None:
+    assert config.render_command("agent --message='{prompt}'", prompt) == ["agent", f"--message={prompt}"]
+
+
+@settings(suppress_health_check=fixtures, max_examples=50)
+@given(attempts=st.integers(min_value=0, max_value=10**6), cooldown=st.integers(min_value=0, max_value=10**6))
+def test_repository_policy_never_loosens_the_defaults(tmp_path: Path, attempts: int, cooldown: int) -> None:
+    (tmp_path / ".git").mkdir(exist_ok=True)
+    (tmp_path / "canopy.toml").write_text(
+        '[tracker]\nprovider = "jira"\nquery = "q"\n'
+        f"[policy]\nmax_fix_ci_attempts = {attempts}\nfix_ci_cooldown_minutes = {cooldown}\n"
+    )
+    user = tmp_path / "config.toml"
+    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    policy = config.load(tmp_path, user).policy
+    assert policy.max_fix_ci_attempts == min(attempts, 2)
+    assert policy.fix_ci_cooldown_minutes == max(cooldown, 30)
+
+
+def test_every_config_key_declares_a_scope() -> None:
+    assert set(config.SECTIONS) == set(config.Config.model_fields)
+    for spec in config.SPECS.values():
+        assert spec.scope in (config.Scope.SHARED, config.Scope.USER)
+    user_only = {name for name, spec in config.SPECS.items() if spec.scope is config.Scope.USER}
+    # TRUST_MODEL §6: commands, prompt paths, capacity, labels, and repliers never come from the repository.
+    assert user_only >= {
+        "runtime.overseer_cmd",
+        "runtime.worker_cmd",
+        "notify.cmd",
+        "paths.prompt_overrides",
+        "paths.state_dir",
+        "capacity.max_workers",
+        "tracker.labels",
+        "trust.authorized_repliers",
+    }
+
+
+@pytest.mark.parametrize("name", sorted(config.SPECS))
+def test_repository_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> None:
+    if config.SPECS[name].scope is not config.Scope.USER:
+        return
+    section, key = name.split(".")
+    (tmp_path / ".git").mkdir()
+    extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
+    (tmp_path / "canopy.toml").write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
+    user = tmp_path / "config.toml"
+    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    with pytest.raises(config.ConfigError, match="user-only"):
+        config.load(tmp_path, user)
