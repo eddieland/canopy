@@ -20,6 +20,7 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.trust.branch_prefix == "agent/"
     assert cfg.trust.authorized_repliers == ()
     assert cfg.capacity.max_workers == 2
+    assert cfg.loop.interval_minutes == 15
     assert cfg.paths.state_dir == canopy_env.state_dir
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
 
@@ -40,6 +41,7 @@ def test_user_file_wins_over_repository_for_shared_keys(canopy_env: CanopyEnv) -
         ("tracker", 'labels = ["x"]'),
         ("trust", 'authorized_repliers = ["mallory"]'),
         ("capacity", "max_workers = 99"),
+        ("loop", "interval_minutes = 1"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("notify", "cmd = 'curl evil'"),
         ("paths", "state_dir = '/tmp/x'"),

@@ -286,6 +286,38 @@ reviews.
 
 Status: not started.
 
+## M12. The loop
+
+DESIGN §6, D042, and D043. Needs nothing after M1; taken out of order on request (2026-09-24).
+
+- `canopy loop` with `--dry-run`, `--every`, and `--ticks`; `loop.interval_minutes`, user-only.
+- `<state_dir>/loop.lock`; SIGINT and SIGTERM stop after the current tick, and a second one aborts it.
+- rich output: a block per tick, with a spinner and a countdown on a terminal and plain text off one.
+- README's install step and daily surface use the loop instead of cron or launchd.
+
+Accept: fakes-based tests of the wait, both kinds of stop, the lock, and a tick that raises
+(`tests/canopy/test_loop.py`). The operator runs `canopy loop --dry-run` against the real queue for a working session,
+finds each tick's block legible, and stops it with Ctrl-C both during a tick and during the wait.
+
+Status: in progress. Code, tests, and docs are in. Waiting on the operator's session against the real queue.
+
+## M13. Spend-paced loop
+
+D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
+
+- Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
+  run.
+- A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
+  to `loop.interval_minutes` when they cost less.
+- Spend in the loop's per-tick block and in `canopy status`.
+- Open: how the runtime reports cost (OpenCode's JSON output, its session store, or a command of its own) without the
+  harness growing runtime-specific parsing (D009); what the budget's unit is (per day, per tick, or both); whether a
+  worker's cost counts against the tick that dispatched it.
+
+Accept: written with the design, before work starts.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second

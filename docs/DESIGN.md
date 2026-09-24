@@ -24,7 +24,8 @@ cannot reach internal systems and require handing a vendor write access.
 ## 3. Non-goals
 
 - Replacing human review, approval, or merge.
-- A hosted service, a daemon, a web UI, or a workflow DSL.
+- A hosted service, a background daemon, a network listener, a web UI, or a workflow DSL. `canopy loop` (§6) runs in
+  the foreground, where the operator started it.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
 - Sandboxing agents (deferred; see TRUST_MODEL and ROADMAP).
@@ -67,12 +68,13 @@ canopy (harness, Python)
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
     setup.py       init
-    loop.py        tick, tick --dry-run, status, decisions
+    loop.py        loop, tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
     journal.py     decide, attention, ticket set
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
+    repeat.py      canopy loop: ticks one after another with a wait between them, its own lock, rich output
     state.py       the overseer's state block
     attention.py   the attention list from the journal; render attention.md, diff, notify
 
@@ -139,7 +141,8 @@ Roles:
 
 ## 6. Tick
 
-`canopy tick` does, in order:
+Ticks run one after another under `canopy loop` (below). `canopy tick` runs one, by hand or from a scheduler. Either
+way, a tick does, in order:
 
 1. Acquire the lock. If held, log and exit 0. No `ticks` row is written.
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
@@ -188,6 +191,36 @@ Roles:
 
 Workers dispatched during a tick outlive the tick. They are detached processes
 owned by `canopy _run`.
+
+### The loop
+
+`canopy loop [--dry-run] [--every MINUTES] [--ticks N]` is how ticks are meant to run (D042). It runs in the foreground
+until stopped:
+
+1. Take `<state_dir>/loop.lock`. If another loop holds it, refuse and exit 1: two loops on one state dir would run the
+   overseer twice as often. The tick lock is separate and each tick takes it as in step 1 above, so a `canopy tick`
+   started by hand runs between the loop's ticks, or finds the lock busy.
+2. Apply pending migrations; the loop reads the journal before its first tick.
+3. Run a tick, exactly as `canopy tick` does, with `--dry-run` passed through. An error the tick code does not handle
+   ends that tick as `error` in the loop's output: the traceback goes to the log and the loop goes on, as with a
+   scheduler that starts each tick as its own process. The next tick closes the row it left `running` as `abandoned`.
+4. Print what the tick did: its status, duration, and summary; each decision except `wait` and attention items, with
+   its rationale; the attention items it added (`+`) and resolved (`-`); running workers and the list's size.
+5. Wait, measured from the end of the tick, so a long tick never leads straight into the next. The pacing rule
+   (`repeat.pace`) decides how long: today `--every`, else `loop.interval_minutes`, after every tick whatever its
+   status. Pacing by what ticks cost is ROADMAP M13, and replaces this rule.
+6. Repeat from 3, until `--ticks N` ticks have run or the operator stops the loop.
+
+Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first one lets the tick
+finish and the loop ends without waiting; both exit 0. A second one aborts the tick: the overseer's process group is
+killed as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Workers already
+dispatched are detached and unaffected either way.
+
+The config is read once, when the loop starts; restart the loop to apply a change. Prompt files are read every tick.
+
+Output is drawn with rich (D043). On a terminal, a spinner with the elapsed time shows during a tick and a countdown
+during the wait, both redrawn in place and gone once done. Sent to a file or a pipe, the output is plain text, one block
+per tick. The JSON log gains `loop started` and `loop stopped` lines, with no tick id.
 
 ## 7. Ticket phases and next actions
 
@@ -373,6 +406,7 @@ refuses to run. Unknown keys are errors in both files.
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `capacity.*` | user-only | the operator's machine and spend |
+| `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
 | `notify.*` | user-only | a command run on the operator's machine |
 | `paths.*` | user-only | where prompts and state are read from |
@@ -414,6 +448,9 @@ overseer_cmd = 'opencode run --agent canopy-overseer {prompt}'
 worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
+
+[loop]
+interval_minutes = 15   # `canopy loop` waits this long after each tick ends
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
@@ -573,6 +610,8 @@ going away is new again.
   says so explicitly.
 - Overseer asks for something the guards refuse: the refusal is recorded as a
   decision with the guard's reason.
+- An error the tick code does not handle, in a tick `canopy loop` runs: the tick ends as `error` in the loop's output,
+  the traceback is logged, and the loop goes on. The next tick closes the row as `abandoned` (§6).
 
 ## 16. Open questions
 
@@ -1126,8 +1165,8 @@ Bounds:
   by kind; runs ended, by status, with each `done` run's ticket and PR and each `blocked` run's ticket; the open
   attention list, counted by reason, with the oldest item's age; the workers running now.
 - It is sent even when nothing happened ("24 ticks ok, nothing ran, nothing needs you"). A digest that stops arriving
-  is how the operator learns that the scheduler or the machine stopped running ticks, which canopy itself cannot
-  report.
+  is how the operator learns that the loop, a scheduler, or the machine stopped running ticks, which canopy itself
+  cannot report.
 - No model writes it. A progress report that needs judgment, such as what changed on the operator's PRs today, is a
   chore (§19). Its summary reaches sinks as a `chore.ended` event in a `chores` group. Neither exists before chores do:
   if M10 lands first, its groups are the three above, and M9 adds `chores` and `chore.ended` to this section.
@@ -1192,9 +1231,9 @@ never opens a connection or reads a sink's secret.
 
 ### Two-way, later
 
-Not in M10. Two rules shape it: nothing listens on the network (TRUST_MODEL §4), and the loop is a scheduled tick with
-no daemon. Slack's interactive features (buttons, slash commands, the Events API, Socket Mode) each need a listener or
-a long-running connection, so they are out. What fits, in order:
+Not in M10. Two rules shape it: nothing listens on the network (TRUST_MODEL §4), and the loop runs ticks in the
+foreground (§6), holding no connection between them. Slack's interactive features (buttons, slash commands, the Events
+API, Socket Mode) each need a listener or a long-running connection, so they are out. What fits, in order:
 
 1. **Replies on the ticket.** Works with M10 as designed. Every message names the ticket and carries what links the
    journal has; a question is answered on the ticket, and an authorized reply resumes the worker as it does now. Slack

@@ -18,6 +18,10 @@ worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
+[loop]
+# `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
+interval_minutes = 15
+
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work. Use the
 # tracker's stable id, not a display name: Jira accountId, GitHub login.
