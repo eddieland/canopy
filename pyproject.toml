@@ -16,6 +16,14 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/canopy"]
 
+# Files canopy reads at run time, bundled into the wheel. canopy.resources finds them here in an installed copy and at
+# the repository root in a source checkout.
+[tool.hatch.build.targets.wheel.force-include]
+"migrations" = "canopy/_data/migrations"
+".agents/prompts" = "canopy/_data/prompts"
+".agents/agents" = "canopy/_data/agents"
+".agents/skills" = "canopy/_data/skills"
+
 [dependency-groups]
 dev = [
     "pyrefly>=1.3.1",
@@ -74,3 +82,5 @@ testpaths = ["tests"]
 [tool.pyrefly]
 preset = "strict"
 project-includes = ["src", "tests", "tests/fakes/agent", "tests/fakes/treehouse"]
+# Tests are packages under the repository root (D019) and import shared helpers from `tests.conftest`.
+search-path = ["src", "."]

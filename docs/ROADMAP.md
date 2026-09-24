@@ -72,7 +72,7 @@ Accept: e2e test against fakes passes. Operator runs `canopy tick --dry-run`
 on a real repository daily for several days and judges the recorded plans
 sensible. No dispatches happen.
 
-Status: not started.
+Status: in progress.
 
 ## M2. Dispatch implement
 
@@ -82,6 +82,9 @@ Status: not started.
 - Reconcile: dead pid detection, stale lease return.
 - `prompts/worker-implement.md` with the result contract.
 - Attention items for `crashed`, `unpushed`, `unknown_result`.
+- `.agents/agents/canopy-worker.md` is still a copy of the overseer definition. Write the worker's own permissions
+  (edit and bash inside the worktree), with the ordering rules in D021. Needs human approval like any `agents/` change.
+- Lift the M1 stopgaps: `canopy tick` without `--dry-run`, and `canopy dispatch` outside a dry run (D020).
 
 Accept: one real ticket goes from label to open PR unattended, with the slot
 returned and a correct `runs` row. A killed worker is detected on the next tick
