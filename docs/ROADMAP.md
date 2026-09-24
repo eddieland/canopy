@@ -213,7 +213,7 @@ Status: not started.
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
-  team adopts it.
+  team adopts it. Proposal: `HOST_ISOLATION.md`.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks; expected to
