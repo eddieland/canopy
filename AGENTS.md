@@ -42,8 +42,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
-  validating config and anything parsed from another program's output (D026), and `hypothesis` for property tests of
-  input validators (D027, dev only).
+  validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
+  validators (D027, dev only), and `rich` for terminal output (D043).
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
   systems is the agent runtime's MCP servers. The harness knows nothing about Jira or GitHub beyond strings in config
   and prompts.
@@ -102,7 +102,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 ## Do not build (unless a ROADMAP milestone says so)
 
 - A web UI. `canopy status` and a markdown file are the UI.
-- Webhooks or long-running daemons. The loop is a scheduled `tick`.
+- Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
+  tick after another (D042).
 - A tracker adapter interface. The tracker is a prompt and config concern.
 - A runtime plugin interface. The agent runtime is a command template in config.
 - Sandboxing. It plugs into the command template later; see TRUST_MODEL.

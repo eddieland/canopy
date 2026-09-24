@@ -161,6 +161,12 @@ class Runtime(Section):
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
 
 
+class Loop(Section):
+    """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
+
+    interval_minutes: Annotated[Minutes, Scope.USER] = 15
+
+
 class Paths(Section):
     """The `[paths]` table."""
 
@@ -184,6 +190,7 @@ class Config(Section):
     trust: Trust
     capacity: Capacity
     runtime: Runtime
+    loop: Loop
     paths: Paths
     notify: Notify
 
@@ -194,6 +201,7 @@ SECTIONS: dict[str, type[Section]] = {
     "trust": Trust,
     "capacity": Capacity,
     "runtime": Runtime,
+    "loop": Loop,
     "paths": Paths,
     "notify": Notify,
 }

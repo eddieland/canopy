@@ -37,11 +37,14 @@ standing write access to your repositories, your tracker, or your internal tools
    repository has none, installs the overseer and worker agent definitions, and installs the tracker skill for your
    provider if one ships. Use an HTTPS remote with a credential helper; init warns if `origin` pushes over SSH, which
    worker sandboxing is not expected to support (D038).
-5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy tick`. Schedule it with cron or launchd
-   once you trust it.
+5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
+   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
+   repeats until you press Ctrl-C.
 
 ## Daily surface
 
+- Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
+  attention list.
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket.
 - Review PRs. Humans approve and merge; the agent never does.
@@ -52,6 +55,12 @@ standing write access to your repositories, your tracker, or your internal tools
 ## How it works, briefly
 
 ```
+canopy loop
+  take the loop lock
+  until Ctrl-C:
+    canopy tick (below)
+    print what it did, then wait loop.interval_minutes
+
 canopy tick
   acquire lock, run migrations
   reconcile: dead workers, stale leases

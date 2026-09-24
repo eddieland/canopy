@@ -1,12 +1,43 @@
-"""`canopy tick`, and what the operator reads back: `canopy status` and `canopy decisions`."""
+"""`canopy loop` and `canopy tick`, and what the operator reads back: `canopy status` and `canopy decisions`."""
 
 from __future__ import annotations
 
 import click
+from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.core import db
-from canopy.loop import attention, tick
+from canopy.infra import lock
+from canopy.loop import attention, repeat, tick
+
+
+@click.command("loop")
+@click.option("--dry-run", is_flag=True, help="Every tick is a dry run: the overseer plans, nothing is dispatched.")
+@click.option(
+    "--every",
+    type=click.IntRange(min=1),
+    metavar="MINUTES",
+    help="Minutes to wait after each tick ends. Default: loop.interval_minutes.",
+)
+@click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
+@click.pass_context
+def cmd_loop(click_ctx: click.Context, *, dry_run: bool, every: int | None, max_ticks: int | None) -> int:
+    """Run ticks in the foreground, waiting between them, until stopped."""
+    ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
+    stop = repeat.Stop()
+    with repeat.signals(stop):
+        try:
+            repeat.run(
+                ctx,
+                dry_run=dry_run,
+                interval_minutes=every or ctx.config.loop.interval_minutes,
+                max_ticks=max_ticks,
+                console=Console(highlight=False),
+                stop=stop,
+            )
+        except lock.LockBusyError:
+            raise CliError(f"another canopy loop is running on {ctx.state_dir}; stop it first") from None
+    return 0
 
 
 @click.command("tick")
