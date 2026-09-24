@@ -198,8 +198,9 @@ DESIGN §19 and D034. Needs only M3's attention list and notification; nothing i
 - `canopy _chore`: detached run, prompt with the `## Run` section, result contract validated with pydantic; reconcile
   for chore runs.
 - The state block's `chores`; findings and `chore_failed` on the attention list and in notifications.
-- The overseer prompt's chore paragraph, the `canopy-chore` agent definition, and the TRUST_MODEL T1, T3, T6, T7, and
-  §7 changes, with human approval.
+- The overseer prompt's chore paragraph and `canopy chore` in its tool list, the `canopy-chore` agent definition, and
+  the TRUST_MODEL T1, T3, T6, T7, and §7 changes, with human approval.
+- DESIGN §5, §6, §11, §12, and §14 updated for chores, and §19's planned note removed.
 
 Accept: a real build-health chore runs for several working days. The journal shows it never started sooner than
 `every_minutes` after its previous run, and the `decisions` table shows the overseer following `when`. Its findings

@@ -739,7 +739,10 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 
 ## 19. Chores
 
-Planned for ROADMAP M9; none of it is built. Rationale in D034.
+Planned for ROADMAP M9; none of it is built. Rationale in D034. Earlier sections describe the loop without chores; M9
+updates them when it builds this: §5 gains `chore.py` (the `canopy chore` commands, `_chore`, and chore reconcile) and
+the overseer's role gains `canopy chore run` and `canopy chore wait`, §6 step 3 reconciles chore runs, §11 lists
+`chore_runs`, §12 the chore keys, and §14 the chore items.
 
 A chore is recurring work the operator defines and the overseer delegates: an agent run that is not about one of the
 queue's tickets, holds no worktree, pushes nothing, and reports findings to the attention list. The motivating chore is
@@ -826,8 +829,9 @@ beyond what the operator's prompt says.
 ### Delegation
 
 - The state block gains `chores`: for each configured chore its name, `every_minutes`, `when`, `due_at` (the earliest
-  time the guard allows a new run), whether it is running, and its latest run (id, status, start, end, summary, and
-  each finding's id, title, and link).
+  time the guard allows a new run), whether it is running, its latest run (id, status, start, end, summary), and its
+  open findings (id, title, link), which are those of its latest `ok` run (below). A latest run that ended otherwise
+  therefore shows its status and summary without replacing the findings.
 - Each tick the overseer considers every chore whose `due_at` has passed and that is not running. It runs the chore
   with `canopy chore run <NAME> [--context '<text>']`, or records `canopy chore wait <NAME> --rationale "<text>"` when
   `when` says not now. Chores that are not due need no decision.
