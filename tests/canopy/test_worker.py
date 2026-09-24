@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from canopy import db, worker
-from canopy.cli import main
+from canopy.cli.main import main
+from canopy.core import db
+from canopy.runs import worker
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 

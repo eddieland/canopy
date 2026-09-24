@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.procs import SubprocessRunner
+from canopy.infra.procs import SubprocessRunner
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.

@@ -16,10 +16,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import db, lock, logs, policy, procs, prompts, treehouse
+from canopy.core import db, prompts, treehouse
+from canopy.infra import lock, logs, procs
+from canopy.runs import policy
 
 if TYPE_CHECKING:
-    from canopy.context import Context
+    from canopy.core.context import Context
 
 # The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
 # characters: lowercase words joined by single hyphens.

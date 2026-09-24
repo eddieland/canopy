@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from canopy import procs
-from canopy.procs import CommandNotFoundError, ProcError, SubprocessRunner
+from canopy.infra import procs
+from canopy.infra.procs import CommandNotFoundError, ProcError, SubprocessRunner
 
 
 def test_captures_stdout_and_exit_code(agent_log: Path, monkeypatch: pytest.MonkeyPatch) -> None:

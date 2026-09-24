@@ -11,8 +11,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from canopy import config, dispatch, init
-from canopy.cli import (
+from canopy.cli.params import (
     CURSOR_VALUE_RE,
     KEY_RE,
     MAX_TEXT,
@@ -24,7 +23,10 @@ from canopy.cli import (
     TextType,
     valid_key,
 )
-from canopy.procs import SubprocessRunner
+from canopy.core import config
+from canopy.infra.procs import SubprocessRunner
+from canopy.runs import dispatch
+from canopy.setup import init
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")

@@ -33,7 +33,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 ## Toolchain
 
-- Python 3.12+. Package layout `src/canopy/`. CLI entry point `canopy`.
+- Python 3.12+. Package layout `src/canopy/`, in layered subpackages (DESIGN §5, D041). CLI entry point `canopy`.
 - `uv` for everything: `uv sync`, `uv run`, `uv tool install`.
 - `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests.
 - ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow
@@ -64,11 +64,13 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - Fully typed. `pyrefly` strict clean, the test fakes included.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
-- Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/procs.py`. Nothing
-  else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if anything
-  else imports it.
-- Modules are small and named for what they own: `db.py`, `lock.py`, `treehouse.py`, `dispatch.py`, `attention.py`,
-  `config.py`, `cli.py`.
+- Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
+  Nothing else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if
+  anything else imports it.
+- Modules are small and named for what they own, in the package for their layer (DESIGN §5): `core/db.py`,
+  `infra/lock.py`, `runs/dispatch.py`, `loop/attention.py`, `cli/main.py`. Imports go down the layers, never between
+  features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
+  there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one.
@@ -79,7 +81,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 ## Testing
 
-- Unit tests fake external processes through `procs.py`, never by monkeypatching `subprocess` in scattered places.
+- Unit tests fake external processes through `canopy.infra.procs`, never by monkeypatching `subprocess` in scattered
+  places.
 - `tests/fakes/treehouse` is an executable fake that speaks the same CLI (`status --json`, `get --lease --json`,
   `return`) and keeps its state in a temp file. It is put on `PATH` by fixtures.
 - The fake agent command is `tests/fakes/agent`, a script that prints a configurable final JSON line. Tests configure

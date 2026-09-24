@@ -18,7 +18,7 @@ from typing import cast
 
 import pytest
 
-from canopy.procs import SubprocessRunner
+from canopy.infra.procs import SubprocessRunner
 
 requires_canary = pytest.mark.skipif(
     os.environ.get("CANOPY_OPENCODE_CANARY") != "1" or shutil.which("opencode") is None,
