@@ -440,3 +440,42 @@ Rejected: refusing SSH remotes in init or at dispatch (the sandbox is opt-in and
 trusted, TRUST_MODEL §3); checking the remote on every tick (noise for a choice the operator already made).
 Revisit: when the sandbox ships. If it finds a way to support SSH (allowing the agent socket, or pushing from the host),
 drop the warning; if sandboxing becomes the default, consider making SSH remotes an attention item.
+
+## D039. Reviews: a fresh reviewer per PR commit that comments as itself, never approves, and needs no ticket
+
+Context: the operator wants an adversarial review of PRs, the loop's own and their hand-written ones, by an agent run
+that did not write the change. It should say what it is in a comment on the PR. Some teams want PRs judged low-impact
+to need no human reviewer. Tracking each review as a ticket in the tracker is unwanted.
+Decision (DESIGN §21, planned for M11):
+- `canopy review run --pr URL --sha SHA` starts a detached `_review` in a leased slot checked out at that commit,
+  with the reviewer's working directory outside the checkout. Guards in code: one `done` review per commit, a per-PR
+  limit, a daily limit, `max_reviews` within `max_workers`.
+- A review of the loop's own PR comes before `needs_reviewer`, when `review.agent_prs` is on, and its findings go back
+  to a worker through `resume`. PRs matched by the user-only `review.query` are reviewed and nothing else. The PR is
+  the unit: no ticket, no tracker writes.
+- The reviewer posts one comment on the PR's conversation, whose first line identifies it and whose last line is a
+  machine-readable marker with the commit, verdict, and impact. It never submits a PR review. Its definition denies
+  the tools that could approve, push, label, or edit.
+- The verdict is only that comment. Letting low-impact PRs skip a human reviewer is the repository's decision, made in
+  its own automation. canopy still never approves (TRUST_MODEL §6).
+- The loop recognizes its reviews by the journal, never by the marker, so a review's comment never counts as a
+  human's review comment.
+Consequences: the overseer handles PRs that are not tickets, and `decisions` gains a `pr` column. A third detached-run
+path beside `_run` and `_chore`. Every review comment is posted as the operator (D010), including on other people's
+PRs when the query matches them. Findings sent to `resume` make `max_resume_attempts` (D030) easier to reach. A
+repository that gates merges on the marker trusts every agent the operator runs.
+Rejected:
+- Submitting a GitHub review: the tool that can comment on lines can also approve, and as the operator an approval
+  counts on other people's PRs.
+- An approval opt-in for low-impact PRs: breaks TRUST_MODEL §6, and under D010 it would be the operator's approval,
+  given by an agent that read untrusted text.
+- A commit status or a label for the verdict: a tool that sets them can set any status, such as a required CI check,
+  or any label, such as one that triggers automation. A label also outlives the commit it judged.
+- A ticket per reviewed PR: tracker noise, and the tracker adds nothing a PR does not already have.
+- A chore that reviews: runs on a timer, not per commit; has no checkout; and its findings never reach a worker.
+- The reviewer working in the checkout: the runtime would load its configuration and agent definitions from files
+  the PR controls.
+- Review runs as `runs` rows: those are keyed by ticket and branch, which a review of a hand-written PR has neither of.
+Revisit: when a runtime can deny approving or a bot identity exists (then inline comments); if the per-commit review
+is measured as too costly on busy PRs (then the overseer waits for a quiet period, under a guard); if OpenCode cannot
+confine reads to the checkout (then no checkout, MCP reads only); if repositories want to share a rubric.

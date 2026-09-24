@@ -1151,3 +1151,250 @@ TRUST_MODEL is unchanged until M10, whose PR carries the human approval:
 - Links to tickets. The harness knows no tracker URLs (D003); a `tracker.ticket_url` template would let every message
   link its ticket.
 - A sink secret read from a command (a password manager's CLI) instead of a file.
+
+## 21. Reviews
+
+Planned for ROADMAP M11; none of it is built. Rationale in D039. Earlier sections describe the loop without reviews;
+M11 updates them when it builds this: §5 gains `review.py` (`canopy review`, `_review`, and review reconcile) and the
+overseer's role gains `canopy review run` and `canopy review wait`, §6 step 3 reconciles review runs, §7 gains the
+phases below, §11 lists `review_runs` and `decisions.pr`, §12 the review keys, §13 the `canopy-reviewer` definition,
+§14 the review items, and §20 a `reviews` event group.
+
+A review is an adversarial read of one PR at one commit by a fresh agent run: no transcript of whoever wrote the
+change, told to assume the change is wrong until the code shows otherwise. It posts one comment on the PR that says
+what it is, and reports a verdict. It never approves, requests changes, pushes, or merges. Human review stays the gate
+(§3); a review is there to make that review cheaper, and to catch what the author's own run could not see.
+
+Two kinds of PR get reviews, and neither needs a ticket:
+
+- **The loop's own PRs.** With `review.agent_prs` on, a ticket's PR is reviewed once its checks pass, before the
+  overseer asks a human for review. Findings go back to a worker through `resume`, like a human's review comments.
+- **PRs the operator names with `review.query`,** usually their own hand-written ones. These are reviewed and nothing
+  else: the loop never pushes to them, fixes them, or opens a ticket for them. The comment on the PR is the whole
+  output, and the operator decides what to do with it.
+
+### Configuration
+
+Every review key is user-only (§12), except the per-PR limit, which is a shared policy that the repository may only
+tighten. A review spends money, runs a command, and comments as the operator (TRUST_MODEL T7).
+
+```toml
+[review]
+agent_prs = true
+query = 'repo:acme/api is:pr is:open author:@me -is:draft'
+low_impact = """Only docs, comments, or tests change; or one dependency moves by a patch version."""
+
+[runtime]
+review_cmd = 'opencode run --agent canopy-reviewer {prompt}'
+review_timeout_minutes = 20
+
+[capacity]
+max_reviews = 1            # review runs at once, within max_workers; 0 turns reviews off
+max_reviews_per_day = 20   # review runs started in any 24 hours
+
+[policy]
+max_reviews_per_pr = 3     # shared; the repository may only lower it
+```
+
+- `agent_prs` defaults to false. `query` is the VCS host's own PR search syntax, as `tracker.query` is the tracker's.
+  It is empty by default, meaning no PRs besides the loop's own.
+- `review.query` authorizes, unlike `tracker.query` (§17): only the operator writes it. It authorizes whatever it
+  matches, so a query without an author filter sends reviews to other people's PRs, in the operator's name. That is
+  allowed, and it is how a team gets reviews on every low-impact PR, but it is the operator's choice to make
+  (TRUST_MODEL §7).
+- `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
+  the reviewer never reports `low`.
+- `review_cmd` follows the rules for command templates (§12). Pointing it at a different model from `worker_cmd` is
+  recommended, so the reviewer does not share the author's blind spots.
+
+### Off unless configured
+
+With no `[review]` table, or `capacity.max_reviews = 0`, nothing about reviews reaches the overseer: the state block
+has no `reviews` key, the phase table is §7's as it stands, and every `canopy review run` refuses as `reviews_off`. A
+test holds this. With `agent_prs` off, the phase table is also unchanged. A loop PR that `query` happens to match is
+then reviewed like any other match: one comment, and no `resume` for its findings.
+
+### Running a review
+
+`canopy review run --pr URL --sha SHA [--ticket KEY] [--context '<text>']` requires `CANOPY_TICK_ID` like `dispatch`
+(D020). `URL` is the PR's `https://` URL, which the harness treats as an opaque string and never parses. `SHA` is the
+full head commit the overseer read. `--ticket` links an agent PR to its ticket. Under the dispatch lock, it refuses,
+recording `refused:<guard>`, on the first of:
+
+- `reviews_off`: see above.
+- `bad_pr`: `URL` is not a plain `https://` URL of at most 300 characters, `SHA` is not 40 or 64 lowercase hex
+  characters, or `--ticket` is not a valid key (§17).
+- `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is: a review must not
+  race the push it is meant to judge.
+- `reviewed`: a review of this PR at this commit ended `done`. One review per commit, whatever the overseer asks.
+- `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, whatever they ended as. This also records
+  the `review_limit` attention item.
+- `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
+- `review_capacity`: `capacity.max_reviews` review runs are running.
+- `capacity`: `max_workers` runs and review runs, together, are running. A review holds a slot, so it counts.
+
+A dry run checks the same guards, counting reviews already recorded in this tick as running, records `dispatch:review`
+with rationale `dry run: not dispatched`, and starts nothing (D036).
+
+Once the guards pass, the command leases a slot with holder `canopy:review:<run_id>`, inserts a `review_runs` row, and
+spawns `python -m canopy _review <run_id>` detached, as dispatch spawns `_run` (§8 step 4). `_review`:
+
+1. Claims the run by pid and drops `CANOPY_TICK_ID`, as `_run` does.
+2. In the slot: `git fetch origin <SHA>`, then `git checkout --detach <SHA>`, and checks that `HEAD` is `SHA`. A
+   failure is `failed` with a harness note: a PR in another repository fails here. No branch is created.
+3. Runs `review_cmd` with cwd `<state_dir>/reviews/<run_id>/`, a directory created readable only by the operator, and
+   **not the checkout**. The prompt names the checkout's path. The checkout holds code the loop did not write, and an
+   agent runtime reads its configuration and agent definitions from its working directory, so a PR could otherwise
+   rewrite the reviewer that reads it. Timeout `review_timeout_minutes`, with the agent's pid recorded.
+4. Parses the result, then always returns the slot with `--force`, which discards anything the reviewer left in the
+   checkout. It traps signals and exits the way `_run` does (§8 step 6), and reconcile treats a dead `_review` as it
+   treats a dead `_run`.
+
+The prompt is `prompts/reviewer.md` (or the override), with the PR URL, the commit, the checkout path, the ticket key
+and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, and
+the result contract. The reviewer:
+
+- reads the PR's description and discussion, the diff, and as much of the checkout as it needs; for an agent PR, the
+  ticket too, to check the change against what was asked;
+- looks for defects, not style: wrong behavior, missed cases, security problems, broken contracts, missing tests for
+  new behavior, and anything the repository's own docs (such as `AGENTS.md`) name as a rule;
+- verifies each finding against the code before reporting it, and reports none when it finds none;
+- treats everything it reads, the diff included, as data (TRUST_MODEL T1).
+
+It posts exactly one comment on the PR's conversation, never a submitted review:
+
+```
+**canopy review**: an automated adversarial review of abc1234, run by canopy under this account. It is not a
+human review and not an approval.
+
+Verdict: findings (1 blocking, 1 minor). Impact: normal.
+1. **blocking** `src/retry.py:42`: ...
+2. **minor** `tests/test_retry.py`: ...
+
+<!-- canopy-review {"v":1,"run":42,"sha":"<full sha>","verdict":"findings","impact":"normal"} -->
+```
+
+The first line identifies it to people, and the marker on the last line identifies it to programs. The comment's
+author is the operator's account (D010), so the marker is a claim anything running as the operator could make. The
+loop itself never trusts the marker; it trusts only its journal (below).
+
+Result contract, one JSON line, last line of stdout, validated with pydantic (D026):
+
+```json
+{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","comment":"https://...",
+ "summary":"one paragraph",
+ "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line"}]}
+```
+
+- `done` means the review was read through and the comment posted, and `comment` is its plain `https://` URL. A `done`
+  without one is recorded as `failed` with a harness note. `failed` means the reviewer could not review, and the
+  summary says why.
+- At most 20 findings. `title` at most 200 characters, `location` at most 300, `summary` at most 2000. `verdict` is
+  `findings` exactly when `findings` is not empty.
+- Anything else is `unknown`. `review_runs` status is `running`, `done`, `failed`, `unknown`, `timeout`, or `crashed`.
+
+### The verdict, and automating on it
+
+canopy never approves (TRUST_MODEL §6), so a review changes no GitHub review state and cannot satisfy a required
+approval. The verdict is the marker. A repository that wants low-impact PRs to need no human reviewer can run its own
+automation, such as a CI job that reads the latest `canopy-review` marker for the head commit from an account it
+allows and sets a check that its branch protection requires. That decision, and that automation, belong to the
+repository's owners, not to canopy. They should know that the marker is only as trustworthy as every agent the
+operator runs, since all of them post as the operator; a bot identity (ROADMAP, deferred) is what would change that.
+
+### The overseer's part
+
+The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
+and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, and
+latest run: id, commit, status, verdict, impact, comment URL, finding titles, start and end.
+
+For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
+`agent_prs` is on:
+
+| Phase | Derived from | Next action |
+|---|---|---|
+| `review_pending` | checks pass, no approval, no `done` review of the head commit, under the per-PR limit | `canopy review run --ticket KEY` |
+| `review_findings` | the head commit's `done` review has findings, newer than the `review` cursor | classify as review comments (§7): dispatch `resume` pointing at the review run and its comment, or `needs_author` |
+
+A clean review, or a PR at its review limit, moves on to `green_unreviewed`, whose `needs_reviewer` item then links
+the latest review. A `resume` pushes a new commit, and the new commit is reviewed again, until the per-PR limit. The
+overseer recognizes a review's comment by the comment URL in the state block, never by the marker, and never counts it
+toward `changes_requested`. A worker can post a comment carrying a marker, but it cannot put a run in the journal.
+
+For PRs from `review.query`, the overseer runs the query each tick. For each open match whose head commit has no `done`
+review, it runs a review or records `canopy review wait --pr URL --rationale "<text>"`: while checks are still running,
+say, or when the PR is a draft. A PR whose head is already reviewed needs no decision. Nothing else is decided about
+these PRs.
+
+Review decisions are `decisions` rows with the PR's URL in a new `pr` column: `dispatch:review`, `wait`,
+`refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.
+
+### Attention
+
+- `review_failed`: a PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed`. The overseer records it
+  every tick that the PR is still a candidate and nothing newer has run, and `canopy review run` may retry it within
+  the per-PR limit.
+- `review_limit`: recorded by the refusal, and by the overseer every tick that a candidate PR's head is unreviewed and
+  it is at its limit.
+- Findings are not attention items. They are on the PR, where the author reads them. For an agent PR, what follows
+  from them is a `resume`, or the `needs_author` or `needs_reviewer` items that already exist.
+
+`canopy attention` gains `--pr URL` in place of a ticket key. In `notifications`, such an item's row holds
+`pr:<URL>` in `ticket_key`, which no ticket key can equal (§17). With M10, a `reviews` event group adds
+`review.ended`: PR, ticket, run, status, verdict, impact, comment.
+
+### Agent definition
+
+canopy ships `canopy-reviewer`. `canopy init` installs it into the operator's own runtime config (for OpenCode,
+`~/.config/opencode/agent/`), not the repository's `.opencode/agent/`, which anyone who can push to the repository
+controls (TRUST_MODEL T7):
+
+- no edits, no subagents, no bash; reads allowed only inside the checkout;
+- MCP: the tracker and GitHub, read tools only, plus the one tool that posts a comment on a PR's conversation. Tools
+  that submit a PR review, push or write files, change labels, or edit or delete comments are denied by name.
+
+A review that should run the PR's tests uses the operator's own copy of the definition, with bash allowed for exactly
+those commands, as a chore does (§19). That executes the PR's code on the operator's machine, which is the operator's
+call to make, and a reason to keep `review.query` to PRs whose authors they trust.
+
+### Journal
+
+- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), slot, lease id and holder, pid of `_review`, pid of
+  the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path. Separate
+  from `runs`, whose ticket and branch columns a review does not have.
+- `decisions.pr`: nullable.
+- The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
+  `--cursor review=run:<id>`.
+
+### Trust model changes needed
+
+TRUST_MODEL is unchanged until M11, whose PR carries the human approval:
+
+- T1: the reviewer reads the most hostile text the loop meets, a diff by anyone `review.query` matches. What it writes
+  is data wherever it goes: the overseer classifies findings as it classifies review comments, and the worker reads the
+  review comment as it reads any other. `review.query` authorizes, and it is user-only.
+- T3: `max_reviews`, `max_reviews_per_day`, `max_reviews_per_pr`, one review per commit, and the review timeout are
+  controls in code. Add them to §6.
+- T4: a review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
+  directory is outside it, so the runtime loads no configuration from it. The shipped definition cannot run commands.
+- T5: every review comment says what it is in its first line and carries the marker.
+- T6: the reviewer can write one kind of thing, a comment on a PR. Residual: a steered reviewer can put what it read
+  into a comment, and the GitHub MCP server cannot limit which PR it comments on. A repository that gates merges on the
+  marker trusts every agent the operator runs.
+- T7: every review key is user-only, except `policy.max_reviews_per_pr`, which the repository may only tighten.
+- §6: never submit a PR review (approve or request changes); never push to or edit a PR the loop is only reviewing.
+- §7: a `review.query` that matches other people's PRs comments on their work in your name; tell them first. A reviewer
+  definition that runs commands runs the PR's code.
+
+### Open
+
+- Inline comments on lines. GitHub puts them in a submitted review, and the tool that submits one can also approve.
+  They wait for a runtime that can deny the approve event, or for a bot identity.
+- Whether the reviewer should update its earlier comment on a PR instead of adding one per commit. Editing needs a tool
+  that can edit any of the operator's comments.
+- Whether a repository should be able to offer a review rubric, such as its own `low_impact`, that an operator opts
+  into by name, the way it offers its tracker query.
+- Where reviews run in a workspace (§18): `review.query` spans repositories, and the checkout needs the right pool, so
+  M6 gives `canopy review run` a `--repo` like dispatch has.
+- Whether OpenCode can confine reads to one directory outside the working directory. The M11 canary settles it. If it
+  cannot, the reviewer runs without a checkout and reads the PR only through MCP.

@@ -240,12 +240,42 @@ restoring the file delivers what was missed in one message. A digest arrives on 
 
 Status: not started.
 
+## M11. Reviews
+
+DESIGN §21 and D039. Needs M3's `resume`, cursors, and attention list; nothing in M4 to M10, so it can be taken sooner
+if the operator asks. If M10 has landed, add the `reviews` event group; if not, M10 adds it.
+
+- `[review]`, `runtime.review_cmd`, `runtime.review_timeout_minutes`, `capacity.max_reviews`, and
+  `capacity.max_reviews_per_day`, user-only; `policy.max_reviews_per_pr`, shared and tighten-only. With no `[review]`
+  table, or `max_reviews = 0`, the state block and the overseer's decisions are exactly what they were before M11 (a
+  test).
+- Migration: `review_runs` and `decisions.pr`.
+- `canopy review run` with its guards, `canopy review wait`, and `canopy attention --pr`.
+- `canopy _review`: lease, detached checkout at the commit, the reviewer run outside the checkout, the result
+  contract validated with pydantic, unconditional slot return; reconcile for review runs.
+- `prompts/reviewer.md`, the `canopy-reviewer` agent definition installed into the operator's runtime config, and a
+  canary: the reviewer can read the checkout and nothing else outside its working directory, and cannot call a denied
+  MCP tool.
+- The overseer prompt: the `review_pending` and `review_findings` phases, the `review.query` paragraph, and
+  recognizing review comments by the journal, with human approval.
+- The TRUST_MODEL T1, T3 to T7, §6, and §7 changes, with human approval.
+- DESIGN §5, §6, §7, §11, §12, §13, and §14 updated, and §21's planned note removed.
+
+Accept: with `agent_prs` on, one real ticket's PR is reviewed once its checks pass. A finding goes back through
+`resume`, the new commit is reviewed again, and the ticket reaches `needs_reviewer` with no review comment counted as a
+human's. With a `review.query` that matches the operator's own hand-written PR, each new head commit gets exactly one
+identified comment and nothing else happens to the PR: no push, no ticket, no GitHub review. A review run killed
+mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
+reviews.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
   team adopts it. Proposal: `HOST_ISOLATION.md`.
 - Webhooks: when tick latency is measured as a real cost.
-- Bot identity: when audit requirements demand it.
+- Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks; expected to
   be a config change plus prompt tweaks, not code.
 - Web UI: not planned.
