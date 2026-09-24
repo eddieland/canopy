@@ -390,7 +390,6 @@ Rejected:
 - Slack's interactive features (buttons, slash commands, Events API, Socket Mode): each needs a listener or a daemon.
 Revisit: when two-way is wanted (then per-ticket threads, replies read through MCP, and a T1 change); if one tick
 interval is measured as too slow for an alert; if operators want routing finer than groups.
-||||||| parent of a3a9f2e (fix: make dry-run plans match what a live tick would do)
 
 ## D036. A dry run checks the dispatch guards and changes no loop state the next live tick reads
 
