@@ -133,8 +133,11 @@ class SubprocessRunner:
                 raise ProcError(f"cannot use working directory {cwd}: {e.strerror}") from e
             if isinstance(e, FileNotFoundError):
                 raise CommandNotFoundError(f"command not found: {argv[0]}") from e
+            # exec reports EACCES for a missing command when some PATH directory cannot be searched, as WSL's
+            # Windows directories often cannot. Only a command that exists is "not executable".
             if isinstance(e, PermissionError):
-                raise CommandNotFoundError(f"command not executable: {argv[0]}") from e
+                reason = "not executable" if _exists(argv[0], cwd=cwd, env=full_env) else "not found"
+                raise CommandNotFoundError(f"command {reason}: {argv[0]}") from e
             raise
 
         try:
@@ -174,6 +177,21 @@ class SubprocessRunner:
             os.close(fd)
         # The child is detached on purpose. Popen reaps it later if it exits while this process still runs.
         return proc.pid
+
+
+def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) -> bool:
+    """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory."""
+    # The child changes into `cwd` before exec, so a relative or empty PATH entry, like a relative command, resolves
+    # against it. An absolute entry replaces `cwd` in the join.
+    base = Path(cwd or ".")
+    dirs = [""] if os.sep in command else os.get_exec_path(env)
+    candidates = [base / d / command for d in dirs]
+    for candidate in candidates:
+        # The directories that make exec report EACCES make this raise it too.
+        with contextlib.suppress(OSError):
+            if candidate.is_file():
+                return True
+    return False
 
 
 def alive(pid: int) -> bool:
