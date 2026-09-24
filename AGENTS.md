@@ -90,8 +90,10 @@ entry says otherwise.
   temp file. It is put on `PATH` by fixtures.
 - The fake agent command is `tests/fakes/agent`, a script that prints a
   configurable final JSON line. Tests configure it through an env var.
-- Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file), and
-  `agent_log` (what each fake agent run saw). Each fake's docstring lists the env vars and state keys it reads.
+- Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file),
+  `agent_log` (what each fake agent run saw), and `canopy_env` (a repository, user config, and state dir in a temp
+  directory, with HOME pointed there). Each fake's docstring lists the env vars and state keys it reads. The fake
+  agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test plays an overseer calling `canopy decide`.
 - Every test directory has an `__init__.py`, `tests/` included (D019). ruff's `INP001` fails the lint on one that does
   not. The root one matters most: without it, `tests/canopy/` is imported as a package named `canopy` and shadows
   `src/canopy`.

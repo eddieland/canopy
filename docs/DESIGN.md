@@ -55,13 +55,19 @@ cannot reach internal systems and require handing a vendor write access.
 
 ```
 canopy (harness, Python)
-  cli.py         tick, tick --dry-run, status, init, dispatch, decide, attention, _run
-  lock.py        flock on ~/.canopy/lock; a tick that cannot lock exits 0 with a log line
+  cli.py         tick, tick --dry-run, status, init, dispatch, decide, attention, ticket set, _run; key validation
+  tick.py        the tick sequence (§6): lock, migrate, reconcile, run the overseer, close the tick
+  prompts.py     prompt files and overrides, the overseer's state block
+  lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
   db.py          SQLite journal, migrations
   config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
   treehouse.py   status --json, get --lease --json, return --force --if-lease-id
   dispatch.py    capacity guard, lease, spawn detached _run
-  attention.py   render attention.md from the journal, diff, notify
+  attention.py   the attention list from the journal; later render attention.md, diff, notify
+  init.py        canopy init: config files, agent definitions, tracker skill, branch protection text
+  logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id
+  context.py     the Context every command passes around: config, repository root, db connection, runner
+  resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
   procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group
 
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
@@ -71,7 +77,8 @@ skills/          canopy/: teaches an agent the canopy CLI
 migrations/      NNNN_name.sql
 ```
 
-`prompts/`, `agents/`, and `skills/` live under `.agents/` in this repository.
+`prompts/`, `agents/`, and `skills/` live under `.agents/` in this repository. The wheel bundles them, and
+`migrations/`, under `canopy/_data/` (D022).
 
 Roles:
 
@@ -90,8 +97,9 @@ Roles:
 
 `canopy tick` does, in order:
 
-1. Acquire the lock. If held, log and exit 0.
-2. Apply pending migrations. Insert a `ticks` row; its id tags all logs.
+1. Acquire the lock. If held, log and exit 0. No `ticks` row is written.
+2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
+   is gone. Insert a `ticks` row; its id tags all logs.
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if the pid is dead, mark
      `crashed`, run `treehouse return --force --if-lease-id` on its slot,
@@ -99,13 +107,24 @@ Roles:
    - For each leased slot in `treehouse status --json` with no live
      `runs` row and `lease_holder` matching our prefix: return it, log it.
    - Compute `capacity = max_workers - count(runs where status='running')`.
-4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block containing
-   config (tracker provider, labels, query, capacity, limits), the `tickets` table summary (phase, cursors, attempts,
-   cooldown until), running workers, and the current tick id.
-5. **Run the overseer** with `overseer_cmd`, cwd = the repository root,
-   timeout `overseer_timeout_minutes`. In `--dry-run`, the state block says so
-   and `canopy dispatch` refuses with a message; the overseer still records
-   decisions.
+   - If `treehouse status` fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
+4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block: a `## State`
+   section holding one JSON object with the tick id, whether it is a dry run, the repository root, tracker config
+   (provider, query, labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity,
+   policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, attempts, cooldown until).
+5. **Run the overseer** with `overseer_cmd`, cwd = the repository root, timeout `overseer_timeout_minutes`, and
+   `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention` read that variable to know
+   which tick they belong to, and refuse if it is unset or names a tick that is not running (D020). The overseer's
+   stdout and stderr go to `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal.
+   The run succeeded if it exited 0 and the last non-empty line of stdout is `tick complete`; anything else closes the
+   tick as `overseer_failed`.
+   In `--dry-run`, the state block says so; `canopy dispatch` starts nothing and records the decision as
+   `dispatch:<kind>` with rationale `dry run: not dispatched`; `canopy ticket set` records phases but does not advance
+   cursors, so the first live tick still sees everything as new. The overseer otherwise behaves as in a live tick.
+   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
+   Everything the overseer writes is rendered into the next tick's prompt, so the CLI bounds it: keys and attention
+   reasons are validated, phases come from the table in §7, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and
+   rationales and details are cut at 2000 characters.
 6. **Render attention**: rebuild `attention.md` from the journal, diff against
    the previous render, and if `notify.cmd` is set pipe the diff to it.
 7. Close the `ticks` row with a summary. Release the lock.
@@ -212,7 +231,9 @@ Worker obligations, stated in every worker prompt:
 
 Schema in `migrations/0001_init.sql`. Tables and purpose:
 
-- `ticks`: one row per tick; id, timestamps, dry_run, summary.
+- `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `overseer_failed`,
+  `reconcile_failed`, or `abandoned`. A tick that cannot take the lock writes no row, although the schema comment lists
+  `lock_busy`.
 - `tickets`: one row per ticket key seen; last derived phase, cursors
   (`last_comment_id`, `last_review_id`, `last_ci_run_id`), attempt counters,
   cooldown_until, done flag. Cursors make ticks incremental.
@@ -321,8 +342,10 @@ Rules:
   label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
 - Merging is stdlib: `tomllib` plus a key-by-key dict merge.
 
-`{prompt}` is substituted with a shell-quoted prompt string. Overrides in
-`prompt_overrides` replace files of the same name in `prompts/`.
+A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
+word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must
+contain `{prompt}` exactly once. Overrides in `prompt_overrides` replace files of the same name in `prompts/`; the default is
+`prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise.
 
 `tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, and `canopy init`
 installs the `tracker-<provider>` skill if one ships. `tracker.query` is how the overseer finds candidates: in the
@@ -356,11 +379,18 @@ phase table plus `crashed`, `unpushed`, `unknown_result`, `attempt_limit`.
 `canopy status` prints it. Items disappear when their cause is gone; no manual
 dismissal.
 
+The overseer records an item with `canopy attention <KEY> <reason> --detail "<link or text>"`, every tick the cause
+holds. It is stored as a decision with action `attention:<reason>`; there is no separate table (D020). The current list
+is the attention decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a
+failed tick leaves the previous list standing. An item's age runs from the first tick of its unbroken run. Reasons must
+match `[a-z][a-z0-9_]*`.
+
 ## 15. Failure handling
 
 - Worker crash: detected by pid liveness in reconcile; slot returned; ticket
   goes to attention with `crashed`. Not auto-redispatched.
 - Stale lease without a run: returned in reconcile.
+- treehouse unavailable or failing in reconcile: tick closes with `reconcile_failed`; the overseer does not run.
 - Overseer timeout or bad output: tick closes with `overseer_failed`; nothing
   is dispatched; next tick retries. Three consecutive failures produce an
   attention item.
@@ -372,7 +402,8 @@ dismissal.
 ## 16. Open questions
 
 - Whether `ask` permissions in OpenCode agent definitions block or auto-deny
-  under `opencode run`. Resolve in M1 with a canary agent; record in DECISIONS.
+  under `opencode run`. Answered from OpenCode's source in M1: `ask` is auto-rejected and `deny` is enforced (D021).
+  The live canary (`tests/canopy/test_opencode_canary.py`) is opt-in; its first real run confirms or overturns this.
 - Whether a Slack notification path should use `notify.cmd` with a small script
   or the overseer posting via MCP. Default to `notify.cmd`.
 - Whether `merged` should trigger a tracker transition. Default no; humans own

@@ -7,13 +7,18 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         to the empty string for no final line, to exercise result parsing.
     FAKE_AGENT_EXIT     exit code. Default 0.
     FAKE_AGENT_SLEEP    seconds to sleep before printing the final line, to exercise timeouts. Default 0.
-    FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "..."} is appended to this file per run.
+    FAKE_AGENT_COMMANDS a JSON list of argv lists, run in order before the final line, the way an agent runs
+                        commands through its bash tool. Stands in for an overseer calling `canopy decide`. Default none.
+    FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "...", "env": {...}, "commands": [...]} is
+                        appended to this file per run. `env` holds the CANOPY_* variables the agent saw; `commands`
+                        holds each command's argv, exit code, stdout, and stderr.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
 import json
 import os
+import subprocess  # noqa: TID251  (stands in for an agent runtime, not canopy code; D024)
 import sys
 import time
 from pathlib import Path
@@ -26,14 +31,25 @@ DEFAULT_RESULT = {
 }
 
 
-def main(argv: list[str]) -> int:
-    log = os.environ.get("FAKE_AGENT_LOG")
-    if log:
-        with Path(log).open("a") as f:
-            f.write(json.dumps({"argv": argv, "cwd": str(Path.cwd())}) + "\n")
+def run_commands() -> list[dict[str, object]]:
+    ran: list[dict[str, object]] = []
+    for command in json.loads(os.environ.get("FAKE_AGENT_COMMANDS", "[]")):
+        proc = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603  (argv from the test)
+        ran.append({"argv": command, "returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})
+    return ran
 
+
+def main(argv: list[str]) -> int:
     print("fake agent: starting")
     print(f"fake agent: {len(argv)} argument(s)", flush=True)
+    commands = run_commands()
+
+    log = os.environ.get("FAKE_AGENT_LOG")
+    if log:
+        env = {k: v for k, v in os.environ.items() if k.startswith("CANOPY_")}
+        with Path(log).open("a") as f:
+            f.write(json.dumps({"argv": argv, "cwd": str(Path.cwd()), "env": env, "commands": commands}) + "\n")
+
     time.sleep(float(os.environ.get("FAKE_AGENT_SLEEP", "0")))
 
     result = os.environ.get("FAKE_AGENT_RESULT", json.dumps(DEFAULT_RESULT))
