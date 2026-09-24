@@ -15,9 +15,9 @@ from pathlib import Path
 from canopy import attention, config, db, init, logs, procs, resources, tick
 from canopy.context import Context, db_path
 
-KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
-REASON_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-CURSOR_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}$")
+KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
+CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 PHASES = (
     "ready",
     "running",
@@ -44,7 +44,7 @@ class CliError(Exception):
 
 def ticket_key(value: str) -> str:
     """argparse type for ticket keys. Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
-    if not KEY_RE.match(value):
+    if not KEY_RE.fullmatch(value):
         raise argparse.ArgumentTypeError(f"invalid ticket key {value!r}: must match {KEY_RE.pattern}")
     return value
 
@@ -53,13 +53,13 @@ def cursor(value: str) -> tuple[str, str]:
     name, sep, cursor_id = value.partition("=")
     if not sep or name not in db.CURSOR_COLUMNS:
         raise argparse.ArgumentTypeError(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}")
-    if not CURSOR_VALUE_RE.match(cursor_id):
+    if not CURSOR_VALUE_RE.fullmatch(cursor_id):
         raise argparse.ArgumentTypeError(f"invalid cursor id {cursor_id!r}")
     return name, cursor_id
 
 
 def reason(value: str) -> str:
-    if not REASON_RE.match(value):
+    if not REASON_RE.fullmatch(value):
         raise argparse.ArgumentTypeError(f"invalid reason {value!r}: must match {REASON_RE.pattern}")
     return value
 
@@ -193,7 +193,7 @@ def cmd_init(args: argparse.Namespace) -> int:
         if not sys.stdin.isatty():
             raise CliError("the repository has no canopy.toml; pass --provider (jira, github, linear, ...)", 2)
         provider = input("Tracker provider for this repository (jira, github, linear, ...): ").strip().lower()
-    if provider is not None and not init.PROVIDER_RE.match(provider):
+    if provider is not None and not init.PROVIDER_RE.fullmatch(provider):
         raise CliError(f"invalid provider {provider!r}: use a short lowercase name such as jira or github", 2)
 
     user_file = config.user_config_path()

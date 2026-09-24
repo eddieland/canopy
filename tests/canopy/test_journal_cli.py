@@ -158,3 +158,18 @@ def test_status_and_attention_ages(
 
     tick([])
     assert attention.current(conn) == []
+
+
+@pytest.mark.parametrize("key", ["PROJ-1\n", "PROJ-1\r\n", "PROJ-1\n\n"])
+def test_trailing_line_breaks_are_not_part_of_a_valid_key(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    # `$` in a Python regex also matches before a trailing newline; validation must use the whole string.
+    in_tick(conn, monkeypatch)
+    with pytest.raises(SystemExit):
+        main(["decide", key, "wait", "--rationale", "r"])
+    with pytest.raises(SystemExit):
+        main(["attention", "PROJ-1", "needs_reviewer\n", "--detail", "d"])
+    with pytest.raises(SystemExit):
+        main(["ticket", "set", "PROJ-1", "--cursor", "comment=1\n"])
+    assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0

@@ -79,3 +79,9 @@ def test_init_rejects_odd_provider_names(canopy_env: CanopyEnv, provider: str) -
 def test_init_outside_a_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
     assert main(["init", "--provider", "jira"]) == 2  # noqa: PLR2004
+
+
+def test_init_rejects_provider_with_trailing_newline(canopy_env: CanopyEnv) -> None:
+    canopy_env.repo_file.unlink()
+    assert main(["init", "--provider", "jira\n"]) == 2  # noqa: PLR2004
+    assert not canopy_env.repo_file.exists()

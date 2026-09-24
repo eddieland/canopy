@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 DB_FILE_NAME = "canopy.db"
-_MIGRATION_RE = re.compile(r"^(\d{4})_([a-z0-9_]+)\.sql$")
+_MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates.
 CURSOR_COLUMNS: Mapping[str, str] = {
@@ -54,7 +54,7 @@ def connect(path: Path) -> sqlite3.Connection:
 def discover(migrations_dir: Path) -> list[Migration]:
     found: list[Migration] = []
     for path in sorted(migrations_dir.glob("*.sql")):
-        m = _MIGRATION_RE.match(path.name)
+        m = _MIGRATION_RE.fullmatch(path.name)
         if m is None:
             raise MigrationError(f"migration file name must be NNNN_name.sql: {path.name}")
         found.append(Migration(int(m.group(1)), m.group(2), path))
