@@ -74,8 +74,13 @@ def _command_template(value: str) -> str:
     return value
 
 
-def _expand(value: Path) -> Path:
-    return value.expanduser()
+def _user_path(value: Path) -> Path:
+    # A relative path would resolve against the working directory, which is the repository: its files would stand in
+    # for the operator's prompts or state (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
+    expanded = value.expanduser()
+    if not expanded.is_absolute():
+        raise ValueError("must be an absolute path or start with ~")
+    return expanded
 
 
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
@@ -83,7 +88,7 @@ NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
-UserPath = Annotated[Path, AfterValidator(_expand)]
+UserPath = Annotated[Path, AfterValidator(_user_path)]
 
 
 class Section(BaseModel):
@@ -240,7 +245,9 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
             section, key = name.split(".", 1)
             merged[section][key] = value
             origin[name] = source
-    merged["paths"].setdefault("prompt_overrides", str(user_file.parent / "prompts"))
+    # Unset or empty: `prompts/` next to the user file.
+    if merged["paths"].get("prompt_overrides", "") == "":
+        merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
 
     try:
         return Config.model_validate(merged)
