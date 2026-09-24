@@ -1,5 +1,5 @@
 ---
-# OpenCode agent definition. Installed to .opencode/agent/canopy-overseer.md by `canopy init`.
+# OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
 # Checked against OpenCode 1.18 in M1 (D021): the last matching permission rule wins, so each catch-all "*" comes
 # before its exceptions. `ask` is auto-rejected under `opencode run`; `deny` is enforced. The old `tools:` map is
 # deprecated in favor of `permission:`.

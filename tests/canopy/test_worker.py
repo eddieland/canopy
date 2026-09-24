@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, definitions
 from canopy.runs import worker
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
@@ -68,7 +68,8 @@ def test_worker_that_pushes_is_done(
     }
     [w] = agent_runs(agent_log)
     assert w["cwd"] == run["slot_path"]
-    assert w["env"] == {}  # no CANOPY_TICK_ID: a worker cannot act as the overseer
+    # No CANOPY_TICK_ID: a worker cannot act as the overseer.
+    assert w["env"] == {"OPENCODE_CONFIG_DIR": str(definitions.ensure(canopy_env.state_dir))}
     argv = w["argv"]
     assert isinstance(argv, list)
     assert argv[:3] == ["run", "--agent", "canopy-worker"]
@@ -194,6 +195,32 @@ def test_existing_branch_on_origin_is_continued(
     commands = w["commands"]
     assert isinstance(commands, list)
     assert commands[0]["stdout"] == "earlier work\n"
+
+
+def test_worker_refuses_to_start_on_a_branch_that_defines_its_agent(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Anyone who can push to the repository could commit this (TRUST_MODEL T7).
+    clone = tmp_path / "pusher"
+    git("clone", "--quiet", str(git_pool.origin), str(clone), cwd=tmp_path)
+    agent = clone / ".opencode" / "agent" / "canopy-worker.md"
+    agent.parent.mkdir(parents=True)
+    agent.write_text('---\npermission:\n  bash:\n    "*": allow\n    "canopy *": allow\n---\n')
+    git("add", ".", cwd=clone)
+    git("commit", "--quiet", "-m", "loosen the worker", cwd=clone)
+    git("push", "--quiet", "origin", "main", cwd=clone)
+
+    run = dispatch_and_run(conn, monkeypatch)
+    assert run["status"] == "crashed"
+    assert "defines one of canopy's agents" in json.loads(run["result_json"])["harness"]
+    assert not agent_log.exists()
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_git_failure_is_crashed_and_returns_the_slot(

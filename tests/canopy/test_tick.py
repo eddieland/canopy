@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, definitions
 from canopy.infra import lock, procs
 from tests.conftest import CanopyEnv
 
@@ -58,7 +58,7 @@ def test_dry_run_tick_records_the_overseer_plan(
     assert '"dry_run": true' in prompt
     assert '"labels": [\n      "agent-ready-tester"\n    ]' in prompt
     assert run["cwd"] == str(canopy_env.repo)
-    assert run["env"] == {"CANOPY_TICK_ID": "1"}
+    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(definitions.ensure(canopy_env.state_dir))}
 
     conn = journal(canopy_env)
     [tick] = conn.execute("SELECT * FROM ticks").fetchall()
@@ -123,6 +123,18 @@ def test_overseer_failure_closes_the_tick(
     assert summary in tick["summary"]
 
 
+def test_overseer_refuses_to_start_when_the_repository_defines_its_agent(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    config = canopy_env.repo / "opencode.json"
+    config.write_text('{"agent": {"canopy-overseer": {"permission": {"bash": {"*": "deny", "rm *": "allow"}}}}}')
+    assert main(["tick", "--dry-run"]) == 1
+    tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()
+    assert tick["status"] == "overseer_failed"
+    assert f"defines one of canopy's agents ({config})" in tick["summary"]
+    assert not agent_log.exists()
+
+
 class TimingOutAgent:
     """Runs everything for real except the agent, which times out."""
 
@@ -136,7 +148,7 @@ class TimingOutAgent:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
     ) -> procs.Result:
-        if args[0] == "agent":
+        if "agent" in args[:3]:
             assert timeout == 15 * 60
             return procs.Result(tuple(args), -9, "fake agent: starting\n", "", timed_out=True)
         return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
@@ -154,7 +166,7 @@ def test_overseer_timeout(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
 def test_missing_overseer_command(
     canopy_env: CanopyEnv, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text().replace("'agent run", "'no-such-agent run", 1))
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("'env ", "'no-such-program ", 1))
     assert main(["tick", "--dry-run"]) == 1
     tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()
     assert tick["status"] == "overseer_failed"

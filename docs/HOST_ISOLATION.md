@@ -225,8 +225,9 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
   worker poison what the operator runs later. Give sandboxed runs their own cache directories.
 - treehouse runs git on returned slots (`return --force`) and runs `post_create` hooks. Check whether it runs anything
   from the slot, and what it should turn off, before calling §5 complete.
-- The repository's `.opencode/agent/` definitions come from the checked-out branch (T7 residual). The sandbox does not
-  change that, but it does bound what a hostile definition can reach.
+- The repository's OpenCode config (skills, MCP servers, plugins) comes from the checked-out branch (T7 residual).
+  canopy's own agent definitions no longer do (D040, D044). The sandbox does not change that, but it does bound what a
+  hostile config can reach.
 - `sandbox-exec` is marked deprecated on macOS, though the Seatbelt framework it drives is what Chrome and several
   agent runtimes still use. Apple's `container` (a lightweight VM per container) is the macOS fallback if it goes away.
 - Where this sits in the ROADMAP: the trigger says before a second team adopts canopy. It needs M2's real worker to be

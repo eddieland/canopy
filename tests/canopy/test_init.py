@@ -4,12 +4,11 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core.config import load
-from canopy.infra import resources
 from canopy.setup.init import is_ssh_url
 from tests.conftest import CanopyEnv, git
 
 
-def test_init_writes_both_configs_and_installs_agents_and_skill(
+def test_init_writes_both_configs_and_installs_nothing_else(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
     canopy_env.user_file.unlink()
@@ -19,18 +18,18 @@ def test_init_writes_both_configs_and_installs_agents_and_skill(
 
     assert "'agent-ready-tester'" in out
     assert "Branch protection" in out
+    assert "does not load" not in out
     assert 'labels = ["agent-ready-tester"]' in canopy_env.user_file.read_text()
     assert 'provider = "github"' in canopy_env.repo_file.read_text()
-    for name in ("canopy-overseer.md", "canopy-worker.md"):
-        installed = canopy_env.repo / ".opencode" / "agent" / name
-        assert installed.read_text() == (resources.agents_dir() / name).read_text()
-    skill = canopy_env.repo / ".opencode" / "skill" / "tracker-github" / "SKILL.md"
-    assert skill.read_text() == (resources.skills_dir() / "tracker-github" / "SKILL.md").read_text()
+    # Agent runs load canopy's definitions from its own directory (D040); nothing goes into the repository.
+    assert sorted(p.name for p in canopy_env.repo.iterdir()) == [".git", "canopy.toml"]
 
     # What init wrote loads. The user file has no state_dir, so it defaults under the fake HOME.
     cfg = load(canopy_env.repo, canopy_env.user_file)
     assert cfg.tracker.labels == ("agent-ready-tester",)
     assert cfg.paths.state_dir == canopy_env.home / ".canopy"
+    assert "{definitions_dir}" in cfg.runtime.overseer_cmd
+    assert "{definitions_dir}" in cfg.runtime.worker_cmd
 
 
 def test_init_never_overwrites_configs(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -39,26 +38,25 @@ def test_init_never_overwrites_configs(canopy_env: CanopyEnv, capsys: pytest.Cap
     assert main(["init", "--provider", "github"]) == 0
     assert canopy_env.user_file.read_text() == user_before
     assert canopy_env.repo_file.read_text() == repo_before
-    out = capsys.readouterr().out
-    assert f"kept  {canopy_env.user_file}" in out
-    # The existing canopy.toml says jira, so the jira skill is installed, not the one named on the command line.
-    assert (canopy_env.repo / ".opencode" / "skill" / "tracker-jira" / "SKILL.md").exists()
-    assert not (canopy_env.repo / ".opencode" / "skill" / "tracker-github").exists()
+    assert f"kept  {canopy_env.user_file}" in capsys.readouterr().out
 
 
-def test_init_uses_existing_repo_provider_and_refreshes_agents(canopy_env: CanopyEnv) -> None:
-    agent = canopy_env.repo / ".opencode" / "agent" / "canopy-overseer.md"
-    agent.parent.mkdir(parents=True)
-    agent.write_text("stale\n")
+def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("env OPENCODE_CONFIG_DIR={definitions_dir} ", ""))
     assert main(["init"]) == 0
-    assert agent.read_text() == (resources.agents_dir() / "canopy-overseer.md").read_text()
-    assert (canopy_env.repo / ".opencode" / "skill" / "tracker-jira" / "SKILL.md").exists()
+    out = capsys.readouterr().out
+    assert "The config does not load yet" in out
+    assert "'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}'" in out
 
 
-def test_init_without_skill_for_provider(canopy_env: CanopyEnv) -> None:
-    canopy_env.repo_file.unlink()
-    assert main(["init", "--provider", "linear"]) == 0
-    assert not (canopy_env.repo / ".opencode" / "skill").exists()
+def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    old = canopy_env.repo / ".opencode" / "agent" / "canopy-worker.md"
+    old.parent.mkdir(parents=True)
+    old.write_text("---\ndescription: an old copy\n---\n")
+    assert main(["init"]) == 0
+    out = capsys.readouterr().out
+    assert f"Warning: OpenCode config here defines one of canopy's agents ({old})" in out
+    assert old.exists()
 
 
 def test_init_needs_provider_when_not_interactive(

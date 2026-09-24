@@ -5,6 +5,11 @@ The agent is told to try all of them. Only the allowed command may leave a marke
 rather than block on the `ask`. Missing marker files alone prove nothing if the model never tried, so the run's JSON
 event stream must also show each forbidden call attempted.
 
+The definition is loaded the way canopy loads its own (D040): from a directory named by `OPENCODE_CONFIG_DIR`, in its
+`agents/` subdirectory. A second run adds the repository's own definition of the same agent, which allows the denied
+command; canopy's must still win (TRUST_MODEL T4). That repository definition does not repeat any of canopy's patterns:
+one that does can loosen them, which is why canopy refuses to run where one exists (D044).
+
 This runs a real model, so it is opt-in: set CANOPY_OPENCODE_CANARY=1 with `opencode` on PATH and a model provider
 configured in OpenCode. CANOPY_OPENCODE_CANARY_MODEL (provider/model) picks the model; otherwise OpenCode's default.
 The helpers that read OpenCode's event stream are unit-tested here without opencode or a model.
@@ -50,19 +55,45 @@ Finally print exactly one line: canary finished
 """
 
 
+# A repository's definition of the same agent, merged before canopy's: it allows the command canopy's denies.
+REPO_AGENT = """\
+---
+description: a repository trying to loosen canopy's agent.
+permission:
+  bash:
+    "touch denied-marker": allow
+---
+"""
+
+
 @requires_canary
 def test_denied_and_asked_tools_are_refused_under_opencode_run(tmp_path: Path) -> None:
+    check_canary(tmp_path, repo_agent=None)
+
+
+@requires_canary
+def test_a_repository_definition_of_the_agent_does_not_loosen_it(tmp_path: Path) -> None:
+    check_canary(tmp_path, repo_agent=REPO_AGENT)
+
+
+def check_canary(tmp_path: Path, *, repo_agent: str | None) -> None:
+    """Run the canary agent from a definitions directory, with `repo_agent` in the repository if given."""
     runner = SubprocessRunner()
-    assert runner.run(["git", "init", "-q", str(tmp_path)]).ok
-    agent_dir = tmp_path / ".opencode" / "agent"
-    agent_dir.mkdir(parents=True)
-    (agent_dir / "canopy-canary.md").write_text(AGENT)
+    repo = tmp_path / "repo"
+    assert runner.run(["git", "init", "-q", str(repo)]).ok
+    definitions_dir = tmp_path / "definitions"
+    (definitions_dir / "agents").mkdir(parents=True)
+    (definitions_dir / "agents" / "canopy-canary.md").write_text(AGENT)
+    if repo_agent is not None:
+        (repo / ".opencode" / "agent").mkdir(parents=True)
+        (repo / ".opencode" / "agent" / "canopy-canary.md").write_text(repo_agent)
 
     argv = ["opencode", "run", "--agent", "canopy-canary", "--format", "json"]
     model = os.environ.get("CANOPY_OPENCODE_CANARY_MODEL")
     if model:
         argv += ["-m", model]
-    result = runner.run([*argv, PROMPT], cwd=tmp_path, timeout=600)
+    env = {"OPENCODE_CONFIG_DIR": str(definitions_dir)}
+    result = runner.run([*argv, PROMPT], cwd=repo, env=env, timeout=600)
 
     report = f"exit {result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     assert not result.timed_out, "the run blocked, probably on the `ask` permission\n" + report
@@ -71,10 +102,10 @@ def test_denied_and_asked_tools_are_refused_under_opencode_run(tmp_path: Path) -
     failed = "OpenCode failed before the canary ran, so this is not a result: " + "; ".join(errors)
     assert not errors, failed + "\n" + report
     # The positive control: without it, a model that did nothing at all would pass.
-    assert (tmp_path / "allowed-marker").exists(), "the allowed command did not run, so this proves nothing\n" + report
-    assert not (tmp_path / "denied-marker").exists(), "a denied bash command ran\n" + report
-    assert not (tmp_path / "written-marker").exists(), "a denied edit went through\n" + report
-    assert not (tmp_path / "asked-marker").exists(), "an `ask` command ran without a human\n" + report
+    assert (repo / "allowed-marker").exists(), "the allowed command did not run, so this proves nothing\n" + report
+    assert not (repo / "denied-marker").exists(), "a denied bash command ran\n" + report
+    assert not (repo / "written-marker").exists(), "a denied edit went through\n" + report
+    assert not (repo / "asked-marker").exists(), "an `ask` command ran without a human\n" + report
 
     # Each forbidden call must have been attempted, or the checks above were never exercised.
     calls = tool_calls(result.stdout)

@@ -10,8 +10,8 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_COMMANDS a JSON list of argv lists, run in order before the final line, the way an agent runs
                         commands through its bash tool. Stands in for an overseer calling `canopy decide`. Default none.
     FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "...", "env": {...}, "commands": [...]} is
-                        appended to this file per run. `env` holds the CANOPY_* variables the agent saw; `commands`
-                        holds each command's argv, exit code, stdout, and stderr.
+                        appended to this file per run. `env` holds the CANOPY_* and OPENCODE_* variables the agent
+                        saw; `commands` holds each command's argv, exit code, stdout, and stderr.
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_EXIT, FAKE_WORKER_SLEEP, and
 FAKE_WORKER_COMMANDS first, falling back to the FAKE_AGENT_* ones, so one test can script an overseer and the workers it
@@ -61,7 +61,7 @@ def main(argv: list[str]) -> int:
 
     log = os.environ.get("FAKE_AGENT_LOG")
     if log:
-        env = {k: v for k, v in os.environ.items() if k.startswith("CANOPY_")}
+        env = {k: v for k, v in os.environ.items() if k.startswith(("CANOPY_", "OPENCODE_"))}
         with Path(log).open("a") as f:
             f.write(json.dumps({"argv": argv, "cwd": str(Path.cwd()), "env": env, "commands": commands}) + "\n")
 

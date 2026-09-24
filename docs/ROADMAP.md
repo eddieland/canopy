@@ -102,16 +102,18 @@ Next:
 - Agent definitions and skills from a directory canopy owns (DESIGN §13, D040): `<state_dir>/runtime/`, the
   `{definitions_dir}` placeholder required in `overseer_cmd` and `worker_cmd`, `canopy init` no longer installing
   definitions, and the canary's precedence check. Before the live run: until then a worktree without a committed
-  `.opencode/agent/` runs the worker as OpenCode's default agent, with no denies.
+  `.opencode/agent/` runs the worker as OpenCode's default agent, with no denies. With it, the guard against a
+  repository defining one of canopy's agents (D044).
 
 Accept: one real ticket goes from label to open PR unattended, with the slot
 returned and a correct `runs` row. A killed worker is detected on the next tick
 and its slot returned.
 
-Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, and D028 and D029 are
-in. Not built: D040's definitions directory, which the live run needs. Waiting on the operator: one real ticket from
-label to open PR, a killed worker on a real run, a first live run of the OpenCode canary, and the human approval the new
-worker definition and the overseer prompt change need. It was started on request before M1 closed (2026-09-24).
+Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, D028, D029, and
+D040's definitions directory with D044's guard are in. Waiting on the operator: one real ticket from label to open PR, a
+killed worker on a real run, a first live run of the OpenCode canary (both tests, including the precedence check), and
+the human approval the new worker definition and the overseer prompt change need. It was started on request before M1
+closed (2026-09-24).
 
 ## M3. Fix-CI and resume
 
