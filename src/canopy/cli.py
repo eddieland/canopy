@@ -18,7 +18,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the CLI with `argv` (default: `sys.argv[1:]`) and return the exit code."""
+    """Run the CLI.
+
+    Args:
+        argv: Arguments without the program name. Defaults to `sys.argv[1:]`.
+
+    Returns:
+        The process exit code.
+    """
     parser = build_parser()
     parser.parse_args(argv)
     parser.print_help()

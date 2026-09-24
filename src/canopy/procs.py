@@ -59,7 +59,19 @@ class Runner(Protocol):
     ) -> Result:
         """Run `args` to completion and capture its output.
 
-        `env` entries are merged over the inherited environment. `timeout` is in seconds.
+        Args:
+            args: The command and its arguments. Never passed through a shell.
+            cwd: Working directory for the child. Defaults to the current one.
+            env: Entries merged over the inherited environment.
+            stdin: Text written to the child's stdin. When None, stdin is `/dev/null`.
+            timeout: Seconds before the child's process group is killed. None waits forever.
+
+        Returns:
+            The exit code and captured output. `timed_out` is set when `timeout` expired.
+
+        Raises:
+            CommandNotFoundError: The executable is missing or not executable.
+            ProcError: The process could not be started, for example because `cwd` does not exist.
         """
         ...
 

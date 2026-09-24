@@ -207,7 +207,8 @@ this codebase: bandit (`S`), pathlib (`PTH`), docstrings (`D`), unused arguments
 (`T20`), pytest style (`PT`), and ruff's own (`RUF`). A hand-picked set also silently skips every rule ruff adds later.
 Decision: `select = ["ALL"]` with a short `ignore` list in `pyproject.toml`, each entry commented with its reason, plus
 per-file ignores for `tests/**` (asserts, magic numbers, fixtures used for side effects, no docstrings, no
-`__init__.py`) and the fakes (`print`). Docstrings follow the `pep257` convention. Relative imports are banned. Preview
+`__init__.py`) and the fakes (`print`). Docstrings follow the Google convention (`Args:`, `Returns:`, `Raises:`
+sections); tests, fakes included, need none and are not docstring-checked. Relative imports are banned. Preview
 rules stay off. The `ruff` floor is 0.16, the version the ignore list was written against.
 Consequences: adopting it needed docstrings on the public API in `src/`, `pathlib` in the agent fake, and `S603` added
 to `procs.py`'s per-file ignores next to `TID251`. A new ruff release can add rules and fail `make check`; `uv.lock`

@@ -44,7 +44,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.pydocstyle]
-convention = "pep257"
+convention = "google"
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -60,7 +60,7 @@ ban-relative-imports = "all"
 "src/canopy/procs.py" = ["TID251", "S603"]
 "tests/**" = [
     "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
-    "D1",      # Test names are the documentation.
+    "D",       # Docstrings are optional in tests and unchecked when present; test names are the documentation.
     "INP001",  # Test directories have no __init__.py on purpose (AGENTS.md, Testing).
     "PLR2004", # Expected exit codes and counts are clearer inline than as named constants.
     "S101",    # pytest asserts.
