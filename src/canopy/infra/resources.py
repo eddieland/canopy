@@ -8,7 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_PACKAGE = Path(__file__).resolve().parent
+# This file is canopy/infra/resources.py; bundled files sit beside the top-level package.
+_PACKAGE = Path(__file__).resolve().parent.parent
 _BUNDLED = _PACKAGE / "_data"
 _SOURCE = _PACKAGE.parent.parent
 

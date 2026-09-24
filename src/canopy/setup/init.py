@@ -15,8 +15,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from canopy import procs, resources
-from canopy.config import REPO_FILE_NAME
+from canopy.core.config import REPO_FILE_NAME
+from canopy.infra import procs, resources
 
 AGENT_DIR = Path(".opencode/agent")
 # OpenCode reads skills from .opencode/skill/<name>/SKILL.md (and .opencode/skills/).

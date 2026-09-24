@@ -237,12 +237,14 @@ if the operator asks.
   `default` shorthand. The existing notify tests pass unchanged.
 - Migration: `notify_events`, `notify_sinks`, and `notifications.sink`, with existing rows assigned to `default` so an
   upgrade with `notify.cmd` set re-notifies nothing (a test).
-- `notify.py`: events recorded by dispatch, run close, and publish; per-sink delivery with cursors, bounds, and
-  pruning; the digest; the `text` and `json` formats.
+- The `notify` package: events recorded by dispatch, run close, and publish through an outbox in `core`; per-sink
+  delivery with cursors, bounds, and pruning; the digest; the `text` and `json` formats.
 - `loop.failing` after three consecutive failed ticks, the notification half of DESIGN §15's three-failure item.
 - `canopy notify test`, and a line per sink in `canopy status`.
-- `canopy.sinks.slack` and the `canopy-notify-slack` script, tested against a local HTTP server; the `TID251` bans on
-  network modules outside `sinks/` and on importing `canopy.sinks`.
+- The uv workspace, with the Slack sink as its first member (`packages/canopy-notify-slack`, D041) and the
+  `canopy-notify-slack` script in canopy's own install, tested against a local HTTP server; the `TID251` ban on network
+  modules in `src/canopy`, and the layer test refusing imports of the sink. `uv tool install canopy` still installs
+  both in one step (a check on a clean machine, as M5's).
 - The TRUST_MODEL T2, T6, and §7 changes, with human approval.
 - DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
 

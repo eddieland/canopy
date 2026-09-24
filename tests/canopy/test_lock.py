@@ -3,14 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from canopy import lock
-from canopy.procs import SubprocessRunner
+from canopy.infra import lock
+from canopy.infra.procs import SubprocessRunner
 
 # Try the lock from another process, the way a second `canopy tick` would.
 TRY_LOCK = """
 import sys
 from pathlib import Path
-from canopy import lock
+from canopy.infra import lock
 try:
     with lock.hold(Path(sys.argv[1])):
         print("acquired")

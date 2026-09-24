@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from canopy import db, lock, procs
-from canopy.cli import main
+from canopy.cli.main import main
+from canopy.core import db
+from canopy.infra import lock, procs
 from tests.conftest import CanopyEnv
 
 

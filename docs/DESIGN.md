@@ -53,28 +53,55 @@ cannot reach internal systems and require handing a vendor write access.
 
 ## 5. Components
 
+The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
+the features, `runs` and `setup`; `core`; `infra`. A module imports from its own package and from lower layers only.
+Features never import each other; what two of them share moves down a layer. `tests/canopy/test_layers.py` enforces
+this, and fails on a module outside the packages it lists.
+
 ```
 canopy (harness, Python)
-  cli.py         tick, tick --dry-run, status, decisions, init, dispatch, decide, attention, ticket set, _run; key
-                 validation
-  tick.py        the tick sequence (§6): lock, migrate, reconcile, run the overseer, close the tick
-  prompts.py     prompt files and overrides, the overseer's state block
-  lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
-  db.py          SQLite journal, migrations
-  config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
-  treehouse.py   status --json, get --lease --json, return --force --if-lease-id
-  dispatch.py    guards, lease, render the worker prompt, spawn detached _run
-  policy.py      attempt limits and the fix-ci cooldown, derived from runs
-  worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
-  attention.py   the attention list from the journal; render attention.md, diff, notify
-  init.py        canopy init: config files, agent definitions, tracker skill, branch protection text, SSH remote warning
-  logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
-  context.py     the Context every command passes around: config, repository root, db connection, runner
-  resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
-  procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
-                 detached spawns and pid liveness
-  __main__.py    python -m canopy, how dispatch starts _run from the same installation
+  __main__.py      python -m canopy, how dispatch starts _run from the same installation
 
+  cli/             the command line; the only package that imports click, and only __main__ imports it
+    main.py        main(), the root group, exit codes
+    common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
+    params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
+    setup.py       init
+    loop.py        tick, tick --dry-run, status, decisions
+    runs.py        dispatch, _run
+    journal.py     decide, attention, ticket set
+
+  loop/            the tick (§6), which drives the features below
+    tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
+    state.py       the overseer's state block
+    attention.py   the attention list from the journal; render attention.md, diff, notify
+
+  runs/            worker runs on tickets (§8)
+    dispatch.py    guards, lease, render the worker prompt, spawn detached _run
+    policy.py      attempt limits and the fix-ci cooldown, derived from runs
+    worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
+    reconcile.py   dead runs marked crashed, stale leases returned, the capacity left
+
+  setup/
+    init.py        canopy init: config files, agent definitions, tracker skill, branch protection text, SSH remote
+                   warning
+
+  core/            what every feature shares
+    config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
+    context.py     the Context every command passes around: config, repository root, db connection, runner
+    db.py          SQLite journal, migrations
+    prompts.py     prompt files and overrides; rendering worker prompts
+    treehouse.py   status --json, get --lease --json, return --force --if-lease-id
+
+  infra/           plumbing that knows nothing about tickets or agents
+    procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
+                   detached spawns and pid liveness
+    lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
+    logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
+    resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
+```
+
+```
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
 agents/          OpenCode agent definitions: canopy-overseer, canopy-worker
 skills/          canopy/: teaches an agent the canopy CLI
@@ -84,6 +111,18 @@ migrations/      NNNN_name.sql
 
 `prompts/`, `agents/`, and `skills/` live under `.agents/` in this repository. The wheel bundles them, and
 `migrations/`, under `canopy/_data/` (D022).
+
+Where later work goes:
+
+- A feature is a package in the features layer with a command module in `cli/`: `chores` (§19), `notify` (§20),
+  `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block. Deleting a
+  feature is deleting its package, its command module, and those calls.
+- A feature other features write to keeps its writing half in `core`: dispatch and `_run` record §20's notification
+  events through `core`, and `notify` delivers them.
+- Code that runs in its own process and must not share the harness's imports or dependencies is not a package here but
+  a separate distribution, a uv workspace member under `packages/`. The first is §20's Slack sink, and the repository
+  becomes a workspace when it lands; `canopy` stays the workspace root, so nothing above moves.
+- A module that takes on a second concern splits into a package of the same name in the same layer, as `cli.py` did.
 
 Roles:
 
@@ -790,9 +829,9 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 ## 19. Chores
 
 Planned for ROADMAP M9; none of it is built. Rationale in D034. Earlier sections describe the loop without chores; M9
-updates them when it builds this: §5 gains `chore.py` (the `canopy chore` commands, `_chore`, and chore reconcile) and
-the overseer's role gains `canopy chore run` and `canopy chore wait`, §6 step 3 reconciles chore runs, §11 lists
-`chore_runs`, §12 the chore keys, and §14 the chore items.
+updates them when it builds this: §5 gains the `chores` package (`_chore` and chore reconcile) and `cli/chores.py` (the
+`canopy chore` commands), the overseer's role gains `canopy chore run` and `canopy chore wait`, §6 step 3 reconciles
+chore runs, §11 lists `chore_runs`, §12 the chore keys, and §14 the chore items.
 
 A chore is recurring work the operator defines and the overseer delegates: an agent run that is not about one of the
 queue's tickets, holds no worktree, pushes nothing, and reports findings to the attention list. The motivating chore is
@@ -990,8 +1029,9 @@ TRUST_MODEL is unchanged until M9, whose PR carries the human approval:
 ## 20. Notifications
 
 Planned for ROADMAP M10; none of it is built. Rationale in D035. It generalizes `notify.cmd` (§14, D032), which stays
-and behaves as it does today. M10 updates the earlier sections when it builds this: §5 gains `notify.py` and
-`sinks/`, §6 step 7 delivers to sinks, §11 lists the new tables, §12 the sink keys, and §14 points here.
+and behaves as it does today. M10 updates the earlier sections when it builds this: §5 gains the `notify` package, the
+event outbox in `core`, `cli/notify.py`, and the Slack sink's workspace member, §6 step 7 delivers to sinks, §11 lists
+the new tables, §12 the sink keys, and §14 points here.
 
 Notifications reach the operator away from the terminal: issues as they happen, progress on a schedule. The first
 destination is a Slack channel. The harness stays a program that runs commands: a destination is a **sink**, a command
@@ -1117,8 +1157,10 @@ field.
 
 ### The Slack sink
 
-`canopy-notify-slack` is a console script in the canopy distribution, so the install that puts `canopy` on `PATH` puts
-it there too. It is `canopy.sinks.slack`, stdlib only (`urllib.request`, `json`).
+`canopy-notify-slack` is its own distribution, the first uv workspace member (D041): `packages/canopy-notify-slack/`,
+module `canopy_notify_slack`, stdlib only (`urllib.request`, `json`), importing nothing from `canopy`. `canopy` depends
+on it and lists the `canopy-notify-slack` script in its own `[project.scripts]`, so the install that puts `canopy` on
+`PATH` puts it there too.
 
 - It reads the `json` format on stdin, posts one message to a Slack incoming webhook, and exits 0 on a 2xx response
   and 1 otherwise, with Slack's reply on stderr. A rate-limited post is retried by the next tick like any failure.
@@ -1134,10 +1176,11 @@ it there too. It is `canopy.sinks.slack`, stdlib only (`urllib.request`, `json`)
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`.
 
-Two lint rules keep the network out of the harness, as D015 keeps processes in `procs.py`: ruff's banned-api rule
-(`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy` except `sinks/`, and bans
-importing `canopy.sinks` anywhere else. The harness reaches the Slack sink only as a configured command, like any other,
-so the process that holds the journal and enforces the guards never opens a connection or reads a sink's secret.
+Two checks keep the network out of the harness, as D015 keeps processes in `canopy.infra.procs`: ruff's banned-api rule
+(`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, with no exception, and
+`tests/canopy/test_layers.py` fails on any import of `canopy_notify_slack` from `src/canopy`. The harness reaches the
+Slack sink only as a configured command, like any other, so the process that holds the journal and enforces the guards
+never opens a connection or reads a sink's secret.
 
 ### Commands
 
@@ -1190,11 +1233,11 @@ TRUST_MODEL is unchanged until M10, whose PR carries the human approval:
 
 ## 21. Reviews
 
-Planned for ROADMAP M11; none of it is built. Rationale in D039. Earlier sections describe the loop without reviews;
-M11 updates them when it builds this: §5 gains `review.py` (`canopy review`, `_review`, and review reconcile) and the
-overseer's role gains `canopy review run` and `canopy review wait`, §6 step 3 reconciles review runs, §7 gains the
-phases below, §11 lists `review_runs` and `decisions.pr`, §12 the review keys, §13 the `canopy-reviewer` definition,
-§14 the review items, and §20 a `reviews` event group.
+Planned for ROADMAP M11; none of it is built. Rationale in D039. Earlier sections describe the loop without reviews; M11
+updates them when it builds this: §5 gains the `reviews` package (`_review` and review reconcile) and `cli/reviews.py`
+(`canopy review`), the overseer's role gains `canopy review run` and `canopy review wait`, §6 step 3 reconciles review
+runs, §7 gains the phases below, §11 lists `review_runs` and `decisions.pr`, §12 the review keys, §13 the
+`canopy-reviewer` definition, §14 the review items, and §20 a `reviews` event group.
 
 A review is an adversarial read of one PR at one commit by a fresh agent run: no transcript of whoever wrote the
 change, told to assume the change is wrong until the code shows otherwise. It posts one comment on the PR that says

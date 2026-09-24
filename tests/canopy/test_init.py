@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from canopy import resources
-from canopy.cli import main
-from canopy.config import load
-from canopy.init import is_ssh_url
+from canopy.cli.main import main
+from canopy.core.config import load
+from canopy.infra import resources
+from canopy.setup.init import is_ssh_url
 from tests.conftest import CanopyEnv, git
 
 

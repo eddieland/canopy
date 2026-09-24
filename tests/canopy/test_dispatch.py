@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from canopy import db, procs
-from canopy.cli import main
+from canopy.cli.main import main
+from canopy.core import db
+from canopy.infra import procs
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
