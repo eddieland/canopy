@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.procs import SubprocessRunner
+from canopy.infra.procs import SubprocessRunner
 
 run = SubprocessRunner().run
 

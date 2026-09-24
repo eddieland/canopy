@@ -2,7 +2,7 @@ from importlib.metadata import version
 
 import pytest
 
-from canopy.cli import main
+from canopy.cli.main import main
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:

@@ -12,7 +12,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictStr, TypeAdapter, ValidationError
 
-from canopy import procs
+from canopy.infra import procs
 
 HOLDER_PREFIX = "canopy:"
 _TIMEOUT_SECONDS = 120

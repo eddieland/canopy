@@ -12,10 +12,10 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy import db
+from canopy.core import db
 
 if TYPE_CHECKING:
-    from canopy.config import Config
+    from canopy.core.config import Config
 
 KINDS = ("implement", "fix-ci", "resume")
 

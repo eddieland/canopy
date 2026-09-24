@@ -1,7 +1,7 @@
 import pytest
 
-from canopy import prompts
-from canopy.config import load
+from canopy.core import prompts
+from canopy.core.config import load
 from tests.conftest import CanopyEnv
 
 VALUES = {

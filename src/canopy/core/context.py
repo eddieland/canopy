@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import db, lock, procs
+from canopy.core import db
+from canopy.infra import lock, procs
 
 if TYPE_CHECKING:
-    from canopy.config import Config
+    from canopy.core.config import Config
 
 
 @dataclass(frozen=True)

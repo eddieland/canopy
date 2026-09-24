@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from canopy import db, resources
+from canopy.core import db
+from canopy.infra import resources
 
 
 def fresh(tmp_path: Path) -> sqlite3.Connection:

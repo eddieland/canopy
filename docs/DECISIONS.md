@@ -532,3 +532,35 @@ Rejected:
 Revisit: when M6 needs workspace-level skills above the repositories (`OPENCODE_CONFIG_CONTENT` with `skills.paths` can
 list several directories); when a second runtime needs its definitions somewhere else (D009); if the canary shows a
 repository can loosen a key canopy sets.
+
+## D041. Layered subpackages now; a uv workspace when the first separate program lands
+
+Context: 18 modules in one directory at M3, and M6 to M11 each add a feature of similar size (workspaces, joint runs,
+chores, notifications, reviews): 40 or more modules on that path. Nothing said which module may import which, so only
+review kept chores removable (D034) and the network out of the harness (D035).
+Decision (DESIGN §5):
+- `src/canopy` is layered subpackages: `cli`; `loop`; the features (`runs` and `setup`, later `chores`, `notify`,
+  `reviews`); `core`; `infra`. Imports go down, never between features. `tests/canopy/test_layers.py` checks every
+  import, `TYPE_CHECKING` ones included, fails on a module in no listed package, and keeps click inside `cli`.
+- `cli/` has one command module per feature, so the command surface stays in one place and nothing else needs click.
+- The repository becomes a uv workspace when M10 builds the Slack sink. `canopy` stays the root project; members go
+  under `packages/`. A member is code that runs as its own process and must not share the harness's imports or
+  dependencies. Anything that reads or writes the journal stays in `canopy`. This amends D035: the sink is the member
+  `canopy-notify-slack`, not `canopy.sinks.slack`. `canopy` depends on it and lists its script in its own
+  `[project.scripts]`, so one `uv tool install` still installs both, and the ban on importing `canopy.sinks` becomes
+  the layer test refusing `canopy_notify_slack`.
+Consequences: imports name their layer (`from canopy.core import db`). D015's exemption is now
+`src/canopy/infra/procs.py`. A new package needs a line in the layer test and in DESIGN §5. `migrations/`, `.agents/`,
+D022's lookup, and the install command stay where they are, because the root project does not move. M10 must check that
+`uv tool install` resolves the member from git and from an index on a clean machine.
+Rejected:
+- A workspace now, with `canopy` moved to `packages/canopy/`: every path moves (resources, force-include, CI, pyrefly)
+  for one member and no second distribution.
+- A virtual workspace root with every project under `packages/`, now or later: the same moves, for symmetry only.
+- Splitting the harness into distributions (core, features, CLI): they share one journal, one lock, and one release.
+- Features owning their click commands: click in every layer, and D025's parameter types shared upward out of `cli`.
+- ruff's `TID251` for layers: exemptions are per rule and file, so letting `cli/` import `canopy.cli` or click would
+  also let it import `subprocess`.
+- import-linter: a dependency for what a short stdlib test does. Reconsider if the contracts outgrow one layer list.
+Revisit: if shared code piles up in `core` until it is the new flat directory (then split it by concern); when a second
+separate program ships, which becomes a workspace member by the rule above.

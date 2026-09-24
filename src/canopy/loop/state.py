@@ -1,53 +1,20 @@
-"""Prompt files, the overseer's generated state block (DESIGN §6 step 4), and worker prompts (DESIGN §8).
-
-A prompt named `overseer.md` is read from `paths.prompt_overrides` if a file of that name is there, otherwise from the
-prompts canopy ships. Worker prompts name their inputs as `{{NAME}}` placeholders.
-"""
+"""The overseer's state block: the `## State` section the harness appends to its prompt (DESIGN §6 step 4)."""
 
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 from collections.abc import Mapping
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import db, policy, resources
+from canopy.core import db
+from canopy.runs import policy
 
 if TYPE_CHECKING:
-    from canopy.config import Config
-
-OVERSEER = "overseer.md"
-WORKER = {"implement": "worker-implement.md", "fix-ci": "worker-fix-ci.md", "resume": "worker-resume.md"}
-_PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
-
-
-class PromptError(Exception):
-    """A prompt file cannot be rendered."""
-
-
-@dataclass(frozen=True)
-class Capacity:
-    """How many workers may run, and how many are running."""
-
-    max_workers: int
-    running: int
-
-    @property
-    def available(self) -> int:
-        """Workers that may still start."""
-        return max(0, self.max_workers - self.running)
-
-
-def prompt_path(config: Config, name: str) -> Path:
-    """Return the prompt file `name`, preferring the operator's override."""
-    override = config.paths.prompt_overrides / name
-    if override.is_file():
-        return override
-    return resources.prompts_dir() / name
+    from canopy.core.config import Config
+    from canopy.runs.reconcile import Capacity
 
 
 def state_block(
@@ -159,27 +126,3 @@ def _run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
         "started_at": run["started_at"],
         "ended_at": run["ended_at"],
     }
-
-
-def render_overseer(config: Config, block: str) -> str:
-    """Return the overseer prompt followed by the state block."""
-    body = prompt_path(config, OVERSEER).read_text(encoding="utf-8").rstrip("\n")
-    return f"{body}\n\n{block}"
-
-
-def render_worker(config: Config, kind: str, values: Mapping[str, str]) -> str:
-    """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
-
-    Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
-    is an error: an override with a typo must not reach a worker half rendered.
-    """
-    path = prompt_path(config, WORKER[kind])
-    text = path.read_text(encoding="utf-8")
-
-    def replace(m: re.Match[str]) -> str:
-        name = m.group(1)
-        if name not in values:
-            raise PromptError(f"{path}: unknown placeholder {{{{{name}}}}}")
-        return values[name]
-
-    return _PLACEHOLDER_RE.sub(replace, text)

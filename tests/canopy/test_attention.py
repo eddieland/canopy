@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from canopy import attention, db
-from canopy.cli import main
-from canopy.config import ConfigError, load
+from canopy.cli.main import main
+from canopy.core import db
+from canopy.core.config import ConfigError, load
+from canopy.loop import attention
 from tests.canopy.helpers import journal
 from tests.conftest import CanopyEnv
 

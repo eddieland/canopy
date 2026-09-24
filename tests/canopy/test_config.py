@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from canopy import config
-from canopy.config import ConfigError, load, render_command
+from canopy.core import config
+from canopy.core.config import ConfigError, load, render_command
 from tests.conftest import CanopyEnv
 
 EXAMPLES = Path(__file__).parents[2] / "examples"

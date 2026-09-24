@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from canopy import treehouse
-from canopy.procs import SubprocessRunner
+from canopy.core import treehouse
+from canopy.infra.procs import SubprocessRunner
 
 runner = SubprocessRunner()
 

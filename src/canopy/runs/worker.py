@@ -19,11 +19,13 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
 
-from canopy import db, dispatch, logs, procs, treehouse
-from canopy.config import render_command
+from canopy.core import db, treehouse
+from canopy.core.config import render_command
+from canopy.infra import logs, procs
+from canopy.runs import dispatch
 
 if TYPE_CHECKING:
-    from canopy.context import Context
+    from canopy.core.context import Context
 
 MAX_TEXT = 2000
 _GIT_TIMEOUT_SECONDS = 300

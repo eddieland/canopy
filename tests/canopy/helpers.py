@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from canopy import db, procs, resources
+from canopy.core import db
+from canopy.infra import procs, resources
 from tests.conftest import CanopyEnv
 
 WORKER_DONE = json.dumps(

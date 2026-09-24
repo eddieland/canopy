@@ -19,13 +19,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy import db, logs, procs
-from canopy.config import notify_words
+from canopy.core import db
+from canopy.core.config import notify_words
+from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from canopy.context import Context
+    from canopy.core.context import Context
 
 ACTION_PREFIX = "attention:"
 # Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the

@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import attention, db, lock, logs, policy, procs, prompts, resources, treehouse
-from canopy.config import render_command
+from canopy.core import db, prompts, treehouse
+from canopy.core.config import render_command
+from canopy.infra import lock, logs, procs, resources
+from canopy.loop import attention, state
+from canopy.runs import policy, reconcile
 
 if TYPE_CHECKING:
-    from canopy.context import Context
+    from canopy.core.context import Context
 
 TICK_ID_ENV = "CANOPY_TICK_ID"
 DONE_LINE = "tick complete"
@@ -56,7 +57,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         return Outcome(tick_id, status, summary)
 
     try:
-        capacity = reconcile(ctx, log)
+        capacity = reconcile.run(ctx, log)
     except treehouse.TreehouseError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
@@ -64,7 +65,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
 
     now = datetime.now(UTC)
-    block = prompts.state_block(
+    block = state.state_block(
         ctx.config,
         ctx.repo_root,
         tick_id=tick_id,
@@ -92,54 +93,6 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     actions = Counter(str(d["action"]) for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}")
-
-
-def reconcile(ctx: Context, log: logs.TickAdapter) -> prompts.Capacity:
-    """Close runs whose process is gone, return canopy leases no running run holds, and return the capacity left.
-
-    Raises:
-        treehouse.TreehouseError: treehouse could not be read or a slot could not be returned. The tick stops.
-    """
-    slots = treehouse.status(ctx.runner)
-    handled: set[str] = set()
-    for run in db.running_runs(ctx.conn):
-        pid = run["pid"]
-        if pid is not None and procs.alive(int(pid)):
-            continue
-        fields = {"run_id": run["id"], "ticket": run["ticket_key"], "pid": pid, "slot": run["slot_path"]}
-        # `_run` is gone, but a worker it started may not be: it leads its own process group. Stop it before its
-        # slot goes back to the pool.
-        if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
-            log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
-        db.finish_run(ctx.conn, int(run["id"]), "crashed", json.dumps({"harness": "the worker process is gone"}))
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            Path(run["slot_path"]),
-            lease_id=str(run["lease_id"]),
-            lease_holder=str(run["lease_holder"]),
-        )
-        handled.add(str(run["lease_id"]))
-        log.warning("worker process is gone; run marked crashed", extra={**fields, "returned": outcome.value})
-
-    running = db.running_runs(ctx.conn)
-    held = {str(r["lease_id"]) for r in running} | handled
-    for slot in slots:
-        if slot.canopy_key is None or not slot.lease_id or slot.lease_id in held:
-            continue
-        outcome = treehouse.return_slot(ctx.runner, slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder)
-        log.warning(
-            "canopy lease with no running worker; returned",
-            extra={
-                "slot": str(slot.path),
-                "lease_holder": slot.lease_holder,
-                "lease_id": slot.lease_id,
-                "returned": outcome.value,
-            },
-        )
-
-    capacity = prompts.Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running))
-    log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
-    return capacity
 
 
 def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter) -> str | None:

@@ -2,6 +2,6 @@
 
 import sys
 
-from canopy.cli import main
+from canopy.cli.main import main
 
 sys.exit(main())

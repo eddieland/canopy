@@ -7,8 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from canopy import attention, db
-from canopy.cli import main
+from canopy.cli.main import main
+from canopy.core import db
+from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
