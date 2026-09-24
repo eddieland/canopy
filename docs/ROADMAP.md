@@ -26,7 +26,7 @@ progress is tracked. Keep it current in the same PR that changes it:
 - Repository layout per `DESIGN.md` §5. `pyproject.toml`, `Makefile`,
   `uv.lock`.
 - `canopy --version`, `canopy --help`.
-- `make check`: ruff format check, ruff lint, ty, pytest. All green on an
+- `make check`: ruff format check, ruff lint, ty, pyrefly (D017), pytest. All green on an
   empty test.
 - GitHub Actions running `make check` on push and PR.
 - `tests/fakes/treehouse` and `tests/fakes/agent` executables with fixtures

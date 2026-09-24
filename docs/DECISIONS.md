@@ -186,3 +186,14 @@ commit by accident, a third file to explain); a shared label with an assignee fi
 tickets but does not authorize them, D014).
 Revisit: when one operator runs canopy on several repositories and needs different labels or state per repository
 (DESIGN §16), or when a team wants a shared authorized-replier list.
+
+## D017. `ty` and `pyrefly` both run
+
+Context: D011 chose `ty` over `pyrefly`, but the seed `Makefile`, `pyproject.toml`, and AGENTS.md already ran both, and
+M0 shipped that way. Nothing recorded the change.
+Decision: `make lint` runs both. `ty check src` covers the package; `pyrefly check` covers `src` and `tests`
+(`[tool.pyrefly] project-includes`). Code must pass both. This supersedes D011's "Decision: `ty`".
+Consequences: two checkers catch more, at the cost of occasionally satisfying both on the same line. `ty` also passes
+on `tests` today; widening its scope is a one-word Makefile change if wanted.
+Revisit: when the two disagree on valid code and a suppression would be needed for one of them; then drop the checker
+that is wrong more often, recording which here.
