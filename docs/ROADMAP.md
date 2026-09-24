@@ -110,10 +110,10 @@ returned and a correct `runs` row. A killed worker is detected on the next tick
 and its slot returned.
 
 Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, D028, D029, and
-D040's definitions directory with D044's guard are in. Waiting on the operator: one real ticket from label to open PR, a
-killed worker on a real run, a first live run of the OpenCode canary (both tests, including the precedence check), and
-the human approval the new worker definition and the overseer prompt change need. It was started on request before M1
-closed (2026-09-24).
+D040's definitions directory with D044's guard are in; the worker definition and overseer prompt were approved in #10.
+Waiting on the operator: one real ticket from label to open PR, a killed worker on a real run, and a first live run of
+the OpenCode canary (both tests, including the precedence check). It was started on request before M1 closed
+(2026-09-24).
 
 ## M3. Fix-CI and resume
 
@@ -132,8 +132,8 @@ ticket; an authorized reply resumes it; an unauthorized reply does not.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py` holds the fix-ci half of the
 acceptance; `tests/canopy/test_attention.py`), docs, and D030 to D032 are in. Waiting on the operator: a real PR with a
-failing check taken through fix-ci to the limit, a real blocked worker answered once by an authorized and once by an
-unauthorized account (prompt behavior the fakes cannot show), and the human approval the overseer prompt change needs.
+failing check taken through fix-ci to the limit, and a real blocked worker answered once by an authorized and once by an
+unauthorized account (prompt behavior the fakes cannot show). The overseer prompt change was approved in #11.
 M2's acceptance run is also still open; this milestone was started on request before M1 closed. Not done
 here, and not listed by any milestone: DESIGN §15's attention item after three consecutive overseer failures.
 
