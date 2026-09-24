@@ -359,3 +359,34 @@ Revisit: if chores routinely need to write (then unlabeled tickets first); if th
 machine-readable window checked by a guard); if overseer failures starve chores (then the harness runs one overdue by
 twice its interval); in M7, whether `chore_runs` folds into `runs` with no slots; once findings have a track record,
 whether they may hold back ticket work, opt-in per chore.
+
+## D035. Notifications: sinks are commands fed by the journal; Slack ships as one sink
+
+Context: `notify.cmd` gets attention diffs as text. The operator wants issues and periodic progress in Slack, and
+perhaps replies from Slack later.
+Decision (DESIGN §20, planned for M10):
+- A sink is a command that gets one message on stdin at the end of a tick, JSON by default. There can be several, each
+  choosing event groups and an optional digest interval. `notify.cmd` becomes shorthand for a text sink of attention
+  only, and its messages do not change.
+- Events are a closed set the harness derives from the journal: attention opened and resolved, runs started and ended,
+  and the loop failing and recovering. Attention stays D032's diff, now per sink. Point events go through an outbox
+  with a cursor per sink, so a failing sink retries without resending to the others.
+- The harness writes the digest from the journal, with no model, and sends it even when quiet, so a missing digest
+  shows a dead scheduler.
+- canopy ships `canopy-notify-slack`, a stdlib incoming-webhook sink run as a separate process. It reads its webhook
+  from a file of its own and escapes Slack markup. Lint keeps network modules and the sink out of the harness.
+Consequences: amends D032, whose table gains a sink column. The harness still makes no network call and holds no
+secret. Alerts arrive up to one tick interval late. Each sink can hold the tick lock for 60 seconds. Two new tables.
+Rejected:
+- HTTP or a Slack SDK in the harness: the process that enforces the guards would hold a credential and make outbound
+  calls (T2), and each destination would become code, which D003 and D014 keep trackers from being.
+- A Python plugin interface: third-party code loaded into the harness process. A command is already the plug (D009).
+- The overseer posting through a Slack MCP server (DESIGN §16's alternative): model spend and an LLM in every
+  delivery, no retry, and a new write tool on the agent that dispatches. It stays the likely way to read replies.
+- A chore for the periodic report: a model run to restate what the journal already holds. Chores are for judgment;
+  their summaries reach sinks as events.
+- Delivering from `dispatch` or `_run` when the event happens: concurrent sends outside the lock and a second retry
+  path, to save at most one tick interval.
+- Slack's interactive features (buttons, slash commands, Events API, Socket Mode): each needs a listener or a daemon.
+Revisit: when two-way is wanted (then per-ticket threads, replies read through MCP, and a T1 change); if one tick
+interval is measured as too slow for an alert; if operators want routing finer than groups.
