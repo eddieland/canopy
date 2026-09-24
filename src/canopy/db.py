@@ -38,9 +38,19 @@ class Migration:
     path: Path
 
 
-def now() -> str:
+def format_time(moment: datetime) -> str:
     """UTC, millisecond precision, the same shape as the schema's own defaults."""
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+
+def parse_time(stamp: str) -> datetime:
+    """Read a timestamp the journal wrote, as an aware UTC datetime."""
+    return datetime.fromisoformat(stamp).astimezone(UTC)
+
+
+def now() -> str:
+    """The current time as the journal stores it."""
+    return format_time(datetime.now(UTC))
 
 
 def connect(path: Path) -> sqlite3.Connection:
@@ -184,6 +194,12 @@ def set_ticket(
             conn.execute(sql, (value, key))
         if done:
             conn.execute("UPDATE tickets SET done = 1 WHERE key = ?", (key,))
+
+
+def get_ticket(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    """Return the ticket row for `key`, or None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM tickets WHERE key = ?", (key,)).fetchone()
+    return row
 
 
 def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:

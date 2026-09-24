@@ -63,8 +63,9 @@ canopy (harness, Python)
   config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
   treehouse.py   status --json, get --lease --json, return --force --if-lease-id
   dispatch.py    guards, lease, render the worker prompt, spawn detached _run
+  policy.py      attempt limits and the fix-ci cooldown, derived from runs
   worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
-  attention.py   the attention list from the journal; later render attention.md, diff, notify
+  attention.py   the attention list from the journal; render attention.md, diff, notify
   init.py        canopy init: config files, agent definitions, tracker skill, branch protection text
   logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
   context.py     the Context every command passes around: config, repository root, db connection, runner
@@ -114,10 +115,11 @@ Roles:
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
    - Record the harness's attention items for runs (§14) as this tick's decisions.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block: a `## State`
-   section holding one JSON object with the tick id, whether it is a dry run, the repository root, tracker config
-   (provider, query, labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity,
-   policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, attempts, cooldown until,
-   and the ticket's latest run: id, kind, status, branch, start and end).
+   section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root,
+   tracker config (provider, query, labels, needs-human label), trust config (authorized repliers, branch prefix, PR
+   label), capacity, policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, runs so far
+   of each kind, when fix-ci may next run if that is still ahead, and the ticket's latest run: id, kind, status, branch,
+   start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root, timeout `overseer_timeout_minutes`, and
    `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention` read that variable to know
    which tick they belong to, and refuse if it is unset or names a tick that is not running (D020). The overseer's
@@ -125,16 +127,19 @@ Roles:
    The run succeeded if it exited 0 and the last non-empty line of stdout is `tick complete`; anything else closes the
    tick as `overseer_failed`.
    In `--dry-run`, the state block says so; `canopy dispatch` starts nothing and records the decision as
-   `dispatch:<kind>` with rationale `dry run: not dispatched`; `canopy ticket set` records phases but does not advance
-   cursors, so the first live tick still sees everything as new. The overseer otherwise behaves as in a live tick, and
-   so does reconcile: it closes dead runs and returns stale leases in a dry run too.
+   `dispatch:<kind>` with rationale `dry run: not dispatched`; `canopy ticket set` records phases but neither it nor
+   `canopy dispatch --cursor` advances cursors, so the first live tick still sees everything as new. The overseer
+   otherwise behaves as in a live tick, and so does reconcile: it closes dead runs and returns stale leases in a dry run
+   too.
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
    Everything the overseer writes is rendered into the next tick's prompt, so the CLI bounds it: keys and attention
    reasons are validated, phases come from the table in §7, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and
-   rationales and details are cut at 2000 characters.
-6. **Render attention**: rebuild `attention.md` from the journal, diff against
-   the previous render, and if `notify.cmd` is set pipe the diff to it.
-7. Close the `ticks` row with a summary. Release the lock.
+   rationales, details, and worker context are cut at 2000 characters.
+6. Close the `ticks` row with a summary.
+7. **Publish attention** (§14): rewrite `attention.md` from the journal, and if `notify.cmd` is set and the list
+   changed since the last notification, pipe the change to it. This comes after the tick is closed because the list is
+   the latest `ok` tick's, and this tick may be it. It runs after a failed tick too, when the list is the one before. A
+   failure here is logged and does not change the tick's status. Release the lock.
 
 Workers dispatched during a tick outlive the tick. They are detached processes
 owned by `canopy _run`.
@@ -150,41 +155,62 @@ in `tickets.phase` for the status view, never read back as truth.
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `ci_running` | PR open, checks pending | wait |
-| `ci_red` | PR open, checks failed | dispatch `fix-ci` if attempts < `max_fix_ci_attempts` and cooldown elapsed, else attention |
+| `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
 | `changes_requested` | review comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
 | `green_unreviewed` | checks pass, no approval | attention: needs a reviewer |
 | `approved` | approved, not merged | attention: ready to merge |
 | `merged` | PR merged | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
-| `human_replied` | authorized reply newer than the label | dispatch `resume` with the reply as context; the worker removes the label |
+| `human_replied` | authorized reply newer than the label | dispatch `resume` pointing at the reply; the worker removes the label |
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
 identifier, never a display name. If the tracker cannot say when a label was added, the worker's question comment is the
 reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+
+Cursors (`comment`, `review`, `ci`) hold the newest item of each kind the loop has handled, in the tracker's and
+GitHub's own ids; "newer than cursor" in the table means not handled yet. A dispatch that handles new items carries
+their cursors (`--cursor`, §8), so they advance only if the worker starts. Items handled by a wait, a done, or an
+attention item advance with `canopy ticket set`. A review comment waiting on a human is not advanced past, so its
+attention item is recorded every tick until a human answers it.
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH]
-[--context FILE]`:
+`canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context TEXT]
+[--cursor NAME=ID]...`:
 
 1. Refuse if `--dry-run` tick, if capacity is zero, if a `runs` row for KEY
    is `running`, or if the kind's attempt limit or cooldown blocks it. Guards
    are in code and are not overridable from the prompt. A refusal is recorded as a decision `refused:<guard>` with the
-   reason, and the command exits 1. Guards: `capacity`, `running`, `not_implemented` (`fix-ci`, `resume`, and
-   `--context` until attempt limits and cooldowns exist in M3; `--base` until stacking in M4), `bad_slug`. Failures
-   after the guards are recorded the same way: `no_slot` (the lease failed), `bad_prompt` (the worker prompt did not
-   render), `spawn_failed`. None of them leaves a slot leased.
+   reason, and the command exits 1. Guards, in the order they are checked:
+   - `not_implemented`: `--base`, until stacking in M4.
+   - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
+   - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
+     ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
+   - `running`: a run for KEY is running.
+   - `attempt_limit`: KEY has already had `policy.max_<kind>_attempts` runs of this kind. Every run counts, whatever it
+     ended as, and the count never resets (D030). The refusal also records the `attempt_limit` attention item (§14).
+   - `cooldown`: `fix-ci` only, less than `policy.fix_ci_cooldown_minutes` after KEY's latest fix-ci run ended.
+   - `capacity`: `max_workers` runs are running.
+
+   Failures after the guards are recorded the same way: `no_slot` (the lease failed), `bad_prompt` (the worker prompt
+   did not render), `spawn_failed`. None of them leaves a slot leased.
    Dispatches are serialized by a blocking `flock` on `<state_dir>/dispatch.lock`, held from the guard checks through
-   the spawn, so two dispatches cannot both pass the capacity check.
+   the spawn, so two dispatches cannot both pass the capacity check or the attempt limit.
+   `--cursor NAME=ID` pairs are applied as `canopy ticket set` would, but only once the worker has started: what a
+   refused dispatch was meant to handle stays new for the next tick.
 2. `treehouse get --lease --lease-holder canopy:<KEY> --json`. Record the
    `runs` row with slot path, lease id, holder, kind, base branch (treehouse's), branch, started_at.
 3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, base branch, PR label, needs-human
-   label, timeout, context file contents, and the result contract below. The branch is
+   label, timeout, the attempt number and the kind's limit, the PR the journal recorded for the ticket, the authorized
+   repliers, the context, and the result contract below. An `implement` branch is
    `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title, lowercase words joined by
-   single hyphens, at most 40 characters, `work` if it gives none. Placeholders are `{{NAME}}`, replaced in one pass;
+   single hyphens, at most 40 characters, `work` if it gives none. The context is the overseer's `--context`: at most
+   2000 characters that point the worker at what to read (links, comment ids, check names), never a copy of ticket or
+   PR text (D031). The worker reads that text itself and checks a reply's author against the authorized repliers,
+   which the harness renders from the user config. Placeholders are `{{NAME}}`, replaced in one pass;
    an unknown one is `bad_prompt`. The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the
    operator.
 4. Spawn `python -m canopy _run <run_id>` with the interpreter canopy runs under, detached (`setsid`, stdin from
@@ -262,17 +288,17 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `overseer_failed`,
   `reconcile_failed`, or `abandoned`. A tick that cannot take the lock writes no row, although the schema comment lists
   `lock_busy`.
-- `tickets`: one row per ticket key seen; last derived phase, cursors
-  (`last_comment_id`, `last_review_id`, `last_ci_run_id`), attempt counters,
-  cooldown_until, done flag. Cursors make ticks incremental.
+- `tickets`: one row per ticket key seen; last derived phase, branch, PR URL, cursors
+  (`last_comment_id`, `last_review_id`, `last_ci_run_id`), done flag. Cursors make ticks incremental. Attempt counts
+  and the fix-ci cooldown are not stored; they are derived from `runs` (D030, migration 0003).
 - `runs`: one row per worker execution; kind, slot, lease identity, pid of `canopy _run`, pid of the worker agent
   (`worker_pid`, migration 0002), status, result_json. Status is `running`, `done`, `blocked`, `failed` (the three the
   worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for capacity, crash detection, attempt
-  counts.
+  counts, and the fix-ci cooldown.
 - `decisions`: one row per overseer decision; tick id, ticket, action,
   rationale. Audit log and prompt-evaluation corpus.
-- `notifications`: fingerprint of each attention item sent, so the attention
-  diff never re-notifies.
+- `notifications`: one row per attention item that `notify.cmd` was told about and that is still open, keyed by a
+  fingerprint of its ticket and reason, so an open item is notified once (§14).
 
 Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
 
@@ -317,6 +343,7 @@ needs_human_label = "needs-human"
 query = 'project = PROJ AND statusCategory != Done'
 
 [policy]
+max_implement_attempts = 2
 max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
@@ -377,7 +404,8 @@ Rules:
 
 A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
 word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must
-contain `{prompt}` exactly once.
+contain `{prompt}` exactly once. `notify.cmd` is split the same way, gets its input on stdin, and must not contain
+`{prompt}`.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. The default is `prompts/` next to the user
 file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
@@ -410,11 +438,10 @@ The runtime is swappable by editing the two command templates. No interface.
 
 ## 14. Attention list
 
-Rendered to `~/.canopy/attention.md`, grouped by reason, one line per item:
-ticket key, reason, link, age. Reasons are exactly the attention rows in the
-phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`.
-`canopy status` prints it. Items disappear when their cause is gone; no manual
-dismissal.
+Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable only by the operator, after
+every tick: grouped by reason, one line per item with ticket key, age, and detail (usually a link). Reasons are exactly
+the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`.
+`canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
 ended `crashed` is `crashed`; `unpushed` is `unpushed`; `unknown` or `timeout` is `unknown_result`; `failed` is
@@ -429,11 +456,24 @@ is the attention decisions of the latest `ok` tick, so an item disappears the fi
 failed tick leaves the previous list standing. An item's age runs from the first tick of its unbroken run. Reasons must
 match `[a-z][a-z0-9_]*`.
 
+`attempt_limit` is raised both ways: the overseer records it when the state block shows a ticket at its limit for the
+work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
+overseer keeps asking for that work.
+
+Notification (D032). An item is identified by its ticket and reason; its detail can be reworded without making it new.
+When `notify.cmd` is set, each tick compares the list with the `notifications` table: items not in the table are new,
+and rows whose item is no longer listed are resolved. If either exists, the command gets one message on stdin, a
+summary line, a `+ KEY reason: detail` line per new item, a `- KEY reason` line per resolved one, and the path of
+`attention.md`. Only when it exits 0 within 60 seconds are new items added to the table and resolved ones removed, so a
+failed notification is retried next tick, an open item is never notified twice, and an item that comes back after
+going away is new again.
+
 ## 15. Failure handling
 
 - Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; slot returned; ticket
   goes to attention with `crashed`. Not auto-redispatched: the harness never restarts a run, and the overseer prompt
-  waits for an authorized reply (§14). `implement` has no attempt limit in code yet (ROADMAP M3).
+  waits for an authorized reply (§14). Every kind has an attempt limit in code, so an overseer that redispatches
+  anyway stops at `policy.max_<kind>_attempts` (D030).
 - Worker exits without a result, times out, reports `failed`, or leaves commits unpushed: `_run` returns the slot and
   records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.

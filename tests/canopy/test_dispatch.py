@@ -112,26 +112,12 @@ def test_one_worker_per_ticket(
     assert decisions(conn, tick_id)[1] == ("refused:running", "run 1 is already working PROJ-1")
 
 
-@pytest.mark.parametrize(
-    ("extra", "reason"),
-    [
-        (["--kind", "fix-ci"], "fix-ci dispatch needs attempt limits and cooldowns (ROADMAP M3)"),
-        (["--kind", "resume"], "resume dispatch needs attempt limits and cooldowns (ROADMAP M3)"),
-        (["--kind", "implement", "--base", "agent/PROJ-0-x"], "--base arrives with stacking (ROADMAP M4)"),
-        (["--kind", "implement", "--context", "ctx.md"], "--context arrives with resume (ROADMAP M3)"),
-    ],
-)
-def test_not_yet_implemented_dispatches_are_refused(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
-    extra: list[str],
-    reason: str,
+def test_base_is_refused_until_stacking(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", *extra], runner=InlineRunner()) == 1
-    assert decisions(conn, tick_id) == [("refused:not_implemented", reason)]
+    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--base", "agent/PROJ-0-x"], runner=InlineRunner()) == 1
+    assert decisions(conn, tick_id) == [("refused:not_implemented", "--base arrives with stacking (ROADMAP M4)")]
     assert not treehouse_state.exists()  # treehouse was never called
 
 

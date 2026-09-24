@@ -80,6 +80,21 @@ def _command_template(value: str) -> str:
     return value
 
 
+def notify_words(template: str) -> list[str]:
+    """Split `notify.cmd` into argv with shell word rules. No shell runs (D023). Empty means no notify command.
+
+    Its input arrives on stdin, so a `{prompt}` would reach the command as a literal word; it is refused.
+    """
+    if "{prompt}" in template:
+        raise ValueError("must not contain {prompt}; the notification arrives on stdin")
+    return shlex.split(template)
+
+
+def _notify_command(value: str) -> str:
+    notify_words(value)
+    return value
+
+
 def _user_path(value: Path) -> Path:
     # A relative path would resolve against the working directory, which is the repository: its files would stand in
     # for the operator's prompts or state (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
@@ -94,6 +109,7 @@ NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
+NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 
 
@@ -114,8 +130,9 @@ class Tracker(Section):
 
 
 class Policy(Section):
-    """The `[policy]` table: attempt limits and cooldowns."""
+    """The `[policy]` table: attempt limits and cooldowns. A limit counts every run of that kind a ticket has had."""
 
+    max_implement_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
     max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
     fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
@@ -155,7 +172,8 @@ class Paths(Section):
 class Notify(Section):
     """The `[notify]` table."""
 
-    cmd: Annotated[StrictStr, Scope.USER] = ""
+    # Receives the attention diff on stdin. Split into argv like the runtime templates, with no `{prompt}`.
+    cmd: Annotated[NotifyCommand, Scope.USER] = ""
 
 
 class Config(Section):

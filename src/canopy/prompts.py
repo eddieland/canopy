@@ -11,10 +11,11 @@ import re
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import db, resources
+from canopy import db, policy, resources
 
 if TYPE_CHECKING:
     from canopy.config import Config
@@ -59,10 +60,15 @@ def state_block(
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
     last_runs: Mapping[str, sqlite3.Row],
+    attempts: Mapping[str, Mapping[str, int]],
+    fix_ci_cooldowns: Mapping[str, datetime],
+    now: datetime,
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt."""
+    no_attempts = dict.fromkeys(policy.KINDS, 0)
     state = {
         "tick_id": tick_id,
+        "now": db.format_time(now),
         "dry_run": dry_run,
         "repository": str(repo_root),
         "tracker": {
@@ -82,6 +88,7 @@ def state_block(
             "available": capacity.available,
         },
         "policy": {
+            "max_implement_attempts": config.policy.max_implement_attempts,
             "max_fix_ci_attempts": config.policy.max_fix_ci_attempts,
             "fix_ci_cooldown_minutes": config.policy.fix_ci_cooldown_minutes,
             "max_resume_attempts": config.policy.max_resume_attempts,
@@ -103,9 +110,8 @@ def state_block(
                 "branch": t["branch"],
                 "pr_url": t["pr_url"],
                 "cursors": {name: t[column] for name, column in db.CURSOR_COLUMNS.items()},
-                "fix_ci_attempts": t["fix_ci_attempts"],
-                "resume_attempts": t["resume_attempts"],
-                "cooldown_until": t["cooldown_until"],
+                "attempts": dict(attempts.get(str(t["key"]), no_attempts)),
+                "fix_ci_cooldown_until": _stamp(fix_ci_cooldowns.get(str(t["key"]))),
                 "needs_human_since": t["needs_human_since"],
                 "last_seen_at": t["last_seen_at"],
                 "last_run": _run_summary(last_runs.get(str(t["key"]))),
@@ -135,6 +141,10 @@ def state_block(
             "",
         ]
     )
+
+
+def _stamp(moment: datetime | None) -> str | None:
+    return db.format_time(moment) if moment is not None else None
 
 
 def _run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:

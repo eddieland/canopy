@@ -110,7 +110,12 @@ Accept: a PR with a failing check gets exactly one fix attempt per cooldown
 window and stops at the limit. A blocked worker's question appears on the
 ticket; an authorized reply resumes it; an unauthorized reply does not.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py` holds the fix-ci half of the
+acceptance; `tests/canopy/test_attention.py`), docs, and D030 to D032 are in. Waiting on the operator: a real PR with a
+failing check taken through fix-ci to the limit, a real blocked worker answered once by an authorized and once by an
+unauthorized account (prompt behavior the fakes cannot show), and the human approval the overseer prompt change needs.
+M1's and M2's acceptance runs are also still open; this milestone was started on request before they closed. Not done
+here, and not listed by any milestone: DESIGN §15's attention item after three consecutive overseer failures.
 
 ## M4. Dependencies and stacking
 
