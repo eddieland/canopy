@@ -325,3 +325,37 @@ Rejected:
 Revisit: if labeling each child is measured as friction (then an authorized reply approving the split on the parent);
 if the overseer is measured choosing repositories wrongly; if OpenCode's permissions cannot follow the desk's links
 (then the worker's cwd is the first unit's worktree and the others are allowed as external directories).
+
+## D034. Chores: recurring agent runs the operator defines and the overseer delegates, reporting to attention
+
+Context: some recurring work is not a ticket, such as spot-checking the CI build queue and recent builds, other people's
+PRs included, for flaky jobs and stuck PRs. It needs judgment, sometimes over the operator's own deterministic tools.
+Everything canopy runs today holds a worktree and pushes a branch for a queue ticket.
+Decision (DESIGN §19, planned for M9):
+- A chore is defined only in the user config: prompt, command template, `every_minutes` (a guard), and a
+  plain-language `when` the overseer applies. The overseer runs a due chore or records a wait; the harness refuses one
+  that is not due, already running, or over `capacity.max_chores`.
+- A chore run is a detached `_chore` process in its own `chore_runs` table, with no lease, branch, or push. Its result
+  is a summary and up to 20 findings with stable ids, which go to the attention list and `notify.cmd`.
+- Read-only: the shipped `canopy-chore` definition has no write tools. A chore's own tooling is allowed in an agent
+  definition in the operator's runtime config, not the repository.
+- Opt-in and isolated: with no chores, or `max_chores = 0`, the overseer sees and decides exactly what it did before;
+  deleting a chore clears its attention items. Findings do not inform ticket decisions.
+- Named "chore" because "task" is OpenCode's subagent tool.
+Consequences: a second spawn and reconcile path beside dispatch, and a second source for the attention list. Spend is
+bounded in code to one run per `every_minutes` per chore. A broken overseer also stops chores. The feature is one
+table, one column, one CLI group, one agent definition, and one prompt paragraph, so it can change or go without
+touching ticket handling.
+Rejected:
+- The overseer doing the check inline: bash for arbitrary tools on the one agent that dispatches, every tick.
+- Cron running the agent: no guards, journal, crash detection, attention list, or judgment about when. It is the
+  fallback if M9 is not worth building.
+- A fixed interval with no overseer: timing conditions such as "after a merge to main" need judgment (D008).
+- Chore runs as `runs` rows: rebuilds the table the core loop depends on for a feature that may not survive M9.
+- Findings informing ticket decisions from the start: a wrong chore would degrade the core loop, and opting out of that
+  would mean dropping the chore.
+- Recurring tickets through `dispatch`, chores the overseer defines (T1, T3), and chores in the repository file (T7).
+Revisit: if chores routinely need to write (then unlabeled tickets first); if the overseer ignores `when` (then a
+machine-readable window checked by a guard); if overseer failures starve chores (then the harness runs one overdue by
+twice its interval); in M7, whether `chore_runs` folds into `runs` with no slots; once findings have a track record,
+whether they may hold back ticket work, opt-in per chore.
