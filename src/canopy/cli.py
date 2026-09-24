@@ -193,7 +193,7 @@ def cmd_init(provider: str | None) -> int:
             raise click.UsageError("the repository has no canopy.toml; pass --provider (jira, github, linear, ...)")
         answer: str = click.prompt("Tracker provider for this repository (jira, github, linear, ...)")
         provider = answer.strip().lower()
-    if provider is not None and not init.PROVIDER_RE.fullmatch(provider):
+    if provider is not None and not init.valid_provider(provider):
         raise click.UsageError(f"invalid provider {provider!r}: use a short lowercase name such as jira or github")
 
     user_file = config.user_config_path()

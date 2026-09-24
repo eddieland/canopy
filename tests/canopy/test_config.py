@@ -1,3 +1,4 @@
+import re
 import tomllib
 from pathlib import Path
 
@@ -169,3 +170,32 @@ def test_examples_are_valid(tmp_path: Path) -> None:
     cfg = load(tmp_path, EXAMPLES / "config.toml")
     with (EXAMPLES / "config.toml").open("rb") as f:
         assert list(cfg.tracker.labels) == tomllib.load(f)["tracker"]["labels"]
+
+
+def test_empty_prompt_overrides_means_the_default(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + 'prompt_overrides = ""\n')
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("prompt_overrides", "prompts"), ("prompt_overrides", "."), ("state_dir", ""), ("state_dir", "state")],
+)
+def test_user_paths_must_not_resolve_against_the_repository(canopy_env: CanopyEnv, key: str, value: str) -> None:
+    # The working directory is the repository; a relative path would let it supply prompts or state (T7).
+    text = canopy_env.user_file.read_text()
+    text = re.sub(rf"^{key} = .*$", "", text, flags=re.MULTILINE) + f'{key} = "{value}"\n'
+    canopy_env.write_user(text)
+    with pytest.raises(ConfigError, match=rf"paths\.{key}: Value error, must be an absolute path or start with ~"):
+        load(canopy_env.repo, canopy_env.user_file)
+
+
+def test_user_paths_expand_the_home_directory(canopy_env: CanopyEnv) -> None:
+    text = re.sub(
+        r"^state_dir = .*$", 'state_dir = "~/somewhere"', canopy_env.user_file.read_text(), flags=re.MULTILINE
+    )
+    canopy_env.write_user(text + 'prompt_overrides = "~/my-prompts"\n')
+    paths = load(canopy_env.repo, canopy_env.user_file).paths
+    assert paths.state_dir == canopy_env.home / "somewhere"
+    assert paths.prompt_overrides == canopy_env.home / "my-prompts"

@@ -2,15 +2,28 @@
 
 import re
 import string
+from collections.abc import Callable
 from pathlib import Path
 
 import click
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from canopy import config, dispatch, init
-from canopy.cli import CURSOR_VALUE_RE, KEY_RE, MAX_TEXT, REASON_RE, CursorType, TextType, valid_key
+from canopy.cli import (
+    CURSOR_VALUE_RE,
+    KEY_RE,
+    MAX_TEXT,
+    REASON,
+    REASON_RE,
+    SLUG,
+    TICKET_KEY,
+    CursorType,
+    TextType,
+    valid_key,
+)
 from canopy.procs import SubprocessRunner
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
@@ -43,16 +56,61 @@ def test_every_key_the_pattern_describes_is_accepted(value: str) -> None:
     assert valid_key(value)
 
 
-@pytest.mark.parametrize(
-    "pattern", [KEY_RE, REASON_RE, CURSOR_VALUE_RE, init.PROVIDER_RE, dispatch.SLUG_RE, config.BRANCH_PREFIX_RE]
-)
+def _converts(param: click.ParamType[object, object], value: str) -> bool:
+    try:
+        param.convert(value, None, None)
+    except click.BadParameter:
+        return False
+    return True
+
+
+def accepts_ticket_key(value: str) -> bool:
+    return _converts(TICKET_KEY, value)
+
+
+def accepts_reason(value: str) -> bool:
+    return _converts(REASON, value)
+
+
+def accepts_cursor_id(value: str) -> bool:
+    return _converts(CursorType(), f"comment={value}")
+
+
+def accepts_slug(value: str) -> bool:
+    return _converts(SLUG, value)
+
+
+def accepts_branch_prefix(value: str) -> bool:
+    try:
+        config.Trust(branch_prefix=value)
+    except ValidationError:
+        return False
+    return True
+
+
+# Each validator the CLI and init actually call, with the pattern it is meant to enforce on the whole string.
+VALIDATORS = [
+    pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
+    pytest.param(KEY_RE, valid_key, id="decide-key"),
+    pytest.param(REASON_RE, accepts_reason, id="reason-type"),
+    pytest.param(CURSOR_VALUE_RE, accepts_cursor_id, id="cursor-type"),
+    pytest.param(init.PROVIDER_RE, init.valid_provider, id="provider"),
+    pytest.param(dispatch.SLUG_RE, accepts_slug, id="slug-type"),
+    pytest.param(dispatch.SLUG_RE, dispatch.valid_slug, id="dispatch-slug"),
+    pytest.param(config.BRANCH_PREFIX_RE, accepts_branch_prefix, id="branch-prefix"),
+]
+
+
+@pytest.mark.parametrize(("pattern", "accepts"), VALIDATORS)
 @given(data=st.data())
-def test_patterns_accept_nothing_around_a_valid_value(pattern: re.Pattern[str], data: st.DataObject) -> None:
+def test_validators_accept_the_whole_pattern_and_nothing_around_it(
+    pattern: re.Pattern[str], accepts: Callable[[str], bool], data: st.DataObject
+) -> None:
     value = data.draw(near(pattern))
-    if pattern.fullmatch(value):
-        assert "\n" not in value
-        assert "\r" not in value
-        assert " " not in value
+    accepted = accepts(value)
+    assert accepted == (pattern.fullmatch(value) is not None)
+    if accepted:
+        assert not any(c.isspace() for c in value)
 
 
 @given(st.text())
