@@ -450,7 +450,7 @@ hangs holds the tick lock for up to 60 seconds.
 Revisit: if operators want reminders for long-open items, or per-reason routing (then say so in the message, not in
 more commands).
 
-## D033. Workspaces: one directory, a repository map, pools inside it, and tickets divided into units
+## D033. Workspaces: one directory, a repository map, pools inside it; split tickets in the tracker, unlabeled
 
 Context: canopy assumes one repository per loop. Real tickets touch several: some need one coordinated change across
 repositories, some arrive covering several and are really several pieces of work. Running one loop per repository
@@ -463,20 +463,26 @@ Decision (DESIGN §18, planned for M6 to M8):
   tracker queue, one capacity, one journal per workspace. A repository with no workspace file is a workspace of one.
 - The workspace file replaces the repository file layer with the same scopes and T7 controls. Clone URLs are read only
   by an operator command, never by a tick.
-- A ticket's work is divided into units, one per repository, each with its own branch, PR, cursors, and attempts. The
-  overseer records which repositories a ticket touches and in what order; each dispatch names the units it covers. One
-  run over several units is a joint change; one run per unit in plan order is a split.
-- One worker per ticket stays a guard, so split units run in sequence.
-- canopy splits inside its journal, never by creating tracker tickets.
-Consequences: no new dependency, and no new tracker capability. The worker gets a desk of links instead of a single
-worktree, which needs an OpenCode permission canary. `runs` loses its slot columns to `run_slots`, and attention items
-gain a repository. A team can share the map through a repository of its own, with the same exposure as `canopy.toml`
-today. Rejected: one loop per repository with cross-loop coordination (two journals would have to agree on one ticket,
-and multi-machine-style coordination is out of scope); worktrees for every repository in one treehouse pool (pools are
-per repository in treehouse, and a pool is how it proves a slot belongs to a clone); canopy creating sub-tickets (a
-child carrying the queue label is work the loop authorized for itself, T1); parallel units of one ticket (needs a
-TRUST_MODEL §6 change for a speedup nobody has measured).
-Revisit: if the overseer is measured choosing repositories wrongly (then a planning worker kind); if split units
-waiting on merges is the bottleneck (then read-only sibling branches in the desk, or parallel units); if OpenCode's
-permissions cannot be made to follow the desk's links (then the worker's cwd is the first unit's worktree and the others
-are allowed as external directories).
+- A ticket's work is divided into units, one per repository, each with its own branch, PR, cursors, and attempts. A
+  ticket that needs one coordinated change is implemented jointly: one worker, one desk of worktrees, linked PRs.
+- A ticket that is really several pieces of work is split in the tracker by a `split` worker, into child tickets with
+  no queue label. The loop never schedules what it split: a human labels each child, and only a label added after the
+  split run ended counts. Ordering between children is the tracker's blocker relation, which M4 already reads.
+- One worker per ticket stays a guard.
+Consequences: no new dependency. The tracker gains a write the loop did not have, creating tickets and links, confined
+to a separate splitter agent with no label tools. Splitting needs label history from the tracker. Children are visible
+to the team and go through the normal path, so a split costs a human one label per child and needs no ordering or
+sequencing code in canopy. The worker of a joint run gets a desk of links instead of a single worktree, which needs an
+OpenCode permission canary. `runs` loses its slot columns to `run_slots`, and attention items gain a repository. A
+team can share the map through a repository of its own, with the same exposure as `canopy.toml` today.
+Rejected:
+- One loop per repository with cross-loop coordination: two journals would have to agree on one ticket.
+- One treehouse pool for every repository: pools are per repository in treehouse, and a pool is how it proves a slot
+  belongs to a clone.
+- Splitting inside the journal, with units worked one after another in an order the overseer records: no human sees or
+  approves the pieces, and canopy would need its own ordering where the tracker already has blockers.
+- Children created with the queue label: work the loop authorized for itself (T1).
+- Parallel units of one ticket: needs a TRUST_MODEL §6 change for a speedup nobody has measured.
+Revisit: if labeling each child is measured as friction (then an authorized reply approving the split on the parent);
+if the overseer is measured choosing repositories wrongly; if OpenCode's permissions cannot be made to follow the
+desk's links (then the worker's cwd is the first unit's worktree and the others are allowed as external directories).

@@ -160,7 +160,7 @@ Status: not started.
 
 ## M7. Joint multi-repo runs
 
-- `canopy ticket plan`, `ticket_units`, `run_slots`, repeated `--repo`, all-or-nothing leases.
+- `ticket_units`, `run_slots`, repeated `--repo`, all-or-nothing leases.
 - Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
 - Per-unit phases, cursors, and attempt counts; attention items with a repository.
 - The desk permission canary, and the TRUST_MODEL T4, T6, T7, and §7 changes with human approval.
@@ -172,12 +172,17 @@ Status: not started.
 
 ## M8. Split tickets
 
-- Overseer prompt: choose split or joint, work split units in plan order, start the next unit when the previous one's
-  PR is merged, or green when `MAP.md` allows.
-- `fix-ci` and `resume` on one unit of a jointly implemented ticket.
+Needs M4's blocker ordering.
 
-Accept: a real ticket covering two repositories is planned as a split: the first repository's PR opens, the second
-waits until it merges, then its PR opens, and the ticket comment links both.
+- `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
+  contract, `policy.max_split_attempts`.
+- Overseer prompt: choose split or joint; the `split` phase and `split_unlabeled` attention; a child is a candidate
+  only if its label was added after the split run ended; read a child's repository from its `canopy-repo` line.
+- The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
+
+Accept: a real ticket covering two repositories is split into two linked children, the second blocked by the first,
+with no queue label on either. Nothing is dispatched for them until the operator labels them; then they are worked in
+order, one PR each.
 
 Status: not started.
 

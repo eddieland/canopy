@@ -625,32 +625,22 @@ A ticket's work is divided into units, one per repository it changes. A unit has
 and CI cursors, and attempt counts. The comment cursor stays per ticket. A single-repository ticket has one unit and
 behaves as today.
 
-The overseer decides which repositories a ticket touches, from the ticket, the summaries, and `MAP.md`, and records it
-with `canopy ticket plan <KEY> --repo api --repo web`. The order of `--repo` is the order the units should land in.
-The plan is journal state, rendered into later ticks' state blocks, and every change to it is recorded as a `plan`
-decision. Repositories can be added to a plan; a unit that has had a run cannot be removed, since its branch exists.
+A ticket's units are the repositories it has been dispatched to. Each dispatch names the units it covers with `--repo`
+(repeatable; optional in a workspace of one), chosen by the overseer from the ticket, the summaries, and `MAP.md`. An
+`implement` over several repositories is a joint change: one worker holds the whole change in one context and opens one
+PR per repository, each linking the others. That is for changes that cannot build or pass tests separately, such as an
+API and its client changed in lockstep, or a schema and the code reading it. `fix-ci` and `resume` normally name only
+the unit whose PR needs the work.
 
-Each dispatch names the units it covers with `--repo` (repeatable; optional in a workspace of one). That choice is how
-a multi-repo ticket is worked:
-
-- **Joint.** One run covers several units. For changes that cannot build or pass tests separately: an API and its
-  client changed in lockstep, a schema and the code reading it. One worker holds the whole change in one context and
-  opens one PR per repository, each linking the others.
-- **Split.** One run per unit, one after another in plan order. For tickets that arrive covering several repositories
-  but are really several pieces of work. The next unit starts when the previous unit's PR is merged, or when it is
-  green if `MAP.md` says the next repository builds against the previous one's source rather than a release.
-
-The overseer prompt prefers split and uses joint only when the ticket or `MAP.md` shows the halves cannot stand alone.
-`fix-ci` and `resume` normally name only the unit whose PR needs the work, even on a ticket implemented jointly.
+A ticket that covers several repositories but is really several pieces of work is split instead (below). The overseer
+prompt prefers splitting and implements jointly only when the ticket or `MAP.md` shows the halves cannot stand alone.
 
 Guards (§8) change as follows:
 
-- `running` stays per ticket: one worker per ticket, whatever its units (TRUST_MODEL §6). Split units therefore run in
-  sequence, which is the order they land in anyway.
-- `unknown_repo`: a `--repo` not in the map, with no primary clone, or, once the ticket has a plan, not in it.
+- `running` stays per ticket: one worker per ticket, whatever its units (TRUST_MODEL §6).
+- `unknown_repo`: a `--repo` not in the map, or with no primary clone.
 - `no_branch`: `fix-ci` and `resume` for a unit with no branch.
-- `attempt_limit` counts per unit: a run counts against every unit it covers, so implementing api and then web is one
-  implement attempt each.
+- `attempt_limit` counts per unit: a run counts against every unit it covers.
 - `capacity` counts runs, not slots. A joint run over three repositories is one worker holding three slots.
 - `no_slot`: leases are all or nothing. If any `treehouse get` fails, the slots already leased are returned before
   the refusal is recorded.
@@ -666,41 +656,64 @@ Guards (§8) change as follows:
   and its summary.
 - The result contract's `"pr"` becomes `"prs"`, an object from repository name to PR URL or null. `tickets.pr_url`
   becomes the unit's.
-- Worker obligations add: each PR's body links its sibling PRs and states the merge order from the plan; the ticket
-  comment lists every PR. Workers still never merge.
+- Worker obligations add: each PR's body links its sibling PRs and says which to merge first; the ticket comment lists
+  every PR. Workers still never merge.
+
+### Splitting
+
+canopy splits a ticket in the tracker, and never schedules what it split. The children are ordinary tickets that start
+without a queue label, so a human authorizes each one exactly as they authorize any ticket (TRUST_MODEL T1).
+
+- The overseer dispatches `canopy dispatch <KEY> --kind split --repo api --repo web`. The overseer is read-only, so the
+  tracker writes happen in a worker, like every other write.
+- The split worker runs as `canopy-splitter`: a separate agent definition with read-only file and shell tools and the
+  tracker MCP tools to create a ticket, link tickets, and comment. It has no label tools and no GitHub write tools. It
+  runs in a desk of the named repositories' worktrees so it can read the code, and it pushes nothing.
+- It creates one child per repository. Each child's body names its repository in a line the overseer reads
+  (`canopy-repo: web`), links the parent, and says what the child covers. Children that must land in order get the
+  tracker's blocker relation (`web` is blocked by `api`), so M4's ordering works them in order. Children carry no
+  queue label and are not assigned to anyone.
+- On the parent it posts a comment listing the children and saying which label starts each one. Its result line adds
+  `"children": ["PROJ-13", "PROJ-14"]`, stored in `result_json`.
+- The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
+  open and unlabeled. The overseer marks the parent `done` in the journal once every child is closed. canopy does not
+  touch the parent's tracker state.
+- A child is a candidate only if its queue label was added after the split run ended. The state block carries each
+  split run's end time and children, and the overseer compares it with the tracker's label history. A label the split
+  worker added itself, whatever the permissions allowed, therefore does not count. A tracker without label history
+  (the optional row of §17's contract) cannot tell the two apart, so there the overseer records
+  `skip` with `tracker_unsupported: label history` instead of dispatching `split`.
+- `split` has an attempt limit like every kind, `policy.max_split_attempts`, default 1.
+- A child's work is ordinary: it is a one-repository ticket whose repository comes from its `canopy-repo` line.
 
 ### Journal
 
-- `ticket_units`: ticket key, repository, position in the plan, branch, PR URL, phase, `last_review_id`,
-  `last_ci_run_id`. The ticket's displayed phase is its least advanced unit's.
+- `ticket_units`: ticket key, repository, branch, PR URL, phase, `last_review_id`, `last_ci_run_id`. The ticket's
+  displayed phase is its least advanced unit's.
 - `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. It replaces the slot columns of
   `runs` for new runs.
 - `tickets.repo` holds the workspace name.
 - Attention items carry an optional repository, and an item is identified by ticket, repository, and reason, so two
   units at their fix-ci limit are two items. `canopy attention` takes `--repo`.
 
-### Splitting in the tracker is not planned
-
-canopy does not create tickets. Creating them is a new tracker write capability, and a child ticket carrying the queue
-label would be work the loop authorized for itself, where TRUST_MODEL T1 lets only a human's label authorize work. A
-team that wants sub-tickets creates them, and M4's blocker ordering works them in order. Units are how canopy splits a
-ticket without writing to the tracker.
-
 ### Trust model changes needed
 
 TRUST_MODEL is unchanged until the milestone that needs each change, whose PR carries the human approval:
 
+- T1: the loop may create tickets, but never with a queue label. What a split creates starts only when a human labels
+  it, and a label added during the split run does not count. Residual: canopy acts as the operator, so the tracker
+  cannot say who added a label, only when.
 - T4: a worker's edit permission covers the worktrees linked from its desk. M7 runs a canary like D021's to show that
   OpenCode's permission check allows edits through the desk's links and still denies paths outside them.
-- T6: the write scope is the repositories of the units the run covers, not one repository.
+- T6: the write scope is the repositories of the units the run covers, not one repository. The splitter's is creating
+  tickets, linking them, and commenting on the parent.
 - T7: the workspace file is a repository file for this purpose. Clone URLs are read only by an operator command.
 - §7: branch protection is needed in every repository in the map; `canopy init --workspace` prints the rules for each.
 
 ### Open
 
-- Whether a split unit's desk should also hold earlier units' unmerged branches, read-only by prompt, so the worker can
-  build against them before they merge.
-- Whether planning should be a worker kind that reads the code before choosing repositories. Only if the `decisions`
-  table shows the overseer choosing them wrongly from ticket text.
-- Whether independent units of one ticket should run in parallel. That needs a TRUST_MODEL §6 change and is not
-  planned.
+- Whether an unlabeled child should become a candidate when an authorized replier approves the split on the parent,
+  instead of a label on each child.
+- Whether a child's desk should also hold its blockers' unmerged branches, read-only by prompt, so the worker can build
+  against them before they merge.
+- Whether the overseer should ever split a ticket it has already started implementing jointly.
