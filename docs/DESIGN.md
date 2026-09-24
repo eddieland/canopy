@@ -736,3 +736,198 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 - Whether a child's desk should also hold its blockers' unmerged branches, read-only by prompt, so the worker can build
   against them before they merge.
 - Whether the overseer should ever split a ticket it has already started implementing jointly.
+
+## 19. Chores
+
+Planned for ROADMAP M9; none of it is built. Rationale in D034.
+
+A chore is recurring work the operator defines and the overseer delegates: an agent run that is not about one of the
+queue's tickets, holds no worktree, pushes nothing, and reports findings to the attention list. The motivating chore is
+a build-health check: look at the CI build queue and recent builds, including other people's PRs, and report flaky
+jobs, stuck builds, and PRs that have been waiting too long. Finding those takes judgment over logs and history, so it
+is an agent run, possibly driving deterministic tooling the operator already has.
+
+The operator writes the chore; the overseer only chooses when to run it, within limits the harness enforces. That keeps
+the split of §4: the operator's config says what a chore is and the fastest it may recur, the overseer's judgment says
+whether now is a good time, and a guard in code holds the limits whatever the overseer asks for.
+
+### Definition
+
+Chores are user-only config (§12): a chore names a prompt and a command, and spends money, so a repository file that
+defines one is a config error (TRUST_MODEL T7).
+
+```toml
+[runtime]
+chore_cmd = 'opencode run --agent canopy-chore {prompt}'   # default for chores that set no cmd
+
+[capacity]
+max_chores = 1            # chore runs at once; separate from max_workers
+
+[chores.build-health]
+prompt = "~/.config/canopy/chores/build-health.md"
+cmd = 'opencode run --agent build-health {prompt}'
+every_minutes = 120
+when = """Weekdays, 08:00 to 18:00 America/New_York.
+Skip it when the last run found nothing and nothing has merged to main since."""
+timeout_minutes = 20
+cwd = "~/src/build-tools"
+```
+
+- A chore name matches `[a-z][a-z0-9-]*`. It appears in file paths and on the command line.
+- `prompt` is the operator's own file, absolute or starting with `~` like every `paths.*` value. Required.
+- `cmd` is a command template with the rules of §12 (`{prompt}` exactly once, no shell). It defaults to
+  `runtime.chore_cmd`. A chore that runs the operator's own tooling needs its own agent definition to allow it (below),
+  so `cmd` is usually set.
+- `every_minutes` is the shortest time between the starts of two runs, at least 15. It is a guard, not a schedule.
+- `when` is plain language for the overseer: the hours a chore is worth running, and conditions that make a run
+  pointless or urgent. Optional; without it the overseer runs a chore whenever it is due. It is operator-written, so it
+  is an instruction, unlike anything a chore reads.
+- `timeout_minutes` defaults to 15. `cwd` is where the chore runs, absolute or starting with `~`; by default a
+  directory of its own, `<state_dir>/chores/<name>/`, created readable only by the operator.
+
+### Off unless configured
+
+Chores are opt-in and isolated, so one that turns out badly costs the operator a config edit, not a change to the loop:
+
+- With no `[chores.*]` tables, nothing about chores reaches the overseer: the state block has no `chores` key, no
+  chore decisions are recorded, and every `canopy chore run` refuses as `unknown_chore`. The overseer prompt's chore
+  paragraph says to skip it when the key is absent. Ticket handling is the same as without M9.
+- `capacity.max_chores = 0` turns every chore off without deleting any: the state block leaves them out, as above.
+- Deleting a chore's table turns that chore off. The attention list shows only configured chores, so its findings and
+  `chore_failed` item disappear at the next render and are notified as resolved (D032). Its `chore_runs` rows stay as
+  history.
+- Chores never change what the overseer does with tickets (below), so a noisy chore can clutter the attention list but
+  cannot make the loop dispatch, or fail to dispatch, anything.
+
+### Agent definitions and tooling
+
+canopy ships `canopy-chore`, installed by `canopy init` like the other definitions: no edits, no subagents, no bash, and
+no MCP write tools where the runtime can deny them by name. It can read the tracker and GitHub, including PRs that are
+not the operator's.
+
+A chore that uses the operator's deterministic tools gets its own definition, copied from `canopy-chore` into the
+operator's own runtime config (for OpenCode, `~/.config/opencode/agent/`, not the repository's `.opencode/agent/`, which
+anyone who can push to the repository controls), with bash allowed for exactly those tools:
+
+```yaml
+permission:
+  edit: deny
+  task: deny
+  bash:
+    "*": deny
+    "buildq *": allow        # the operator's read-only CLI for the build queue
+```
+
+The tools are the operator's to install: on `PATH` (`uv tool install` from the repository that holds them), or run from
+a checkout that `cwd` points at. Credentials for CI systems belong to those tools or to the runtime's MCP servers, as
+for the tracker (§4, principle 5). canopy never sees them and knows nothing about Jenkins, or any other CI system,
+beyond what the operator's prompt says.
+
+### Delegation
+
+- The state block gains `chores`: for each configured chore its name, `every_minutes`, `when`, `due_at` (the earliest
+  time the guard allows a new run), whether it is running, and its latest run (id, status, start, end, summary, and
+  each finding's id, title, and link).
+- Each tick the overseer considers every chore whose `due_at` has passed and that is not running. It runs the chore
+  with `canopy chore run <NAME> [--context '<text>']`, or records `canopy chore wait <NAME> --rationale "<text>"` when
+  `when` says not now. Chores that are not due need no decision.
+- `--context` follows D031: at most 2000 characters that point at what to look at (a PR, a job name, a build number),
+  never a quote of untrusted text. An empty one renders as "None."
+- Findings in the state block are there for deciding about the chore (a `when` such as "skip it when the last run
+  found nothing"). The overseer does not use them when it decides about tickets; see Open.
+
+`canopy chore run` requires `CANOPY_TICK_ID` like `dispatch` (D020) and refuses, recording `refused:<guard>`, on the
+first of:
+
+- `unknown_chore`: no chore of that name in the user config.
+- `running`: a run of this chore is running.
+- `not_due`: less than `every_minutes` since this chore's latest run started, whatever that run ended as.
+- `chore_capacity`: `capacity.max_chores` chore runs are running.
+
+In a dry run it records `dispatch:chore` with rationale `dry run: not dispatched` and starts nothing. Chore decisions
+are `decisions` rows with the chore's name in a new `chore` column and no ticket key: `dispatch:chore`, `wait`, and
+`refused:<guard>`. Chore runs are serialized with dispatches by the same `dispatch.lock`.
+
+### Runs
+
+`canopy chore run` inserts a `chore_runs` row, renders the prompt, and spawns `python -m canopy _chore <run_id>`
+detached, as dispatch spawns `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOPY_TICK_ID`, runs the
+chore's command in its `cwd` with its timeout, records the agent's pid, parses the result, and closes the row. Output
+goes to `<state_dir>/chores/<run_id>.log`. There is no lease, branch, or push, so there is nothing to return or verify.
+
+The prompt is the operator's file followed by a generated `## Run` section holding one JSON object: the chore's name,
+the current time, the run id, the overseer's context, the latest completed run's end time, summary, and findings (id,
+title, link), and the result contract. The previous findings let a chore reuse the same id for the same problem and
+say when one is gone. The rendered prompt is written to `<state_dir>/chores/<run_id>.prompt`, readable only by the
+operator.
+
+Result contract, one JSON line, last line of stdout:
+
+```json
+{"status":"ok|failed","summary":"one paragraph",
+ "findings":[{"id":"flaky/checkout-service/test_retry","title":"one line","detail":"a paragraph","link":"https://..."}]}
+```
+
+- `ok` means the chore did its check; no findings means nothing needs a human. `failed` means it could not check (a
+  tool broke, CI unreachable) and says why in the summary.
+- A finding's `id` is stable across runs for the same problem, matches `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and is at most
+  200 characters. `title` is at most 200 characters, `detail` at most 2000, `link` a plain `https://` URL or absent. At
+  most 20 findings; ids unique within a run.
+- Validated with pydantic (D026). Anything else is `unknown`, and the findings are not recorded.
+
+`chore_runs` status is `running`, `ok`, `failed`, `unknown`, `timeout`, or `crashed`. Reconcile (§6 step 3) treats
+running chore runs as it treats running worker runs: a dead `_chore` pid means the agent's process group is killed and
+the run is `crashed`. Chore runs do not count against `max_workers`.
+
+### Findings on the attention list
+
+- A chore's open findings are those of its latest run that ended `ok`. A finding disappears when a later `ok` run does
+  not report its id, the way an item disappears when its cause is gone (§14). A run that ends any other way leaves the
+  previous findings standing.
+- A chore whose latest run ended `failed`, `unknown`, `timeout`, or `crashed` also has a `chore_failed` item, raised by
+  the harness after reconcile as for worker runs (D028). It goes away when a later run ends `ok`.
+- `attention.md` gets a section per chore after the ticket items: one line per finding with its title, age, and link.
+  A finding's age runs from the first run of the unbroken sequence of `ok` runs that reported its id.
+- Notification follows D032, with a finding identified by its chore and id. The message line is
+  `+ chore:<name> <id>: <title> <link>`. In `notifications`, a finding's row holds `chore:<name>` in `ticket_key`, which
+  no ticket key can equal since the key pattern (§17) has no colon, and its id in `reason`.
+
+### Journal
+
+- `chore_runs`: id, tick id, chore name, pid of `_chore`, pid of the agent, started and ended times, status,
+  `result_json` (the validated result, text cut to its limits), log path. Separate from `runs`, whose ticket, slot,
+  lease, and branch columns a chore does not have.
+- `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
+
+### Trust model changes needed
+
+TRUST_MODEL is unchanged until M9, whose PR carries the human approval:
+
+- T1: chores read text from people outside the operator's queue (other people's PRs, build logs). Their findings are
+  data wherever they go: the attention list, the notification, and the overseer's state block.
+- T3: add `every_minutes`, `running`, and `capacity.max_chores` to the controls in code, and to §6: never run a chore
+  more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
+- T6: a chore's only output is its result line. The shipped definition has no write tools. Residual: a chore steered by
+  what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`, wherever that
+  sends them, and a finding's link can carry data in its URL.
+- T7: chores, `runtime.chore_cmd`, and `capacity.max_chores` are user-only.
+- §7: an operator who allows a tool in a chore's definition is responsible for what that tool can do. canopy's controls
+  assume chore tools only read.
+
+### Open
+
+- Whether a chore should ever write. Commenting on or retrying someone else's build acts as the operator on other
+  people's work, which D010 kept out of the MVP. The likely first write is a ticket for a finding, created without a
+  queue label like a split child (§18), so a human decides whether the loop works on it.
+- Whether the operator needs `canopy chore try <NAME>`, a foreground run outside any tick that prints the result and
+  records nothing, for writing chore prompts. Until then, run the chore's command by hand.
+- Whether findings should inform ticket decisions, once chores have a track record in the journal: a finding that a
+  check is flaky could make the overseer record attention for a ticket's red PR instead of dispatching `fix-ci`.
+  Findings are written by an agent that read untrusted text, so they could only ever hold work back or raise attention,
+  never make a ticket a candidate. Opt-in per chore when it comes, so a chore's reports can be trusted before its
+  influence is.
+- Where a chore runs in a workspace (§18). Chores come from the user file, which every loop the operator runs reads, so
+  once state is per workspace (M6) each workspace would run every chore. M6 either gives a chore an optional list of
+  the workspaces it runs in or moves chores into a user file table per workspace.
+- Whether a repository should be able to offer chores that an operator opts into by name, the way it offers its tracker
+  query.
