@@ -564,3 +564,48 @@ Rejected:
 - import-linter: a dependency for what a short stdlib test does. Reconsider if the contracts outgrow one layer list.
 Revisit: if shared code piles up in `core` until it is the new flat directory (then split it by concern); when a second
 separate program ships, which becomes a workspace member by the rule above.
+
+## D042. The loop is `canopy loop` in the foreground, not cron or launchd
+
+Context: the README told operators to schedule `canopy tick` with cron or launchd once they trusted it. Every tick runs
+the overseer, which reads the queue through MCP, so the tick rate sets the loop's largest recurring spend (TRUST_MODEL
+§2), and pacing ticks by what they cost is the planned cost control (ROADMAP M13). A scheduler outside canopy cannot
+read the journal, so it cannot pace by anything.
+Decision (DESIGN §6):
+- `canopy loop` runs ticks one after another in the foreground and waits after each one ends: `--every`, else
+  `loop.interval_minutes` (user-only, default 15). One function, `repeat.pace` in `canopy.loop`, decides the wait,
+  so pacing by spend replaces a function, not the scheduler.
+- Each iteration is an unchanged tick. The loop adds its own lock, so a state dir has at most one loop. `canopy tick`
+  stays, for one tick by hand, a dry run, or an operator who still prefers a scheduler.
+- SIGINT or SIGTERM stops the loop after the current tick; a second one aborts the tick. A tick that raises ends as
+  `error` and the loop goes on.
+- It is not a daemon: it does not detach, write a pid file, restart itself, or listen on anything. Keeping it running,
+  in a terminal, tmux, or a service manager, is the operator's choice.
+Consequences: AGENTS.md's do-not-build list and DESIGN §3 no longer say the loop is a scheduled tick. One process lives
+for days with one journal connection and the config it read at start. A loop that dies stops ticks until it is
+restarted, as a broken crontab did; M10's digest is how the operator would notice.
+Rejected:
+- Recommending cron or launchd: no pacing from the journal, no output a person reads, and set up differently on each
+  platform.
+- A background daemon with start and stop commands: pid files, log rotation, and supervision to write, for what a
+  terminal or the platform's service manager already does.
+- Holding the tick lock through the wait: `canopy tick` by hand could never run while a loop is up.
+- A start-to-start cadence: a tick longer than the interval would lead straight into the next one.
+- Ending the loop on a failed tick: DESIGN §15 already has the next tick retry.
+Revisit: with M13, when the wait depends on spend; when M6 puts several repositories in one queue.
+
+## D043. rich for terminal output
+
+Context: `canopy loop` runs for hours in front of a person. It needs a spinner during a tick, a countdown during the
+wait, color by status, and aligned columns that truncate long text, redrawn in place on a terminal and plain when
+piped to a file.
+Decision: adopt `rich` for the loop's output. Other commands keep `click.echo` until their output is reworked; moving
+them is not required. rich writes to stdout only; the log stays JSON lines through `logging`.
+Why stdlib was insufficient: `curses` takes over the whole screen and loses scrollback, which is the loop's record of
+what happened. Hand-written ANSI would reimplement terminal detection, width, truncation, `NO_COLOR`, and in-place
+redraw. click's `style` covers color only.
+Consequences: one runtime dependency, pure Python and typed, bringing `markdown-it-py` and `pygments`. Tests render to a
+`Console` over a `StringIO`, which draws no color and none of the in-place output.
+Rejected: `textual` (a full-screen application framework, where the loop is a log with a status line); `tqdm`
+(progress bars only).
+Revisit: if a command's output needs something rich cannot draw plainly off a terminal.
