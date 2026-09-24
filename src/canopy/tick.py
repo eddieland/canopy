@@ -1,17 +1,15 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, run the overseer, close the tick.
-
-Attention rendering (step 6) arrives with `attention.py` in M3.
-"""
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, run the overseer, close the tick, publish attention."""
 
 from __future__ import annotations
 
 import json
 from collections import Counter
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import attention, db, lock, logs, procs, prompts, resources, treehouse
+from canopy import attention, db, lock, logs, policy, procs, prompts, resources, treehouse
 from canopy.config import render_command
 
 if TYPE_CHECKING:
@@ -34,7 +32,10 @@ def run(ctx: Context, *, dry_run: bool) -> Outcome:
     """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error."""
     try:
         with lock.hold(ctx.lock_path):
-            return _locked(ctx, dry_run=dry_run)
+            outcome = _locked(ctx, dry_run=dry_run)
+            # After the tick is closed: the list is the latest `ok` tick's, and this tick may be it.
+            attention.publish(ctx, logs.for_tick(outcome.tick_id))
+            return outcome
     except lock.LockBusyError:
         logs.for_tick(None).info("tick skipped: another tick holds the lock", extra={"lock": str(ctx.lock_path)})
         return Outcome(None, "lock_busy", "another tick holds the lock")
@@ -62,6 +63,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
 
+    now = datetime.now(UTC)
     block = prompts.state_block(
         ctx.config,
         ctx.repo_root,
@@ -71,6 +73,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         running=db.running_runs(ctx.conn),
         tickets=db.open_tickets(ctx.conn),
         last_runs=db.latest_runs(ctx.conn),
+        attempts=policy.attempts(ctx.conn),
+        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
+        now=now,
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)

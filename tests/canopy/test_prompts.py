@@ -13,14 +13,21 @@ VALUES = {
     "NEEDS_HUMAN_LABEL": "needs-human",
     "PR_LABEL": "agent",
     "TIMEOUT_MINUTES": "45",
+    "ATTEMPT": "1",
+    "MAX_ATTEMPTS": "2",
+    "PR_URL": "https://example.test/pr/1",
+    "CONTEXT": "None.",
+    "AUTHORIZED_REPLIERS": "`alice`",
 }
 
 
-def test_shipped_implement_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
-    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), "implement", VALUES)
+@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: str) -> None:
+    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES)
     assert "{{" not in text
     assert "}}" not in text
     assert '"branch":"agent/PROJ-1-work"' in text
+    assert "attempt 1 of 2" in text
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:

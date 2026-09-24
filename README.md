@@ -44,7 +44,8 @@ standing write access to your repositories, your tracker, or your internal tools
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket.
 - Review PRs. Humans approve and merge; the agent never does.
-- Read the attention list: `canopy status`, or the file it maintains.
+- Read the attention list: `canopy status`, or `~/.canopy/attention.md`. Set `notify.cmd` to have changes piped to a
+  command of your own.
 
 ## How it works, briefly
 

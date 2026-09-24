@@ -383,3 +383,69 @@ group leader when reconcile kills. Both need the pid recycled between a crash an
 `--context`, and `--base` are refused as `not_implemented` until M3 and M4 add their guards and prompts.
 Revisit: if pid reuse is ever observed (then compare process start times), or if the rendered prompt should move from
 a file into the journal.
+
+## D030. Attempt limits and the fix-ci cooldown are derived from `runs`; cursors ride on the dispatch
+
+Context: M3 adds attempt limits and cooldowns (TRUST_MODEL T3), and D028 asked for one on `implement` too. The schema
+had `tickets.fix_ci_attempts`, `resume_attempts`, and `cooldown_until`, which nothing wrote, while DESIGN §11 also named
+`runs` as the source of attempt counts. Separately, the overseer advanced cursors with `canopy ticket set` for every
+ticket it inspected, so a dispatch refused for capacity or cooldown left the comments or failure it was meant to handle
+looking old next tick, and they were never handled.
+Decision:
+- An attempt is a `runs` row: every run of that kind for the ticket counts, whatever it ended as, crashed included.
+  Counts never reset; a ticket at its limit waits for a human, who can raise the limit in their user config. There is
+  no reset command, because the overseer can run any `canopy` command and a guard it can reset is not a guard.
+- New `policy.max_implement_attempts`, default 2: the first try and one retry after an authorized "try again" (D028).
+  Shared, and the repository may only lower it, like the other limits.
+- The fix-ci cooldown runs from the `ended_at` of the ticket's latest fix-ci run, so CI gets the whole window on the
+  pushed fix. Only fix-ci has one; the others have no configured cooldown.
+- Guards run in the order: `running`, `attempt_limit`, `cooldown`, `capacity`, so a ticket at its limit is reported as
+  such even when there is no capacity.
+- An `attempt_limit` refusal also records the `attempt_limit` attention item. The overseer asking for work the limit
+  forbids is exactly the condition, and the harness sees it without trusting the prompt to report it.
+- `fix-ci` and `resume` continue `tickets.branch`, the branch the latest dispatch recorded, and refuse `--slug`. A
+  ticket without one is `no_branch`. Only `implement` names a branch.
+- `canopy dispatch --cursor NAME=ID` advances cursors after the worker starts, and not at all on a refusal or in a dry
+  run.
+- Migration 0003 drops the three unused columns (SQLite 3.35 or later, which every supported Python ships).
+Consequences: one source of truth, which the overseer cannot alter. A long review cycle can exhaust
+`max_resume_attempts` (default 3) on a ticket that is going well; it then shows up as `attempt_limit`. A spawn that
+fails counts as an attempt, since its run row is closed `crashed`.
+Revisit: if limits hit routinely on healthy tickets (then count per PR, or reset on a merged PR), or if an operator
+needs to retry past a limit without editing config (then an operator-only command that refuses inside a tick).
+
+## D031. `--context` is text that points at what to read, not a file and not a quote
+
+Context: DESIGN §8 had `dispatch --context FILE`, and the resume prompt expected quoted review comments and replies,
+with an "AUTHORIZED REPLY" section. The overseer has no edit tool and its bash runs only `canopy` and `treehouse
+status`, so it cannot write a file. A path it chose would also let it have canopy read any file the operator can read
+into a worker prompt, which a steered worker could then post (T6). Quoting ticket or review text is worse: the overseer
+would paste untrusted text into a shell command line, where a stray quote or `$(...)` runs, and a quote can itself
+contain a forged "AUTHORIZED REPLY" header.
+Decision: `--context TEXT`, bounded at 2000 characters like rationales. The overseer prompt tells it to point at what
+the worker should read (links, comment ids, check names, account ids) in single quotes, and never to paste the text
+itself. Workers read the tracker and GitHub with their own MCP access anyway. Every worker prompt now names the
+authorized repliers, rendered by the harness from the user config, and the worker checks a reply's author itself before
+acting on it. `--context` is accepted for all three kinds; an empty one renders as "None."
+Consequences: two checks on a reply's author instead of one, and the second reads from the operator's config, not from
+anything the overseer wrote. The harness still cannot see who wrote a comment (D003): a flag naming the author would
+only check the overseer's claim, so there is none. An overseer that ignores the prompt can still write anything into
+2000 characters of context; that text reaches a worker that is told it is not an instruction.
+Revisit: if workers routinely fail to find what the context points at, or if the runtime can pass a file or stdin to the
+overseer's commands safely.
+
+## D032. Attention notifications: an item is its ticket and reason, and is notified once while it stays open
+
+Context: DESIGN §6 said to diff `attention.md` against the previous render and pipe the diff to `notify.cmd`, and the
+schema comment fingerprints an item by ticket, reason, and detail. The file carries ages, so it changes every tick; the
+overseer rewords details; and a diff against the previous render would lose a notification whose command failed.
+Decision: `attention.md` is rewritten after every tick, once the tick is closed, since the list is the latest `ok`
+tick's. An item is identified by ticket and reason. `notifications` holds the notified items that are still open. New
+items are those not in the table; resolved ones are rows whose item is gone. A notification goes out when either
+exists, and only a zero exit within 60 seconds updates the table. The fingerprint is sha256 of key and reason; the
+migration's comment is out of date and shipped migrations are not edited.
+Consequences: no re-notification for a reworded detail or a long-lived item, a retry after a failed command, and a new
+notification for an item that comes back. Resolved items are only reported if they were notified. A notify command that
+hangs holds the tick lock for up to 60 seconds.
+Revisit: if operators want reminders for long-open items, or per-reason routing (then say so in the message, not in
+more commands).

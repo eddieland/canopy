@@ -8,13 +8,12 @@ import sqlite3
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import override
 
 import click
 
-from canopy import attention, config, db, dispatch, init, logs, procs, resources, tick, worker
+from canopy import attention, config, db, dispatch, init, logs, policy, procs, resources, tick, worker
 from canopy.context import Context, db_path
 
 KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
@@ -33,7 +32,6 @@ PHASES = (
     "needs_human",
     "human_replied",
 )
-KINDS = ("implement", "fix-ci", "resume")
 DECIDE_ACTIONS = ("wait", "skip", "done")
 MAX_TEXT = 2000
 
@@ -237,7 +235,7 @@ def cmd_status(click_ctx: click.Context) -> int:
         click.echo("No ticks yet.")
     else:
         dry = " (dry run)" if last["dry_run"] else ""
-        click.echo(f"Last tick: {last['id']} {last['status']}{dry}, started {_age(last['started_at'])} ago")
+        click.echo(f"Last tick: {last['id']} {last['status']}{dry}, started {attention.age(last['started_at'])} ago")
         if last["summary"]:
             click.echo(f"  {last['summary']}")
 
@@ -246,14 +244,14 @@ def cmd_status(click_ctx: click.Context) -> int:
     for group in sorted({i.reason for i in items}):
         click.echo(f"  {group}")
         for item in (i for i in items if i.reason == group):
-            click.echo(f"    {item.ticket_key}  {_age(item.since)}  {item.detail}")
+            click.echo(f"    {item.ticket_key}  {attention.age(item.since)}  {item.detail}")
     if not items:
         click.echo("  nothing needs you")
 
     running = db.running_runs(ctx.conn)
     click.echo(f"\nRunning workers ({len(running)}/{ctx.config.capacity.max_workers}):")
     for r in running:
-        click.echo(f"  {r['ticket_key']}  {r['kind']}  {_age(r['started_at'])}  {r['slot_path']}")
+        click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {r['slot_path']}")
     if not running:
         click.echo("  none")
     return 0
@@ -261,19 +259,36 @@ def cmd_status(click_ctx: click.Context) -> int:
 
 @cli.command("dispatch")
 @click.argument("key", type=TICKET_KEY)
-@click.option("--kind", required=True, type=click.Choice(KINDS))
+@click.option("--kind", required=True, type=click.Choice(policy.KINDS))
 @click.option(
     "--slug",
-    default=dispatch.DEFAULT_SLUG,
-    show_default=True,
     type=SLUG,
-    help="Short name for the work, from the ticket title; the branch is <prefix><KEY>-<slug>.",
+    help=f"implement only: short name for the work, from the ticket title; the branch is <prefix><KEY>-<slug>. "
+    f"Default {dispatch.DEFAULT_SLUG!r}. fix-ci and resume continue the ticket's recorded branch.",
 )
 @click.option("--base", metavar="BRANCH", help="Start from this branch instead of the default.")
-@click.option("--context", "context_file", type=click.Path(path_type=Path), help="File with context for the worker.")
+@click.option(
+    "--context",
+    type=TextType(),
+    help="What the worker should read or do: links, comment ids, check names. Never quoted ticket or PR text.",
+)
+@click.option(
+    "--cursor",
+    "cursor_pairs",
+    type=CursorType(),
+    multiple=True,
+    help="Advance a cursor, only if the worker starts: what this dispatch handles.",
+)
 @click.pass_context
 def cmd_dispatch(
-    click_ctx: click.Context, *, key: str, kind: str, slug: str, base: str | None, context_file: Path | None
+    click_ctx: click.Context,
+    *,
+    key: str,
+    kind: str,
+    slug: str | None,
+    base: str | None,
+    context: str | None,
+    cursor_pairs: tuple[tuple[str, str], ...],
 ) -> int:
     """Start a worker on a ticket (overseer only)."""
     ctx = _open(click_ctx)
@@ -282,20 +297,30 @@ def cmd_dispatch(
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
     if current["dry_run"]:
-        extras = [f"slug={slug}", f"base={base}" if base else "", f"context={context_file}" if context_file else ""]
+        if kind == "implement":
+            slug = slug or dispatch.DEFAULT_SLUG
+        extras = [
+            f"slug={slug}" if slug else "",
+            f"base={base}" if base else "",
+            *(f"cursor {name}={value}" for name, value in cursor_pairs),
+            f"context={context}" if context else "",
+        ]
         detail = "; ".join(e for e in extras if e)
         db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", f"dry run: not dispatched ({detail})")
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
         click.echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
         return 0
     try:
-        started = dispatch.start(
-            ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base, context_file=context_file
-        )
+        started = dispatch.start(ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base, context=context)
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+        if r.guard == "attempt_limit":
+            # The overseer wants work the limit forbids: a human has to look (DESIGN §14).
+            db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}attempt_limit", r.reason)
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
+    db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
     rationale = f"run {started.run_id}: {started.branch} in {started.slot}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
@@ -391,12 +416,3 @@ def cmd_ticket_set(
     note = "; dry run, cursors not advanced" if skipped else ""
     click.echo(f"updated {key}{note}")
     return 0
-
-
-def _age(timestamp: str) -> str:
-    then = datetime.fromisoformat(timestamp)
-    seconds = max(0, int((datetime.now(UTC) - then).total_seconds()))
-    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
-        if seconds >= size:
-            return f"{seconds // size}{unit}"
-    return f"{seconds}s"
