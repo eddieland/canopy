@@ -175,9 +175,10 @@ Status: not started.
 Needs M4's blocker ordering.
 
 - `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
-  contract, `policy.max_split_attempts`.
+  contract validated into `split_children`, the child's recorded repository enforced by dispatch,
+  `policy.max_split_attempts`.
 - Overseer prompt: choose split or joint; the `split` phase and `split_unlabeled` attention; a child is a candidate
-  only if its label was added after the split run ended; read a child's repository from its `canopy-repo` line.
+  only if its label was added after the split run ended, and `split_self_labeled` attention when one was not.
 - The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
 
 Accept: a real ticket covering two repositories is split into two linked children, the second blocked by the first,

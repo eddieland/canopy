@@ -640,7 +640,7 @@ prompt prefers splitting and implements jointly only when the ticket or `MAP.md`
 Guards (§8) change as follows:
 
 - `running` stays per ticket: one worker per ticket, whatever its units (TRUST_MODEL §6).
-- `unknown_repo`: a `--repo` not in the map, or with no primary clone.
+- `unknown_repo`: a `--repo` not in the map, with no primary clone, or, for a split child, not the one recorded.
 - `no_branch`: `fix-ci` and `resume` for a unit with no branch.
 - `attempt_limit` counts per unit: a run counts against every unit it covers.
 - `capacity` counts runs, not slots. A joint run over three repositories is one worker holding three slots.
@@ -670,24 +670,36 @@ without a queue label, so a human authorizes each one exactly as they authorize 
   tracker writes happen in a worker, like every other write.
 - The split worker runs as `canopy-splitter`: a separate agent definition with read-only file and shell tools and the
   tracker MCP tools to create a ticket, link tickets, and comment. It has no label tools and no GitHub write tools. It
-  runs in a desk of the named repositories' worktrees so it can read the code, and it pushes nothing.
-- It creates one child per repository. Each child's body names its repository in a line the overseer reads
-  (`canopy-repo: web`), links the parent, and says what the child covers. Children that must land in order get the
+  runs in a desk of the named repositories' worktrees so it can read the code, and it pushes nothing. Where the
+  runtime can restrict a create tool's arguments, the definition forbids labels on create; where it cannot, the check
+  below still holds.
+- It creates one child per repository. Each child's body names its repository (`canopy-repo: web`) for people to
+  read, links the parent, and says what the child covers. Children that must land in order get the
   tracker's blocker relation (`web` is blocked by `api`), so M4's ordering works them in order. Children carry no
   queue label and are not assigned to anyone.
 - On the parent it posts a comment listing the children and saying which label starts each one. Its result line adds
-  `"children": ["PROJ-13", "PROJ-14"]`, stored in `result_json`. Each child must be a valid ticket key (§17) or the
-  run's status is `unknown`, since the keys are rendered into later prompts.
+  `"children": {"PROJ-13": "api", "PROJ-14": "web"}`, each child's key and repository. `_run` validates it: every key
+  a valid ticket key (§17), every repository one the split was dispatched with, each at most once. Anything else makes
+  the run's status `unknown` and records nothing. A valid result is recorded in `split_children`, and a child's
+  repository comes from there afterwards.
 - The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
   open and unlabeled. The overseer marks the parent `done` in the journal once every child is closed. canopy does not
   touch the parent's tracker state.
 - A child is a candidate only if its queue label was added after the split run ended. The state block carries each
   split run's end time and children, and the overseer compares it with the tracker's label history. A label the split
-  worker added itself, whatever the permissions allowed, therefore does not count. A tracker without label history
-  (the optional row of §17's contract) cannot tell the two apart, so there the overseer records
-  `skip` with `tracker_unsupported: label history` instead of dispatching `split`.
+  worker added itself, at creation or later, is therefore not counted, whatever the permissions allowed; the overseer
+  records attention `split_self_labeled` for that child instead, and it stays out of the queue until a human removes
+  the label and adds it again. A tracker without label history (the optional row of §17's contract) cannot tell the
+  two apart, so there the overseer records `skip` with `tracker_unsupported: label history` instead of dispatching
+  `split`.
+- This check is the overseer's, not a harness guard: the harness never reads the tracker (D003), so it cannot see
+  labels at all. It is the same kind of control as the check that a ticket carries a queue label in the first place
+  (§17), and it has the same residual, stated in the trust model changes below.
 - `split` has an attempt limit like every kind, `policy.max_split_attempts`, default 1.
-- A child's work is ordinary: it is a one-repository ticket whose repository comes from its `canopy-repo` line.
+- A child's work is ordinary: it is a one-repository ticket. `canopy dispatch` for a key in `split_children` refuses
+  any `--repo` other than the one recorded there (`unknown_repo`), so editing the child's `canopy-repo` line later
+  changes nothing. A ticket a human splits by hand has no such row; the overseer chooses its repository as for any
+  ticket.
 
 ### Journal
 
@@ -695,6 +707,8 @@ without a queue label, so a human authorizes each one exactly as they authorize 
   displayed phase is its least advanced unit's.
 - `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. It replaces the slot columns of
   `runs` for new runs.
+- `split_children`: parent key, child key, repository, split run id. Written only by `_run` from a validated split
+  result.
 - `tickets.repo` holds the workspace name.
 - Attention items carry an optional repository, and an item is identified by ticket, repository, and reason, so two
   units at their fix-ci limit are two items. `canopy attention` takes `--repo`.
@@ -704,8 +718,10 @@ without a queue label, so a human authorizes each one exactly as they authorize 
 TRUST_MODEL is unchanged until the milestone that needs each change, whose PR carries the human approval:
 
 - T1: the loop may create tickets, but never with a queue label. What a split creates starts only when a human labels
-  it, and a label added during the split run does not count. Residual: canopy acts as the operator, so the tracker
-  cannot say who added a label, only when.
+  it, and a label added during the split run does not count. The check is in the overseer prompt, backed by the
+  splitter's permissions, because the harness cannot read the tracker. Residual: canopy acts as the operator, so the
+  tracker cannot say who added a label, only when; a steered overseer that ignores the check can dispatch a
+  self-labeled child, as it could dispatch an unlabeled ticket today.
 - T4: a worker's edit permission covers the worktrees linked from its desk. M7 runs a canary like D021's to show that
   OpenCode's permission check allows edits through the desk's links and still denies paths outside them.
 - T6: the write scope is the repositories of the units the run covers, not one repository. The splitter's is creating

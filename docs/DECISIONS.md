@@ -473,7 +473,8 @@ Consequences: no new dependency. The tracker gains a write the loop did not have
 to a separate splitter agent with no label tools. Splitting needs label history from the tracker. Children are visible
 to the team and go through the normal path, so a split costs a human one label per child and needs no ordering or
 sequencing code in canopy. The worker of a joint run gets a desk of links instead of a single worktree, which needs an
-OpenCode permission canary. `runs` loses its slot columns to `run_slots`, and attention items gain a repository. A
+OpenCode permission canary. `runs` loses its slot columns to `run_slots`, a split's children and their repositories are
+recorded in `split_children` rather than read back from ticket text, and attention items gain a repository. A
 team can share the map through a repository of its own, with the same exposure as `canopy.toml` today.
 Rejected:
 - One loop per repository with cross-loop coordination: two journals would have to agree on one ticket.
