@@ -67,7 +67,7 @@ canopy (harness, Python)
   policy.py      attempt limits and the fix-ci cooldown, derived from runs
   worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
   attention.py   the attention list from the journal; render attention.md, diff, notify
-  init.py        canopy init: config files, agent definitions, tracker skill, branch protection text
+  init.py        canopy init: config files, agent definitions, tracker skill, branch protection text, SSH remote warning
   logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
   context.py     the Context every command passes around: config, repository root, db connection, runner
   resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
@@ -406,6 +406,10 @@ Rules:
   and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
 - `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
   label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
+- Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
+  `git remote get-url --push --all origin`, which applies `insteadOf` and `pushInsteadOf` rewrites, and prints a
+  warning naming every URL git would reach over SSH: `ssh://`, `git+ssh://`, or the scp-like `[user@]host:path`. It
+  is only a warning. Init still succeeds, and nothing else in canopy checks the remote.
 - Reading is `tomllib`, merging is a key-by-key dict merge, and validation is pydantic models that carry each key's
   type, default, scope, and tighten direction (D026). Scope and tighten checks run per file before the merge, so errors
   name the file that caused them.
@@ -589,11 +593,11 @@ the workspace file's part, and state and pools stay where §12 and treehouse put
 name = "acme"
 
 [repos.api]
-url = "git@github.com:acme/api.git"
+url = "https://github.com/acme/api.git"
 summary = "Public REST API. Owns the order schema and the generated OpenAPI spec."
 
 [repos.web]
-url = "git@github.com:acme/web.git"
+url = "https://github.com/acme/web.git"
 summary = "Customer web app. Consumes the api's generated client from a release."
 
 # [tracker], [policy], [trust]: the shared keys of §12, as in a repository's canopy.toml.
@@ -609,7 +613,8 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   `canopy.toml` files are not read inside a workspace: a workspace has one tracker and one queue.
 - The map may be committed to a shared workspace repository, so a team maintains it together. It is then exposed like
   a repository file (TRUST_MODEL T7) and gets the same controls. `url` is read only by `canopy workspace sync`, an
-  operator command that prints what it clones before cloning. A tick never clones a repository or changes a remote; a
+  operator command that prints what it clones before cloning. Map URLs should be HTTPS (D038); `sync` warns about SSH
+  ones as `canopy init` does and clones them anyway. A tick never clones a repository or changes a remote; a
   repository in the map with no clone is an attention item, `repo_missing`, and cannot be dispatched to.
 - `canopy init --workspace` writes the skeleton and a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and
   `.canopy/`.

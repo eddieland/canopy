@@ -425,3 +425,19 @@ Consequences: a run item the harness raises during an outage (a crashed worker) 
 as it already did during an overseer failure. Schedulers see the outage as a failed run.
 Rejected: carrying the previous list forward into the skipped tick (copies decisions the overseer never made).
 Revisit: with DESIGN §15's attention item after consecutive overseer failures, which should count skipped ticks too.
+
+## D038. Recommend HTTPS remotes; `canopy init` warns about SSH ones and refuses nothing
+
+Context: HOST_ISOLATION proposes running workers under `srt`, and the worker pushes from inside the run. On Linux
+`srt` blocks creating Unix sockets, which includes the SSH agent socket, so an SSH remote cannot push from a sandboxed
+worker without extra policy. HTTPS with a credential helper works through the sandbox's proxy.
+Decision: HTTPS remotes are the supported path, and the docs use them everywhere. `canopy init` resolves `origin`'s
+push URLs through git, so `insteadOf` and `pushInsteadOf` rewrites count, and prints a warning naming any that go over
+SSH, with the two ways to fix it. It is a warning, not a guard: init succeeds, and tick, dispatch, and `_run` never
+look at the remote.
+Consequences: an operator who runs unsandboxed can keep SSH remotes. An operator who wants to keep SSH for their own
+fetches can push over HTTPS with `pushInsteadOf`, which silences the warning.
+Rejected: refusing SSH remotes in init or at dispatch (the sandbox is opt-in and not built, and the operator is fully
+trusted, TRUST_MODEL §3); checking the remote on every tick (noise for a choice the operator already made).
+Revisit: when the sandbox ships. If it finds a way to support SSH (allowing the agent socket, or pushing from the host),
+drop the warning; if sandboxing becomes the default, consider making SSH remotes an attention item.
