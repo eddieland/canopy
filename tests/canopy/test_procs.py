@@ -1,9 +1,12 @@
 import json
+import os
+import signal
 import time
 from pathlib import Path
 
 import pytest
 
+from canopy import procs
 from canopy.procs import CommandNotFoundError, ProcError, SubprocessRunner
 
 
@@ -57,3 +60,66 @@ def test_missing_cwd_is_not_reported_as_missing_command(agent_log: Path, tmp_pat
     with pytest.raises(ProcError, match="working directory") as exc:
         SubprocessRunner().run(["agent"], cwd=tmp_path / "gone")
     assert not isinstance(exc.value, CommandNotFoundError)
+
+
+def test_on_start_gets_the_pid_that_leads_the_group(agent_log: Path) -> None:
+    started: list[int] = []
+    assert SubprocessRunner().run(["agent"], on_start=started.append).ok
+    [pid] = started
+    assert pid != os.getpid()
+    assert not procs.alive(pid)
+
+
+def test_spawn_detaches_and_logs(agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "spawned result")
+    log = tmp_path / "run.log"
+    pid = SubprocessRunner().spawn(["agent", "x"], cwd=tmp_path, log_path=log)
+    assert os.getpgid(pid) == pid  # its own session, so its own group
+    deadline = time.monotonic() + 10
+    while procs.alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert not procs.alive(pid)
+    assert log.read_text().splitlines()[-1] == "spawned result"
+    assert log.stat().st_mode & 0o777 == 0o600
+    assert json.loads(agent_log.read_text())["cwd"] == str(tmp_path)
+
+
+def test_spawn_missing_command(tmp_path: Path) -> None:
+    with pytest.raises(CommandNotFoundError):
+        SubprocessRunner().spawn([str(tmp_path / "nope")], cwd=tmp_path, log_path=tmp_path / "log")
+
+
+def test_alive_and_kill_group(agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert procs.alive(os.getpid())
+    assert not procs.alive(0)
+    assert not procs.alive(4_194_305)
+    assert not procs.kill_group(4_194_305)
+    assert not procs.kill_group(1)
+    monkeypatch.setenv("FAKE_AGENT_SLEEP", "30")
+    pid = SubprocessRunner().spawn(["agent"], cwd=tmp_path, log_path=tmp_path / "log")
+    assert procs.alive(pid)
+    assert procs.kill_group(pid)
+    deadline = time.monotonic() + 10
+    while procs.alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert not procs.alive(pid)  # the zombie was reaped, not counted as alive
+
+
+def test_alive_ignores_zombies_it_cannot_reap(agent_log: Path, tmp_path: Path) -> None:
+    # A zombie that is not this process's child, as a killed `_run` leaves when nothing reaps it, reads as dead.
+    script = tmp_path / "orphan"
+    script.write_text("#!/bin/sh\nsleep 30 &\necho $!\nexec sleep 30\n")
+    script.chmod(0o755)
+    if not Path("/proc/self/stat").exists():
+        pytest.skip("needs /proc")
+    pid = SubprocessRunner().spawn([str(script)], cwd=tmp_path, log_path=tmp_path / "log")
+    deadline = time.monotonic() + 10
+    while not (tmp_path / "log").read_text().strip() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    child = int((tmp_path / "log").read_text().split()[0])
+    os.kill(child, signal.SIGKILL)  # a zombie until its parent, the script, waits; it never does
+    while Path(f"/proc/{child}/stat").read_text().rpartition(")")[2].split()[0] != "Z":
+        assert time.monotonic() < deadline
+        time.sleep(0.02)
+    assert not procs.alive(child)
+    procs.kill_group(pid)

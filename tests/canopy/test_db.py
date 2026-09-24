@@ -12,9 +12,10 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2]
     assert db.migrate(conn, resources.migrations_dir()) == []
-    assert [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")] == [(1, "init")]
+    rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
+    assert rows == [(1, "init"), (2, "runs_worker_pid")]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
