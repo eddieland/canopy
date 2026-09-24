@@ -101,21 +101,38 @@ needed. A deny list of known secret paths was considered and rejected: it always
 | --- | --- | --- | --- |
 | The cwd and every worktree a desk links to | yes | yes | The work. |
 | Each worktree's `.git` link file | yes | no | Repointing it moves host-side git somewhere the worker owns (§5). |
-| Git common dir: objects, refs, `worktrees/<slot>/` | yes | yes | Committing and checking out. |
-| Git common dir: `config`, `hooks/`, `info/`, `worktrees/*/config.worktree` | yes | no | Runs later on the host. |
+| The git common dir, except this slot's `worktrees/<slot>/` | yes | no | Shared by every slot; see below. |
+| This slot's `worktrees/<slot>/`, except `config.worktree` | yes | yes | Its own HEAD, index, and reflog. |
+| A per-run git object directory | yes | yes | New commits; see below. |
 | The runtime's config (`~/.config/opencode`) | yes | no | A worker must not rewrite its own permissions. |
 | The runtime's data and cache (`~/.local/share/opencode`, ...) | yes | yes | Sessions and token refresh. |
 | Toolchains the build needs (`~/.local/bin`, `~/.cargo`, `~/.nvm`, ...) | yes | no | Running tests. |
 | Build and package caches | yes | yes | Separate from the operator's own caches (§7). |
 | A per-run temp directory, exported as `TMPDIR` | yes | yes | Scratch space. |
-| `~/.config/canopy`, `state_dir` (`~/.canopy`) | no | no | Config and journal belong to the harness. |
+| A chore's own `cwd` (default `<state_dir>/chores/<name>/`) | yes | only if it writes | Chores only (below). |
+| The rest of `~/.config/canopy` and `state_dir` (`~/.canopy`) | no | no | Config and journal belong to the harness. |
 | The rest of `$HOME` | no | no | Secrets, other repositories. |
 
 The run log is unaffected: the worker's stdout and stderr are file descriptors `_run` opened before the sandbox
 started.
 
-A chore gets the same policy with its `cwd` read-only by default, since its only output is its result line (D034). A
-chore whose own tooling writes there gets that path in its own policy template.
+Git state is where the worktree boundary leaks. Every slot in a pool shares one common directory: refs, objects, hooks,
+config, and every other slot's metadata. Path rules cannot give a worker write access to its own branch alone, because
+git updates a ref through a lock file beside it and rewrites a shared `packed-refs`. A worker that can write refs can
+move another running worker's branch, which that worker then builds on and pushes as its own. So a worker writes no
+shared git state:
+
+- `_run` checks the branch out detached (`git checkout --detach`, from `origin/<branch>` or the base). A detached
+  worktree keeps HEAD, the index, and the reflog in `worktrees/<slot>/`, which belongs to that slot alone.
+- `_run` sets `GIT_OBJECT_DIRECTORY` to a per-run directory and lists the shared object directory in
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES`. New objects land in the per-run directory; existing ones are read from the shared
+  directory, read-only. The per-run directory goes away with the run's temp directory.
+- The worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares the remote
+  branch with HEAD.
+
+A chore gets the same policy. Its default `cwd` is inside `state_dir`, so its policy re-allows that one directory:
+read-only by default, since a chore's only output is its result line (D034), and writable for a chore whose own
+tooling writes there. The rest of `state_dir` stays denied.
 
 ### 4.3 Network policy
 
@@ -147,7 +164,7 @@ worker can still push to any repository or post anywhere the operator can. That 
 
 The prefix alone moves the problem to the boundary. After the worker exits, `_run` runs git on the host in the slot
 the worker just had (`ls-remote`, and `push` if needed), and the next run fetches and checks out in it. That is code
-running outside the sandbox on files a worker wrote. Four small changes, in the same milestone as the sandbox:
+running outside the sandbox on files a worker wrote. Five changes, in the same milestone as the sandbox:
 
 1. Host-side git in a slot runs with hooks and filesystem monitors off:
    `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c fetch.recurseSubmodules=false`. Cheap and correct with or
@@ -157,11 +174,16 @@ running outside the sandbox on files a worker wrote. Four small changes, in the 
 3. The prompt reaches the runtime byte for byte. D023 keeps ticket text out of a shell. `srt` joins its arguments into
    one `bash -c` string after single-quoting each one. That is the POSIX-safe form, but it is a second parser on
    ticket-written text. The canary (§6) proves prompts come through unchanged with a hypothesis property test over
-   quotes, newlines, `$()`, backticks, and non-UTF-8 bytes (D027). If that is not convincing, D023's own revisit
-   clause applies: add a `{prompt_file}` placeholder and pass the path of the prompt `_run` already writes.
+   quotes, newlines, `$()`, backticks, and arbitrary Unicode text (D027). `_run` reads the prompt as UTF-8, so bytes
+   that are not valid UTF-8 never reach the command line. If that is not convincing, D023's own revisit clause
+   applies: add a `{prompt_file}` placeholder and pass the path of the prompt `_run` already writes.
 4. Timeouts still end everything. `_run` kills the worker's process group with SIGKILL. The canary checks that nothing
    inside the sandbox outlives it. canopy reads the result line, not the exit status, so `srt` exiting 0 on SIGTERM
    does not matter.
+5. Worker git state is private (§4.2): a detached checkout in step 2, a per-run object directory with the shared one
+   as an alternate, and a push by refspec. `_run` sets the object variables for the worker and for its own fallback
+   push in step 5. This changes DESIGN §8 steps 2 and 5, and the push instruction in the worker prompts. The `-B`
+   reasoning in step 2 goes away, since no run creates a local branch.
 
 No new config keys. `canopy init` can print a suggested `worker_cmd` and the one install command, but does not write
 them. The sandbox stays opt-in until the canary has passed on real machines.
@@ -175,7 +197,8 @@ real git worktree, and runs a script that tries each of these. Every attempt mus
 
 - Read the fake SSH key, and anything else under HOME outside the policy.
 - Write `~/canary`, `~/.bashrc`, `~/.config/canopy/config.toml`, and anything under the state dir.
-- Write the common dir's `config` or `hooks/post-checkout`, a `config.worktree`, or the slot's `.git` link.
+- Move another slot's branch or any other ref, write the common dir's `config` or `hooks/post-checkout`, a
+  `config.worktree`, or the slot's `.git` link.
 - Connect to a host not on the allowlist, to `169.254.169.254`, and to a port on the host's loopback.
 
 And the positive controls must succeed, so a sandbox that blocks everything cannot pass:
@@ -189,6 +212,9 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
 
 ## 7. Open questions
 
+- Fetching inside a run. The worker cannot update shared remote-tracking refs, so a plain `git fetch` fails. `_run`
+  fetches before the worker starts, which covers most runs. Check what the fix-ci and resume prompts ask for, and
+  whether a fetch that writes only `FETCH_HEAD` (per worktree) is enough.
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
   Linux: `srt` blocks creating Unix sockets, which includes the agent socket. Recommend HTTPS remotes for pools.
 - OpenCode's local MCP servers start inside the sandbox and inherit it. Each one's hosts must be on the allowlist, and
