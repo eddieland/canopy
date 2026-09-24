@@ -38,10 +38,10 @@ TREEHOUSE_VERSION ?= $(shell git ls-remote --tags --refs --sort=-v:refname $(TRE
 # and `@v2.x` is rejected. The prebuilt release binaries need glibc 2.34+. CGO_ENABLED=0 gives a static binary.
 treehouse: ## Install treehouse (TREEHOUSE_VERSION, default newest release) with go install
 	@sha=$$(git ls-remote $(TREEHOUSE_REPO) 'refs/tags/$(TREEHOUSE_VERSION)^{}' 'refs/tags/$(TREEHOUSE_VERSION)' \
-		| head -1 | cut -f1); \
+		| sort -k2 | tail -1 | cut -f1); \
 	test -n "$$sha" || { echo "no treehouse tag $(TREEHOUSE_VERSION)"; exit 1; }; \
 	echo "installing treehouse $(TREEHOUSE_VERSION) ($$sha)"; \
 	CGO_ENABLED=0 go install github.com/kunchenguid/treehouse@$$sha
 	@command -v treehouse >/dev/null 2>&1 || echo "treehouse is installed but not on PATH (add \$$(go env GOPATH)/bin)"
-	@treehouse status --help 2>&1 | grep -q -- --json || \
+	@! command -v treehouse >/dev/null 2>&1 || treehouse status --help 2>&1 | grep -q -- --json || \
 		echo "warning: $$(command -v treehouse) comes first on PATH and is too old (no --json); remove it"
