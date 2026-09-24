@@ -140,6 +140,53 @@ Accept: a coworker runs it against their own ticket.
 
 Status: not started.
 
+## M6. Workspace
+
+DESIGN §18 and D033. Tickets still touch one repository each; the workspace makes several repositories one queue.
+
+- `canopy-workspace.toml` and `MAP.md`, found by walking up from the current directory like `.git`. The workspace file
+  replaces the repository file layer; a repository with no workspace file is a workspace of one, and every existing test
+  passes unchanged.
+- `canopy init --workspace`: skeleton, `.gitignore`, branch protection rules for every repository in the map.
+- `canopy workspace sync`: clone missing repositories into `repos/<name>`, report an `origin` that differs from the map.
+- `TREEHOUSE_ROOT` and `--worktree-path` on every treehouse call; reconcile per repository; `repo_missing` attention.
+- State under `<workspace>/.canopy/`. The state block lists repositories and summaries.
+- `canopy dispatch --repo NAME`, exactly one, with the `unknown_repo` guard.
+
+Accept: a two-repository workspace; one real ticket in each repository goes from label to open PR, from one queue,
+with every worktree under the workspace root.
+
+Status: not started.
+
+## M7. Joint multi-repo runs
+
+- `ticket_units`, `run_slots`, repeated `--repo`, all-or-nothing leases.
+- Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
+- Per-unit phases, cursors, and attempt counts; attention items with a repository.
+- The desk permission canary, and the TRUST_MODEL T4, T6, T7, and §7 changes with human approval.
+
+Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
+detected on the next tick and all its slots are returned.
+
+Status: not started.
+
+## M8. Split tickets
+
+Needs M4's blocker ordering.
+
+- `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
+  contract validated into `split_children`, the child's recorded repository enforced by dispatch,
+  `policy.max_split_attempts`.
+- Overseer prompt: choose split or joint; the `split` phase and `split_unlabeled` attention; a child is a candidate
+  only if its label was added after the split run ended, and `split_self_labeled` attention when one was not.
+- The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
+
+Accept: a real ticket covering two repositories is split into two linked children, the second blocked by the first,
+with no queue label on either. Nothing is dispatched for them until the operator labels them; then they are worked in
+order, one PR each.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second

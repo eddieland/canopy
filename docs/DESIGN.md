@@ -497,7 +497,8 @@ going away is new again.
   ticket state.
 - One operator on several repositories. The user file is shared across them, and `state_dir` and the lock are global.
   Whether the user file needs per-repository tables, and whether state should be per repository, stays open until
-  someone does it.
+  someone does it. Planned answer: a workspace (§18), which keeps its own state and holds one queue for several
+  repositories.
 
 ## 17. Trackers
 
@@ -545,3 +546,193 @@ A key is the tracker's short, human-readable id, as the provider skill defines i
 GitHub Issues. Keys appear in branch names, lease holders, file paths, and shell arguments, so `canopy dispatch`,
 `decide`, `attention`, and `ticket set` reject any key that does not match `[A-Za-z0-9][A-Za-z0-9_-]*`. That guard is in
 code.
+
+## 18. Workspaces and multi-repo tickets
+
+Planned for ROADMAP M6 to M8; none of it is built. Earlier sections describe one repository, which becomes the
+workspace of one below. Rationale in D033.
+
+### Shape
+
+A workspace is a directory canopy manages. It holds a map of the repositories a queue's tickets touch, one primary
+clone of each, the worktree pools, and canopy's state for that workspace. The loop runs from the workspace root.
+
+```
+~/work/acme/                 workspace root; canopy tick runs here
+  canopy-workspace.toml      the map, and the shared config layer
+  MAP.md                     prose: what each repository owns and how they depend on each other
+  repos/api/                 primary clones, one per repository in the map
+  repos/web/
+  .treehouse/                every repository's treehouse pool
+  desks/PROJ-12/             one per running worker: a link to each worktree its run leased
+    api -> ../../.treehouse/<api pool>/3/api
+    web -> ../../.treehouse/<web pool>/1/web
+  .canopy/                   journal, locks, logs, attention.md; operator-only
+```
+
+A repository with no workspace file is a workspace of one: its map is the repository itself, its `canopy.toml` plays
+the workspace file's part, and state and pools stay where §12 and treehouse put them today. There is one code path.
+
+### The map
+
+```toml
+[workspace]
+name = "acme"
+
+[repos.api]
+url = "git@github.com:acme/api.git"
+summary = "Public REST API. Owns the order schema and the generated OpenAPI spec."
+
+[repos.web]
+url = "git@github.com:acme/web.git"
+summary = "Customer web app. Consumes the api's generated client from a release."
+
+# [tracker], [policy], [trust]: the shared keys of §12, as in a repository's canopy.toml.
+```
+
+- A repository name matches `[a-z][a-z0-9-]*`. It is a directory name, a treehouse leaf, and a `--repo` argument. The
+  clone lives at `repos/<name>`, which is not configurable, so a map cannot point canopy outside the workspace.
+- `summary` is one line, at most 200 characters, rendered into the overseer's state block. `MAP.md` is prose the
+  overseer and workers read themselves: ownership, dependency direction, where contracts live, the order in which
+  cross-repository changes land. Both are data, like ticket text. They help choose repositories and authorize nothing.
+- Config layers are built-in defaults, the workspace file, then the user file. The workspace file takes the repository
+  file's place with the same scopes and the same rule that repository policy may only tighten. The repositories' own
+  `canopy.toml` files are not read inside a workspace: a workspace has one tracker and one queue.
+- The map may be committed to a shared workspace repository, so a team maintains it together. It is then exposed like
+  a repository file (TRUST_MODEL T7) and gets the same controls. `url` is read only by `canopy workspace sync`, an
+  operator command that prints what it clones before cloning. A tick never clones a repository or changes a remote; a
+  repository in the map with no clone is an attention item, `repo_missing`, and cannot be dispatched to.
+- `canopy init --workspace` writes the skeleton and a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and
+  `.canopy/`.
+- A workspace's state is always `<workspace>/.canopy/`, created readable only by the operator; `paths.state_dir`
+  applies only to a workspace of one. Each workspace therefore has its own journal and locks.
+
+### Worktrees live in the workspace
+
+Every treehouse command canopy runs gets `TREEHOUSE_ROOT` set to the workspace root and runs in the repository's
+primary clone, so each pool lives under `<workspace>/.treehouse/`. The variable outranks both treehouse config files,
+so a repository's own `treehouse.toml` cannot move canopy's pools. `get` also passes
+`--worktree-path '{pool}/{slot}/{repo}'`, pinning the layout the same way. canopy's pools are separate from the
+operator's interactive ones under `~/.treehouse`, so an interactive `treehouse` never recycles a slot canopy uses, and
+deleting the workspace removes everything canopy made. Build caches still have to be slot-independent (§9).
+
+Reconcile runs `treehouse status --json` once per repository in the map and returns stale `canopy:` leases in each
+pool. The overseer runs from the workspace root, which is not a repository, so the state block carries each pool's
+leased slots in place of the overseer's own `treehouse status`. Lease holders stay `canopy:<KEY>`; pools are per
+repository, so one ticket can hold a slot in several.
+
+### Units
+
+A ticket's work is divided into units, one per repository it changes. A unit has its own branch, PR, phase, review
+and CI cursors, and attempt counts. The comment cursor stays per ticket. A single-repository ticket has one unit and
+behaves as today.
+
+A ticket's units are the repositories it has been dispatched to. Each dispatch names the units it covers with `--repo`
+(repeatable; optional in a workspace of one), chosen by the overseer from the ticket, the summaries, and `MAP.md`. An
+`implement` over several repositories is a joint change: one worker holds the whole change in one context and opens one
+PR per repository, each linking the others. That is for changes that cannot build or pass tests separately, such as an
+API and its client changed in lockstep, or a schema and the code reading it. `fix-ci` and `resume` normally name only
+the unit whose PR needs the work.
+
+A ticket that covers several repositories but is really several pieces of work is split instead (below). The overseer
+prompt prefers splitting and implements jointly only when the ticket or `MAP.md` shows the halves cannot stand alone.
+
+Guards (§8) change as follows:
+
+- `running` stays per ticket: one worker per ticket, whatever its units (TRUST_MODEL §6).
+- `unknown_repo`: a `--repo` not in the map, with no primary clone, or, for a split child, not the one recorded.
+- `no_branch`: `fix-ci` and `resume` for a unit with no branch.
+- `attempt_limit` counts per unit: a run counts against every unit it covers.
+- `capacity` counts runs, not slots. A joint run over three repositories is one worker holding three slots.
+- `no_slot`: leases are all or nothing. If any `treehouse get` fails, the slots already leased are returned before
+  the refusal is recorded.
+
+### Runs over several repositories
+
+- The branch is `<trust.branch_prefix><KEY>-<slug>` in every repository. The slug is fixed by the ticket's first
+  `implement`; later implements of other units reuse it and refuse `--slug`.
+- `_run` does its branch setup (§8 step 2) and push verification (step 5) in each worktree, creates the desk with one
+  link per worktree, and runs the worker with the desk as cwd. The trap removes the desk and returns every slot. A run
+  is `unpushed` if any repository's branch is.
+- The worker prompt lists each repository: its name, path in the desk, branch, base, the unit's PR if there is one,
+  and its summary.
+- The result contract's `"pr"` becomes `"prs"`, an object from repository name to PR URL or null. `tickets.pr_url`
+  becomes the unit's.
+- Worker obligations add: each PR's body links its sibling PRs and says which to merge first; the ticket comment lists
+  every PR. Workers still never merge.
+
+### Splitting
+
+canopy splits a ticket in the tracker, and never schedules what it split. The children are ordinary tickets that start
+without a queue label, so a human authorizes each one exactly as they authorize any ticket (TRUST_MODEL T1).
+
+- The overseer dispatches `canopy dispatch <KEY> --kind split --repo api --repo web`. The overseer is read-only, so the
+  tracker writes happen in a worker, like every other write.
+- The split worker runs as `canopy-splitter`: a separate agent definition with read-only file and shell tools and the
+  tracker MCP tools to create a ticket, link tickets, and comment. It has no label tools and no GitHub write tools. It
+  runs in a desk of the named repositories' worktrees so it can read the code, and it pushes nothing. Where the
+  runtime can restrict a create tool's arguments, the definition forbids labels on create; where it cannot, the check
+  below still holds.
+- It creates one child per repository. Each child's body names its repository (`canopy-repo: web`) for people to
+  read, links the parent, and says what the child covers. Children that must land in order get the
+  tracker's blocker relation (`web` is blocked by `api`), so M4's ordering works them in order. Children carry no
+  queue label and are not assigned to anyone.
+- On the parent it posts a comment listing the children and saying which label starts each one. Its result line adds
+  `"children": {"PROJ-13": "api", "PROJ-14": "web"}`, each child's key and repository. `_run` validates it: every key
+  a valid ticket key (§17), every repository one the split was dispatched with, each at most once. Anything else makes
+  the run's status `unknown` and records nothing. A valid result is recorded in `split_children`, and a child's
+  repository comes from there afterwards.
+- The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
+  open and unlabeled. The overseer marks the parent `done` in the journal once every child is closed. canopy does not
+  touch the parent's tracker state.
+- A child is a candidate only if its queue label was added after the split run ended. The state block carries each
+  split run's end time and children, and the overseer compares it with the tracker's label history. A label the split
+  worker added itself, at creation or later, is therefore not counted, whatever the permissions allowed; the overseer
+  records attention `split_self_labeled` for that child instead, and it stays out of the queue until a human removes
+  the label and adds it again. A tracker without label history (the optional row of §17's contract) cannot tell the
+  two apart, so there the overseer records `skip` with `tracker_unsupported: label history` instead of dispatching
+  `split`.
+- This check is the overseer's, not a harness guard: the harness never reads the tracker (D003), so it cannot see
+  labels at all. It is the same kind of control as the check that a ticket carries a queue label in the first place
+  (§17), and it has the same residual, stated in the trust model changes below.
+- `split` has an attempt limit like every kind, `policy.max_split_attempts`, default 1.
+- A child's work is ordinary: it is a one-repository ticket. `canopy dispatch` for a key in `split_children` refuses
+  any `--repo` other than the one recorded there (`unknown_repo`), so editing the child's `canopy-repo` line later
+  changes nothing. A ticket a human splits by hand has no such row; the overseer chooses its repository as for any
+  ticket.
+
+### Journal
+
+- `ticket_units`: ticket key, repository, branch, PR URL, phase, `last_review_id`, `last_ci_run_id`. The ticket's
+  displayed phase is its least advanced unit's.
+- `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. It replaces the slot columns of
+  `runs` for new runs.
+- `split_children`: parent key, child key, repository, split run id. Written only by `_run` from a validated split
+  result.
+- `tickets.repo` holds the workspace name.
+- Attention items carry an optional repository, and an item is identified by ticket, repository, and reason, so two
+  units at their fix-ci limit are two items. `canopy attention` takes `--repo`.
+
+### Trust model changes needed
+
+TRUST_MODEL is unchanged until the milestone that needs each change, whose PR carries the human approval:
+
+- T1: the loop may create tickets, but never with a queue label. What a split creates starts only when a human labels
+  it, and a label added during the split run does not count. The check is in the overseer prompt, backed by the
+  splitter's permissions, because the harness cannot read the tracker. Residual: canopy acts as the operator, so the
+  tracker cannot say who added a label, only when; a steered overseer that ignores the check can dispatch a
+  self-labeled child, as it could dispatch an unlabeled ticket today.
+- T4: a worker's edit permission covers the worktrees linked from its desk. M7 runs a canary like D021's to show that
+  OpenCode's permission check allows edits through the desk's links and still denies paths outside them.
+- T6: the write scope is the repositories of the units the run covers, not one repository. The splitter's is creating
+  tickets, linking them, and commenting on the parent.
+- T7: the workspace file is a repository file for this purpose. Clone URLs are read only by an operator command.
+- §7: branch protection is needed in every repository in the map; `canopy init --workspace` prints the rules for each.
+
+### Open
+
+- Whether an unlabeled child should become a candidate when an authorized replier approves the split on the parent,
+  instead of a label on each child.
+- Whether a child's desk should also hold its blockers' unmerged branches, read-only by prompt, so the worker can build
+  against them before they merge.
+- Whether the overseer should ever split a ticket it has already started implementing jointly.
