@@ -24,7 +24,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Every new dependency gets a `docs/DECISIONS.md` entry explaining why stdlib was insufficient.
 - Record a decision only when it will shape how a future developer changes or reasons about the code: a choice between
   real alternatives, a constraint, a dependency. Do not use `docs/DECISIONS.md` to track progress or state. Milestone
-  status and what a milestone taught go on its `Status:` line in `docs/ROADMAP.md`; how things work goes in
+  milestone status belongs in its `Status:` line in `docs/ROADMAP.md`; milestone lessons or follow-up actions belong in the
+  accompanying `Learned:` and `Next:` fields; how things work goes in
   `docs/DESIGN.md`; context for one change goes in its PR description. If an entry would stop mattering once its
   milestone is done, it is not a decision.
 - Changes to `docs/TRUST_MODEL.md`, `prompts/overseer.md`, or anything under `agents/` require an explicit human
