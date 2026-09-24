@@ -1,7 +1,7 @@
 """`canopy init`: set up canopy for a repository and an operator.
 
 Writes the user config and repository config if missing, installs agent definitions and the tracker skill, and prints
-the branch protection canopy relies on (DESIGN §12, TRUST_MODEL §7).
+the branch protection canopy relies on (DESIGN §12, TRUST_MODEL §7). Warns when `origin` pushes over SSH (D038).
 
 Neither config file is ever overwritten. Agent definitions and skills are canopy's own files and are refreshed.
 """
@@ -15,7 +15,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from canopy import resources
+from canopy import procs, resources
 from canopy.config import REPO_FILE_NAME
 
 AGENT_DIR = Path(".opencode/agent")
@@ -42,6 +42,43 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Require status checks to pass before merging.
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
 """
+
+SSH_REMOTE_WARNING = """\
+Warning: origin pushes over SSH ({urls}).
+  canopy strongly recommends HTTPS remotes with a credential helper (D038). Worker sandboxing is expected to block
+  the SSH agent socket, so a sandboxed worker could not push. This is a recommendation; nothing is refused. To switch:
+    git remote set-url origin https://<host>/<owner>/<repo>.git
+  or keep the SSH URL and rewrite it for pushes: git config url.https://<host>/.pushInsteadOf git@<host>:
+"""
+
+# Transports git runs over ssh. Anything else with `://` (https, git, file) is not SSH.
+_SSH_SCHEMES = ("ssh://", "git+ssh://", "ssh+git://")
+
+
+def is_ssh_url(url: str) -> bool:
+    """Return whether git would reach `url` over SSH.
+
+    That is an `ssh://` URL, or the scp-like `[user@]host:path` form: no `://`, and a colon before the first slash.
+    """
+    url = url.strip()
+    if url.lower().startswith(_SSH_SCHEMES):
+        return True
+    if "://" in url:
+        return False
+    colon = url.find(":")
+    slash = url.find("/")
+    return colon > 0 and (slash == -1 or colon < slash)
+
+
+def ssh_push_urls(runner: procs.Runner, repo_root: Path) -> list[str]:
+    """Return `origin`'s push URLs that go over SSH, after `insteadOf` rewrites. Empty if there is no `origin`."""
+    try:
+        result = runner.run(["git", "remote", "get-url", "--push", "--all", "origin"], cwd=repo_root, timeout=30)
+    except procs.ProcError:
+        return []
+    if not result.ok:
+        return []
+    return [url for url in result.stdout.split() if is_ssh_url(url)]
 
 
 @dataclass
