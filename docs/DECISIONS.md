@@ -476,6 +476,8 @@ Rejected:
 - The reviewer working in the checkout: the runtime would load its configuration and agent definitions from files
   the PR controls.
 - Review runs as `runs` rows: those are keyed by ticket and branch, which a review of a hand-written PR has neither of.
+- The harness checking the reviewer's comment, or allowing it one comment, through the VCS API: VCS code in the
+  harness (principle 5, D003). The overseer checks the comment; one comment per run stays a prompt rule.
 Revisit: when a runtime can deny approving or a bot identity exists (then inline comments); if the per-commit review
 is measured as too costly on busy PRs (then the overseer waits for a quiet period, under a guard); if OpenCode cannot
 confine reads to the checkout (then no checkout, MCP reads only); if repositories want to share a rubric.

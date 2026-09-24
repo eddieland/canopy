@@ -1286,9 +1286,11 @@ Result contract, one JSON line, last line of stdout, validated with pydantic (D0
  "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line"}]}
 ```
 
-- `done` means the review was read through and the comment posted, and `comment` is its plain `https://` URL. A `done`
-  without one is recorded as `failed` with a harness note. `failed` means the reviewer could not review, and the
-  summary says why.
+- `done` means the review was read through and the comment posted, and `comment` is its plain `https://` URL, which
+  must begin with the reviewed PR's URL: a comment's link does on GitHub. A `done` without one is recorded as `failed`
+  with a harness note. `failed` means the reviewer could not review, and the summary says why.
+- The harness cannot check that the comment exists (principle 5; it has no VCS client). The overseer can, and does
+  (below): a `done` run whose comment is missing costs that commit its review, not the PR its human review.
 - At most 20 findings. `title` at most 200 characters, `location` at most 300, `summary` at most 2000. `verdict` is
   `findings` exactly when `findings` is not empty.
 - Anything else is `unknown`. `review_runs` status is `running`, `done`, `failed`, `unknown`, `timeout`, or `crashed`.
@@ -1321,10 +1323,20 @@ the latest review. A `resume` pushes a new commit, and the new commit is reviewe
 overseer recognizes a review's comment by the comment URL in the state block, never by the marker, and never counts it
 toward `changes_requested`. A worker can post a comment carrying a marker, but it cannot put a run in the journal.
 
-For PRs from `review.query`, the overseer runs the query each tick. For each open match whose head commit has no `done`
-review, it runs a review or records `canopy review wait --pr URL --rationale "<text>"`: while checks are still running,
-say, or when the PR is a draft. A PR whose head is already reviewed needs no decision. Nothing else is decided about
-these PRs.
+When it reads a PR, the overseer also checks the latest `done` review's comment: it exists on that PR, by the operator's
+account, with a marker naming that run. If it does not, the overseer records `review_unposted` (Attention, below)
+and an agent PR moves on as a PR at its review limit does, to `needs_reviewer`: a worker is never sent to a comment
+that is not there. The `reviewed` guard
+still holds for that commit; the next commit is reviewed as usual. Comments by the operator's account carrying a
+`canopy-review` marker that no run in the state block names are extra: the overseer ignores them, as it ignores any
+text that is not an authorized reply.
+
+For PRs from `review.query`, the overseer runs the query each tick and keeps only PRs of this repository, the one whose
+PRs it already reads for tickets. A match in another repository gets no decision: its commit cannot be fetched from
+this repository's `origin`, so `_review` would only fail. The prompt says so, and a query with a `repo:` qualifier
+saves the reads. For each open match whose head commit has no `done` review, it runs a review or records
+`canopy review wait --pr URL --rationale "<text>"`: while checks are still running, say, or when the PR is a draft. A
+PR whose head is already reviewed needs no decision. Nothing else is decided about these PRs.
 
 Review decisions are `decisions` rows with the PR's URL in a new `pr` column: `dispatch:review`, `wait`,
 `refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.
@@ -1334,6 +1346,8 @@ Review decisions are `decisions` rows with the PR's URL in a new `pr` column: `d
 - `review_failed`: a PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed`. The overseer records it
   every tick that the PR is still a candidate and nothing newer has run, and `canopy review run` may retry it within
   the per-PR limit.
+- `review_unposted`: the latest `done` review's comment is not on the PR (above). It lasts until a newer review of the
+  PR ends `done` with its comment in place.
 - `review_limit`: recorded by the refusal, and by the overseer every tick that a candidate PR's head is unreviewed and
   it is at its limit.
 - Findings are not attention items. They are on the PR, where the author reads them. For an agent PR, what follows
@@ -1379,7 +1393,9 @@ TRUST_MODEL is unchanged until M11, whose PR carries the human approval:
   directory is outside it, so the runtime loads no configuration from it. The shipped definition cannot run commands.
 - T5: every review comment says what it is in its first line and carries the marker.
 - T6: the reviewer can write one kind of thing, a comment on a PR. Residual: a steered reviewer can put what it read
-  into a comment, and the GitHub MCP server cannot limit which PR it comments on. A repository that gates merges on the
+  into a comment, and the GitHub MCP server cannot limit which PR it comments on, or how many times: the prompt asks
+  for one comment, and nothing in code enforces it. Extra comments are noise, not authority: the loop reads reviews
+  from its journal. A repository that gates merges on the
   marker trusts every agent the operator runs.
 - T7: every review key is user-only, except `policy.max_reviews_per_pr`, which the repository may only tighten.
 - §6: never submit a PR review (approve or request changes); never push to or edit a PR the loop is only reviewing.
@@ -1394,7 +1410,9 @@ TRUST_MODEL is unchanged until M11, whose PR carries the human approval:
   that can edit any of the operator's comments.
 - Whether a repository should be able to offer a review rubric, such as its own `low_impact`, that an operator opts
   into by name, the way it offers its tracker query.
-- Where reviews run in a workspace (§18): `review.query` spans repositories, and the checkout needs the right pool, so
-  M6 gives `canopy review run` a `--repo` like dispatch has.
+- Reviews of other repositories' PRs. Until M6, a loop reviews PRs of its own repository only. In a workspace (§18),
+  `canopy review run` gets a `--repo` like dispatch has, and the checkout comes from that repository's pool.
+- A comment tool the runtime lets the reviewer call once, on one PR. It would turn T6's residual into a control. canopy
+  will not ship one: it would be VCS code (principle 5).
 - Whether OpenCode can confine reads to one directory outside the working directory. The M11 canary settles it. If it
   cannot, the reviewer runs without a checkout and reads the PR only through MCP.

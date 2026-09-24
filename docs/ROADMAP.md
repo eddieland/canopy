@@ -256,8 +256,9 @@ if the operator asks. If M10 has landed, add the `reviews` event group; if not, 
 - `prompts/reviewer.md`, the `canopy-reviewer` agent definition installed into the operator's runtime config, and a
   canary: the reviewer can read the checkout and nothing else outside its working directory, and cannot call a denied
   MCP tool.
-- The overseer prompt: the `review_pending` and `review_findings` phases, the `review.query` paragraph, and
-  recognizing review comments by the journal, with human approval.
+- The overseer prompt: the `review_pending` and `review_findings` phases, the `review.query` paragraph (this
+  repository's PRs only), recognizing review comments by the journal, and checking that the latest review's comment
+  exists, with human approval.
 - The TRUST_MODEL T1, T3 to T7, §6, and §7 changes, with human approval.
 - DESIGN §5, §6, §7, §11, §12, §13, and §14 updated, and §21's planned note removed.
 
