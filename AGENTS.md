@@ -92,8 +92,9 @@ entry says otherwise.
   configurable final JSON line. Tests configure it through an env var.
 - Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file), and
   `agent_log` (what each fake agent run saw). Each fake's docstring lists the env vars and state keys it reads.
-- Test directories have no `__init__.py`. `tests/canopy/__init__.py` would make pytest import that directory as a
-  package named `canopy` and shadow `src/canopy`.
+- Every test directory has an `__init__.py`, `tests/` included (D019). ruff's `INP001` fails the lint on one that does
+  not. The root one matters most: without it, `tests/canopy/` is imported as a package named `canopy` and shadows
+  `src/canopy`.
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts
   on the `decisions` and `ticks` tables.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's
