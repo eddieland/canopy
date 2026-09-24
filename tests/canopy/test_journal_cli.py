@@ -90,19 +90,67 @@ def test_attention_reason_format(
     assert main(["attention", "PROJ-1", "Needs Reviewer", "--detail", "d"]) == 2
 
 
-def test_dry_run_dispatch_records_base_and_context(
+def test_dry_run_dispatch_records_branch_cursors_and_context(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
-    args = ["dispatch", "PROJ-2", "--kind", "implement", "--base", "agent/PROJ-1-x", "--context", "see comment 7"]
-    assert main([*args, "--cursor", "comment=7"]) == 0
-    [row] = db.decisions_for_tick(conn, tick_id)
-    assert row["action"] == "dispatch:implement"
-    assert row["rationale"] == (
-        "dry run: not dispatched (slug=work; base=agent/PROJ-1-x; cursor comment=7; context=see comment 7)"
+    assert (
+        main(["dispatch", "PROJ-2", "--kind", "implement", "--context", "see comment 7", "--cursor", "comment=7"]) == 0
     )
+    assert main(["dispatch", "PROJ-3", "--kind", "implement", "--slug", "add-login"]) == 0
+    rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+    assert rows == [
+        (
+            "dispatch:implement",
+            "dry run: not dispatched; would work on agent/PROJ-2-work; cursor comment=7; context=see comment 7",
+        ),
+        ("dispatch:implement", "dry run: not dispatched; would work on agent/PROJ-3-add-login"),
+    ]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
     assert ticket["last_comment_id"] is None  # a dry run never advances cursors
+    assert ticket["branch"] is None  # nor records a branch
+
+
+def test_dry_run_ticket_set_records_the_phase_only(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--phase", "merged", "--cursor", "review=9", "--done"]) == 0
+    assert capsys.readouterr().out == "updated PROJ-1; dry run, cursors not advanced and not marked done\n"
+    row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
+    assert (row["phase"], row["last_review_id"], row["done"]) == ("merged", None, 0)
+    assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
+
+
+def test_decisions_prints_a_ticks_plan(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["decisions"]) == 0
+    assert capsys.readouterr().out == "No ticks yet.\n"
+    first = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, first, "PROJ-1", "dispatch:implement", "dry run: not dispatched;\nwould work on x")
+    db.record_decision(conn, first, None, "skip", "nothing else")
+    db.finish_tick(conn, first, "ok", "dry run; 2 decisions")
+    second = db.start_tick(conn, dry_run=False)
+    db.finish_tick(conn, second, "ok", "0 decisions: none")
+
+    assert main(["decisions"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("Tick 2: ok, started ")
+    assert out.endswith("Decisions (0):\n  none\n")
+
+    assert main(["decisions", str(first)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0].startswith("Tick 1: ok (dry run), started ")
+    assert lines[1] == "  dry run; 2 decisions"
+    assert lines[-3:] == [
+        "Decisions (2):",
+        "  PROJ-1  dispatch:implement  dry run: not dispatched; would work on x",
+        "  -       skip                nothing else",
+    ]
+
+    assert main(["decisions", "9"]) == 1
+    assert "no tick 9" in capsys.readouterr().err
 
 
 def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

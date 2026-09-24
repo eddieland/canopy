@@ -56,6 +56,33 @@ def test_missing_command_raises(tmp_path: Path) -> None:
         SubprocessRunner().run([str(tmp_path / "no-such-command")])
 
 
+@pytest.mark.skipif(os.geteuid() == 0, reason="root searches any directory")
+def test_missing_command_behind_an_unsearchable_path_dir_is_not_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # exec reports EACCES, not ENOENT, when a PATH directory cannot be searched, as on WSL.
+    locked = tmp_path / "locked"
+    locked.mkdir(mode=0o000)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(locked), str(tmp_path)]))
+    try:
+        with pytest.raises(CommandNotFoundError, match="command not found: no-such-command"):
+            SubprocessRunner().run(["no-such-command"])
+        script = tmp_path / "not-executable"
+        script.write_text("#!/bin/sh\n")
+        with pytest.raises(CommandNotFoundError, match="command not executable: not-executable"):
+            SubprocessRunner().run(["not-executable"])
+        # Relative and empty PATH entries resolve against the child's cwd, as exec resolves them.
+        (tmp_path / "bin").mkdir()
+        (tmp_path / "bin" / "relative-tool").write_text("#!/bin/sh\n")
+        (tmp_path / "cwd-tool").write_text("#!/bin/sh\n")
+        monkeypatch.setenv("PATH", os.pathsep.join([str(locked), "bin", ""]))
+        for name in ("relative-tool", "cwd-tool"):
+            with pytest.raises(CommandNotFoundError, match=f"command not executable: {name}"):
+                SubprocessRunner().run([name], cwd=tmp_path)
+    finally:
+        locked.chmod(0o700)
+
+
 def test_missing_cwd_is_not_reported_as_missing_command(agent_log: Path, tmp_path: Path) -> None:
     with pytest.raises(ProcError, match="working directory") as exc:
         SubprocessRunner().run(["agent"], cwd=tmp_path / "gone")

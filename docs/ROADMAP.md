@@ -72,7 +72,12 @@ Accept: e2e test against fakes passes. Operator runs `canopy tick --dry-run`
 on a real repository daily for several days and judges the recorded plans
 sensible. No dispatches happen.
 
-Status: in progress.
+Status: in progress. Code and fakes-based tests are in. Interactive dry runs before the acceptance run found plans a
+live tick would not carry out; fixed: a dry-run dispatch checks the guards (D036), a dry-run `ticket set --done` no
+longer marks a ticket done, a tick-wide `skip` closes the tick as `skipped` and keeps the attention list (D037), and
+`canopy decisions [TICK]` prints a plan without SQL. Waiting on the operator: the first real dry runs (2026-09-24)
+failed reconcile on a missing then outdated treehouse, then skipped with `mcp_unavailable: github` because the
+overseer's runtime had no GitHub MCP server, so no real plan has been recorded yet.
 
 ## M2. Dispatch implement
 

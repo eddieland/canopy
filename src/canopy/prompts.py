@@ -121,8 +121,9 @@ def state_block(
     }
     if dry_run:
         mode = (
-            "This is a dry run. `canopy dispatch` records what it would have done and starts nothing, and "
-            "`canopy ticket set` records phases but does not advance cursors. Decide exactly as you would otherwise."
+            "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "
+            "refusal, and starts nothing. `canopy ticket set` records phases but neither advances cursors nor marks "
+            "tickets done. Decide exactly as you would otherwise."
         )
     else:
         mode = "This is a live tick."

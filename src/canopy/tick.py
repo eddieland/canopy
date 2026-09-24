@@ -24,7 +24,7 @@ class Outcome:
     """How a tick ended."""
 
     tick_id: int | None
-    status: str  # ok | overseer_failed | reconcile_failed | lock_busy
+    status: str  # ok | skipped | overseer_failed | reconcile_failed | lock_busy
     summary: str
 
 
@@ -82,9 +82,16 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     if failure is not None:
         return finish("overseer_failed", failure)
 
-    actions = Counter(str(d["action"]) for d in db.decisions_for_tick(ctx.conn, tick_id))
+    decisions = db.decisions_for_tick(ctx.conn, tick_id)
+    prefix = "dry run; " if dry_run else ""
+    # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
+    # `ok` would make its empty list the attention list and notify every open item as resolved (D037).
+    skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
+    if skips:
+        return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}")
+    actions = Counter(str(d["action"]) for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
-    return finish("ok", f"{'dry run; ' if dry_run else ''}{actions.total()} decisions: {counts}")
+    return finish("ok", f"{prefix}{actions.total()} decisions: {counts}")
 
 
 def reconcile(ctx: Context, log: logs.TickAdapter) -> prompts.Capacity:

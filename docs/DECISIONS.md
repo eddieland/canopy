@@ -390,3 +390,38 @@ Rejected:
 - Slack's interactive features (buttons, slash commands, Events API, Socket Mode): each needs a listener or a daemon.
 Revisit: when two-way is wanted (then per-ticket threads, replies read through MCP, and a T1 change); if one tick
 interval is measured as too slow for an alert; if operators want routing finer than groups.
+||||||| parent of a3a9f2e (fix: make dry-run plans match what a live tick would do)
+
+## D036. A dry run checks the dispatch guards and changes no loop state the next live tick reads
+
+Context: interactive dry runs showed plans a live tick would never carry out. `dispatch` in a dry run recorded every
+request as `dispatch:<kind>`: an overseer asking for eight dispatches got eight, where a live tick would have started
+one and refused seven (attempt limit, cooldown, running, no branch, capacity). `ticket set --done` also marked tickets
+done, which drops them from every later state block, live ticks included.
+Decision (DESIGN §6, §8), superseding D020's dry-run sentence:
+- A dry-run `dispatch` checks the same guards, in the same order, and records a refusal as `refused:<guard>` like a
+  live one, `attempt_limit` attention included. Each dry-run dispatch already recorded this tick counts as a running
+  run, so `running` and `capacity` refuse what the live tick would. An allowed dispatch records the branch it would
+  work on. The lease, prompt, and spawn are not tried, so `no_slot`, `bad_prompt`, and `spawn_failed` never appear.
+- A dry-run `ticket set` records phases only: no cursors, no done flag.
+- A dry-run tick is otherwise a tick: its attention items are the attention list and are notified. They describe the
+  world as the overseer read it, and the guards now make a dry run's `attempt_limit` items the ones a live tick records.
+Consequences: the `decisions` table is a faithful evaluation corpus for prompt changes. A dry run takes the dispatch
+lock.
+Rejected: simulating the lease with `treehouse status` (a real `get` may create a slot, so status cannot say whether it
+would succeed); keeping dry-run attention off the list and out of notifications (an operator running only dry runs, as
+M1 asks, would have no list at all).
+Revisit: if dry-run notifications turn out to be noise for operators who alternate dry and live ticks.
+
+## D037. A tick-wide skip closes the tick as `skipped`, which leaves the attention list standing
+
+Context: when the overseer cannot reach the tracker or GitHub it records one tick-wide `skip` (`mcp_unavailable`,
+`tracker_unsupported`) and exits cleanly. The tick closed `ok`, so its empty attention list became the current one:
+every open item was notified as resolved, then as new on the next good tick, and item ages restarted.
+Decision: after a successful overseer run, a tick-wide `skip` among the tick's decisions closes the tick as `skipped`,
+and `canopy tick` exits 1. The attention list is the latest `ok` tick's, so a skipped tick leaves it as it was, like a
+failed one. Any other decisions the overseer recorded in that tick stay in the journal.
+Consequences: a run item the harness raises during an outage (a crashed worker) reaches the list at the next `ok` tick,
+as it already did during an overseer failure. Schedulers see the outage as a failed run.
+Rejected: carrying the previous list forward into the skipped tick (copies decisions the overseer never made).
+Revisit: with DESIGN §15's attention item after consecutive overseer failures, which should count skipped ticks too.

@@ -183,6 +183,66 @@ def test_dry_run_still_starts_nothing(
 ) -> None:
     in_tick(conn, monkeypatch, dry_run=True)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--kind", "fix-ci"], runner=runner) == 0
+    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=runner) == 0
     assert runner.spawned == []
     assert not treehouse_state.exists()
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
+def test_dry_run_refuses_what_a_live_dispatch_would(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    earlier = in_tick(conn, monkeypatch)
+
+    def past_run(key: str, kind: str, status: str) -> None:
+        db.touch_ticket(conn, key, str(canopy_env.repo))
+        run_id = db.insert_run(
+            conn,
+            tick_id=earlier,
+            key=key,
+            kind=kind,
+            slot_path=Path("/pool/1"),
+            lease_id=f"lease-{key}",
+            lease_holder=f"canopy:{key}",
+            base_branch="main",
+            branch=f"agent/{key}-work",
+            runs_dir=canopy_env.state_dir / "runs",
+        )
+        if status == "running":
+            assert db.claim_run(conn, run_id, os.getpid())
+        else:
+            assert db.finish_run(conn, run_id, status, None)
+
+    past_run("LIMIT", "fix-ci", "done")
+    past_run("LIMIT", "fix-ci", "done")
+    past_run("COOL", "fix-ci", "done")  # just ended, so fix-ci is in its cooldown
+    past_run("BUSY", "implement", "running")
+    tick_id = in_tick(conn, monkeypatch, dry_run=True)
+    runner = InlineRunner()
+    for args, code in [
+        (["LIMIT", "--kind", "fix-ci"], 1),
+        (["COOL", "--kind", "fix-ci"], 1),
+        (["BUSY", "--kind", "resume"], 1),
+        (["NEW", "--kind", "fix-ci"], 1),
+        (["NEW", "--kind", "implement", "--base", "agent/X-1-work"], 1),
+        (["NEW", "--kind", "implement"], 0),  # BUSY and this one fill max_workers = 2
+        (["NEW", "--kind", "implement"], 1),
+        (["OTHER", "--kind", "implement"], 1),
+    ]:
+        assert main(["dispatch", *args], runner=runner) == code, args
+
+    assert [(d["ticket_key"], d["action"]) for d in db.decisions_for_tick(conn, tick_id)] == [
+        ("LIMIT", "refused:attempt_limit"),
+        ("LIMIT", "attention:attempt_limit"),
+        ("COOL", "refused:cooldown"),
+        ("BUSY", "refused:running"),
+        ("NEW", "refused:no_branch"),
+        ("NEW", "refused:not_implemented"),
+        ("NEW", "dispatch:implement"),
+        ("NEW", "refused:running"),
+        ("OTHER", "refused:capacity"),
+    ]
+    assert decisions(conn, tick_id)[-1][1] == "2 of 2 workers are running, counting 1 this dry run dispatched"
+    assert runner.spawned == []
+    assert not treehouse_state.exists()
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 4

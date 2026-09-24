@@ -161,6 +161,35 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
     assert len(messages(notified)) == 1
 
 
+def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    notified: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    overseer_records(monkeypatch, ("PROJ-3", "needs_reviewer"))
+    assert main(["tick", "--dry-run"]) == 0
+    skip = [["canopy", "decide", "skip", "--rationale", "mcp_unavailable: github"]]
+    monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(skip))
+    capsys.readouterr()
+    assert main(["tick", "--dry-run"]) == 1
+    assert capsys.readouterr().out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
+
+    assert conn.execute("SELECT status FROM ticks WHERE id = 2").fetchone()[0] == "skipped"
+    [still] = attention.current(conn)
+    assert (still.ticket_key, still.reason) == ("PROJ-3", "needs_reviewer")
+    assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
+    assert len(messages(notified)) == 1  # the first tick's; nothing resolved
+
+    # The overseer sees the world again and still records the item: it was never gone, so it is not new.
+    overseer_records(monkeypatch, ("PROJ-3", "needs_reviewer"))
+    assert main(["tick", "--dry-run"]) == 0
+    assert len(messages(notified)) == 1
+
+
 def test_notify_cmd_takes_no_prompt_placeholder(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[notify]\ncmd = 'notify-send {prompt}'\n")
     with pytest.raises(ConfigError, match=r"notify\.cmd: Value error, must not contain \{prompt\}"):
