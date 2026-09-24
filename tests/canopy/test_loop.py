@@ -12,6 +12,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import override
 
 import pytest
 from rich.console import Console
@@ -30,6 +31,7 @@ class FakeTime:
 
     now: float = 0.0
     slept: list[float] = field(default_factory=list)
+    woke: list[float] = field(default_factory=list)  # the clock after each sleep
     on_sleep: Callable[[], None] | None = None
 
     def clock(self) -> float:
@@ -38,6 +40,7 @@ class FakeTime:
     def sleep(self, seconds: float) -> None:
         self.slept.append(seconds)
         self.now += seconds
+        self.woke.append(self.now)
         if self.on_sleep is not None:
             self.on_sleep()
 
@@ -141,6 +144,43 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     assert "attention 0" in tick2
     assert "next tick" not in tick2
     assert "stopped after 2 ticks: ok=2" in tick2
+
+
+class SlowOutput(io.StringIO):
+    """Output that takes a second of fake time per write, and notes when tick 1's report line was written."""
+
+    def __init__(self, time: FakeTime) -> None:
+        super().__init__()
+        self.time = time
+        self.written_at: dict[str, float] = {}
+
+    @override
+    def write(self, s: str, /) -> int:
+        if "tick 1  " in s:
+            self.written_at.setdefault("tick 1", self.time.now)
+        self.time.now += 1
+        return super().write(s)
+
+
+def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch, canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/3"))
+    time = FakeTime()
+    out = SlowOutput(time=time)
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=5,
+        max_ticks=2,
+        console=Console(file=out, width=200, highlight=False),
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+    # Tick 1 ended just before its report line was written. Printing the rest of the report took fake time, and the
+    # wait still ends exactly the interval after the tick did.
+    assert time.woke[-1] == out.written_at["tick 1"] + 300
 
 
 def test_the_overseer_text_is_printed_as_text_not_rich_markup(

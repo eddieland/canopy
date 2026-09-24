@@ -114,13 +114,16 @@ def run(
             started = clock()
             with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
                 outcome = _tick(ctx, dry_run=dry_run, log=log)
+            ended = clock()
             statuses[outcome.status] += 1
             last = max_ticks is not None and statuses.total() >= max_ticks
             wait = None if last or stop.requested else pace(outcome, interval_minutes * 60)
-            _report(console, ctx, outcome, before, elapsed=clock() - started, wait=wait)
+            # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
+            next_at = None if wait is None else _clock_time(wait)
+            _report(console, ctx, outcome, before, elapsed=ended - started, next_at=next_at)
             if wait is None:
                 break
-            _wait(console, stop, wait, sleep=sleep, clock=clock)
+            _wait(console, stop, ended + wait, sleep=sleep, clock=clock)
         log.info("loop stopped", extra={"ticks": statuses.total(), "statuses": dict(statuses)})
     counts = ", ".join(f"{status}={n}" for status, n in sorted(statuses.items())) or "none"
     ticks = statuses.total()
@@ -158,13 +161,12 @@ class _Ticking:
 def _wait(
     console: Console,
     stop: Stop,
-    seconds: float,
+    deadline: float,
     *,
     sleep: Callable[[float], None],
     clock: Callable[[], float],
 ) -> None:
-    """Wait `seconds`, drawing a countdown, or less if a stop is requested."""
-    deadline = clock() + seconds
+    """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested."""
     with Live(console=console, transient=True, auto_refresh=False) as live:
         while not stop.requested and (remaining := deadline - clock()) > 0:
             live.update(
@@ -203,7 +205,7 @@ def _report(
     before: list[attention.Item],
     *,
     elapsed: float,
-    wait: float | None,
+    next_at: str | None,
 ) -> None:
     """Print what one tick did: its status, the decisions that change something, and how the attention list moved."""
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
@@ -239,8 +241,8 @@ def _report(
     footer.append(f"workers {running}/{ctx.config.capacity.max_workers}")
     footer.append("  ·  ")
     footer.append(f"attention {len(after)}", style="bold yellow" if after else "dim")
-    if wait is not None:
-        footer.append(f"  ·  next tick at {_clock_time(wait)}")
+    if next_at is not None:
+        footer.append(f"  ·  next tick at {next_at}")
     console.print(footer)
     console.print()
 
