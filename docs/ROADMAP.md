@@ -68,16 +68,25 @@ Next:
   denied tool, run under `opencode run`, must be unable to use it. Record the
   outcome in `DECISIONS.md`.
 
-Accept: e2e test against fakes passes. Operator runs `canopy tick --dry-run`
-on a real repository daily for several days and judges the recorded plans
-sensible. No dispatches happen.
+Accept: e2e test against fakes passes. The operator judges real `canopy tick --dry-run` plans sensible for an empty
+queue and for a labeled candidate. No dispatches happen.
 
-Status: in progress. Code and fakes-based tests are in. Interactive dry runs before the acceptance run found plans a
-live tick would not carry out; fixed: a dry-run dispatch checks the guards (D036), a dry-run `ticket set --done` no
-longer marks a ticket done, a tick-wide `skip` closes the tick as `skipped` and keeps the attention list (D037), and
-`canopy decisions [TICK]` prints a plan without SQL. Waiting on the operator: the first real dry runs (2026-09-24)
-failed reconcile on a missing then outdated treehouse, then skipped with `mcp_unavailable: github` because the
-overseer's runtime had no GitHub MCP server, so no real plan has been recorded yet.
+Status: done 2026-09-24.
+Learned:
+- Interactive dry runs found plans a live tick would not carry out: a dry-run dispatch now checks the guards (D036), a
+  dry-run `ticket set --done` no longer marks a ticket done, and a tick-wide `skip` closes the tick as `skipped` (D037).
+  `canopy decisions [TICK]` prints a plan without SQL.
+- The first real runs failed on setup, not on the loop: a missing then outdated treehouse, then no GitHub MCP server in
+  the overseer's runtime (`mcp_unavailable: github`). With the server configured, tick 5 planned nothing on an empty
+  queue and tick 6 planned `dispatch:implement` for eddieland/canopy#21.
+- The original acceptance, several days of daily dry runs, measured calendar time on a near-empty queue. It now asks
+  for sensible plans on an empty queue and a labeled candidate. M2's live runs, which produce at most a branch and a
+  PR for review, test the same judgment against the real guards.
+Next:
+- The live OpenCode canary is still unrun: both attempts on 2026-09-24 hit an OpenCode server error before the model
+  acted, which the test reports as a failed positive control (eddieland/canopy#21). It stays in M2's open items.
+- Workers open PRs and comment through the GitHub MCP server, so the worker's runtime needs write scope the overseer's
+  read-only server does not give it (TRUST_MODEL T1, T6). Set that up before M2's live run.
 
 ## M2. Dispatch implement
 
@@ -97,8 +106,8 @@ and its slot returned.
 
 Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, and D028 and D029 are
 in. Waiting on the operator: one real ticket from label to open PR, a killed worker on a real run, a first live run of
-the OpenCode canary, and the human approval the new worker definition and the overseer prompt change need. M1's
-acceptance run is also still open; this milestone was started on request before it closed.
+the OpenCode canary, and the human approval the new worker definition and the overseer prompt change need. It was
+started on request before M1 closed (2026-09-24).
 
 ## M3. Fix-CI and resume
 
@@ -119,7 +128,7 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.p
 acceptance; `tests/canopy/test_attention.py`), docs, and D030 to D032 are in. Waiting on the operator: a real PR with a
 failing check taken through fix-ci to the limit, a real blocked worker answered once by an authorized and once by an
 unauthorized account (prompt behavior the fakes cannot show), and the human approval the overseer prompt change needs.
-M1's and M2's acceptance runs are also still open; this milestone was started on request before they closed. Not done
+M2's acceptance run is also still open; this milestone was started on request before M1 closed. Not done
 here, and not listed by any milestone: DESIGN §15's attention item after three consecutive overseer failures.
 
 ## M4. Dependencies and stacking
