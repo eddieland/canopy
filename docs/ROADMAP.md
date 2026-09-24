@@ -217,7 +217,8 @@ if the operator asks.
 
 - `[notify.sinks.<name>]` (`cmd`, `format`, `events`, `digest_every_minutes`), user-only, and `notify.cmd` as the
   `default` shorthand. The existing notify tests pass unchanged.
-- Migration: `notifications.sink`, `notify_events`, `notify_sinks`.
+- Migration: `notify_events`, `notify_sinks`, and `notifications.sink`, with existing rows assigned to `default` so an
+  upgrade with `notify.cmd` set re-notifies nothing (a test).
 - `notify.py`: events recorded by dispatch, run close, and publish; per-sink delivery with cursors, bounds, and
   pruning; the digest; the `text` and `json` formats.
 - `loop.failing` after three consecutive failed ticks, the notification half of DESIGN §15's three-failure item.

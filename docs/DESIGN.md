@@ -1000,6 +1000,11 @@ dispatch that inserts the run, whatever closes the run's row (`_run`, or reconci
 publish step for `loop.*`. Each sink has a cursor in `notify_sinks`, the last event id it delivered. `loop.failing` and
 `loop.sink_failing` are recorded once per streak.
 
+The migration gives every existing `notifications` row the sink `default`, the name `notify.cmd` becomes, and keeps its
+fingerprint, so an operator who upgrades with `notify.cmd` set is not told again about items already notified. If the
+config has no `default` sink, those rows go at the first publish like any removed sink's (Delivery, below), and each
+named sink hears about every open item once, as a new sink does.
+
 ### Delivery
 
 §6 step 7, after `attention.md` is written, for each sink in name order:
@@ -1033,8 +1038,8 @@ Bounds:
   is how the operator learns that the scheduler or the machine stopped running ticks, which canopy itself cannot
   report.
 - No model writes it. A progress report that needs judgment, such as what changed on the operator's PRs today, is a
-  chore (§19). Its summary reaches sinks as a `chore.ended` event in the `chores` group, which whichever of M9 and M10
-  lands second adds.
+  chore (§19). Its summary reaches sinks as a `chore.ended` event in a `chores` group. Neither exists before chores do:
+  if M10 lands first, its groups are the three above, and M9 adds `chores` and `chore.ended` to this section.
 
 ### Formats
 
