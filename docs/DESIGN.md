@@ -604,6 +604,8 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   repository in the map with no clone is an attention item, `repo_missing`, and cannot be dispatched to.
 - `canopy init --workspace` writes the skeleton and a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and
   `.canopy/`.
+- A workspace's state is always `<workspace>/.canopy/`, created readable only by the operator; `paths.state_dir`
+  applies only to a workspace of one. Each workspace therefore has its own journal and locks.
 
 ### Worktrees live in the workspace
 
@@ -674,7 +676,8 @@ without a queue label, so a human authorizes each one exactly as they authorize 
   tracker's blocker relation (`web` is blocked by `api`), so M4's ordering works them in order. Children carry no
   queue label and are not assigned to anyone.
 - On the parent it posts a comment listing the children and saying which label starts each one. Its result line adds
-  `"children": ["PROJ-13", "PROJ-14"]`, stored in `result_json`.
+  `"children": ["PROJ-13", "PROJ-14"]`, stored in `result_json`. Each child must be a valid ticket key (§17) or the
+  run's status is `unknown`, since the keys are rendered into later prompts.
 - The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
   open and unlabeled. The overseer marks the parent `done` in the journal once every child is closed. canopy does not
   touch the parent's tracker state.
