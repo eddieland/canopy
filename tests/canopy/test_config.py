@@ -113,9 +113,12 @@ def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:
         load(canopy_env.repo, canopy_env.user_file)
 
 
-def test_command_template_needs_prompt(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text().replace("canopy-overseer {prompt}", "canopy-overseer"))
-    with pytest.raises(ConfigError, match=r"must contain \{prompt\}"):
+@pytest.mark.parametrize(
+    "replacement", ["canopy-overseer", "canopy-overseer {prompt} --copy {prompt}", "{prompt}{prompt}"]
+)
+def test_command_template_needs_prompt_exactly_once(canopy_env: CanopyEnv, replacement: str) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("canopy-overseer {prompt}", replacement))
+    with pytest.raises(ConfigError, match=r"must contain \{prompt\} exactly once"):
         load(canopy_env.repo, canopy_env.user_file)
 
 

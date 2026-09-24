@@ -6,8 +6,10 @@ reconcile arrive with dispatch in M2; until then reconcile only reads the pool a
 
 from __future__ import annotations
 
+import os
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy import db, lock, logs, procs, prompts, resources, treehouse
@@ -112,8 +114,7 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{tick_id}.log"
-    out_path.touch(mode=0o600)
-    out_path.write_text(f"{result.stdout}\n--- stderr ---\n{result.stderr}", encoding="utf-8")
+    _write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
     lines = [line.strip().strip("`").strip() for line in result.stdout.splitlines() if line.strip()]
     if result.timed_out:
@@ -126,3 +127,15 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
         return None
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure
+
+
+def _write_private(path: Path, text: str) -> None:
+    """Write `text` to `path`, readable only by the operator (TRUST_MODEL T2).
+
+    The mode is set on the open file, so a file that already existed with a wider mode is narrowed too, and a symlink
+    at `path` is refused rather than followed.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(text)

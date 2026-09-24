@@ -344,7 +344,7 @@ Rules:
 
 A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
 word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must
-contain `{prompt}`. Overrides in `prompt_overrides` replace files of the same name in `prompts/`; the default is
+contain `{prompt}` exactly once. Overrides in `prompt_overrides` replace files of the same name in `prompts/`; the default is
 `prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise.
 
 `tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, and `canopy init`

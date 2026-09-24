@@ -284,7 +284,7 @@ Context: DESIGN §12 said `{prompt}` is replaced by a shell-quoted string, which
 shell. The prompt contains ticket state the overseer wrote, and later ticket text; a quoting mistake there is command
 execution on the operator's machine.
 Decision: `shlex.split` the template, then replace `{prompt}` inside each word, and run the argv directly. The template
-must contain `{prompt}`.
+must contain `{prompt}` exactly once, so the prompt is never copied into two arguments.
 Consequences: the prompt is always exactly one argument. Templates cannot use pipes, redirection, or `$VAR`; a wrapper
 such as a sandbox is written as a prefix (`bwrap ... opencode run ...`) or as a script. Linux caps one argument at
 128 KiB, far above today's overseer prompt.

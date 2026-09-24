@@ -315,15 +315,16 @@ def _build(v: dict[str, Value], user_file: Path) -> Config:
 
 
 def check_command_template(name: str, template: str) -> list[str]:
-    """Split a command template into words, as `render_command` will. It must mention `{prompt}`."""
+    """Split a command template into words, as `render_command` will. It must mention `{prompt}` exactly once."""
     try:
         words = shlex.split(template)
     except ValueError as e:
         raise ConfigError(f"{name}: {e}") from e
     if not words:
         raise ConfigError(f"{name} must not be empty")
-    if not any("{prompt}" in w for w in words):
-        raise ConfigError(f"{name} must contain {{prompt}}")
+    # Exactly once: the prompt must land in one argument, not be copied into several (D023).
+    if sum(w.count("{prompt}") for w in words) != 1:
+        raise ConfigError(f"{name} must contain {{prompt}} exactly once")
     return words
 
 

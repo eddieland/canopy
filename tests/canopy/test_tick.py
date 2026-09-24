@@ -216,3 +216,31 @@ def test_prompt_override(
     argv = agent_runs(agent_log)[0]["argv"]
     assert isinstance(argv, list)
     assert argv[-1].startswith("# my overseer\n\n## State\n")
+
+
+def test_overseer_output_is_private_even_if_the_file_existed(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    ticks = canopy_env.state_dir / "ticks"
+    ticks.mkdir(parents=True)
+    stale = ticks / "1.log"
+    stale.write_text("left over from a restored backup\n")
+    stale.chmod(0o644)
+    assert main(["tick", "--dry-run"]) == 0
+    assert stale.stat().st_mode & 0o777 == 0o600
+    assert stale.read_text().startswith("fake agent: starting")
+
+
+def test_overseer_output_refuses_a_symlink(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    overseer_does(monkeypatch)
+    ticks = canopy_env.state_dir / "ticks"
+    ticks.mkdir(parents=True)
+    target = tmp_path / "elsewhere.txt"
+    target.write_text("not yours\n")
+    (ticks / "1.log").symlink_to(target)
+    with pytest.raises(OSError, match="Too many levels of symbolic links"):
+        main(["tick", "--dry-run"])
+    assert target.read_text() == "not yours\n"
