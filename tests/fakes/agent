@@ -13,6 +13,10 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         appended to this file per run. `env` holds the CANOPY_* variables the agent saw; `commands`
                         holds each command's argv, exit code, stdout, and stderr.
 
+A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_EXIT, FAKE_WORKER_SLEEP, and
+FAKE_WORKER_COMMANDS first, falling back to the FAKE_AGENT_* ones, so one test can script an overseer and the workers it
+dispatches. `--agent canopy-overseer` reads FAKE_OVERSEER_* the same way.
+
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
 
@@ -31,9 +35,20 @@ DEFAULT_RESULT = {
 }
 
 
-def run_commands() -> list[dict[str, object]]:
+def role(argv: list[str]) -> str:
+    if "--agent" in argv[:-1]:
+        return argv[argv.index("--agent") + 1].removeprefix("canopy-").upper()
+    return "AGENT"
+
+
+def setting(argv: list[str], name: str, default: str) -> str:
+    specific = os.environ.get(f"FAKE_{role(argv)}_{name}")
+    return specific if specific is not None else os.environ.get(f"FAKE_AGENT_{name}", default)
+
+
+def run_commands(argv: list[str]) -> list[dict[str, object]]:
     ran: list[dict[str, object]] = []
-    for command in json.loads(os.environ.get("FAKE_AGENT_COMMANDS", "[]")):
+    for command in json.loads(setting(argv, "COMMANDS", "[]")):
         proc = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603  (argv from the test)
         ran.append({"argv": command, "returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})
     return ran
@@ -42,7 +57,7 @@ def run_commands() -> list[dict[str, object]]:
 def main(argv: list[str]) -> int:
     print("fake agent: starting")
     print(f"fake agent: {len(argv)} argument(s)", flush=True)
-    commands = run_commands()
+    commands = run_commands(argv)
 
     log = os.environ.get("FAKE_AGENT_LOG")
     if log:
@@ -50,12 +65,12 @@ def main(argv: list[str]) -> int:
         with Path(log).open("a") as f:
             f.write(json.dumps({"argv": argv, "cwd": str(Path.cwd()), "env": env, "commands": commands}) + "\n")
 
-    time.sleep(float(os.environ.get("FAKE_AGENT_SLEEP", "0")))
+    time.sleep(float(setting(argv, "SLEEP", "0")))
 
-    result = os.environ.get("FAKE_AGENT_RESULT", json.dumps(DEFAULT_RESULT))
+    result = setting(argv, "RESULT", json.dumps(DEFAULT_RESULT))
     if result:
         print(result)
-    return int(os.environ.get("FAKE_AGENT_EXIT", "0"))
+    return int(setting(argv, "EXIT", "0"))
 
 
 if __name__ == "__main__":

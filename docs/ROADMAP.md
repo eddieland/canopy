@@ -90,14 +90,19 @@ Accept: one real ticket goes from label to open PR unattended, with the slot
 returned and a correct `runs` row. A killed worker is detected on the next tick
 and its slot returned.
 
-Status: not started.
+Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, and D028 and D029 are
+in. Waiting on the operator: one real ticket from label to open PR, a killed worker on a real run, a first live run of
+the OpenCode canary, and the human approval the new worker definition and the overseer prompt change need. M1's
+acceptance run is also still open; this milestone was started on request before it closed.
 
 ## M3. Fix-CI and resume
 
 - Phases `ci_red`, `changes_requested`, `needs_human`, `human_replied` in the
   overseer prompt.
 - `prompts/worker-fix-ci.md`, `prompts/worker-resume.md`.
-- Attempt counters, cooldowns, `attempt_limit` attention.
+- Attempt counters, cooldowns, `attempt_limit` attention. Include `implement`: M2 has no attempt limit on it in code,
+  only the overseer prompt (D028).
+- Lift M2's `not_implemented` refusals for `fix-ci`, `resume`, and `--context` (D029).
 - Cursors updated per ticket so ticks are incremental.
 - `attention.py` render, diff, `notify.cmd`.
 
@@ -111,7 +116,7 @@ Status: not started.
 
 - Blocker detection via the tracker's blocker relations in the overseer prompt (DESIGN §17; Jira links and GitHub
   dependencies via their skills).
-- `dispatch --base` and PR base handling in `_run` and the worker prompt.
+- `dispatch --base` and PR base handling in `_run` and the worker prompt. M2 refuses `--base` as `not_implemented`.
 
 Accept: two linked tickets are worked in order; the second's PR targets the
 first's branch when the first is open and green.

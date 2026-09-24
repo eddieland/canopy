@@ -9,19 +9,22 @@ import click
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from pydantic import ValidationError
 
-from canopy import config, init
+from canopy import config, dispatch, init
 from canopy.cli import (
     CURSOR_VALUE_RE,
     KEY_RE,
     MAX_TEXT,
     REASON,
     REASON_RE,
+    SLUG,
     TICKET_KEY,
     CursorType,
     TextType,
     valid_key,
 )
+from canopy.procs import SubprocessRunner
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
@@ -73,6 +76,18 @@ def accepts_cursor_id(value: str) -> bool:
     return _converts(CursorType(), f"comment={value}")
 
 
+def accepts_slug(value: str) -> bool:
+    return _converts(SLUG, value)
+
+
+def accepts_branch_prefix(value: str) -> bool:
+    try:
+        config.Trust(branch_prefix=value)
+    except ValidationError:
+        return False
+    return True
+
+
 # Each validator the CLI and init actually call, with the pattern it is meant to enforce on the whole string.
 VALIDATORS = [
     pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
@@ -80,6 +95,9 @@ VALIDATORS = [
     pytest.param(REASON_RE, accepts_reason, id="reason-type"),
     pytest.param(CURSOR_VALUE_RE, accepts_cursor_id, id="cursor-type"),
     pytest.param(init.PROVIDER_RE, init.valid_provider, id="provider"),
+    pytest.param(dispatch.SLUG_RE, accepts_slug, id="slug-type"),
+    pytest.param(dispatch.SLUG_RE, dispatch.valid_slug, id="dispatch-slug"),
+    pytest.param(config.BRANCH_PREFIX_RE, accepts_branch_prefix, id="branch-prefix"),
 ]
 
 
@@ -177,3 +195,26 @@ def test_repository_file_cannot_set_user_only_keys(tmp_path: Path, name: str) ->
     user.write_text('[tracker]\nlabels = ["mine"]\n')
     with pytest.raises(config.ConfigError, match="user-only"):
         config.load(tmp_path, user)
+
+
+@settings(max_examples=50, deadline=None)
+@given(
+    st.from_regex(config.BRANCH_PREFIX_RE, fullmatch=True),
+    st.from_regex(KEY_RE, fullmatch=True),
+    st.from_regex(dispatch.SLUG_RE, fullmatch=True),
+)
+def test_branch_names_are_plain_git_branches(prefix: str, key: str, slug: str) -> None:
+    # Branch names reach git's argv. git must read each as a branch name, never an option or a revision expression.
+    branch = dispatch.branch_name(prefix, key, slug)
+    assert not branch.startswith("-")
+    assert not {"..", "@{", "//", " "} & {branch[i : i + 2] for i in range(len(branch))}
+    result = SubprocessRunner().run(["git", "check-ref-format", "--branch", branch])
+    assert result.ok, (branch, result.stderr)
+    assert result.stdout.strip() == branch
+
+
+@given(near(dispatch.SLUG_RE))
+def test_accepted_slugs_are_short_and_plain(value: str) -> None:
+    if dispatch.valid_slug(value):
+        assert 1 <= len(value) <= 40
+        assert set(value) <= set(string.ascii_lowercase + string.digits + "-")

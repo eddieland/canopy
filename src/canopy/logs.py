@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -64,3 +65,15 @@ def configure(state_dir: Path) -> None:
 def for_tick(tick_id: int | None) -> TickAdapter:
     """Return a logger that stamps records with `tick_id`."""
     return TickAdapter(logging.getLogger(_LOGGER), {"tick_id": tick_id})
+
+
+def write_private(path: Path, text: str) -> None:
+    """Write `text` to `path`, readable only by the operator (TRUST_MODEL T2).
+
+    The mode is set on the open file, so a file that already existed with a wider mode is narrowed too, and a symlink
+    at `path` is refused rather than followed.
+    """
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(text)

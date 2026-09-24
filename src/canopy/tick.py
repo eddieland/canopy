@@ -1,18 +1,17 @@
 """One tick of the loop (DESIGN §6): lock, migrate, reconcile, run the overseer, close the tick.
 
-Attention rendering (step 6) arrives with `attention.py` in M3. Returning stale leases and detecting dead workers in
-reconcile arrive with dispatch in M2; until then reconcile only reads the pool and logs what it would do.
+Attention rendering (step 6) arrives with `attention.py` in M3.
 """
 
 from __future__ import annotations
 
-import os
+import json
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import db, lock, logs, procs, prompts, resources, treehouse
+from canopy import attention, db, lock, logs, procs, prompts, resources, treehouse
 from canopy.config import render_command
 
 if TYPE_CHECKING:
@@ -60,6 +59,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     except treehouse.TreehouseError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
+    for item in attention.from_runs(ctx.conn):
+        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
 
     block = prompts.state_block(
         ctx.config,
@@ -69,6 +70,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         capacity=capacity,
         running=db.running_runs(ctx.conn),
         tickets=db.open_tickets(ctx.conn),
+        last_runs=db.latest_runs(ctx.conn),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
@@ -81,15 +83,48 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
 
 
 def reconcile(ctx: Context, log: logs.TickAdapter) -> prompts.Capacity:
-    """Read the pool and running workers; return the capacity left for this tick."""
+    """Close runs whose process is gone, return canopy leases no running run holds, and return the capacity left.
+
+    Raises:
+        treehouse.TreehouseError: treehouse could not be read or a slot could not be returned. The tick stops.
+    """
+    slots = treehouse.status(ctx.runner)
+    handled: set[str] = set()
+    for run in db.running_runs(ctx.conn):
+        pid = run["pid"]
+        if pid is not None and procs.alive(int(pid)):
+            continue
+        fields = {"run_id": run["id"], "ticket": run["ticket_key"], "pid": pid, "slot": run["slot_path"]}
+        # `_run` is gone, but a worker it started may not be: it leads its own process group. Stop it before its
+        # slot goes back to the pool.
+        if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
+            log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
+        db.finish_run(ctx.conn, int(run["id"]), "crashed", json.dumps({"harness": "the worker process is gone"}))
+        outcome = treehouse.return_slot(
+            ctx.runner,
+            Path(run["slot_path"]),
+            lease_id=str(run["lease_id"]),
+            lease_holder=str(run["lease_holder"]),
+        )
+        handled.add(str(run["lease_id"]))
+        log.warning("worker process is gone; run marked crashed", extra={**fields, "returned": outcome.value})
+
     running = db.running_runs(ctx.conn)
-    leases = {str(r["lease_id"]) for r in running}
-    for slot in treehouse.status(ctx.runner):
-        if slot.canopy_key is not None and slot.lease_id and slot.lease_id not in leases:
-            log.warning(
-                "canopy lease with no running worker; not returned until M2",
-                extra={"slot": str(slot.path), "lease_holder": slot.lease_holder, "lease_id": slot.lease_id},
-            )
+    held = {str(r["lease_id"]) for r in running} | handled
+    for slot in slots:
+        if slot.canopy_key is None or not slot.lease_id or slot.lease_id in held:
+            continue
+        outcome = treehouse.return_slot(ctx.runner, slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder)
+        log.warning(
+            "canopy lease with no running worker; returned",
+            extra={
+                "slot": str(slot.path),
+                "lease_holder": slot.lease_holder,
+                "lease_id": slot.lease_id,
+                "returned": outcome.value,
+            },
+        )
+
     capacity = prompts.Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running))
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
     return capacity
@@ -114,7 +149,7 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{tick_id}.log"
-    _write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
+    logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
     lines = [line.strip().strip("`").strip() for line in result.stdout.splitlines() if line.strip()]
     if result.timed_out:
@@ -127,15 +162,3 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
         return None
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure
-
-
-def _write_private(path: Path, text: str) -> None:
-    """Write `text` to `path`, readable only by the operator (TRUST_MODEL T2).
-
-    The mode is set on the open file, so a file that already existed with a wider mode is narrowed too, and a symlink
-    at `path` is refused rather than followed.
-    """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        os.fchmod(f.fileno(), 0o600)
-        f.write(text)

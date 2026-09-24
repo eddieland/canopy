@@ -339,3 +339,47 @@ keys, reasons, cursors, journal text, command rendering, and repository policy. 
 Consequences: a slower test run by a couple of seconds. Hypothesis keeps an example database in `.hypothesis/`,
 already gitignored.
 Revisit: if the suite's runtime becomes a problem; lower `max_examples` before dropping tests.
+
+## D028. The harness raises attention for runs; retrying is an authorized reply
+
+Context: DESIGN §14 lists `crashed`, `unpushed`, and `unknown_result` as attention reasons, but attention items were
+only ever recorded by the overseer (D020), and "items disappear when their cause is gone; no manual dismissal" needs a
+cause that can go away. A run that crashed or failed also leaves its ticket looking `ready` to the overseer, which
+would dispatch it again every tick.
+Decision: after reconcile, every tick, the harness records `attention:<reason>` for each ticket not marked done whose
+latest run ended `crashed`, `unpushed`, `unknown` or `timeout` (`unknown_result`), or `failed` (`worker_failed`, a new
+reason: a worker that gave up needs a human as much as one that crashed). The cause is gone when a newer run starts or
+the ticket is marked done. The state block gives the overseer each ticket's latest run, and the overseer prompt tells it
+not to dispatch such a ticket again until an authorized replier has commented after the run ended. That reuses the
+one channel through which a human already steers the loop (TRUST_MODEL T1); there is no `canopy clear`.
+Consequences: the attention list needs no table and no dismissal command. "Not auto-redispatched" is prompt policy, not
+a guard: `implement` has no attempt limit in code, so an overseer that ignores the prompt can redispatch a failing
+ticket once per tick, bounded by capacity. M3's attempt counters should cover `implement` too.
+Revisit: in M3, when attempt limits land; if the `decisions` table shows the overseer redispatching after a failed run,
+move the rule into a dispatch guard.
+
+## D029. `canopy _run` and dispatch details: detached via `python -m canopy`, claimed by pid, serialized by flock
+
+Context: DESIGN §8 describes dispatch and `_run` in outline. Building them raised questions it did not answer: how the
+detached process is found, how a second `_run` for the same run is prevented (the overseer may run any `canopy`
+command), how concurrent dispatches are kept under capacity, and what happens to a worker when `_run` is killed.
+Decision:
+- Dispatch spawns `sys.executable -m canopy _run <id>` rather than `canopy` from PATH, so the child is the same
+  installation. `procs.Runner.spawn` starts it in a new session with stdin from `/dev/null` and output to the run log;
+  anything else would leave the overseer's captured stdout open until the worker finished.
+- A run is claimed by pid: dispatch records the pid it spawned, `_run` claims with its own (the same one), and any other
+  process is refused. No new column.
+- Dispatches take a blocking `flock` on `<state_dir>/dispatch.lock` from the guards through the spawn. Holding the
+  SQLite write lock across a `treehouse get` instead would block every running `_run` closing its row.
+- The worker leads its own process group (every `SubprocessRunner` child does, so timeouts kill its children). If `_run`
+  is killed with SIGKILL, the worker would keep running in a slot that reconcile then returns. `_run` records the
+  worker's pid in `runs.worker_pid` (migration 0002, through a new `on_start` callback on `Runner.run`), and reconcile
+  kills that group before returning the slot. SIGTERM, SIGHUP, and SIGINT to `_run` become cleanup.
+- The branch slug is a new `--slug` option the overseer fills from the ticket title; the harness has no tracker access
+  to derive one (D003). It defaults to `work`.
+- `trust.branch_prefix` must be plain ref components, since the repository file sets it (T7) and it reaches git's argv.
+Consequences: pid reuse is a residual: a reused pid reads as alive, and a reused worker pid could in principle be a new
+group leader when reconcile kills. Both need the pid recycled between a crash and the next tick. `fix-ci`, `resume`,
+`--context`, and `--base` are refused as `not_implemented` until M3 and M4 add their guards and prompts.
+Revisit: if pid reuse is ever observed (then compare process start times), or if the rendered prompt should move from
+a file into the journal.

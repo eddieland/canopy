@@ -199,6 +199,78 @@ def running_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM runs WHERE status = 'running' ORDER BY started_at").fetchall()
 
 
+def insert_run(
+    conn: sqlite3.Connection,
+    *,
+    tick_id: int,
+    key: str,
+    kind: str,
+    slot_path: Path,
+    lease_id: str,
+    lease_holder: str,
+    base_branch: str,
+    branch: str,
+    runs_dir: Path,
+) -> int:
+    """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id."""
+    with transaction(conn):
+        cur = conn.execute(
+            "INSERT INTO runs (tick_id, ticket_key, kind, slot_path, lease_id, lease_holder, base_branch, branch, "
+            "started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')",
+            (tick_id, key, kind, str(slot_path), lease_id, lease_holder, base_branch, branch, now()),
+        )
+        run_id = _rowid(cur)
+        conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
+        conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
+    return run_id
+
+
+def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+    """Return the run with `run_id`, or None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    return row
+
+
+def claim_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
+    """Record `pid` as the process working a running run. Only the first process to claim a run gets it.
+
+    `canopy dispatch` claims with the pid it spawned, and `canopy _run` claims with its own, which is the same pid; a
+    second `_run` for the same run has a different one and is refused.
+    """
+    cur = conn.execute(
+        "UPDATE runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
+        (pid, run_id, pid),
+    )
+    return cur.rowcount == 1
+
+
+def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
+    """Record the pid, and so the process group, of a run's worker agent."""
+    conn.execute("UPDATE runs SET worker_pid = ? WHERE id = ?", (pid, run_id))
+
+
+def finish_run(conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None) -> bool:
+    """Close a running run. Returns False if it was already closed, which leaves it as it was."""
+    cur = conn.execute(
+        "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
+        (now(), status, result_json, run_id),
+    )
+    return cur.rowcount == 1
+
+
+def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
+    """Return each ticket's most recent run, by ticket key."""
+    rows = conn.execute(
+        "SELECT * FROM runs r WHERE r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key)"
+    ).fetchall()
+    return {str(r["ticket_key"]): r for r in rows}
+
+
+def set_pr_url(conn: sqlite3.Connection, key: str, pr_url: str) -> None:
+    """Record the PR a worker reported for `key`. Display only, like the phase."""
+    conn.execute("UPDATE tickets SET pr_url = ? WHERE key = ?", (pr_url, key))
+
+
 def record_decision(conn: sqlite3.Connection, tick_id: int, key: str | None, action: str, rationale: str) -> int:
     """Insert a decision for `tick_id` and return its id."""
     cur = conn.execute(

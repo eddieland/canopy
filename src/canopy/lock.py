@@ -1,4 +1,4 @@
-"""The tick lock: an exclusive, non-blocking `flock` on `<state_dir>/lock`.
+"""Exclusive `flock` locks: the tick lock on `<state_dir>/lock`, and the dispatch lock.
 
 The lock is released when the holding process exits, however it exits, so a crashed tick never leaves it held.
 """
@@ -19,13 +19,16 @@ class LockBusyError(Exception):
 
 
 @contextmanager
-def hold(path: Path) -> Generator[None]:
-    """Hold the lock at `path` for the duration of the block, or raise LockBusyError at once if it is taken."""
+def hold(path: Path, *, wait: bool = False) -> Generator[None]:
+    """Hold the lock at `path` for the duration of the block.
+
+    If another process holds it, raise LockBusyError at once, or with `wait` block until it is free.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     # Python opens files non-inheritable, so the agents a tick runs do not hold the lock after the tick exits.
     with path.open("a+") as f:
         try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(f, fcntl.LOCK_EX if wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as e:
             raise LockBusyError(f"{path} is held by another process") from e
         try:

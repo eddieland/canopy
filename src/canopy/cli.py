@@ -14,7 +14,7 @@ from typing import override
 
 import click
 
-from canopy import attention, config, db, init, logs, procs, resources, tick
+from canopy import attention, config, db, dispatch, init, logs, procs, resources, tick, worker
 from canopy.context import Context, db_path
 
 KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
@@ -98,6 +98,7 @@ class TextType(click.ParamType[str, object]):
 
 TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
+SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 
 
 @dataclass(frozen=True)
@@ -219,10 +220,8 @@ def cmd_init(provider: str | None) -> int:
 @click.pass_context
 def cmd_tick(click_ctx: click.Context, *, dry_run: bool) -> int:
     """Run one tick of the loop."""
-    if not dry_run:
-        raise click.UsageError("canopy tick runs only with --dry-run until dispatch is implemented (ROADMAP M2)")
     ctx = _open(click_ctx, migrate=False)
-    outcome = tick.run(ctx, dry_run=True)
+    outcome = tick.run(ctx, dry_run=dry_run)
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
     click.echo(f"{label}: {outcome.status}: {outcome.summary}")
     return 0 if outcome.status in ("ok", "lock_busy") else 1
@@ -263,24 +262,61 @@ def cmd_status(click_ctx: click.Context) -> int:
 @cli.command("dispatch")
 @click.argument("key", type=TICKET_KEY)
 @click.option("--kind", required=True, type=click.Choice(KINDS))
+@click.option(
+    "--slug",
+    default=dispatch.DEFAULT_SLUG,
+    show_default=True,
+    type=SLUG,
+    help="Short name for the work, from the ticket title; the branch is <prefix><KEY>-<slug>.",
+)
 @click.option("--base", metavar="BRANCH", help="Start from this branch instead of the default.")
 @click.option("--context", "context_file", type=click.Path(path_type=Path), help="File with context for the worker.")
 @click.pass_context
-def cmd_dispatch(click_ctx: click.Context, key: str, kind: str, base: str | None, context_file: Path | None) -> int:
+def cmd_dispatch(
+    click_ctx: click.Context, *, key: str, kind: str, slug: str, base: str | None, context_file: Path | None
+) -> int:
     """Start a worker on a ticket (overseer only)."""
     ctx = _open(click_ctx)
     current = _require_tick(ctx)
+    tick_id = int(current["id"])
+    log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
-    extras = [f"base={base}" if base else "", f"context={context_file}" if context_file else ""]
-    detail = "; ".join(e for e in extras if e)
     if current["dry_run"]:
-        rationale = "dry run: not dispatched" + (f" ({detail})" if detail else "")
-        db.record_decision(ctx.conn, current["id"], key, f"dispatch:{kind}", rationale)
-        logs.for_tick(current["id"]).info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
+        extras = [f"slug={slug}", f"base={base}" if base else "", f"context={context_file}" if context_file else ""]
+        detail = "; ".join(e for e in extras if e)
+        db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", f"dry run: not dispatched ({detail})")
+        log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
         click.echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
         return 0
-    db.record_decision(ctx.conn, current["id"], key, "refused:not_implemented", "dispatch arrives in ROADMAP M2")
-    raise CliError("dispatch is not implemented yet (ROADMAP M2); the refusal was recorded")
+    try:
+        started = dispatch.start(
+            ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base, context_file=context_file
+        )
+    except dispatch.Refusal as r:
+        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+        log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
+        raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    rationale = f"run {started.run_id}: {started.branch} in {started.slot}"
+    db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
+    log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
+    click.echo(f"dispatched {kind} for {key}: {rationale}")
+    return 0
+
+
+@cli.command("_run", hidden=True)
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.pass_context
+def cmd_run(click_ctx: click.Context, run_id: int) -> int:
+    """Do one dispatched run. Started by `canopy dispatch`, detached; not for people or agents."""
+    # The worker must not be able to act as the overseer of the tick that dispatched it (D020).
+    os.environ.pop(tick.TICK_ID_ENV, None)
+    ctx = _open(click_ctx)
+    try:
+        outcome = worker.execute(ctx, run_id, out=sys.stdout)
+    except worker.WorkerError as e:
+        raise CliError(str(e)) from None
+    click.echo(f"run {run_id}: {outcome.status}")
+    return 0
 
 
 @cli.command("decide")
