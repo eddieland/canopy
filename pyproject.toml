@@ -20,7 +20,7 @@ packages = ["src/canopy"]
 dev = [
     "pyrefly>=1.3.1",
     "pytest>=8",
-    "ruff>=0.6",
+    "ruff>=0.16",
 ]
 
 [tool.ruff]
@@ -30,8 +30,24 @@ target-version = "py312"
 extend-include = ["tests/fakes/agent", "tests/fakes/treehouse"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "PL", "TID"]
-ignore = ["PLR0913"]
+# Every stable rule (D018). Opt out below with a reason, never by narrowing `select`. Preview rules stay off: they
+# change between ruff releases, so enabling them would make a lockfile bump a lint-policy change.
+select = ["ALL"]
+ignore = [
+    "COM812",  # Conflicts with `ruff format`, which owns trailing commas.
+    "CPY001",  # No per-file copyright headers.
+    "EM101",   # Building the message in a variable first only moves the string; tracebacks are readable as is.
+    "EM102",   # Same as EM101, for f-strings.
+    "PLR0913", # Keyword-only arguments are how we spell options (procs.Runner.run); the count is not the problem.
+    "TC003",   # Stdlib imports cost nothing at runtime; TYPE_CHECKING blocks for them are noise.
+    "TRY003",  # A specific message on a small exception hierarchy beats one exception class per message.
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
 
 # procs.py is the only module that runs subprocesses (AGENTS.md, DESIGN.md §5).
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -40,7 +56,16 @@ ignore = ["PLR0913"]
 "os.popen".msg = "Run external processes through canopy.procs."
 
 [tool.ruff.lint.per-file-ignores]
-"src/canopy/procs.py" = ["TID251"]
+# The subprocess boundary (D015). Arguments are an argv list, never a shell string.
+"src/canopy/procs.py" = ["TID251", "S603"]
+"tests/**" = [
+    "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
+    "D",       # Docstrings are optional in tests and unchecked when present; test names are the documentation.
+    "PLR2004", # Expected exit codes and counts are clearer inline than as named constants.
+    "S101",    # pytest asserts.
+]
+# The fakes are standalone scripts that talk on stdout and stderr.
+"tests/fakes/*" = ["T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
