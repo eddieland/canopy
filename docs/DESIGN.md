@@ -346,8 +346,12 @@ Rules:
 
 A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
 word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must
-contain `{prompt}` exactly once. Overrides in `prompt_overrides` replace files of the same name in `prompts/`; the default is
-`prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise.
+contain `{prompt}` exactly once.
+
+Overrides in `prompt_overrides` replace files of the same name in `prompts/`. The default is `prompts/` next to the user
+file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
+`paths.*` values must be absolute or start with `~`: canopy runs from the repository root, so a relative path would let
+the repository supply the operator's prompts or state (TRUST_MODEL T7).
 
 `tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, and `canopy init`
 installs the `tracker-<provider>` skill if one ships. `tracker.query` is how the overseer finds candidates: in the

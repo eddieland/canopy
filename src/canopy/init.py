@@ -24,6 +24,12 @@ SKILL_DIR = Path(".opencode/skill")
 # A provider name becomes a directory name; keep it to one plain path component.
 PROVIDER_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
+
+def valid_provider(provider: str) -> bool:
+    """Return whether `provider` is a plain name that is safe as one path component."""
+    return PROVIDER_RE.fullmatch(provider) is not None
+
+
 EXAMPLE_QUERIES = {
     "jira": "project = PROJ AND statusCategory != Done ORDER BY priority DESC, created ASC",
     "github": "repo:OWNER/NAME is:issue is:open",
@@ -142,7 +148,7 @@ def run(repo_root: Path, user_file: Path, provider: str | None) -> Report:
     for src in sorted(resources.agents_dir().glob("*.md")):
         _install(src, repo_root / AGENT_DIR / src.name, report)
 
-    if provider is not None and PROVIDER_RE.fullmatch(provider):
+    if provider is not None and valid_provider(provider):
         skill = resources.skills_dir() / f"tracker-{provider}" / "SKILL.md"
         if skill.is_file():
             _install(skill, repo_root / SKILL_DIR / f"tracker-{provider}" / "SKILL.md", report)
