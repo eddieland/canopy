@@ -81,7 +81,12 @@ def _command_template(value: str) -> str:
 
 
 def notify_words(template: str) -> list[str]:
-    """Split `notify.cmd` into argv with shell word rules. No shell runs (D023). Empty means no notify command."""
+    """Split `notify.cmd` into argv with shell word rules. No shell runs (D023). Empty means no notify command.
+
+    Its input arrives on stdin, so a `{prompt}` would reach the command as a literal word; it is refused.
+    """
+    if "{prompt}" in template:
+        raise ValueError("must not contain {prompt}; the notification arrives on stdin")
     return shlex.split(template)
 
 

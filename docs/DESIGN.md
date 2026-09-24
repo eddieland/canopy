@@ -404,7 +404,8 @@ Rules:
 
 A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
 word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must
-contain `{prompt}` exactly once. `notify.cmd` is split the same way and has no placeholder; its input is on stdin.
+contain `{prompt}` exactly once. `notify.cmd` is split the same way, gets its input on stdin, and must not contain
+`{prompt}`.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. The default is `prompts/` next to the user
 file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
