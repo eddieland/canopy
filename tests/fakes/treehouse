@@ -27,21 +27,22 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 
-def load(path: Path) -> dict:
+def load(path: Path) -> dict[str, Any]:
     if path.exists():
         return json.loads(path.read_text())
     return {}
 
 
-def save(path: Path, state: dict) -> None:
+def save(path: Path, state: dict[str, Any]) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(state, indent=2) + "\n")
     tmp.replace(path)
 
 
-def status_entry(slot: dict) -> dict:
+def status_entry(slot: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": slot["name"],
         "path": slot["path"],
@@ -56,7 +57,7 @@ def status_entry(slot: dict) -> dict:
     }
 
 
-def cmd_status(state: dict, args: argparse.Namespace) -> int:
+def cmd_status(state: dict[str, Any], args: argparse.Namespace) -> int:
     slots = state.get("slots", [])
     if args.json:
         print(json.dumps([status_entry(s) for s in slots]))
@@ -66,7 +67,7 @@ def cmd_status(state: dict, args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_get(state: dict, args: argparse.Namespace, state_path: Path) -> int:
+def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -> int:
     if not args.lease:
         print("fake treehouse: only `get --lease` is supported", file=sys.stderr)
         return 2
@@ -98,7 +99,7 @@ def cmd_get(state: dict, args: argparse.Namespace, state_path: Path) -> int:
     return 0
 
 
-def cmd_return(state: dict, args: argparse.Namespace) -> int:
+def cmd_return(state: dict[str, Any], args: argparse.Namespace) -> int:
     slots = state.get("slots", [])
     target = args.target
     slot = next((s for s in slots if target in (s["name"], s["path"])), None)

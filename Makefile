@@ -19,10 +19,9 @@ fmt: ## Run autoformatters (ruff import sorting, ruff format)
 	uv run ruff check --select I --fix .
 	uv run ruff format .
 
-lint: ## Run linters and type checkers (ruff, ty, pyrefly)
+lint: ## Run linters and the type checker (ruff, pyrefly strict)
 	uv run ruff format --check .
 	uv run ruff check .
-	uv run ty check src
 	uv run pyrefly check
 
 test: ## Run all tests
