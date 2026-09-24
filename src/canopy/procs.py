@@ -181,11 +181,11 @@ class SubprocessRunner:
 
 def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) -> bool:
     """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory."""
-    if os.sep in command:
-        candidates = [Path(cwd or ".") / command]
-    else:
-        path = (env if env is not None else os.environ).get("PATH", os.defpath)
-        candidates = [Path(d) / command for d in path.split(os.pathsep) if d]
+    # The child changes into `cwd` before exec, so a relative or empty PATH entry, like a relative command, resolves
+    # against it. An absolute entry replaces `cwd` in the join.
+    base = Path(cwd or ".")
+    dirs = [""] if os.sep in command else os.get_exec_path(env)
+    candidates = [base / d / command for d in dirs]
     for candidate in candidates:
         # The directories that make exec report EACCES make this raise it too.
         with contextlib.suppress(OSError):

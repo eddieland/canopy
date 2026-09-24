@@ -71,6 +71,14 @@ def test_missing_command_behind_an_unsearchable_path_dir_is_not_found(
         script.write_text("#!/bin/sh\n")
         with pytest.raises(CommandNotFoundError, match="command not executable: not-executable"):
             SubprocessRunner().run(["not-executable"])
+        # Relative and empty PATH entries resolve against the child's cwd, as exec resolves them.
+        (tmp_path / "bin").mkdir()
+        (tmp_path / "bin" / "relative-tool").write_text("#!/bin/sh\n")
+        (tmp_path / "cwd-tool").write_text("#!/bin/sh\n")
+        monkeypatch.setenv("PATH", os.pathsep.join([str(locked), "bin", ""]))
+        for name in ("relative-tool", "cwd-tool"):
+            with pytest.raises(CommandNotFoundError, match=f"command not executable: {name}"):
+                SubprocessRunner().run([name], cwd=tmp_path)
     finally:
         locked.chmod(0o700)
 
