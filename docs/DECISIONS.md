@@ -481,3 +481,54 @@ Rejected:
 Revisit: when a runtime can deny approving or a bot identity exists (then inline comments); if the per-commit review
 is measured as too costly on busy PRs (then the overseer waits for a quiet period, under a guard); if OpenCode cannot
 confine reads to the checkout (then no checkout, MCP reads only); if repositories want to share a rubric.
+
+## D040. Agent runs load canopy's definitions from a directory canopy owns, never from the repository
+
+Context: `canopy init` copies `canopy-overseer`, `canopy-worker`, and the tracker skill into the repository's
+`.opencode/`. A leased worktree only has them if they are committed, and when `opencode run --agent NAME` cannot find
+NAME it prints a warning and runs OpenCode's default agent, which allows everything: a worker with none of its denies.
+Nothing in canopy notices. Copies in every repository also do not scale to M6's workspaces, and T7 already names them as
+repository-controlled config the user-only keys do not cover.
+Decision (DESIGN §13):
+- canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of
+  their contents: written to a temporary directory, renamed into place, and never modified afterwards, so concurrent
+  runs never see a partial set. A run uses the snapshot for the installed canopy, creating it if missing. Reconcile
+  removes other snapshots when no run is live. OpenCode scans `{agent,agents}/` and `{skill,skills}/` in a config
+  directory, so the bundled names need no renaming.
+- Command templates get a `{definitions_dir}` placeholder for the snapshot; the default templates are `env
+  OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}` and the same for the overseer.
+  Every template that runs a canopy-shipped agent must contain it: `overseer_cmd`, `worker_cmd`, and D039's
+  `review_cmd`. Without it the config error prints the replacement line; canopy does not rewrite the user file.
+- The runtime's own skill paths stay on, and adding skills there is how an operator or a repository customizes canopy:
+  OpenCode reads `OPENCODE_CONFIG_DIR` in addition to `~/.agents/skills`, `~/.claude/skills`, `~/.config/opencode/`,
+  the repository's `.agents/skills`, `.claude/skills`, and `.opencode/`, and `skills.paths`. Customizations use new
+  names: OpenCode loads skills concurrently, so which of two same-named skills wins is not deterministic.
+- `canopy init` stops installing agent definitions and skills, including D039's `canopy-reviewer` into the
+  operator's runtime config.
+- The live canary gains a precedence check: a repository-level definition of the canary agent that allows a denied
+  command must not make it run.
+Consequences: the definitions an agent runs with always exist and always match the installed canopy; upgrading canopy
+updates them at the next run. A repository can still add skills, MCP servers, plugins, and permission rules for keys
+canopy's definitions do not set; it cannot override a key they do set, since `OPENCODE_CONFIG_DIR` merges after
+project config and the last matching rule wins (from OpenCode 1.18.32's source; the canary confirms it live). The
+worker's `external_directory: deny` means it gets a skill's `SKILL.md` from anywhere but cannot read files next to it
+outside the worktree, so skills in `$HOME` that workers use, and canopy's own, are single files. OpenCode installs its
+plugin package into every config directory, so each snapshot gets a `node_modules/` once. Operators upgrading from
+an earlier canopy edit their templates once, guided by the config error. The placeholder is a path,
+not a shell variable, so D023 holds; `env` is an ordinary program.
+Rejected:
+- Pointing `OPENCODE_CONFIG_DIR` at the installed package: OpenCode writes `.gitignore`, `package.json`, and
+  `node_modules/` into it, inside site-packages or, in a source checkout, inside `.agents/`.
+- Committing `.opencode/` in every repository: a copy per repository to keep current, and one that anyone who can push
+  controls (T7).
+- `OPENCODE_DISABLE_PROJECT_CONFIG`: it blocks the repository's skills and MCP servers, which operators should be able
+  to use to customize canopy.
+- A guard that refuses when the worktree defines a `canopy-*` agent: it cannot see agents defined in `opencode.json`
+  without parsing JSONC, and merge order already makes canopy's keys win.
+- One mutable `<state_dir>/runtime/` rewritten before each run: overlapping runs could load a half-written set.
+- Rewriting the old default templates during config loading: the operator's file would no longer say what runs.
+- `skills.paths` in the operator's `opencode.json`: covers skills only, not agent definitions, and changes every
+  OpenCode session the operator runs.
+Revisit: when M6 needs workspace-level skills above the repositories (`OPENCODE_CONFIG_CONTENT` with `skills.paths` can
+list several directories); when a second runtime needs its definitions somewhere else (D009); if the canary shows a
+repository can loosen a key canopy sets.
