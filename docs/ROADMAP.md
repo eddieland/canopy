@@ -187,6 +187,29 @@ order, one PR each.
 
 Status: not started.
 
+## M9. Chores
+
+DESIGN §19 and D034. Needs only M3's attention list and notification; nothing in M4 to M8.
+
+- `[chores.<name>]`, `runtime.chore_cmd`, and `capacity.max_chores` in the user config, user-only. With no chores, or
+  `max_chores = 0`, the state block and the overseer's decisions are exactly what they were before M9 (a test).
+- Migration: `chore_runs` and `decisions.chore`.
+- `canopy chore run` with the `unknown_chore`, `running`, `not_due`, and `chore_capacity` guards; `canopy chore wait`.
+- `canopy _chore`: detached run, prompt with the `## Run` section, result contract validated with pydantic; reconcile
+  for chore runs.
+- The state block's `chores`; findings and `chore_failed` on the attention list and in notifications.
+- The overseer prompt's chore paragraph and `canopy chore` in its tool list, the `canopy-chore` agent definition, and
+  the TRUST_MODEL T1, T3, T6, T7, and §7 changes, with human approval.
+- DESIGN §5, §6, §11, §12, and §14 updated for chores, and §19's planned note removed.
+
+Accept: a real build-health chore runs for several working days. The journal shows it never started sooner than
+`every_minutes` after its previous run, and the `decisions` table shows the overseer following `when`. Its findings
+reach the attention list and are notified once, and each disappears after a run that no longer reports it. A chore run
+killed mid-way is detected on the next tick as `crashed` with a `chore_failed` item. Deleting the chore from the config
+clears its items at the next tick.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
