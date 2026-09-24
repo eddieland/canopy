@@ -11,16 +11,15 @@ import json
 import re
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy import db, lock, logs, procs, prompts, treehouse
+from canopy import db, lock, logs, policy, procs, prompts, treehouse
 
 if TYPE_CHECKING:
     from canopy.context import Context
 
-# Kinds whose guards exist. fix-ci and resume need attempt limits and cooldowns first (ROADMAP M3).
-IMPLEMENTED_KINDS = frozenset({"implement"})
 # The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
 # characters: lowercase words joined by single hyphens.
 SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
@@ -77,53 +76,86 @@ def start(
     tick_id: int,
     key: str,
     kind: str,
-    slug: str,
+    slug: str | None,
     base: str | None,
-    context_file: Path | None,
+    context: str | None,
 ) -> Started:
     """Check the guards, lease a slot, record the run, and spawn `canopy _run` for it.
+
+    `implement` works on `<branch_prefix><KEY>-<slug>`. `fix-ci` and `resume` continue the branch the journal recorded
+    for the ticket, so they take no slug.
 
     Raises:
         Refusal: a guard refused, or the slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased.
     """
-    if kind not in IMPLEMENTED_KINDS:
-        raise Refusal("not_implemented", f"{kind} dispatch needs attempt limits and cooldowns (ROADMAP M3)")
     if base is not None:
         raise Refusal("not_implemented", "--base arrives with stacking (ROADMAP M4)")
-    if context_file is not None:
-        raise Refusal("not_implemented", "--context arrives with resume (ROADMAP M3)")
-    if not valid_slug(slug):
-        raise Refusal("bad_slug", f"slug must match {SLUG_RE.pattern}")
-    branch = branch_name(ctx.config.trust.branch_prefix, key, slug)
+    branch = _branch(ctx, key, kind, slug)
 
     # One dispatch at a time, so two cannot both pass the capacity check. Held across the lease and the spawn.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        _guard(ctx, key)
+        attempt = _guard(ctx, key, kind)
         try:
             lease = treehouse.lease(ctx.runner, key)
         except treehouse.TreehouseError as e:
             raise Refusal("no_slot", str(e)) from e
         try:
-            return _spawn(ctx, tick_id=tick_id, key=key, kind=kind, branch=branch, lease=lease)
+            return _spawn(
+                ctx, tick_id=tick_id, key=key, kind=kind, branch=branch, lease=lease, attempt=attempt, context=context
+            )
         except BaseException:
             with contextlib.suppress(treehouse.TreehouseError):
                 treehouse.return_slot(ctx.runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
             raise
 
 
-def _guard(ctx: Context, key: str) -> None:
+def _branch(ctx: Context, key: str, kind: str, slug: str | None) -> str:
+    if kind == "implement":
+        slug = DEFAULT_SLUG if slug is None else slug
+        if not valid_slug(slug):
+            raise Refusal("bad_slug", f"slug must match {SLUG_RE.pattern}")
+        return branch_name(ctx.config.trust.branch_prefix, key, slug)
+    if slug is not None:
+        raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; --slug is for implement")
+    ticket = db.get_ticket(ctx.conn, key)
+    if ticket is None or not ticket["branch"]:
+        raise Refusal("no_branch", f"{key} has no branch in the journal for {kind} to continue; dispatch implement")
+    return str(ticket["branch"])
+
+
+def _guard(ctx: Context, key: str, kind: str) -> int:
+    """Refuse unless a `kind` run for `key` may start now. Returns the attempt number the run would be."""
     running = db.running_runs(ctx.conn)
     for run in running:
         if run["ticket_key"] == key:
             raise Refusal("running", f"run {run['id']} is already working {key}")
+    counts = policy.ticket_attempts(ctx.conn, key)
+    cooldown = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC)).get(key)
+    refused = policy.blocked(key, kind, counts=counts, limit=policy.limits(ctx.config)[kind], cooldown_until=cooldown)
+    if refused is not None:
+        raise Refusal(*refused)
     limit = ctx.config.capacity.max_workers
     if len(running) >= limit:
         raise Refusal("capacity", f"{len(running)} of {limit} workers are running")
+    return counts[kind] + 1
 
 
-def _spawn(ctx: Context, *, tick_id: int, key: str, kind: str, branch: str, lease: treehouse.Lease) -> Started:
+def _spawn(
+    ctx: Context,
+    *,
+    tick_id: int,
+    key: str,
+    kind: str,
+    branch: str,
+    lease: treehouse.Lease,
+    attempt: int,
+    context: str | None,
+) -> Started:
     cfg = ctx.config
+    ticket = db.get_ticket(ctx.conn, key)
+    pr_url = ticket["pr_url"] if ticket is not None else None
+    repliers = ", ".join(f"`{r}`" for r in cfg.trust.authorized_repliers)
     values = {
         "KEY": key,
         "SLOT": str(lease.path),
@@ -133,6 +165,11 @@ def _spawn(ctx: Context, *, tick_id: int, key: str, kind: str, branch: str, leas
         "NEEDS_HUMAN_LABEL": cfg.tracker.needs_human_label,
         "PR_LABEL": cfg.trust.pr_label,
         "TIMEOUT_MINUTES": str(cfg.runtime.worker_timeout_minutes),
+        "ATTEMPT": str(attempt),
+        "MAX_ATTEMPTS": str(policy.limits(cfg)[kind]),
+        "PR_URL": str(pr_url) if pr_url else f"not recorded; look up the PR for `{branch}` through the GitHub MCP",
+        "CONTEXT": context or "None.",
+        "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
     }
     try:
         prompt = prompts.render_worker(cfg, kind, values)

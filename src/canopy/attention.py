@@ -3,16 +3,29 @@
 Attention items are decisions with action `attention:<reason>`, recorded every tick the cause holds: by the overseer
 for what it reads in the world, and by the harness for runs that ended in a way a human must look at (`from_runs`). The
 current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
-longer records it. Rendering `attention.md`, diffing, and `notify.cmd` arrive in M3.
+longer records it.
+
+After every tick, `publish` rewrites `<state_dir>/attention.md` and, when `notify.cmd` is set, pipes it what changed
+since the last notification. The `notifications` table holds the items already notified that are still open, so an
+open item is notified once however many ticks it lasts.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
-from canopy import db
+from canopy import db, logs, procs
+from canopy.config import notify_words
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from canopy.context import Context
 
 ACTION_PREFIX = "attention:"
 # Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
@@ -26,6 +39,8 @@ RUN_REASONS = {
 }
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
+FILE_NAME = "attention.md"
+NOTIFY_TIMEOUT_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -112,3 +127,114 @@ def _detail(run: sqlite3.Row) -> str:
     if note:
         text += f": {note}"
     return f"{text}; log {run['log_path']}"[:2000]
+
+
+def age(timestamp: str, now: datetime | None = None) -> str:
+    """Return how long ago `timestamp` was, in its largest whole unit: `3d`, `2h`, `5m`, `40s`."""
+    seconds = max(0, int(((now or datetime.now(UTC)) - db.parse_time(timestamp)).total_seconds()))
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if seconds >= size:
+            return f"{seconds // size}{unit}"
+    return f"{seconds}s"
+
+
+def _one_line(text: str) -> str:
+    return " ".join(text.split())
+
+
+def render(items: list[Item], now: datetime) -> str:
+    """Return `attention.md`: the items grouped by reason, one line each with key, age, and detail."""
+    stamp = now.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    lines = ["# canopy attention", ""]
+    if not items:
+        lines += [f"Nothing needs you. Updated {stamp}.", ""]
+        return "\n".join(lines)
+    count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
+    lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
+    for reason in sorted({i.reason for i in items}):
+        lines += [f"## {reason}", ""]
+        lines += [f"- {i.ticket_key}, {age(i.since, now)}: {_one_line(i.detail)}" for i in items if i.reason == reason]
+        lines.append("")
+    return "\n".join(lines)
+
+
+def fingerprint(ticket_key: str, reason: str) -> str:
+    """Identify an item across ticks. The detail is left out: rewording it does not make a new item."""
+    return hashlib.sha256(f"{ticket_key}\0{reason}".encode()).hexdigest()
+
+
+@dataclass(frozen=True)
+class Diff:
+    """What changed since the last notification: new items, and notified items whose cause is gone."""
+
+    added: list[Item]
+    resolved: list[tuple[str, str]]  # (ticket key, reason)
+
+    def __bool__(self) -> bool:
+        """Whether anything changed."""
+        return bool(self.added or self.resolved)
+
+    def text(self, path: Path) -> str:
+        """Return the notification: one line per change, then where the full list is."""
+        lines = [f"canopy attention: {len(self.added)} new, {len(self.resolved)} resolved"]
+        lines += [f"+ {i.ticket_key} {i.reason}: {_one_line(i.detail)}" for i in self.added]
+        lines += [f"- {key} {reason}" for key, reason in self.resolved]
+        lines.append(f"Full list: {path}")
+        return "\n".join(lines) + "\n"
+
+
+def diff(conn: sqlite3.Connection, items: list[Item]) -> Diff:
+    """Compare `items` with the open items already notified."""
+    notified = {
+        str(r[0]): (str(r[1]), str(r[2]))
+        for r in conn.execute("SELECT fingerprint, ticket_key, reason FROM notifications")
+    }
+    now_open = {fingerprint(i.ticket_key, i.reason) for i in items}
+    added = [i for i in items if fingerprint(i.ticket_key, i.reason) not in notified]
+    resolved = sorted(item for fp, item in notified.items() if fp not in now_open)
+    return Diff(added, resolved)
+
+
+def mark_sent(conn: sqlite3.Connection, change: Diff) -> None:
+    """Record a notified diff: its new items become notified, its resolved items are forgotten."""
+    ts = db.now()
+    with db.transaction(conn):
+        conn.executemany(
+            "DELETE FROM notifications WHERE fingerprint = ?", [(fingerprint(k, r),) for k, r in change.resolved]
+        )
+        conn.executemany(
+            "INSERT OR REPLACE INTO notifications (fingerprint, ticket_key, reason, sent_at) VALUES (?, ?, ?, ?)",
+            [(fingerprint(i.ticket_key, i.reason), i.ticket_key, i.reason, ts) for i in change.added],
+        )
+
+
+def publish(ctx: Context, log: logs.TickAdapter) -> None:
+    """Rewrite `attention.md` and, if `notify.cmd` is set and something changed, notify (DESIGN §6 step 7).
+
+    Failures are logged, never raised: the tick is already closed. A notification that fails is sent again next tick,
+    since nothing is marked sent until the command succeeds.
+    """
+    items = current(ctx.conn)
+    path = ctx.state_dir / FILE_NAME
+    try:
+        logs.write_private(path, render(items, datetime.now(UTC)))
+    except OSError as e:
+        log.error("could not write the attention list", extra={"path": str(path), "error": str(e)})  # noqa: TRY400
+    argv = notify_words(ctx.config.notify.cmd)
+    if not argv:
+        return
+    change = diff(ctx.conn, items)
+    if not change:
+        return
+    fields = {"added": len(change.added), "resolved": len(change.resolved), "cmd": argv[0]}
+    try:
+        result = ctx.runner.run(argv, cwd=ctx.repo_root, stdin=change.text(path), timeout=NOTIFY_TIMEOUT_SECONDS)
+    except procs.ProcError as e:
+        log.warning("notify command could not start", extra={**fields, "error": str(e)})
+        return
+    if not result.ok:
+        status = "timed out" if result.timed_out else f"exited {result.returncode}"
+        log.warning("notify command failed", extra={**fields, "status": status, "stderr": result.stderr[-500:]})
+        return
+    mark_sent(ctx.conn, change)
+    log.info("notified", extra=fields)

@@ -94,11 +94,15 @@ def test_dry_run_dispatch_records_base_and_context(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
-    args = ["dispatch", "PROJ-2", "--kind", "implement", "--base", "agent/PROJ-1-x", "--context", "ctx.md"]
-    assert main(args) == 0
+    args = ["dispatch", "PROJ-2", "--kind", "implement", "--base", "agent/PROJ-1-x", "--context", "see comment 7"]
+    assert main([*args, "--cursor", "comment=7"]) == 0
     [row] = db.decisions_for_tick(conn, tick_id)
     assert row["action"] == "dispatch:implement"
-    assert row["rationale"] == "dry run: not dispatched (slug=work; base=agent/PROJ-1-x; context=ctx.md)"
+    assert row["rationale"] == (
+        "dry run: not dispatched (slug=work; base=agent/PROJ-1-x; cursor comment=7; context=see comment 7)"
+    )
+    ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
+    assert ticket["last_comment_id"] is None  # a dry run never advances cursors
 
 
 def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
