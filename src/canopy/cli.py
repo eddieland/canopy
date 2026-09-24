@@ -183,7 +183,8 @@ def _require_tick(ctx: Context) -> sqlite3.Row:
 
 @cli.command("init")
 @click.option("--provider", help="Tracker provider for a new canopy.toml (jira, github, linear, ...).")
-def cmd_init(provider: str | None) -> int:
+@click.pass_context
+def cmd_init(click_ctx: click.Context, provider: str | None) -> int:
     """Set up canopy for this repository and this user."""
     repo_root = config.find_repo_root(Path.cwd())
     if provider is None and not (repo_root / config.REPO_FILE_NAME).exists():
@@ -210,6 +211,10 @@ def cmd_init(provider: str | None) -> int:
         prefix = "agent/"
     click.echo()
     click.echo(init.BRANCH_PROTECTION.format(prefix=prefix), nl=False)
+    obj = click_ctx.find_object(Obj)
+    if obj is not None and (ssh_urls := init.ssh_push_urls(obj.runner, repo_root)):
+        click.echo()
+        click.echo(init.SSH_REMOTE_WARNING.format(urls=", ".join(ssh_urls)), nl=False)
     return 0
 
 

@@ -35,7 +35,8 @@ standing write access to your repositories, your tracker, or your internal tools
 4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
    default `~/.config/canopy/config.toml`, with a queue label of your own), writes a shared `canopy.toml` if the
    repository has none, installs the overseer and worker agent definitions, and installs the tracker skill for your
-   provider if one ships.
+   provider if one ships. Use an HTTPS remote with a credential helper; init warns if `origin` pushes over SSH, which
+   worker sandboxing is not expected to support (D038).
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy tick`. Schedule it with cron or launchd
    once you trust it.
 
