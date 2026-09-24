@@ -10,24 +10,31 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from canopy import db, resources
-from canopy.config import Config
+
+if TYPE_CHECKING:
+    from canopy.config import Config
 
 OVERSEER = "overseer.md"
 
 
 @dataclass(frozen=True)
 class Capacity:
+    """How many workers may run, and how many are running."""
+
     max_workers: int
     running: int
 
     @property
     def available(self) -> int:
+        """Workers that may still start."""
         return max(0, self.max_workers - self.running)
 
 
 def prompt_path(config: Config, name: str) -> Path:
+    """Return the prompt file `name`, preferring the operator's override."""
     override = config.paths.prompt_overrides / name
     if override.is_file():
         return override
@@ -44,6 +51,7 @@ def state_block(
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
 ) -> str:
+    """Render the `## State` section the harness appends to the overseer prompt."""
     state = {
         "tick_id": tick_id,
         "dry_run": dry_run,
@@ -120,5 +128,6 @@ def state_block(
 
 
 def render_overseer(config: Config, block: str) -> str:
+    """Return the overseer prompt followed by the state block."""
     body = prompt_path(config, OVERSEER).read_text(encoding="utf-8").rstrip("\n")
     return f"{body}\n\n{block}"

@@ -70,10 +70,12 @@ def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
     db.finish_tick(conn, tick, "ok", "1 decision")
 
     row = db.get_tick(conn, stale)
-    assert row is not None and row["status"] == "abandoned"
+    assert row is not None
+    assert row["status"] == "abandoned"
     [ticket] = db.open_tickets(conn)
     assert (ticket["key"], ticket["phase"], ticket["last_ci_run_id"]) == ("PROJ-1", "ci_red", "run-7")
     [decision] = db.decisions_for_tick(conn, tick)
     assert (decision["ticket_key"], decision["action"]) == ("PROJ-1", "wait")
     last = db.last_tick(conn)
-    assert last is not None and (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
+    assert last is not None
+    assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)

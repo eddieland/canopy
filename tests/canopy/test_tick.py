@@ -6,10 +6,10 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
-from conftest import CanopyEnv
 
 from canopy import db, lock, procs
 from canopy.cli import main
+from tests.conftest import CanopyEnv
 
 
 def journal(env: CanopyEnv) -> sqlite3.Connection:
@@ -177,7 +177,7 @@ def test_busy_lock_exits_zero_without_a_tick(
 
 
 def test_live_tick_is_refused_until_dispatch_exists(canopy_env: CanopyEnv, agent_log: Path) -> None:
-    assert main(["tick"]) == 2  # noqa: PLR2004
+    assert main(["tick"]) == 2
     assert not agent_log.exists()
 
 

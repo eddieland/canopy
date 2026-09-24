@@ -1,11 +1,11 @@
 from pathlib import Path
 
 import pytest
-from conftest import CanopyEnv
 
 from canopy import resources
 from canopy.cli import main
 from canopy.config import load
+from tests.conftest import CanopyEnv
 
 
 def test_init_writes_both_configs_and_installs_agents_and_skill(
@@ -65,7 +65,7 @@ def test_init_needs_provider_when_not_interactive(
 ) -> None:
     canopy_env.repo_file.unlink()
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-    assert main(["init"]) == 2  # noqa: PLR2004
+    assert main(["init"]) == 2
     assert "--provider" in capsys.readouterr().err
     assert not canopy_env.repo_file.exists()
 
@@ -73,15 +73,15 @@ def test_init_needs_provider_when_not_interactive(
 @pytest.mark.parametrize("provider", ["../evil", "Jira Cloud", ""])
 def test_init_rejects_odd_provider_names(canopy_env: CanopyEnv, provider: str) -> None:
     canopy_env.repo_file.unlink()
-    assert main(["init", "--provider", provider]) == 2  # noqa: PLR2004
+    assert main(["init", "--provider", provider]) == 2
 
 
 def test_init_outside_a_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)
-    assert main(["init", "--provider", "jira"]) == 2  # noqa: PLR2004
+    assert main(["init", "--provider", "jira"]) == 2
 
 
 def test_init_rejects_provider_with_trailing_newline(canopy_env: CanopyEnv) -> None:
     canopy_env.repo_file.unlink()
-    assert main(["init", "--provider", "jira\n"]) == 2  # noqa: PLR2004
+    assert main(["init", "--provider", "jira\n"]) == 2
     assert not canopy_env.repo_file.exists()

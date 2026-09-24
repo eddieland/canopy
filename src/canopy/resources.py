@@ -21,16 +21,20 @@ def _find(bundled: str, source: str) -> Path:
 
 
 def migrations_dir() -> Path:
+    """Return the directory of SQL migrations."""
     return _find("migrations", "migrations")
 
 
 def prompts_dir() -> Path:
+    """Return the directory of shipped prompts."""
     return _find("prompts", ".agents/prompts")
 
 
 def agents_dir() -> Path:
+    """Return the directory of OpenCode agent definitions."""
     return _find("agents", ".agents/agents")
 
 
 def skills_dir() -> Path:
+    """Return the directory of shipped skills."""
     return _find("skills", ".agents/skills")

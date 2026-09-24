@@ -1,5 +1,7 @@
-"""`canopy init`: write the user config and repository config if missing, install agent definitions and the tracker
-skill, and print the branch protection canopy relies on (DESIGN §12, TRUST_MODEL §7).
+"""`canopy init`: set up canopy for a repository and an operator.
+
+Writes the user config and repository config if missing, installs agent definitions and the tracker skill, and prints
+the branch protection canopy relies on (DESIGN §12, TRUST_MODEL §7).
 
 Neither config file is ever overwritten. Agent definitions and skills are canopy's own files and are refreshed.
 """
@@ -38,18 +40,22 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
 
 @dataclass
 class Report:
+    """What `run` wrote, what it left alone, and the label it chose for a new user file."""
+
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
     label: str | None = None
 
 
 def default_label() -> str:
+    """Return the default queue label, `agent-ready-<$USER>`, reduced to safe characters."""
     user = os.environ.get("USER") or os.environ.get("LOGNAME") or "me"
     # Labels end up in tracker queries; keep them to characters every tracker accepts.
     return "agent-ready-" + (re.sub(r"[^A-Za-z0-9_-]+", "-", user).strip("-").lower() or "me")
 
 
 def user_config_text(label: str) -> str:
+    """Return the text of a new user config file with queue label `label`."""
     return f"""\
 # canopy user config: personal, never committed. Overrides the repository's canopy.toml key by key.
 # Keys marked user-only in DESIGN.md §12 may be set only here. See examples/config.toml for every key.
@@ -76,6 +82,7 @@ authorized_repliers = []
 
 
 def repo_config_text(provider: str) -> str:
+    """Return the text of a new `canopy.toml` for tracker `provider`."""
     query = EXAMPLE_QUERIES.get(provider, "describe which tickets to look at, in plain language")
     return f"""\
 # canopy.toml: committed at the repository root, shared by everyone who runs canopy on it.

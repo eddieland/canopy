@@ -23,6 +23,8 @@ class TreehouseError(Exception):
 
 @dataclass(frozen=True)
 class Slot:
+    """One worktree in the pool, from `treehouse status --json`."""
+
     name: str
     path: Path
     status: str
@@ -40,6 +42,8 @@ class Slot:
 
 @dataclass(frozen=True)
 class Lease:
+    """A slot leased with `treehouse get --lease --json`."""
+
     path: Path
     lease_id: str
     lease_holder: str
@@ -48,6 +52,8 @@ class Lease:
 
 
 class ReturnOutcome(Enum):
+    """What `treehouse return` said."""
+
     RETURNED = "returned"
     # Exit 1: the slot is unknown, not leased, or leased under a different identity. Retrying cannot help.
     FAILED = "failed"
@@ -56,6 +62,7 @@ class ReturnOutcome(Enum):
 
 
 def holder_for(key: str) -> str:
+    """Return the lease holder canopy uses for ticket `key`."""
     return f"{HOLDER_PREFIX}{key}"
 
 
@@ -90,6 +97,7 @@ def _str(d: dict[str, object], key: str, what: str, *, nullable: bool = False) -
 
 
 def status(runner: procs.Runner) -> list[Slot]:
+    """Return every slot in the pool."""
     result = _run(runner, ["status", "--json"])
     if not result.ok:
         raise _fail(result)
@@ -117,6 +125,7 @@ def status(runner: procs.Runner) -> list[Slot]:
 
 
 def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
+    """Lease a slot for ticket `key`, optionally based on branch `base`."""
     args = ["get", "--lease", "--lease-holder", holder_for(key), "--json"]
     if base is not None:
         args += ["--base", base]
@@ -137,8 +146,10 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
 
 
 def return_slot(runner: procs.Runner, path: Path, *, lease_id: str, lease_holder: str) -> ReturnOutcome:
-    """Return a slot only if it is still held under this exact lease. Always forced: the pushed branch is the
-    checkpoint, and anything uncommitted in the slot is discarded."""
+    """Return a slot only if it is still held under this exact lease.
+
+    Always forced: the pushed branch is the checkpoint, and anything uncommitted in the slot is discarded.
+    """
     args = ["return", "--force", "--if-lease-id", lease_id, "--if-lease-holder", lease_holder, str(path)]
     result = _run(runner, args)
     if result.ok:

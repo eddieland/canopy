@@ -37,19 +37,28 @@ MAX_TEXT = 2000
 
 
 class CliError(Exception):
+    """A refusal or failure, reported on stderr with its exit code."""
+
     def __init__(self, message: str, code: int = 1) -> None:
+        """Carry the message and the exit code."""
         super().__init__(message)
         self.code = code
 
 
+def echo(message: str = "", *, err: bool = False, end: str = "\n") -> None:
+    """Write a line for whoever runs the command: the operator, or the overseer's bash tool."""
+    (sys.stderr if err else sys.stdout).write(message + end)
+
+
 def ticket_key(value: str) -> str:
-    """argparse type for ticket keys. Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
+    """Argparse type for ticket keys. Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
     if not KEY_RE.fullmatch(value):
         raise argparse.ArgumentTypeError(f"invalid ticket key {value!r}: must match {KEY_RE.pattern}")
     return value
 
 
 def cursor(value: str) -> tuple[str, str]:
+    """Parse `--cursor NAME=ID`, as an argparse type."""
     name, sep, cursor_id = value.partition("=")
     if not sep or name not in db.CURSOR_COLUMNS:
         raise argparse.ArgumentTypeError(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}")
@@ -59,12 +68,14 @@ def cursor(value: str) -> tuple[str, str]:
 
 
 def reason(value: str) -> str:
+    """Validate an attention reason, as an argparse type."""
     if not REASON_RE.fullmatch(value):
         raise argparse.ArgumentTypeError(f"invalid reason {value!r}: must match {REASON_RE.pattern}")
     return value
 
 
 def text(value: str) -> str:
+    """Strip, require, and bound free text the overseer writes, as an argparse type."""
     value = value.strip()
     if not value:
         raise argparse.ArgumentTypeError("must not be empty")
@@ -132,10 +143,10 @@ def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) 
     try:
         return _dispatch_command(args, runner or procs.SubprocessRunner())
     except CliError as e:
-        print(f"canopy: {e}", file=sys.stderr)
+        echo(f"canopy: {e}", err=True)
         return e.code
     except (config.ConfigError, db.MigrationError) as e:
-        print(f"canopy: {e}", file=sys.stderr)
+        echo(f"canopy: {e}", err=True)
         return 2
 
 
@@ -170,12 +181,10 @@ def _open(runner: procs.Runner) -> Context:
     return Context(config=cfg, repo_root=repo_root, conn=db.connect(db_path(cfg)), runner=runner)
 
 
-def _current_tick(ctx: Context, *, required: bool = True) -> sqlite3.Row | None:
-    """The tick this command runs inside, named by CANOPY_TICK_ID, which the tick sets for the overseer."""
+def _optional_tick(ctx: Context) -> sqlite3.Row | None:
+    """Return the tick this command runs inside, named by CANOPY_TICK_ID, or None outside a tick."""
     raw = os.environ.get(tick.TICK_ID_ENV)
     if not raw:
-        if required:
-            raise CliError(f"no tick is running ({tick.TICK_ID_ENV} is not set); this command runs inside a tick")
         return None
     row = db.get_tick(ctx.conn, int(raw)) if raw.isdigit() else None
     if row is None or row["status"] != "running":
@@ -183,10 +192,19 @@ def _current_tick(ctx: Context, *, required: bool = True) -> sqlite3.Row | None:
     return row
 
 
+def _require_tick(ctx: Context) -> sqlite3.Row:
+    """Return the tick this command runs inside; refuse outside a tick."""
+    row = _optional_tick(ctx)
+    if row is None:
+        raise CliError(f"no tick is running ({tick.TICK_ID_ENV} is not set); this command runs inside a tick")
+    return row
+
+
 # Commands
 
 
 def cmd_init(args: argparse.Namespace) -> int:
+    """Write missing config, install agent files, and print the branch protection rules."""
     repo_root = config.find_repo_root(Path.cwd())
     provider: str | None = args.provider
     if provider is None and not (repo_root / config.REPO_FILE_NAME).exists():
@@ -199,62 +217,64 @@ def cmd_init(args: argparse.Namespace) -> int:
     user_file = config.user_config_path()
     report = init.run(repo_root, user_file, provider)
     for path in report.written:
-        print(f"wrote {path}")
+        echo(f"wrote {path}")
     for path in report.kept:
-        print(f"kept  {path}")
+        echo(f"kept  {path}")
     if report.label is not None:
-        print(f"\nYour queue label is {report.label!r}. Add it to a ticket to hand the ticket to canopy.")
+        echo(f"\nYour queue label is {report.label!r}. Add it to a ticket to hand the ticket to canopy.")
     if (repo_root / config.REPO_FILE_NAME) in report.written:
-        print(f"Edit tracker.query in {repo_root / config.REPO_FILE_NAME} before the first tick.")
+        echo(f"Edit tracker.query in {repo_root / config.REPO_FILE_NAME} before the first tick.")
     try:
         prefix = config.load(repo_root, user_file).trust.branch_prefix
     except config.ConfigError:
         prefix = "agent/"
-    print()
-    print(init.BRANCH_PROTECTION.format(prefix=prefix), end="")
+    echo()
+    echo(init.BRANCH_PROTECTION.format(prefix=prefix), end="")
     return 0
 
 
 def cmd_tick(ctx: Context, args: argparse.Namespace) -> int:
+    """Run one tick. Only `--dry-run` is allowed until dispatch exists (ROADMAP M2)."""
     if not args.dry_run:
         raise CliError("canopy tick runs only with --dry-run until dispatch is implemented (ROADMAP M2)", 2)
     outcome = tick.run(ctx, dry_run=True)
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
-    print(f"{label}: {outcome.status}: {outcome.summary}")
+    echo(f"{label}: {outcome.status}: {outcome.summary}")
     return 0 if outcome.status in ("ok", "lock_busy") else 1
 
 
-def cmd_status(ctx: Context, args: argparse.Namespace) -> int:
+def cmd_status(ctx: Context, _args: argparse.Namespace) -> int:
+    """Print the last tick, the attention list, and running workers."""
     last = db.last_tick(ctx.conn)
     if last is None:
-        print("No ticks yet.")
+        echo("No ticks yet.")
     else:
         dry = " (dry run)" if last["dry_run"] else ""
-        print(f"Last tick: {last['id']} {last['status']}{dry}, started {_age(last['started_at'])} ago")
+        echo(f"Last tick: {last['id']} {last['status']}{dry}, started {_age(last['started_at'])} ago")
         if last["summary"]:
-            print(f"  {last['summary']}")
+            echo(f"  {last['summary']}")
 
     items = attention.current(ctx.conn)
-    print(f"\nAttention ({len(items)}):")
+    echo(f"\nAttention ({len(items)}):")
     for group in sorted({i.reason for i in items}):
-        print(f"  {group}")
+        echo(f"  {group}")
         for item in (i for i in items if i.reason == group):
-            print(f"    {item.ticket_key}  {_age(item.since)}  {item.detail}")
+            echo(f"    {item.ticket_key}  {_age(item.since)}  {item.detail}")
     if not items:
-        print("  nothing needs you")
+        echo("  nothing needs you")
 
     running = db.running_runs(ctx.conn)
-    print(f"\nRunning workers ({len(running)}/{ctx.config.max_workers}):")
+    echo(f"\nRunning workers ({len(running)}/{ctx.config.max_workers}):")
     for r in running:
-        print(f"  {r['ticket_key']}  {r['kind']}  {_age(r['started_at'])}  {r['slot_path']}")
+        echo(f"  {r['ticket_key']}  {r['kind']}  {_age(r['started_at'])}  {r['slot_path']}")
     if not running:
-        print("  none")
+        echo("  none")
     return 0
 
 
 def cmd_dispatch(ctx: Context, args: argparse.Namespace) -> int:
-    current = _current_tick(ctx)
-    assert current is not None
+    """Record a dry-run dispatch; outside a dry run, refuse until ROADMAP M2."""
+    current = _require_tick(ctx)
     key: str = args.key
     kind: str = args.kind
     db.touch_ticket(ctx.conn, key, ctx.repo)
@@ -264,15 +284,15 @@ def cmd_dispatch(ctx: Context, args: argparse.Namespace) -> int:
         rationale = "dry run: not dispatched" + (f" ({detail})" if detail else "")
         db.record_decision(ctx.conn, current["id"], key, f"dispatch:{kind}", rationale)
         logs.for_tick(current["id"]).info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
-        print(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
+        echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
         return 0
     db.record_decision(ctx.conn, current["id"], key, "refused:not_implemented", "dispatch arrives in ROADMAP M2")
     raise CliError("dispatch is not implemented yet (ROADMAP M2); the refusal was recorded")
 
 
 def cmd_decide(ctx: Context, args: argparse.Namespace) -> int:
-    current = _current_tick(ctx)
-    assert current is not None
+    """Record a wait, skip, or done decision for the current tick."""
+    current = _require_tick(ctx)
     key: str | None = args.key
     action: str = args.action
     if key is None and action != "skip":
@@ -280,33 +300,34 @@ def cmd_decide(ctx: Context, args: argparse.Namespace) -> int:
     if key is not None:
         db.touch_ticket(ctx.conn, key, ctx.repo)
     db.record_decision(ctx.conn, current["id"], key, action, args.rationale)
-    print(f"recorded {action} for {key or 'this tick'}")
+    echo(f"recorded {action} for {key or 'this tick'}")
     return 0
 
 
 def cmd_attention(ctx: Context, args: argparse.Namespace) -> int:
-    current = _current_tick(ctx)
-    assert current is not None
+    """Record an attention item for the current tick."""
+    current = _require_tick(ctx)
     key: str = args.key
     db.touch_ticket(ctx.conn, key, ctx.repo)
     db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{args.reason}", args.detail)
-    print(f"recorded attention {args.reason} for {key}")
+    echo(f"recorded attention {args.reason} for {key}")
     return 0
 
 
 def cmd_ticket_set(ctx: Context, args: argparse.Namespace) -> int:
-    current = _current_tick(ctx, required=False)
+    """Record a ticket's phase, cursors, or done flag. A dry run does not advance cursors."""
+    current = _optional_tick(ctx)
     cursors = dict(args.cursor)
     # A dry run must not advance cursors: the first live tick would then miss everything the dry runs saw.
     skipped = bool(cursors) and current is not None and bool(current["dry_run"])
     db.set_ticket(ctx.conn, args.key, ctx.repo, phase=args.phase, cursors={} if skipped else cursors, done=args.done)
     note = "; dry run, cursors not advanced" if skipped else ""
-    print(f"updated {args.key}{note}")
+    echo(f"updated {args.key}{note}")
     return 0
 
 
 def _age(timestamp: str) -> str:
-    then = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    then = datetime.fromisoformat(timestamp)
     seconds = max(0, int((datetime.now(UTC) - then).total_seconds()))
     for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
         if seconds >= size:

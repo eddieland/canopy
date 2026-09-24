@@ -17,6 +17,8 @@ _HISTORY_TICKS = 1000
 
 @dataclass(frozen=True)
 class Item:
+    """One attention item: a ticket, why it needs a human, and since when."""
+
     ticket_key: str
     reason: str
     detail: str
@@ -24,6 +26,7 @@ class Item:
 
 
 def current(conn: sqlite3.Connection) -> list[Item]:
+    """Return the current attention list, sorted by ticket key and reason."""
     ticks = [
         int(r[0])
         for r in conn.execute(
@@ -33,8 +36,9 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     ]
     if not ticks:
         return []
+    # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at FROM decisions "
+        f"SELECT tick_id, ticket_key, action, rationale, created_at FROM decisions "  # noqa: S608
         f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
         ticks,
     ).fetchall()

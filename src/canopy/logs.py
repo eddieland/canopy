@@ -19,6 +19,8 @@ _STANDARD_ATTRS = frozenset(vars(logging.makeLogRecord({})))
 
 
 class JsonFormatter(logging.Formatter):
+    """Formats a record as one JSON object with `ts`, `level`, `msg`, `tick_id`, and any extras."""
+
     @override
     def format(self, record: logging.LogRecord) -> str:
         line: dict[str, object] = {
@@ -36,6 +38,8 @@ class JsonFormatter(logging.Formatter):
 
 
 class TickAdapter(logging.LoggerAdapter[logging.Logger]):
+    """A logger adapter that stamps every record with its tick id."""
+
     @override
     def process(self, msg: Any, kwargs: MutableMapping[str, Any]) -> tuple[Any, MutableMapping[str, Any]]:
         extra: Mapping[str, object] = kwargs.get("extra") or {}
@@ -58,4 +62,5 @@ def configure(state_dir: Path) -> None:
 
 
 def for_tick(tick_id: int | None) -> TickAdapter:
+    """Return a logger that stamps records with `tick_id`."""
     return TickAdapter(logging.getLogger(_LOGGER), {"tick_id": tick_id})

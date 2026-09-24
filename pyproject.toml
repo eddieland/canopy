@@ -82,5 +82,5 @@ testpaths = ["tests"]
 [tool.pyrefly]
 preset = "strict"
 project-includes = ["src", "tests", "tests/fakes/agent", "tests/fakes/treehouse"]
-# pytest puts tests/ on sys.path (rootdir conftest, no __init__.py), so tests import shared helpers from `conftest`.
-search-path = ["src", "tests"]
+# Tests are packages under the repository root (D019) and import shared helpers from `tests.conftest`.
+search-path = ["src", "."]

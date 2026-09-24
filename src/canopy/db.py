@@ -31,6 +31,8 @@ class MigrationError(Exception):
 
 @dataclass(frozen=True)
 class Migration:
+    """One migration file on disk."""
+
     version: int
     name: str
     path: Path
@@ -42,6 +44,7 @@ def now() -> str:
 
 
 def connect(path: Path) -> sqlite3.Connection:
+    """Open the journal at `path` in WAL mode with foreign keys on, creating its directory."""
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, autocommit=True, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -52,6 +55,7 @@ def connect(path: Path) -> sqlite3.Connection:
 
 
 def discover(migrations_dir: Path) -> list[Migration]:
+    """Return the migrations in `migrations_dir`, checking names and numbering."""
     found: list[Migration] = []
     for path in sorted(migrations_dir.glob("*.sql")):
         m = _MIGRATION_RE.fullmatch(path.name)
@@ -66,6 +70,7 @@ def discover(migrations_dir: Path) -> list[Migration]:
 
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Generator[None]:
+    """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises."""
     conn.execute("BEGIN IMMEDIATE")
     try:
         yield
@@ -100,16 +105,23 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
     return applied_now
 
 
+def _rowid(cur: sqlite3.Cursor) -> int:
+    if cur.lastrowid is None:
+        raise sqlite3.DatabaseError("INSERT returned no row id")
+    return cur.lastrowid
+
+
 # Ticks
 
 
 def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
+    """Insert a `running` tick row and return its id."""
     cur = conn.execute("INSERT INTO ticks (started_at, dry_run) VALUES (?, ?)", (now(), int(dry_run)))
-    assert cur.lastrowid is not None
-    return cur.lastrowid
+    return _rowid(cur)
 
 
 def finish_tick(conn: sqlite3.Connection, tick_id: int, status: str, summary: str) -> None:
+    """Close a tick with its final status and summary."""
     conn.execute(
         "UPDATE ticks SET ended_at = ?, status = ?, summary = ? WHERE id = ?",
         (now(), status, summary, tick_id),
@@ -128,11 +140,13 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
 
 
 def get_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
+    """Return the tick row with `tick_id`, or None."""
     row: sqlite3.Row | None = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick_id,)).fetchone()
     return row
 
 
 def last_tick(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    """Return the most recent tick row, or None."""
     row: sqlite3.Row | None = conn.execute("SELECT * FROM ticks ORDER BY id DESC LIMIT 1").fetchone()
     return row
 
@@ -159,18 +173,21 @@ def set_ticket(
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
 ) -> None:
+    """Record a ticket's phase, cursors, or done flag in one transaction."""
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
             conn.execute("UPDATE tickets SET phase = ? WHERE key = ?", (phase, key))
         for name, value in (cursors or {}).items():
             # The column name comes from a fixed mapping, never from input.
-            conn.execute(f"UPDATE tickets SET {CURSOR_COLUMNS[name]} = ? WHERE key = ?", (value, key))
+            sql = f"UPDATE tickets SET {CURSOR_COLUMNS[name]} = ? WHERE key = ?"  # noqa: S608
+            conn.execute(sql, (value, key))
         if done:
             conn.execute("UPDATE tickets SET done = 1 WHERE key = ?", (key,))
 
 
 def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return the tickets not marked done, by key."""
     return conn.execute("SELECT * FROM tickets WHERE done = 0 ORDER BY key").fetchall()
 
 
@@ -178,17 +195,19 @@ def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def running_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return runs with status `running`, oldest first."""
     return conn.execute("SELECT * FROM runs WHERE status = 'running' ORDER BY started_at").fetchall()
 
 
 def record_decision(conn: sqlite3.Connection, tick_id: int, key: str | None, action: str, rationale: str) -> int:
+    """Insert a decision for `tick_id` and return its id."""
     cur = conn.execute(
         "INSERT INTO decisions (tick_id, ticket_key, action, rationale) VALUES (?, ?, ?, ?)",
         (tick_id, key, action, rationale),
     )
-    assert cur.lastrowid is not None
-    return cur.lastrowid
+    return _rowid(cur)
 
 
 def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.Row]:
+    """Return a tick's decisions in the order they were recorded."""
     return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()

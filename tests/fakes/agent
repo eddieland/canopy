@@ -34,7 +34,7 @@ DEFAULT_RESULT = {
 def run_commands() -> list[dict[str, object]]:
     ran: list[dict[str, object]] = []
     for command in json.loads(os.environ.get("FAKE_AGENT_COMMANDS", "[]")):
-        proc = subprocess.run(command, capture_output=True, text=True, check=False)
+        proc = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603  (argv from the test)
         ran.append({"argv": command, "returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})
     return ran
 

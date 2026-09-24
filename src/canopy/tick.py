@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from canopy import db, lock, logs, procs, prompts, resources, treehouse
 from canopy.config import render_command
-from canopy.context import Context
+
+if TYPE_CHECKING:
+    from canopy.context import Context
 
 TICK_ID_ENV = "CANOPY_TICK_ID"
 DONE_LINE = "tick complete"
@@ -19,12 +22,15 @@ DONE_LINE = "tick complete"
 
 @dataclass(frozen=True)
 class Outcome:
+    """How a tick ended."""
+
     tick_id: int | None
     status: str  # ok | overseer_failed | reconcile_failed | lock_busy
     summary: str
 
 
 def run(ctx: Context, *, dry_run: bool) -> Outcome:
+    """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error."""
     try:
         with lock.hold(ctx.lock_path):
             return _locked(ctx, dry_run=dry_run)
@@ -50,7 +56,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     try:
         capacity = reconcile(ctx, log)
     except treehouse.TreehouseError as e:
-        log.error("reconcile failed", extra={"error": str(e)})
+        log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
 
     block = prompts.state_block(
@@ -73,6 +79,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
 
 
 def reconcile(ctx: Context, log: logs.TickAdapter) -> prompts.Capacity:
+    """Read the pool and running workers; return the capacity left for this tick."""
     running = db.running_runs(ctx.conn)
     leases = {str(r["lease_id"]) for r in running}
     for slot in treehouse.status(ctx.runner):
@@ -99,7 +106,7 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
             timeout=timeout_minutes * 60,
         )
     except procs.ProcError as e:
-        log.error("overseer could not start", extra={"error": str(e)})
+        log.exception("overseer could not start", extra={"error": str(e)})
         return str(e)
 
     out_dir = ctx.state_dir / "ticks"

@@ -3,10 +3,10 @@
 import sqlite3
 
 import pytest
-from conftest import CanopyEnv
 
 from canopy import attention, db, resources
 from canopy.cli import main
+from tests.conftest import CanopyEnv
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def test_every_key_taking_command_rejects_bad_keys(
 ) -> None:
     with pytest.raises(SystemExit) as exc:
         main([a.replace("{key}", key) for a in argv])
-    assert exc.value.code == 2  # noqa: PLR2004
+    assert exc.value.code == 2
     assert "invalid ticket key" in capsys.readouterr().err or key.startswith("-")
 
 
@@ -69,7 +69,7 @@ def test_decide_needs_a_key_except_for_skip(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     in_tick(conn, monkeypatch)
-    assert main(["decide", "wait", "--rationale", "r"]) == 2  # noqa: PLR2004
+    assert main(["decide", "wait", "--rationale", "r"]) == 2
     with pytest.raises(SystemExit):
         main(["decide", "PROJ-1", "dispatch:implement", "--rationale", "r"])
     with pytest.raises(SystemExit):
@@ -82,7 +82,7 @@ def test_long_text_is_truncated(
     tick_id = in_tick(conn, monkeypatch)
     assert main(["decide", "PROJ-1", "wait", "--rationale", "x" * 5000]) == 0
     [row] = db.decisions_for_tick(conn, tick_id)
-    assert len(row["rationale"]) == 2000  # noqa: PLR2004
+    assert len(row["rationale"]) == 2000
 
 
 def test_attention_reason_format(

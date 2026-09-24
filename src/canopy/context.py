@@ -5,13 +5,18 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from canopy import db, lock, procs
-from canopy.config import Config
+
+if TYPE_CHECKING:
+    from canopy.config import Config
 
 
 @dataclass(frozen=True)
 class Context:
+    """Config, repository root, journal connection, and process runner for one command."""
+
     config: Config
     repo_root: Path
     conn: sqlite3.Connection
@@ -19,10 +24,12 @@ class Context:
 
     @property
     def state_dir(self) -> Path:
+        """Where the journal, lock, and logs live."""
         return self.config.paths.state_dir
 
     @property
     def lock_path(self) -> Path:
+        """The tick lock file."""
         return self.state_dir / lock.LOCK_FILE_NAME
 
     @property
@@ -32,4 +39,5 @@ class Context:
 
 
 def db_path(config: Config) -> Path:
+    """Return the journal's path for `config`."""
     return config.paths.state_dir / db.DB_FILE_NAME

@@ -24,6 +24,8 @@ class ConfigError(Exception):
 
 
 class Scope(Enum):
+    """Where a key may be set: either file, or only the user file."""
+
     SHARED = "shared"
     USER = "user-only"
 
@@ -35,6 +37,8 @@ type Tighten = Literal["lower", "higher"] | None
 
 @dataclass(frozen=True)
 class KeySpec:
+    """One config key: its type, default, scope, and which direction is stricter for policy."""
+
     name: str
     scope: Scope
     kind: Kind
@@ -68,6 +72,8 @@ SPECS: dict[str, KeySpec] = {k.name: k for k in KEYS}
 
 @dataclass(frozen=True)
 class Tracker:
+    """The `[tracker]` table."""
+
     provider: str
     query: str
     needs_human_label: str
@@ -76,6 +82,8 @@ class Tracker:
 
 @dataclass(frozen=True)
 class Policy:
+    """The `[policy]` table: attempt limits and cooldowns."""
+
     max_fix_ci_attempts: int
     fix_ci_cooldown_minutes: int
     max_resume_attempts: int
@@ -83,6 +91,8 @@ class Policy:
 
 @dataclass(frozen=True)
 class Trust:
+    """The `[trust]` table."""
+
     branch_prefix: str
     pr_label: str
     authorized_repliers: tuple[str, ...]
@@ -90,6 +100,8 @@ class Trust:
 
 @dataclass(frozen=True)
 class Runtime:
+    """The `[runtime]` table: agent command templates and timeouts."""
+
     overseer_cmd: str
     worker_cmd: str
     overseer_timeout_minutes: int
@@ -98,12 +110,16 @@ class Runtime:
 
 @dataclass(frozen=True)
 class Paths:
+    """The `[paths]` table."""
+
     prompt_overrides: Path
     state_dir: Path
 
 
 @dataclass(frozen=True)
 class Config:
+    """The merged, validated configuration."""
+
     tracker: Tracker
     policy: Policy
     trust: Trust
@@ -120,6 +136,7 @@ def user_config_dir() -> Path:
 
 
 def user_config_path() -> Path:
+    """Return the user config file's path."""
     return user_config_dir() / "config.toml"
 
 
@@ -207,42 +224,62 @@ def _check_type(path: Path, spec: KeySpec, raw: object) -> Value:
 
 
 def _stricter(spec: KeySpec, value: Value) -> bool:
-    assert isinstance(value, int) and isinstance(spec.default, int)
+    if not isinstance(value, int) or not isinstance(spec.default, int):
+        raise TypeError(f"{spec.name}: policy keys are integers")
     return value < spec.default if spec.tighten == "lower" else value > spec.default
 
 
-def _build(v: dict[str, Value], user_file: Path) -> Config:
-    def s(name: str) -> str:
-        value = v[name]
-        assert isinstance(value, str)
-        return value
+# Typed reads from the merged values, which `_check_type` has already checked per key.
 
-    def i(name: str) -> int:
-        value = v[name]
-        assert isinstance(value, int)
-        return value
 
-    def lst(name: str) -> tuple[str, ...]:
-        value = v[name]
-        assert isinstance(value, list)
-        return tuple(value)
+def _str(v: dict[str, Value], name: str) -> str:
+    value = v[name]
+    if not isinstance(value, str):
+        raise TypeError(name)
+    return value
 
-    labels = lst("tracker.labels")
+
+def _int(v: dict[str, Value], name: str) -> int:
+    value = v[name]
+    if not isinstance(value, int):
+        raise TypeError(name)
+    return value
+
+
+def _list(v: dict[str, Value], name: str) -> tuple[str, ...]:
+    value = v[name]
+    if not isinstance(value, list):
+        raise TypeError(name)
+    return tuple(value)
+
+
+def _validate(v: dict[str, Value], user_file: Path) -> None:
+    labels = _list(v, "tracker.labels")
     if not labels:
         raise ConfigError(f"{user_file}: tracker.labels must list at least one label")
     if not all(label.strip() for label in labels):
         raise ConfigError(f"{user_file}: tracker.labels entries must not be empty")
     for name in ("tracker.provider", "tracker.query", "tracker.needs_human_label"):
-        if not s(name).strip():
+        if not _str(v, name).strip():
             raise ConfigError(f"{name} must not be empty")
-    prefix = s("trust.branch_prefix")
+    prefix = _str(v, "trust.branch_prefix")
     if not prefix or not prefix.endswith("/"):
         raise ConfigError(f"trust.branch_prefix must be non-empty and end in '/', got {prefix!r}")
     for name in ("runtime.overseer_cmd", "runtime.worker_cmd"):
-        check_command_template(name, s(name))
+        check_command_template(name, _str(v, name))
     for name in ("runtime.overseer_timeout_minutes", "runtime.worker_timeout_minutes"):
-        if i(name) == 0:
+        if _int(v, name) == 0:
             raise ConfigError(f"{name} must be at least 1")
+
+
+def _build(v: dict[str, Value], user_file: Path) -> Config:
+    _validate(v, user_file)
+
+    def s(name: str) -> str:
+        return _str(v, name)
+
+    def i(name: str) -> int:
+        return _int(v, name)
 
     overrides = s("paths.prompt_overrides")
     return Config(
@@ -250,7 +287,7 @@ def _build(v: dict[str, Value], user_file: Path) -> Config:
             provider=s("tracker.provider"),
             query=s("tracker.query"),
             needs_human_label=s("tracker.needs_human_label"),
-            labels=labels,
+            labels=_list(v, "tracker.labels"),
         ),
         policy=Policy(
             max_fix_ci_attempts=i("policy.max_fix_ci_attempts"),
@@ -258,9 +295,9 @@ def _build(v: dict[str, Value], user_file: Path) -> Config:
             max_resume_attempts=i("policy.max_resume_attempts"),
         ),
         trust=Trust(
-            branch_prefix=prefix,
+            branch_prefix=s("trust.branch_prefix"),
             pr_label=s("trust.pr_label"),
-            authorized_repliers=lst("trust.authorized_repliers"),
+            authorized_repliers=_list(v, "trust.authorized_repliers"),
         ),
         max_workers=i("capacity.max_workers"),
         runtime=Runtime(
