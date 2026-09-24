@@ -38,7 +38,8 @@ Accept: CI green; fakes exercised by at least one test each.
 Status: done 2026-09-23.
 Learned:
 - `tests/canopy/__init__.py` made pytest import the test directory as a package named `canopy`, shadowing
-  `src/canopy`. Test directories now have no `__init__.py`.
+  `src/canopy`. Test directories now have no `__init__.py`. (Superseded by D019: every test directory, the root
+  included, has one.)
 - treehouse's real shapes, read from its source (commit `1185dc6`): `status --json` is an array whose `name` is a
   string and whose `leased_at` is `null` when unleased; `get --lease --json` also returns `base_branch`; `return` exits
   0 returned, 1 failed or lease mismatch, 3 dirty and not forced. The fake follows these.

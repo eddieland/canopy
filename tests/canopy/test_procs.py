@@ -12,7 +12,7 @@ def test_captures_stdout_and_exit_code(agent_log: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("FAKE_AGENT_EXIT", "7")
     result = SubprocessRunner().run(["agent", "hello"])
     assert result.args == ("agent", "hello")
-    assert result.returncode == 7  # noqa: PLR2004
+    assert result.returncode == 7
     assert not result.ok
     assert not result.timed_out
     assert result.stdout.splitlines()[-1] == '{"status":"failed"}'
@@ -32,7 +32,7 @@ def test_timeout_kills_and_keeps_partial_output(agent_log: Path, monkeypatch: py
     monkeypatch.setenv("FAKE_AGENT_SLEEP", "30")
     started = time.monotonic()
     result = SubprocessRunner().run(["agent"], timeout=0.5)
-    assert time.monotonic() - started < 10  # noqa: PLR2004
+    assert time.monotonic() - started < 10
     assert result.timed_out
     assert not result.ok
     assert "fake agent: starting" in result.stdout

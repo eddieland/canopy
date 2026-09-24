@@ -199,3 +199,35 @@ Consequences: one checker, one set of suppressions. Strict mode rejects implicit
 annotation. Adopting it only needed the treehouse fake's `dict` annotations parameterized.
 Revisit: if strict mode forces suppressions on correct code often enough to cost more than it catches; then drop to
 the default preset for the offending error kinds, not the whole project.
+
+## D018. ruff selects every stable rule
+
+Context: ruff ran a hand-picked set (`E`, `F`, `I`, `UP`, `B`, `SIM`, `PL`, `TID`). That missed whole families that fit
+this codebase: bandit (`S`), pathlib (`PTH`), docstrings (`D`), unused arguments (`ARG`), `print` in library code
+(`T20`), pytest style (`PT`), and ruff's own (`RUF`). A hand-picked set also silently skips every rule ruff adds later.
+Decision: `select = ["ALL"]` with a short `ignore` list in `pyproject.toml`, each entry commented with its reason, plus
+per-file ignores for `tests/**` (asserts, magic numbers, fixtures used for side effects, no docstrings) and the
+fakes (`print`). Docstrings follow the Google convention (`Args:`, `Returns:`, `Raises:`
+sections); tests, fakes included, need none and are not docstring-checked. Relative imports are banned. Preview
+rules stay off. The `ruff` floor is 0.16, the version the ignore list was written against.
+Consequences: adopting it needed docstrings on the public API in `src/`, `pathlib` in the agent fake, and `S603` added
+to `procs.py`'s per-file ignores next to `TID251`. A new ruff release can add rules and fail `make check`; `uv.lock`
+pins the version, so that happens only in the PR that bumps it, which fixes or ignores (with a reason) what it flags.
+Opting out is an `ignore` entry with a comment or a `noqa` with a code, never narrowing `select`.
+Revisit: if the ignore list grows past what one screen of `pyproject.toml` explains, or a ruff bump routinely costs
+more than it catches.
+
+## D019. Every test directory is a package
+
+Context: M0 removed `tests/canopy/__init__.py` because, with no `tests/__init__.py`, pytest's default `prepend` import
+mode named that directory `canopy` and shadowed `src/canopy`. The fix left test modules as top-level names
+(`test_cli`), so two test files with the same basename in different directories collide, and what a test module is
+called depends on which directories happen to lack an `__init__.py`.
+Decision: every directory under `tests/` has an `__init__.py`, the root included. Test modules import as
+`tests.canopy.test_cli` and so on, and `src/canopy` stays the only `canopy`. ruff's `INP001` is no longer ignored in
+tests, so a new test directory without one fails the lint. `tests/fakes/` gets one too, for uniformity; the fakes are
+executables and are never imported.
+Consequences: test basenames may repeat across directories. Removing `tests/__init__.py` brings the shadowing back;
+`INP001` catches that. Rejected: `--import-mode=importlib`, which avoids the shadowing without packages but changes
+how `conftest.py` and test helpers are imported for no gain here.
+Revisit: if pytest's default import mode changes.

@@ -64,7 +64,7 @@ def test_treehouse_return_rejects_wrong_lease_id(treehouse_state: Path) -> None:
 
 def test_treehouse_dirty_return_needs_force(treehouse_state: Path) -> None:
     treehouse_state.write_text(json.dumps({"slots": [{"name": "1", "path": "/pool/1/repo", "status": "dirty"}]}))
-    assert treehouse("return", "1")[0] == 3  # noqa: PLR2004
+    assert treehouse("return", "1")[0] == 3
     assert treehouse("return", "--force", "1")[0] == 0
 
 
