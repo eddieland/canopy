@@ -6,10 +6,11 @@ Lease holders are `canopy:<KEY>`.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictStr, TypeAdapter, ValidationError
 
 from canopy import procs
 
@@ -21,16 +22,32 @@ class TreehouseError(Exception):
     """treehouse failed or said something canopy cannot parse."""
 
 
-@dataclass(frozen=True)
-class Slot:
+def _null_is_empty(value: object) -> object:
+    return "" if value is None else value
+
+
+def _empty_is_null(value: object) -> object:
+    return None if value == "" else value
+
+
+# treehouse writes "" for an unleased slot's lease fields and null for its `leased_at`; accept either for both.
+MaybeStr = Annotated[StrictStr, BeforeValidator(_null_is_empty)]
+
+
+class _Output(BaseModel):
+    # treehouse may add fields; canopy reads only the ones it needs.
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+
+class Slot(_Output):
     """One worktree in the pool, from `treehouse status --json`."""
 
-    name: str
+    name: StrictStr
     path: Path
-    status: str
-    lease_id: str
-    lease_holder: str
-    leased_at: str | None
+    status: StrictStr
+    lease_id: MaybeStr = ""
+    lease_holder: MaybeStr = ""
+    leased_at: Annotated[StrictStr | None, BeforeValidator(_empty_is_null)] = None
 
     @property
     def canopy_key(self) -> str | None:
@@ -40,15 +57,17 @@ class Slot:
         return None
 
 
-@dataclass(frozen=True)
-class Lease:
+class Lease(_Output):
     """A slot leased with `treehouse get --lease --json`."""
 
     path: Path
-    lease_id: str
-    lease_holder: str
-    leased_at: str
-    base_branch: str
+    lease_id: StrictStr
+    lease_holder: StrictStr
+    leased_at: StrictStr
+    base_branch: StrictStr
+
+
+_SLOTS = TypeAdapter(list[Slot])
 
 
 class ReturnOutcome(Enum):
@@ -81,47 +100,15 @@ def _fail(result: procs.Result) -> TreehouseError:
     return TreehouseError(f"treehouse {result.args[1]} exited {result.returncode}: {detail}")
 
 
-def _obj(value: object, what: str) -> dict[str, object]:
-    if not isinstance(value, dict):
-        raise TreehouseError(f"treehouse {what}: expected a JSON object")
-    return {str(k): v for k, v in value.items()}
-
-
-def _str(d: dict[str, object], key: str, what: str, *, nullable: bool = False) -> str:
-    value = d.get(key)
-    if value is None and nullable:
-        return ""
-    if not isinstance(value, str):
-        raise TreehouseError(f"treehouse {what}: field {key!r} is missing or not a string")
-    return value
-
-
 def status(runner: procs.Runner) -> list[Slot]:
     """Return every slot in the pool."""
     result = _run(runner, ["status", "--json"])
     if not result.ok:
         raise _fail(result)
     try:
-        doc: object = json.loads(result.stdout)
-    except json.JSONDecodeError as e:
-        raise TreehouseError(f"treehouse status: invalid JSON: {e}") from e
-    if not isinstance(doc, list):
-        raise TreehouseError("treehouse status: expected a JSON array")
-    slots: list[Slot] = []
-    for raw in doc:
-        d = _obj(raw, "status")
-        leased_at = _str(d, "leased_at", "status", nullable=True)
-        slots.append(
-            Slot(
-                name=_str(d, "name", "status"),
-                path=Path(_str(d, "path", "status")),
-                status=_str(d, "status", "status"),
-                lease_id=_str(d, "lease_id", "status", nullable=True),
-                lease_holder=_str(d, "lease_holder", "status", nullable=True),
-                leased_at=leased_at or None,
-            )
-        )
-    return slots
+        return _SLOTS.validate_json(result.stdout)
+    except ValidationError as e:
+        raise TreehouseError(f"treehouse status: unexpected output: {e}") from e
 
 
 def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
@@ -133,16 +120,9 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
     if not result.ok:
         raise _fail(result)
     try:
-        d = _obj(json.loads(result.stdout), "get")
-    except json.JSONDecodeError as e:
-        raise TreehouseError(f"treehouse get: invalid JSON: {e}") from e
-    return Lease(
-        path=Path(_str(d, "path", "get")),
-        lease_id=_str(d, "lease_id", "get"),
-        lease_holder=_str(d, "lease_holder", "get"),
-        leased_at=_str(d, "leased_at", "get"),
-        base_branch=_str(d, "base_branch", "get"),
-    )
+        return Lease.model_validate_json(result.stdout)
+    except ValidationError as e:
+        raise TreehouseError(f"treehouse get: unexpected output: {e}") from e
 
 
 def return_slot(runner: procs.Runner, path: Path, *, lease_id: str, lease_holder: str) -> ReturnOutcome:
