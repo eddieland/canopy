@@ -36,7 +36,7 @@ entry says otherwise.
 
 - Python 3.12+. Package layout `src/canopy/`. CLI entry point `canopy`.
 - `uv` for everything: `uv sync`, `uv run`, `uv tool install`.
-- `ruff` for formatting and linting. `ty` and `pyrefly` for type checking. `pytest` for tests.
+- `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
 - Stdlib first: `argparse`, `sqlite3`, `tomllib`, `subprocess`, `fcntl`,
@@ -61,7 +61,7 @@ entry says otherwise.
 
 ## Code conventions
 
-- Fully typed. `ty` clean.
+- Fully typed. `pyrefly` strict clean, the test fakes included.
 - Deterministic core. The Python code never calls an LLM. It runs agent
   processes and reads their output.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`)

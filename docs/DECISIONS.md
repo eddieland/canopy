@@ -186,3 +186,16 @@ commit by accident, a third file to explain); a shared label with an assignee fi
 tickets but does not authorize them, D014).
 Revisit: when one operator runs canopy on several repositories and needs different labels or state per repository
 (DESIGN §16), or when a team wants a shared authorized-replier list.
+
+## D017. `pyrefly` in strict mode is the only type checker
+
+Context: D011 chose `ty`, but the seed `Makefile`, `pyproject.toml`, and AGENTS.md ran both `ty` and `pyrefly`, and M0
+shipped that way without a record. Two checkers meant satisfying both on the same code for little extra coverage, and
+neither looked at the test fakes.
+Decision: `pyrefly` with `preset = "strict"` is the only type checker. It covers `src`, `tests`, and the extensionless
+fakes (listed in `[tool.pyrefly] project-includes`, as ruff's `extend-include` lists them). `ty` is removed from the
+dev dependencies and the `Makefile`. This supersedes D011 and the `ty` in D007.
+Consequences: one checker, one set of suppressions. Strict mode rejects implicit `Any`, such as a bare `dict`
+annotation. Adopting it only needed the treehouse fake's `dict` annotations parameterized.
+Revisit: if strict mode forces suppressions on correct code often enough to cost more than it catches; then drop to
+the default preset for the offending error kinds, not the whole project.
