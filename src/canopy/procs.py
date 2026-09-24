@@ -41,10 +41,13 @@ class Result:
 
     @property
     def ok(self) -> bool:
+        """Whether the process exited 0 without timing out."""
         return self.returncode == 0 and not self.timed_out
 
 
 class Runner(Protocol):
+    """Runs external processes. `SubprocessRunner` is the real one; tests pass fakes."""
+
     def run(
         self,
         args: Sequence[str],
@@ -77,6 +80,7 @@ class SubprocessRunner:
         stdin: str | None = None,
         timeout: float | None = None,
     ) -> Result:
+        """Run `args` to completion and capture its output. See `Runner.run`."""
         argv = tuple(args)
         full_env = {**os.environ, **env} if env is not None else None
         try:

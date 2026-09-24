@@ -27,5 +27,5 @@ def test_no_arguments_prints_help(capsys: pytest.CaptureFixture[str]) -> None:
 def test_unknown_argument_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc:
         main(["--no-such-flag"])
-    assert exc.value.code == 2  # noqa: PLR2004
+    assert exc.value.code == 2
     assert "unrecognized arguments" in capsys.readouterr().err

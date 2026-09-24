@@ -16,6 +16,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 DEFAULT_RESULT = {
     "status": "done",
@@ -28,8 +29,8 @@ DEFAULT_RESULT = {
 def main(argv: list[str]) -> int:
     log = os.environ.get("FAKE_AGENT_LOG")
     if log:
-        with open(log, "a") as f:
-            f.write(json.dumps({"argv": argv, "cwd": os.getcwd()}) + "\n")
+        with Path(log).open("a") as f:
+            f.write(json.dumps({"argv": argv, "cwd": str(Path.cwd())}) + "\n")
 
     print("fake agent: starting")
     print(f"fake agent: {len(argv)} argument(s)", flush=True)

@@ -37,6 +37,8 @@ entry says otherwise.
 - Python 3.12+. Package layout `src/canopy/`. CLI entry point `canopy`.
 - `uv` for everything: `uv sync`, `uv run`, `uv tool install`.
 - `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests.
+- ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never
+  narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
 - Stdlib first: `argparse`, `sqlite3`, `tomllib`, `subprocess`, `fcntl`,
