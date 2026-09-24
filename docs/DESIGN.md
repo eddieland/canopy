@@ -491,8 +491,8 @@ going away is new again.
 - Whether `ask` permissions in OpenCode agent definitions block or auto-deny
   under `opencode run`. Answered from OpenCode's source in M1: `ask` is auto-rejected and `deny` is enforced (D021).
   The live canary (`tests/canopy/test_opencode_canary.py`) is opt-in; its first real run confirms or overturns this.
-- Whether a Slack notification path should use `notify.cmd` with a small script
-  or the overseer posting via MCP. Default to `notify.cmd`.
+- Whether a Slack notification path should use `notify.cmd` with a small script or the overseer posting via MCP.
+  Planned answer (§20, D035): a sink command, with a Slack sink shipped in canopy. The overseer does not post.
 - Whether `merged` should trigger a tracker transition. Default no; humans own
   ticket state.
 - One operator on several repositories. The user file is shared across them, and `state_dir` and the lock are global.
@@ -935,3 +935,199 @@ TRUST_MODEL is unchanged until M9, whose PR carries the human approval:
   the workspaces it runs in or moves chores into a user file table per workspace.
 - Whether a repository should be able to offer chores that an operator opts into by name, the way it offers its tracker
   query.
+
+## 20. Notifications
+
+Planned for ROADMAP M10; none of it is built. Rationale in D035. It generalizes `notify.cmd` (§14, D032), which stays
+and behaves as it does today. M10 updates the earlier sections when it builds this: §5 gains `notify.py` and
+`sinks/`, §6 step 7 delivers to sinks, §11 lists the new tables, §12 the sink keys, and §14 points here.
+
+Notifications reach the operator away from the terminal: issues as they happen, progress on a schedule. The first
+destination is a Slack channel. The harness stays a program that runs commands: a destination is a **sink**, a command
+that reads one message on stdin. canopy ships one sink, for Slack. Another destination is a small program of the
+operator's, not a change to canopy.
+
+### Sinks
+
+```toml
+[notify.sinks.slack]
+cmd = "canopy-notify-slack"            # the shipped sink; reads its webhook from a file of its own
+events = ["attention", "loop", "runs"]
+digest_every_minutes = 240
+
+[notify.sinks.phone]
+cmd = "curl -sS --fail --data-binary @- https://ntfy.sh/my-private-topic"
+format = "text"
+```
+
+- Sinks are user-only (§12), like every `notify.*` key: they run commands (TRUST_MODEL T7).
+- A sink name matches `[a-z][a-z0-9-]*`. At most 5 sinks, since each can hold the tick lock for its timeout.
+- `cmd` follows the rules for `notify.cmd` (§12): split into argv, no shell, no `{prompt}`. It runs with cwd the
+  repository root, the message on stdin, and a 60-second timeout. Exit 0 means delivered; anything else, a timeout
+  included, means try again next tick. Its stdout is ignored and the tail of its stderr is logged.
+- `format` is `json` (the default) or `text`.
+- `events` lists the groups the sink receives: `attention`, `loop`, `runs`. Default `["attention", "loop"]`. M9 adds
+  `chores`.
+- `digest_every_minutes` is optional and at least 60 (Digest, below).
+- `notify.cmd = "X"` is shorthand for a sink named `default` with `cmd = "X"`, `format = "text"`,
+  `events = ["attention"]`, and no digest. Setting both `notify.cmd` and `[notify.sinks.default]` is a config error.
+
+With no `notify.cmd` and no sinks, nothing below happens: no events are recorded and publishing is §14 without the
+notification.
+
+### Events
+
+A closed set, written by the harness from the journal. Text fields are cut to the limits shown, on one line.
+
+| Group | Kind | When | Fields |
+|---|---|---|---|
+| `attention` | `attention.opened` | a listed item the sink was not told of | ticket, reason, detail (500), since |
+| `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, reason |
+| `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
+| `runs` | `run.ended` | a run's row was closed | ticket, run, kind, status, branch, pr, summary, question |
+| `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
+| `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
+| `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
+
+`summary` and `question` are cut at 300 characters. `question` is set only for a `blocked` run; a blocked worker waits
+on the ticket's needs-human label, which is not an attention item, so `run.ended` is how a sink hears that a worker
+asked something.
+
+Attention stays a diff of state, per sink (D032). `notifications` gains a `sink` column, so each sink is told about
+each open item once, and a sink that was down for a day gets the net change instead of every flip. The other kinds are
+point events. They are written to an outbox table, `notify_events`, in the transaction that records the fact: the
+dispatch that inserts the run, whatever closes the run's row (`_run`, or reconcile marking it `crashed`), and the
+publish step for `loop.*`. Each sink has a cursor in `notify_sinks`, the last event id it delivered. `loop.failing` and
+`loop.sink_failing` are recorded once per streak.
+
+### Delivery
+
+§6 step 7, after `attention.md` is written, for each sink in name order:
+
+1. Gather the sink's attention diff if it takes `attention`, its events after its cursor in the groups it takes, and a
+   digest if one is due. If there is nothing, skip the sink.
+2. Render one message in the sink's format and run the command.
+3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, and set
+   the digest time. On anything else, change nothing, log the failure, and count it toward `loop.sink_failing`.
+
+Bounds:
+
+- At most 20 attention lines and 20 events in one message. The rest are counted in a closing line that points at
+  `attention.md` and `canopy status`, and count as delivered.
+- Events more than 24 hours old when a sink next succeeds are counted, not listed.
+- A new sink's cursor starts at the newest event, so it gets no backlog. It hears about every open attention item on
+  its first delivery, as `notify.cmd` does today.
+- A sink removed from the config loses its `notify_sinks` and `notifications` rows at the next publish. Events every
+  sink has passed are deleted after 7 days.
+- Sinks run one after another under the tick lock, so a hung sink delays the next tick by up to 60 seconds, and five
+  hung sinks by five minutes.
+
+### Digest
+
+- A sink with `digest_every_minutes` gets a digest at its first delivery, and then at the first delivery at least that
+  long after its previous one.
+- The digest covers the time since the sink's previous digest, from the journal only: ticks by status; runs started,
+  by kind; runs ended, by status, with each `done` run's ticket and PR and each `blocked` run's ticket; the open
+  attention list, counted by reason, with the oldest item's age; the workers running now.
+- It is sent even when nothing happened ("24 ticks ok, nothing ran, nothing needs you"). A digest that stops arriving
+  is how the operator learns that the scheduler or the machine stopped running ticks, which canopy itself cannot
+  report.
+- No model writes it. A progress report that needs judgment, such as what changed on the operator's PRs today, is a
+  chore (§19). Its summary reaches sinks as a `chore.ended` event in the `chores` group, which whichever of M9 and M10
+  lands second adds.
+
+### Formats
+
+`text` is lines for a person. A message holding only attention is exactly §14's, so `notify.cmd` does not change. Other
+parts add a line per event and the digest's lines after the attention lines.
+
+`json` is one object:
+
+```json
+{"version": 1, "sink": "slack", "repo": "/home/me/src/api", "sent_at": "2026-09-24T19:00:00Z",
+ "attention": {"added": [{"ticket": "PROJ-3", "reason": "needs_reviewer", "detail": "https://...", "since": "..."}],
+               "resolved": [{"ticket": "PROJ-4", "reason": "ready_to_merge"}],
+               "open": 4, "path": "/home/me/.canopy/attention.md"},
+ "events": [{"id": 88, "kind": "run.ended", "at": "...", "ticket": "PROJ-12", "run": 41, "run_kind": "implement",
+             "status": "done", "branch": "agent/PROJ-12-add-retry", "pr": "https://...", "summary": "..."}],
+ "omitted": 0,
+ "digest": null,
+ "text": "the same message in the text format"}
+```
+
+`attention` is null for a sink that does not take it. `omitted` counts what the bounds left out. `version` changes only
+on an incompatible change; sinks ignore fields they do not know. `text` lets a sink that only forwards a string read one
+field.
+
+### The Slack sink
+
+`canopy-notify-slack` is a console script in the canopy distribution, so the install that puts `canopy` on `PATH` puts
+it there too. It is `canopy.sinks.slack`, stdlib only (`urllib.request`, `json`).
+
+- It reads the `json` format on stdin, posts one message to a Slack incoming webhook, and exits 0 on a 2xx response
+  and 1 otherwise, with Slack's reply on stderr. A rate-limited post is retried by the next tick like any failure.
+- The webhook URL comes from a file: `--webhook-file PATH`, default `$XDG_CONFIG_HOME/canopy/slack-webhook`
+  (`~/.config/canopy/slack-webhook`). The file must belong to the operator, be unreadable by group and others, and hold
+  one `https://hooks.slack.com/` URL; otherwise the sink exits 2 saying which. The URL is never in canopy's config,
+  argv, journal, or logs.
+- The message has a header with the repository's directory name and the counts, a line per item or event with the
+  ticket key, reason or status, and link, and the digest as a short block.
+- Text from the journal is escaped for Slack's markup (`&`, `<`, `>`), so text written by an agent or an org member
+  cannot mention `@channel` or a person, or show one link and point at another. Bare URLs stay clickable; Slack links
+  them itself.
+- Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
+  `[notify.sinks.slack]` table, and run `canopy notify test slack`.
+
+Two lint rules keep the network out of the harness, as D015 keeps processes in `procs.py`: ruff's banned-api rule
+(`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy` except `sinks/`, and bans
+importing `canopy.sinks` anywhere else. The harness reaches the Slack sink only as a configured command, like any other,
+so the process that holds the journal and enforces the guards never opens a connection or reads a sink's secret.
+
+### Commands
+
+- `canopy notify test [SINK]` sends a `test` message to every sink, or to one, now, outside any tick, and prints each
+  result. It changes no cursor and no table. It refuses when `CANOPY_TICK_ID` is set, so the overseer cannot use it to
+  page the operator.
+- `canopy status` gains a line per sink: its last delivery, its consecutive failures and last error, and how many
+  events wait for it.
+
+### Two-way, later
+
+Not in M10. Two rules shape it: nothing listens on the network (TRUST_MODEL §4), and the loop is a scheduled tick with
+no daemon. Slack's interactive features (buttons, slash commands, the Events API, Socket Mode) each need a listener or
+a long-running connection, so they are out. What fits, in order:
+
+1. **Replies on the ticket.** Works with M10 as designed. Every message names the ticket and carries what links the
+   journal has; a question is answered on the ticket, and an authorized reply resumes the worker as it does now. Slack
+   is the pager; the ticket is the conversation.
+2. **Replies in Slack, read by the overseer.** The overseer reads a Slack thread through a Slack MCP server each tick,
+   as it reads ticket comments, and a reply by an authorized Slack account counts as an authorized reply. That needs
+   one thread per ticket (a bot token and `chat.postMessage` instead of a webhook, with the sink reporting each
+   ticket's thread on stdout for the harness to record and pass into the state block), Slack account ids among the
+   authorized repliers, and a TRUST_MODEL T1 change, since it adds a second place authorization comes from.
+
+The `json` format's `version` and the sink's stdout, which M10 ignores, are where that attaches.
+
+### Trust model changes needed
+
+TRUST_MODEL is unchanged until M10, whose PR carries the human approval:
+
+- T2: the harness still makes no outbound call except through configured commands and never reads a token. canopy
+  now ships one program that does both, the Slack sink. It runs only as a sink the operator configured, reads its
+  webhook from the operator's own file, and lint keeps network modules and the sink out of the harness.
+- T6: notifications carry text written by agents and org members (attention details, worker summaries and questions)
+  off the machine to wherever a sink sends it. Controls: the harness sends only the fields in the table above, cut to
+  their limits; the Slack sink escapes text so it cannot mention anyone or disguise a link. Residual: a steered agent
+  chooses up to 500 characters per item that appear in the operator's channel, and a link can carry data in its URL,
+  as §19 says of chore findings.
+- §7: point a sink only at a place whose audience may read the tickets and PRs it quotes, and keep the webhook file
+  readable only by the operator. People who can read the channel see what the loop does; they cannot steer it.
+
+### Open
+
+- Routing finer than groups (D032's revisit), such as `crashed` to a phone and `needs_reviewer` to Slack only.
+- Digests at fixed times of day instead of an interval.
+- Reminders for items open longer than some threshold.
+- Links to tickets. The harness knows no tracker URLs (D003); a `tracker.ticket_url` template would let every message
+  link its ticket.
+- A sink secret read from a command (a password manager's CLI) instead of a file.

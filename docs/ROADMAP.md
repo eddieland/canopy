@@ -210,6 +210,30 @@ clears its items at the next tick.
 
 Status: not started.
 
+## M10. Notification sinks
+
+DESIGN §20 and D035. Needs only M3's attention list and notification; nothing in M4 to M9, so it can be taken sooner
+if the operator asks.
+
+- `[notify.sinks.<name>]` (`cmd`, `format`, `events`, `digest_every_minutes`), user-only, and `notify.cmd` as the
+  `default` shorthand. The existing notify tests pass unchanged.
+- Migration: `notifications.sink`, `notify_events`, `notify_sinks`.
+- `notify.py`: events recorded by dispatch, run close, and publish; per-sink delivery with cursors, bounds, and
+  pruning; the digest; the `text` and `json` formats.
+- `loop.failing` after three consecutive failed ticks, the notification half of DESIGN §15's three-failure item.
+- `canopy notify test`, and a line per sink in `canopy status`.
+- `canopy.sinks.slack` and the `canopy-notify-slack` script, tested against a local HTTP server; the `TID251` bans on
+  network modules outside `sinks/` and on importing `canopy.sinks`.
+- The TRUST_MODEL T2, T6, and §7 changes, with human approval.
+- DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
+
+Accept: with the Slack sink on a real channel, one real ticket's dispatch, a blocked worker's question, and its PR each
+reach the channel once, and an attention item is posted once when it opens and once when it resolves. With the webhook
+file removed, Slack fails for several ticks while a second sink keeps delivering and reports `loop.sink_failing`;
+restoring the file delivers what was missed in one message. A digest arrives on its interval, including a quiet one.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
