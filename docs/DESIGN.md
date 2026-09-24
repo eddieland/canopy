@@ -448,6 +448,42 @@ When the tracker is GitHub Issues, the tracker and GitHub are the same MCP serve
 
 The runtime is swappable by editing the two command templates. No interface.
 
+### Where the runtime finds canopy's definitions
+
+Planned for ROADMAP M2; none of it is built. Rationale in D040. M2 updates §5 (`init.py` stops installing definitions),
+§12 (the placeholder and the default templates), the paragraph above, and §21's agent definition (the snapshot, not
+`canopy init`, provides `canopy-reviewer`) when it builds this.
+
+canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
+contents. A snapshot is written to a temporary directory, renamed into place, and never modified, so overlapping runs
+never load a partial set; reconcile removes snapshots other than the current one when no run is live. OpenCode scans
+both `agent/` and `agents/` (and `skill/` and `skills/`) in a config directory. Command templates name the current
+snapshot with `{definitions_dir}`, which is replaced like `{prompt}` (§12) and must appear in every template that runs a
+canopy-shipped agent (`overseer_cmd`, `worker_cmd`, and §21's `review_cmd`). A template without it is a config error
+that prints the replacement line:
+
+```toml
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
+```
+
+Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
+`OPENCODE_CONFIG_DIR` after the repository's config, so canopy's permissions win on every key they set.
+
+Customizing canopy is adding skills where the runtime already looks: in the repository (`.agents/skills/`,
+`.claude/skills/`, `.opencode/skill/`) or the operator's home (`~/.agents/skills/`, `~/.claude/skills/`,
+`~/.config/opencode/skill/`). canopy turns none of these off. Give a custom skill its own name; two skills with the same
+name do not reliably override each other. A skill in `$HOME` that workers use must be a single `SKILL.md`: the worker's
+`external_directory: deny` lets it load the skill but not read files next to it outside the worktree.
+
+Trust model changes needed, in M2's PR, with human approval:
+
+- T7: agent definitions are no longer repository config. The residual becomes what a repository can still add through
+  the runtime's own config: skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the
+  agent process, the same exposure as the build scripts a worker runs, T4), and permission rules for keys canopy's
+  definitions leave unset.
+- T4: the canary also checks that a repository-level definition cannot loosen a key canopy's definition sets.
+
 ## 14. Attention list
 
 Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable only by the operator, after
