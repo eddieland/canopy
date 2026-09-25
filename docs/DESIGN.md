@@ -1573,3 +1573,20 @@ TRUST_MODEL is unchanged until M11, whose PR carries the human approval:
   will not ship one: it would be VCS code (principle 5).
 - Whether OpenCode can confine reads to one directory outside the working directory. The M11 canary settles it. If it
   cannot, the reviewer runs without a checkout and reads the PR only through MCP.
+
+## Glossary
+
+- **Tick**: one pass of the loop: reconcile local state, run the overseer to read current state and decide what to do,
+  then close the journal record and publish attention.
+- **Overseer**: the agent run once per tick that reads tracker and GitHub state through MCP, derives ticket phases, and
+  chooses actions through the canopy CLI.
+- **Worker**: an agent run dispatched to do work on a ticket in a leased worktree; it writes a branch, pushes it, and
+  reports its result.
+- **Run**: one worker execution dispatched for a ticket, recorded in the journal with its kind, branch, status, and
+  lifecycle details.
+- **Slot**: a worktree location in the treehouse pool that can be leased to a worker while it runs.
+- **Lease**: treehouse's durable record that reserves a slot for a run until canopy returns it.
+- **Attention list**: the operator-facing list of current items that need human notice or action, rendered by
+  `canopy status` and `attention.md`.
+- **Cursor**: the id of the newest comment, review, or CI item already handled for a ticket, so later ticks can process
+  only newer items.
