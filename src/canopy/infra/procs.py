@@ -62,7 +62,8 @@ class Runner(Protocol):
 
         Args:
             args: The command and its arguments. Never passed through a shell.
-            cwd: Working directory for the child. Defaults to the current one.
+            cwd: Working directory for the child. Defaults to the current one. When given, the child's `PWD` names
+                it, overriding any `PWD` in `env`.
             env: Entries merged over the inherited environment.
             stdin: Text written to the child's stdin. When None, stdin is `/dev/null`.
             timeout: Seconds before the child's process group is killed. None waits forever.
@@ -82,7 +83,7 @@ class Runner(Protocol):
 
         Args:
             args: The command and its arguments. Never passed through a shell.
-            cwd: Working directory for the child.
+            cwd: Working directory for the child, which its `PWD` also names.
             log_path: File the child's stdout and stderr are appended to, created readable only by the operator.
 
         Returns:
@@ -183,9 +184,9 @@ class SubprocessRunner:
 def _child_env(cwd: Path | None, env: Mapping[str, str] | None) -> dict[str, str] | None:
     """Return the child's environment: the inherited one with `env` merged over it, or None to inherit it unchanged.
 
-    A child given a working directory gets `PWD` naming it, as a shell's `cd` would. Some programs trust `PWD` over
-    the real working directory: OpenCode runs its tools in `PWD`, so an inherited one would put a worker's edits in the
-    directory canopy was started from instead of its worktree.
+    A child given a working directory gets `PWD` naming it, as a shell's `cd` would, whatever `env` says. Some programs
+    trust `PWD` over the real working directory: OpenCode runs its tools in `PWD`, so an inherited one would put a
+    worker's edits in the directory canopy was started from instead of its worktree.
     """
     if cwd is None:
         return {**os.environ, **env} if env is not None else None
