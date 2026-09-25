@@ -497,8 +497,11 @@ A command template is split into words with shell quoting rules (`shlex`), then 
 replaced inside each word in one pass. No shell runs, so the prompt always lands in exactly one argument whatever it
 contains (D023). Both templates must contain `{prompt}` exactly once and `{definitions_dir}`, the directory canopy's
 agent definitions are in (§13), at least once; a template without it is a config error that prints the line to write
-instead. `env` in the default templates is the ordinary program, not a shell. `notify.cmd` is split the same way, gets
-its input on stdin, and must not contain `{prompt}`.
+instead. The check catches templates from before D040; it cannot tell where the runtime reads the value. A template
+that passes the directory somewhere OpenCode does not read it runs OpenCode's default agent, which allows everything, so
+a custom template, such as a sandbox wrapper's, must still end up setting `OPENCODE_CONFIG_DIR` to it. `env` in the
+default templates is the ordinary program, not a shell. `notify.cmd` is split the same way, gets its input on stdin, and
+must not contain `{prompt}`.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. The default is `prompts/` next to the user
 file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
