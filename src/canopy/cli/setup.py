@@ -1,4 +1,4 @@
-"""`canopy init`."""
+"""`canopy init`, and `canopy skill` for the operator's own agent sessions."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import click
 
 from canopy.cli.common import Obj
 from canopy.core import config, definitions
+from canopy.infra import resources
 from canopy.setup import init
 
 
@@ -33,6 +34,20 @@ def cmd_init(click_ctx: click.Context, provider: str | None) -> int:
     if obj is not None and (ssh_urls := init.ssh_push_urls(obj.runner, repo_root)):
         click.echo()
         click.echo(init.SSH_REMOTE_WARNING.format(urls=", ".join(ssh_urls)), nl=False)
+    return 0
+
+
+@click.command("skill")
+def cmd_skill() -> int:
+    """Print the canopy skill for your own agent sessions.
+
+    Save it where your agent runtime reads skills, and again after upgrading canopy:
+
+    \b
+        mkdir -p ~/.agents/skills/canopy
+        canopy skill > ~/.agents/skills/canopy/SKILL.md
+    """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
+    click.echo(resources.operator_skill().read_text(encoding="utf-8"), nl=False)
     return 0
 
 

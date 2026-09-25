@@ -664,3 +664,39 @@ against the base branch, with the blocker's commits in it; a reviewer sees that.
 green or is the ticket's blocker; that stays the overseer's judgment, like every other reading of the tracker.
 Revisit: if the `decisions` table shows stacks on red or unrelated branches, or stacked tickets' later runs dropping
 their base; then record the base per ticket and check it in dispatch.
+
+## D046. Proprietary for now, installed from git, never from PyPI under this name
+
+Context: M5 makes canopy something a coworker installs. The repository is private, and `canopy` on PyPI is an unrelated
+project: `uv tool install canopy`, which README's install step said, installs it and fails with no `canopy` executable.
+Decision:
+- License: proprietary, all rights reserved (`LICENSE`, `license = "LicenseRef-Proprietary"`). Coworkers use it under
+  the owner's permission, as with any private repository.
+- Install: `uv tool install git+https://github.com/eddieland/canopy`, with the HTTPS credential any private clone
+  needs; `--reinstall` upgrades. The `Private :: Do Not Upload` classifier makes PyPI refuse an upload, so a mistaken
+  publish cannot take a name that is not ours.
+- `tests/install-check.sh` (`make install-check`) is the clean-machine check: `uv tool install` from the checkout
+  into an empty HOME, then `canopy init` and a dry tick against the fakes, asserting the bundled files come from the
+  installed tool. CI runs it on Linux and macOS for every change. It is not in `make check` because it downloads the
+  dependencies.
+Rejected: a permissive license now (the owner chose to decide that with a public release); publishing to PyPI under
+another name (a rename is open, README's first line, and a release process is more than M5 needs).
+Revisit: before any public release or index publish, together with the name; if a coworker cannot use git credentials
+for the install.
+
+## D047. The operator's canopy skill is printed by `canopy skill`, and agent runs do not load it
+
+Context: the `canopy` skill reserved in `.agents/skills/` was for an agent in the operator's own session, answering
+"why was KEY not picked up". Since D040 it would ship only in the definitions snapshot, which only canopy's overseer and
+workers load: the overseer has its prompt and the worker may not run `canopy` at all. An operator's copy in `$HOME`
+would then be a second skill with the same name in every run, and which one OpenCode loads is not deterministic.
+Decision (DESIGN §13): the skill moves to `.agents/operator-skill/SKILL.md`, bundled but outside the snapshot.
+`canopy skill` prints it; the operator saves it where their runtime reads skills and again after upgrading. It tells an
+agent started by canopy to follow its prompt instead, since canopy's runs also read `$HOME`'s skills. It describes only
+read-only use: ticks and the overseer's commands are the operator's and the overseer's.
+Rejected:
+- `canopy init` writing it into `~/.agents/skills/`: D040 took init out of the operator's runtime config, and a file
+  written behind the operator's back goes stale unnoticed on upgrade.
+- Keeping it in the snapshot: runs gain nothing from it, and a `$HOME` copy collides with it by name.
+Revisit: when a second runtime reads skills from somewhere `canopy skill`'s output does not fit; if operators ask for
+an install command.

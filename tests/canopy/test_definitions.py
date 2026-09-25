@@ -23,6 +23,14 @@ def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> Non
     assert "canopy-overseer" in definitions.agent_names()
 
 
+def test_the_operator_skill_is_not_in_the_snapshot(tmp_path: Path) -> None:
+    # It is for the operator's own sessions; an operator's copy of it in $HOME would clash with a second one here.
+    snapshot = definitions.ensure(tmp_path)
+    names = [p.name for p in (snapshot / "skills").iterdir()]
+    assert "canopy" not in names
+    assert names
+
+
 def test_an_existing_snapshot_is_reused_as_is(tmp_path: Path) -> None:
     snapshot = definitions.ensure(tmp_path)
     # OpenCode writes into the directory it loads; that must not make canopy copy again.

@@ -101,7 +101,8 @@ def user_config_text(label: str) -> str:
     """Return the text of a new user config file with queue label `label`."""
     return f"""\
 # canopy user config: personal, never committed. Overrides the repository's canopy.toml key by key.
-# Keys marked user-only in DESIGN.md §12 may be set only here. See examples/config.toml for every key.
+# Keys marked user-only in DESIGN.md §12 may be set only here. Every key, with comments:
+# https://github.com/eddieland/canopy/blob/main/examples/config.toml
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a label with another operator:

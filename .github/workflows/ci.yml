@@ -39,3 +39,28 @@ jobs:
       # It includes `ruff format --check`, so unformatted code still fails.
       - name: Lint, type check, and test
         run: make check
+
+  # README's install step, from this commit, into an empty HOME: the wheel's bundled files, its dependencies' wheels,
+  # and the installed `canopy` running a dry tick against the fakes (ROADMAP M5).
+  install-check:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # No cache: the check installs into an empty one of its own, so setup-uv would find nothing to save and fail.
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: false
+
+      - name: Install with uv tool install and run a dry tick
+        run: make install-check

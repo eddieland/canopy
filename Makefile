@@ -1,12 +1,12 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test treehouse
+.PHONY: help all check fmt lint test install-check treehouse
 
 ##@ General
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} \
-		/^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2} \
+		/^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2} \
 		/^##@ / {printf "\n\033[1m%s\033[0m\n", substr($$0, 5)}' $(MAKEFILE_LIST)
 
 all: fmt check ## Everything to run before committing: fmt, then check
@@ -26,6 +26,10 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict)
 
 test: ## Run all tests
 	uv run pytest -q
+
+# Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
+install-check: ## Install canopy with uv tool install into an empty HOME and run it against the fakes
+	tests/install-check.sh
 
 ##@ Setup
 
