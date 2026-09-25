@@ -45,7 +45,8 @@ converts them to Jira's format.
 ## Blockers
 
 Blockers are issue links of type "Blocks", read from the inward side ("is blocked by"). A blocker is resolved when its
-status category is Done. Other link types ("relates to", "clones") are not blockers.
+status category is Done. Other link types ("relates to", "clones") and parent or subtask relations are not blockers.
+A blocker's PR is found on GitHub by its head branch, `<branch prefix><KEY>-*`, not from links in the issue.
 
 ## Text that acts
 

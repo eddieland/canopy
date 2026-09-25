@@ -26,6 +26,9 @@ if TYPE_CHECKING:
 # The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
 # characters: lowercase words joined by single hyphens.
 SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
+# A stacked run's base is another ticket's branch, `<branch_prefix><KEY>-<slug>`: what follows the prefix is one plain
+# ref component, so it reaches git's argv as safely as a key.
+BASE_TAIL_RE = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
 DEFAULT_SLUG = "work"
 DISPATCH_LOCK = "dispatch.lock"
 RUNS_DIR = "runs"
@@ -49,6 +52,14 @@ class Started:
     branch: str
     slot: Path
     pid: int
+
+
+@dataclass(frozen=True)
+class Plan:
+    """The branch a run works on, and the branch it stacks on if `--base` named one."""
+
+    branch: str
+    base: str | None
 
 
 def valid_slug(value: str) -> bool:
@@ -86,13 +97,14 @@ def start(
     """Check the guards, lease a slot, record the run, and spawn `canopy _run` for it.
 
     `implement` works on `<branch_prefix><KEY>-<slug>`. `fix-ci` and `resume` continue the branch the journal recorded
-    for the ticket, so they take no slug.
+    for the ticket, so they take no slug. `base` stacks the run on another ticket's branch (DESIGN §10); without it the
+    run starts from the pool's base branch.
 
     Raises:
         Refusal: a guard refused, or the slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased.
     """
-    branch = _branch(ctx, key, kind, slug, base)
+    plan = _plan(ctx, key, kind, slug, base)
 
     # One dispatch at a time, so two cannot both pass the capacity check. Held across the lease and the spawn.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
@@ -103,7 +115,7 @@ def start(
             raise Refusal("no_slot", str(e)) from e
         try:
             return _spawn(
-                ctx, tick_id=tick_id, key=key, kind=kind, branch=branch, lease=lease, attempt=attempt, context=context
+                ctx, tick_id=tick_id, key=key, kind=kind, plan=plan, lease=lease, attempt=attempt, context=context
             )
         except BaseException:
             with contextlib.suppress(treehouse.TreehouseError):
@@ -121,7 +133,7 @@ def check(ctx: Context, *, tick_id: int, key: str, kind: str, slug: str | None, 
     Raises:
         Refusal: a guard refused.
     """
-    branch = _branch(ctx, key, kind, slug, base)
+    plan = _plan(ctx, key, kind, slug, base)
     planned = [
         str(d["ticket_key"])
         for d in db.decisions_for_tick(ctx.conn, tick_id)
@@ -129,12 +141,26 @@ def check(ctx: Context, *, tick_id: int, key: str, kind: str, slug: str | None, 
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
         _guard(ctx, key, kind, planned=planned)
-    return branch
+    return plan.branch
 
 
-def _branch(ctx: Context, key: str, kind: str, slug: str | None, base: str | None) -> str:
+def _plan(ctx: Context, key: str, kind: str, slug: str | None, base: str | None) -> Plan:
+    branch = _branch(ctx, key, kind, slug)
     if base is not None:
-        raise Refusal("not_implemented", "--base arrives with stacking (ROADMAP M4)")
+        _check_base(ctx.config.trust.branch_prefix, branch, base)
+    return Plan(branch=branch, base=base)
+
+
+def _check_base(prefix: str, branch: str, base: str) -> None:
+    """Refuse a base that is not another ticket's agent branch (DESIGN §10, D045)."""
+    tail = base.removeprefix(prefix)
+    if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
+        raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
+    if base == branch:
+        raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
+
+
+def _branch(ctx: Context, key: str, kind: str, slug: str | None) -> str:
     if kind == "implement":
         slug = DEFAULT_SLUG if slug is None else slug
         if not valid_slug(slug):
@@ -178,12 +204,15 @@ def _spawn(
     tick_id: int,
     key: str,
     kind: str,
-    branch: str,
+    plan: Plan,
     lease: treehouse.Lease,
     attempt: int,
     context: str | None,
 ) -> Started:
     cfg = ctx.config
+    branch = plan.branch
+    # A stacked run starts from, and opens its PR against, the other ticket's branch; `_run` checks it is on origin.
+    base = plan.base if plan.base is not None else lease.base_branch
     ticket = db.get_ticket(ctx.conn, key)
     pr_url = ticket["pr_url"] if ticket is not None else None
     repliers = ", ".join(f"`{r}`" for r in cfg.trust.authorized_repliers)
@@ -191,7 +220,8 @@ def _spawn(
         "KEY": key,
         "SLOT": str(lease.path),
         "BRANCH": branch,
-        "BASE": lease.base_branch,
+        "BASE": base,
+        "STACKING": stacking_note(branch, plan.base),
         "TRACKER_PROVIDER": cfg.tracker.provider,
         "NEEDS_HUMAN_LABEL": cfg.tracker.needs_human_label,
         "PR_LABEL": cfg.trust.pr_label,
@@ -215,7 +245,7 @@ def _spawn(
         slot_path=lease.path,
         lease_id=lease.lease_id,
         lease_holder=lease.lease_holder,
-        base_branch=lease.base_branch,
+        base_branch=base,
         branch=branch,
         runs_dir=runs_dir(ctx),
     )
@@ -232,3 +262,14 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
     return Started(run_id=run_id, branch=branch, slot=lease.path, pid=pid)
+
+
+def stacking_note(branch: str, base: str | None) -> str:
+    """Return the worker prompt's `{{STACKING}}` paragraph: whether the run builds on another ticket's open PR."""
+    if base is None:
+        return "This ticket is not stacked on another ticket's branch."
+    return (
+        f"This ticket is stacked: `{base}` is the branch of another ticket's open PR, and this work builds on it. "
+        f"Never push to `{base}` or change its PR. The PR for `{branch}` targets `{base}`, so it shows only this "
+        "ticket's commits; its body names the PR it builds on and says it merges after that one."
+    )

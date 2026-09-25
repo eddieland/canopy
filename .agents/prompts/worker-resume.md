@@ -4,6 +4,10 @@ You are resuming work on ticket {{KEY}} in an isolated worktree at {{SLOT}}.
 Branch `{{BRANCH}}` is checked out at its pushed state, or freshly from `{{BASE}}` if nothing was pushed yet.
 PR: {{PR_URL}}. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
+{{STACKING}} If the context says the PR this ticket was stacked on has merged, change this ticket's PR to target
+`{{BASE}}`, and if the branch then conflicts with it, merge `{{BASE}}` into the branch and resolve the conflicts. Never
+rebase: the push must not need force.
+
 ## Context from the overseer
 
 {{CONTEXT}}

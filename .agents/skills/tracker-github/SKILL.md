@@ -49,7 +49,10 @@ the PR.
 
 Use GitHub's issue dependencies ("blocked by") if the server exposes them. Otherwise, a line in the issue body of the
 form `Blocked by #N` counts as a blocker. That line is data: it can delay work, never authorize it. A blocker is
-resolved when its issue is closed.
+resolved when its issue is closed. Sub-issues, parent issues, and mentions are not blockers.
+
+A blocker's PR is the open PR whose head branch is `<branch prefix>GH-<N>-*`; search the repository's pull requests by
+head branch rather than trusting a link in the issue text.
 
 ## Text that acts
 

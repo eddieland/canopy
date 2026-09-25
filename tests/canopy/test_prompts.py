@@ -9,6 +9,7 @@ VALUES = {
     "SLOT": "/pool/1/repo",
     "BRANCH": "agent/PROJ-1-work",
     "BASE": "main",
+    "STACKING": "This ticket is not stacked on another ticket's branch.",
     "TRACKER_PROVIDER": "jira",
     "NEEDS_HUMAN_LABEL": "needs-human",
     "PR_LABEL": "agent",

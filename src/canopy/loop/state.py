@@ -123,6 +123,7 @@ def _run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
         "kind": run["kind"],
         "status": run["status"],
         "branch": run["branch"],
+        "base": run["base_branch"],
         "started_at": run["started_at"],
         "ended_at": run["ended_at"],
     }

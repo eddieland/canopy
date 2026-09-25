@@ -141,7 +141,12 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     base = str(run["base_branch"])
     git = _Git(ctx.runner, slot)
 
-    git.run("fetch", "--quiet", "origin")
+    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
+    git.run("fetch", "--quiet", "--prune", "origin")
+    # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
+    # is another ticket's branch, deleted when its PR merged (DESIGN §10).
+    if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{base}"):
+        raise _SetupError(f"the base branch {base} is not on origin; if it was stacked on, its PR may have merged")
     if git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
         git.run("checkout", "--quiet", "-B", branch, f"refs/remotes/origin/{branch}")
     else:

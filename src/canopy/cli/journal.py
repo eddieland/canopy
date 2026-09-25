@@ -11,6 +11,7 @@ from canopy.loop import attention
 
 PHASES = (
     "ready",
+    "blocked",
     "running",
     "pushed_no_pr",
     "ci_running",

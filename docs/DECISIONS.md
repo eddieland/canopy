@@ -639,3 +639,28 @@ Rejected:
 - Relying on the canary alone: it checks how the runtime merges definitions, not what a given repository commits.
 Revisit: if OpenCode gives a config directory's agent definitions precedence over the project's, or lets a command
 disable project agent definitions without disabling project skills; when a second runtime is supported (D009).
+
+## D045. Stacking checks the base's shape in code; the overseer chooses it from live state every dispatch
+
+Decision:
+- `canopy dispatch --base BRANCH` is accepted for every kind. The base must be `trust.branch_prefix` followed by one
+  plain ref component, and not the run's own branch; anything else is `bad_base`. Only agent branches can be stacked
+  on, so an overseer steered by injected text cannot aim a worker's PR at a release or other long-lived branch.
+- The harness does not require the base to be a branch in its own journal. A blocker in another operator's queue,
+  under the same shared prefix, is a legitimate base.
+- The base is not stored on the ticket or inherited by later runs. Each dispatch passes it or not, from what the
+  overseer reads that tick (the blocker's PR open or merged), and the run records it in `runs.base_branch`. The state
+  block shows the latest run's base so the overseer can see a ticket was stacked.
+- `treehouse get` is not given the base. `_run` already creates the branch from `origin/<base>` after a fetch, and a
+  base missing from origin is a `crashed` run with a note, before the worker starts.
+- A stacked ticket whose blocker merged is retargeted by a `resume` without `--base`: the worker points the PR at the
+  repository's base branch and merges that branch in if it conflicts. Workers push without force, so no rebase.
+Alternatives: a `tickets.base_branch` column that later runs inherit (a journal fact standing in for the PR's live
+base, DESIGN §4, and one that goes stale when the blocker merges); checking the base against the journal (refuses
+cross-operator stacks); passing `--base` to treehouse (its handling of a branch that exists only on origin is not
+canopy's to rely on).
+Consequences: an overseer that forgets `--base` on a stacked ticket's `resume` before its PR exists opens that PR
+against the base branch, with the blocker's commits in it; a reviewer sees that. The harness cannot tell a base is
+green or is the ticket's blocker; that stays the overseer's judgment, like every other reading of the tracker.
+Revisit: if the `decisions` table shows stacks on red or unrelated branches, or stacked tickets' later runs dropping
+their base; then record the base per ticket and check it in dispatch.

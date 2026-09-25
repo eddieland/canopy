@@ -24,7 +24,12 @@ from canopy.runs import dispatch, policy, worker
     help=f"implement only: short name for the work, from the ticket title; the branch is <prefix><KEY>-<slug>. "
     f"Default {dispatch.DEFAULT_SLUG!r}. fix-ci and resume continue the ticket's recorded branch.",
 )
-@click.option("--base", metavar="BRANCH", help="Start from this branch instead of the default.")
+@click.option(
+    "--base",
+    metavar="BRANCH",
+    help="Stack on another ticket's branch, <prefix><KEY>-<slug>, whose PR is open and green: start from it and target "
+    "the PR at it. Default: the repository's base branch.",
+)
 @click.option(
     "--context",
     type=TextType(),
@@ -70,19 +75,23 @@ def cmd_dispatch(
             db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}attempt_limit", r.reason)
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    # `base` passed the guards, so it is the branch this run is stacked on.
+    on_base = f" on {base}" if base is not None else ""
     if started is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
             f"context={context}" if context else "",
         ]
-        rationale = truncate("; ".join(e for e in [f"dry run: not dispatched; would work on {branch}", *extras] if e))
+        rationale = truncate(
+            "; ".join(e for e in [f"dry run: not dispatched; would work on {branch}{on_base}", *extras] if e)
+        )
         db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
         click.echo(f"dry run: recorded dispatch {kind} for {key}; nothing was started")
         return 0
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
-    rationale = f"run {started.run_id}: {started.branch} in {started.slot}"
+    rationale = f"run {started.run_id}: {started.branch}{on_base} in {started.slot}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")
