@@ -34,7 +34,9 @@ export PATH="$UV_TOOL_BIN_DIR:$repo/tests/fakes:$PATH"
 
 canopy --version
 canopy --help >/dev/null
-canopy skill | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"
+# Output is captured before grep, so a command that fails after printing the expected text still fails the check.
+skill=$(canopy skill)
+echo "$skill" | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"
 
 project="$work/project"
 mkdir -p "$project"
@@ -52,7 +54,8 @@ export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
 export FAKE_AGENT_RESULT="tick complete"
 export FAKE_AGENT_COMMANDS='[["canopy", "decide", "GH-1", "wait", "--rationale", "install check"]]'
 canopy tick --dry-run
-canopy decisions | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
+decisions=$(canopy decisions)
+echo "$decisions" | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
 
 # The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
