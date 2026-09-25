@@ -149,7 +149,11 @@ here, and not listed by any milestone: DESIGN §15's attention item after three 
 Accept: two linked tickets are worked in order; the second's PR targets the
 first's branch when the first is open and green.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_stacking.py` holds the harness's half of the
+acceptance), docs, and D045 are in: `--base` checked by the `bad_base` guard, the stacked base in the run and the worker
+prompts, a `blocked` phase, and the overseer prompt's blockers and stacking section. The overseer prompt change needs
+human approval in its PR. Waiting on the operator: two real linked tickets worked in order, the second stacked on the
+first's open, green PR. Started on request while M2 and M3 wait on their live runs.
 
 ## M5. Shareable
 
