@@ -31,6 +31,21 @@ def test_runs_in_cwd_with_merged_env(agent_log: Path, tmp_path: Path) -> None:
     assert json.loads(agent_log.read_text())["cwd"] == str(workdir)
 
 
+def test_a_child_given_a_cwd_gets_a_pwd_naming_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # OpenCode runs its tools in $PWD, not its working directory, so a stale inherited PWD misplaces a worker's edits.
+    # `env` prints PWD as given; a shell would correct it and hide the bug.
+    monkeypatch.setenv("PWD", "/somewhere/else")
+    workdir = tmp_path / "slot"
+    workdir.mkdir()
+    for env in (None, {"EXTRA": "1"}):
+        result = SubprocessRunner().run(["env"], cwd=workdir, env=env)
+        assert f"PWD={workdir}" in result.stdout.splitlines()
+    log = tmp_path / "spawn.log"
+    pid = SubprocessRunner().spawn(["env"], cwd=workdir, log_path=log)
+    os.waitpid(pid, 0)
+    assert f"PWD={workdir}" in log.read_text().splitlines()
+
+
 def test_timeout_kills_and_keeps_partial_output(agent_log: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FAKE_AGENT_SLEEP", "30")
     started = time.monotonic()

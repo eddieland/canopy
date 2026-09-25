@@ -97,7 +97,7 @@ canopy (harness, Python)
 
   infra/           plumbing that knows nothing about tickets or agents
     procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
-                   detached spawns and pid liveness
+                   a child's PWD names its cwd (OpenCode runs tools in PWD); detached spawns and pid liveness
     lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
     logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
     resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel

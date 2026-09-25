@@ -3,7 +3,8 @@
 An agent definition allows one bash command, denies other bash commands and all edits, and marks one command `ask`.
 The agent is told to try all of them. Only the allowed command may leave a marker file; the run must end on its own
 rather than block on the `ask`. Missing marker files alone prove nothing if the model never tried, so the run's JSON
-event stream must also show each forbidden call attempted.
+event stream must also show each forbidden bash call attempted. The edit tool is not offered at all when denied, so
+there is no attempt to see.
 
 The definition is loaded the way canopy loads its own (D040): from a directory named by `OPENCODE_CONFIG_DIR`, in its
 `agents/` subdirectory. A second run adds the repository's own definition of the same agent, which allows the denied
@@ -110,7 +111,8 @@ def check_canary(tmp_path: Path, *, repo_agent: str | None) -> None:
     # Each forbidden call must have been attempted, or the checks above were never exercised.
     calls = tool_calls(result.stdout)
     assert attempted(calls, "touch denied-marker"), "the model never tried the denied command\n" + report
-    assert attempted(calls, "written-marker"), "the model never tried the denied edit\n" + report
+    # No check that the edit was attempted: OpenCode 1.18 leaves a tool denied outright out of the model's toolset, so
+    # there is nothing to call. The marker check above still catches an edit made some other way.
     # An `ask` is rejected before the tool runs; OpenCode reports it on stderr and ends the turn.
     asked = attempted(calls, "touch asked-marker") or "auto-rejecting" in result.stderr
     assert asked, "the model never tried the `ask` command\n" + report
