@@ -146,6 +146,41 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     assert "stopped after 2 ticks: ok=2" in tick2
 
 
+def test_a_narrow_terminal_shortens_only_the_rationale(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slug = "docs-readme-add-troubleshooting-section"
+    overseer_does(
+        monkeypatch,
+        canopy("dispatch", "PROJ-2", "--kind", "implement", "--slug", slug),
+        canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3/" + "x" * 80),
+    )
+    time = FakeTime()
+    time.on_sleep = lambda: overseer_does(monkeypatch, canopy("decide", "PROJ-3", "wait", "--rationale", "approved"))
+    out = io.StringIO()
+    term = Console(file=out, width=80, highlight=False)
+
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    text = out.getvalue()
+    assert all(len(line) <= 80 for line in text.splitlines())
+    tick1, tick2 = text.split("tick 1  ok")[1].split("tick 2  ok")
+    assert "    PROJ-2  dispatch:implement  dry run: not dispatched; would work on" in tick1
+    assert slug not in tick1  # the rationale is what gives way
+    assert "…" in tick1
+    assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3/" in tick1
+    assert "-   PROJ-3  needs_reviewer  resolved" in tick2
+
+
 class SlowOutput(io.StringIO):
     """Output that takes a second of fake time per write, and notes when tick 1's report line was written."""
 
