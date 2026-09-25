@@ -257,7 +257,7 @@ provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context TEXT]
+`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context TEXT]
 [--cursor NAME=ID]...`:
 
 1. Refuse if capacity is zero, if a `runs` row for KEY is `running`, or if the kind's attempt limit or cooldown blocks
@@ -265,6 +265,9 @@ provider skill says which.
    `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and then stops, with
    each dry-run dispatch already recorded this tick counting as a running run for `running` and `capacity` (§6, D036).
    Guards, in the order they are checked:
+   - `unauthorized`: no `--label`, or one that is not in `tracker.labels`. canopy cannot read the tracker, so this does
+     not prove the label is on the ticket; it makes the overseer name, for every dispatch, the label it read, and the
+     decision records it (D050). The worker checks the ticket's labels again before it starts (step 3).
    - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
      ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
@@ -287,7 +290,9 @@ provider skill says which.
    started_at.
 3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, base branch, PR label, needs-human
    label, timeout, the attempt number and the kind's limit, the PR the journal recorded for the ticket, the authorized
-   repliers, whether the run is stacked on another ticket's branch (§10), the context, and the result contract below.
+   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), the context, and the result
+   contract below. Every worker reads the ticket first and reports `failed` with a summary starting `not authorized:`,
+   changing nothing, if it is closed or carries none of the queue labels.
    An `implement` branch is `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title,
    lowercase words joined by single hyphens, at most 40 characters, `work` if it gives none. The context is the overseer's `--context`: at most
    2000 characters that point the worker at what to read (links, comment ids, check names), never a copy of ticket or

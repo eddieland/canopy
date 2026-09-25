@@ -22,8 +22,11 @@ matters.
 - GitHub MCP: find the PR for a branch, read checks, reviews, review comments,
   merge state.
 - `bash`, restricted to:
-  - `canopy dispatch <KEY> --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context '<text>']
-    [--cursor NAME=ID ...]`.
+  - `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH]
+    [--context '<text>'] [--cursor NAME=ID ...]`.
+    - `--label` is the configured label you read on this ticket in this tick. Every dispatch needs it, whatever the
+      kind; the CLI refuses one without a configured label (`unauthorized`). Never name a label you did not see on
+      the ticket.
     - `--slug` is for `implement` only. It names the branch `agent/<KEY>-<slug>`: two to five lowercase words from the
       ticket title joined by hyphens, at most 40 characters, such as `add-login-button`. `fix-ci` and `resume`
       continue the branch the ticket already has and take no slug.
@@ -43,8 +46,11 @@ matters.
 1. Find tickets with the configured query. It is in the tracker's own search syntax, or in plain language if the tracker
    has none. Union the result with tickets in the state block that are not `done`. Then read each ticket: it is a
    candidate only if it carries one of the configured labels and is not closed. The query finds tickets; only the
-   labels authorize them. Use the tracker's short id as the ticket key (the skill says which form). The CLI accepts keys
-   matching `[A-Za-z0-9][A-Za-z0-9_-]*` only.
+   labels authorize them. Being in the state block authorizes nothing either: the journal remembers every ticket the
+   loop has seen, including ones that never had a label and ones whose label was removed. Read the labels of every
+   ticket in the union, and for one without a configured label record only `canopy decide <KEY> skip --rationale
+   "not_labeled"`, whatever its branch, PR, or last run says. Use the tracker's short id as the ticket key (the skill
+   says which form). The CLI accepts keys matching `[A-Za-z0-9][A-Za-z0-9_-]*` only.
 2. For each ticket, derive its phase from live state using the table below.
    Use cursors from the state block to know what is new since last tick.
    A ticket's `attempts` count every run of each kind it has had. When the count for the kind you would dispatch has
@@ -82,7 +88,7 @@ exit.
 | `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch fix-ci --cursor ci=<run>`; see step 2 |
 | `changes_requested` | review comments or requested changes newer than `review` cursor | classify (below) |
 | `green_unreviewed` | checks pass, no approval, no new comments | `attention needs_reviewer` |
-| `approved` | approved, not merged | `attention ready_to_merge` |
+| `approved` | approved by a human, not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
 | `merged` | PR merged | `canopy ticket set --done`; `decide done` |
 | `needs_human` | needs-human label present, no authorized reply newer than it | `wait` |
 | `human_replied` | authorized replier's comment newer than the needs-human label | `dispatch resume` (below) |
@@ -183,10 +189,11 @@ started from. Later:
 
 ## Guards you will hit
 
-The CLI refuses dispatches that exceed capacity (`capacity`), target a ticket with a running worker (`running`), exceed
-the kind's attempt limit (`attempt_limit`), are inside the fix-ci cooldown (`cooldown`), or continue a branch the
-journal does not know (`no_branch`). It records the refusal as a decision; an `attempt_limit` refusal also records the
-`attempt_limit` attention item. Do not work around a refusal; it is correct.
+The CLI refuses dispatches that do not name a configured label (`unauthorized`), exceed capacity (`capacity`), target
+a ticket with a running worker (`running`), exceed the kind's attempt limit (`attempt_limit`), are inside the fix-ci
+cooldown (`cooldown`), or continue a branch the journal does not know (`no_branch`). It records the refusal as a
+decision; an `attempt_limit` refusal also records the `attempt_limit` attention item. Do not work around a refusal; it
+is correct.
 
 In a dry run, `canopy dispatch` records what it would have done and does
 nothing. Behave exactly as you would otherwise.

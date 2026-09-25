@@ -715,3 +715,26 @@ Rejected:
   refused dispatch.
 - Tracking treehouse's `main`: unreviewed upstream changes to the JSON canopy parses would land on the next install.
 Revisit: when a treehouse release includes `base_branch`; switch the default back to a release tag.
+
+## D050. A dispatch names the queue label it relies on, and the worker checks it again
+
+Context: labels are canopy's only authorization to start work (TRUST_MODEL T1), and until now only the overseer's
+prompt checked them. In the live acceptance run on 2026-09-25 the overseer (OpenCode with `gpt-6-luna`) dispatched an
+unlabeled ticket twice, dry and live: the ticket was in the state block from an earlier dry run, the prompt says to union
+the state block with the query, and the overseer skipped the label read for it. Other ticks skipped the same tickets
+correctly, so the check is unreliable rather than absent. canopy has no tracker code (D009), so it cannot read labels
+itself.
+Decision: `canopy dispatch` requires `--label LABEL`, one of `tracker.labels`, and refuses otherwise as `unauthorized`,
+the first guard. The label goes into the decision's rationale. Every worker prompt starts by reading the ticket and
+reporting `failed` (`not authorized: ...`) without changes if it is closed or unlabeled. The overseer prompt says the
+state block authorizes nothing and that `[bot]` approvals do not make a PR `approved`.
+Rejected:
+- Prompt wording alone: it already said labels authorize; the failure was a skipped step, which a required argument
+  turns into an explicit claim.
+- Reading labels in the harness: that is a tracker client (D009), per provider.
+- Narrowing `tracker.query` to the operator's label: the state-block union still brings old tickets back, and the
+  query is shared across operators.
+Residual: an overseer can still name a label it did not read. The worker's independent read is the second check; human
+review of every PR is the third.
+Revisit: if a tracker-neutral way to read labels appears (for example a runtime command canopy can call without
+provider code), move the check into code.

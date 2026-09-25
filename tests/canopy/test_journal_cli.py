@@ -27,7 +27,7 @@ def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_ru
 @pytest.mark.parametrize(
     "argv",
     [
-        ["dispatch", "{key}", "--kind", "implement"],
+        ["dispatch", "{key}", "--label", "agent-ready-tester", "--kind", "implement"],
         ["decide", "{key}", "wait", "--rationale", "r"],
         ["attention", "{key}", "needs_reviewer", "--detail", "d"],
         ["ticket", "set", "{key}", "--phase", "ready"],
@@ -97,16 +97,38 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
     assert (
-        main(["dispatch", "PROJ-2", "--kind", "implement", "--context", "see comment 7", "--cursor", "comment=7"]) == 0
+        main(
+            [
+                "dispatch",
+                "PROJ-2",
+                "--label",
+                "agent-ready-tester",
+                "--kind",
+                "implement",
+                "--context",
+                "see comment 7",
+                "--cursor",
+                "comment=7",
+            ]
+        )
+        == 0
     )
-    assert main(["dispatch", "PROJ-3", "--kind", "implement", "--slug", "add-login"]) == 0
+    assert (
+        main(["dispatch", "PROJ-3", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"]) == 0
+    )
     rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
     assert rows == [
         (
             "dispatch:implement",
-            "dry run: not dispatched; would work on agent/PROJ-2-work; cursor comment=7; context=see comment 7",
+            (
+                "dry run: not dispatched; would work on agent/PROJ-2-work; label agent-ready-tester; cursor comment=7; "
+                "context=see comment 7"
+            ),
         ),
-        ("dispatch:implement", "dry run: not dispatched; would work on agent/PROJ-3-add-login"),
+        (
+            "dispatch:implement",
+            "dry run: not dispatched; would work on agent/PROJ-3-add-login; label agent-ready-tester",
+        ),
     ]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
     assert ticket["last_comment_id"] is None  # a dry run never advances cursors

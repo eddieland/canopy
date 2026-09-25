@@ -50,6 +50,10 @@ Controls:
 - Authorization comes only from things with permission semantics: who can add
   one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
+- The label check is the overseer's, since canopy has no tracker code, and a live tick showed an overseer can skip it for
+  a ticket the journal remembers. So `canopy dispatch` refuses without `--label` naming one of `tracker.labels`
+  (recorded with the decision), and every worker re-reads the ticket's labels and stops, changing nothing, without one
+  (D050). Two agents must each fail the same check before unlabeled work lands on a branch.
 - Workers can push only to `trust.branch_prefix` branches. Enforced by the
   worker prompt and by repository branch protection, which the operator must
   configure. canopy `init` prints the required protection rules.

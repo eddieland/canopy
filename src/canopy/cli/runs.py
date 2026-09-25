@@ -19,6 +19,12 @@ from canopy.runs import dispatch, policy, worker
 @click.argument("key", type=TICKET_KEY)
 @click.option("--kind", required=True, type=click.Choice(policy.KINDS))
 @click.option(
+    "--label",
+    metavar="LABEL",
+    help="The configured queue label you read on the ticket just now. Required: without one of tracker.labels the "
+    "dispatch is refused as unauthorized.",
+)
+@click.option(
     "--slug",
     type=SLUG,
     help=f"implement only: short name for the work, from the ticket title; the branch is <prefix><KEY>-<slug>. "
@@ -48,6 +54,7 @@ def cmd_dispatch(
     *,
     key: str,
     kind: str,
+    label: str | None,
     slug: str | None,
     base: str | None,
     context: str | None,
@@ -63,10 +70,12 @@ def cmd_dispatch(
     try:
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if dry_run:
-            branch = dispatch.check(ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base)
+            branch = dispatch.check(ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base)
             started = None
         else:
-            started = dispatch.start(ctx, tick_id=tick_id, key=key, kind=kind, slug=slug, base=base, context=context)
+            started = dispatch.start(
+                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, context=context
+            )
             branch = started.branch
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
@@ -83,7 +92,9 @@ def cmd_dispatch(
             f"context={context}" if context else "",
         ]
         rationale = truncate(
-            "; ".join(e for e in [f"dry run: not dispatched; would work on {branch}{on_base}", *extras] if e)
+            "; ".join(
+                e for e in [f"dry run: not dispatched; would work on {branch}{on_base}", f"label {label}", *extras] if e
+            )
         )
         db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
         log.info("dry-run dispatch recorded", extra={"ticket": key, "kind": kind})
@@ -91,7 +102,7 @@ def cmd_dispatch(
         return 0
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
-    rationale = f"run {started.run_id}: {started.branch}{on_base} in {started.slot}"
+    rationale = f"run {started.run_id}: {started.branch}{on_base} in {started.slot}; label {label}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")

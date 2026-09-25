@@ -19,6 +19,7 @@ VALUES = {
     "PR_URL": "https://example.test/pr/1",
     "CONTEXT": "None.",
     "AUTHORIZED_REPLIERS": "`alice`",
+    "LABELS": "`agent-ready-alice`",
 }
 
 
