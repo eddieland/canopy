@@ -13,8 +13,10 @@ labels = ["agent-ready-yourname"]
 max_workers = 2
 
 [runtime]
-overseer_cmd = 'opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
+# {definitions_dir} is the directory canopy's agent definitions and skills are in (D040). Every template that runs one
+# of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 

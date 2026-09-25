@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, definitions
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
@@ -97,6 +97,28 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
     assert '"running": 1' in prompt
     assert '"available": 1' in prompt
     assert '"status": "crashed"' in prompt  # the ticket's last run, for the overseer
+
+
+def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    overseer_does(monkeypatch)
+    old = canopy_env.state_dir / "runtime" / "0123456789abcdef"
+    old.mkdir(parents=True)
+    live = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=os.getpid())
+
+    # A live run may be one of an earlier canopy, still loading the old snapshot.
+    assert main(["tick", "--dry-run"]) == 0
+    assert old.is_dir()
+
+    db.finish_run(conn, live, "done", "{}")
+    assert main(["tick", "--dry-run"]) == 0
+    assert not old.exists()
+    assert definitions.ensure(canopy_env.state_dir).is_dir()
 
 
 def test_stale_canopy_lease_is_returned_and_others_are_not(

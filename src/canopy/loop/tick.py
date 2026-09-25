@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, prompts, treehouse
+from canopy.core import db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
@@ -97,7 +97,13 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
 
 def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter) -> str | None:
     """Run `overseer_cmd`. Returns None on success, else why it failed. Output goes to `<state_dir>/ticks/<id>.log`."""
-    argv = render_command(ctx.config.runtime.overseer_cmd, prompt)
+    # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
+    shadowing = definitions.shadowing(ctx.repo_root)
+    if shadowing:
+        failure = definitions.shadowing_message(shadowing)
+        log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
+        return failure
+    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions.ensure(ctx.state_dir))
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     try:

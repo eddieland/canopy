@@ -85,13 +85,13 @@ canopy (harness, Python)
     reconcile.py   dead runs marked crashed, stale leases returned, the capacity left
 
   setup/
-    init.py        canopy init: config files, agent definitions, tracker skill, branch protection text, SSH remote
-                   warning
+    init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
 
   core/            what every feature shares
     config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
     context.py     the Context every command passes around: config, repository root, db connection, runner
     db.py          SQLite journal, migrations
+    definitions.py the snapshot of agents/ and skills/ that agent runs load (§13); the guard against shadowing them
     prompts.py     prompt files and overrides; rendering worker prompts
     treehouse.py   status --json, get --lease --json, return --force --if-lease-id
 
@@ -444,8 +444,8 @@ labels = ["agent-ready-yourname"]
 max_workers = 2
 
 [runtime]
-overseer_cmd = 'opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'opencode run --agent canopy-worker {prompt}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
@@ -481,7 +481,10 @@ Rules:
 - `trust.branch_prefix` must be non-empty and end in `/`, and is made of plain ref components: letters, digits, `_`,
   and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
 - `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
-  label. It writes `canopy.toml` only if the repository has none. It never overwrites either file.
+  label. It writes `canopy.toml` only if the repository has none. It never overwrites either file, and installs nothing
+  else (§13). If the config does not load, for example a user file from an earlier canopy whose templates lack
+  `{definitions_dir}`, it prints the error. It warns about copies of canopy's agent definitions in the repository's
+  OpenCode config, which earlier versions installed there and which now stop runs (§13).
 - Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
   `git remote get-url --push --all origin`, which applies `insteadOf` and `pushInsteadOf` rewrites, and prints a
   warning naming every URL git would reach over SSH: `ssh://`, `git+ssh://`, or the scp-like `[user@]host:path`. It
@@ -490,21 +493,27 @@ Rules:
   type, default, scope, and tighten direction (D026). Scope and tighten checks run per file before the merge, so errors
   name the file that caused them.
 
-A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` is replaced inside each
-word. No shell runs, so the prompt always lands in exactly one argument whatever it contains (D023). Both templates must
-contain `{prompt}` exactly once. `notify.cmd` is split the same way, gets its input on stdin, and must not contain
-`{prompt}`.
+A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` and `{definitions_dir}` are
+replaced inside each word in one pass. No shell runs, so the prompt always lands in exactly one argument whatever it
+contains (D023). Both templates must contain `{prompt}` exactly once and `{definitions_dir}`, the directory canopy's
+agent definitions are in (§13), at least once; a template without it is a config error that prints the line to write
+instead. The check catches templates from before D040; it cannot tell where the runtime reads the value. A template
+that passes the directory somewhere OpenCode does not read it runs OpenCode's default agent, which allows everything, so
+a custom template, such as a sandbox wrapper's, must still end up setting `OPENCODE_CONFIG_DIR` to it. `env` in the
+default templates is the ordinary program, not a shell. `notify.cmd` is split the same way, gets its input on stdin, and
+must not contain `{prompt}`.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. The default is `prompts/` next to the user
 file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
 `paths.*` values must be absolute or start with `~`: canopy runs from the repository root, so a relative path would let
 the repository supply the operator's prompts or state (TRUST_MODEL T7).
 
-`tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, and `canopy init`
-installs the `tracker-<provider>` skill if one ships. `tracker.query` is how the overseer finds candidates: in the
-tracker's own search syntax where it has one (JQL, GitHub issue search), otherwise a plain-language description. It
-finds tickets; it does not authorize them. See §17. The repository's query usually leaves the label out; an operator
-can override it in the user file to include their labels and save the overseer some reads.
+`tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, which name the
+`tracker-<provider>` skill; every shipped skill is in the definitions directory (§13). `tracker.query` is how the
+overseer finds candidates: in the tracker's own search syntax where it has one (JQL, GitHub issue search), otherwise a
+plain-language description. It finds tickets; it does not authorize them. See §17. The repository's query usually
+leaves the label out; an operator can override it in the user file to include their labels and save the overseer some
+reads.
 
 ## 13. Agent runtime
 
@@ -513,7 +522,7 @@ non-interactively in a given cwd with a prompt, and read its stdout. That is
 `opencode run --agent <name>`. Everything else (MCP connectivity, OAuth, tool
 permissions) is the runtime's job.
 
-Agent definitions ship in `agents/` and are installed by `canopy init`:
+Agent definitions ship in `agents/`, and agent runs load them from a directory canopy owns (below):
 
 - `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`. MCP: the tracker,
   GitHub.
@@ -526,17 +535,18 @@ The runtime is swappable by editing the two command templates. No interface.
 
 ### Where the runtime finds canopy's definitions
 
-Planned for ROADMAP M2; none of it is built. Rationale in D040. M2 updates §5 (`init.py` stops installing definitions),
-§12 (the placeholder and the default templates), the paragraph above, and §21's agent definition (the snapshot, not
-`canopy init`, provides `canopy-reviewer`) when it builds this.
+Rationale in D040 and D044.
 
 canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents. A snapshot is written to a temporary directory, renamed into place, and never modified, so overlapping runs
-never load a partial set; reconcile removes snapshots other than the current one when no run is live. OpenCode scans
-both `agent/` and `agents/` (and `skill/` and `skills/`) in a config directory. Command templates name the current
-snapshot with `{definitions_dir}`, which is replaced like `{prompt}` (§12) and must appear in every template that runs a
-canopy-shipped agent (`overseer_cmd`, `worker_cmd`, and §21's `review_cmd`). A template without it is a config error
-that prints the replacement line:
+contents (`definitions.py`). A snapshot is written to a temporary directory, renamed into place, and never changed by
+canopy, so overlapping runs never load a partial set. The overseer run and each `_run` use the snapshot for the
+installed canopy, creating it if missing. Reconcile removes other snapshots, and temporary directories more than an
+hour old, when no run is live: a live run may be one of an earlier canopy, still loading its snapshot. OpenCode scans
+both `agent/` and `agents/` (and `skill/` and `skills/`) in a config directory, and writes a `.gitignore` and a
+`node_modules/` into each one it loads, the snapshot included.
+
+Command templates name the current snapshot with `{definitions_dir}` (§12), which must appear in every template that
+runs a canopy-shipped agent (`overseer_cmd`, `worker_cmd`, §19's `chore_cmd`, and §21's `review_cmd`):
 
 ```toml
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
@@ -544,21 +554,20 @@ worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent c
 ```
 
 Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
-`OPENCODE_CONFIG_DIR` after the repository's config, so canopy's permissions win on every key they set.
+`OPENCODE_CONFIG_DIR` after the repository's config. A repository's definition of one of canopy's agents is merged into
+canopy's, not replaced by it, and could loosen its bash rules (D044). So before starting an agent, the harness looks at
+the OpenCode config in the directory the agent will start in (the repository root for the overseer, the worktree on the
+run's branch for a worker) and refuses to start if it defines one of canopy's agents: a file named for one under
+`.opencode/{agent,agents,mode,modes}/`, or an `opencode.json` or `opencode.jsonc` at the root or in `.opencode/` whose
+text names one. The overseer's refusal fails the tick (`overseer_failed`, summary naming the files); a worker's is a
+`crashed` run whose note names them, and its slot is returned. `canopy init` warns about the same files.
 
 Customizing canopy is adding skills where the runtime already looks: in the repository (`.agents/skills/`,
 `.claude/skills/`, `.opencode/skill/`) or the operator's home (`~/.agents/skills/`, `~/.claude/skills/`,
 `~/.config/opencode/skill/`). canopy turns none of these off. Give a custom skill its own name; two skills with the same
 name do not reliably override each other. A skill in `$HOME` that workers use must be a single `SKILL.md`: the worker's
-`external_directory: deny` lets it load the skill but not read files next to it outside the worktree.
-
-Trust model changes needed, in M2's PR, with human approval:
-
-- T7: agent definitions are no longer repository config. The residual becomes what a repository can still add through
-  the runtime's own config: skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the
-  agent process, the same exposure as the build scripts a worker runs, T4), and permission rules for keys canopy's
-  definitions leave unset.
-- T4: the canary also checks that a repository-level definition cannot loosen a key canopy's definition sets.
+`external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
+also define agents of its own under other names, MCP servers, and permissions (TRUST_MODEL T7).
 
 ## 14. Attention list
 
@@ -889,7 +898,7 @@ defines one is a config error (TRUST_MODEL T7).
 
 ```toml
 [runtime]
-chore_cmd = 'opencode run --agent canopy-chore {prompt}'   # default for chores that set no cmd
+chore_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}'   # default
 
 [capacity]
 max_chores = 1            # chore runs at once; separate from max_workers
@@ -932,9 +941,9 @@ Chores are opt-in and isolated, so one that turns out badly costs the operator a
 
 ### Agent definitions and tooling
 
-canopy ships `canopy-chore`, installed by `canopy init` like the other definitions: no edits, no subagents, no bash, and
-no MCP write tools where the runtime can deny them by name. It can read the tracker and GitHub, including PRs that are
-not the operator's.
+canopy ships `canopy-chore` in the definitions directory (§13) like the other definitions: no edits, no subagents, no
+bash, and no MCP write tools where the runtime can deny them by name. It can read the tracker and GitHub, including PRs
+that are not the operator's.
 
 A chore that uses the operator's deterministic tools gets its own definition, copied from `canopy-chore` into the
 operator's own runtime config (for OpenCode, `~/.config/opencode/agent/`, not the repository's `.opencode/agent/`, which
@@ -1303,7 +1312,7 @@ query = 'repo:acme/api is:pr is:open author:@me -is:draft'
 low_impact = """Only docs, comments, or tests change; or one dependency moves by a patch version."""
 
 [runtime]
-review_cmd = 'opencode run --agent canopy-reviewer {prompt}'
+review_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer {prompt}'
 review_timeout_minutes = 20
 
 [capacity]
@@ -1477,9 +1486,8 @@ Review decisions are `decisions` rows with the PR's URL in a new `pr` column: `d
 
 ### Agent definition
 
-canopy ships `canopy-reviewer`. `canopy init` installs it into the operator's own runtime config (for OpenCode,
-`~/.config/opencode/agent/`), not the repository's `.opencode/agent/`, which anyone who can push to the repository
-controls (TRUST_MODEL T7):
+canopy ships `canopy-reviewer` in the definitions directory (§13), not the repository's `.opencode/agent/`, which anyone
+who can push to the repository controls (TRUST_MODEL T7):
 
 - no edits, no subagents, no bash; reads allowed only inside the checkout;
 - MCP: the tracker and GitHub, read tools only, plus the one tool that posts a comment on a PR's conversation. Tools
