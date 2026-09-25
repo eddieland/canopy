@@ -1,5 +1,27 @@
 # canopy design
 
+- [1. Problem](#1-problem)
+- [2. Goals](#2-goals)
+- [3. Non-goals](#3-non-goals)
+- [4. Principles](#4-principles)
+- [5. Components](#5-components)
+- [6. Tick](#6-tick)
+- [7. Ticket phases and next actions](#7-ticket-phases-and-next-actions)
+- [8. Dispatch and the worker contract](#8-dispatch-and-the-worker-contract)
+- [9. Aggressive release](#9-aggressive-release)
+- [10. Dependencies and stacking](#10-dependencies-and-stacking)
+- [11. State model](#11-state-model)
+- [12. Configuration](#12-configuration)
+- [13. Agent runtime](#13-agent-runtime)
+- [14. Attention list](#14-attention-list)
+- [15. Failure handling](#15-failure-handling)
+- [16. Open questions](#16-open-questions)
+- [17. Trackers](#17-trackers)
+- [18. Workspaces and multi-repo tickets](#18-workspaces-and-multi-repo-tickets)
+- [19. Chores](#19-chores)
+- [20. Notifications](#20-notifications)
+- [21. Reviews](#21-reviews)
+
 Normative. Code follows this document; changes to behavior change this document
 in the same PR. Rationale for choices lives in `DECISIONS.md`.
 
