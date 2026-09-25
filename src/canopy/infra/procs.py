@@ -115,7 +115,7 @@ class SubprocessRunner:
     ) -> Result:
         """Run `args` to completion and capture its output. See `Runner.run`."""
         argv = tuple(args)
-        full_env = {**os.environ, **env} if env is not None else None
+        full_env = _child_env(cwd, env)
         try:
             proc = subprocess.Popen(
                 argv,
@@ -164,6 +164,7 @@ class SubprocessRunner:
             proc = subprocess.Popen(
                 argv,
                 cwd=cwd,
+                env=_child_env(cwd, None),
                 stdin=subprocess.DEVNULL,
                 stdout=fd,
                 stderr=subprocess.STDOUT,
@@ -177,6 +178,18 @@ class SubprocessRunner:
             os.close(fd)
         # The child is detached on purpose. Popen reaps it later if it exits while this process still runs.
         return proc.pid
+
+
+def _child_env(cwd: Path | None, env: Mapping[str, str] | None) -> dict[str, str] | None:
+    """Return the child's environment: the inherited one with `env` merged over it, or None to inherit it unchanged.
+
+    A child given a working directory gets `PWD` naming it, as a shell's `cd` would. Some programs trust `PWD` over
+    the real working directory: OpenCode runs its tools in `PWD`, so an inherited one would put a worker's edits in the
+    directory canopy was started from instead of its worktree.
+    """
+    if cwd is None:
+        return {**os.environ, **env} if env is not None else None
+    return {**os.environ, **(env or {}), "PWD": str(cwd.absolute())}
 
 
 def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) -> bool:

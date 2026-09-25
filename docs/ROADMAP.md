@@ -111,8 +111,11 @@ and its slot returned.
 
 Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, D028, D029, and
 D040's definitions directory with D044's guard are in; the worker definition and overseer prompt were approved in #10.
-Waiting on the operator: one real ticket from label to open PR, a killed worker on a real run, and a first live run of
-the OpenCode canary (both tests, including the precedence check). It was started on request before M1 closed
+The live OpenCode canary passed both tests, the precedence check included, on 2026-09-24 with OpenCode 1.18.32. Its
+first run found that OpenCode runs tools in `$PWD`, not its working directory, so a worker would have edited the
+directory canopy started in; `procs` now sets `PWD` for every child given a cwd. OpenCode also leaves a tool denied
+outright out of the model's toolset, so the canary no longer expects an attempted edit. Waiting on the operator: one
+real ticket from label to open PR, and a killed worker on a real run. It was started on request before M1 closed
 (2026-09-24).
 
 ## M3. Fix-CI and resume
