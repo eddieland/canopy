@@ -1,5 +1,5 @@
 ---
-# OpenCode agent definition. Installed to .opencode/agent/canopy-worker.md by `canopy init`.
+# OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
 # Rules follow D021: the last matching rule wins, so each catch-all "*" comes before its exceptions. `ask` is
 # auto-rejected under `opencode run`; `deny` is enforced. Bash compound commands are checked command by command.
 # These permissions are defense in depth, not the boundary (TRUST_MODEL T4). Branch protection governs where pushes can

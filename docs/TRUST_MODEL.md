@@ -94,7 +94,10 @@ Controls now:
   forbids leaving it. OpenCode agent permissions restrict edit paths and deny
   destructive command patterns.
 - Config-level permissions are defense in depth, not the boundary. M1 verifies
-  with a canary agent that denies actually hold under `opencode run`.
+  with a canary agent that denies actually hold under `opencode run`. The canary
+  loads its definition the way canopy loads its own (DESIGN §13), and checks that
+  a repository's definition of the same agent, allowing a command canopy's
+  denies, does not make it run.
 
 Deferred (ROADMAP): running `worker_cmd` inside a container or OS sandbox. The
 command template is the plug point; nothing else changes.
@@ -139,10 +142,26 @@ Controls, in code:
 - `policy.*` values from the repository file apply only when stricter than the built-in defaults.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 
+The repository's OpenCode config is read by the agent runtime, in the repository for the overseer and in the worktree
+for a worker, so it too comes from whoever can push. canopy's agent definitions are therefore not repository config:
+agent runs load them from a directory canopy owns, named in the operator's command templates (DESIGN §13, D040).
+OpenCode merges a repository's definition of the same agent into canopy's rather than replacing it, and a repository
+that repeats one of canopy's permission patterns can put its own rules after it (D044). So, in code:
+- The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
+  agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
+- A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
+  back to its default agent, which allows everything.
+
 Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, and the branch
 prefix. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs, or agent branches under
-an unexpected prefix, which branch protection (§7) still governs. The agent definitions `canopy init` installs into the
-repository are exposed in the same way and are not covered by this control yet.
+an unexpected prefix, which branch protection (§7) still governs. Through the runtime's own config it can also add
+skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the same
+exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
+canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
+agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
+agents. Scalar rules canopy sets (the worker's `edit`, `external_directory`, and `task`) cannot be loosened that way,
+since a scalar replaces whatever the repository set; bash rules are defense in depth (T4), with branch protection (§7)
+the boundary for what a worker can push.
 
 ## 6. What canopy must never do
 

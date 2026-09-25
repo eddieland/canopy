@@ -143,13 +143,14 @@ WORDS = st.text(alphabet=string.ascii_letters + string.digits + "-_", min_size=1
 
 @given(st.lists(WORDS, min_size=1, max_size=4), st.text())
 def test_the_prompt_is_always_exactly_one_argument(words: list[str], prompt: str) -> None:
-    argv = config.render_command(" ".join([*words, "{prompt}"]), prompt)
+    argv = config.render_command(" ".join([*words, "{prompt}"]), prompt, Path("/defs"))
     assert argv == [*words, prompt]
 
 
 @given(st.text())
 def test_the_prompt_survives_quoting_in_the_template(prompt: str) -> None:
-    assert config.render_command("agent --message='{prompt}'", prompt) == ["agent", f"--message={prompt}"]
+    argv = config.render_command("agent --message='{prompt}'", prompt, Path("/defs"))
+    assert argv == ["agent", f"--message={prompt}"]
 
 
 @settings(suppress_health_check=fixtures, max_examples=50)

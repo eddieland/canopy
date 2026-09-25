@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, treehouse
+from canopy.core import db, definitions, treehouse
 from canopy.infra import logs, procs
 
 if TYPE_CHECKING:
@@ -69,6 +69,12 @@ def run(ctx: Context, log: logs.TickAdapter) -> Capacity:
                 "returned": outcome.value,
             },
         )
+
+    if not running:
+        # No run is live, so no run of an earlier canopy is still loading its snapshot.
+        current = definitions.ensure(ctx.state_dir)
+        for removed in definitions.prune(ctx.state_dir, current):
+            log.info("removed an old definitions snapshot", extra={"path": str(removed)})
 
     capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running))
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})

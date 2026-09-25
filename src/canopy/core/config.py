@@ -27,6 +27,11 @@ if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
 REPO_FILE_NAME = "canopy.toml"
+PROMPT = "{prompt}"
+# Replaced with the snapshot of canopy's agent definitions and skills (D040).
+DEFINITIONS_DIR = "{definitions_dir}"
+DEFINITIONS_ENV_PREFIX = f"env OPENCODE_CONFIG_DIR={DEFINITIONS_DIR} "
+_PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}")
 
 
 class ConfigError(Exception):
@@ -80,6 +85,17 @@ def _command_template(value: str) -> str:
     return value
 
 
+def _agent_template(value: str) -> str:
+    # Without the placeholder, OpenCode would look for canopy's agent in the repository and, not finding it, run its
+    # default agent, which allows everything (D040). The old default templates lack it, so say what to write instead.
+    if DEFINITIONS_DIR not in value:
+        raise ValueError(
+            f"must contain {DEFINITIONS_DIR}, the directory canopy's agent definitions are in (D040). "
+            f"For OpenCode, write: '{DEFINITIONS_ENV_PREFIX}{value}'"
+        )
+    return value
+
+
 def notify_words(template: str) -> list[str]:
     """Split `notify.cmd` into argv with shell word rules. No shell runs (D023). Empty means no notify command.
 
@@ -109,6 +125,7 @@ NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
 Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
+AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
 NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 
@@ -155,8 +172,12 @@ class Capacity(Section):
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    overseer_cmd: Annotated[CommandTemplate, Scope.USER] = "opencode run --agent canopy-overseer {prompt}"
-    worker_cmd: Annotated[CommandTemplate, Scope.USER] = "opencode run --agent canopy-worker {prompt}"
+    overseer_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}"
+    )
+    worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
+    )
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
 
@@ -336,10 +357,12 @@ def _describe(error: ValidationError, origin: dict[str, Path], repo_file: Path, 
     return "\n".join(lines)
 
 
-def render_command(template: str, prompt: str) -> list[str]:
+def render_command(template: str, prompt: str, definitions_dir: Path) -> list[str]:
     """Turn a command template into argv. No shell runs (D023).
 
-    The template is split with shell word rules, then `{prompt}` is replaced inside each word. The prompt therefore
-    always lands in exactly one argument, whatever it contains.
+    The template is split with shell word rules, then `{prompt}` and `{definitions_dir}` are replaced inside each word,
+    in one pass, so neither value is searched for the other placeholder. The prompt therefore always lands in exactly
+    one argument, whatever it contains.
     """
-    return [w.replace("{prompt}", prompt) for w in command_words(template)]
+    values = {PROMPT: prompt, DEFINITIONS_DIR: str(definitions_dir)}
+    return [_PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], w) for w in command_words(template)]

@@ -1,9 +1,11 @@
 """`canopy init`: set up canopy for a repository and an operator.
 
-Writes the user config and repository config if missing, installs agent definitions and the tracker skill, and prints
-the branch protection canopy relies on (DESIGN §12, TRUST_MODEL §7). Warns when `origin` pushes over SSH (D038).
+Writes the user config and repository config if missing, and prints the branch protection canopy relies on (DESIGN §12,
+TRUST_MODEL §7). Warns when `origin` pushes over SSH (D038), and when the repository still has copies of canopy's agent
+definitions from an earlier canopy (D040, D044).
 
-Neither config file is ever overwritten. Agent definitions and skills are canopy's own files and are refreshed.
+Neither config file is ever overwritten. Nothing else is installed: agent runs load canopy's definitions and skills from
+a directory canopy owns (`definitions.py`).
 """
 
 from __future__ import annotations
@@ -11,16 +13,13 @@ from __future__ import annotations
 import json
 import os
 import re
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from canopy.core import definitions
 from canopy.core.config import REPO_FILE_NAME
-from canopy.infra import procs, resources
+from canopy.infra import procs
 
-AGENT_DIR = Path(".opencode/agent")
-# OpenCode reads skills from .opencode/skill/<name>/SKILL.md (and .opencode/skills/).
-SKILL_DIR = Path(".opencode/skill")
 # A provider name becomes a directory name; keep it to one plain path component.
 PROVIDER_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
@@ -83,11 +82,12 @@ def ssh_push_urls(runner: procs.Runner, repo_root: Path) -> list[str]:
 
 @dataclass
 class Report:
-    """What `run` wrote, what it left alone, and the label it chose for a new user file."""
+    """What `run` wrote, what it left alone, the label it chose for a new user file, and old agent definitions found."""
 
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
     label: str | None = None
+    shadowing: list[Path] = field(default_factory=list)
 
 
 def default_label() -> str:
@@ -112,8 +112,9 @@ labels = [{json.dumps(label)}]
 max_workers = 2
 
 [runtime]
-overseer_cmd = 'opencode run --agent canopy-overseer {{prompt}}'
-worker_cmd   = 'opencode run --agent canopy-worker {{prompt}}'
+# {{definitions_dir}} is the directory canopy's agent definitions and skills are in (D040). Keep it.
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-overseer {{prompt}}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-worker {{prompt}}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
@@ -157,16 +158,6 @@ def _write_if_missing(path: Path, text: str, report: Report) -> None:
     report.written.append(path)
 
 
-def _install(src: Path, dest: Path, report: Report) -> None:
-    text = src.read_text(encoding="utf-8")
-    if dest.exists() and dest.read_text(encoding="utf-8") == text:
-        report.kept.append(dest)
-        return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(text, encoding="utf-8")
-    report.written.append(dest)
-
-
 def run(repo_root: Path, user_file: Path, provider: str | None) -> Report:
     """Do the init. `provider` is needed only when the repository has no canopy.toml yet."""
     report = Report()
@@ -178,29 +169,11 @@ def run(repo_root: Path, user_file: Path, provider: str | None) -> Report:
 
     repo_file = repo_root / REPO_FILE_NAME
     if repo_file.exists():
-        # The committed file decides the provider; `provider` only seeds a new one.
         report.kept.append(repo_file)
-        provider = _provider_from(repo_file)
     else:
         if provider is None:
             raise ValueError("the repository has no canopy.toml; a tracker provider is needed to write one")
         _write_if_missing(repo_file, repo_config_text(provider), report)
 
-    for src in sorted(resources.agents_dir().glob("*.md")):
-        _install(src, repo_root / AGENT_DIR / src.name, report)
-
-    if provider is not None and valid_provider(provider):
-        skill = resources.skills_dir() / f"tracker-{provider}" / "SKILL.md"
-        if skill.is_file():
-            _install(skill, repo_root / SKILL_DIR / f"tracker-{provider}" / "SKILL.md", report)
+    report.shadowing = definitions.shadowing(repo_root)
     return report
-
-
-def _provider_from(repo_file: Path) -> str | None:
-    try:
-        with repo_file.open("rb") as f:
-            tracker = tomllib.load(f).get("tracker", {})
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    provider = tracker.get("provider") if isinstance(tracker, dict) else None
-    return provider if isinstance(provider, str) else None

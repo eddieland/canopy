@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
 
-from canopy.core import db, treehouse
+from canopy.core import db, definitions, treehouse
 from canopy.core.config import render_command
 from canopy.infra import logs, procs
 from canopy.runs import dispatch
@@ -149,7 +149,11 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     start = git.run("rev-parse", f"refs/heads/{branch}")
 
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    argv = render_command(ctx.config.runtime.worker_cmd, prompt)
+    # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044).
+    shadowing = definitions.shadowing(slot)
+    if shadowing:
+        raise _SetupError(definitions.shadowing_message(shadowing))
+    argv = render_command(ctx.config.runtime.worker_cmd, prompt, definitions.ensure(ctx.state_dir))
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     log.info("running worker", extra={"run_id": run["id"], "cmd": argv[0], "timeout_minutes": timeout_minutes})
     run_id = int(run["id"])

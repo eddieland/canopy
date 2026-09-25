@@ -146,9 +146,36 @@ def test_command_template_is_checked(canopy_env: CanopyEnv, replacement: str, me
 
 
 def test_render_command_keeps_the_prompt_in_one_argument() -> None:
-    prompt = "it's a `prompt` with $HOME; rm -rf / && echo {prompt}"
-    argv = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt)
+    prompt = "it's a `prompt` with $HOME; rm -rf / && echo {prompt} {definitions_dir}"
+    argv = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt, Path("/defs"))
     assert argv == ["opencode", "run", "--agent", "canopy overseer", prompt]
+
+
+def test_render_command_fills_in_the_definitions_dir() -> None:
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
+    argv = render_command(template, "do {definitions_dir}", Path("/state/runtime/abc"))
+    assert argv[:2] == ["env", "OPENCODE_CONFIG_DIR=/state/runtime/abc"]
+    assert argv[-1] == "do {definitions_dir}"
+
+
+@pytest.mark.parametrize("key", ["overseer_cmd", "worker_cmd"])
+def test_an_agent_template_without_the_definitions_dir_prints_its_replacement(canopy_env: CanopyEnv, key: str) -> None:
+    old = f"opencode run --agent canopy-{key.removesuffix('_cmd')} {{prompt}}"
+    text = re.sub(rf"^{key} = .*$", f"{key} = '{old}'", canopy_env.user_file.read_text(), flags=re.MULTILINE)
+    canopy_env.write_user(text)
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.repo, canopy_env.user_file)
+    assert f"runtime.{key}: Value error, must contain {{definitions_dir}}" in str(e.value)
+    assert f"'env OPENCODE_CONFIG_DIR={{definitions_dir}} {old}'" in str(e.value)
+
+
+def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(
+        "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line)
+    )
+    runtime = load(canopy_env.repo, canopy_env.user_file).runtime
+    for template in (runtime.overseer_cmd, runtime.worker_cmd):
+        assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
 
 
 def test_xdg_config_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

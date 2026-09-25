@@ -82,7 +82,7 @@ class InlineRunner:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
     ) -> procs.Result:
-        if self.timeout_agent and args[0] == "agent":
+        if self.timeout_agent and "agent" in args[:3]:
             return procs.Result(tuple(args), -9, "fake agent: starting\n", "", timed_out=True)
         return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
 

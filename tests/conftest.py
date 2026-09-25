@@ -83,8 +83,8 @@ def user_toml(state_dir: Path) -> str:
 labels = ["agent-ready-tester"]
 
 [runtime]
-overseer_cmd = 'agent run --agent canopy-overseer {{prompt}}'
-worker_cmd = 'agent run --agent canopy-worker {{prompt}}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
+worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
 
 [paths]
 state_dir = {json.dumps(str(state_dir))}

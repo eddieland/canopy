@@ -609,3 +609,33 @@ Consequences: one runtime dependency, pure Python and typed, bringing `markdown-
 Rejected: `textual` (a full-screen application framework, where the loop is a log with a status line); `tqdm`
 (progress bars only).
 Revisit: if a command's output needs something rich cannot draw plainly off a terminal.
+
+## D044. Refuse to start an agent where the repository's OpenCode config defines one of canopy's agents
+
+Context: D040 rejected a guard against repository definitions of `canopy-*` agents because merge order makes canopy's
+keys win. OpenCode 1.18.32's source says otherwise for bash rules. Agent definitions from every config directory are
+merged with a deep object merge, and a permission map becomes rules in key order, the last matching rule winning. A key
+both definitions set keeps the position of the definition loaded first, the repository's, and takes canopy's value; keys
+only the repository sets stay where the repository put them; canopy's other keys are appended. So a repository
+definition with `"*": deny` followed by `"rm *": allow` gives the overseer `"*": deny`, `"rm *": allow`, then canopy's
+own allows: `rm` runs (`opencode agent list` shows exactly that order). A scalar value such as `external_directory:
+deny` replaces whatever the repository set, so only map-valued keys, in practice bash, can be loosened this way.
+Decision (DESIGN §13, TRUST_MODEL T7):
+- Before starting the overseer or a worker, the harness looks at the OpenCode config in the directory the agent starts
+  in: files under `.opencode/{agent,agents,mode,modes}/` named for one of canopy's agents, and `opencode.json` or
+  `opencode.jsonc` at the root or in `.opencode/` whose text contains one's name. If any is found the agent does not
+  start: the tick fails with `overseer_failed`, or the run ends `crashed` and its slot is returned, naming the files.
+- A worker's check runs after its branch is checked out, on the files the worker would load.
+- `canopy init` warns about the same files, which earlier versions of init installed.
+Consequences: repositories that committed `.opencode/agent/canopy-*.md` from an earlier `canopy init` stop working until
+the files are removed. A JSON config that mentions a canopy agent's name for any reason, such as a comment, is refused
+too. The check does not parse JSONC or apply OpenCode's `{env:...}` and `{file:...}` substitutions, so a config that
+builds the name through JSON escapes or a `{file:...}` reference gets past it; TRUST_MODEL T7 records that residual.
+Rejected:
+- Parsing `opencode.json` as JSONC with substitutions: reimplements OpenCode's loader, and would still trail it.
+- Refusing any repository OpenCode config: blocks the skills and MCP servers operators should be able to add (D040).
+- Agent names unique to each installation: templates name the agent, so every operator would edit them on each
+  upgrade, and a repository targeting one canopy version can compute a name derived from its contents.
+- Relying on the canary alone: it checks how the runtime merges definitions, not what a given repository commits.
+Revisit: if OpenCode gives a config directory's agent definitions precedence over the project's, or lets a command
+disable project agent definitions without disabling project skills; when a second runtime is supported (D009).
