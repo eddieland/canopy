@@ -73,7 +73,9 @@ The operator sets, in the user config only:
 
 ```toml
 [runtime]
-worker_cmd = 'canopy-sandbox worker opencode run --agent canopy-worker {prompt}'
+# A multi-line literal string: the template is split into words, so the line break is only a space.
+worker_cmd = '''canopy-sandbox worker env OPENCODE_CONFIG_DIR={definitions_dir}
+    opencode run --agent canopy-worker {prompt}'''
 ```
 
 `canopy-sandbox` is a short script the operator installs (canopy would ship it as an example, not as harness code). It
