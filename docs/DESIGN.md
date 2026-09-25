@@ -214,7 +214,9 @@ until stopped:
 Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first one lets the tick
 finish and the loop ends without waiting; both exit 0. A second one aborts the tick: the overseer's process group is
 killed as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Workers already
-dispatched are detached and unaffected either way.
+dispatched are detached and unaffected either way. A signal less than one second (`repeat.SAME_SIGNAL_SECONDS`, on a
+monotonic clock) after the first is the same keypress, not a second one: under `uv run`, one Ctrl-C reaches canopy from
+the terminal and again, about 200 ms later, forwarded by uv (D049).
 
 The config is read once, when the loop starts; restart the loop to apply a change. Prompt files are read every tick.
 
