@@ -277,7 +277,9 @@ provider skill says which.
    - `capacity`: `max_workers` runs are running.
 
    Failures after the guards are recorded the same way: `no_slot` (the lease failed), `bad_prompt` (the worker prompt
-   did not render), `spawn_failed`. None of them leaves a slot leased.
+   did not render), `spawn_failed`. None of them leaves a slot leased. A `get` that exits 0 with output canopy cannot
+   parse is `no_slot` too: canopy reads the path, lease id, and holder from it if it can and returns that slot at once.
+   If it cannot, the rationale says so, and the next tick's reconcile returns the slot (§6 step 3).
    Dispatches are serialized by a blocking `flock` on `<state_dir>/dispatch.lock`, held from the guard checks through
    the spawn, so two dispatches cannot both pass the capacity check or the attempt limit.
    `--cursor NAME=ID` pairs are applied as `canopy ticket set` would, but only once the worker has started: what a

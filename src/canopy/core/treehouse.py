@@ -67,6 +67,14 @@ class Lease(_Output):
     base_branch: StrictStr
 
 
+class _Held(_Output):
+    """The fields of a `get` allocation needed to return it, for output that is not a full `Lease`."""
+
+    path: Path
+    lease_id: StrictStr
+    lease_holder: StrictStr
+
+
 _SLOTS = TypeAdapter(list[Slot])
 
 
@@ -112,7 +120,11 @@ def status(runner: procs.Runner) -> list[Slot]:
 
 
 def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
-    """Lease a slot for ticket `key`, optionally based on branch `base`."""
+    """Lease a slot for ticket `key`, optionally based on branch `base`.
+
+    If treehouse leased a slot but its output is not a `Lease`, the slot is returned before the error is raised, so a
+    failed lease never leaves one held. The error says whether that return worked.
+    """
     args = ["get", "--lease", "--lease-holder", holder_for(key), "--json"]
     if base is not None:
         args += ["--base", base]
@@ -122,7 +134,22 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
     try:
         return Lease.model_validate_json(result.stdout)
     except ValidationError as e:
-        raise TreehouseError(f"treehouse get: unexpected output: {e}") from e
+        raise TreehouseError(f"treehouse get: unexpected output: {e}; {_return_unparsed(runner, result.stdout)}") from e
+
+
+def _return_unparsed(runner: procs.Runner, stdout: str) -> str:
+    """Return the slot a `get` with unparseable output leased, and say what happened for the error."""
+    try:
+        held = _Held.model_validate_json(stdout)
+    except ValidationError:
+        return "could not tell which slot was leased; the next tick's reconcile returns it"
+    try:
+        outcome = return_slot(runner, held.path, lease_id=held.lease_id, lease_holder=held.lease_holder)
+    except TreehouseError as e:
+        return f"returning {held.path} failed ({e}); the next tick's reconcile returns it"
+    if outcome is ReturnOutcome.RETURNED:
+        return f"returned {held.path}"
+    return f"returning {held.path} said {outcome.value}; the next tick's reconcile returns it"
 
 
 def return_slot(runner: procs.Runner, path: Path, *, lease_id: str, lease_holder: str) -> ReturnOutcome:
