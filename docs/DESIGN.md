@@ -304,12 +304,12 @@ provider skill says which.
 1. Claim the run: set its pid to this process's pid, only if the run is `running` and its pid is unset or already this
    pid. Anything else is refused, so the overseer cannot start a second worker on a run. Drop `CANOPY_TICK_ID` from the
    environment, so the worker cannot act as the overseer of the tick that dispatched it.
-2. In the slot: `git fetch origin`; if `origin/<branch>` exists,
+2. In the slot: `git fetch --prune origin`, so a branch deleted on origin is gone here too; if `origin/<branch>` exists,
    `git checkout -B <branch> origin/<branch>`, else `git checkout --no-track -B <branch>
    origin/<base>`. `-B` because a branch left in the pool's repository by an earlier run on another slot would make
    `-b` fail; `--no-track` so that a bare `git push` never targets the base. Note the branch's commit. A base missing
    from origin, such as a stacked-on branch deleted when its PR merged, fails the run as `crashed` before the worker
-   starts, with a note saying so.
+   starts, with a note saying so, whether the branch is new or continued: the worker's prompt targets the PR at it.
 3. Run `worker_cmd` with cwd = slot, timeout `worker_timeout_minutes`. Record the worker's pid in `runs.worker_pid`;
    the worker leads its own process group. The worker's stdout and stderr go to the run log.
 4. Parse the last non-empty line of stdout as the result contract. Missing or invalid means `status='unknown'`; a
