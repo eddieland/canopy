@@ -271,19 +271,64 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
     assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
 
 
+def seconds_apart(seconds: float) -> Callable[[], float]:
+    """A clock for `repeat.signals` that moves on by `seconds` each time it is read: one read per signal."""
+    now = [0.0]
+
+    def clock() -> float:
+        now[0] += seconds
+        return now[0]
+
+    return clock
+
+
 def test_a_second_ctrl_c_aborts_the_tick_and_the_next_tick_closes_it(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     overseer_does(monkeypatch, interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x"))
     term, _ = console()
     stop = repeat.Stop()
-    with repeat.signals(stop), pytest.raises(KeyboardInterrupt):
+    clock = seconds_apart(repeat.SAME_SIGNAL_SECONDS + 0.5)
+    with repeat.signals(stop, clock=clock), pytest.raises(KeyboardInterrupt):
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop)
     assert tick_statuses(canopy_env) == ["running"]
 
     overseer_does(monkeypatch)
     assert main(["tick", "--dry-run"]) == 0  # both locks were released
     assert tick_statuses(canopy_env) == ["abandoned", "ok"]
+
+
+def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under `uv run`, one Ctrl-C reaches canopy twice: from the terminal, then forwarded by uv about 200 ms later."""
+    overseer_does(monkeypatch, interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x"))
+    term, _ = console()
+    stop = repeat.Stop()
+    with repeat.signals(stop, clock=seconds_apart(0.2)):
+        statuses = repeat.run(
+            context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop
+        )
+    assert statuses == {"ok": 1}
+    conn = db.connect(canopy_env.state_dir / db.DB_FILE_NAME)
+    assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+
+
+@pytest.mark.parametrize(
+    ("gap", "aborts"),
+    [(0.0, False), (repeat.SAME_SIGNAL_SECONDS - 0.01, False), (repeat.SAME_SIGNAL_SECONDS, True), (60.0, True)],
+)
+def test_a_second_signal_aborts_only_after_the_window(gap: float, aborts: bool) -> None:  # noqa: FBT001
+    stop = repeat.Stop()
+    with repeat.signals(stop, clock=seconds_apart(gap)):
+        os.kill(os.getpid(), signal.SIGTERM)
+        assert stop.requested
+        if aborts:
+            with pytest.raises(KeyboardInterrupt):
+                os.kill(os.getpid(), signal.SIGINT)
+        else:
+            os.kill(os.getpid(), signal.SIGINT)
+    assert stop.requested
 
 
 def test_a_tick_that_raises_ends_that_tick_not_the_loop(
