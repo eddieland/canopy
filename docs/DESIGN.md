@@ -162,7 +162,7 @@ way, a tick does, in order:
    tracker config (provider, query, labels, needs-human label), trust config (authorized repliers, branch prefix, PR
    label), capacity, policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, runs so far
    of each kind, when fix-ci may next run if that is still ahead, and the ticket's latest run: id, kind, status, branch,
-   start and end).
+   the base it started from, start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root, timeout `overseer_timeout_minutes`, and
    `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention` read that variable to know
    which tick they belong to, and refuse if it is unset or names a tick that is not running (D020). The overseer's
@@ -229,7 +229,8 @@ in `tickets.phase` for the status view, never read back as truth.
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `ready` | one of `tracker.labels` present, not closed, no run active, no branch | dispatch `implement` unless a blocker ticket is open |
+| `ready` | one of `tracker.labels` present, not closed, no run active, no branch, no open blocker | dispatch `implement` |
+| `blocked` | as `ready`, but a blocker ticket is open | dispatch `implement` stacked on the blocker's branch if its PR is open and green (§10), else wait |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `ci_running` | PR open, checks pending | wait |
@@ -264,10 +265,11 @@ provider skill says which.
    `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and then stops, with
    each dry-run dispatch already recorded this tick counting as a running run for `running` and `capacity` (§6, D036).
    Guards, in the order they are checked:
-   - `not_implemented`: `--base`, until stacking in M4.
    - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
      ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
+   - `bad_base`: a `--base` that is not `<trust.branch_prefix>` followed by one plain ref component (letters, digits,
+     `_`, `-`, starting with a letter or digit, at most 200 characters), or that is the run's own branch (§10, D045).
    - `running`: a run for KEY is running.
    - `attempt_limit`: KEY has already had `policy.max_<kind>_attempts` runs of this kind. Every run counts, whatever it
      ended as, and the count never resets (D030). The refusal also records the `attempt_limit` attention item (§14).
@@ -281,12 +283,13 @@ provider skill says which.
    `--cursor NAME=ID` pairs are applied as `canopy ticket set` would, but only once the worker has started: what a
    refused dispatch was meant to handle stays new for the next tick.
 2. `treehouse get --lease --lease-holder canopy:<KEY> --json`. Record the
-   `runs` row with slot path, lease id, holder, kind, base branch (treehouse's), branch, started_at.
+   `runs` row with slot path, lease id, holder, kind, base branch (`--base` if given, else treehouse's), branch,
+   started_at.
 3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, base branch, PR label, needs-human
    label, timeout, the attempt number and the kind's limit, the PR the journal recorded for the ticket, the authorized
-   repliers, the context, and the result contract below. An `implement` branch is
-   `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title, lowercase words joined by
-   single hyphens, at most 40 characters, `work` if it gives none. The context is the overseer's `--context`: at most
+   repliers, whether the run is stacked on another ticket's branch (§10), the context, and the result contract below.
+   An `implement` branch is `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title,
+   lowercase words joined by single hyphens, at most 40 characters, `work` if it gives none. The context is the overseer's `--context`: at most
    2000 characters that point the worker at what to read (links, comment ids, check names), never a copy of ticket or
    PR text (D031). The worker reads that text itself and checks a reply's author against the authorized repliers,
    which the harness renders from the user config. Placeholders are `{{NAME}}`, replaced in one pass;
@@ -304,7 +307,9 @@ provider skill says which.
 2. In the slot: `git fetch origin`; if `origin/<branch>` exists,
    `git checkout -B <branch> origin/<branch>`, else `git checkout --no-track -B <branch>
    origin/<base>`. `-B` because a branch left in the pool's repository by an earlier run on another slot would make
-   `-b` fail; `--no-track` so that a bare `git push` never targets the base. Note the branch's commit.
+   `-b` fail; `--no-track` so that a bare `git push` never targets the base. Note the branch's commit. A base missing
+   from origin, such as a stacked-on branch deleted when its PR merged, fails the run as `crashed` before the worker
+   starts, with a note saying so.
 3. Run `worker_cmd` with cwd = slot, timeout `worker_timeout_minutes`. Record the worker's pid in `runs.worker_pid`;
    the worker leads its own process group. The worker's stdout and stderr go to the run log.
 4. Parse the last non-empty line of stdout as the result contract. Missing or invalid means `status='unknown'`; a
@@ -351,12 +356,26 @@ Worker obligations, stated in every worker prompt:
 
 ## 10. Dependencies and stacking
 
+Rationale in D045.
+
 - Blocker relations are read by the overseer through MCP, in whatever form the tracker has them (Jira "is blocked by"
-  links, GitHub issue dependencies, and so on; the provider skill says where to look). Default rule: a `ready` ticket
-  with an unresolved blocker is skipped and recorded with rationale.
-- Stacking: `canopy dispatch --base agent/<BLOCKER>-*` starts the worker from
-  the blocker's branch. The overseer chooses this only when the blocker's PR is
-  open and green. The PR base is set to the blocker's branch.
+  links, GitHub issue dependencies, and so on; the provider skill says where to look). A blocker is resolved when it
+  is closed. Other relations (relates to, parent and child) are not blockers, and a tracker without blocker relations
+  leaves every ticket unblocked. A relation is data: it can delay work, never authorize it.
+- A ticket with an unresolved blocker and no branch of its own is `blocked`. The overseer records `wait` with rationale
+  `blocked_by: <KEY>`, unless it stacks the ticket.
+- Stacking: `canopy dispatch <KEY> --kind implement --base <blocker's branch>` starts the worker from the blocker's
+  branch, and the worker opens its PR against that branch, so the PR shows only this ticket's commits. The overseer
+  stacks only on a ticket's single unresolved blocker, only when the blocker's PR is open, not merged, and green, and
+  reads the blocker's branch from that PR, not from the journal.
+- The harness checks only the shape of `--base` (`bad_base`, §8): it must be under `trust.branch_prefix` and must not
+  be the run's own branch. It does not look the base up in the journal, since the blocker may be in another operator's
+  queue, and it cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run` step 2).
+- The base is not remembered. Every dispatch starts from `--base` if given, else the pool's base branch, and the run
+  records it (`runs.base_branch`, shown as the latest run's `base` in the state block). While the blocker's PR is
+  open, the overseer passes the same `--base` to the stacked ticket's `resume` and `fix-ci`. Once it merges, a
+  `resume` without `--base` tells the worker to retarget the PR to the repository's base branch, merging that branch in
+  if it conflicts; workers never rebase, since their pushes never force.
 - Ordering is a decision the overseer makes each tick from live state and
   records in `decisions`. There is no plan file and no DAG config.
 

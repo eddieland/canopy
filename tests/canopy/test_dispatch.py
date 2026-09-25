@@ -113,15 +113,6 @@ def test_one_worker_per_ticket(
     assert decisions(conn, tick_id)[1] == ("refused:running", "run 1 is already working PROJ-1")
 
 
-def test_base_is_refused_until_stacking(
-    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--base", "agent/PROJ-0-x"], runner=InlineRunner()) == 1
-    assert decisions(conn, tick_id) == [("refused:not_implemented", "--base arrives with stacking (ROADMAP M4)")]
-    assert not treehouse_state.exists()  # treehouse was never called
-
-
 @pytest.mark.parametrize("slug", ["Add", "a_b", "-a", "a-", "a--b", "a" * 41, "a/b", "a\n"])
 def test_bad_slugs_are_usage_errors(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, slug: str
@@ -225,7 +216,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
         (["COOL", "--kind", "fix-ci"], 1),
         (["BUSY", "--kind", "resume"], 1),
         (["NEW", "--kind", "fix-ci"], 1),
-        (["NEW", "--kind", "implement", "--base", "agent/X-1-work"], 1),
+        (["NEW", "--kind", "implement", "--base", "main"], 1),
         (["NEW", "--kind", "implement"], 0),  # BUSY and this one fill max_workers = 2
         (["NEW", "--kind", "implement"], 1),
         (["OTHER", "--kind", "implement"], 1),
@@ -238,7 +229,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
         ("COOL", "refused:cooldown"),
         ("BUSY", "refused:running"),
         ("NEW", "refused:no_branch"),
-        ("NEW", "refused:not_implemented"),
+        ("NEW", "refused:bad_base"),
         ("NEW", "dispatch:implement"),
         ("NEW", "refused:running"),
         ("OTHER", "refused:capacity"),

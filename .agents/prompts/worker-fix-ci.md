@@ -4,6 +4,9 @@ You are fixing CI for ticket {{KEY}} in an isolated worktree at {{SLOT}}. The
 branch `{{BRANCH}}` is checked out at its pushed state. PR: {{PR_URL}}.
 This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
+{{STACKING}} If a failure comes from the changes of the branch this ticket is stacked on, not from this ticket's,
+do not fix it here: report `blocked` and say so.
+
 ## Context from the overseer
 
 {{CONTEXT}}

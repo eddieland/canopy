@@ -144,8 +144,11 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     git.run("fetch", "--quiet", "origin")
     if git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
         git.run("checkout", "--quiet", "-B", branch, f"refs/remotes/origin/{branch}")
-    else:
+    elif git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{base}"):
         git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{base}")
+    else:
+        # A stacked run's base is another ticket's branch, deleted when its PR merged (DESIGN §10).
+        raise _SetupError(f"the base branch {base} is not on origin; if it was stacked on, its PR may have merged")
     start = git.run("rev-parse", f"refs/heads/{branch}")
 
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
