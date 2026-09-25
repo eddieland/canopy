@@ -55,10 +55,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # No cache: the check installs into an empty one of its own, so setup-uv would find nothing to save and fail.
       - name: Set up uv and Python 3.12
         uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.12"
+          enable-cache: false
 
       - name: Install with uv tool install and run a dry tick
         run: make install-check

@@ -60,9 +60,11 @@ state="$HOME/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
 "$UV_TOOL_DIR/canopy/bin/python" -c '
 import sys
+from pathlib import Path
 from canopy.infra import resources
+tool = Path(sys.argv[1]).resolve()  # resources resolves symlinks, such as macOS /var -> /private/var
 for found in (resources.migrations_dir(), resources.prompts_dir(), resources.agents_dir(), resources.skills_dir()):
-    if not found.is_relative_to(sys.argv[1]):
+    if not found.is_relative_to(tool):
         sys.exit(f"install-check: {found} is outside the installed tool")
 ' "$UV_TOOL_DIR"
 
