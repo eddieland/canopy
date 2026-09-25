@@ -29,7 +29,10 @@ standing write access to your repositories, your tracker, or your internal tools
 
 ## Install (target: five steps, no more)
 
-1. Install [treehouse](https://github.com/kunchenguid/treehouse).
+1. Install [treehouse](https://github.com/kunchenguid/treehouse) from source at the commit canopy needs:
+   `CGO_ENABLED=0 go install github.com/kunchenguid/treehouse@1185dc6cc50e1b66ef5c74b8ac677a6251258abc` (in a canopy
+   checkout, `make treehouse` does the same). No release has the lease output canopy reads yet, and `treehouse update`
+   installs a release binary that needs glibc 2.34+.
 2. Install canopy: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
    HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
    project. To upgrade, run the same command with `--reinstall`.

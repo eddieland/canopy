@@ -34,18 +34,22 @@ install-check: ## Install canopy with uv tool install into an empty HOME and run
 ##@ Setup
 
 TREEHOUSE_REPO := https://github.com/kunchenguid/treehouse
-# Newest release tag unless overridden, e.g. `make treehouse TREEHOUSE_VERSION=v2.3.0`.
-TREEHOUSE_VERSION ?= $(shell git ls-remote --tags --refs --sort=-v:refname $(TREEHOUSE_REPO) 'v*' \
-	| head -1 | sed 's|.*refs/tags/||')
+# A release tag, commit, or branch, e.g. `make treehouse TREEHOUSE_VERSION=v2.4.0`. The default is a pinned commit, not
+# the newest release: canopy needs `base_branch` in `get --lease --json`, which no release has yet (v2.3.0 lacks it).
+# Move to a release tag once one includes it. README's install step names the same commit; keep the two in sync.
+TREEHOUSE_VERSION ?= 1185dc6cc50e1b66ef5c74b8ac677a6251258abc
 
 # Built from source by commit: treehouse tags v2+ without a /v2 module path, so `go install ...@latest` stops at v1.8.0
-# and `@v2.x` is rejected. The prebuilt release binaries need glibc 2.34+. CGO_ENABLED=0 gives a static binary.
-treehouse: ## Install treehouse (TREEHOUSE_VERSION, default newest release) with go install
+# and `@v2.x` is rejected. The prebuilt release binaries need glibc 2.34+, so `treehouse update` can install one that
+# does not run. CGO_ENABLED=0 gives a static binary.
+treehouse: ## Install treehouse (TREEHOUSE_VERSION: tag, commit, or branch; default a pinned commit) with go install
 	@sha=$$(git ls-remote $(TREEHOUSE_REPO) 'refs/tags/$(TREEHOUSE_VERSION)^{}' 'refs/tags/$(TREEHOUSE_VERSION)' \
-		| sort -k2 | tail -1 | cut -f1); \
-	test -n "$$sha" || { echo "no treehouse tag $(TREEHOUSE_VERSION)"; exit 1; }; \
+		'refs/heads/$(TREEHOUSE_VERSION)' | sort -k2 | tail -1 | cut -f1); \
+	sha=$${sha:-$(TREEHOUSE_VERSION)}; \
 	echo "installing treehouse $(TREEHOUSE_VERSION) ($$sha)"; \
-	CGO_ENABLED=0 go install github.com/kunchenguid/treehouse@$$sha
-	@command -v treehouse >/dev/null 2>&1 || echo "treehouse is installed but not on PATH (add \$$(go env GOPATH)/bin)"
-	@! command -v treehouse >/dev/null 2>&1 || treehouse status --help 2>&1 | grep -q -- --json || \
-		echo "warning: $$(command -v treehouse) comes first on PATH and is too old (no --json); remove it"
+	CGO_ENABLED=0 go install github.com/kunchenguid/treehouse@$$sha && \
+	if ! command -v treehouse >/dev/null 2>&1; then \
+		echo "treehouse is installed but not on PATH (add $$(go env GOPATH)/bin)"; \
+	elif ! treehouse --version 2>&1 | grep -q -- "$$(echo $$sha | cut -c1-12)"; then \
+		echo "warning: $$(command -v treehouse) comes first on PATH and is not the one just installed; remove it"; \
+	fi

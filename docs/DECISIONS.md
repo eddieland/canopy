@@ -700,3 +700,18 @@ Rejected:
 - Keeping it in the snapshot: runs gain nothing from it, and a `$HOME` copy collides with it by name.
 Revisit: when a second runtime reads skills from somewhere `canopy skill`'s output does not fit; if operators ask for
 an install command.
+
+## D048. treehouse is pinned to a commit until a release has `base_branch`
+
+Context: canopy's lease model requires `base_branch` from `treehouse get --lease --json`; dispatch uses it as the
+worker's base when there is no `--base`. treehouse added the field after v2.3.0, its newest release, so `make treehouse`
+(which installed the newest release) and `treehouse update` both give a treehouse whose every lease canopy refuses. A
+live tick on 2026-09-25 refused all three dispatches as `no_slot` this way, and `treehouse update` also left a binary
+that needs glibc 2.34+.
+Decision: `make treehouse` and README's install step pin commit `1185dc6`, the one canopy's treehouse shapes were read
+from (ROADMAP M0). `TREEHOUSE_VERSION` takes a tag, commit, or branch.
+Rejected:
+- Making `base_branch` optional and falling back to `main`: a wrong base is a silent wrong PR target, worse than a
+  refused dispatch.
+- Tracking treehouse's `main`: unreviewed upstream changes to the JSON canopy parses would land on the next install.
+Revisit: when a treehouse release includes `base_branch`; switch the default back to a release tag.
