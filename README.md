@@ -64,9 +64,10 @@ standing write access to your repositories, your tracker, or your internal tools
 ## Troubleshooting
 
 - If canopy cannot find `treehouse`, check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
-  outdated, run `treehouse update` or install the required version from step 1 above.
+  outdated, rerun the pinned install from step 1 above or run `make treehouse` in a canopy checkout.
 - If the overseer records `skip` with `mcp_unavailable: github`, configure the GitHub MCP server in your agent runtime.
-- For more detail, check `canopy decisions`, `canopy status`, and `~/.canopy/canopy.log`.
+- For more detail, check `canopy decisions`, `canopy status`, and the effective log path reported by canopy's command
+  output.
 
 ## How it works, briefly
 
