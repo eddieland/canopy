@@ -67,7 +67,7 @@ canopy (harness, Python)
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
-    setup.py       init
+    setup.py       init, skill
     loop.py        loop, tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
     journal.py     decide, attention, ticket set
@@ -106,13 +106,13 @@ canopy (harness, Python)
 ```
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
 agents/          OpenCode agent definitions: canopy-overseer, canopy-worker
-skills/          canopy/: teaches an agent the canopy CLI
-                 tracker-<provider>/: optional per-tracker guides (§17)
+skills/          tracker-<provider>/: optional per-tracker guides (§17)
+operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
 ```
 
-`prompts/`, `agents/`, and `skills/` live under `.agents/` in this repository. The wheel bundles them, and
-`migrations/`, under `canopy/_data/` (D022).
+`prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
+them, and `migrations/`, under `canopy/_data/` (D022).
 
 Where later work goes:
 
@@ -587,6 +587,18 @@ Customizing canopy is adding skills where the runtime already looks: in the repo
 name do not reliably override each other. A skill in `$HOME` that workers use must be a single `SKILL.md`: the worker's
 `external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
 also define agents of its own under other names, MCP servers, and permissions (TRUST_MODEL T7).
+
+### The operator's skill
+
+Rationale in D047.
+
+`canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI, where
+the state directory's files are, how to read the journal read-only, and how to answer "why was KEY not picked up".
+canopy installs it nowhere: the operator saves it where their runtime reads skills, such as
+`~/.agents/skills/canopy/SKILL.md`, and saves it again after upgrading. It is not in the definitions snapshot, so a copy
+in `$HOME`, which canopy's own runs also load, never meets a second skill of the same name. Since those runs may load
+it, it opens by telling an agent started by canopy (`CANOPY_TICK_ID` set, or a canopy prompt) to follow its prompt
+instead. It grants nothing: the overseer's and worker's bash rules are what they run with either way.
 
 ## 14. Attention list
 

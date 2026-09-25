@@ -1,6 +1,7 @@
 # canopy
 
-> Working name. Rename freely; check PyPI and Homebrew collisions before publishing.
+> Working name. `canopy` on PyPI is an unrelated project, so canopy installs from this repository (D046). Rename
+> before any index release.
 
 An unattended, local agent loop driven by your issue tracker.
 
@@ -29,7 +30,9 @@ standing write access to your repositories, your tracker, or your internal tools
 ## Install (target: five steps, no more)
 
 1. Install [treehouse](https://github.com/kunchenguid/treehouse).
-2. Install canopy: `uv tool install canopy`.
+2. Install canopy: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
+   HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
+   project. To upgrade, run the same command with `--reinstall`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
 4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
@@ -51,6 +54,9 @@ standing write access to your repositories, your tracker, or your internal tools
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. Set `notify.cmd` to have changes piped to a
   command of your own.
 - Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
+  and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
+  upgrading.
 
 ## How it works, briefly
 
@@ -91,4 +97,4 @@ Details in [docs/DESIGN.md](docs/DESIGN.md). Security posture in
 
 ## License
 
-Not yet decided. Do not add a `LICENSE` file until it is.
+Proprietary, all rights reserved, for now (D046). See [LICENSE](LICENSE). Revisit before any public release.

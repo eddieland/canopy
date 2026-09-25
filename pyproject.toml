@@ -3,6 +3,10 @@ name = "canopy"
 version = "0.0.1"
 description = "Unattended, local agent loop driven by your issue tracker."
 readme = "README.md"
+# Proprietary for now (D046). The classifier makes PyPI refuse an upload, where `canopy` is another project's name.
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
+classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.5.0",
@@ -27,6 +31,7 @@ packages = ["src/canopy"]
 ".agents/prompts" = "canopy/_data/prompts"
 ".agents/agents" = "canopy/_data/agents"
 ".agents/skills" = "canopy/_data/skills"
+".agents/operator-skill" = "canopy/_data/operator-skill"
 
 [dependency-groups]
 dev = [

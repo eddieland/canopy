@@ -165,7 +165,12 @@ first's open, green PR. Started on request while M2 and M3 wait on their live ru
 
 Accept: a coworker runs it against their own ticket.
 
-Status: not started.
+Status: in progress. The skill, the install check, and the license are in (D046, D047). The skill is for the
+operator's own agent sessions: `canopy skill` prints it and agent runs do not load it. `uv tool install canopy` was
+wrong, since the PyPI name is another project's; README now installs from git, verified from an empty HOME on
+2026-09-25, and `tests/install-check.sh` repeats that in CI on Linux and macOS. The license is proprietary for now.
+Waiting on the operator: a second person following README's install steps without help, with their friction filed as
+issues, and a coworker running canopy against their own ticket.
 
 ## M6. Workspace
 
@@ -252,8 +257,8 @@ if the operator asks.
 - `canopy notify test`, and a line per sink in `canopy status`.
 - The uv workspace, with the Slack sink as its first member (`packages/canopy-notify-slack`, D041) and the
   `canopy-notify-slack` script in canopy's own install, tested against a local HTTP server; the `TID251` ban on network
-  modules in `src/canopy`, and the layer test refusing imports of the sink. `uv tool install canopy` still installs
-  both in one step (a check on a clean machine, as M5's).
+  modules in `src/canopy`, and the layer test refusing imports of the sink. One `uv tool install` still installs
+  both (`tests/install-check.sh`, M5's clean-machine check).
 - The TRUST_MODEL T2, T6, and §7 changes, with human approval.
 - DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
 
