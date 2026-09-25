@@ -1,4 +1,4 @@
-"""Where canopy's own files are: migrations, prompts, agent definitions, skills.
+"""Where canopy's own files are: migrations, prompts, agent definitions, skills, the operator's skill.
 
 In a source checkout they sit at the repository root (`migrations/`, `.agents/`). In an installed wheel they are
 bundled inside the package (`canopy/_data/`, see `[tool.hatch.build.targets.wheel.force-include]` in pyproject.toml).
@@ -39,3 +39,8 @@ def agents_dir() -> Path:
 def skills_dir() -> Path:
     """Return the directory of shipped skills."""
     return _find("skills", ".agents/skills")
+
+
+def operator_skill() -> Path:
+    """Return the skill for the operator's own agent sessions, which `canopy skill` prints. Agent runs never load it."""
+    return _find("operator-skill", ".agents/operator-skill") / "SKILL.md"
