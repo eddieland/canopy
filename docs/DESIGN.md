@@ -63,7 +63,7 @@ this, and fails on a module outside the packages it lists.
 canopy (harness, Python)
   __main__.py      python -m canopy, how dispatch starts _run from the same installation
 
-  cli/             the command line; the only package that imports click, and only __main__ imports it
+  cli/             the command line; only cli imports click, and only __main__ imports cli
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
