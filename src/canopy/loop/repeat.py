@@ -261,7 +261,8 @@ def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> 
         rows.add_row("", Text(str(d["ticket_key"] or "-")), Text(action, style=style), rationale)
     output = ctx.state_dir / "ticks" / f"{tick_id}.log"
     if failed and output.exists():
-        rows.add_row("", "", Text("overseer output", style="red"), _detail(str(output)))
+        # Not `_detail`: collapsing whitespace would print a path that does not exist.
+        rows.add_row("", "", Text("overseer output", style="red"), Text(str(output), no_wrap=True, overflow="ellipsis"))
 
 
 def _attention_rows(rows: Table, before: list[attention.Item], after: list[attention.Item]) -> None:
