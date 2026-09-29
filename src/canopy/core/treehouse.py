@@ -122,8 +122,9 @@ def status(runner: procs.Runner) -> list[Slot]:
 def lease(runner: procs.Runner, key: str, *, base: str | None = None) -> Lease:
     """Lease a slot for ticket `key`, optionally based on branch `base`.
 
-    If treehouse leased a slot but its output is not a `Lease`, the slot is returned before the error is raised, so a
-    failed lease never leaves one held. The error says whether that return worked.
+    If treehouse leased a slot but its output is not a `Lease`, the slot is returned before the error is raised when
+    the output still names it. When it does not, or the return fails, the next tick's reconcile returns it. The error
+    says which happened.
     """
     args = ["get", "--lease", "--lease-holder", holder_for(key), "--json"]
     if base is not None:
