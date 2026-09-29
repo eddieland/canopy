@@ -715,3 +715,20 @@ Rejected:
   refused dispatch.
 - Tracking treehouse's `main`: unreviewed upstream changes to the JSON canopy parses would land on the next install.
 Revisit: when a treehouse release includes `base_branch`; switch the default back to a release tag.
+
+## D049. A second stop signal within one second of the first is the same Ctrl-C
+
+Context: D042 has the loop's first SIGINT or SIGTERM stop after the tick and a second abort it. Run as `uv run canopy
+loop` (a checkout, a developer), one Ctrl-C aborted the tick: the terminal sends SIGINT to the foreground process
+group, which holds both uv and canopy, and uv 0.11 forwards the SIGINT it got to its child about 200 ms later. canopy
+cannot tell the forwarded copy from a second keypress by its content.
+Decision (DESIGN §6): `repeat.signals` ignores a stop signal that arrives less than `SAME_SIGNAL_SECONDS` (1.0) after
+the first, measured on a monotonic clock, for SIGINT and SIGTERM alike. The clock is injected, so tests need no sleeps.
+Rejected:
+- Detecting uv (its env vars or parent process) and ignoring one extra signal: couples canopy to one launcher's
+  behavior and version, and misfires if uv stops forwarding.
+- Moving canopy into its own process group: the terminal's Ctrl-C would then reach only uv, so canopy would depend on
+  uv forwarding it, and a `canopy loop` run directly would lose Ctrl-C altogether.
+- A shorter window, such as 300 ms: close to uv's 200 ms delay on a loaded machine, for no gain; a person reads the
+  "stopping after this tick" line before pressing Ctrl-C again.
+Revisit: if a launcher forwards signals later than a second, or operators find a deliberate double Ctrl-C ignored.

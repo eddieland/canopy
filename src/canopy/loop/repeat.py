@@ -41,6 +41,10 @@ if TYPE_CHECKING:
 LOCK_FILE_NAME = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop.
 _WAIT_STEP_SECONDS = 0.5
+# A second stop signal this soon after the first is the same Ctrl-C, not a second one (D049). `uv run` forwards the
+# SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
+# again aborts it" and pressing it again takes longer than this.
+SAME_SIGNAL_SECONDS = 1.0
 # Decisions every tick repeats. The tick's summary counts them; `canopy decisions` lists them.
 _QUIET_ACTIONS = ("wait",)
 _STATUS_STYLES = {
@@ -58,20 +62,24 @@ class Stop:
     """Whether the operator asked the loop to stop. Set by `signals`, read between and during ticks."""
 
     requested: bool = False
+    requested_at: float | None = None  # `signals`' clock at the first stop signal
 
 
 @contextmanager
-def signals(stop: Stop) -> Generator[None]:
+def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Generator[None]:
     """Make SIGINT and SIGTERM ask the loop to stop once the current tick ends, instead of killing it.
 
     A second signal raises KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process
     group, and the next tick closes the tick row as `abandoned`. Workers already dispatched are detached and keep going.
+    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second (D049).
     """
 
     def handle(_signum: int, _frame: FrameType | None) -> None:
-        if stop.requested:
+        now = clock()
+        if stop.requested_at is None:
+            stop.requested, stop.requested_at = True, now
+        elif now - stop.requested_at >= SAME_SIGNAL_SECONDS:
             raise KeyboardInterrupt
-        stop.requested = True
 
     previous = {s: signal.signal(s, handle) for s in (signal.SIGINT, signal.SIGTERM)}
     try:
