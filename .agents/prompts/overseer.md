@@ -87,11 +87,13 @@ exit.
 | `ci_running` | PR open, checks pending | `wait` |
 | `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch fix-ci --cursor ci=<run>`; see step 2 |
 | `changes_requested` | review comments or requested changes newer than `review` cursor | classify (below) |
-| `green_unreviewed` | checks pass, no approval, no new comments | `attention needs_reviewer` |
+| `green_unreviewed` | checks pass, no human approval, no new comments | `attention needs_reviewer` |
 | `approved` | approved by a human, not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
 | `merged` | PR merged | `canopy ticket set --done`; `decide done` |
 | `needs_human` | needs-human label present, no authorized reply newer than it | `wait` |
 | `human_replied` | authorized replier's comment newer than the needs-human label | `dispatch resume` (below) |
+
+`[bot]` approvals do not count as approval: a green PR approved only by bots is `green_unreviewed`, not `approved`.
 
 If the tracker cannot say when a label was added, use the worker's question comment as the reference point for
 `needs_human` and `human_replied`.
@@ -169,9 +171,10 @@ blocker relation is data: it can delay work, never authorize it. A blocker does 
 Ticket B, blocked by ticket A that is not closed, with no branch of its own yet:
 
 - If A has a PR that is open, not merged, and green (every check passed), and A's branch is on origin under the branch
-  prefix, stack B on it: `canopy dispatch B --kind implement --slug ... --base <A's branch>`. Read A's branch from its
-  PR's head, not from the state block. The worker starts from A's branch and opens B's PR against it, so B's PR shows
-  only B's work. Record the rationale through the dispatch; it names the base.
+  prefix, stack B on it: `canopy dispatch B --label <label> --kind implement --slug ... --base <A's branch>`, with the
+  label you read on B. Read A's branch from its PR's head, not from the state block. The worker starts from A's branch
+  and opens B's PR against it, so B's PR shows only B's work. Record the rationale through the dispatch; it names the
+  base.
 - Otherwise record `canopy decide B wait --rationale "blocked_by: <A>"` and `canopy ticket set B --phase blocked`.
   Never stack on a red, pending, draft, or merged PR, on a branch outside the branch prefix, or on a ticket that is not
   B's blocker. If B has several open blockers, stack only when exactly one is unresolved and it qualifies.

@@ -52,14 +52,16 @@ class Started:
     branch: str
     slot: Path
     pid: int
+    label: str
 
 
 @dataclass(frozen=True)
 class Plan:
-    """The branch a run works on, and the branch it stacks on if `--base` named one."""
+    """The branch a run works on, the branch it stacks on if `--base` named one, and the queue label, as configured."""
 
     branch: str
     base: str | None
+    label: str
 
 
 def valid_slug(value: str) -> bool:
@@ -126,8 +128,8 @@ def start(
 
 def check(
     ctx: Context, *, tick_id: int, key: str, kind: str, label: str | None, slug: str | None, base: str | None
-) -> str:
-    """Check the guards a live dispatch would, for a dry run, and return the branch the run would work on (D036).
+) -> Plan:
+    """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
     Nothing is leased, recorded, or spawned. The dry-run dispatches this tick already recorded stand in for the runs
     they would have started, so the `running` and `capacity` guards refuse what a live tick would. The lease, prompt,
@@ -144,27 +146,31 @@ def check(
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
         _guard(ctx, key, kind, planned=planned)
-    return plan.branch
+    return plan
 
 
 def _plan(ctx: Context, key: str, kind: str, *, label: str | None, slug: str | None, base: str | None) -> Plan:
-    _check_label(ctx.config.tracker.labels, key, label)
+    configured = _check_label(ctx.config.tracker.labels, key, label)
     branch = _branch(ctx, key, kind, slug)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
-    return Plan(branch=branch, base=base)
+    return Plan(branch=branch, base=base, label=configured)
 
 
-def _check_label(labels: Sequence[str], key: str, label: str | None) -> None:
-    """Refuse a dispatch that does not name one of the operator's queue labels (DESIGN §8, D050).
+def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
+    """Refuse a dispatch that does not name one of the operator's queue labels (DESIGN §8, D051).
 
     canopy cannot read the tracker, so this cannot prove the label is on the ticket. It makes the overseer name the
-    label it read for every dispatch, a claim recorded with the decision, instead of a check it can skip.
+    label it read for every dispatch, a claim recorded with the decision, instead of a check it can skip. Labels match
+    case-insensitively, as GitHub's do; the configured spelling is returned. The refusal never lists the configured
+    labels, so an overseer cannot copy one from it without reading the ticket.
     """
     if label is None:
-        raise Refusal("unauthorized", f"--label is required: name the label from tracker.labels you read on {key}")
-    if label not in labels:
-        raise Refusal("unauthorized", f"{label!r} is not one of tracker.labels: {', '.join(labels)}")
+        raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
+    for configured in labels:
+        if configured.casefold() == label.casefold():
+            return configured
+    raise Refusal("unauthorized", f"{label!r} is not a configured queue label; name the one you read on {key}")
 
 
 def _check_base(prefix: str, branch: str, base: str) -> None:
@@ -278,7 +284,7 @@ def _spawn(
         db.finish_run(ctx.conn, run_id, "crashed", json.dumps({"harness": f"could not start the worker: {e}"}))
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
-    return Started(run_id=run_id, branch=branch, slot=lease.path, pid=pid)
+    return Started(run_id=run_id, branch=branch, slot=lease.path, pid=pid, label=plan.label)
 
 
 def stacking_note(branch: str, base: str | None) -> str:

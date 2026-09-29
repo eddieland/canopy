@@ -35,13 +35,24 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-implement.md").write_text("{{KEY}} {{BRANCH}}\n")
+    (overrides / "worker-implement.md").write_text("{{KEY}} {{BRANCH}} {{LABELS}}\n")
     cfg = load(canopy_env.repo, canopy_env.user_file)
     text = prompts.render_worker(cfg, "implement", {**VALUES, "KEY": "{{BRANCH}}"})
-    assert text == "{{BRANCH}} agent/PROJ-1-work\n"
+    assert text == "{{BRANCH}} agent/PROJ-1-work `agent-ready-alice`\n"
 
 
 def test_unknown_placeholder_is_an_error(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.repo, canopy_env.user_file)
     with pytest.raises(prompts.PromptError, match=r"unknown placeholder \{\{BASE\}\}"):
         prompts.render_worker(cfg, "implement", {k: v for k, v in VALUES.items() if k != "BASE"})
+
+
+@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+def test_worker_prompt_without_the_labels_is_an_error(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override from before D051 would drop the worker's own label check; it must not render.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} on {{BRANCH}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{LABELS\}\}"):
+        prompts.render_worker(cfg, kind, VALUES)

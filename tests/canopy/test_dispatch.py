@@ -56,6 +56,8 @@ def test_dispatch_leases_records_and_spawns(
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "dispatch:implement"
     assert rationale == f"run 1: agent/PROJ-1-add-login in {run['slot_path']}; label agent-ready-tester"
+    # The worker is told which labels authorize it, so it can check the ticket itself (D051).
+    assert "`agent-ready-tester`" in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert ticket["branch"] == "agent/PROJ-1-add-login"
 
@@ -140,8 +142,13 @@ def test_bad_slugs_are_usage_errors(
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
+@pytest.mark.parametrize("kind", ["implement", "fix-ci", "resume"])
 @pytest.mark.parametrize(
-    ("label", "reason"), [(None, "--label is required"), ("agent-ready-someone-else", "is not one of tracker.labels")]
+    ("label", "reason"),
+    [
+        (None, "--label is required: name the queue label you read on PROJ-1"),
+        ("agent-ready-someone-else", "'agent-ready-someone-else' is not a configured queue label"),
+    ],
 )
 def test_dispatch_without_a_configured_label_is_unauthorized(
     canopy_env: CanopyEnv,
@@ -150,16 +157,74 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
     monkeypatch: pytest.MonkeyPatch,
     label: str | None,
     reason: str,
+    kind: str,
     mode: str,
 ) -> None:
-    # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D050).
+    # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D051).
+    db.touch_ticket(conn, "PROJ-1", str(canopy_env.repo))
+    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so fix-ci and resume could
     tick_id = in_tick(conn, monkeypatch, dry_run=mode == "dry run")
-    args = ["dispatch", "PROJ-1", "--kind", "implement"] + ([] if label is None else ["--label", label])
+    args = ["dispatch", "PROJ-1", "--kind", kind] + ([] if label is None else ["--label", label])
     assert main(args, runner=InlineRunner()) == 1
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "refused:unauthorized"
-    assert reason in rationale
-    assert not treehouse_state.exists() or not json.loads(treehouse_state.read_text()).get("calls")  # no lease
+    assert rationale.startswith(reason)
+    assert "agent-ready-tester" not in rationale  # the refusal never hands the overseer a label to copy
+    assert not treehouse_state.exists()  # refused before leasing
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
+def test_unauthorized_is_checked_before_the_other_guards(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No branch to continue, a slug fix-ci does not take, and a bad base: the missing label is still what is reported.
+    tick_id = in_tick(conn, monkeypatch)
+    args = ["dispatch", "PROJ-1", "--kind", "fix-ci", "--slug", "again", "--base", "main"]
+    assert main(args, runner=InlineRunner()) == 1
+    assert [action for action, _ in decisions(conn, tick_id)] == ["refused:unauthorized"]
+    # With the label, the next guard in line refuses instead.
+    assert main([*args, "--label", "agent-ready-tester"], runner=InlineRunner()) == 1
+    assert [action for action, _ in decisions(conn, tick_id)][-1] == "refused:bad_slug"
+    assert not treehouse_state.exists()
+
+
+@pytest.mark.parametrize("mode", ["live", "dry run"])
+def test_label_matches_case_insensitively_and_records_the_configured_spelling(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    # GitHub labels are case-insensitive, so an overseer that reads `Agent-Ready-Tester` has read the configured label.
+    tick_id = in_tick(conn, monkeypatch, dry_run=mode == "dry run")
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "Agent-Ready-TESTER", "--kind", "implement"], runner=InlineRunner()) == 0
+    )
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "dispatch:implement"
+    assert rationale.endswith("; label agent-ready-tester")
+
+
+def test_stale_worker_prompt_override_is_refused(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An override written before D051 has no `{{LABELS}}`, so its worker would skip the label check: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text("Work {{KEY}} on {{BRANCH}}\n")
+    tick_id = in_tick(conn, monkeypatch)
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{LABELS}}" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
@@ -183,7 +248,9 @@ def test_unparseable_lease_is_returned_and_refused(
     # treehouse leased the slot, but its output lacks a field canopy needs: the slot goes back in the same dispatch.
     treehouse_state.write_text(json.dumps({"get_omit": ["base_branch"]}))
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=InlineRunner()) == 1
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "refused:no_slot"
     assert "base_branch" in rationale

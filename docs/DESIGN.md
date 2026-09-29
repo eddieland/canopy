@@ -284,14 +284,17 @@ provider skill says which.
 `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context TEXT]
 [--cursor NAME=ID]...`:
 
-1. Refuse if capacity is zero, if a `runs` row for KEY is `running`, or if the kind's attempt limit or cooldown blocks
-   it. Guards are in code and are not overridable from the prompt. A refusal is recorded as a decision
-   `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and then stops, with
-   each dry-run dispatch already recorded this tick counting as a running run for `running` and `capacity` (§6, D036).
+1. Refuse if the dispatch names no configured queue label, if capacity is zero, if a `runs` row for KEY is `running`,
+   or if the kind's attempt limit or cooldown blocks it. Guards are in code and are not overridable from the prompt. A
+   refusal is recorded as a decision `refused:<guard>` with the reason, and the command exits 1. A dry run checks the
+   same guards and then stops, with each dry-run dispatch already recorded this tick counting as a running run for
+   `running` and `capacity` (§6, D036).
    Guards, in the order they are checked:
-   - `unauthorized`: no `--label`, or one that is not in `tracker.labels`. canopy cannot read the tracker, so this does
-     not prove the label is on the ticket; it makes the overseer name, for every dispatch, the label it read, and the
-     decision records it (D050). The worker checks the ticket's labels again before it starts (step 3).
+   - `unauthorized`: no `--label`, or one that is not in `tracker.labels`, compared case-insensitively as GitHub labels
+     are. canopy cannot read the tracker, so this does not prove the label is on the ticket; it makes the overseer
+     name, for every dispatch, the label it read, and the decision records it in its configured spelling (D051). The
+     refusal does not list the configured labels, so it cannot be answered by copying one. The worker's own read of
+     the ticket's labels is the independent check (step 3).
    - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
      ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
@@ -318,14 +321,16 @@ provider skill says which.
    label, timeout, the attempt number and the kind's limit, the PR the journal recorded for the ticket, the authorized
    repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), the context, and the result
    contract below. Every worker reads the ticket first and reports `failed` with a summary starting `not authorized:`,
-   changing nothing, if it is closed or carries none of the queue labels.
+   changing nothing, if it is closed or carries none of the queue labels; that run counts toward the kind's attempt
+   limit like any other.
    An `implement` branch is `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title,
-   lowercase words joined by single hyphens, at most 40 characters, `work` if it gives none. The context is the overseer's `--context`: at most
-   2000 characters that point the worker at what to read (links, comment ids, check names), never a copy of ticket or
-   PR text (D031). The worker reads that text itself and checks a reply's author against the authorized repliers,
-   which the harness renders from the user config. Placeholders are `{{NAME}}`, replaced in one pass;
-   an unknown one is `bad_prompt`. The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the
-   operator.
+   lowercase words joined by single hyphens, at most 40 characters, `work` if it gives none. The context is the
+   overseer's `--context`: at most 2000 characters that point the worker at what to read (links, comment ids, check
+   names), never a copy of ticket or PR text (D031). The worker reads that text itself and checks a reply's author
+   against the authorized repliers, which the harness renders from the user config. Placeholders are `{{NAME}}`,
+   replaced in one pass; an unknown one is `bad_prompt`, and so is a worker prompt without `{{LABELS}}`, so an override
+   written before D051 fails closed instead of silently dropping the worker's label check. The prompt is written to
+   `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with the interpreter canopy runs under, detached (`setsid`, stdin from
    `/dev/null`, stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository root). Record its
    pid in the run. Return immediately.
@@ -395,10 +400,10 @@ Rationale in D045.
   leaves every ticket unblocked. A relation is data: it can delay work, never authorize it.
 - A ticket with an unresolved blocker and no branch of its own is `blocked`. The overseer records `wait` with rationale
   `blocked_by: <KEY>`, unless it stacks the ticket.
-- Stacking: `canopy dispatch <KEY> --kind implement --base <blocker's branch>` starts the worker from the blocker's
-  branch, and the worker opens its PR against that branch, so the PR shows only this ticket's commits. The overseer
-  stacks only on a ticket's single unresolved blocker, only when the blocker's PR is open, not merged, and green, and
-  reads the blocker's branch from that PR, not from the journal.
+- Stacking: `canopy dispatch <KEY> --label <label> --kind implement --base <blocker's branch>` starts the worker from
+  the blocker's branch, and the worker opens its PR against that branch, so the PR shows only this ticket's commits. The
+  overseer stacks only on a ticket's single unresolved blocker, only when the blocker's PR is open, not merged, and
+  green, and reads the blocker's branch from that PR, not from the journal.
 - The harness checks only the shape of `--base` (`bad_base`, §8): it must be under `trust.branch_prefix` and must not
   be the run's own branch. It does not look the base up in the journal, since the blocker may be in another operator's
   queue, and it cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run` step 2).
@@ -553,7 +558,10 @@ a custom template, such as a sandbox wrapper's, must still end up setting `OPENC
 default templates is the ordinary program, not a shell. `notify.cmd` is split the same way, gets its input on stdin, and
 must not contain `{prompt}`.
 
-Overrides in `prompt_overrides` replace files of the same name in `prompts/`. The default is `prompts/` next to the user
+Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An override must keep what canopy's
+guards rely on: an overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include
+`{{LABELS}}` and the authorization check that uses it (§8, D051); a worker override without it is refused as
+`bad_prompt`. The default is `prompts/` next to the user
 file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
 `paths.*` values must be absolute or start with `~`: canopy runs from the repository root, so a relative path would let
 the repository supply the operator's prompts or state (TRUST_MODEL T7).
@@ -865,8 +873,8 @@ Guards (§8) change as follows:
 canopy splits a ticket in the tracker, and never schedules what it split. The children are ordinary tickets that start
 without a queue label, so a human authorizes each one exactly as they authorize any ticket (TRUST_MODEL T1).
 
-- The overseer dispatches `canopy dispatch <KEY> --kind split --repo api --repo web`. The overseer is read-only, so the
-  tracker writes happen in a worker, like every other write.
+- The overseer dispatches `canopy dispatch <KEY> --label <label> --kind split --repo api --repo web`. The overseer is
+  read-only, so the tracker writes happen in a worker, like every other write.
 - The split worker runs as `canopy-splitter`: a separate agent definition with read-only file and shell tools and the
   tracker MCP tools to create a ticket, link tickets, and comment. It has no label tools and no GitHub write tools. It
   runs in a desk of the named repositories' worktrees so it can read the code, and it pushes nothing. Where the
