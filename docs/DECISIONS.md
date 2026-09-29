@@ -732,3 +732,21 @@ Rejected:
 - A shorter window, such as 300 ms: close to uv's 200 ms delay on a loaded machine, for no gain; a person reads the
   "stopping after this tick" line before pressing Ctrl-C again.
 Revisit: if a launcher forwards signals later than a second, or operators find a deliberate double Ctrl-C ignored.
+
+## D050. Build canopy rather than adopt Symphony, agent-orchestrator, or Hermes Kanban
+
+Context: three open-source projects overlap with canopy's loop (surveyed 2026-09-29 in `PRIOR_ART.md`). Polling,
+dispatch, a worktree per ticket, and sending CI and review back to an agent are common to all of them.
+Decision: keep building canopy; take their lessons, not their code, as with Azimuth (D001). What none of them offers,
+and canopy is for: any tracker through MCP with no tracker code (D003, D014); never merging, enforced in code
+(TRUST_MODEL §6); no daemon or listener (D042); worktrees released while waiting (D005); a fresh overseer each tick
+(§6).
+Rejected:
+- Implementing Symphony's spec: it targets the Codex app-server protocol and a tracker adapter per provider, keeps
+  state in memory, and lets a repository file set the agent command and shell hooks (T7).
+- Configuring agent-orchestrator: its tracker intake is GitHub and GitLab only, its sessions are long-lived and fed
+  messages, it runs listeners, and "never merge" rests on a prompt and branch protection.
+- Hermes Kanban: its tasks live on its own board, not the team's tracker, and it has no CI or review follow-up.
+Revisit: if agent-orchestrator ships tracker intake through MCP or Jira and a merge deny in code; if Symphony's spec
+drops the Codex requirement and moves CI and review follow-up into scope; if Hermes lands tracker-driven issue
+resolution ([#404](https://github.com/NousResearch/hermes-agent/issues/404)).

@@ -97,6 +97,9 @@ Details in [docs/DESIGN.md](docs/DESIGN.md). Security posture in
   orchestrator. Different shape: canopy is unattended and queue-driven.
 - **GitHub Copilot coding agent, Atlassian Rovo Dev**: hosted equivalents. See
   "Why this exists".
+- **OpenAI Symphony, Composio agent-orchestrator, Hermes Agent Kanban**: open-source loops that dispatch agents from a
+  tracker or board. Why canopy is built anyway, and what their issue trackers taught: D050 and
+  [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 ## License
 
