@@ -7,6 +7,12 @@ This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 {{STACKING}} If a failure comes from the changes of the branch this ticket is stacked on, not from this ticket's,
 do not fix it here: report `blocked` and say so.
 
+## Authorization
+
+Before any other work, read {{KEY}} through the tracker. If it is closed, or carries none of the labels {{LABELS}}, the
+overseer should not have dispatched you: change nothing, push nothing, post nothing, and report `failed` with a summary
+that starts `not authorized:` and says which it was.
+
 ## Context from the overseer
 
 {{CONTEXT}}

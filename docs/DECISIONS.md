@@ -751,3 +751,31 @@ Rejected:
 Revisit: if agent-orchestrator ships tracker intake through MCP or Jira and a fresh session per run; if Symphony's spec
 drops the Codex requirement and moves CI and review follow-up into scope; if Hermes lands tracker-driven issue
 resolution ([#404](https://github.com/NousResearch/hermes-agent/issues/404)).
+
+## D051. A dispatch names the queue label it relies on, and the worker checks it again
+
+Context: labels are canopy's only authorization to start work (TRUST_MODEL T1), and until now only the overseer's
+prompt checked them. In the live acceptance run on 2026-09-25 the overseer (OpenCode with `gpt-6-luna`) dispatched an
+unlabeled ticket twice, dry and live: the ticket was in the state block from an earlier dry run, the prompt says to
+union the state block with the query, and the overseer skipped the label read for it. Other ticks skipped the same
+tickets correctly, so the check is unreliable rather than absent. canopy has no tracker code (D009), so it cannot read
+labels itself.
+Decision: `canopy dispatch` requires `--label LABEL`, one of `tracker.labels` compared case-insensitively (GitHub
+labels are), and refuses otherwise as `unauthorized`, the first guard. The refusal does not list the configured labels,
+so the overseer cannot copy one from it. The decision's rationale records the configured spelling. Every worker prompt
+starts by reading the ticket and reporting `failed` (`not authorized: ...`) without changes if it is closed or carries
+none of the queue labels, which the harness renders into the prompt; a worker prompt without `{{LABELS}}`, such as an
+override written before this decision, fails to render and the dispatch is refused as `bad_prompt`. The overseer
+prompt says the state block authorizes nothing and that `[bot]` approvals do not count as approval.
+Rejected:
+- Prompt wording alone: it already said labels authorize; the failure was a skipped step, which a required argument
+  turns into an explicit claim.
+- Reading labels in the harness: that is a tracker client (D009), per provider.
+- Narrowing `tracker.query` to the operator's label: the state-block union still brings old tickets back, and the
+  query is shared across operators.
+Residual: `--label` is a recorded claim, not a check: the harness knows only that the label is configured, not that it
+is on the ticket, so an overseer that names a label it did not read passes the guard. The independent check is the
+worker's own read of the ticket's labels, a separate agent run with its own tracker access; it is a prompt instruction,
+so it too can be skipped. Human review of every PR is the backstop.
+Revisit: if a tracker-neutral way to read labels appears (for example a runtime command canopy can call without
+provider code), move the check into code.

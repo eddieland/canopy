@@ -8,6 +8,12 @@ PR: {{PR_URL}}. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 `{{BASE}}`, and if the branch then conflicts with it, merge `{{BASE}}` into the branch and resolve the conflicts. Never
 rebase: the push must not need force.
 
+## Authorization
+
+Before any other work, read {{KEY}} through the tracker. If it is closed, or carries none of the labels {{LABELS}}, the
+overseer should not have dispatched you: change nothing, push nothing, post nothing, and report `failed` with a summary
+that starts `not authorized:` and says which it was.
+
 ## Context from the overseer
 
 {{CONTEXT}}
