@@ -30,6 +30,8 @@ requires_canary = pytest.mark.skipif(
     os.environ.get("CANOPY_OPENCODE_CANARY") != "1" or shutil.which("opencode") is None,
     reason="opt-in: set CANOPY_OPENCODE_CANARY=1 with opencode installed and a model configured",
 )
+# Read at import, like the opt-in above: conftest's autouse fixture drops CANOPY_* variables before each test runs.
+CANARY_MODEL = os.environ.get("CANOPY_OPENCODE_CANARY_MODEL")
 
 # Last matching rule wins in OpenCode, so the catch-all comes first.
 AGENT = """\
@@ -90,9 +92,8 @@ def check_canary(tmp_path: Path, *, repo_agent: str | None) -> None:
         (repo / ".opencode" / "agent" / "canopy-canary.md").write_text(repo_agent)
 
     argv = ["opencode", "run", "--agent", "canopy-canary", "--format", "json"]
-    model = os.environ.get("CANOPY_OPENCODE_CANARY_MODEL")
-    if model:
-        argv += ["-m", model]
+    if CANARY_MODEL:
+        argv += ["-m", CANARY_MODEL]
     env = {"OPENCODE_CONFIG_DIR": str(definitions_dir)}
     result = runner.run([*argv, PROMPT], cwd=repo, env=env, timeout=600)
 
