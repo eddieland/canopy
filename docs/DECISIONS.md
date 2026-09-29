@@ -716,25 +716,47 @@ Rejected:
 - Tracking treehouse's `main`: unreviewed upstream changes to the JSON canopy parses would land on the next install.
 Revisit: when a treehouse release includes `base_branch`; switch the default back to a release tag.
 
-## D050. A dispatch names the queue label it relies on, and the worker checks it again
+## D049. A second stop signal within one second of the first is the same Ctrl-C
+
+Context: D042 has the loop's first SIGINT or SIGTERM stop after the tick and a second abort it. Run as `uv run canopy
+loop` (a checkout, a developer), one Ctrl-C aborted the tick: the terminal sends SIGINT to the foreground process
+group, which holds both uv and canopy, and uv 0.11 forwards the SIGINT it got to its child about 200 ms later. canopy
+cannot tell the forwarded copy from a second keypress by its content.
+Decision (DESIGN §6): `repeat.signals` ignores a stop signal that arrives less than `SAME_SIGNAL_SECONDS` (1.0) after
+the first, measured on a monotonic clock, for SIGINT and SIGTERM alike. The clock is injected, so tests need no sleeps.
+Rejected:
+- Detecting uv (its env vars or parent process) and ignoring one extra signal: couples canopy to one launcher's
+  behavior and version, and misfires if uv stops forwarding.
+- Moving canopy into its own process group: the terminal's Ctrl-C would then reach only uv, so canopy would depend on
+  uv forwarding it, and a `canopy loop` run directly would lose Ctrl-C altogether.
+- A shorter window, such as 300 ms: close to uv's 200 ms delay on a loaded machine, for no gain; a person reads the
+  "stopping after this tick" line before pressing Ctrl-C again.
+Revisit: if a launcher forwards signals later than a second, or operators find a deliberate double Ctrl-C ignored.
+
+## D051. A dispatch names the queue label it relies on, and the worker checks it again
 
 Context: labels are canopy's only authorization to start work (TRUST_MODEL T1), and until now only the overseer's
 prompt checked them. In the live acceptance run on 2026-09-25 the overseer (OpenCode with `gpt-6-luna`) dispatched an
-unlabeled ticket twice, dry and live: the ticket was in the state block from an earlier dry run, the prompt says to union
-the state block with the query, and the overseer skipped the label read for it. Other ticks skipped the same tickets
-correctly, so the check is unreliable rather than absent. canopy has no tracker code (D009), so it cannot read labels
-itself.
-Decision: `canopy dispatch` requires `--label LABEL`, one of `tracker.labels`, and refuses otherwise as `unauthorized`,
-the first guard. The label goes into the decision's rationale. Every worker prompt starts by reading the ticket and
-reporting `failed` (`not authorized: ...`) without changes if it is closed or unlabeled. The overseer prompt says the
-state block authorizes nothing and that `[bot]` approvals do not make a PR `approved`.
+unlabeled ticket twice, dry and live: the ticket was in the state block from an earlier dry run, the prompt says to
+union the state block with the query, and the overseer skipped the label read for it. Other ticks skipped the same
+tickets correctly, so the check is unreliable rather than absent. canopy has no tracker code (D009), so it cannot read
+labels itself.
+Decision: `canopy dispatch` requires `--label LABEL`, one of `tracker.labels` compared case-insensitively (GitHub
+labels are), and refuses otherwise as `unauthorized`, the first guard. The refusal does not list the configured labels,
+so the overseer cannot copy one from it. The decision's rationale records the configured spelling. Every worker prompt
+starts by reading the ticket and reporting `failed` (`not authorized: ...`) without changes if it is closed or carries
+none of the queue labels, which the harness renders into the prompt; a worker prompt without `{{LABELS}}`, such as an
+override written before this decision, fails to render and the dispatch is refused as `bad_prompt`. The overseer
+prompt says the state block authorizes nothing and that `[bot]` approvals do not count as approval.
 Rejected:
 - Prompt wording alone: it already said labels authorize; the failure was a skipped step, which a required argument
   turns into an explicit claim.
 - Reading labels in the harness: that is a tracker client (D009), per provider.
 - Narrowing `tracker.query` to the operator's label: the state-block union still brings old tickets back, and the
   query is shared across operators.
-Residual: an overseer can still name a label it did not read. The worker's independent read is the second check; human
-review of every PR is the third.
+Residual: `--label` is a recorded claim, not a check: the harness knows only that the label is configured, not that it
+is on the ticket, so an overseer that names a label it did not read passes the guard. The independent check is the
+worker's own read of the ticket's labels, a separate agent run with its own tracker access; it is a prompt instruction,
+so it too can be skipped. Human review of every PR is the backstop.
 Revisit: if a tracker-neutral way to read labels appears (for example a runtime command canopy can call without
 provider code), move the check into code.

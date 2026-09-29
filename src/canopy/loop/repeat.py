@@ -41,6 +41,10 @@ if TYPE_CHECKING:
 LOCK_FILE_NAME = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop.
 _WAIT_STEP_SECONDS = 0.5
+# A second stop signal this soon after the first is the same Ctrl-C, not a second one (D049). `uv run` forwards the
+# SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
+# again aborts it" and pressing it again takes longer than this.
+SAME_SIGNAL_SECONDS = 1.0
 # Decisions every tick repeats. The tick's summary counts them; `canopy decisions` lists them.
 _QUIET_ACTIONS = ("wait",)
 _STATUS_STYLES = {
@@ -58,20 +62,24 @@ class Stop:
     """Whether the operator asked the loop to stop. Set by `signals`, read between and during ticks."""
 
     requested: bool = False
+    requested_at: float | None = None  # `signals`' clock at the first stop signal
 
 
 @contextmanager
-def signals(stop: Stop) -> Generator[None]:
+def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Generator[None]:
     """Make SIGINT and SIGTERM ask the loop to stop once the current tick ends, instead of killing it.
 
     A second signal raises KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process
     group, and the next tick closes the tick row as `abandoned`. Workers already dispatched are detached and keep going.
+    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second (D049).
     """
 
     def handle(_signum: int, _frame: FrameType | None) -> None:
-        if stop.requested:
+        now = clock()
+        if stop.requested_at is None:
+            stop.requested, stop.requested_at = True, now
+        elif now - stop.requested_at >= SAME_SIGNAL_SECONDS:
             raise KeyboardInterrupt
-        stop.requested = True
 
     previous = {s: signal.signal(s, handle) for s in (signal.SIGINT, signal.SIGTERM)}
     try:
@@ -224,11 +232,14 @@ def _report(
     )
 
     # Cells are Text, never str: rich parses a str as markup, and rationales and details are the overseer's text.
+    # Only the last column may give up width on a narrow terminal. rich shrinks wrappable columns first and, when every
+    # column is no_wrap, shrinks them all alike, which drops the ticket key. So the last column is wrappable and its
+    # cells (`_detail`) keep themselves to one line with an ellipsis.
     rows = Table.grid(padding=(0, 2))
-    rows.add_column(width=2)
+    rows.add_column(width=2, no_wrap=True)
     rows.add_column(style="cyan", no_wrap=True)
     rows.add_column(no_wrap=True)
-    rows.add_column(style="dim", no_wrap=True, overflow="ellipsis", ratio=1)
+    rows.add_column(style="dim", ratio=1)
     if outcome.tick_id is not None:
         _decision_rows(rows, ctx, outcome.tick_id, failed=outcome.status == "overseer_failed")
     after = attention.current(ctx.conn)
@@ -254,11 +265,12 @@ def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> 
         if action.startswith(attention.ACTION_PREFIX) or action in _QUIET_ACTIONS:
             continue
         style = "red" if action.startswith("refused:") else "green" if action.startswith("dispatch:") else ""
-        rationale = Text(" ".join(str(d["rationale"]).split()))
+        rationale = _detail(str(d["rationale"]))
         rows.add_row("", Text(str(d["ticket_key"] or "-")), Text(action, style=style), rationale)
     output = ctx.state_dir / "ticks" / f"{tick_id}.log"
     if failed and output.exists():
-        rows.add_row("", "", Text("overseer output", style="red"), Text(str(output)))
+        # Not `_detail`: collapsing whitespace would print a path that does not exist.
+        rows.add_row("", "", Text("overseer output", style="red"), Text(str(output), no_wrap=True, overflow="ellipsis"))
 
 
 def _attention_rows(rows: Table, before: list[attention.Item], after: list[attention.Item]) -> None:
@@ -267,15 +279,23 @@ def _attention_rows(rows: Table, before: list[attention.Item], after: list[atten
     has = {(i.ticket_key, i.reason) for i in after}
     for item in after:
         if (item.ticket_key, item.reason) not in had:
-            detail = Text(" ".join(item.detail.split()))
+            detail = _detail(item.detail)
             rows.add_row(
                 Text("+", style="bold yellow"), Text(item.ticket_key), Text(item.reason, style="yellow"), detail
             )
     for item in before:
         if (item.ticket_key, item.reason) not in has:
             rows.add_row(
-                Text("-", style="bold green"), Text(item.ticket_key), Text(item.reason, style="green"), "resolved"
+                Text("-", style="bold green"),
+                Text(item.ticket_key),
+                Text(item.reason, style="green"),
+                _detail("resolved"),
             )
+
+
+def _detail(text: str) -> Text:
+    """A last-column cell: one line, whitespace collapsed, cut with an ellipsis when the terminal is too narrow."""
+    return Text(" ".join(text.split()), no_wrap=True, overflow="ellipsis")
 
 
 def duration(seconds: float) -> str:

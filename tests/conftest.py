@@ -15,6 +15,19 @@ from canopy.infra.procs import SubprocessRunner
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
 SCRIPTS_DIR = Path(sys.executable).parent
+# The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
+RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
+
+
+@pytest.fixture(autouse=True)
+def hermetic_agent_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets.
+
+    Workers run this suite inside the agent runtime, which exports its own (OpenCode sets OPENCODE_PID). The fake
+    agent records these prefixes and tests assert on them exactly, so an inherited one would fail them.
+    """
+    for name in [k for k in os.environ if k.startswith(RECORDED_ENV_PREFIXES)]:
+        monkeypatch.delenv(name)
 
 
 @pytest.fixture
