@@ -52,6 +52,24 @@ def test_pool_exhausted_is_an_error(treehouse_state: Path) -> None:
         treehouse.lease(runner, "PROJ-1")
 
 
+def test_unparseable_lease_is_returned(treehouse_state: Path) -> None:
+    treehouse_state.write_text(json.dumps({"get_omit": ["base_branch"]}))
+    with pytest.raises(treehouse.TreehouseError, match=r"base_branch(.|\n)*; returned .*/pool/1/repo"):
+        treehouse.lease(runner, "PROJ-1")
+    [slot] = treehouse.status(runner)
+    assert (slot.status, slot.canopy_key) == ("available", None)
+    calls = json.loads(treehouse_state.read_text())["calls"]
+    assert [c[0] for c in calls] == ["get", "return", "status"]
+
+
+def test_unidentifiable_lease_is_left_for_reconcile(treehouse_state: Path) -> None:
+    treehouse_state.write_text(json.dumps({"get_omit": ["lease_id"]}))
+    with pytest.raises(treehouse.TreehouseError, match="the next tick's reconcile returns it"):
+        treehouse.lease(runner, "PROJ-1")
+    [slot] = treehouse.status(runner)
+    assert slot.canopy_key == "PROJ-1"
+
+
 def test_missing_treehouse_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(treehouse.TreehouseError, match="command not found"):
