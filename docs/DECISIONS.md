@@ -739,9 +739,9 @@ Context: three open-source projects overlap with canopy's loop (surveyed 2026-09
 dispatch, a worktree per ticket, and sending CI and review back to an agent are common to all of them.
 Decision: keep building canopy; take their lessons, not their code, as with Azimuth (D001). What none of them offers,
 and canopy is for: any tracker through MCP with no tracker code (D003, D014); never merging (TRUST_MODEL §6), held by
-the prompts, a merge deny in canopy-owned agent permissions that the repository cannot override (TRUST_MODEL T7), and
-branch protection; no daemon or listener (D042); worktrees released while waiting (D005); a fresh overseer each tick
-(DESIGN §6).
+the prompts, a `gh pr merge` deny in canopy's agent permissions as defense in depth (TRUST_MODEL T4, T7), and branch
+protection, which is the boundary; no daemon or listener (D042); worktrees released while waiting (D005); a fresh
+overseer each tick (DESIGN §6).
 Rejected:
 - Implementing Symphony's spec: it targets the Codex app-server protocol and a tracker adapter per provider, keeps
   state in memory, and lets a repository file set the agent command and shell hooks (TRUST_MODEL T7).

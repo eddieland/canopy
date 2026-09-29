@@ -19,8 +19,7 @@ A bare § is a section of `DESIGN.md`; other documents are named, as in TRUST_MO
   a Go daemon with desktop and mobile apps (Apache-2.0). A worktree and agent per issue; CI failures and review comments
   are sent back to the agent. Unlike canopy: tracker intake is GitHub and GitLab only, and at least eight Jira attempts
   were closed unmerged; agent sessions are long-lived and fed messages; it runs loopback and optional LAN listeners;
-  "never merge" is a prompt line and branch protection, with no deny in agent permissions the repository cannot
-  override.
+  "never merge" is a prompt line and branch protection, and only its reviewer's permissions deny a merge.
 - **[Hermes Agent](https://github.com/NousResearch/hermes-agent) Kanban**: a board in Hermes' own SQLite database. A
   cron dispatcher starts one agent process per task, in a git worktree for coding tasks. Unlike canopy: tasks live on
   Hermes' board, not the team's tracker, and there is no CI or review follow-up. A Symphony-style tracker loop is a
@@ -135,8 +134,9 @@ A bare § is a section of `DESIGN.md`; other documents are named, as in TRUST_MO
   and TRUST_MODEL §6 keep all of that user-only.
 - **Agents that merge, land, or move tickets.** Symphony's example workflow has a `land` skill, run once a human moves
   the ticket to `Merging`; TRUST_MODEL §6 forbids agents merging at all. canopy's own guard is layered: the prompts, a
-  `gh pr merge` deny in canopy's agent permissions that the repository cannot override (TRUST_MODEL T7), and branch
-  protection, which governs. The deny is defense in depth and names only the `gh` CLI, not MCP merge tools.
+  `gh pr merge` deny in canopy's agent permissions, and branch protection, which governs. The deny is defense in depth
+  (TRUST_MODEL T4, T7): it names only the `gh` CLI, not MCP merge tools, and a repository that gets past the shadowing
+  check can add bash rules after it.
 - **Long-lived sessions fed events, a daemon, or a listener** (D042, TRUST_MODEL §4). agent-orchestrator's own
   reverted re-engagement is the evidence.
 - **Tracker adapters.** agent-orchestrator has closed at least eight Jira attempts unmerged; canopy's tracker is MCP
