@@ -249,12 +249,17 @@ def test_killed_worker_is_detected_on_the_next_tick(
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
 
+    # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come
+    # first. The log is written after the fake's stdout chatter: killing `_run` before then would break the worker's
+    # pipe and kill it too.
     deadline = time.monotonic() + 30
-    while not agent_log.exists() and time.monotonic() < deadline:
-        time.sleep(0.05)
-    assert agent_log.exists(), "the worker never started"
     run = db.get_run(conn, 1)
+    while (run is None or run["worker_pid"] is None or not agent_log.exists()) and time.monotonic() < deadline:
+        time.sleep(0.05)
+        run = db.get_run(conn, 1)
+    assert agent_log.exists(), "the worker never started"
     assert run is not None
+    assert run["worker_pid"] is not None, "`_run` never recorded the worker's pid"
     pid, worker_pid = int(run["pid"]), int(run["worker_pid"])
     # `kill -9` of `_run` alone: the worker leads its own process group and is left running, orphaned.
     os.kill(pid, signal.SIGKILL)
