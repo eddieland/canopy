@@ -32,7 +32,13 @@ def dispatch_and_run(
 ) -> sqlite3.Row:
     runner = runner or InlineRunner()
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--slug", slug], runner=runner) == 0
+    assert (
+        main(
+            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", slug],
+            runner=runner,
+        )
+        == 0
+    )
     db.finish_tick(conn, tick_id, "ok", "test")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     assert main(["_run", str(run_id)], runner=runner) == 0
@@ -256,7 +262,9 @@ def test_a_run_is_claimed_once(
 
     # A running run that another process claimed is refused too: the overseer cannot start a second worker in a slot.
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-2", "--kind", "implement"], runner=InlineRunner()) == 0
+    assert (
+        main(["dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 0
+    )
     db.finish_tick(conn, tick_id, "ok", "test")
     conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
     assert main(["_run", "2"]) == 1

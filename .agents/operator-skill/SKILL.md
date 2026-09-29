@@ -78,10 +78,13 @@ Work through these in order and stop at the first that explains it.
    `tracker.labels`, or it is closed. Only the labels authorize work; the query only finds candidates.
 3. Read the action:
    - `wait` or `skip`: the rationale says why. `blocked_by: <KEY>` means an open blocker.
-   - `refused:<guard>`: the harness refused the dispatch. `capacity` (all `capacity.max_workers` slots busy), `running`
-     (a worker is already on it), `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never
-     resets), `cooldown` (fix-ci waits `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had
-     no free worktree), `bad_slug`, `bad_base`, `no_branch`, `bad_prompt`, `spawn_failed`.
+   - `refused:<guard>`: the harness refused the dispatch. `unauthorized` (the overseer named no label from
+     `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
+     `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
+     `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree), `bad_slug`,
+     `bad_base`, `no_branch`, `bad_prompt` (the worker prompt did not render; an override may lack `{{LABELS}}`),
+     `spawn_failed`. A run that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket
+     closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.
    - `attention:<reason>`: it is waiting on a human (below).
 4. If it was dispatched, look at its runs:

@@ -11,6 +11,7 @@ from canopy.core import db
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
+LABEL = "agent-ready-tester"
 FIRST = "agent/PROJ-1-first"
 # Pushes whatever branch `_run` checked out to the same name on origin.
 PUSH = ["git", "push", "--quiet", "origin", "HEAD"]
@@ -57,7 +58,7 @@ def subjects(git_pool: GitPool, branch: str) -> list[str]:
 def blocker(git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
     """PROJ-1 implemented and pushed as `agent/PROJ-1-first`: the branch of the blocker's open PR."""
     worker_does(monkeypatch, commit("PROJ-1: the blocker"), PUSH)
-    run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-1", "--kind", "implement", "--slug", "first")
+    run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-1", "--label", LABEL, "--kind", "implement", "--slug", "first")
     assert run["status"] == "done"
 
 
@@ -71,11 +72,13 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
 ) -> None:
     worker_does(monkeypatch, commit("PROJ-2: stacked"), PUSH)
     run, made = dispatch_and_run(
-        conn, monkeypatch, "PROJ-2", "--kind", "implement", "--slug", "second", "--base", FIRST
+        conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
     )
 
     assert (run["status"], run["branch"], run["base_branch"]) == ("done", "agent/PROJ-2-second", FIRST)
-    assert made == [("dispatch:implement", f"run 2: agent/PROJ-2-second on {FIRST} in {run['slot_path']}")]
+    assert made == [
+        ("dispatch:implement", f"run 2: agent/PROJ-2-second on {FIRST} in {run['slot_path']}; label {LABEL}")
+    ]
     assert subjects(git_pool, "agent/PROJ-2-second") == ["PROJ-2: stacked", "PROJ-1: the blocker", "initial"]
     assert subjects(git_pool, FIRST) == ["PROJ-1: the blocker", "initial"]  # the base is untouched
     prompt = prompt_of(canopy_env, 2)
@@ -98,17 +101,21 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker_does(monkeypatch, commit("PROJ-2: stacked"), PUSH)
-    dispatch_and_run(conn, monkeypatch, "PROJ-2", "--kind", "implement", "--slug", "second", "--base", FIRST)
+    dispatch_and_run(
+        conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
+    )
 
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
     worker_does(monkeypatch, commit("PROJ-2: review fix"), PUSH)
-    resume, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--kind", "resume", "--base", FIRST)
+    resume, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
     assert (resume["status"], resume["base_branch"]) == ("done", FIRST)
     assert f"open one against `{FIRST}`" in prompt_of(canopy_env, int(resume["id"]))
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
     worker_does(monkeypatch, PUSH)
-    retarget, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--kind", "resume", "--context", "blocker merged")
+    retarget, _ = dispatch_and_run(
+        conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--context", "blocker merged"
+    )
     assert (retarget["status"], retarget["base_branch"]) == ("done", "main")
     text = prompt_of(canopy_env, int(retarget["id"]))
     assert "This ticket is not stacked on another ticket's branch." in text
@@ -134,7 +141,7 @@ def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The blocker's PR merged and its branch was deleted between the overseer's look and the run.
-    run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--kind", "implement", "--base", FIRST)
+    run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--base", FIRST)
     assert run["status"] == "crashed"
     note = json.loads(run["result_json"])["harness"]
     assert note == f"the base branch {FIRST} is not on origin; if it was stacked on, its PR may have merged"
@@ -152,12 +159,14 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker_does(monkeypatch, commit("PROJ-2: stacked"), PUSH)
-    dispatch_and_run(conn, monkeypatch, "PROJ-2", "--kind", "implement", "--slug", "second", "--base", FIRST)
+    dispatch_and_run(
+        conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
+    )
     workers = len(agent_log.read_text().splitlines())
 
     # The blocker's branch is deleted after PROJ-2's branch exists; a resume still naming it must not start.
     git("branch", "--quiet", "-D", FIRST, cwd=git_pool.origin)
-    run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--kind", "resume", "--base", FIRST)
+    run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"])["harness"].startswith(f"the base branch {FIRST} is not on origin")
     assert len(agent_log.read_text().splitlines()) == workers  # the worker never ran
@@ -186,7 +195,7 @@ def test_bad_base_is_refused_before_leasing(
     reason: str,
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-2", "--kind", "implement", *args], runner=InlineRunner()) == 1
+    assert main(["dispatch", "PROJ-2", "--label", LABEL, "--kind", "implement", *args], runner=InlineRunner()) == 1
     assert decisions(conn, tick_id) == [("refused:bad_base", reason)]
     assert not treehouse_state.exists()
 
@@ -197,7 +206,13 @@ def test_a_continued_branch_cannot_be_its_own_base(
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.repo))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-2-own' WHERE key = 'PROJ-2'")
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-2", "--kind", "resume", "--base", "agent/PROJ-2-own"], runner=InlineRunner()) == 1
+    assert (
+        main(
+            ["dispatch", "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", "agent/PROJ-2-own"],
+            runner=InlineRunner(),
+        )
+        == 1
+    )
     assert decisions(conn, tick_id) == [("refused:bad_base", "agent/PROJ-2-own cannot be stacked on itself")]
 
 
@@ -205,9 +220,9 @@ def test_dry_run_names_the_base(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tick_id = in_tick(conn, monkeypatch, dry_run=True)
-    args = ["dispatch", "PROJ-2", "--kind", "implement", "--slug", "second", "--base", FIRST]
+    args = ["dispatch", "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST]
     assert main(args, runner=InlineRunner()) == 0
-    rationale = f"dry run: not dispatched; would work on agent/PROJ-2-second on {FIRST}"
+    rationale = f"dry run: not dispatched; would work on agent/PROJ-2-second on {FIRST}; label {LABEL}"
     assert decisions(conn, tick_id) == [("dispatch:implement", rationale)]
     assert not treehouse_state.exists()
 
@@ -228,7 +243,7 @@ def test_two_linked_tickets_are_worked_in_order(
         "FAKE_OVERSEER_COMMANDS",
         json.dumps(
             [
-                ["canopy", "dispatch", "PROJ-1", "--kind", "implement", "--slug", "first"],
+                ["canopy", "dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", "--slug", "first"],
                 ["canopy", "decide", "PROJ-2", "wait", "--rationale", "blocked_by: PROJ-1"],
                 ["canopy", "ticket", "set", "PROJ-2", "--phase", "blocked"],
             ]
@@ -242,7 +257,19 @@ def test_two_linked_tickets_are_worked_in_order(
         json.dumps(
             [
                 ["canopy", "decide", "PROJ-1", "wait", "--rationale", "ci_running"],
-                ["canopy", "dispatch", "PROJ-2", "--kind", "implement", "--slug", "second", "--base", FIRST],
+                [
+                    "canopy",
+                    "dispatch",
+                    "PROJ-2",
+                    "--label",
+                    LABEL,
+                    "--kind",
+                    "implement",
+                    "--slug",
+                    "second",
+                    "--base",
+                    FIRST,
+                ],
             ]
         ),
     )

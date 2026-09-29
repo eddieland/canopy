@@ -7,6 +7,12 @@ only thing that survives is what you push. This is attempt {{ATTEMPT}} of {{MAX_
 
 {{STACKING}}
 
+## Authorization
+
+Before any other work, read {{KEY}} through the tracker. If it is closed, or carries none of the labels {{LABELS}}, the
+overseer should not have dispatched you: change nothing, push nothing, post nothing, and report `failed` with a summary
+that starts `not authorized:` and says which it was.
+
 ## Task
 
 Read the ticket through the tracker MCP. The tracker is {{TRACKER_PROVIDER}}; if a skill named

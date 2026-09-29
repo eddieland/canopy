@@ -108,7 +108,7 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     overseer_does(
         monkeypatch,
         canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-        canopy("dispatch", "PROJ-2", "--kind", "implement", "--slug", "login"),
+        canopy("dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "login"),
         canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"),
     )
     time = FakeTime()
@@ -152,7 +152,7 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
     slug = "docs-readme-add-troubleshooting-section"
     overseer_does(
         monkeypatch,
-        canopy("dispatch", "PROJ-2", "--kind", "implement", "--slug", slug),
+        canopy("dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement", "--slug", slug),
         canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3/" + "x" * 80),
     )
     time = FakeTime()

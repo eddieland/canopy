@@ -58,12 +58,14 @@ def test_fix_ci_continues_the_recorded_branch(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-add-login", "PROJ-1: first"))
-    first = dispatch_and_run(conn, monkeypatch, "--kind", "implement", "--slug", "add-login")
+    first = dispatch_and_run(
+        conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"
+    )
     assert first["status"] == "done"
 
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-add-login", "PROJ-1: fix the build"))
     context = "Check unit-tests failed on run 77: https://example.test/runs/77"
-    fix = dispatch_and_run(conn, monkeypatch, "--kind", "fix-ci", "--context", context)
+    fix = dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci", "--context", context)
     assert (fix["kind"], fix["status"], fix["branch"]) == ("fix-ci", "done", "agent/PROJ-1-add-login")
 
     # The fix-ci worker started from the pushed branch, not from main.
@@ -82,12 +84,14 @@ def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
     canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\nauthorized_repliers = ["alice", "5b10ac"]\n')
     blocked = json.dumps({"status": "blocked", "summary": "unclear", "question": "which API?"})
     worker_does(monkeypatch, result=blocked)
-    first = dispatch_and_run(conn, monkeypatch, "--kind", "implement")
+    first = dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement")
     assert first["status"] == "blocked"
 
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
     context = "Authorized reply: ticket comment 10234 by account alice"
-    resumed = dispatch_and_run(conn, monkeypatch, "--kind", "resume", "--context", context)
+    resumed = dispatch_and_run(
+        conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "resume", "--context", context
+    )
     assert (resumed["kind"], resumed["status"], resumed["branch"]) == ("resume", "done", "agent/PROJ-1-work")
     # Nothing was pushed before, so the resume started from main.
     assert git("log", "--format=%s", "agent/PROJ-1-work", cwd=git_pool.origin).splitlines() == [
@@ -106,7 +110,9 @@ def test_implement_prompt_without_context_or_repliers(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=InlineRunner()) == 0
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 0
+    )
     prompt = prompt_of(canopy_env, 1)
     assert "## Context from the overseer\n\nNone.\n" in prompt
     assert "one of\nnone (no reply may instruct you);" in prompt
@@ -117,7 +123,9 @@ def test_continuing_needs_a_recorded_branch(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
     reason = f"PROJ-1 has no branch in the journal for {kind} to continue; dispatch implement"
-    assert refused(conn, monkeypatch, "--kind", kind) == [("refused:no_branch", reason)]
+    assert refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", kind) == [
+        ("refused:no_branch", reason)
+    ]
     assert not treehouse_state.exists()  # refused before leasing
 
 
@@ -125,7 +133,9 @@ def test_slug_is_for_implement_only(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     reason = "fix-ci continues the ticket's recorded branch; --slug is for implement"
-    assert refused(conn, monkeypatch, "--kind", "fix-ci", "--slug", "other") == [("refused:bad_slug", reason)]
+    assert refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci", "--slug", "other") == [
+        ("refused:bad_slug", reason)
+    ]
 
 
 def test_implement_attempt_limit_refuses_and_raises_attention(
@@ -133,9 +143,12 @@ def test_implement_attempt_limit_refuses_and_raises_attention(
 ) -> None:
     worker_does(monkeypatch, result=json.dumps({"status": "failed", "summary": "could not build"}))
     for _ in range(2):
-        assert dispatch_and_run(conn, monkeypatch, "--kind", "implement")["status"] == "failed"
+        assert (
+            dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement")["status"]
+            == "failed"
+        )
     reason = "PROJ-1 has had 2 implement runs and the limit is 2"
-    assert refused(conn, monkeypatch, "--kind", "implement") == [
+    assert refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement") == [
         ("refused:attempt_limit", reason),
         ("attention:attempt_limit", reason),
     ]
@@ -149,7 +162,7 @@ def test_a_limit_of_zero_disables_the_kind(
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[policy]\nmax_resume_attempts = 0\n")
     db.touch_ticket(conn, "PROJ-1", "repo")
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work'")
-    [first, _] = refused(conn, monkeypatch, "--kind", "resume")
+    [first, _] = refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "resume")
     assert first == ("refused:attempt_limit", "PROJ-1 has had 0 resume runs and the limit is 0")
 
 
@@ -157,16 +170,16 @@ def test_fix_ci_cooldown_runs_from_the_end_of_the_last_fix(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    dispatch_and_run(conn, monkeypatch, "--kind", "implement")
-    fix = dispatch_and_run(conn, monkeypatch, "--kind", "fix-ci")
+    dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement")
+    fix = dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci")
     until = db.format_time(db.parse_time(str(fix["ended_at"])) + timedelta(minutes=30))
-    assert refused(conn, monkeypatch, "--kind", "fix-ci") == [
+    assert refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci") == [
         ("refused:cooldown", f"fix-ci for PROJ-1 may run again after {until}")
     ]
     # The cooldown is fix-ci's only; a resume may run at once.
-    assert dispatch_and_run(conn, monkeypatch, "--kind", "resume")["status"] == "done"
+    assert dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "resume")["status"] == "done"
     cool_down(conn)
-    assert dispatch_and_run(conn, monkeypatch, "--kind", "fix-ci")["status"] == "done"
+    assert dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci")["status"] == "done"
 
 
 def test_cursors_advance_only_when_the_worker_starts(
@@ -175,8 +188,25 @@ def test_cursors_advance_only_when_the_worker_starts(
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_workers = 1\n")
     in_tick(conn, monkeypatch)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--cursor", "comment=c1"], runner=runner) == 0
-    args = ["dispatch", "PROJ-2", "--kind", "implement", "--cursor", "comment=c2", "--cursor", "review=r2"]
+    assert (
+        main(
+            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--cursor", "comment=c1"],
+            runner=runner,
+        )
+        == 0
+    )
+    args = [
+        "dispatch",
+        "PROJ-2",
+        "--label",
+        "agent-ready-tester",
+        "--kind",
+        "implement",
+        "--cursor",
+        "comment=c2",
+        "--cursor",
+        "review=r2",
+    ]
     assert main(args, runner=runner) == 1  # capacity
     rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
     assert rows["PROJ-1"]["last_comment_id"] == "c1"
@@ -192,8 +222,8 @@ def test_state_block_shows_attempts_and_the_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    dispatch_and_run(conn, monkeypatch, "--kind", "implement")
-    fix = dispatch_and_run(conn, monkeypatch, "--kind", "fix-ci")
+    dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement")
+    fix = dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)  # `_run` drops it
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
     assert main(["tick"]) == 0
@@ -230,11 +260,22 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
     """M3 acceptance, against the fakes. An overseer that asks for fix-ci every tick, as a PR whose checks keep
     failing would make it, gets one run per cooldown window and none past `max_fix_ci_attempts`."""
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    overseer_does(monkeypatch, ["dispatch", "PROJ-1", "--kind", "implement"])
+    overseer_does(monkeypatch, ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"])
     assert main(["tick"]) == 0
     wait_for_run(conn, 1)
 
-    fix = ["dispatch", "PROJ-1", "--kind", "fix-ci", "--context", "checks failed", "--cursor", "ci=run-1"]
+    fix = [
+        "dispatch",
+        "PROJ-1",
+        "--label",
+        "agent-ready-tester",
+        "--kind",
+        "fix-ci",
+        "--context",
+        "checks failed",
+        "--cursor",
+        "ci=run-1",
+    ]
     overseer_does(monkeypatch, fix)
     assert main(["tick"]) == 0
     assert tick_decisions(conn) == ["dispatch:fix-ci"]

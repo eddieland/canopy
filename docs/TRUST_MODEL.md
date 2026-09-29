@@ -50,6 +50,12 @@ Controls:
 - Authorization comes only from things with permission semantics: who can add
   one of `tracker.labels`, and whose replies count for resuming blocked work
   (`trust.authorized_repliers`). All other text is data. Prompts say so.
+- canopy has no tracker code, so it cannot read labels, and a live tick showed an overseer can skip its label check
+  for a ticket the journal remembers (D051). `canopy dispatch` refuses without `--label` naming one of
+  `tracker.labels`; that is a recorded claim a harness guard checks against config, not proof the label is on the
+  ticket. The independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
+  changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
+  judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
 - Workers can push only to `trust.branch_prefix` branches. Enforced by the
   worker prompt and by repository branch protection, which the operator must
   configure. canopy `init` prints the required protection rules.

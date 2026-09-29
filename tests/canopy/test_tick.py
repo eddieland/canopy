@@ -37,7 +37,7 @@ def test_dry_run_tick_records_the_overseer_plan(
         monkeypatch,
         ["decide", "PROJ-1", "wait", "--rationale", "checks pending"],
         ["ticket", "set", "PROJ-1", "--phase", "ci_running", "--cursor", "ci=run-1"],
-        ["dispatch", "PROJ-2", "--kind", "implement"],
+        ["dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement"],
         ["attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"],
         ["decide", "PROJ-4;rm", "wait", "--rationale", "bad key"],
     )

@@ -208,7 +208,10 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
-    overseer_does(monkeypatch, ["dispatch", "PROJ-1", "--kind", "implement", "--slug", "add-login"])
+    overseer_does(
+        monkeypatch,
+        ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"],
+    )
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-add-login"))
     assert main(["tick"]) == 0
     assert capsys.readouterr().out.startswith("tick 1: ok: 1 decisions: dispatch:implement=1")
@@ -245,7 +248,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     worker_does(monkeypatch)
     monkeypatch.setenv("FAKE_WORKER_SLEEP", "60")
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"]) == 0
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
 
