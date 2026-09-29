@@ -133,6 +133,21 @@ def test_no_slot(
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
+def test_unparseable_lease_is_returned_and_refused(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # treehouse leased the slot, but its output lacks a field canopy needs: the slot goes back in the same dispatch.
+    treehouse_state.write_text(json.dumps({"get_omit": ["base_branch"]}))
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=InlineRunner()) == 1
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "refused:no_slot"
+    assert "base_branch" in rationale
+    assert "returned" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
 def test_bad_prompt_override_returns_the_slot(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
