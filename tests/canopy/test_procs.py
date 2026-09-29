@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import signal
@@ -42,7 +43,9 @@ def test_a_child_given_a_cwd_gets_a_pwd_naming_it(tmp_path: Path, monkeypatch: p
         assert f"PWD={workdir}" in result.stdout.splitlines()
     log = tmp_path / "spawn.log"
     pid = SubprocessRunner().spawn(["env"], cwd=workdir, log_path=log)
-    os.waitpid(pid, 0)
+    # `spawn` drops its Popen, whose `__del__` reaps the child if it has already exited, as `env` may have.
+    with contextlib.suppress(ChildProcessError):
+        os.waitpid(pid, 0)
     assert f"PWD={workdir}" in log.read_text().splitlines()
 
 
