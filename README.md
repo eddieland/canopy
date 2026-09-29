@@ -61,6 +61,14 @@ standing write access to your repositories, your tracker, or your internal tools
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
 
+## Troubleshooting
+
+- If canopy cannot find `treehouse`, check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
+  outdated, rerun the pinned install from step 1 above or run `make treehouse` in a canopy checkout.
+- If the overseer records `skip` with `mcp_unavailable: github`, configure the GitHub MCP server in your agent runtime.
+- For more detail, check `canopy decisions`, `canopy status`, and the effective log path reported by canopy's command
+  output.
+
 ## How it works, briefly
 
 ```
