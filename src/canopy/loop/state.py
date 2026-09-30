@@ -13,7 +13,9 @@ from canopy.core import db
 from canopy.runs import policy
 
 if TYPE_CHECKING:
+    from canopy.core import treehouse
     from canopy.core.config import Config
+    from canopy.core.workspace import Workspace
     from canopy.runs.reconcile import Capacity
 
 
@@ -24,6 +26,8 @@ def state_block(
     tick_id: int,
     dry_run: bool,
     capacity: Capacity,
+    workspace: Workspace,
+    leased: Mapping[str, list[treehouse.Slot]],
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
     last_runs: Mapping[str, sqlite3.Row],
@@ -38,6 +42,26 @@ def state_block(
         "now": db.format_time(now),
         "dry_run": dry_run,
         "repository": str(repo_root),
+        # The overseer runs at the workspace root, which in a workspace is not a repository: each repository's leased
+        # slots stand in for its own `treehouse status` (DESIGN §18).
+        "workspace": {
+            "name": workspace.name,
+            "single_repository": workspace.single,
+            "map": str(workspace.map_prose) if workspace.map_prose is not None else None,
+        },
+        "repositories": [
+            {
+                "name": r.name,
+                "path": str(r.path),
+                "summary": r.summary,
+                "cloned": r.cloned,
+                "leased_slots": [
+                    {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": s.leased_at}
+                    for s in leased.get(r.name, [])
+                ],
+            }
+            for r in workspace.repos
+        ],
         "tracker": {
             "provider": config.tracker.provider,
             "query": config.tracker.query,
@@ -64,6 +88,7 @@ def state_block(
             {
                 "run_id": r["id"],
                 "ticket": r["ticket_key"],
+                "repo": r["repo"],
                 "kind": r["kind"],
                 "branch": r["branch"],
                 "started_at": r["started_at"],
@@ -73,6 +98,7 @@ def state_block(
         "tickets": [
             {
                 "key": t["key"],
+                "repo": _repo(last_runs.get(str(t["key"]))),
                 "phase": t["phase"],
                 "branch": t["branch"],
                 "pr_url": t["pr_url"],
@@ -113,6 +139,11 @@ def state_block(
 
 def _stamp(moment: datetime | None) -> str | None:
     return db.format_time(moment) if moment is not None else None
+
+
+def _repo(run: sqlite3.Row | None) -> str | None:
+    """The repository a ticket's work is in: its latest run's."""
+    return None if run is None else run["repo"]
 
 
 def _run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:

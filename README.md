@@ -61,6 +61,14 @@ standing write access to your repositories, your tracker, or your internal tools
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
 
+## Several repositories
+
+When one queue's tickets land in several repositories, make a workspace instead of running canopy in each: in an empty
+directory, `canopy init --workspace`, list the repositories under `[repos.<name>]` in `canopy-workspace.toml` and
+describe them in `MAP.md`, then `canopy workspace sync` to clone them under `repos/`. Run `canopy loop` from the
+workspace. Each ticket is worked in one repository, which the overseer picks; the pools, journal, and attention list
+live inside the workspace. See `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
+
 ## Troubleshooting
 
 - If canopy cannot find `treehouse`, check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is

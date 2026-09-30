@@ -1,4 +1,7 @@
-"""Layered configuration: built-in defaults, then the repository's `canopy.toml`, then the user's `config.toml`.
+"""Layered configuration: built-in defaults, then the shared file, then the user's `config.toml`.
+
+The shared file is the workspace's `canopy-workspace.toml` in a workspace, and the repository's `canopy.toml` in a
+workspace of one (DESIGN §18). Both are the "repository file" of what follows.
 
 Every key has a scope (DESIGN §12). A shared key may be set in either file and the user file wins. A user-only key may
 be set only in the user file; a repository file that sets one is an error, because anyone who can push to the
@@ -27,6 +30,11 @@ if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
 REPO_FILE_NAME = "canopy.toml"
+WORKSPACE_FILE_NAME = "canopy-workspace.toml"
+# A workspace's state is always here, under its root; `paths.state_dir` applies only to a workspace of one.
+WORKSPACE_STATE_DIR = ".canopy"
+# Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
+WORKSPACE_MAP_TABLES = ("workspace", "repos")
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
 DEFINITIONS_DIR = "{definitions_dir}"
@@ -274,11 +282,18 @@ def find_repo_root(start: Path) -> Path:
 
 
 def load(repo_root: Path, user_file: Path | None = None) -> Config:
-    """Read and validate the layered config for the repository at `repo_root`."""
-    user_file = user_file or user_config_path()
-    repo_file = repo_root / REPO_FILE_NAME
+    """Read and validate the layered config for the workspace at `repo_root`.
 
-    repo_values: dict[str, object] = _read(repo_file) if repo_file.exists() else {}
+    A `canopy-workspace.toml` at `repo_root` is the shared layer, and its state directory is `<repo_root>/.canopy`
+    whatever `paths.state_dir` says. Without one, the repository's `canopy.toml` is, as it always was.
+    """
+    user_file = user_file or user_config_path()
+    workspace_file = repo_root / WORKSPACE_FILE_NAME
+    in_workspace = workspace_file.is_file()
+    repo_file = workspace_file if in_workspace else repo_root / REPO_FILE_NAME
+
+    skip = WORKSPACE_MAP_TABLES if in_workspace else ()
+    repo_values: dict[str, object] = _read(repo_file, skip=skip) if repo_file.exists() else {}
     for name in repo_values:
         if SPECS[name].scope is Scope.USER:
             raise ConfigError(
@@ -301,6 +316,9 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
     # Unset or empty: `prompts/` next to the user file.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
+    if in_workspace:
+        # Each workspace has its own journal and locks, so two workspaces never share a queue's state (DESIGN §18).
+        merged["paths"]["state_dir"] = str(repo_root.absolute() / WORKSPACE_STATE_DIR)
 
     try:
         return Config.model_validate(merged)
@@ -308,7 +326,8 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
         raise ConfigError(_describe(e, origin, repo_file, user_file)) from e
 
 
-def _read(path: Path) -> dict[str, object]:
+def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
+    """Return the file's config keys as `section.key` names. Tables named in `skip` are someone else's to read."""
     try:
         with path.open("rb") as f:
             doc = tomllib.load(f)
@@ -319,6 +338,8 @@ def _read(path: Path) -> dict[str, object]:
 
     values: dict[str, object] = {}
     for section, table in doc.items():
+        if section in skip:
+            continue
         if not isinstance(table, dict):
             raise ConfigError(f"{path}: unknown key {section}")
         for key, raw in table.items():

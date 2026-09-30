@@ -188,14 +188,23 @@ DESIGN §18 and D033. Tickets still touch one repository each; the workspace mak
 Accept: a two-repository workspace; one real ticket in each repository goes from label to open PR, from one queue,
 with every worktree under the workspace root.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_workspace.py` holds the harness's half of the
+acceptance: two tickets in two repositories, each run's worktree under the workspace root), docs, D052, and D053 are in.
+Until M7 a ticket stays in the repository of its first dispatch (D052), and the overseer records `multi_repo` for one
+that needs several. A workspace's `.canopy/` sits inside what may be a shared checkout, so it, and any definitions
+snapshot, must be private to the operator (D053). The workspace file is new repository-controlled config, so the
+TRUST_MODEL T7 and §7 changes moved here from M7. The overseer prompt and TRUST_MODEL changes need human approval in
+their PR. Waiting on the operator: the real two-repository run. Started on request while M2 to M5 wait on their live
+runs.
 
 ## M7. Joint multi-repo runs
 
 - `ticket_units`, `run_slots`, repeated `--repo`, all-or-nothing leases.
 - Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
-- Per-unit phases, cursors, and attempt counts; attention items with a repository.
-- The desk permission canary, and the TRUST_MODEL T4, T6, T7, and §7 changes with human approval.
+- Per-unit phases, cursors, and attempt counts; attention items about a unit, and `canopy attention --repo`. M6 added
+  the `repo` column and items about a repository (`repo_missing`); M7 gives ticket items one.
+- Lift D052's one repository per ticket: `implement` may add a unit.
+- The desk permission canary, and the TRUST_MODEL T4 and T6 changes with human approval (T7 and §7 changed in M6).
 
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.

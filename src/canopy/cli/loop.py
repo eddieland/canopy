@@ -71,7 +71,7 @@ def cmd_status(click_ctx: click.Context) -> int:
     for group in sorted({i.reason for i in items}):
         click.echo(f"  {group}")
         for item in (i for i in items if i.reason == group):
-            click.echo(f"    {item.ticket_key}  {attention.age(item.since)}  {item.detail}")
+            click.echo(f"    {item.subject}  {attention.age(item.since)}  {item.detail}")
     if not items:
         click.echo("  nothing needs you")
 

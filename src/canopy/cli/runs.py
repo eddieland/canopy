@@ -8,7 +8,7 @@ import sys
 import click
 
 from canopy.cli.common import CliError, open_context, require_tick
-from canopy.cli.params import SLUG, TICKET_KEY, CursorType, TextType, truncate
+from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
@@ -23,6 +23,12 @@ from canopy.runs import dispatch, policy, worker
     metavar="LABEL",
     help="The configured queue label you read on the ticket just now. Required: without one of tracker.labels the "
     "dispatch is refused as unauthorized.",
+)
+@click.option(
+    "--repo",
+    type=REPO,
+    help="The repository in the workspace the work is in. Required in a workspace; a ticket stays in the repository of "
+    "its first dispatch. Optional in a single repository.",
 )
 @click.option(
     "--slug",
@@ -55,6 +61,7 @@ def cmd_dispatch(
     key: str,
     kind: str,
     label: str | None,
+    repo: str | None,
     slug: str | None,
     base: str | None,
     context: str | None,
@@ -70,14 +77,16 @@ def cmd_dispatch(
     try:
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if dry_run:
-            plan = dispatch.check(ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base)
-            branch, queue_label = plan.branch, plan.label
+            plan = dispatch.check(
+                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, repo=repo
+            )
+            branch, queue_label, repo_name = plan.branch, plan.label, plan.repo
             started = None
         else:
             started = dispatch.start(
-                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, context=context
+                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, context=context, repo=repo
             )
-            branch, queue_label = started.branch, started.label
+            branch, queue_label, repo_name = started.branch, started.label, started.repo
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         if r.guard == "attempt_limit":
@@ -87,6 +96,8 @@ def cmd_dispatch(
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling.
     on_base = f" on {base}" if base is not None else ""
+    # A workspace of one has one repository, so naming it would say nothing.
+    in_repo = "" if ctx.workspace.single else f" in {repo_name}"
     if started is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
@@ -95,7 +106,11 @@ def cmd_dispatch(
         rationale = truncate(
             "; ".join(
                 e
-                for e in [f"dry run: not dispatched; would work on {branch}{on_base}", f"label {queue_label}", *extras]
+                for e in [
+                    f"dry run: not dispatched; would work on {branch}{on_base}{in_repo}",
+                    f"label {queue_label}",
+                    *extras,
+                ]
                 if e
             )
         )
@@ -105,7 +120,8 @@ def cmd_dispatch(
         return 0
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
-    rationale = f"run {started.run_id}: {branch}{on_base} in {started.slot}; label {queue_label}"
+    where = f"{in_repo} at {started.slot}" if in_repo else f" in {started.slot}"
+    rationale = f"run {started.run_id}: {branch}{on_base}{where}; label {queue_label}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")
