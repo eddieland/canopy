@@ -854,7 +854,8 @@ summary = "Customer web app. Consumes the api's generated client from a release.
 - `canopy workspace sync` prints each clone it is about to make, then clones it with `git clone -- <url>
   repos/<name>`, with credential prompts and git's `ext::` transport off. For a repository already cloned it compares
   `origin` with the map's URL (ignoring a trailing `/` or `.git`) and reports a difference; it changes no remote. It
-  exits 1 if any clone failed.
+  exits 1 if any clone failed, or if `repos/<name>` exists and is not a clone. It prints a credential in a URL as
+  `***`, and `canopy init --workspace` names the repositories without their URLs.
 - A workspace's state is always `<workspace>/.canopy/`, created readable only by the operator; `paths.state_dir`
   applies only to a workspace of one. Each workspace therefore has its own journal and locks. The root may be a
   checkout of a shared workspace repository, so a `.canopy/` that is a symlink, someone else's, or open to others is

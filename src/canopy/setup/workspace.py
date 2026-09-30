@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import definitions, workspace
 from canopy.core.config import WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
@@ -117,8 +118,9 @@ def protection_targets(ws: workspace.Workspace) -> str:
     """Name the repositories the branch protection rules must be configured in (TRUST_MODEL §7)."""
     if not ws.repos:
         return "The map lists no repositories yet. Configure the rules in each one you add.\n"
+    # Names only: clone URLs are read by `canopy workspace sync` alone, and one may carry a credential.
     lines = ["Configure them in every repository in the map:"]
-    lines += [f"  - {r.name}: {r.url}" for r in ws.repos]
+    lines += [f"  - {r.name}" for r in ws.repos]
     return "\n".join(lines) + "\n"
 
 
@@ -138,7 +140,7 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
 
 def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -> Checked:
     """Clone `repo` from the map's URL into `repos/<name>`."""
-    if repo.path.exists() and any(repo.path.iterdir()):
+    if repo.path.is_symlink() or (repo.path.exists() and (not repo.path.is_dir() or any(repo.path.iterdir()))):
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
     args = ["git", *_NO_EXT, "clone", "--quiet", "--", str(repo.url), str(repo.path)]
@@ -148,7 +150,8 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -
         return Checked(repo, "failed", str(e))
     if not result.ok:
         status = "timed out" if result.timed_out else f"exited {result.returncode}"
-        return Checked(repo, "failed", f"git clone {status}: {(result.stderr.strip() or result.stdout.strip())[:500]}")
+        output = (result.stderr.strip() or result.stdout.strip()).replace(str(repo.url), shown(str(repo.url)))
+        return Checked(repo, "failed", f"git clone {status}: {output[:500]}")
     return Checked(repo, "cloned")
 
 
@@ -165,7 +168,17 @@ def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
     origin = result.stdout.strip()
     if _same_url(origin, str(repo.url)):
         return Checked(repo, "present")
-    return Checked(repo, "present", f"origin is {origin}, but the map says {repo.url}; canopy changes no remote")
+    return Checked(
+        repo, "present", f"origin is {shown(origin)}, but the map says {shown(str(repo.url))}; canopy changes no remote"
+    )
+
+
+def shown(url: str) -> str:
+    """Return `url` fit to print: a credential in it (`https://user:token@host/...`) is replaced with `***`."""
+    parts = urlsplit(url)
+    if not parts.scheme or "@" not in parts.netloc:
+        return url
+    return urlunsplit(parts._replace(netloc="***@" + parts.netloc.rpartition("@")[2]))
 
 
 def _same_url(a: str, b: str) -> bool:

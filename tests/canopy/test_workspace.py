@@ -12,6 +12,7 @@ from canopy.cli.main import main
 from canopy.core import config, db, definitions, workspace
 from canopy.infra import resources
 from canopy.loop import attention
+from canopy.setup import workspace as setup_workspace
 from tests.canopy.helpers import InlineRunner, commit_and_push, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
 
@@ -406,7 +407,8 @@ def test_init_workspace_writes_the_skeleton(
     assert main(["init"]) == 0
     out = capsys.readouterr().out
     assert f"kept    {root / '.gitignore'}" in out
-    assert "  - api: https://x.test/api.git" in out
+    assert "  - api\n" in out
+    assert "x.test" not in out  # clone URLs are for `canopy workspace sync` alone
     assert not (root / "repos" / "api" / "canopy.toml").exists()
 
 
@@ -427,6 +429,23 @@ def test_sync_clones_missing_repositories_and_reports_a_different_origin(
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("gone", str(tmp_path / "nowhere.git"))))
     assert main(["workspace", "sync"]) == 1
     assert "gone: failed: git clone exited 128" in capsys.readouterr().out
+
+
+def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(
+    ws: Ws, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("docs", "https://someone:s3cret@x.invalid/docs.git"), ("notes", str(ws.origins["api"])))
+    )
+    (ws.root / "repos" / "notes").write_text("a file where the clone should be")
+    assert main(["workspace", "sync"]) == 1
+    out = capsys.readouterr().out
+    assert "notes: failed: " in out
+    assert "exists and is not a clone" in out
+    assert "docs: cloning https://***@x.invalid/docs.git into " in out
+    assert "docs: failed: git clone exited 128" in out
+    assert "s3cret" not in out
+    assert setup_workspace.shown("git@github.com:acme/api.git") == "git@github.com:acme/api.git"
 
 
 def test_sync_outside_a_workspace_refuses(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

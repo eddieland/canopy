@@ -39,9 +39,12 @@ class Reconciled:
 
 
 def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
-    """Close runs whose process is gone, return canopy leases no running run holds, and return the capacity left.
+    """Close runs whose process is gone and return canopy leases no running run holds.
 
     A repository in the map with no clone has no pool to read; the tick raises `repo_missing` for it instead.
+
+    Returns:
+        The capacity left, and each cloned repository's slots still leased, for the state block.
 
     Raises:
         treehouse.TreehouseError: treehouse could not be read or a slot could not be returned. The tick stops.

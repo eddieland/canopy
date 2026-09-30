@@ -40,9 +40,10 @@ def cmd_sync(click_ctx: click.Context) -> int:
         if repo.cloned:
             checked = setup_workspace.check_origin(obj.runner, repo)
         else:
-            click.echo(f"{repo.name}: cloning {repo.url} into {repo.path}")
+            url = setup_workspace.shown(str(repo.url))
+            click.echo(f"{repo.name}: cloning {url} into {repo.path}")
             if repo.url is not None and init.is_ssh_url(repo.url):
-                click.echo(f"{repo.name}: warning: {repo.url} is reached over SSH; canopy recommends HTTPS (D038)")
+                click.echo(f"{repo.name}: warning: {url} is reached over SSH; canopy recommends HTTPS (D038)")
             checked = setup_workspace.clone(obj.runner, ws, repo)
         failed += checked.outcome == "failed"
         detail = f": {checked.detail}" if checked.detail else ""
