@@ -996,6 +996,15 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 - Whether a child's desk should also hold its blockers' unmerged branches, read-only by prompt, so the worker can build
   against them before they merge.
 - Whether the overseer should ever split a ticket it has already started implementing jointly.
+- A ticket whose work lands as several PRs in sequence, rather than jointly or as split children: the api change merges,
+  then the web change that consumes it; or review feedback arrives on a PR that has just merged and needs a follow-up
+  PR. Today neither can happen inside the ticket. A merged PR marks it done (§7), D052 keeps it in the repository of its
+  first dispatch, `implement` has an attempt limit that never resets, and the loop cannot file a follow-up ticket for
+  itself (TRUST_MODEL T1), so a human has to file and label one. A candidate that keeps authorization where it is: an
+  authorized replier's comment on the ticket after its PR merged authorizes one follow-up `implement` on a new branch,
+  in the same or another repository, as a new unit of the ticket (M7), and the overseer marks the ticket done only
+  when no unit is open and no such reply is unhandled. Undecided: whether a follow-up counts against
+  `max_implement_attempts`, and how the overseer tells late feedback on a merged PR from ordinary comments.
 
 ## 19. Chores
 

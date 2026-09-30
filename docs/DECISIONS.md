@@ -796,7 +796,8 @@ Rejected:
   attempts would count against the second.
 - Building units now: M7's schema (`ticket_units`, `run_slots`) and its canary belong together; M6 would ship half.
 Revisit: M7 replaces the check with units: `implement` may add a repository to a ticket, and `fix-ci` and `resume` name
-the unit whose PR needs work.
+the unit whose PR needs work. Units added one after another, such as a follow-up PR after the first merged, are an
+open question (DESIGN §18, Open): the check here is what blocks them now.
 
 ## D053. A workspace's state directory, and any definitions snapshot, must be private to the operator
 

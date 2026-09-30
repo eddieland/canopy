@@ -203,7 +203,9 @@ runs.
 - Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
 - Per-unit phases, cursors, and attempt counts; attention items about a unit, and `canopy attention --repo`. M6 added
   the `repo` column and items about a repository (`repo_missing`); M7 gives ticket items one.
-- Lift D052's one repository per ticket: `implement` may add a unit.
+- Lift D052's one repository per ticket: `implement` may add a unit. Decide DESIGN §18's open question on sequenced
+  PRs (a follow-up after the first merged, or the next repository once the first lands) before designing units, since
+  it decides whether a unit can start after the ticket's first PR has merged.
 - The desk permission canary, and the TRUST_MODEL T4 and T6 changes with human approval (T7 and §7 changed in M6).
 
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
