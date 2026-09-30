@@ -57,12 +57,19 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         return Outcome(tick_id, status, summary)
 
     try:
-        capacity = reconcile.run(ctx, log)
+        reconciled = reconcile.run(ctx, log)
     except treehouse.TreehouseError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+    for repo in ctx.workspace.repos:
+        # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
+        if not repo.cloned:
+            detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
+            db.record_decision(
+                ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
+            )
 
     now = datetime.now(UTC)
     block = state.state_block(
@@ -70,7 +77,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         ctx.repo_root,
         tick_id=tick_id,
         dry_run=dry_run,
-        capacity=capacity,
+        capacity=reconciled.capacity,
+        workspace=ctx.workspace,
+        leased=reconciled.leased,
         running=db.running_runs(ctx.conn),
         tickets=db.open_tickets(ctx.conn),
         last_runs=db.latest_runs(ctx.conn),
@@ -103,7 +112,12 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
         failure = definitions.shadowing_message(shadowing)
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure
-    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions.ensure(ctx.state_dir))
+    try:
+        definitions_dir = definitions.ensure(ctx.state_dir)
+    except definitions.DefinitionsError as e:
+        log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
+        return str(e)
+    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions_dir)
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     try:

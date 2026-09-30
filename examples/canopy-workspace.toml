@@ -1,0 +1,27 @@
+# canopy-workspace.toml - the map of a workspace: several repositories that share one queue (DESIGN.md §18).
+# Written by `canopy init --workspace`. It takes the place of each repository's canopy.toml, with the same scopes:
+# shared keys only; personal settings live in ~/.config/canopy/config.toml. Commit it if the workspace is shared.
+#
+# Layout under the workspace root: repos/<name> (clones; `canopy workspace sync`), .treehouse/ (the pools), .canopy/
+# (journal, logs, attention.md; readable only by you), and MAP.md (prose about the repositories, for the overseer).
+
+[workspace]
+name = "acme"
+
+# One table per repository. The name is its directory under repos/ and what the overseer passes as --repo.
+[repos.api]
+url = "https://github.com/acme/api.git"
+summary = "Public REST API. Owns the order schema and the generated OpenAPI spec."
+
+[repos.web]
+url = "https://github.com/acme/web.git"
+summary = "Customer web app. Consumes the api's generated client from a release."
+
+[tracker]
+provider = "jira"
+needs_human_label = "needs-human"
+query = 'project = ACME AND statusCategory != Done ORDER BY priority DESC, created ASC'
+
+[trust]
+branch_prefix = "agent/"
+pr_label = "agent"

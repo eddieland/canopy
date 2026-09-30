@@ -10,7 +10,7 @@ from typing import override
 
 import click
 
-from canopy.core import db
+from canopy.core import db, workspace
 from canopy.runs import dispatch
 
 KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
@@ -76,3 +76,4 @@ class TextType(click.ParamType[str, object]):
 TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
+REPO = PatternType("NAME", workspace.REPO_NAME_RE, "repository name")

@@ -275,19 +275,17 @@ def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> 
 
 def _attention_rows(rows: Table, before: list[attention.Item], after: list[attention.Item]) -> None:
     """Items the tick added to the attention list, then items it resolved."""
-    had = {(i.ticket_key, i.reason) for i in before}
-    has = {(i.ticket_key, i.reason) for i in after}
+    had = {(i.ticket_key, i.reason, i.repo) for i in before}
+    has = {(i.ticket_key, i.reason, i.repo) for i in after}
     for item in after:
-        if (item.ticket_key, item.reason) not in had:
+        if (item.ticket_key, item.reason, item.repo) not in had:
             detail = _detail(item.detail)
-            rows.add_row(
-                Text("+", style="bold yellow"), Text(item.ticket_key), Text(item.reason, style="yellow"), detail
-            )
+            rows.add_row(Text("+", style="bold yellow"), Text(item.subject), Text(item.reason, style="yellow"), detail)
     for item in before:
-        if (item.ticket_key, item.reason) not in has:
+        if (item.ticket_key, item.reason, item.repo) not in has:
             rows.add_row(
                 Text("-", style="bold green"),
-                Text(item.ticket_key),
+                Text(item.subject),
                 Text(item.reason, style="green"),
                 _detail("resolved"),
             )

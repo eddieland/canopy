@@ -89,10 +89,11 @@ canopy (harness, Python)
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
-    setup.py       init, skill
+    setup.py       init, init --workspace, skill
     loop.py        loop, tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
     journal.py     decide, attention, ticket set
+    workspace.py   workspace sync
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -108,20 +109,23 @@ canopy (harness, Python)
 
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
+    workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: clone the map, check origins (§18)
 
   core/            what every feature shares
-    config.py      layered config: repository canopy.toml and user config.toml, scopes, validation
-    context.py     the Context every command passes around: config, repository root, db connection, runner
+    config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
+    context.py     the Context every command passes around: config, workspace, db connection, runner
     db.py          SQLite journal, migrations
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13); the guard against shadowing them
     prompts.py     prompt files and overrides; rendering worker prompts
-    treehouse.py   status --json, get --lease --json, return --force --if-lease-id
+    treehouse.py   status --json, get --lease --json, return --force --if-lease-id; a Pool per repository (§18)
+    workspace.py   the workspace: its map, repositories, their pools, the private state directory (§18)
 
   infra/           plumbing that knows nothing about tickets or agents
     procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
                    a child's PWD names its cwd (OpenCode runs tools in PWD); detached spawns and pid liveness
     lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
-    logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files
+    logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files and
+                   directories
     resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
 ```
 
@@ -175,32 +179,36 @@ way, a tick does, in order:
      `crashed`; run `treehouse return --force --if-lease-id` on its slot; log it. A zombie counts as dead. A pid
      reused by an unrelated process reads as alive, so that run is left running; this is a residual, not a guard.
    - For each leased slot in `treehouse status --json` with no live
-     `runs` row and `lease_holder` matching our prefix: return it, log it.
+     `runs` row and `lease_holder` matching our prefix: return it, log it. In a workspace this is done in every
+     repository's pool that has a clone, and a run's slot goes back to the pool of the repository it records (§18).
    - Compute `capacity = max_workers - count(runs where status='running')`.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
-   - Record the harness's attention items for runs (§14) as this tick's decisions.
+   - Record the harness's attention items for runs (§14) as this tick's decisions, and `repo_missing` for each
+     repository in the map with no clone.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block: a `## State`
    section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root,
-   tracker config (provider, query, labels, needs-human label), trust config (authorized repliers, branch prefix, PR
-   label), capacity, policy limits, running workers, and the `tickets` rows not marked done (phase, cursors, runs so far
-   of each kind, when fix-ci may next run if that is still ahead, and the ticket's latest run: id, kind, status, branch,
-   the base it started from, start and end).
-5. **Run the overseer** with `overseer_cmd`, cwd = the repository root, timeout `overseer_timeout_minutes`, and
-   `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention` read that variable to know
-   which tick they belong to, and refuse if it is unset or names a tick that is not running (D020). The overseer's
-   stdout and stderr go to `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal.
-   The run succeeded if it exited 0 and the last non-empty line of stdout is `tick complete`; anything else closes the
-   tick as `overseer_failed`. A run that succeeded but recorded a tick-wide `skip` (`mcp_unavailable`,
-   `tracker_unsupported`) closes the tick as `skipped`: the overseer could not see the world, so the tick is not `ok`
-   and does not replace the attention list (D037).
+   the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
+   (name, path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query,
+   labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy limits,
+   running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
+   next run if that is still ahead, the repository of its latest run, and that run: id, kind, status, branch, the base
+   it started from, start and end).
+5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
+   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention`
+   read that variable to know which tick they belong to, and refuse if it is unset or names a tick that is not running
+   (D020). The overseer's stdout and stderr go to `<state_dir>/ticks/<tick id>.log`, readable only by the operator,
+   never to the journal. The run succeeded if it exited 0 and the last non-empty line of stdout is `tick complete`;
+   anything else closes the tick as `overseer_failed`. A run that succeeded but recorded a tick-wide `skip`
+   (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`: the overseer could not see the world, so the
+   tick is not `ok` and does not replace the attention list (D037).
    In `--dry-run`, the state block says so. `canopy dispatch` checks the same guards as in a live tick (§8), counting
    each dispatch this dry run already recorded as a running run, and records a refusal the same way; a dispatch the
    guards allow starts nothing and is recorded as `dispatch:<kind>` with rationale `dry run: not dispatched; would work
-   on <branch>` and its cursors and context. `canopy ticket set` records phases, but in a dry run neither it nor
-   `canopy dispatch --cursor` advances cursors, and `--done` does not mark the ticket done, so the first live tick still
-   sees everything as new (D036). The overseer otherwise behaves as in a live tick, and so does the rest of the tick:
-   reconcile closes dead runs and returns stale leases, and a dry-run tick's attention items are the attention list and
-   are notified like a live tick's.
+   on <branch>` (followed by `in <repository>` in a workspace) and its cursors and context. `canopy ticket set` records
+   phases, but in a dry run neither it nor `canopy dispatch --cursor` advances cursors, and `--done` does not mark the
+   ticket done, so the first live tick still sees everything as new (D036). The overseer otherwise behaves as in a live
+   tick, and so does the rest of the tick: reconcile closes dead runs and returns stale leases, and a dry-run tick's
+   attention items are the attention list and are notified like a live tick's.
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
    Everything the overseer writes is rendered into the next tick's prompt, so the CLI bounds it: keys and attention
    reasons are validated, phases come from the table in §7, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and
@@ -281,8 +289,8 @@ provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--slug SLUG] [--base BRANCH] [--context TEXT]
-[--cursor NAME=ID]...`:
+`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--repo NAME] [--slug SLUG] [--base BRANCH]
+[--context TEXT] [--cursor NAME=ID]...`:
 
 1. Refuse if the dispatch names no configured queue label, if capacity is zero, if a `runs` row for KEY is `running`,
    or if the kind's attempt limit or cooldown blocks it. Guards are in code and are not overridable from the prompt. A
@@ -295,6 +303,10 @@ provider skill says which.
      name, for every dispatch, the label it read, and the decision records it in its configured spelling (D051). The
      refusal does not list the configured labels, so it cannot be answered by copying one. The worker's own read of
      the ticket's labels is the independent check (step 3).
+   - `unknown_repo`: in a workspace, no `--repo`, or one that is not in the map, has no primary clone, or is not the
+     repository of the ticket's earlier runs: a ticket stays in the repository of its first dispatch until joint runs
+     (ROADMAP M7, D052). In a workspace of one `--repo` may be left out, and if given must be the repository's name
+     (§18). A `--repo` that is not a repository name at all (`[a-z][a-z0-9-]*`) is a usage error, like a bad key.
    - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
      ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
@@ -314,8 +326,8 @@ provider skill says which.
    the spawn, so two dispatches cannot both pass the capacity check or the attempt limit.
    `--cursor NAME=ID` pairs are applied as `canopy ticket set` would, but only once the worker has started: what a
    refused dispatch was meant to handle stays new for the next tick.
-2. `treehouse get --lease --lease-holder canopy:<KEY> --json`. Record the
-   `runs` row with slot path, lease id, holder, kind, base branch (`--base` if given, else treehouse's), branch,
+2. `treehouse get --lease --lease-holder canopy:<KEY> --json`, in the repository's pool (§18). Record the `runs` row
+   with the repository, slot path, lease id, holder, kind, base branch (`--base` if given, else treehouse's), branch,
    started_at.
 3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, base branch, PR label, needs-human
    label, timeout, the attempt number and the kind's limit, the PR the journal recorded for the ticket, the authorized
@@ -332,8 +344,8 @@ provider skill says which.
    written before D051 fails closed instead of silently dropping the worker's label check. The prompt is written to
    `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with the interpreter canopy runs under, detached (`setsid`, stdin from
-   `/dev/null`, stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository root). Record its
-   pid in the run. Return immediately.
+   `/dev/null`, stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository or workspace root).
+   Record its pid in the run. Return immediately.
 
 `canopy _run <run_id>` (hidden from `--help`):
 
@@ -354,8 +366,9 @@ provider skill says which.
    If not and the branch has commits since step 2, push once, without force. If still not pushed, record
    `status='unpushed'`; the checkpoint invariant failed and a human looks.
 6. Always: `treehouse return --force --if-lease-id <id> --if-lease-holder
-   <holder> <slot>`. Trap ensures this runs on any exit path: a normal exit, an exception, and SIGTERM, SIGHUP, or
-   SIGINT (the run is then `crashed`). SIGKILL cannot be trapped; reconcile handles it.
+   <holder> <slot>`, in the pool of the run's repository. Trap ensures this runs on any exit path: a normal exit, an
+   exception, and SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). SIGKILL cannot be trapped; reconcile handles
+   it.
 7. Update the `runs` row: ended_at, status, result_json. A git failure before or after the worker is `crashed`.
    `result_json` holds the validated result, text fields cut at 2000 characters, plus a `harness` note saying why the
    status differs from what the worker reported. A reported `pr` that is a plain `https://` URL is copied to
@@ -423,17 +436,19 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
   `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick and its decisions,
   the latest tick by default: the way to read a dry run's plan. A tick that cannot take the lock writes no row,
   although the schema comment lists `lock_busy`.
-- `tickets`: one row per ticket key seen; last derived phase, branch, PR URL, cursors
+- `tickets`: one row per ticket key seen; the workspace root (`repo`), last derived phase, branch, PR URL, cursors
   (`last_comment_id`, `last_review_id`, `last_ci_run_id`), done flag. Cursors make ticks incremental. Attempt counts
   and the fix-ci cooldown are not stored; they are derived from `runs` (D030, migration 0003).
 - `runs`: one row per worker execution; kind, slot, lease identity, pid of `canopy _run`, pid of the worker agent
-  (`worker_pid`, migration 0002), status, result_json. Status is `running`, `done`, `blocked`, `failed` (the three the
-  worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for capacity, crash detection, attempt
-  counts, and the fix-ci cooldown.
+  (`worker_pid`, migration 0002), the repository in the workspace it leased from (`repo`, migration 0004; null on
+  runs from before it, which were in the workspace of one's repository), status, result_json. Status is `running`,
+  `done`, `blocked`, `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source
+  for capacity, crash detection, attempt counts, the fix-ci cooldown, and a ticket's repository (its latest run's).
 - `decisions`: one row per overseer decision; tick id, ticket, action,
-  rationale. Audit log and prompt-evaluation corpus.
+  rationale, and a repository for an attention item about one (`repo`, migration 0004). Audit log and
+  prompt-evaluation corpus.
 - `notifications`: one row per attention item that `notify.cmd` was told about and that is still open, keyed by a
-  fingerprint of its ticket and reason, so an open item is notified once (§14).
+  fingerprint of its ticket, reason, and repository if it has one, so an open item is notified once (§14).
 
 Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
 
@@ -443,7 +458,9 @@ Configuration is layered. Each layer overrides the one before it, key by key:
 
 1. Built-in defaults in `config.py`.
 2. **Repository file**, `canopy.toml` at the repository root. Committed and shared by everyone who runs canopy on the
-   repository. Optional.
+   repository. Optional. In a workspace, the workspace file `canopy-workspace.toml` takes its place, with the same
+   scopes and rules, and the repositories' own `canopy.toml` files are not read (§18). Everything below about the
+   repository file holds for the workspace file.
 3. **User file**, `$XDG_CONFIG_HOME/canopy/config.toml` (default `~/.config/canopy/config.toml`). Personal to the
    operator, never committed. Required.
 
@@ -535,6 +552,7 @@ Rules:
   anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
 - `trust.branch_prefix` must be non-empty and end in `/`, and is made of plain ref components: letters, digits, `_`,
   and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
+- `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
 - `canopy init` writes the user file if it is missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the
   label. It writes `canopy.toml` only if the repository has none. It never overwrites either file, and installs nothing
   else (§13). If the config does not load, for example a user file from an earlier canopy whose templates lack
@@ -564,7 +582,8 @@ guards rely on: an overseer override must pass `--label` on every `canopy dispat
 `bad_prompt`. The default is `prompts/` next to the user
 file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise, and an empty value means the default.
 `paths.*` values must be absolute or start with `~`: canopy runs from the repository root, so a relative path would let
-the repository supply the operator's prompts or state (TRUST_MODEL T7).
+the repository supply the operator's prompts or state (TRUST_MODEL T7). In a workspace, `paths.state_dir` is ignored:
+the state is always `<workspace>/.canopy/` (§18).
 
 `tracker.provider` is a free-form name. The harness does not branch on it; it passes it into prompts, which name the
 `tracker-<provider>` skill; every shipped skill is in the definitions directory (§13). `tracker.query` is how the
@@ -598,10 +617,12 @@ Rationale in D040 and D044.
 canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
 contents (`definitions.py`). A snapshot is written to a temporary directory, renamed into place, and never changed by
 canopy, so overlapping runs never load a partial set. The overseer run and each `_run` use the snapshot for the
-installed canopy, creating it if missing. Reconcile removes other snapshots, and temporary directories more than an
-hour old, when no run is live: a live run may be one of an earlier canopy, still loading its snapshot. OpenCode scans
-both `agent/` and `agents/` (and `skill/` and `skills/`) in a config directory, and writes a `.gitignore` and a
-`node_modules/` into each one it loads, the snapshot included.
+installed canopy, creating it if missing. A snapshot canopy made is readable only by the operator; one that is a
+symlink, someone else's, or open to others was put there by something else, such as a checkout of a shared workspace
+(§18), and is refused: the overseer's refusal fails the tick, a worker's is a `crashed` run. Reconcile removes other
+snapshots, and temporary directories more than an hour old, when no run is live: a live run may be one of an earlier
+canopy, still loading its snapshot. OpenCode scans both `agent/` and `agents/` (and `skill/` and `skills/`) in a config
+directory, and writes a `.gitignore` and a `node_modules/` into each one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), which must appear in every template that
 runs a canopy-shipped agent (`overseer_cmd`, `worker_cmd`, §19's `chore_cmd`, and §21's `review_cmd`):
@@ -643,7 +664,8 @@ instead. It grants nothing: the overseer's and worker's bash rules are what they
 
 Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable only by the operator, after
 every tick: grouped by reason, one line per item with ticket key, age, and detail (usually a link). Reasons are exactly
-the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`.
+the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`,
+and in a workspace `repo_missing` and the overseer's `multi_repo` (§18).
 `canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
@@ -652,6 +674,10 @@ ended `crashed` is `crashed`; `unpushed` is `unpushed`; `unknown` or `timeout` i
 log. The cause is gone when a newer run starts for the ticket or the ticket is marked done. The overseer does not
 dispatch such a ticket again until an authorized replier has commented after the run ended; that is how a human says
 "try again".
+
+The harness also raises `repo_missing` every tick for each repository in the workspace map with no clone at
+`repos/<name>`. It is about a repository, not a ticket: it has no ticket key, carries the repository's name, and is
+shown under that name. Its cause is gone once `canopy workspace sync` (or anything else) puts the clone there.
 
 The overseer records an item with `canopy attention <KEY> <reason> --detail "<link or text>"`, every tick the cause
 holds. It is stored as a decision with action `attention:<reason>`; there is no separate table (D020). The current list
@@ -663,7 +689,8 @@ the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
 work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
 overseer keeps asking for that work.
 
-Notification (D032). An item is identified by its ticket and reason; its detail can be reworded without making it new.
+Notification (D032). An item is identified by its ticket and reason, and its repository if it has one; its detail can
+be reworded without making it new.
 When `notify.cmd` is set, each tick compares the list with the `notifications` table: items not in the table are new,
 and rows whose item is no longer listed are resolved. If either exists, the command gets one message on stdin, a
 summary line, a `+ KEY reason: detail` line per new item, a `- KEY reason` line per resolved one, and the path of
@@ -701,10 +728,9 @@ going away is new again.
   Planned answer (§20, D035): a sink command, with a Slack sink shipped in canopy. The overseer does not post.
 - Whether `merged` should trigger a tracker transition. Default no; humans own
   ticket state.
-- One operator on several repositories. The user file is shared across them, and `state_dir` and the lock are global.
-  Whether the user file needs per-repository tables, and whether state should be per repository, stays open until
-  someone does it. Planned answer: a workspace (§18), which keeps its own state and holds one queue for several
-  repositories.
+- One operator on several repositories. Answered in M6 by the workspace (§18): one queue, one user file, and state
+  per workspace under its root. Separate repositories that are not one queue stay separate workspaces of one, which
+  share `paths.state_dir` and so its journal and locks.
 
 ## 17. Trackers
 
@@ -755,8 +781,11 @@ code.
 
 ## 18. Workspaces and multi-repo tickets
 
-Planned for ROADMAP M6 to M8; none of it is built. Earlier sections describe one repository, which becomes the
-workspace of one below. Rationale in D033.
+ROADMAP M6 to M8. Rationale in D033. M6 built the workspace: the map and its config layer, state under the root, pools
+under the root with reconcile per repository, `repo_missing`, `canopy dispatch --repo` with one repository per ticket
+(D052), `canopy init --workspace`, and `canopy workspace sync`. Units, joint runs, and desks (M7) and splitting (M8)
+below are still plans; until M7 a ticket has exactly one repository, the one its first dispatch named. Earlier sections
+describe one repository, which is the workspace of one below.
 
 ### Shape
 
@@ -776,8 +805,16 @@ clone of each, the worktree pools, and canopy's state for that workspace. The lo
   .canopy/                   journal, locks, logs, attention.md; operator-only
 ```
 
+`desks/` is M7's; nothing creates it yet.
+
 A repository with no workspace file is a workspace of one: its map is the repository itself, its `canopy.toml` plays
-the workspace file's part, and state and pools stay where §12 and treehouse put them today. There is one code path.
+the workspace file's part, and state and pools stay where §12 and treehouse put them today. There is one code path. The
+repository's name in the state block and for `--repo` is its directory's name, lowercased, with anything else a
+repository name cannot hold turned into hyphens.
+
+canopy finds the workspace by walking up from the current directory to the nearest `canopy-workspace.toml`, as git
+finds `.git`, so it works from inside a clone under `repos/` too. With none above, the nearest `.git` above names the
+workspace of one.
 
 ### The map
 
@@ -809,10 +846,21 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   operator command that prints what it clones before cloning. Map URLs should be HTTPS (D038); `sync` warns about SSH
   ones as `canopy init` does and clones them anyway. A tick never clones a repository or changes a remote; a
   repository in the map with no clone is an attention item, `repo_missing`, and cannot be dispatched to.
-- `canopy init --workspace` writes the skeleton and a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and
-  `.canopy/`.
+- `canopy init --workspace` writes the skeleton: the workspace file (asking for the tracker provider, as `canopy init`
+  does), a `MAP.md` to fill in, a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and `.canopy/` (a
+  `.gitignore` that exists only gains the lines it lacks), and the user file if missing. It overwrites nothing, and
+  prints the branch protection rules with every repository in the map they must be configured in. Plain `canopy init`
+  inside a workspace does the same.
+- `canopy workspace sync` prints each clone it is about to make, then clones it with `git clone -- <url>
+  repos/<name>`, with credential prompts and git's `ext::` transport off. For a repository already cloned it compares
+  `origin` with the map's URL (ignoring a trailing `/` or `.git`) and reports a difference; it changes no remote. It
+  exits 1 if any clone failed, or if `repos/<name>` exists and is not a clone. It prints a credential in a URL as
+  `***`, and `canopy init --workspace` names the repositories without their URLs.
 - A workspace's state is always `<workspace>/.canopy/`, created readable only by the operator; `paths.state_dir`
-  applies only to a workspace of one. Each workspace therefore has its own journal and locks.
+  applies only to a workspace of one. Each workspace therefore has its own journal and locks. The root may be a
+  checkout of a shared workspace repository, so a `.canopy/` that is a symlink, someone else's, or open to others is
+  refused, and every command stops with a config error until it is removed (D053). A definitions snapshot inside it
+  is checked the same way before each run loads it (§13).
 
 ### Worktrees live in the workspace
 
@@ -823,10 +871,13 @@ so a repository's own `treehouse.toml` cannot move canopy's pools. `get` also pa
 operator's interactive ones under `~/.treehouse`, so an interactive `treehouse` never recycles a slot canopy uses, and
 deleting the workspace removes everything canopy made. Build caches still have to be slot-independent (§9).
 
-Reconcile runs `treehouse status --json` once per repository in the map and returns stale `canopy:` leases in each
-pool. The overseer runs from the workspace root, which is not a repository, so the state block carries each pool's
-leased slots in place of the overseer's own `treehouse status`. Lease holders stay `canopy:<KEY>`; pools are per
-repository, so one ticket can hold a slot in several.
+Reconcile runs `treehouse status --json` once per repository in the map that has a clone and returns stale `canopy:`
+leases in each pool. A repository with no clone has no pool to read; the tick records `repo_missing` for it (§14), and
+dispatch refuses it. A run's slot is always returned through the pool of the repository the run records; if that
+repository's clone is gone, treehouse runs at the workspace root and finds the pool from the slot's path, which the
+pinned layout puts two levels below it. The overseer runs from the workspace root, which is not a repository, so the
+state block carries each pool's leased slots in place of the overseer's own `treehouse status`. Lease holders stay
+`canopy:<KEY>`; pools are per repository, so one ticket can hold a slot in several.
 
 ### Units
 
@@ -847,7 +898,8 @@ prompt prefers splitting and implements jointly only when the ticket or `MAP.md`
 Guards (§8) change as follows:
 
 - `running` stays per ticket: one worker per ticket, whatever its units (TRUST_MODEL §6).
-- `unknown_repo`: a `--repo` not in the map, with no primary clone, or, for a split child, not the one recorded.
+- `unknown_repo`: a `--repo` not in the map, with no primary clone, or, for a split child, not the one recorded. Until
+  M7, also no `--repo` in a workspace, and any repository other than the one the ticket's runs are in (D052).
 - `no_branch`: `fix-ci` and `resume` for a unit with no branch.
 - `attempt_limit` counts per unit: a run counts against every unit it covers.
 - `capacity` counts runs, not slots. A joint run over three repositories is one worker holding three slots.
@@ -933,8 +985,10 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
   OpenCode's permission check allows edits through the desk's links and still denies paths outside them.
 - T6: the write scope is the repositories of the units the run covers, not one repository. The splitter's is creating
   tickets, linking them, and commenting on the parent.
-- T7: the workspace file is a repository file for this purpose. Clone URLs are read only by an operator command.
-- §7: branch protection is needed in every repository in the map; `canopy init --workspace` prints the rules for each.
+- T7 (made in M6): the workspace file is a repository file for this purpose. Clone URLs are read only by an operator
+  command. A workspace's state directory and definitions snapshots must be private to the operator (D053).
+- §7 (made in M6): branch protection is needed in every repository in the map; `canopy init --workspace` prints the
+  rules for each.
 
 ### Open
 
@@ -943,6 +997,15 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 - Whether a child's desk should also hold its blockers' unmerged branches, read-only by prompt, so the worker can build
   against them before they merge.
 - Whether the overseer should ever split a ticket it has already started implementing jointly.
+- A ticket whose work lands as several PRs in sequence, rather than jointly or as split children: the api change merges,
+  then the web change that consumes it; or review feedback arrives on a PR that has just merged and needs a follow-up
+  PR. Today neither can happen inside the ticket. A merged PR marks it done (§7), D052 keeps it in the repository of its
+  first dispatch, `implement` has an attempt limit that never resets, and the loop cannot file a follow-up ticket for
+  itself (TRUST_MODEL T1), so a human has to file and label one. A candidate that keeps authorization where it is: an
+  authorized replier's comment on the ticket after its PR merged authorizes one follow-up `implement` on a new branch,
+  in the same or another repository, as a new unit of the ticket (M7), and the overseer marks the ticket done only
+  when no unit is open and no such reply is unhandled. Undecided: whether a follow-up counts against
+  `max_implement_attempts`, and how the overseer tells late feedback on a merged PR from ordinary comments.
 
 ## 19. Chores
 
@@ -1139,7 +1202,7 @@ TRUST_MODEL is unchanged until M9, whose PR carries the human approval:
   never make a ticket a candidate. Opt-in per chore when it comes, so a chore's reports can be trusted before its
   influence is.
 - Where a chore runs in a workspace (§18). Chores come from the user file, which every loop the operator runs reads, so
-  once state is per workspace (M6) each workspace would run every chore. M6 either gives a chore an optional list of
+  once state is per workspace (M6) each workspace would run every chore. M9 either gives a chore an optional list of
   the workspaces it runs in or moves chores into a user file table per workspace.
 - Whether a repository should be able to offer chores that an operator opts into by name, the way it offers its tracker
   query.

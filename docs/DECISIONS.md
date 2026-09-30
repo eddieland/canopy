@@ -779,3 +779,43 @@ worker's own read of the ticket's labels, a separate agent run with its own trac
 so it too can be skipped. Human review of every PR is the backstop.
 Revisit: if a tracker-neutral way to read labels appears (for example a runtime command canopy can call without
 provider code), move the check into code.
+
+## D052. Until joint runs, a ticket has one repository: the one its first dispatch named
+
+Context: M6 makes several repositories one queue, but units, joint runs, and per-unit attempts are M7 (DESIGN §18).
+The journal still has one branch, PR, and set of attempt counts per ticket, so a second repository for a ticket would
+overwrite its branch, count its attempts against the first repository's, and leave `fix-ci` and `resume` without a way
+to tell which branch they continue.
+Decision: in a workspace, every `canopy dispatch` names exactly one repository with `--repo`. Each run records it
+(`runs.repo`), and a ticket's repository is its latest run's. A dispatch naming any other repository for a ticket that
+has runs is refused as `unknown_repo`, the guard §18 already defines for "not the one recorded". The overseer prompt
+records attention `multi_repo` for a ticket that needs several repositories, so a human splits it. In a workspace of
+one, `--repo` is optional and the check is skipped, so renaming the checkout's directory never strands a ticket.
+Rejected:
+- Letting a later implement move the ticket: the branch and PR of the first repository would be forgotten, and its
+  attempts would count against the second.
+- Building units now: M7's schema (`ticket_units`, `run_slots`) and its canary belong together; M6 would ship half.
+Revisit: M7 replaces the check with units: `implement` may add a repository to a ticket, and `fix-ci` and `resume` name
+the unit whose PR needs work. Units added one after another, such as a follow-up PR after the first merged, are an
+open question (DESIGN §18, Open): the check here is what blocks them now.
+
+## D053. A workspace's state directory, and any definitions snapshot, must be private to the operator
+
+Context: a workspace keeps its state under its root (`.canopy/`, D033), and the root may be a checkout of a shared
+workspace repository. Before M6 the state directory was the operator's own (`~/.canopy`). Inside a checkout, anyone who
+can push to the workspace repository could commit a `.canopy/` holding a journal, or a definitions snapshot named for a
+released canopy's digest whose agents allow everything; canopy would load it, breaking TRUST_MODEL T7's rule that
+canopy's agent definitions never come from the repository (D040).
+Decision: every command in a workspace that opens the journal refuses a `.canopy/` that is a symlink, belongs to someone
+else, or has group or other permission bits, as a config error naming the fix (remove it; canopy recreates it). canopy
+creates it 0700, and git creates directories from the umask, typically 0755. Separately, and in every workspace, a
+definitions snapshot is used only if it passes the same test: canopy's own are made with `mkdtemp`, so they are 0700. A
+refused snapshot fails the tick as `overseer_failed` or a run as `crashed`, with the message.
+Rejected:
+- Asking git whether `.canopy/` is tracked: a process per command, and the workspace root need not be a repository.
+- Verifying a snapshot's contents against the bundled files: OpenCode writes its own files into the snapshot, and
+  extra files (an `opencode.json` at its root) would need their own rules.
+- State outside the workspace: D033 keeps each workspace's journal with it, so deleting the workspace removes it.
+Residual: the check reads permissions, not provenance. A checkout made under a umask of 077 creates private
+directories, and files git adds inside a `.canopy/` canopy already made are the operator's own. `.gitignore` covers
+`.canopy/`, and review of the workspace repository is the backstop, as for the map itself.
