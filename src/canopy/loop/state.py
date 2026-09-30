@@ -30,13 +30,52 @@ def state_block(
     leased: Mapping[str, list[treehouse.Slot]],
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
+    units: Mapping[str, list[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
-    attempts: Mapping[str, Mapping[str, int]],
-    fix_ci_cooldowns: Mapping[str, datetime],
+    run_slots: Mapping[int, list[sqlite3.Row]],
+    attempts: Mapping[policy.Unit, Mapping[str, int]],
+    fix_ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
 ) -> str:
-    """Render the `## State` section the harness appends to the overseer prompt."""
+    """Render the `## State` section the harness appends to the overseer prompt.
+
+    `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts` and
+    `fix_ci_cooldowns` are per unit (`policy.unit`).
+    """
     no_attempts = dict.fromkeys(policy.KINDS, 0)
+
+    def repo_name(repo: str | None) -> str:
+        # A workspace of one's rows may predate its repository's name (migration 0005); it has only the one.
+        return workspace.repos[0].name if workspace.single or repo is None else repo
+
+    def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
+        name = repo_name(u["repo"])
+        unit = policy.unit(key, name, single=workspace.single)
+        return {
+            "repo": name,
+            "branch": u["branch"],
+            "pr_url": u["pr_url"],
+            "phase": u["phase"],
+            "cursors": {cursor: u[column] for cursor, column in db.UNIT_CURSORS.items()},
+            "attempts": dict(attempts.get(unit, no_attempts)),
+            "fix_ci_cooldown_until": _stamp(fix_ci_cooldowns.get(unit)),
+        }
+
+    def run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
+        if run is None:
+            return None
+        return {
+            "run_id": run["id"],
+            "kind": run["kind"],
+            "status": run["status"],
+            "branch": run["branch"],
+            "repos": [
+                {"repo": repo_name(s["repo"]), "base": s["base_branch"]} for s in run_slots.get(int(run["id"]), [])
+            ],
+            "started_at": run["started_at"],
+            "ended_at": run["ended_at"],
+        }
+
     state = {
         "tick_id": tick_id,
         "now": db.format_time(now),
@@ -88,7 +127,7 @@ def state_block(
             {
                 "run_id": r["id"],
                 "ticket": r["ticket_key"],
-                "repo": r["repo"],
+                "repos": [repo_name(s["repo"]) for s in run_slots.get(int(r["id"]), [])],
                 "kind": r["kind"],
                 "branch": r["branch"],
                 "started_at": r["started_at"],
@@ -98,16 +137,13 @@ def state_block(
         "tickets": [
             {
                 "key": t["key"],
-                "repo": _repo(last_runs.get(str(t["key"]))),
                 "phase": t["phase"],
                 "branch": t["branch"],
-                "pr_url": t["pr_url"],
-                "cursors": {name: t[column] for name, column in db.CURSOR_COLUMNS.items()},
-                "attempts": dict(attempts.get(str(t["key"]), no_attempts)),
-                "fix_ci_cooldown_until": _stamp(fix_ci_cooldowns.get(str(t["key"]))),
+                "cursors": {name: t[column] for name, column in db.TICKET_CURSORS.items()},
+                "units": [unit_summary(str(t["key"]), u) for u in units.get(str(t["key"]), [])],
                 "needs_human_since": t["needs_human_since"],
                 "last_seen_at": t["last_seen_at"],
-                "last_run": _run_summary(last_runs.get(str(t["key"]))),
+                "last_run": run_summary(last_runs.get(str(t["key"]))),
             }
             for t in tickets
         ],
@@ -139,22 +175,3 @@ def state_block(
 
 def _stamp(moment: datetime | None) -> str | None:
     return db.format_time(moment) if moment is not None else None
-
-
-def _repo(run: sqlite3.Row | None) -> str | None:
-    """The repository a ticket's work is in: its latest run's."""
-    return None if run is None else run["repo"]
-
-
-def _run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
-    if run is None:
-        return None
-    return {
-        "run_id": run["id"],
-        "kind": run["kind"],
-        "status": run["status"],
-        "branch": run["branch"],
-        "base": run["base_branch"],
-        "started_at": run["started_at"],
-        "ended_at": run["ended_at"],
-    }

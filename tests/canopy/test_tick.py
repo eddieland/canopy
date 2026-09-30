@@ -72,7 +72,7 @@ def test_dry_run_tick_records_the_overseer_plan(
     ]
     proj1 = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert proj1["phase"] == "ci_running"
-    assert proj1["last_ci_run_id"] is None  # a dry run never advances cursors
+    assert db.units(conn, "PROJ-1") == []  # a dry run never advances cursors, the ci cursor included
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0  # nothing was dispatched
     assert [c[0] for c in json.loads(treehouse_state.read_text())["calls"]] == ["status"]
 

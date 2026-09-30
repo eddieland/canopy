@@ -102,10 +102,11 @@ canopy (harness, Python)
     attention.py   the attention list from the journal; render attention.md, diff, notify
 
   runs/            worker runs on tickets (§8)
-    dispatch.py    guards, lease, render the worker prompt, spawn detached _run
-    policy.py      attempt limits and the fix-ci cooldown, derived from runs
-    worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
-    reconcile.py   dead runs marked crashed, stale leases returned, the capacity left
+    dispatch.py    guards, leases (all or nothing), render the worker prompt, spawn detached _run
+    policy.py      attempt limits and the fix-ci cooldown per unit, derived from runs and run_slots
+    worker.py      canopy _run: branch setup in each slot, the worker, result parsing, push verification, slot return
+    desks.py       a joint run's desk: one link per worktree it leased (§18)
+    reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
 
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
@@ -176,11 +177,13 @@ way, a tick does, in order:
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
      kill the process group of the worker `_run` started, if any of it is left (`runs.worker_pid`); mark the run
-     `crashed`; run `treehouse return --force --if-lease-id` on its slot; log it. A zombie counts as dead. A pid
-     reused by an unrelated process reads as alive, so that run is left running; this is a residual, not a guard.
+     `crashed`; run `treehouse return --force --if-lease-id` on every slot it leased (`run_slots`), and remove its desk
+     if it was a joint run; log it. A zombie counts as dead. A pid reused by an unrelated process reads as alive, so
+     that run is left running; this is a residual, not a guard.
    - For each leased slot in `treehouse status --json` with no live
      `runs` row and `lease_holder` matching our prefix: return it, log it. In a workspace this is done in every
-     repository's pool that has a clone, and a run's slot goes back to the pool of the repository it records (§18).
+     repository's pool that has a clone, and a run's slots go back to the pools of the repositories they record (§18).
+     In a workspace of several, a desk whose ticket has no running run is removed.
    - Compute `capacity = max_workers - count(runs where status='running')`.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
    - Record the harness's attention items for runs (§14) as this tick's decisions, and `repo_missing` for each
@@ -190,9 +193,10 @@ way, a tick does, in order:
    the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
    (name, path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query,
    labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy limits,
-   running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
-   next run if that is still ahead, the repository of its latest run, and that run: id, kind, status, branch, the base
-   it started from, start and end).
+   running workers and their repositories, and the `tickets` rows not marked done: the ticket's phase, branch, and
+   comment cursor; its units (§18), each with its repository, branch, PR, phase, review and ci cursors, runs so far of
+   each kind, and when fix-ci may next run if that is still ahead; and its latest run (id, kind, status, branch, each
+   repository it leased in with the base it started from, start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention`
    read that variable to know which tick they belong to, and refuse if it is unset or names a tick that is not running
@@ -200,19 +204,18 @@ way, a tick does, in order:
    never to the journal. The run succeeded if it exited 0 and the last non-empty line of stdout is `tick complete`;
    anything else closes the tick as `overseer_failed`. A run that succeeded but recorded a tick-wide `skip`
    (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`: the overseer could not see the world, so the
-   tick is not `ok` and does not replace the attention list (D037).
-   In `--dry-run`, the state block says so. `canopy dispatch` checks the same guards as in a live tick (§8), counting
-   each dispatch this dry run already recorded as a running run, and records a refusal the same way; a dispatch the
-   guards allow starts nothing and is recorded as `dispatch:<kind>` with rationale `dry run: not dispatched; would work
-   on <branch>` (followed by `in <repository>` in a workspace) and its cursors and context. `canopy ticket set` records
-   phases, but in a dry run neither it nor `canopy dispatch --cursor` advances cursors, and `--done` does not mark the
-   ticket done, so the first live tick still sees everything as new (D036). The overseer otherwise behaves as in a live
-   tick, and so does the rest of the tick: reconcile closes dead runs and returns stale leases, and a dry-run tick's
-   attention items are the attention list and are notified like a live tick's.
-   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
-   Everything the overseer writes is rendered into the next tick's prompt, so the CLI bounds it: keys and attention
-   reasons are validated, phases come from the table in §7, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and
-   rationales, details, and worker context are cut at 2000 characters.
+   tick is not `ok` and does not replace the attention list (D037). In `--dry-run`, the state block says so. `canopy
+   dispatch` checks the same guards as in a live tick (§8), counting each dispatch this dry run already recorded as a
+   running run, and records a refusal the same way; a dispatch the guards allow starts nothing and is recorded as
+   `dispatch:<kind>` with rationale `dry run: not dispatched; would work on <branch>` (followed by `in <repositories>`
+   in a workspace) and its cursors and context. `canopy ticket set` records phases, but in a dry run neither it nor
+   `canopy dispatch --cursor` advances cursors, and `--done` does not mark the ticket done, so the first live tick still
+   sees everything as new (D036). The overseer otherwise behaves as in a live tick, and so does the rest of the tick:
+   reconcile closes dead runs and returns stale leases, and a dry-run tick's attention items are the attention list and
+   are notified like a live tick's. `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as
+   `mcp_unavailable`) omits the key. Everything the overseer writes is rendered into the next tick's prompt, so the CLI
+   bounds it: keys and attention reasons are validated, phases come from the table in §7, cursor ids must match
+   `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at 2000 characters.
 6. Close the `ticks` row with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, and if `notify.cmd` is set and the list
    changed since the last notification, pipe the change to it. This comes after the tick is closed because the list is
@@ -257,7 +260,8 @@ per tick. The JSON log gains `loop started` and `loop stopped` lines, with no ti
 ## 7. Ticket phases and next actions
 
 Phases are derived by the overseer each tick from live state. They are recorded
-in `tickets.phase` for the status view, never read back as truth.
+in `tickets.phase` for the status view, never read back as truth. The phases about a PR, `pushed_no_pr` to `merged`,
+are a unit's in a workspace of several (§18), recorded in `ticket_units.phase` with `canopy ticket set --repo`.
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -270,7 +274,7 @@ in `tickets.phase` for the status view, never read back as truth.
 | `changes_requested` | review comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
 | `green_unreviewed` | checks pass, no approval | attention: needs a reviewer |
 | `approved` | approved, not merged | attention: ready to merge |
-| `merged` | PR merged | mark ticket `done` in the journal; humans handle the tracker transition |
+| `merged` | every unit's PR merged, and no other repository left to change (§18) | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label | dispatch `resume` pointing at the reply; the worker removes the label |
 
@@ -279,7 +283,10 @@ identifier, never a display name. If the tracker cannot say when a label was add
 reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
 
 Cursors (`comment`, `review`, `ci`) hold the newest item of each kind the loop has handled, in the tracker's and
-GitHub's own ids; "newer than cursor" in the table means not handled yet. A dispatch that handles new items carries
+GitHub's own ids; "newer than cursor" in the table means not handled yet. The comment cursor is the ticket's; the review
+and ci cursors are each unit's, since each unit has its own PR. In a workspace of several, `canopy ticket set` names the
+unit with `--repo` for them, and a dispatch that carries one names exactly one repository; in a workspace of one the
+ticket's one unit is implied. A dispatch that handles new items carries
 their cursors (`--cursor`, §8), so they advance only if the worker starts. Items handled by a wait, a done, or an
 attention item advance with `canopy ticket set`. A review comment waiting on a human is not advanced past, so its
 attention item is recorded every tick until a human answers it.
@@ -289,59 +296,72 @@ provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--repo NAME] [--slug SLUG] [--base BRANCH]
+`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--repo NAME]... [--slug SLUG] [--base BRANCH]
 [--context TEXT] [--cursor NAME=ID]...`:
 
-1. Refuse if the dispatch names no configured queue label, if capacity is zero, if a `runs` row for KEY is `running`,
-   or if the kind's attempt limit or cooldown blocks it. Guards are in code and are not overridable from the prompt. A
-   refusal is recorded as a decision `refused:<guard>` with the reason, and the command exits 1. A dry run checks the
-   same guards and then stops, with each dry-run dispatch already recorded this tick counting as a running run for
-   `running` and `capacity` (§6, D036).
-   Guards, in the order they are checked:
+Each `--repo` names a unit of the ticket, its work in one repository (§18); a dispatch naming several is a joint run.
+In a workspace of one, the ticket has one unit and `--repo` may be left out.
+
+1. Refuse if the dispatch names no configured queue label, if capacity is zero, if a `runs` row for KEY is `running`, or
+   if the kind's attempt limit or cooldown blocks it in any unit it names. Guards are in code and are not overridable
+   from the prompt. A refusal is recorded as a decision `refused:<guard>` with the reason, and the command exits 1. A
+   dry run checks the same guards and then stops, with each dry-run dispatch already recorded this tick counting as a
+   running run for `running` and `capacity` (§6, D036). Guards, in the order they are checked:
    - `unauthorized`: no `--label`, or one that is not in `tracker.labels`, compared case-insensitively as GitHub labels
      are. canopy cannot read the tracker, so this does not prove the label is on the ticket; it makes the overseer
      name, for every dispatch, the label it read, and the decision records it in its configured spelling (D051). The
      refusal does not list the configured labels, so it cannot be answered by copying one. The worker's own read of
      the ticket's labels is the independent check (step 3).
-   - `unknown_repo`: in a workspace, no `--repo`, or one that is not in the map, has no primary clone, or is not the
-     repository of the ticket's earlier runs: a ticket stays in the repository of its first dispatch until joint runs
-     (ROADMAP M7, D052). In a workspace of one `--repo` may be left out, and if given must be the repository's name
-     (§18). A `--repo` that is not a repository name at all (`[a-z][a-z0-9-]*`) is a usage error, like a bad key.
-   - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
-   - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
-     ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
+   - `unknown_repo`: in a workspace, no `--repo`, or one that is not in the map or has no primary clone. Naming a
+     repository the ticket has no unit in yet adds that unit (§18, D054). In a workspace of one `--repo` may be left
+     out, and if given must be the repository's name (§18). A repository named twice is one unit. A `--repo` that is
+     not a repository name at all (`[a-z][a-z0-9-]*`) is a usage error, like a bad key.
+   - `bad_slug`: a slug that is not lowercase words joined by hyphens; any `--slug` with `fix-ci` or `resume`; or, on
+     a later `implement`, a `--slug` naming another branch than the ticket's. The ticket's first `implement` names its
+     branch, and every later dispatch continues it, in every unit (D055).
+   - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal (`tickets.branch`), or, in a
+     workspace of several, naming a unit with no branch yet: a repository no `implement` has covered.
    - `bad_base`: a `--base` that is not `<trust.branch_prefix>` followed by one plain ref component (letters, digits,
      `_`, `-`, starting with a letter or digit, at most 200 characters), or that is the run's own branch (§10, D045).
    - `running`: a run for KEY is running.
-   - `attempt_limit`: KEY has already had `policy.max_<kind>_attempts` runs of this kind. Every run counts, whatever it
-     ended as, and the count never resets (D030). The refusal also records the `attempt_limit` attention item (§14).
-   - `cooldown`: `fix-ci` only, less than `policy.fix_ci_cooldown_minutes` after KEY's latest fix-ci run ended.
+   - `attempt_limit`: a unit the dispatch names has already had `policy.max_<kind>_attempts` runs of this kind. A run
+     counts against every unit it covered, whatever it ended as, and the count never resets (D030). In a workspace of
+     one the ticket's runs are its one unit's. The refusal also records the `attempt_limit` attention item (§14),
+     about that unit in a workspace of several.
+   - `cooldown`: `fix-ci` only, less than `policy.fix_ci_cooldown_minutes` after the latest fix-ci run covering a unit
+     the dispatch names ended.
    - `capacity`: `max_workers` runs are running.
 
-   Failures after the guards are recorded the same way: `no_slot` (the lease failed), `bad_prompt` (the worker prompt
-   did not render), `spawn_failed`. None of them leaves a slot leased. A `get` that exits 0 with output canopy cannot
-   parse is `no_slot` too: canopy reads the path, lease id, and holder from it if it can and returns that slot at once.
-   If it cannot, the rationale says so, and the next tick's reconcile returns the slot (§6 step 3).
-   Dispatches are serialized by a blocking `flock` on `<state_dir>/dispatch.lock`, held from the guard checks through
-   the spawn, so two dispatches cannot both pass the capacity check or the attempt limit.
-   `--cursor NAME=ID` pairs are applied as `canopy ticket set` would, but only once the worker has started: what a
-   refused dispatch was meant to handle stays new for the next tick.
-2. `treehouse get --lease --lease-holder canopy:<KEY> --json`, in the repository's pool (§18). Record the `runs` row
-   with the repository, slot path, lease id, holder, kind, base branch (`--base` if given, else treehouse's), branch,
-   started_at.
-3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, base branch, PR label, needs-human
-   label, timeout, the attempt number and the kind's limit, the PR the journal recorded for the ticket, the authorized
-   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), the context, and the result
-   contract below. Every worker reads the ticket first and reports `failed` with a summary starting `not authorized:`,
-   changing nothing, if it is closed or carries none of the queue labels; that run counts toward the kind's attempt
-   limit like any other.
-   An `implement` branch is `<trust.branch_prefix><KEY>-<slug>`; the overseer picks the slug from the ticket title,
-   lowercase words joined by single hyphens, at most 40 characters, `work` if it gives none. The context is the
-   overseer's `--context`: at most 2000 characters that point the worker at what to read (links, comment ids, check
-   names), never a copy of ticket or PR text (D031). The worker reads that text itself and checks a reply's author
-   against the authorized repliers, which the harness renders from the user config. Placeholders are `{{NAME}}`,
+   Failures after the guards are recorded the same way: `no_slot` (a lease failed), `bad_prompt` (the worker prompt did
+   not render), `spawn_failed`. None of them leaves a slot leased: leases are all or nothing, so when any repository's
+   `get` fails, the slots already leased for the dispatch are returned before the refusal is recorded. A `get` that
+   exits 0 with output canopy cannot parse is `no_slot` too: canopy reads the path, lease id, and holder from it if it
+   can and returns that slot at once. If it cannot, the rationale says so, and the next tick's reconcile returns the
+   slot (§6 step 3). Dispatches are serialized by a blocking `flock` on `<state_dir>/dispatch.lock`, held from the guard
+   checks through the spawn, so two dispatches cannot both pass the capacity check or the attempt limit. `--cursor
+   NAME=ID` pairs are applied as `canopy ticket set` would, but only once the worker has started: what a refused
+   dispatch was meant to handle stays new for the next tick.
+2. `treehouse get --lease --lease-holder canopy:<KEY> --json`, in each named repository's pool (§18). Record the `runs`
+   row with the kind, branch, and started_at, and a `run_slots` row per slot with its repository, slot path, lease id,
+   holder, and base branch (`--base` if given, else treehouse's). Each repository becomes a unit of the ticket, with
+   the run's branch.
+3. Render the worker prompt for the kind, with KEY, tracker provider, branch name, PR label, needs-human label, timeout,
+   the attempt number (one more than the most runs of the kind in any unit covered) and the kind's limit, a
+   `{{REPOSITORIES}}` section listing each repository with its path, base branch, the PR the journal recorded for its
+   unit, and its summary, the authorized repliers, the queue labels, whether the run is stacked on another ticket's
+   branch (§10), the context, and the result contract below, whose `prs` skeleton (`{{PRS}}`) names each repository.
+   Every worker reads the ticket first and reports `failed` with a summary starting `not authorized:`, changing nothing,
+   if it is closed or carries none of the queue labels; that run counts toward the kind's attempt limit like any other.
+   A ticket's branch is `<trust.branch_prefix><KEY>-<slug>`, named by its first `implement`; the overseer picks the slug
+   from the ticket title, lowercase words joined by single hyphens, at most 40 characters, `work` if it gives none. The
+   context is the overseer's `--context`: at most 2000 characters that point the worker at what to read (links, comment
+   ids, check names), never a copy of ticket or PR text (D031). The worker reads that text itself and checks a reply's
+   author against the authorized repliers, which the harness renders from the user config. Placeholders are `{{NAME}}`,
    replaced in one pass; an unknown one is `bad_prompt`, and so is a worker prompt without `{{LABELS}}`, so an override
-   written before D051 fails closed instead of silently dropping the worker's label check. The prompt is written to
+   written before D051 fails closed instead of silently dropping the worker's label check. A joint run's prompt must
+   also have `{{REPOSITORIES}}` and `{{PRS}}`, its worker's only way to learn its repositories; an override without them
+   still serves runs in one repository. `{{SLOT}}` is the worker's working directory, `{{BASE}}` and `{{PR_URL}}` the
+   one repository's base and PR, for overrides written before joint runs. The prompt is written to
    `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with the interpreter canopy runs under, detached (`setsid`, stdin from
    `/dev/null`, stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository or workspace root).
@@ -352,40 +372,47 @@ provider skill says which.
 1. Claim the run: set its pid to this process's pid, only if the run is `running` and its pid is unset or already this
    pid. Anything else is refused, so the overseer cannot start a second worker on a run. Drop `CANOPY_TICK_ID` from the
    environment, so the worker cannot act as the overseer of the tick that dispatched it.
-2. In the slot: `git fetch --prune origin`, so a branch deleted on origin is gone here too; if `origin/<branch>` exists,
-   `git checkout -B <branch> origin/<branch>`, else `git checkout --no-track -B <branch>
-   origin/<base>`. `-B` because a branch left in the pool's repository by an earlier run on another slot would make
-   `-b` fail; `--no-track` so that a bare `git push` never targets the base. Note the branch's commit. A base missing
-   from origin, such as a stacked-on branch deleted when its PR merged, fails the run as `crashed` before the worker
-   starts, with a note saying so, whether the branch is new or continued: the worker's prompt targets the PR at it.
-3. Run `worker_cmd` with cwd = slot, timeout `worker_timeout_minutes`. Record the worker's pid in `runs.worker_pid`;
-   the worker leads its own process group. The worker's stdout and stderr go to the run log.
+2. In each slot: `git fetch --prune origin`, so a branch deleted on origin is gone here too; if `origin/<branch>`
+   exists, `git checkout -B <branch> origin/<branch>`, else `git checkout --no-track -B <branch> origin/<base>`. `-B`
+   because a branch left in the pool's repository by an earlier run on another slot would make `-b` fail; `--no-track`
+   so that a bare `git push` never targets the base. Note the branch's commit. A base missing from origin, such as a
+   stacked-on branch deleted when its PR merged, fails the run as `crashed` before the worker starts, with a note saying
+   so, whether the branch is new or continued: the worker's prompt targets the PR at it.
+3. Run `worker_cmd` with cwd = the slot, or for a joint run the desk (§18), which `_run` makes now with one link per
+   slot. Timeout `worker_timeout_minutes`. Record the worker's pid in `runs.worker_pid`; the worker leads its own
+   process group. The worker's stdout and stderr go to the run log.
 4. Parse the last non-empty line of stdout as the result contract. Missing or invalid means `status='unknown'`; a
    timeout means `status='timeout'`.
-5. Verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local branch).
-   If not and the branch has commits since step 2, push once, without force. If still not pushed, record
-   `status='unpushed'`; the checkpoint invariant failed and a human looks.
-6. Always: `treehouse return --force --if-lease-id <id> --if-lease-holder
-   <holder> <slot>`, in the pool of the run's repository. Trap ensures this runs on any exit path: a normal exit, an
-   exception, and SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). SIGKILL cannot be trapped; reconcile handles
-   it.
+5. In each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local branch).
+   If not and the branch has commits since step 2, push once, without force. If still not pushed in any slot, record
+   `status='unpushed'`, naming each repository in a workspace; the checkpoint invariant failed and a human looks.
+6. Always: remove the desk of a joint run, and `treehouse return --force --if-lease-id <id> --if-lease-holder
+   <holder> <slot>` for every slot, each in the pool of its repository. Trap ensures this runs on any exit path: a
+   normal exit, an exception, and SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). SIGKILL cannot be trapped;
+   reconcile handles it.
 7. Update the `runs` row: ended_at, status, result_json. A git failure before or after the worker is `crashed`.
    `result_json` holds the validated result, text fields cut at 2000 characters, plus a `harness` note saying why the
-   status differs from what the worker reported. A reported `pr` that is a plain `https://` URL is copied to
-   `tickets.pr_url` for display.
+   status differs from what the worker reported. `prs` is kept to the run's repositories, or filled from `pr` for a
+   run in one; each that is a plain `https://` URL is copied to its unit's `pr_url`, for display and the next run's
+   prompt.
 
 Worker result contract, one JSON line, last line of stdout:
 
 ```json
-{"status":"done|blocked|failed","branch":"agent/KEY-slug","pr":"https://...|null",
+{"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},
  "summary":"one paragraph","question":"only when blocked"}
 ```
 
+`prs` maps each repository the run worked in to its PR. A result with `pr`, a single URL, is still read for a run in
+one repository: the contract before joint runs, which older prompt overrides print.
+
 Worker obligations, stated in every worker prompt:
 
-- Work only inside the worktree. Push only to `agent/<KEY>-*`, never with force.
+- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
+  repository.
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
-- Leave a comment on the ticket describing what was done and linking the PR.
+- Leave a comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links
+  its sibling PRs and says which merges first.
 - On `blocked`: post the question as a ticket comment, add
   `needs_human_label`, do not push half-finished speculative work beyond a
   WIP commit.
@@ -420,8 +447,9 @@ Rationale in D045.
 - The harness checks only the shape of `--base` (`bad_base`, §8): it must be under `trust.branch_prefix` and must not
   be the run's own branch. It does not look the base up in the journal, since the blocker may be in another operator's
   queue, and it cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run` step 2).
-- The base is not remembered. Every dispatch starts from `--base` if given, else the pool's base branch, and the run
-  records it (`runs.base_branch`, shown as the latest run's `base` in the state block). While the blocker's PR is
+- The base is not remembered. Every dispatch starts from `--base` if given, else the pool's base branch, in every
+  repository it names, and the run records each (`run_slots.base_branch`, shown in the latest run's `repos` in the
+  state block). While the blocker's PR is
   open, the overseer passes the same `--base` to the stacked ticket's `resume` and `fix-ci`. Once it merges, a
   `resume` without `--base` tells the worker to retarget the PR to the repository's base branch, merging that branch in
   if it conflicts; workers never rebase, since their pushes never force.
@@ -436,21 +464,28 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
   `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick and its decisions,
   the latest tick by default: the way to read a dry run's plan. A tick that cannot take the lock writes no row,
   although the schema comment lists `lock_busy`.
-- `tickets`: one row per ticket key seen; the workspace root (`repo`), last derived phase, branch, PR URL, cursors
-  (`last_comment_id`, `last_review_id`, `last_ci_run_id`), done flag. Cursors make ticks incremental. Attempt counts
-  and the fix-ci cooldown are not stored; they are derived from `runs` (D030, migration 0003).
-- `runs`: one row per worker execution; kind, slot, lease identity, pid of `canopy _run`, pid of the worker agent
-  (`worker_pid`, migration 0002), the repository in the workspace it leased from (`repo`, migration 0004; null on
-  runs from before it, which were in the workspace of one's repository), status, result_json. Status is `running`,
-  `done`, `blocked`, `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source
-  for capacity, crash detection, attempt counts, the fix-ci cooldown, and a ticket's repository (its latest run's).
-- `decisions`: one row per overseer decision; tick id, ticket, action,
-  rationale, and a repository for an attention item about one (`repo`, migration 0004). Audit log and
-  prompt-evaluation corpus.
+- `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
+  branch (named by its first implement), the comment cursor (`last_comment_id`), done flag. Cursors make ticks
+  incremental. Attempt counts and the fix-ci cooldown are not stored; they are derived from `runs` and `run_slots`
+  (D030, migration 0003).
+- `ticket_units`: one row per unit, a ticket's work in one repository (§18, migration 0005); ticket, repository,
+  branch, PR URL, the unit's phase, and its cursors (`last_review_id`, `last_ci_run_id`).
+- `runs`: one row per worker execution; ticket, kind, branch, pid of `canopy _run`, pid of the worker agent
+  (`worker_pid`, migration 0002), status, result_json. Status is `running`, `done`, `blocked`, `failed` (the three the
+  worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for capacity, crash detection, attempt
+  counts, and the fix-ci cooldown.
+- `run_slots`: one row per slot a run leased (migration 0005); the repository whose pool it came from, slot path,
+  lease id and holder, and the base branch the run started from there. A joint run has one per repository.
+- `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
+  repository or a ticket's unit, that repository (`repo`, migration 0004). Audit log and prompt-evaluation corpus.
 - `notifications`: one row per attention item that `notify.cmd` was told about and that is still open, keyed by a
   fingerprint of its ticket, reason, and repository if it has one, so an open item is notified once (§14).
 
 Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
+
+A `repo` in `ticket_units` or `run_slots` is null only on rows migration 0005 carried over from runs made before
+workspaces, in a workspace of one. Its one unit is renamed to the repository's current name the next time canopy
+writes it, and every lookup in a workspace of one ignores the name, so renaming the checkout never strands a ticket.
 
 ## 12. Configuration
 
@@ -665,7 +700,8 @@ instead. It grants nothing: the overseer's and worker's bash rules are what they
 Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable only by the operator, after
 every tick: grouped by reason, one line per item with ticket key, age, and detail (usually a link). Reasons are exactly
 the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`,
-and in a workspace `repo_missing` and the overseer's `multi_repo` (§18).
+and in a workspace `repo_missing` and the overseer's `multi_repo` (§18). In a workspace of several, an item about one
+unit of a ticket names its repository too, and is shown as `KEY (repo)`.
 `canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
@@ -679,18 +715,20 @@ The harness also raises `repo_missing` every tick for each repository in the wor
 `repos/<name>`. It is about a repository, not a ticket: it has no ticket key, carries the repository's name, and is
 shown under that name. Its cause is gone once `canopy workspace sync` (or anything else) puts the clone there.
 
-The overseer records an item with `canopy attention <KEY> <reason> --detail "<link or text>"`, every tick the cause
-holds. It is stored as a decision with action `attention:<reason>`; there is no separate table (D020). The current list
-is the attention decisions of the latest `ok` tick, so an item disappears the first tick that does not record it, and a
-failed or `skipped` tick leaves the previous list standing. Dry-run ticks count like live ones. An item's age runs from
-the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
+The overseer records an item with `canopy attention <KEY> <reason> [--repo NAME] --detail "<link or text>"`, every tick
+the cause holds. `--repo` names the unit it is about, such as the PR waiting on a reviewer; in a workspace of one it is
+ignored, since naming the only repository would make every item new. It is stored as a decision with action
+`attention:<reason>`; there is no separate table (D020). The current list is the attention decisions of the latest `ok`
+tick, so an item disappears the first tick that does not record it, and a failed or `skipped` tick leaves the previous
+list standing. Dry-run ticks count like live ones. An item's age runs from the first tick of its unbroken run. Reasons
+must match `[a-z][a-z0-9_]*`.
 
 `attempt_limit` is raised both ways: the overseer records it when the state block shows a ticket at its limit for the
 work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
-overseer keeps asking for that work.
+overseer keeps asking for that work. In a workspace of several, the refusal's item names the unit at its limit.
 
-Notification (D032). An item is identified by its ticket and reason, and its repository if it has one; its detail can
-be reworded without making it new.
+Notification (D032). An item is identified by its ticket and reason, and its repository if it has one, so two units
+at their fix-ci limit are two items; its detail can be reworded without making it new.
 When `notify.cmd` is set, each tick compares the list with the `notifications` table: items not in the table are new,
 and rows whose item is no longer listed are resolved. If either exists, the command gets one message on stdin, a
 summary line, a `+ KEY reason: detail` line per new item, a `- KEY reason` line per resolved one, and the path of
@@ -700,10 +738,10 @@ going away is new again.
 
 ## 15. Failure handling
 
-- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; slot returned; ticket
-  goes to attention with `crashed`. Not auto-redispatched: the harness never restarts a run, and the overseer prompt
-  waits for an authorized reply (§14). Every kind has an attempt limit in code, so an overseer that redispatches
-  anyway stops at `policy.max_<kind>_attempts` (D030).
+- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; every slot returned and a
+  joint run's desk removed; ticket goes to attention with `crashed`. Not auto-redispatched: the harness never restarts a
+  run, and the overseer prompt waits for an authorized reply (§14). Every kind has an attempt limit in code, so an
+  overseer that redispatches anyway stops at `policy.max_<kind>_attempts` (D030).
 - Worker exits without a result, times out, reports `failed`, or leaves commits unpushed: `_run` returns the slot and
   records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.
@@ -781,11 +819,10 @@ code.
 
 ## 18. Workspaces and multi-repo tickets
 
-ROADMAP M6 to M8. Rationale in D033. M6 built the workspace: the map and its config layer, state under the root, pools
-under the root with reconcile per repository, `repo_missing`, `canopy dispatch --repo` with one repository per ticket
-(D052), `canopy init --workspace`, and `canopy workspace sync`. Units, joint runs, and desks (M7) and splitting (M8)
-below are still plans; until M7 a ticket has exactly one repository, the one its first dispatch named. Earlier sections
-describe one repository, which is the workspace of one below.
+ROADMAP M6 to M8. Rationale in D033, D054, and D055. M6 built the workspace: the map and its config layer, state under
+the root, pools under the root with reconcile per repository, `repo_missing`, `canopy init --workspace`, and `canopy
+workspace sync`. M7 built units, joint runs, and desks, which replaced M6's one repository per ticket (D052). Splitting
+(M8) below is still a plan. Earlier sections describe one repository, which is the workspace of one below.
 
 ### Shape
 
@@ -799,13 +836,11 @@ clone of each, the worktree pools, and canopy's state for that workspace. The lo
   repos/api/                 primary clones, one per repository in the map
   repos/web/
   .treehouse/                every repository's treehouse pool
-  desks/PROJ-12/             one per running worker: a link to each worktree its run leased
+  desks/PROJ-12/             one per running joint run: a link to each worktree it leased
     api -> ../../.treehouse/<api pool>/3/api
     web -> ../../.treehouse/<web pool>/1/web
   .canopy/                   journal, locks, logs, attention.md; operator-only
 ```
-
-`desks/` is M7's; nothing creates it yet.
 
 A repository with no workspace file is a workspace of one: its map is the repository itself, its `canopy.toml` plays
 the workspace file's part, and state and pools stay where §12 and treehouse put them today. There is one code path. The
@@ -873,7 +908,7 @@ deleting the workspace removes everything canopy made. Build caches still have t
 
 Reconcile runs `treehouse status --json` once per repository in the map that has a clone and returns stale `canopy:`
 leases in each pool. A repository with no clone has no pool to read; the tick records `repo_missing` for it (§14), and
-dispatch refuses it. A run's slot is always returned through the pool of the repository the run records; if that
+dispatch refuses it. Each of a run's slots is returned through the pool of the repository it records; if that
 repository's clone is gone, treehouse runs at the workspace root and finds the pool from the slot's path, which the
 pinned layout puts two levels below it. The overseer runs from the workspace root, which is not a repository, so the
 state block carries each pool's leased slots in place of the overseer's own `treehouse status`. Lease holders stay
@@ -881,9 +916,10 @@ state block carries each pool's leased slots in place of the overseer's own `tre
 
 ### Units
 
-A ticket's work is divided into units, one per repository it changes. A unit has its own branch, PR, phase, review
-and CI cursors, and attempt counts. The comment cursor stays per ticket. A single-repository ticket has one unit and
-behaves as today.
+A ticket's work is divided into units, one per repository it changes. A unit has its own PR, phase, review and CI
+cursors, and attempt counts. The comment cursor and the ticket's own phase (`ready`, `blocked`, `needs_human`, and the
+others not about a PR) stay per ticket, and so does the branch: every unit uses the ticket's (D055). A single-repository
+ticket has one unit and behaves as it did before units.
 
 A ticket's units are the repositories it has been dispatched to. Each dispatch names the units it covers with `--repo`
 (repeatable; optional in a workspace of one), chosen by the overseer from the ticket, the summaries, and `MAP.md`. An
@@ -892,31 +928,49 @@ PR per repository, each linking the others. That is for changes that cannot buil
 API and its client changed in lockstep, or a schema and the code reading it. `fix-ci` and `resume` normally name only
 the unit whose PR needs the work.
 
+A unit can also start after another unit's PR has merged: a later `implement` naming a repository the ticket has no unit
+in adds one (D054). That is a sequenced change, for work whose second part builds on the first once it lands, such as a
+web change consuming the api's released client. The label on the ticket authorizes it, as it authorized the first. A
+repository has at most one unit per ticket, so a follow-up PR in a repository whose unit has merged is not a unit: a
+human files a new ticket for it (TRUST_MODEL T1). The overseer marks the ticket done when every unit's PR has merged
+and no other repository is left to change.
+
 A ticket that covers several repositories but is really several pieces of work is split instead (below). The overseer
 prompt prefers splitting and implements jointly only when the ticket or `MAP.md` shows the halves cannot stand alone.
+Until M8 builds splitting, the overseer records `multi_repo` for such a ticket, so a human splits it.
 
 Guards (§8) change as follows:
 
 - `running` stays per ticket: one worker per ticket, whatever its units (TRUST_MODEL §6).
-- `unknown_repo`: a `--repo` not in the map, with no primary clone, or, for a split child, not the one recorded. Until
-  M7, also no `--repo` in a workspace, and any repository other than the one the ticket's runs are in (D052).
+- `unknown_repo`: in a workspace, no `--repo`, or one not in the map or with no primary clone; for a split child (M8),
+  not the one recorded.
+- `bad_slug`: a later `implement` whose `--slug` names another branch than the ticket's.
 - `no_branch`: `fix-ci` and `resume` for a unit with no branch.
 - `attempt_limit` counts per unit: a run counts against every unit it covers.
+- `cooldown`: from the end of the latest fix-ci run covering the unit.
 - `capacity` counts runs, not slots. A joint run over three repositories is one worker holding three slots.
 - `no_slot`: leases are all or nothing. If any `treehouse get` fails, the slots already leased are returned before
   the refusal is recorded.
 
+Harness attention items for runs (§14) stay per ticket: a run is the ticket's, whichever units it covered, and its
+detail names the repositories that failed. An `attempt_limit` refusal's item, and the overseer's items about a PR, name
+their unit.
+
 ### Runs over several repositories
 
 - The branch is `<trust.branch_prefix><KEY>-<slug>` in every repository. The slug is fixed by the ticket's first
-  `implement`; later implements of other units reuse it and refuse `--slug`.
-- `_run` does its branch setup (§8 step 2) and push verification (step 5) in each worktree, creates the desk with one
-  link per worktree, and runs the worker with the desk as cwd. The trap removes the desk and returns every slot. A run
-  is `unpushed` if any repository's branch is.
-- The worker prompt lists each repository: its name, path in the desk, branch, base, the unit's PR if there is one,
-  and its summary.
-- The result contract's `"pr"` becomes `"prs"`, an object from repository name to PR URL or null. `tickets.pr_url`
-  becomes the unit's.
+  `implement`; later implements, of other units or the same, reuse it and refuse a `--slug` naming another.
+- `_run` does its branch setup (§8 step 2) and push verification (step 5) in each worktree. A run in one repository
+  runs its worker in the worktree, as before units. A joint run's worker runs in its desk, `desks/<KEY>/`, which `_run`
+  makes just before starting it, with a relative link per worktree named for its repository. The trap removes the desk
+  and returns every slot, and reconcile does both for a run whose `_run` died. A desk is made only in a `desks/` that is
+  not a symlink, and removing one never follows its links. A run is `unpushed` if any repository's branch is.
+- Before a joint run's worker starts, the shadowing check (§13) covers each worktree, `desks/`, and the workspace root,
+  since the desk is not a repository and OpenCode may read config above it.
+- The worker prompt lists each repository: its name, path (in the desk for a joint run), branch, base, the unit's PR if
+  there is one, and its summary.
+- The result contract's `"pr"` becomes `"prs"`, an object from repository name to PR URL or null. Each URL is recorded
+  as its unit's `pr_url`.
 - Worker obligations add: each PR's body links its sibling PRs and says which to merge first; the ticket comment lists
   every PR. Workers still never merge.
 
@@ -962,29 +1016,30 @@ without a queue label, so a human authorizes each one exactly as they authorize 
 
 ### Journal
 
-- `ticket_units`: ticket key, repository, branch, PR URL, phase, `last_review_id`, `last_ci_run_id`. The ticket's
-  displayed phase is its least advanced unit's.
-- `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. It replaces the slot columns of
-  `runs` for new runs.
-- `split_children`: parent key, child key, repository, split run id. Written only by `_run` from a validated split
+- `ticket_units`: ticket key, repository, branch, PR URL, phase, `last_review_id`, `last_ci_run_id`. `tickets.phase`
+  is the ticket's own; the state block shows it and each unit's.
+- `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. Migration 0005 moved every run's
+  slot here and dropped the slot columns of `runs`.
+- `split_children` (M8): parent key, child key, repository, split run id. Written only by `_run` from a validated split
   result.
-- `tickets.repo` holds the workspace name.
+- `tickets.repo` holds the workspace root.
 - Attention items carry an optional repository, and an item is identified by ticket, repository, and reason, so two
   units at their fix-ci limit are two items. `canopy attention` takes `--repo`.
 
-### Trust model changes needed
+### Trust model changes
 
-TRUST_MODEL is unchanged until the milestone that needs each change, whose PR carries the human approval:
+TRUST_MODEL changes with the milestone that needs each, whose PR carries the human approval:
 
-- T1: the loop may create tickets, but never with a queue label. What a split creates starts only when a human labels
-  it, and a label added during the split run does not count. The check is in the overseer prompt, backed by the
+- T1 (M8): the loop may create tickets, but never with a queue label. What a split creates starts only when a human
+  labels it, and a label added during the split run does not count. The check is in the overseer prompt, backed by the
   splitter's permissions, because the harness cannot read the tracker. Residual: canopy acts as the operator, so the
   tracker cannot say who added a label, only when; a steered overseer that ignores the check can dispatch a
   self-labeled child, as it could dispatch an unlabeled ticket today.
-- T4: a worker's edit permission covers the worktrees linked from its desk. M7 runs a canary like D021's to show that
-  OpenCode's permission check allows edits through the desk's links and still denies paths outside them.
-- T6: the write scope is the repositories of the units the run covers, not one repository. The splitter's is creating
-  tickets, linking them, and commenting on the parent.
+- T4 (made in M7): a worker's edit permission covers the worktrees linked from its desk. The desk canary
+  (`tests/canopy/test_opencode_canary.py`), like D021's, shows that OpenCode's permission check allows edits through the
+  desk's links and still denies paths beside them.
+- T6 (made in M7): the write scope is the repositories of the units the run covers, not one repository. The splitter's
+  (M8) is creating tickets, linking them, and commenting on the parent.
 - T7 (made in M6): the workspace file is a repository file for this purpose. Clone URLs are read only by an operator
   command. A workspace's state directory and definitions snapshots must be private to the operator (D053).
 - §7 (made in M6): branch protection is needed in every repository in the map; `canopy init --workspace` prints the
@@ -997,15 +1052,9 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 - Whether a child's desk should also hold its blockers' unmerged branches, read-only by prompt, so the worker can build
   against them before they merge.
 - Whether the overseer should ever split a ticket it has already started implementing jointly.
-- A ticket whose work lands as several PRs in sequence, rather than jointly or as split children: the api change merges,
-  then the web change that consumes it; or review feedback arrives on a PR that has just merged and needs a follow-up
-  PR. Today neither can happen inside the ticket. A merged PR marks it done (§7), D052 keeps it in the repository of its
-  first dispatch, `implement` has an attempt limit that never resets, and the loop cannot file a follow-up ticket for
-  itself (TRUST_MODEL T1), so a human has to file and label one. A candidate that keeps authorization where it is: an
-  authorized replier's comment on the ticket after its PR merged authorizes one follow-up `implement` on a new branch,
-  in the same or another repository, as a new unit of the ticket (M7), and the overseer marks the ticket done only
-  when no unit is open and no such reply is unhandled. Undecided: whether a follow-up counts against
-  `max_implement_attempts`, and how the overseer tells late feedback on a merged PR from ordinary comments.
+- Whether a follow-up PR in a repository whose unit has merged, for late review feedback, should be possible inside the
+  ticket, authorized by an authorized replier's comment after the merge. D054 leaves it to a new ticket; revisit if
+  filing those is measured as friction.
 
 ## 19. Chores
 

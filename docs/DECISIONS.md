@@ -819,3 +819,50 @@ Rejected:
 Residual: the check reads permissions, not provenance. A checkout made under a umask of 077 creates private
 directories, and files git adds inside a `.canopy/` canopy already made are the operator's own. `.gitignore` covers
 `.canopy/`, and review of the workspace repository is the backstop, as for the map itself.
+
+## D054. A ticket's work is units, one per repository; a unit may start after another unit's PR merged
+
+Context: D052 kept a ticket in the repository of its first dispatch until M7. M7 builds units (DESIGN §18), and the
+open question was whether a unit can start once the ticket's first PR has merged: the next repository once the first
+lands, or a follow-up PR after late review feedback.
+Decision: a ticket's units are the repositories it has been dispatched to, each with its own PR, phase, review and ci
+cursors, and attempt counts. Any `implement` may add a unit for a repository the ticket has none in, before or after
+another unit's PR merged: that is how a sequenced change (web consuming the api's release) is worked inside one ticket.
+The queue label authorizes it, as it authorized the first. A repository has at most one unit per ticket, so a
+follow-up PR in a repository whose unit has merged is a new ticket a human files. The overseer marks the ticket done
+only when every unit's PR has merged and no other repository is left to change. Attention items about a unit name its
+repository. D052's check is gone.
+Consequences: attempt limits and the fix-ci cooldown are per unit, so a new unit starts with none used; one worker per
+ticket still holds. The harness cannot tell a sequenced unit from a joint one or check that the first PR merged (D003):
+the overseer prompt carries that judgment, and `multi_repo` still asks a human to split a ticket that is several
+independent pieces until M8.
+Rejected:
+- No unit after a merge: the common cross-repository ticket, a contract change then its consumer, would need a second
+  ticket for work the first already describes and authorizes.
+- A follow-up in the same repository, authorized by a reply after the merge: two units per repository, a second branch,
+  and a new authorization path (TRUST_MODEL T1) for a need nobody has measured. Revisit: if filing follow-up tickets for
+  late review feedback is measured as friction; if the overseer is measured adding units a ticket did not need.
+
+## D055. One branch per ticket; a desk only for a joint run; `run_slots` holds every run's slots
+
+Context: M7's units share a run's branch, and a joint run leases a slot per repository (DESIGN §18). Before units, a
+retry `implement` could name a new slug, and every run held one slot, in columns of `runs`.
+Decision:
+- The ticket's first `implement` names its branch, and every later dispatch continues it in every unit. A later
+  `implement` whose `--slug` names another branch is refused as `bad_slug`. A run therefore has one branch, and a joint
+  `fix-ci` or `resume` never covers units on different branches.
+- A run in one repository runs its worker in the worktree, as before; only a joint run gets a desk. Joint runs depend on
+  the desk canary; runs in one repository do not.
+- Migration 0005 moves every run's slot into `run_slots` and every ticket's PR and review and ci cursors into a unit,
+  and drops the old columns, so code reads one shape. Rows from before workspaces have no repository name; a workspace
+  of one ignores it and renames the unit on its next write.
+- A joint run's prompt must have `{{REPOSITORIES}}` and `{{PRS}}`; an override without them still serves a run in one
+  repository.
+Consequences: a retry after a failed `implement` continues whatever that run pushed rather than starting a fresh branch.
+Result lines with the old single `pr` are still read for a run in one repository.
+Rejected:
+- A branch per unit: a joint run with several branches, and `--slug` per repository.
+- A desk for every run in a workspace: every run would depend on the canary, for no gain in one repository.
+- Keeping the slot columns for old runs: two code paths for reconcile, attempt counts, and the state block.
+Revisit: if the desk canary fails (then, per D033, the worker's cwd is the first unit's worktree and the others are
+allowed as external directories); if operators need a fresh branch after a failed implement.

@@ -211,7 +211,15 @@ runs.
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py` holds the harness's half of the acceptance:
+one run over two repositories pushes both and records both PRs, and a joint run killed mid-way has every slot returned
+and its desk removed on the next tick), docs, D054, and D055 are in. D054 answers §18's open question: a unit may start
+after another unit's PR merged, in a repository the ticket has no unit in; a follow-up PR in the same repository is a
+new ticket. The desk canary is written (`tests/canopy/test_opencode_canary.py`, opt-in) and unrun. The overseer prompt,
+the worker definition's comment, and the TRUST_MODEL T4 and T6 changes need human approval in their PR. Waiting on the
+operator: the desk canary against real OpenCode, before any real joint run (if it fails, D055 says what changes); then
+one real ticket touching two repositories taken to two linked PRs, and a real joint run killed mid-way. Started on
+request while M2 to M6 wait on their live runs.
 
 ## M8. Split tickets
 

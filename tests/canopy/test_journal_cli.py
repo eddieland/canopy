@@ -142,7 +142,8 @@ def test_dry_run_ticket_set_records_the_phase_only(
     assert main(["ticket", "set", "PROJ-1", "--phase", "merged", "--cursor", "review=9", "--done"]) == 0
     assert capsys.readouterr().out == "updated PROJ-1; dry run, cursors not advanced and not marked done\n"
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["phase"], row["last_review_id"], row["done"]) == ("merged", None, 0)
+    assert (row["phase"], row["done"]) == ("merged", 0)
+    assert db.units(conn, "PROJ-1") == []  # the review cursor is the unit's, and was not advanced
     assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
@@ -181,7 +182,10 @@ def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn:
     args = ["ticket", "set", "PROJ-1", "--cursor", "comment=10001", "--cursor", "review=PRR_kw1", "--done"]
     assert main(args) == 0
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["last_comment_id"], row["last_review_id"], row["done"]) == ("10001", "PRR_kw1", 1)
+    assert (row["last_comment_id"], row["done"]) == ("10001", 1)
+    # In a single repository, the review cursor goes to the ticket's one unit without naming it.
+    [unit] = db.units(conn, "PROJ-1")
+    assert (unit["repo"], unit["last_review_id"]) == ("repo", "PRR_kw1")
 
 
 @pytest.mark.parametrize("value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)"])

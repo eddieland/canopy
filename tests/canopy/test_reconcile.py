@@ -48,11 +48,16 @@ def add_run(
         tick_id=tick_id,
         key=key,
         kind="implement",
-        slot_path=Path(leased["path"]),
-        lease_id=leased["lease_id"],
-        lease_holder=leased["lease_holder"],
-        base_branch="main",
         branch=f"agent/{key}-work",
+        slots=[
+            db.RunSlot(
+                repo="repo",
+                slot_path=Path(leased["path"]),
+                lease_id=leased["lease_id"],
+                lease_holder=leased["lease_holder"],
+                base_branch="main",
+            )
+        ],
         runs_dir=Path("/state/runs"),
     )
     if pid is not None:

@@ -8,7 +8,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, wait_for_run, worker_does
+from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
 LABEL = "agent-ready-tester"
@@ -75,21 +75,21 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
         conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
     )
 
-    assert (run["status"], run["branch"], run["base_branch"]) == ("done", "agent/PROJ-2-second", FIRST)
+    slot = slot_of(conn, int(run["id"]))
+    assert (run["status"], run["branch"], slot["base_branch"]) == ("done", "agent/PROJ-2-second", FIRST)
     assert made == [
-        ("dispatch:implement", f"run 2: agent/PROJ-2-second on {FIRST} in {run['slot_path']}; label {LABEL}")
+        ("dispatch:implement", f"run 2: agent/PROJ-2-second on {FIRST} in {slot['slot_path']}; label {LABEL}")
     ]
     assert subjects(git_pool, "agent/PROJ-2-second") == ["PROJ-2: stacked", "PROJ-1: the blocker", "initial"]
     assert subjects(git_pool, FIRST) == ["PROJ-1: the blocker", "initial"]  # the base is untouched
     prompt = prompt_of(canopy_env, 2)
-    assert f"`agent/PROJ-2-second` is checked out, based on `{FIRST}`" in prompt
-    assert f"Open a PR against `{FIRST}`" in prompt
+    assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt
     assert f"This ticket is stacked: `{FIRST}` is the branch of another ticket's open PR" in prompt
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
     # The unstacked blocker's prompt said so.
     assert "This ticket is not stacked on another ticket's branch." in prompt_of(canopy_env, 1)
-    assert "Open a PR against `main`" in prompt_of(canopy_env, 1)
+    assert ": branch `agent/PROJ-1-first` from `main`; PR: " in prompt_of(canopy_env, 1)
 
 
 def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
@@ -108,18 +108,19 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
     worker_does(monkeypatch, commit("PROJ-2: review fix"), PUSH)
     resume, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
-    assert (resume["status"], resume["base_branch"]) == ("done", FIRST)
-    assert f"open one against `{FIRST}`" in prompt_of(canopy_env, int(resume["id"]))
+    assert (resume["status"], slot_of(conn, int(resume["id"]))["base_branch"]) == ("done", FIRST)
+    assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, int(resume["id"]))
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
     worker_does(monkeypatch, PUSH)
     retarget, _ = dispatch_and_run(
         conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--context", "blocker merged"
     )
-    assert (retarget["status"], retarget["base_branch"]) == ("done", "main")
+    assert (retarget["status"], slot_of(conn, int(retarget["id"]))["base_branch"]) == ("done", "main")
     text = prompt_of(canopy_env, int(retarget["id"]))
     assert "This ticket is not stacked on another ticket's branch." in text
-    assert "change this ticket's PR to target `main`" in text
+    assert ": branch `agent/PROJ-2-second` from `main`; PR: " in text
+    assert "change this ticket's PR to target its repository's base branch listed above" in text
     assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
 
     # The overseer sees which base each ticket's latest run started from.
@@ -128,8 +129,8 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
     assert main(["tick"]) == 0
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
-    bases = {t["key"]: t["last_run"]["base"] for t in state["tickets"]}
-    assert bases == {"PROJ-1": "main", "PROJ-2": "main"}
+    bases = {t["key"]: t["last_run"]["repos"] for t in state["tickets"]}
+    assert bases == {"PROJ-1": [{"repo": "repo", "base": "main"}], "PROJ-2": [{"repo": "repo", "base": "main"}]}
 
 
 def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
@@ -275,7 +276,7 @@ def test_two_linked_tickets_are_worked_in_order(
     )
     assert main(["tick"]) == 0
     second = wait_for_run(conn, 2)
-    assert (second["status"], second["base_branch"]) == ("done", FIRST)
+    assert (second["status"], slot_of(conn, 2)["base_branch"]) == ("done", FIRST)
 
     ticks = [int(r["id"]) for r in conn.execute("SELECT id FROM ticks ORDER BY id")]
     assert [[a for a, _ in decisions(conn, t)] for t in ticks] == [
@@ -283,5 +284,5 @@ def test_two_linked_tickets_are_worked_in_order(
         ["wait", "dispatch:implement"],
     ]
     assert git("merge-base", "--is-ancestor", FIRST, "agent/PROJ-2-second", cwd=git_pool.origin) == ""
-    assert f"Open a PR against `{FIRST}`" in prompt_of(canopy_env, 2)
+    assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, 2)
     assert all(s["status"] == "available" for s in pool(treehouse_state))

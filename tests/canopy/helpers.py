@@ -31,6 +31,18 @@ def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_ru
     return tick_id
 
 
+def slot_of(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row:
+    """The one slot a run in one repository leased."""
+    [row] = db.run_slots(conn, run_id)
+    return row
+
+
+def unit_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
+    """The one unit of a ticket in one repository."""
+    [row] = db.units(conn, key)
+    return row
+
+
 def worker_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str], result: str = WORKER_DONE) -> None:
     monkeypatch.setenv("FAKE_WORKER_COMMANDS", json.dumps(list(commands)))
     monkeypatch.setenv("FAKE_WORKER_RESULT", result)

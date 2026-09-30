@@ -1,8 +1,9 @@
-"""`canopy _run <run_id>`: one worker execution in a leased slot (DESIGN §8).
+"""`canopy _run <run_id>`: one worker execution in its leased slots (DESIGN §8, §18).
 
-Sets up the branch, runs `worker_cmd` with a timeout, parses the result line, verifies the branch is pushed, returns the
-slot, and closes the `runs` row. The slot is returned on every exit path this process can see: normal, exception, and
-SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next tick.
+Sets up the branch in each slot, makes the desk of a joint run, runs `worker_cmd` with a timeout, parses the result
+line, verifies the branch is pushed in each slot, removes the desk, returns every slot, and closes the `runs` row. The
+slots are returned on every exit path this process can see: normal, exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL
+cannot be caught; reconcile finds that run's dead pid on the next tick.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ import json
 import os
 import signal
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import FrameType, TracebackType
@@ -21,8 +22,9 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, Validatio
 
 from canopy.core import db, definitions, treehouse
 from canopy.core.config import render_command
+from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs
-from canopy.runs import dispatch
+from canopy.runs import desks, dispatch
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -58,15 +60,27 @@ Text = Annotated[StrictStr, AfterValidator(_bounded)]
 
 
 class WorkerResult(BaseModel):
-    """The worker result contract (DESIGN §8): the last line of the worker's stdout. Untrusted, so bounded."""
+    """The worker result contract (DESIGN §8, §18): the last line of the worker's stdout. Untrusted, so bounded.
+
+    `prs` maps each repository's name to its PR. `pr` is the contract before joint runs, still accepted for a run in
+    one repository.
+    """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     status: Literal["done", "blocked", "failed"]
     branch: Text | None = None
     pr: Text | None = None
+    prs: dict[StrictStr, Text | None] | None = None
     summary: Text = ""
     question: Text | None = None
+
+    def for_repos(self, repos: Sequence[str]) -> Self:
+        """Return this result with `prs` kept to `repos`, the repositories the run worked in, and filled from `pr`."""
+        prs = {r: self.prs.get(r) for r in repos if r in self.prs} if self.prs is not None else None
+        if prs is None and self.pr is not None and len(repos) == 1:
+            prs = {repos[0]: self.pr}
+        return self.model_copy(update={"prs": prs})
 
 
 @dataclass(frozen=True)
@@ -107,64 +121,94 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         raise WorkerError(f"no run {run_id}")
     if not db.claim_run(ctx.conn, run_id, os.getpid()):
         raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
+    slots = [_Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
     log = logs.for_tick(int(run["tick_id"]))
     fields = {"run_id": run_id, "ticket": run["ticket_key"], "kind": run["kind"]}
-    log.info("run started", extra={**fields, "slot": run["slot_path"], "branch": run["branch"], "repo": run["repo"]})
+    where = {"slots": [str(s.path) for s in slots], "repos": [s.repo for s in slots]}
+    log.info("run started", extra={**fields, **where, "branch": run["branch"]})
 
     outcome = Outcome("crashed", None, "the run stopped before the worker finished")
     with _StopOnSignal() as stop:
         try:
-            outcome = _work(ctx, run, out, log)
+            if not slots:
+                raise _SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
+            outcome = _work(ctx, run, slots, out, log)
         except Stopped as e:
             outcome = Outcome("crashed", None, str(e))
-        except _SetupError as e:
+        except (_SetupError, desks.DeskError) as e:
             outcome = Outcome("crashed", None, str(e))
             log.error("run setup failed", extra={**fields, "error": str(e)})  # noqa: TRY400  (no traceback needed)
         except Exception as e:
             outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
             log.exception("run failed", extra=fields)
         finally:
-            # From here on a signal is ignored: returning the slot and closing the row must not be interrupted.
+            # From here on a signal is ignored: returning the slots and closing the row must not be interrupted.
             stop.armed = False
-            _return_slot(ctx, run, log)
-            if outcome.result is not None and outcome.result.pr and _plain_url(outcome.result.pr):
-                db.set_pr_url(ctx.conn, str(run["ticket_key"]), outcome.result.pr)
+            if len(slots) > 1:
+                _remove_desk(ctx, str(run["ticket_key"]), log)
+            for slot in slots:
+                _return_slot(ctx, run, slot, log)
+            _record_prs(ctx, run, outcome)
             if not db.finish_run(ctx.conn, run_id, outcome.status, outcome.result_json()):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             log.info("run finished", extra={**fields, "status": outcome.status})
     return outcome
 
 
-def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
-    slot = Path(run["slot_path"])
-    branch = str(run["branch"])
-    base = str(run["base_branch"])
-    git = _Git(ctx.runner, slot)
+@dataclass(frozen=True)
+class _Slot:
+    """One of a run's slots: the repository it is in, the worktree, its lease, and git in it."""
 
-    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
-    git.run("fetch", "--quiet", "--prune", "origin")
-    # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
-    # is another ticket's branch, deleted when its PR merged (DESIGN §10).
-    if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{base}"):
-        raise _SetupError(f"the base branch {base} is not on origin; if it was stacked on, its PR may have merged")
-    if git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
-        git.run("checkout", "--quiet", "-B", branch, f"refs/remotes/origin/{branch}")
-    else:
-        git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{base}")
-    start = git.run("rev-parse", f"refs/heads/{branch}")
+    repo: str
+    path: Path
+    lease_id: str
+    lease_holder: str
+    base: str
+    git: _Git
+
+    @classmethod
+    def of(cls, ctx: Context, row: sqlite3.Row) -> _Slot:
+        # A run from before migration 0005 in a workspace of one has no repository name; it is the only repository.
+        repo = str(row["repo"]) if row["repo"] is not None else ctx.workspace.repos[0].name
+        path = Path(row["slot_path"])
+        # A workspace of one's only repository goes unnamed in errors, as before workspaces.
+        name = "" if ctx.workspace.single else repo
+        return cls(
+            repo,
+            path,
+            str(row["lease_id"]),
+            str(row["lease_holder"]),
+            str(row["base_branch"]),
+            _Git(ctx.runner, path, name),
+        )
+
+
+def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+    branch = str(run["branch"])
+    starts = [_set_up_branch(slot, branch) for slot in slots]
 
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044).
-    shadowing = definitions.shadowing(slot)
+    # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044). A joint run's
+    # worker starts in a desk, not a repository, so OpenCode may look above it: the directories above it are checked.
+    desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if len(slots) > 1 else []
+    places = [s.path for s in slots] + desk_parents
+    shadowing = [found for place in places for found in definitions.shadowing(place)]
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     argv = render_command(ctx.config.runtime.worker_cmd, prompt, definitions.ensure(ctx.state_dir))
+    if len(slots) > 1:
+        cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
+    else:
+        cwd = slots[0].path
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
-    log.info("running worker", extra={"run_id": run["id"], "cmd": argv[0], "timeout_minutes": timeout_minutes})
+    log.info(
+        "running worker",
+        extra={"run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
+    )
     run_id = int(run["id"])
     result = ctx.runner.run(
         argv,
-        cwd=slot,
+        cwd=cwd,
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
     )
@@ -173,6 +217,8 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.flush()
 
     parsed = parse_result(result.stdout)
+    if parsed is not None:
+        parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
         status, note = "timeout", f"the worker timed out after {timeout_minutes} minutes"
     elif parsed is None:
@@ -180,28 +226,50 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     else:
         status, note = parsed.status, ""
 
-    unpushed = _ensure_pushed(git, branch, start, log)
+    # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
+    unpushed = [
+        found for slot, start in zip(slots, starts, strict=True) if (found := _ensure_pushed(slot, branch, start, log))
+    ]
     if unpushed:
-        status, note = "unpushed", unpushed
+        status, note = "unpushed", "; ".join(unpushed)
     return Outcome(status, parsed, note)
 
 
-def _ensure_pushed(git: _Git, branch: str, start: str, log: logs.TickAdapter) -> str:
+def _set_up_branch(slot: _Slot, branch: str) -> str:
+    """Check out `branch` in the slot: origin's if it is there, else new from the base. Returns its commit."""
+    git = slot.git
+    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
+    git.run("fetch", "--quiet", "--prune", "origin")
+    # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
+    # is another ticket's branch, deleted when its PR merged (DESIGN §10).
+    if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{slot.base}"):
+        raise _SetupError(
+            f"{git.where}the base branch {slot.base} is not on origin; if it was stacked on, its PR may have merged"
+        )
+    if git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
+        git.run("checkout", "--quiet", "-B", branch, f"refs/remotes/origin/{branch}")
+    else:
+        git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{slot.base}")
+    return git.run("rev-parse", f"refs/heads/{branch}")
+
+
+def _ensure_pushed(slot: _Slot, branch: str, start: str, log: logs.TickAdapter) -> str:
     """Check the checkpoint invariant: the branch on origin is the branch here. Push once if it is not.
 
     Returns why the branch is not pushed, or "" if it is, or if the worker committed nothing.
     """
+    git = slot.git
     local = git.run("rev-parse", f"refs/heads/{branch}")
     if _remote_head(git, branch) == local:
         return ""
     if local == start:
         return ""  # nothing new here; whatever is on origin is the worker's doing
-    log.warning("worker left commits unpushed; pushing once", extra={"branch": branch})
+    log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
     pushed = git.result("push", "--quiet", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
     if pushed.ok and _remote_head(git, branch) == local:
         return ""
     detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
-    return f"commits on {branch} are not on origin; the push failed: {detail}"
+    return f"{git.where}commits on {branch} are not on origin; the push failed: {detail}"
 
 
 def _remote_head(git: _Git, branch: str) -> str:
@@ -209,15 +277,15 @@ def _remote_head(git: _Git, branch: str) -> str:
     return listed.split()[0] if listed else ""
 
 
-def _return_slot(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
-    fields = {"run_id": run["id"], "slot": run["slot_path"], "lease_id": run["lease_id"]}
+def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
+    fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
     try:
         outcome = treehouse.return_slot(
             ctx.runner,
-            Path(run["slot_path"]),
-            lease_id=str(run["lease_id"]),
-            lease_holder=str(run["lease_holder"]),
-            pool=ctx.workspace.pool(run["repo"]),
+            slot.path,
+            lease_id=slot.lease_id,
+            lease_holder=slot.lease_holder,
+            pool=ctx.workspace.pool(slot.repo),
         )
     except treehouse.TreehouseError as e:
         # The next tick's reconcile returns a canopy lease with no running run.
@@ -227,6 +295,24 @@ def _return_slot(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
         log.info("slot returned", extra=fields)
     else:
         log.warning("slot not returned", extra={**fields, "outcome": outcome.value})
+
+
+def _remove_desk(ctx: Context, key: str, log: logs.TickAdapter) -> None:
+    desk = desks.path(ctx.workspace.root, key)
+    try:
+        desks.remove(desk)
+    except OSError as e:
+        # Reconcile removes the desks of tickets with no running run.
+        log.error("desk not removed", extra={"desk": str(desk), "error": str(e)})  # noqa: TRY400
+
+
+def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
+    """Record each PR the worker reported as its unit's, for display and the next worker's prompt."""
+    if outcome.result is None or not outcome.result.prs:
+        return
+    for repo, url in outcome.result.prs.items():
+        if url and _plain_url(url):
+            db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, single=ctx.workspace.single, pr_url=url)
 
 
 def _plain_url(value: str) -> bool:
@@ -260,19 +346,20 @@ class _StopOnSignal:
 
 
 class _Git:
-    """git in one slot, through the runner."""
+    """git in one slot, through the runner. `name` is the slot's repository, for errors, or "" to leave it unnamed."""
 
-    def __init__(self, runner: procs.Runner, slot: Path) -> None:
+    def __init__(self, runner: procs.Runner, slot: Path, name: str = "") -> None:
         self.runner = runner
         self.slot = slot
+        self.where = f"{name}: " if name else ""
 
     def result(self, *args: str) -> procs.Result:
         try:
             result = self.runner.run(["git", *args], cwd=self.slot, env=_GIT_ENV, timeout=_GIT_TIMEOUT_SECONDS)
         except procs.ProcError as e:
-            raise _SetupError(f"git {args[0]}: {e}") from e
+            raise _SetupError(f"{self.where}git {args[0]}: {e}") from e
         if result.timed_out:
-            raise _SetupError(f"git {args[0]} timed out")
+            raise _SetupError(f"{self.where}git {args[0]} timed out")
         return result
 
     def ok(self, *args: str) -> bool:
@@ -282,5 +369,5 @@ class _Git:
         result = self.result(*args)
         if not result.ok:
             detail = (result.stderr.strip() or result.stdout.strip())[:500]
-            raise _SetupError(f"git {args[0]} exited {result.returncode}: {detail}")
+            raise _SetupError(f"{self.where}git {args[0]} exited {result.returncode}: {detail}")
         return result.stdout.strip()
