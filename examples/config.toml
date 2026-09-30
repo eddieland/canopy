@@ -31,6 +31,7 @@ authorized_repliers = ["replace-with-your-account-id"]
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
+# Journal, logs, and attention.md. A workspace of several repositories ignores this and keeps its own in .canopy/.
 state_dir = "~/.canopy"
 
 [notify]

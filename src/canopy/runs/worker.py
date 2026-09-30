@@ -109,7 +109,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
     log = logs.for_tick(int(run["tick_id"]))
     fields = {"run_id": run_id, "ticket": run["ticket_key"], "kind": run["kind"]}
-    log.info("run started", extra={**fields, "slot": run["slot_path"], "branch": run["branch"]})
+    log.info("run started", extra={**fields, "slot": run["slot_path"], "branch": run["branch"], "repo": run["repo"]})
 
     outcome = Outcome("crashed", None, "the run stopped before the worker finished")
     with _StopOnSignal() as stop:
@@ -217,6 +217,7 @@ def _return_slot(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
             Path(run["slot_path"]),
             lease_id=str(run["lease_id"]),
             lease_holder=str(run["lease_holder"]),
+            pool=ctx.workspace.pool(run["repo"]),
         )
     except treehouse.TreehouseError as e:
         # The next tick's reconcile returns a canopy lease with no running run.

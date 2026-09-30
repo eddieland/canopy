@@ -82,10 +82,11 @@ def ssh_push_urls(runner: procs.Runner, repo_root: Path) -> list[str]:
 
 @dataclass
 class Report:
-    """What `run` wrote, what it left alone, the label it chose for a new user file, and old agent definitions found."""
+    """What `run` wrote, updated, and left alone, the label it chose for a new user file, and old agent definitions."""
 
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
+    updated: list[Path] = field(default_factory=list)
     label: str | None = None
     shadowing: list[Path] = field(default_factory=list)
 
@@ -150,7 +151,8 @@ pr_label = "agent"
 """
 
 
-def _write_if_missing(path: Path, text: str, report: Report) -> None:
+def write_if_missing(path: Path, text: str, report: Report) -> None:
+    """Write `text` to `path` unless it exists, and record which in `report`."""
     if path.exists():
         report.kept.append(path)
         return
@@ -166,7 +168,7 @@ def run(repo_root: Path, user_file: Path, provider: str | None) -> Report:
         report.kept.append(user_file)
     else:
         report.label = default_label()
-        _write_if_missing(user_file, user_config_text(report.label), report)
+        write_if_missing(user_file, user_config_text(report.label), report)
 
     repo_file = repo_root / REPO_FILE_NAME
     if repo_file.exists():
@@ -174,7 +176,7 @@ def run(repo_root: Path, user_file: Path, provider: str | None) -> Report:
     else:
         if provider is None:
             raise ValueError("the repository has no canopy.toml; a tracker provider is needed to write one")
-        _write_if_missing(repo_file, repo_config_text(provider), report)
+        write_if_missing(repo_file, repo_config_text(provider), report)
 
     report.shadowing = definitions.shadowing(repo_root)
     return report

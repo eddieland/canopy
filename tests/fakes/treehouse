@@ -2,7 +2,7 @@
 """Fake treehouse for tests. Speaks the subset of the treehouse CLI canopy uses.
 
     treehouse status --json
-    treehouse get --lease [--lease-holder H] [--json] [--base B] [--no-fetch]
+    treehouse get --lease [--lease-holder H] [--json] [--base B] [--no-fetch] [--worktree-path TEMPLATE]
     treehouse return [--force] [--if-lease-id ID] [--if-lease-holder H] <path|name>
 
 Output shapes and exit codes follow treehouse's own (`status --json` array fields, `get --lease --json` allocation,
@@ -17,6 +17,12 @@ State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is a
     get_omit    list of str, default []. Fields left out of `get --lease --json` output, to simulate a treehouse whose
                 allocation canopy cannot parse. The slot is leased all the same.
     calls       list of argv lists, one per invocation, appended by the fake for assertions.
+    contexts    list of {cwd, treehouse_root}, one per invocation, parallel to `calls`.
+    pools       with TREEHOUSE_ROOT set, the pools, by the path of the repository the command ran in (the nearest
+                directory at or above the working directory holding `.git`). Each is {slots, max_trees} as above. A
+                new slot goes where --worktree-path says (default {pool}/{slot}/{repo}), with {pool} the directory
+                `<TREEHOUSE_ROOT>/.treehouse/<repo>-fake`. `return` finds a slot by path in any pool, as treehouse does
+                from the slot's own path. Without TREEHOUSE_ROOT, the top-level `slots` and `max_trees` are the pool.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -60,7 +66,11 @@ def status_entry(slot: dict[str, Any]) -> dict[str, Any]:
 
 
 def cmd_status(state: dict[str, Any], args: argparse.Namespace) -> int:
-    slots = state.get("slots", [])
+    pool = pool_of(state)
+    if pool is None:
+        print("treehouse: not in a git or jj repository", file=sys.stderr)
+        return 1
+    slots = pool.get("slots", [])
     if args.json:
         print(json.dumps([status_entry(s) for s in slots]))
     else:
@@ -69,19 +79,48 @@ def cmd_status(state: dict[str, Any], args: argparse.Namespace) -> int:
     return 0
 
 
+def repo_root() -> Path | None:
+    cwd = Path.cwd()
+    return next((d for d in (cwd, *cwd.parents) if (d / ".git").exists()), None)
+
+
+def pool_of(state: dict[str, Any]) -> dict[str, Any] | None:
+    """The pool the command works on: the working directory's repository's under TREEHOUSE_ROOT, else the state."""
+    root = os.environ.get("TREEHOUSE_ROOT")
+    if not root:
+        return state
+    repo = repo_root()
+    if repo is None:
+        return None
+    return state.setdefault("pools", {}).setdefault(str(repo), {"slots": []})
+
+
+def new_slot_path(state: dict[str, Any], args: argparse.Namespace, state_path: Path, name: str) -> Path:
+    root = os.environ.get("TREEHOUSE_ROOT")
+    repo = repo_root()
+    if not root or repo is None:
+        return Path(state.get("pool_dir", state_path.parent / "pool")) / name / "repo"
+    template = args.worktree_path or "{pool}/{slot}/{repo}"
+    pool_dir = Path(root) / ".treehouse" / f"{repo.name}-fake"
+    return Path(template.format(pool=pool_dir, slot=name, repo=repo.name))
+
+
 def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -> int:
     if not args.lease:
         print("fake treehouse: only `get --lease` is supported", file=sys.stderr)
         return 2
-    slots = state.setdefault("slots", [])
+    pool = pool_of(state)
+    if pool is None:
+        print("treehouse: not in a git or jj repository", file=sys.stderr)
+        return 1
+    slots = pool.setdefault("slots", [])
     slot = next((s for s in slots if s["status"] == "available"), None)
     if slot is None:
-        if len(slots) >= state.get("max_trees", 4):
+        if len(slots) >= pool.get("max_trees", 4):
             print("treehouse: no available worktree and max_trees reached", file=sys.stderr)
             return 1
         name = str(len(slots) + 1)
-        pool_dir = Path(state.get("pool_dir", state_path.parent / "pool"))
-        slot = {"name": name, "path": str(pool_dir / name / "repo")}
+        slot = {"name": name, "path": str(new_slot_path(state, args, state_path, name))}
         slots.append(slot)
     Path(slot["path"]).mkdir(parents=True, exist_ok=True)
     slot.update(
@@ -103,7 +142,9 @@ def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -
 
 
 def cmd_return(state: dict[str, Any], args: argparse.Namespace) -> int:
-    slots = state.get("slots", [])
+    slots = list(state.get("slots", []))
+    if os.environ.get("TREEHOUSE_ROOT"):
+        slots = [s for pool in state.get("pools", {}).values() for s in pool.get("slots", [])]
     target = args.target
     slot = next((s for s in slots if target in (s["name"], s["path"])), None)
     if slot is None:
@@ -140,6 +181,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     get.add_argument("--json", action="store_true")
     get.add_argument("--base")
     get.add_argument("--no-fetch", action="store_true")
+    get.add_argument("--worktree-path")
 
     ret = sub.add_parser("return")
     ret.add_argument("--force", action="store_true")
@@ -162,6 +204,8 @@ def main(argv: list[str]) -> int:
         fcntl.flock(lock, fcntl.LOCK_EX)
         state = load(state_path)
         state.setdefault("calls", []).append(argv)
+        context = {"cwd": str(Path.cwd()), "treehouse_root": os.environ.get("TREEHOUSE_ROOT")}
+        state.setdefault("contexts", []).append(context)
         if args.command == "status":
             code = cmd_status(state, args)
         elif args.command == "get":

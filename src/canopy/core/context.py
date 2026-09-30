@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db
+from canopy.core.workspace import Workspace, of_one
 from canopy.infra import lock, procs
 
 if TYPE_CHECKING:
@@ -16,12 +17,22 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Context:
-    """Config, repository root, journal connection, and process runner for one command."""
+    """Config, workspace, journal connection, and process runner for one command.
+
+    `repo_root` is the workspace root: the directory the overseer runs in, and the repository itself in a workspace of
+    one. `ws` is the workspace; left out, it is the workspace of one at `repo_root`.
+    """
 
     config: Config
     repo_root: Path
     conn: sqlite3.Connection
     runner: procs.Runner
+    ws: Workspace | None = None
+
+    @property
+    def workspace(self) -> Workspace:
+        """The workspace this command runs in."""
+        return self.ws if self.ws is not None else of_one(self.repo_root)
 
     @property
     def state_dir(self) -> Path:
@@ -35,7 +46,7 @@ class Context:
 
     @property
     def repo(self) -> str:
-        """How the journal's `tickets.repo` names this repository."""
+        """How the journal's `tickets.repo` names this workspace: its root."""
         return str(self.repo_root)
 
 

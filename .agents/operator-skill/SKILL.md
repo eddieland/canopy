@@ -31,7 +31,8 @@ Everything below is for an agent helping the operator in their own session.
 
 ## Commands
 
-Run these from the repository the loop works on (they find it from the current directory).
+Run these from the repository the loop works on, or from anywhere in a workspace of several repositories (they find it
+from the current directory: the nearest `canopy-workspace.toml` above it, else the repository).
 
 | Command | What it does |
 |---|---|
@@ -40,12 +41,15 @@ Run these from the repository the loop works on (they find it from the current d
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
+| `canopy init --workspace` | Sets up the current directory as a workspace: `canopy-workspace.toml`, `MAP.md`, `.gitignore`. |
+| `canopy workspace sync` | Clones the map's repositories that are missing under `repos/`; reports an `origin` that differs. |
 | `canopy skill` | Prints this skill. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |
 
 ## Where things are
 
-The state directory is `paths.state_dir`, `~/.canopy` by default. Everything in it is readable only by the operator.
+The state directory is `paths.state_dir`, `~/.canopy` by default, or `.canopy/` at the root of a workspace. Everything
+in it is readable only by the operator; in the commands below, replace `~/.canopy` with it.
 
 | Path | What it holds |
 |---|---|
@@ -57,8 +61,9 @@ The state directory is `paths.state_dir`, `~/.canopy` by default. Everything in 
 | `runs/<run id>.prompt` | The prompt that run's worker got. |
 
 Config: the user file `~/.config/canopy/config.toml` (`$XDG_CONFIG_HOME/canopy/config.toml`), personal, and the
-repository's `canopy.toml`, shared. The user file wins key by key; some keys, such as `tracker.labels` and everything
-under `runtime`, may be set only in the user file.
+repository's `canopy.toml` (in a workspace, `canopy-workspace.toml`, which also lists the repositories), shared. The
+user file wins key by key; some keys, such as `tracker.labels` and everything under `runtime`, may be set only in the
+user file.
 
 ## Answering "why wasn't KEY picked up?"
 
@@ -82,7 +87,9 @@ Work through these in order and stop at the first that explains it.
      `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
      `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
      `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree), `bad_slug`,
-     `bad_base`, `no_branch`, `bad_prompt` (the worker prompt did not render; an override may lack `{{LABELS}}`),
+     `bad_base`, `no_branch`, `unknown_repo` (in a workspace: no `--repo`, a repository not in the map or not cloned,
+     or not the one the ticket's earlier runs were in), `bad_prompt` (the worker prompt did not render; an override may
+     lack `{{LABELS}}`),
      `spawn_failed`. A run that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket
      closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.
@@ -111,6 +118,8 @@ cause is gone; there is no dismissing. Reasons:
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
+| `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
+| `multi_repo` | The ticket needs changes in several repositories: split it into one ticket per repository. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 

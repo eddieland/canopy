@@ -46,12 +46,36 @@ NOTIFY_TIMEOUT_SECONDS = 60
 
 @dataclass(frozen=True)
 class Item:
-    """One attention item: a ticket, why it needs a human, and since when."""
+    """One attention item: a ticket or a repository, why it needs a human, and since when.
 
-    ticket_key: str
+    An item about a repository, such as `repo_missing`, has `repo` set and no ticket key.
+    """
+
+    ticket_key: str | None
     reason: str
     detail: str
     since: str  # created_at of the first tick in the unbroken run of ticks that recorded this item
+    repo: str | None = None
+
+    @property
+    def subject(self) -> str:
+        """What the item is about, for display: `PROJ-1`, `api`, or `PROJ-1 (api)`."""
+        return subject(self.ticket_key, self.repo)
+
+
+def subject(ticket_key: str | None, repo: str | None) -> str:
+    """Name an item's ticket, its repository, or both, for display."""
+    if ticket_key is None:
+        return repo or "-"
+    return f"{ticket_key} ({repo})" if repo else ticket_key
+
+
+# An item is its ticket, its reason, and its repository if it has one.
+_ItemId = tuple[str | None, str, str | None]
+
+
+def _sort_key(item_id: _ItemId) -> tuple[str, str, str]:
+    return (item_id[0] or "", item_id[1], item_id[2] or "")
 
 
 def current(conn: sqlite3.Connection) -> list[Item]:
@@ -67,25 +91,27 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         return []
     # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at FROM decisions "  # noqa: S608
+        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo FROM decisions "  # noqa: S608
         f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
         ticks,
     ).fetchall()
-    by_tick: dict[int, dict[tuple[str, str], tuple[str, str]]] = {t: {} for t in ticks}
+    by_tick: dict[int, dict[_ItemId, tuple[str, str]]] = {t: {} for t in ticks}
     for r in rows:
-        item_id = (str(r["ticket_key"]), str(r["action"]).removeprefix(ACTION_PREFIX))
+        key = None if r["ticket_key"] is None else str(r["ticket_key"])
+        repo = None if r["repo"] is None else str(r["repo"])
+        item_id: _ItemId = (key, str(r["action"]).removeprefix(ACTION_PREFIX), repo)
         by_tick[int(r["tick_id"])].setdefault(item_id, (str(r["rationale"]), str(r["created_at"])))
 
     latest = by_tick[ticks[0]]
     items: list[Item] = []
-    for item_id, (detail, created_at) in sorted(latest.items()):
-        since = created_at
+    for item_id in sorted(latest, key=_sort_key):
+        detail, since = latest[item_id]
         for tick_id in ticks[1:]:
             earlier = by_tick[tick_id].get(item_id)
             if earlier is None:
                 break
             since = earlier[1]
-        items.append(Item(item_id[0], item_id[1], detail, since))
+        items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
     return items
 
 
@@ -154,14 +180,22 @@ def render(items: list[Item], now: datetime) -> str:
     lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
     for reason in sorted({i.reason for i in items}):
         lines += [f"## {reason}", ""]
-        lines += [f"- {i.ticket_key}, {age(i.since, now)}: {_one_line(i.detail)}" for i in items if i.reason == reason]
+        lines += [f"- {i.subject}, {age(i.since, now)}: {_one_line(i.detail)}" for i in items if i.reason == reason]
         lines.append("")
     return "\n".join(lines)
 
 
-def fingerprint(ticket_key: str, reason: str) -> str:
-    """Identify an item across ticks. The detail is left out: rewording it does not make a new item."""
-    return hashlib.sha256(f"{ticket_key}\0{reason}".encode()).hexdigest()
+def fingerprint(ticket_key: str | None, reason: str, repo: str | None = None) -> str:
+    """Identify an item across ticks. The detail is left out: rewording it does not make a new item.
+
+    An item without a repository has the fingerprint it had before items could have one, so none is notified again.
+    """
+    text = f"{ticket_key or ''}\0{reason}" + (f"\0{repo}" if repo is not None else "")
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _fingerprint(item: Item) -> str:
+    return fingerprint(item.ticket_key, item.reason, item.repo)
 
 
 @dataclass(frozen=True)
@@ -169,7 +203,8 @@ class Diff:
     """What changed since the last notification: new items, and notified items whose cause is gone."""
 
     added: list[Item]
-    resolved: list[tuple[str, str]]  # (ticket key, reason)
+    resolved: list[tuple[str, str]]  # (subject, reason)
+    resolved_fingerprints: list[str]
 
     def __bool__(self) -> bool:
         """Whether anything changed."""
@@ -178,8 +213,8 @@ class Diff:
     def text(self, path: Path) -> str:
         """Return the notification: one line per change, then where the full list is."""
         lines = [f"canopy attention: {len(self.added)} new, {len(self.resolved)} resolved"]
-        lines += [f"+ {i.ticket_key} {i.reason}: {_one_line(i.detail)}" for i in self.added]
-        lines += [f"- {key} {reason}" for key, reason in self.resolved]
+        lines += [f"+ {i.subject} {i.reason}: {_one_line(i.detail)}" for i in self.added]
+        lines += [f"- {name} {reason}" for name, reason in self.resolved]
         lines.append(f"Full list: {path}")
         return "\n".join(lines) + "\n"
 
@@ -187,13 +222,13 @@ class Diff:
 def diff(conn: sqlite3.Connection, items: list[Item]) -> Diff:
     """Compare `items` with the open items already notified."""
     notified = {
-        str(r[0]): (str(r[1]), str(r[2]))
-        for r in conn.execute("SELECT fingerprint, ticket_key, reason FROM notifications")
+        str(r[0]): (subject(r[1], r[3]), str(r[2]))
+        for r in conn.execute("SELECT fingerprint, ticket_key, reason, repo FROM notifications")
     }
-    now_open = {fingerprint(i.ticket_key, i.reason) for i in items}
-    added = [i for i in items if fingerprint(i.ticket_key, i.reason) not in notified]
-    resolved = sorted(item for fp, item in notified.items() if fp not in now_open)
-    return Diff(added, resolved)
+    now_open = {_fingerprint(i) for i in items}
+    added = [i for i in items if _fingerprint(i) not in notified]
+    gone = sorted((item, fp) for fp, item in notified.items() if fp not in now_open)
+    return Diff(added, [item for item, _ in gone], [fp for _, fp in gone])
 
 
 def mark_sent(conn: sqlite3.Connection, change: Diff) -> None:
@@ -201,11 +236,12 @@ def mark_sent(conn: sqlite3.Connection, change: Diff) -> None:
     ts = db.now()
     with db.transaction(conn):
         conn.executemany(
-            "DELETE FROM notifications WHERE fingerprint = ?", [(fingerprint(k, r),) for k, r in change.resolved]
+            "DELETE FROM notifications WHERE fingerprint = ?", [(fp,) for fp in change.resolved_fingerprints]
         )
         conn.executemany(
-            "INSERT OR REPLACE INTO notifications (fingerprint, ticket_key, reason, sent_at) VALUES (?, ?, ?, ?)",
-            [(fingerprint(i.ticket_key, i.reason), i.ticket_key, i.reason, ts) for i in change.added],
+            "INSERT OR REPLACE INTO notifications (fingerprint, ticket_key, reason, repo, sent_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [(_fingerprint(i), i.ticket_key, i.reason, i.repo, ts) for i in change.added],
         )
 
 

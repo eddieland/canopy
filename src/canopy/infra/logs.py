@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import stat
 from collections.abc import Mapping, MutableMapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -77,3 +78,16 @@ def write_private(path: Path, text: str) -> None:
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         os.fchmod(f.fileno(), 0o600)
         f.write(text)
+
+
+def private_dir(path: Path) -> bool:
+    """Return whether `path` is a directory only the operator can use: not a symlink, theirs, no group or other bits.
+
+    canopy creates its own directories that way. One that is not, such as a `.canopy/` a git checkout created, came from
+    someone else and may hold what they chose (DESIGN §18).
+    """
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        return False
+    return stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and st.st_mode & 0o077 == 0

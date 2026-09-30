@@ -227,13 +227,17 @@ def insert_run(
     base_branch: str,
     branch: str,
     runs_dir: Path,
+    repo: str | None = None,
 ) -> int:
-    """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id."""
+    """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
+
+    `repo` names the repository in the workspace map whose pool the slot came from.
+    """
     with transaction(conn):
         cur = conn.execute(
             "INSERT INTO runs (tick_id, ticket_key, kind, slot_path, lease_id, lease_holder, base_branch, branch, "
-            "started_at, log_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '')",
-            (tick_id, key, kind, str(slot_path), lease_id, lease_holder, base_branch, branch, now()),
+            "started_at, log_path, repo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)",
+            (tick_id, key, kind, str(slot_path), lease_id, lease_holder, base_branch, branch, now(), repo),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
@@ -282,16 +286,24 @@ def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
     return {str(r["ticket_key"]): r for r in rows}
 
 
+def ticket_repo(conn: sqlite3.Connection, key: str) -> str | None:
+    """Return the repository of `key`'s latest run: the one a ticket's work is in. None if it has none recorded."""
+    row = conn.execute("SELECT repo FROM runs WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)).fetchone()
+    return None if row is None or row[0] is None else str(row[0])
+
+
 def set_pr_url(conn: sqlite3.Connection, key: str, pr_url: str) -> None:
     """Record the PR a worker reported for `key`. Display only, like the phase."""
     conn.execute("UPDATE tickets SET pr_url = ? WHERE key = ?", (pr_url, key))
 
 
-def record_decision(conn: sqlite3.Connection, tick_id: int, key: str | None, action: str, rationale: str) -> int:
-    """Insert a decision for `tick_id` and return its id."""
+def record_decision(
+    conn: sqlite3.Connection, tick_id: int, key: str | None, action: str, rationale: str, *, repo: str | None = None
+) -> int:
+    """Insert a decision for `tick_id` and return its id. `repo` is set for an item about a repository."""
     cur = conn.execute(
-        "INSERT INTO decisions (tick_id, ticket_key, action, rationale) VALUES (?, ?, ?, ?)",
-        (tick_id, key, action, rationale),
+        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, repo) VALUES (?, ?, ?, ?, ?)",
+        (tick_id, key, action, rationale, repo),
     )
     return _rowid(cur)
 

@@ -142,11 +142,20 @@ starts. If it could set the runtime commands, `notify.cmd`, prompt paths, capaci
 repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who steers
 their workers.
 
+In a workspace of several repositories (DESIGN §18), the workspace file `canopy-workspace.toml` is the repository file
+for everything in this section, and the repositories' own `canopy.toml` files are not read. It may be committed to a
+shared workspace repository, so it is exposed the same way. It also holds the map: repository names, one-line
+summaries, and clone URLs. Names and summaries are data, like ticket text. URLs are read only by `canopy workspace
+sync`, a command the operator runs, which prints each clone before making it; a tick never clones or changes a remote.
+
 Controls, in code:
 - Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A repository file
   that sets one is a config error and the tick does not run.
 - `policy.*` values from the repository file apply only when stricter than the built-in defaults.
 - `trust.branch_prefix` must be non-empty and end in `/`.
+- A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
+  private to the operator (a symlink, someone else's, or open to others), and refuses to load a definitions snapshot
+  that is not, so a committed `.canopy/` cannot supply a journal or agent definitions (D053).
 
 The repository's OpenCode config is read by the agent runtime, in the repository for the overseer and in the worktree
 for a worker, so it too comes from whoever can push. canopy's agent definitions are therefore not repository config:
@@ -183,7 +192,7 @@ the boundary for what a worker can push.
 ## 7. Operator responsibilities
 
 - Configure branch protection: no direct pushes to protected branches, required
-  reviews, no self-approval.
+  reviews, no self-approval. In a workspace, in every repository in the map; `canopy init --workspace` lists them.
 - Keep `trust.authorized_repliers` short.
 - Check who can add your `tracker.labels` in your tracker. That permission is the authorization to start work, and it
   differs by tracker (Jira: edit issue; GitHub: triage or above on the repository). canopy inherits whatever the tracker

@@ -53,15 +53,21 @@ class Started:
     slot: Path
     pid: int
     label: str
+    repo: str
 
 
 @dataclass(frozen=True)
 class Plan:
-    """The branch a run works on, the branch it stacks on if `--base` named one, and the queue label, as configured."""
+    """What a run would do: its branch, its base, its queue label, and its repository.
+
+    `base` is the branch it stacks on if `--base` named one, the label is in its configured spelling, and the repository
+    is the name of the one in the workspace it works in.
+    """
 
     branch: str
     base: str | None
     label: str
+    repo: str
 
 
 def valid_slug(value: str) -> bool:
@@ -96,24 +102,27 @@ def start(
     slug: str | None,
     base: str | None,
     context: str | None,
+    repo: str | None = None,
 ) -> Started:
     """Check the guards, lease a slot, record the run, and spawn `canopy _run` for it.
 
     `implement` works on `<branch_prefix><KEY>-<slug>`. `fix-ci` and `resume` continue the branch the journal recorded
     for the ticket, so they take no slug. `base` stacks the run on another ticket's branch (DESIGN §10); without it the
-    run starts from the pool's base branch.
+    run starts from the pool's base branch. `repo` names the repository in the workspace; it may be left out only in a
+    workspace of one.
 
     Raises:
         Refusal: a guard refused, or the slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased.
     """
-    plan = _plan(ctx, key, kind, label=label, slug=slug, base=base)
+    plan = _plan(ctx, key, kind, label=label, repo=repo, slug=slug, base=base)
+    pool = ctx.workspace.pool(plan.repo)
 
     # One dispatch at a time, so two cannot both pass the capacity check. Held across the lease and the spawn.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
         attempt = _guard(ctx, key, kind)
         try:
-            lease = treehouse.lease(ctx.runner, key)
+            lease = treehouse.lease(ctx.runner, key, pool=pool)
         except treehouse.TreehouseError as e:
             raise Refusal("no_slot", str(e)) from e
         try:
@@ -122,12 +131,22 @@ def start(
             )
         except BaseException:
             with contextlib.suppress(treehouse.TreehouseError):
-                treehouse.return_slot(ctx.runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+                treehouse.return_slot(
+                    ctx.runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder, pool=pool
+                )
             raise
 
 
 def check(
-    ctx: Context, *, tick_id: int, key: str, kind: str, label: str | None, slug: str | None, base: str | None
+    ctx: Context,
+    *,
+    tick_id: int,
+    key: str,
+    kind: str,
+    label: str | None,
+    slug: str | None,
+    base: str | None,
+    repo: str | None = None,
 ) -> Plan:
     """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
@@ -138,7 +157,7 @@ def check(
     Raises:
         Refusal: a guard refused.
     """
-    plan = _plan(ctx, key, kind, label=label, slug=slug, base=base)
+    plan = _plan(ctx, key, kind, label=label, repo=repo, slug=slug, base=base)
     planned = [
         str(d["ticket_key"])
         for d in db.decisions_for_tick(ctx.conn, tick_id)
@@ -149,12 +168,42 @@ def check(
     return plan
 
 
-def _plan(ctx: Context, key: str, kind: str, *, label: str | None, slug: str | None, base: str | None) -> Plan:
+def _plan(
+    ctx: Context, key: str, kind: str, *, label: str | None, repo: str | None, slug: str | None, base: str | None
+) -> Plan:
     configured = _check_label(ctx.config.tracker.labels, key, label)
+    name = _check_repo(ctx, key, repo)
     branch = _branch(ctx, key, kind, slug)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
-    return Plan(branch=branch, base=base, label=configured)
+    return Plan(branch=branch, base=base, label=configured, repo=name)
+
+
+def _check_repo(ctx: Context, key: str, repo: str | None) -> str:
+    """Refuse a repository the run cannot work in, and return the name of the one it will (DESIGN §18).
+
+    In a workspace, `--repo` must name a repository in the map with a primary clone. A ticket stays in the repository
+    of its first dispatch: its branch and PR are there, and a run over several repositories is ROADMAP M7 (D052). In a
+    workspace of one, `--repo` may be left out, and if given must name the repository.
+    """
+    ws = ctx.workspace
+    names = ", ".join(r.name for r in ws.repos) or "none yet"
+    if repo is None:
+        if not ws.single:
+            raise Refusal("unknown_repo", f"--repo is required in a workspace: name the repository for {key} ({names})")
+        return ws.repos[0].name
+    found = ws.repo(repo)
+    if found is None:
+        raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
+    if not found.cloned:
+        raise Refusal("unknown_repo", f"{repo} has no clone at {found.path}; the operator runs `canopy workspace sync`")
+    recorded = None if ws.single else db.ticket_repo(ctx.conn, key)
+    if recorded is not None and recorded != found.name:
+        raise Refusal(
+            "unknown_repo",
+            f"{key} is worked in {recorded}; a ticket stays in the repository of its first dispatch (D052)",
+        )
+    return found.name
 
 
 def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
@@ -271,6 +320,7 @@ def _spawn(
         base_branch=base,
         branch=branch,
         runs_dir=runs_dir(ctx),
+        repo=plan.repo,
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -284,7 +334,7 @@ def _spawn(
         db.finish_run(ctx.conn, run_id, "crashed", json.dumps({"harness": f"could not start the worker: {e}"}))
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
-    return Started(run_id=run_id, branch=branch, slot=lease.path, pid=pid, label=plan.label)
+    return Started(run_id=run_id, branch=branch, slot=lease.path, pid=pid, label=plan.label, repo=plan.repo)
 
 
 def stacking_note(branch: str, base: str | None) -> str:
