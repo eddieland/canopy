@@ -203,9 +203,9 @@ runs.
 - Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
 - Per-unit phases, cursors, and attempt counts; attention items about a unit, and `canopy attention --repo`. M6 added
   the `repo` column and items about a repository (`repo_missing`); M7 gives ticket items one.
-- Lift D052's one repository per ticket: `implement` may add a unit. Decide DESIGN §18's open question on sequenced
-  PRs (a follow-up after the first merged, or the next repository once the first lands) before designing units, since
-  it decides whether a unit can start after the ticket's first PR has merged.
+- Lift D052's one repository per ticket: `implement` may add a unit. Units land jointly or in sequence, the overseer
+  choosing (D055): the next repository's unit may start after the first unit's PR merged, so a merged PR no longer
+  marks a ticket with open units done. Design how before units (DESIGN §18, Open).
 - The desk permission canary, and the TRUST_MODEL T4 and T6 changes with human approval (T7 and §7 changed in M6).
 - M8 landed first: run the splitter in a desk of the split's worktrees instead of at the workspace root, and replace
   `run_repos` with `run_slots` (D054).
@@ -222,18 +222,20 @@ Needs M4's blocker ordering.
 - `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
   contract validated into `split_children`, the child's recorded repository enforced by dispatch,
   `policy.max_split_attempts`.
-- Overseer prompt: choose split or joint; the `split` phase and `split_unlabeled` attention; a child is a candidate
-  only if its label was added after the split run ended, and `split_self_labeled` attention when one was not.
+- Overseer prompt: split only when an authorized replier asks for it (`--request`, D055), never on its own judgment;
+  the `split` phase and `split_unlabeled` attention; a child is a candidate only if its label was added after the split
+  run ended, and `split_self_labeled` attention when one was not.
 - The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
 
-Accept: a real ticket covering two repositories is split into two linked children, the second blocked by the first,
-with no queue label on either. Nothing is dispatched for them until the operator labels them; then they are worked in
-order, one PR each.
+Accept: a real ticket covering two repositories, whose split an authorized replier asked for in a comment, is split into
+two linked children, the second blocked by the first, with no queue label on either. Nothing is dispatched for them
+until the operator labels them; then they are worked in order, one PR each.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_split.py` holds the harness's half of the acceptance:
-a split leases nothing and records the children its worker reports, invalid children are recorded nowhere, and each
-child is dispatched only in its recorded repository), docs, and D054 are in. Started on request ahead of M7, so a split
-run has no desk: it reads the primary clones from the workspace root (D054). The overseer prompt, the
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_split.py` holds the harness's half of the acceptance: a
+split leases nothing and records the children its worker reports, invalid children are recorded nowhere, and each child
+is dispatched only in its recorded repository), docs, D054, and D055 are in. A split needs an authorized replier's
+comment asking for it (D055); without one a multi-repo ticket stays one ticket. Started on request ahead of M7, so a
+split run has no desk: it reads the primary clones from the workspace root (D054). The overseer prompt, the
 `canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Not yet checked
 live: that OpenCode applies the splitter's name patterns for MCP tools; run the canary with them before the real split.
 Waiting on the operator: a real two-repository ticket split, its children labeled by hand and worked in order.

@@ -67,10 +67,11 @@ When one queue's tickets land in several repositories, make a workspace instead 
 directory, `canopy init --workspace`, list the repositories under `[repos.<name>]` in `canopy-workspace.toml` and
 describe them in `MAP.md`, then `canopy workspace sync` to clone them under `repos/`. Run `canopy loop` from the
 workspace. Each ticket is worked in one repository, which the overseer picks; the pools, journal, and attention list
-live inside the workspace. A labeled ticket that needs several repositories is split: a worker creates one unlabeled
-ticket per repository, ordered by blocker links, and comments on the original. Each child starts only when you add your
-label to it (`split_unlabeled` on the attention list reminds you). See `examples/canopy-workspace.toml` and
-[docs/DESIGN.md](docs/DESIGN.md) §18.
+live inside the workspace. A ticket that needs several repositories stays one ticket; until canopy can work one ticket
+across repositories, it shows as `multi_repo` on the attention list. To split it instead, comment on it, as an
+authorized replier, asking for a split: a worker creates one unlabeled ticket per repository, ordered by blocker links,
+and comments on the original. Each child starts only when you add your label to it (`split_unlabeled` reminds you). See
+`examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
 
 ## Troubleshooting
 

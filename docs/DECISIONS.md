@@ -847,3 +847,27 @@ Consequences: the splitter reads the primary clones as the operator left them ch
 another branch. That costs split quality, not safety: it writes no code.
 Revisit: when M7 lands desks, run the splitter in one and drop `run_repos` for `run_slots`; if splits are judged on
 stale code.
+
+## D055. A multi-repository ticket stays one ticket; the loop splits only when an authorized replier asks
+
+Context: D033 had the overseer prefer splitting a multi-repository ticket into tracker tickets, and implement jointly
+only when the halves could not stand alone. The operator's own work does not fit that: a change that sets up a
+database edits the Terraform repository and then the Kubernetes repository, under one ticket, and the loop should watch
+both PRs. Creating real tickets is something a person decides to do, not a default of the loop.
+Decision (supersedes D033's preference for splitting):
+- A ticket that needs several repositories stays one ticket, with a PR per repository (M7's units). The overseer
+  chooses how they land: jointly when the changes must land together, in sequence when one consumes the other after it
+  merges. Until M7 such a ticket is `multi_repo` attention.
+- The overseer splits a ticket only when an authorized replier's comment on it asks for a split. `canopy dispatch
+  --kind split` requires `--request <comment id>` and refuses without it as `unauthorized`; `--request` on another kind
+  is `bad_request`. The splitter reads that comment and creates nothing unless an authorized replier wrote it and it
+  asks for a split, and a split prompt without `{{REQUEST}}` does not render (D051's pattern).
+Rejected:
+- A dedicated split label: another label every tracker must be set up with, and one anyone who can label could add.
+- An operator command that starts a split outside a tick: a second path into dispatch's guards and journal for one
+  kind of run.
+Consequences: the harness cannot read the comment, so `--request` is a recorded claim; the splitter's own read is the
+independent check, as with labels. Sequenced units mean a merged PR no longer finishes a ticket that has other units
+to land, which M7 designs (DESIGN §18, Open).
+Revisit: if operators ask for splits often enough that a comment per ticket is friction; if the overseer is measured
+choosing joint or sequenced wrongly.

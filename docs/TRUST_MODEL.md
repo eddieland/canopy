@@ -65,8 +65,10 @@ Controls:
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
-- The loop may create tickets, but never authorize them. A split run (DESIGN §18) creates one child ticket per
-  repository with no labels and no assignee; a child starts only when a human adds a queue label to it, and only a
+- The loop may create tickets, but never decide to, and never authorize them. A split run (DESIGN §18) starts only
+  from an authorized replier's comment asking for it: the dispatch must name that comment, and the splitter reads it
+  again and creates nothing unless its author is an authorized replier. It creates one child ticket per repository
+  with no labels and no assignee; a child starts only when a human adds a queue label to it, and only a
   label added after the split run ended counts. The overseer reads that from the tracker's label history and records
   `split_self_labeled` instead of dispatching a child labeled earlier; without label history it does not split. The
   splitter's permissions deny tools whose names suggest labels, assignees, or edits to existing tickets, as defense in

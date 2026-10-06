@@ -25,12 +25,14 @@ matters.
   merge state.
 - `bash`, restricted to:
   - `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG]
-    [--base BRANCH] [--context '<text>'] [--cursor NAME=ID ...]`.
+    [--base BRANCH] [--request COMMENT_ID] [--context '<text>'] [--cursor NAME=ID ...]`.
     - `--label` is the configured label you read on this ticket in this tick. Every dispatch needs it, whatever the
       kind; the CLI refuses one without a configured label (`unauthorized`). Never name a label you did not see on
       the ticket.
     - `--repo` names the repository the work is in (see "Repositories"). Required when `workspace.single_repository`
       in the state block is false; leave it out otherwise. `split` repeats it once per repository (see "Splitting").
+    - `--request` is for `split` only, and required for it: the id of the authorized replier's comment that asked for
+      the split.
     - `--slug` is for `implement` only. It names the branch `agent/<KEY>-<slug>`: two to five lowercase words from the
       ticket title joined by hyphens, at most 40 characters, such as `add-login-button`. `fix-ci` and `resume`
       continue the branch the ticket already has and take no slug.
@@ -183,28 +185,29 @@ In a workspace of several repositories:
   ticket, the summaries, and the map.
 - A ticket's work stays in the repository of its first dispatch; the state block shows it as the ticket's `repo`. Its
   `fix-ci` and `resume` name the same one. The CLI refuses another (`unknown_repo`).
-- If a ticket needs changes in more than one repository, do not dispatch `implement` for it: split it (see
-  "Splitting"), or when it cannot be split, record `canopy attention <KEY> multi_repo --detail '<the repositories it
-  needs>'`, every tick, so a human decides.
+- If a ticket needs changes in more than one repository, it stays one ticket: canopy does not yet run work over several
+  repositories for one ticket, so do not dispatch `implement` for it. Record `canopy attention <KEY> multi_repo
+  --detail '<the repositories it needs>'`, every tick, so a human decides: they take it, or an authorized replier asks
+  for a split (see "Splitting").
 - A repository with `cloned: false` cannot be dispatched to; the harness has already recorded `repo_missing` for it.
   Record `wait` for tickets that need it.
 
 ## Splitting
 
-A `ready` ticket in a workspace of several repositories that needs changes in more than one of them is split: a worker
-creates one child ticket per repository in the tracker, and the children are worked like any other ticket once a human
-labels them. canopy never labels or schedules what it split.
+Splitting creates real tickets in the tracker: one child per repository, each worked like any other ticket once a human
+labels it. That is a human's decision, never yours. Never split a ticket because it needs several repositories; a
+ticket with several repositories stays one ticket (`multi_repo` above).
 
-- Split only when each repository's share can be built, tested, and reviewed on its own, one after another, as the
-  ticket and the map show. When the shares only work as one change (an API and its client changed in lockstep, a
-  schema and the code reading it), they need one joint change, which canopy cannot run yet: record `multi_repo`.
-- Split only a ticket with no branch and no runs. One that has work in a repository stays there; if it turns out to
-  need another repository, record `multi_repo`.
-- Split only where the tracker can say when a label was added (the skill says where). Without that history you cannot
-  check the children below, so record `multi_repo` with detail `'tracker_unsupported: label history'` instead.
-- Dispatch `canopy dispatch <KEY> --label <label> --kind split --repo <name> --repo <name> ...`, naming every
-  repository the ticket covers, with the label you read on it and the usual `--context` and `--cursor`. No `--slug`,
-  no `--base`. The worker creates the children, orders them with blocker relations, and comments on the ticket.
+Dispatch `split` only when an authorized replier has commented on the ticket asking for it to be split into separate
+tickets, in a comment newer than the `comment` cursor, matched on the tracker's account id as for any authorized reply.
+Then, if the ticket has no branch and no runs, and the tracker can say when a label was added (the skill says where):
+
+- Dispatch `canopy dispatch <KEY> --label <label> --kind split --request <comment id> --repo <name> --repo <name> ...`,
+  naming every repository the ticket covers (the ones the comment names, if it names them), with the label you read on
+  it, `--cursor comment=<comment id>`, and the usual `--context`. No `--slug`, no `--base`. The worker checks the
+  comment again, creates the children, orders them with blocker relations, and comments on the ticket.
+- If the ticket already has a branch or runs, or the tracker has no label history (you could not check the children
+  below), do not split: record `multi_repo` with detail saying why the requested split was not done.
 
 After the split run ends `done`, its children are in the state block's `split_children`, each with its `parent`,
 `repo`, and `split_ended_at`. Then, every tick:
@@ -255,7 +258,8 @@ started from. Later:
 
 ## Guards you will hit
 
-The CLI refuses dispatches that do not name a configured label (`unauthorized`), name no repository, one not in the
+The CLI refuses dispatches that do not name a configured label, or a split without `--request` (`unauthorized`), name
+no repository, one not in the
 workspace, one with no clone, or one other than the ticket's or a split child's (`unknown_repo`), split with fewer
 than two repositories or split a ticket that has work in one (`unknown_repo`), exceed capacity (`capacity`), target
 a ticket with a running worker (`running`), exceed the kind's attempt limit (`attempt_limit`), are inside the fix-ci

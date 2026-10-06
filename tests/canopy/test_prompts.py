@@ -24,8 +24,9 @@ VALUES = {
     "WORKSPACE": "/work/acme",
     "REPOS": "- `api`, cloned at `/work/acme/repos/api`: The API.",
     "MAP": "`/work/acme/MAP.md`",
+    "REQUEST": "`10234`",
 }
-SPLIT_ONLY = ("WORKSPACE", "REPOS", "MAP")
+SPLIT_ONLY = ("WORKSPACE", "REPOS", "MAP", "REQUEST")
 BRANCH_ONLY = ("SLOT", "BRANCH", "BASE", "STACKING", "NEEDS_HUMAN_LABEL", "PR_LABEL", "PR_URL")
 
 
@@ -70,3 +71,13 @@ def test_worker_prompt_without_the_labels_is_an_error(canopy_env: CanopyEnv, kin
     cfg = load(canopy_env.repo, canopy_env.user_file)
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{LABELS\}\}"):
         prompts.render_worker(cfg, kind, VALUES)
+
+
+def test_a_split_prompt_without_the_request_is_an_error(canopy_env: CanopyEnv) -> None:
+    # The splitter checks the authorized comment that asked for the split; an override that drops it must not render.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER["split"]).write_text("Split {{KEY}} for {{LABELS}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REQUEST\}\}"):
+        prompts.render_worker(cfg, "split", VALUES)

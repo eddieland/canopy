@@ -38,7 +38,8 @@ def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
 
 
 def split(key: str, *args: str) -> list[str]:
-    return ["dispatch", key, "--label", LABEL, "--kind", "split", *args]
+    """A split dispatch, with the authorized replier's comment that asked for it."""
+    return ["dispatch", key, "--label", LABEL, "--kind", "split", "--request", "10234", *args]
 
 
 def splitter_reports(monkeypatch: pytest.MonkeyPatch, children: dict[str, str], status: str = "done") -> None:
@@ -84,7 +85,9 @@ def test_a_split_leases_nothing_runs_at_the_root_and_records_its_children(
         None,
     )
     assert db.run_repos(conn, 1) == ["api", "web"]
-    assert decisions(conn, tick_id) == [("dispatch:split", f"run 1: split across web, api; label {LABEL}")]
+    assert decisions(conn, tick_id) == [
+        ("dispatch:split", f"run 1: split across web, api as asked in comment 10234; label {LABEL}")
+    ]
     # No pool was touched: the split reads the primary clones from the workspace root.
     assert not treehouse_state.exists()
     [agent] = [json.loads(line) for line in agent_log.read_text().splitlines()]
@@ -96,6 +99,7 @@ def test_a_split_leases_nothing_runs_at_the_root_and_records_its_children(
     assert f"`{ws.root / 'MAP.md'}`" in prompt
     assert "Split per the map" in prompt
     assert "attempt 1 of 1" in prompt
+    assert "Read comment `10234` on PROJ-1." in prompt
 
     assert [(c["child_key"], c["parent_key"], c["repo"], c["run_id"]) for c in db.open_splits(conn)] == [
         ("PROJ-2", "PROJ-1", "api", 1),
@@ -135,9 +139,12 @@ def test_split_guards(ws: Ws, treehouse_state: Path, monkeypatch: pytest.MonkeyP
         split("PROJ-1", *both, "--slug", "halves"),
         split("PROJ-1", *both, "--base", "agent/PROJ-9-work"),
         ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", *both],
+        # The loop never splits on its own judgment: a split names the comment that asked for it (D055).
+        ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "split", *both],
+        ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", "--repo", "api", "--request", "10234"],
         split("PROJ-1", *both),
     ]
-    assert [main(args) for args in cases] == [1, 1, 1, 1, 1, 1, 0]
+    assert [main(args) for args in cases] == [1, 1, 1, 1, 1, 1, 1, 1, 0]
     assert decisions(conn, tick_id) == [
         (
             "refused:unknown_repo",
@@ -154,7 +161,15 @@ def test_split_guards(ws: Ws, treehouse_state: Path, monkeypatch: pytest.MonkeyP
             "refused:unknown_repo",
             "implement works in one repository; only split names several until joint runs (ROADMAP M7, D052)",
         ),
-        ("dispatch:split", f"dry run: not dispatched; would split it across api, web; label {LABEL}"),
+        (
+            "refused:unauthorized",
+            "split needs --request naming the authorized replier's comment on PROJ-1 that asked for it",
+        ),
+        ("refused:bad_request", "--request names the comment that asked for a split; implement takes none"),
+        (
+            "dispatch:split",
+            f"dry run: not dispatched; would split it across api, web as asked in comment 10234; label {LABEL}",
+        ),
     ]
 
 

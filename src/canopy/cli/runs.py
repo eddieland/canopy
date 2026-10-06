@@ -8,7 +8,7 @@ import sys
 import click
 
 from canopy.cli.common import CliError, open_context, require_tick
-from canopy.cli.params import REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
+from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
@@ -45,6 +45,12 @@ from canopy.runs import dispatch, policy, worker
     "the PR at it. Default: the repository's base branch.",
 )
 @click.option(
+    "--request",
+    type=COMMENT_ID,
+    help="split only, and required for it: the ticket comment in which an authorized replier asked for the split. The "
+    "loop never splits a ticket on its own.",
+)
+@click.option(
     "--context",
     type=TextType(),
     help="What the worker should read or do: links, comment ids, check names. Never quoted ticket or PR text.",
@@ -66,6 +72,7 @@ def cmd_dispatch(
     repos: tuple[str, ...],
     slug: str | None,
     base: str | None,
+    request: str | None,
     context: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
 ) -> int:
@@ -80,7 +87,15 @@ def cmd_dispatch(
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if dry_run:
             plan = dispatch.check(
-                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, repos=repos
+                ctx,
+                tick_id=tick_id,
+                key=key,
+                kind=kind,
+                label=label,
+                slug=slug,
+                base=base,
+                repos=repos,
+                request=request,
             )
             branch, queue_label, repo_names = plan.branch, plan.label, plan.repos
             started = None
@@ -95,6 +110,7 @@ def cmd_dispatch(
                 base=base,
                 context=context,
                 repos=repos,
+                request=request,
             )
             branch, queue_label, repo_names = started.branch, started.label, started.repos
     except dispatch.Refusal as r:
@@ -109,7 +125,10 @@ def cmd_dispatch(
     # A workspace of one has one repository, so naming it would say nothing. A split has no branch: it names its
     # repositories instead.
     in_repo = "" if ctx.workspace.single else f" in {repo_names[0]}"
-    work = f"split it across {', '.join(repo_names)}" if branch is None else f"work on {branch}{on_base}{in_repo}"
+    asked = f" as asked in comment {request}" if request is not None else ""
+    work = (
+        f"split it across {', '.join(repo_names)}{asked}" if branch is None else f"work on {branch}{on_base}{in_repo}"
+    )
     if started is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
@@ -133,7 +152,7 @@ def cmd_dispatch(
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
     if branch is None:
-        what = f"split across {', '.join(repo_names)}"
+        what = f"split across {', '.join(repo_names)}{asked}"
     else:
         what = f"{branch}{on_base}" + (f"{in_repo} at {started.slot}" if in_repo else f" in {started.slot}")
     rationale = f"run {started.run_id}: {what}; label {queue_label}"
