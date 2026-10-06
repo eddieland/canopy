@@ -46,8 +46,9 @@ cannot reach internal systems and require handing a vendor write access.
 ## 3. Non-goals
 
 - Replacing human review, approval, or merge.
-- A hosted service, a background daemon, a network listener, a web UI, or a workflow DSL. `canopy loop` (§6) runs in
-  the foreground, where the operator started it.
+- A hosted service, a background daemon, or a workflow DSL. `canopy loop` (§6) runs in the foreground, where the
+  operator started it. A listener is allowed only on loopback or the operator's private network, behind the operator's
+  secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
 - Sandboxing agents (deferred; see TRUST_MODEL and ROADMAP).
@@ -1373,9 +1374,10 @@ never opens a connection or reads a sink's secret.
 
 ### Two-way, later
 
-Not in M10. Two rules shape it: nothing listens on the network (TRUST_MODEL §4), and the loop runs ticks in the
-foreground (§6), holding no connection between them. Slack's interactive features (buttons, slash commands, the Events
-API, Socket Mode) each need a listener or a long-running connection, so they are out. What fits, in order:
+Not in M10. The loop runs ticks in the foreground (§6), holding no connection between them, and a listener must follow
+TRUST_MODEL T8 (D055): loopback or the operator's private network, behind the operator's secret. Slack's Events API
+and slash commands need Slack to reach the listener from the internet, so they stay out; Socket Mode connects outward
+and could fit under T8 once something long-running holds the connection. What fits, in order:
 
 1. **Replies on the ticket.** Works with M10 as designed. Every message names the ticket and carries what links the
    journal has; a question is answered on the ticket, and an authorized reply resumes the worker as it does now. Slack

@@ -347,17 +347,17 @@ Status: not started.
 
 ## M14. PR-scoped work
 
-REQUIREMENTS R9. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first, and it starts by settling
-REQUIREMENTS C4.
+REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first.
 
 - A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: `fix-ci` when its checks
   fail, `resume` when review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
 - Authorization by a queue label on the PR, as on a ticket, so neither the operator nor a coworker learns a command.
   Only PRs the operator authored, in the repository or workspace the loop runs for.
-- Where the worker pushes: the PR's head branch, or a prefixed branch with a PR into it (C4). Either way, never with
-  force, and never on a PR from a fork.
+- The worker pushes to the PR's head branch, never with force, never on a PR from a fork; the harness refuses the
+  repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
+  both (D051's pattern).
 - `canopy status` and the attention list name PR units by the PR, not a ticket key.
-- The TRUST_MODEL T1 and §6 changes, if C4 goes that way, with human approval.
+- TRUST_MODEL T1 and §6 already allow it (D056).
 
 Accept: written with the design, before work starts.
 
@@ -365,7 +365,7 @@ Status: not started.
 
 ## M15. Sessions and recent runs
 
-REQUIREMENTS R4 and R6. Needs M2. Sketch only; the design comes first, and it starts by settling REQUIREMENTS C3.
+REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 
 - Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
   runtime-specific output beyond one validated field (D009, D026).
@@ -373,8 +373,15 @@ REQUIREMENTS R4 and R6. Needs M2. Sketch only; the design comes first, and it st
   session id, so the operator can open a transcript with OpenCode's own tools.
 - Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
   wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
-- If C3 calls for it: an operator command that resumes a ticket with the operator's text, checked by the same guards
-  as any dispatch.
+- Workers run against OpenCode's server (`opencode serve`, with `opencode run --attach`), so the operator can
+  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a user-only bind address,
+  loopback by default, refused if wildcard or public; the operator's listener secret from an operator-only file, passed
+  only to the server. Verify OpenCode's server authentication on the pinned version first.
+- Whether one server serves every run or each run gets its own, and what happens to a session whose run has ended: its
+  slot is returned and may be leased again, so prompting it must not run tools in that directory. Either the session
+  is read-only once its run ends, or prompting it starts a `resume` dispatch through the guards.
+- Prompting is the operator's own input (T8): it is not checked against `trust.authorized_repliers`, and it lifts no
+  guard. Capacity, attempt limits, the run's timeout, and push verification still apply.
 
 Accept: written with the design, before work starts.
 
@@ -404,4 +411,4 @@ Status: not started.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
-- Web UI: not planned. A localhost server is a listener (TRUST_MODEL §4); see REQUIREMENTS C2.
+- Web UI: when `canopy status` and `opencode attach` stop being enough. Allowed under TRUST_MODEL T8 (D055).

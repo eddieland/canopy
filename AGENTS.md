@@ -106,7 +106,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - A web UI. `canopy status` and a markdown file are the UI.
 - Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
-  tick after another (D042).
+  tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
 - A runtime plugin interface. The agent runtime is a command template in config.
 - Sandboxing. It plugs into the command template later; see TRUST_MODEL.

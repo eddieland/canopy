@@ -819,3 +819,54 @@ Rejected:
 Residual: the check reads permissions, not provenance. A checkout made under a umask of 077 creates private
 directories, and files git adds inside a `.canopy/` canopy already made are the operator's own. `.gitignore` covers
 `.canopy/`, and review of the workspace repository is the backstop, as for the map itself.
+
+## D054. Stacking stays, and the operator controls it through the overseer's policy
+
+Context: the operator's requirements say ticket B is not started until A lands (REQUIREMENTS R8); the overseer stacks B
+on A's open, green PR (D045), which starts B sooner. The operator, asked, chose to keep stacking but to control it, and
+preferred the control to be the overseer's judgment rather than a harness guard (REQUIREMENTS C1).
+Decision: a shared key `policy.stacking`, `"auto"` (default: the overseer stacks when DESIGN §10's conditions hold) or
+`"never"` (a blocked ticket waits until its blocker is closed). It is rendered into the state block with the other
+policy, and the overseer prompt follows it. The repository may only tighten it (`"never"` is stricter), as for every
+`policy.*` key. The harness adds no guard: whether to stack is policy, which lives in prompts (D008); `bad_base` still
+checks the base's shape.
+Rejected:
+- A `bad_base` refusal under `"never"`: a second place for a preference the operator asked to keep in the overseer.
+- A boolean: leaves no room for a later per-ticket or per-relation mode without renaming the key.
+Revisit: if the overseer stacks under `"never"` in the decisions corpus (then add the guard); if the operator wants
+per-ticket control, such as a label that forbids or allows stacking for one ticket.
+
+## D055. Listeners are allowed on loopback or a private network, behind the operator's secret
+
+Context: TRUST_MODEL §4 said nothing listens on the network, which ruled out prompting a running session (OpenCode's
+server), interactive notifications, and a local UI (REQUIREMENTS C2, C3). The operator wants two-way communication and
+runs on a private VPC, and asked for simple protection.
+Decision (TRUST_MODEL §4, T8, §6): a listener canopy runs or starts binds to loopback by default, or to a private
+address the operator sets in the user config; never a wildcard or public address. Every listener checks the operator's
+listener secret, read from an operator-only file. Whoever holds it acts as the operator. Listeners lift no guard.
+The first listener is OpenCode's own server, so the operator can attach to a worker's session and prompt it (ROADMAP
+M15); a local UI and interactive notifications may follow under the same rules.
+Consequences: DESIGN §3 no longer lists a network listener or a web UI as non-goals. `canopy loop` is still not a
+daemon and listens on nothing itself (D042) until a milestone gives it a listener.
+Rejected:
+- Loopback only: the operator asked for the VPC; loopback stays the default.
+- mTLS or per-user accounts: more than a single-operator tool on a private network needs now.
+- No secret on loopback: any local user could steer the operator's workers.
+Revisit: if canopy is run by more than one person per machine or listener, or on a network the operator does not
+control (then per-user authentication).
+
+## D056. A worker may push to the head branch of a PR the operator wrote and labeled
+
+Context: the operator wants canopy to fix CI and address review on their own hand-written PRs (REQUIREMENTS R9). Those
+PRs' branches are not under `trust.branch_prefix`, where workers are limited to pushing (TRUST_MODEL T1, §6). The
+operator chose direct pushes over a fix branch with a PR into theirs (REQUIREMENTS C4).
+Decision (TRUST_MODEL T1, §6; built in ROADMAP M14): a PR's head branch may be pushed to if the PR is open, not from a
+fork, authored by the operator, and labeled with one of `tracker.labels`. The label is the authorization, as on a ticket
+(D051): the overseer reads it and the author, and the worker reads both again before changing anything. Pushes are
+never forced. The harness refuses the repository's base branch; it cannot read PRs (D003), so authorship is the agents'
+check.
+Rejected:
+- A prefixed fix branch with a PR into the operator's: keeps T1 unchanged but adds a merge per fix, which the operator
+  declined.
+- Any PR with the label, whoever wrote it: lets a label put a worker's commits on a coworker's branch.
+Revisit: if the decisions corpus shows a dispatch for a PR the operator did not write.
