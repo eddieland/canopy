@@ -187,13 +187,13 @@ way, a tick does, in order:
    - Record the harness's attention items for runs (§14) as this tick's decisions, and `repo_missing` for each
      repository in the map with no clone.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block: a `## State`
-   section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root,
-   the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
-   (name, path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query,
-   labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy (limits
-   and stacking), running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
-   next run if that is still ahead, the repository of its latest run, and that run: id, kind, status, branch, the base
-   it started from, start and end).
+   section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root, the
+   workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories (name,
+   path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query, labels,
+   needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy (limits and
+   stacking), running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when
+   fix-ci may next run if that is still ahead, the repository of its latest run, and that run: id, kind, status, branch,
+   the base it started from, start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention`
    read that variable to know which tick they belong to, and refuse if it is unset or names a tick that is not running
@@ -550,11 +550,11 @@ Rules:
   any of them. Two operators must never share a label: the guards (one worker per ticket, attempt limits, cooldowns)
   see only the local journal, so two loops on one label both work the same tickets. canopy cannot detect this; choosing
   distinct labels is an operator responsibility (TRUST_MODEL §7).
-- **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is
-  stricter than the built-in default: a lower attempt limit, a longer cooldown, or `stacking = "never"`. Otherwise the
-  default stands. The user file may set any value, including a looser one: repository policy is a shared default, not a
-  limit a team can impose on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their
-  machine could not enforce one anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
+- **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is stricter
+  than the built-in default: a lower attempt limit, a longer cooldown, or `stacking = "never"`. Otherwise the default
+  stands. The user file may set any value, including a looser one: repository policy is a shared default, not a limit a
+  team can impose on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their machine could
+  not enforce one anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
 - `trust.branch_prefix` must be non-empty and end in `/`, and is made of plain ref components: letters, digits, `_`,
   and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
