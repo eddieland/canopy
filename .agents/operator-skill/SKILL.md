@@ -84,15 +84,15 @@ Work through these in order and stop at the first that explains it.
 3. Read the action:
    - `wait` or `skip`: the rationale says why. `blocked_by: <KEY>` means an open blocker.
    - `refused:<guard>`: the harness refused the dispatch. `unauthorized` (the overseer named no label from
-     `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
-     `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
+     `tracker.labels`, or a split named no requesting comment), `bad_request` (`--request` on a kind other than split),
+     `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it), `attempt_limit` (the
+     kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
      `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree), `bad_slug`,
      `bad_base`, `no_branch`, `unknown_repo` (in a workspace: no `--repo`, a repository not in the map or not cloned,
      not the one the ticket's earlier runs were in or a split recorded for it, or a split naming fewer than two),
-     `bad_prompt` (the worker prompt did not render; an override may
-     lack `{{LABELS}}`),
-     `spawn_failed`. A run that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket
-     closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
+     `bad_prompt` (the worker prompt did not render; an override may lack `{{LABELS}}`), `spawn_failed`. A run that ends
+     `failed` with a summary starting `not authorized:` is the worker finding the ticket closed or unlabeled; it changed
+     nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.
    - `attention:<reason>`: it is waiting on a human (below).
 4. If it was dispatched, look at its runs:
@@ -120,7 +120,7 @@ cause is gone; there is no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
-| `multi_repo` | The ticket needs several repositories and canopy could not split it: split it by hand, or decide. |
+| `multi_repo` | One ticket cannot span repositories yet: take it, or ask for a split in an authorized comment. |
 | `split_unlabeled` | canopy split the ticket: add your queue label to each child listed when you want it worked. |
 | `split_self_labeled` | A split child had a queue label before the split ended: remove the label and add it again. |
 

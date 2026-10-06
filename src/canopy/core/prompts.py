@@ -25,8 +25,10 @@ WORKER = {
 }
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
-# written before it existed would silently drop that check, so it fails to render instead.
+# written before it existed would silently drop that check, so it fails to render instead. A split's prompt must also
+# carry the comment that asked for it, which the splitter checks before creating anything (D055).
 REQUIRED_WORKER = ("LABELS",)
+REQUIRED_BY_KIND = {"split": ("REQUEST",)}
 
 
 class PromptError(Exception):
@@ -52,7 +54,7 @@ def render_worker(config: Config, kind: str, values: Mapping[str, str]) -> str:
 
     Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
-    `REQUIRED_WORKER`.
+    `REQUIRED_WORKER`, or of its kind's `REQUIRED_BY_KIND`.
     """
     path = prompt_path(config, WORKER[kind])
     text = path.read_text(encoding="utf-8")
@@ -65,7 +67,8 @@ def render_worker(config: Config, kind: str, values: Mapping[str, str]) -> str:
 
     rendered = _PLACEHOLDER_RE.sub(replace, text)
     used = set(_PLACEHOLDER_RE.findall(text))
-    missing = [f"{{{{{name}}}}}" for name in REQUIRED_WORKER if name not in used]
+    required = (*REQUIRED_WORKER, *REQUIRED_BY_KIND.get(kind, ()))
+    missing = [f"{{{{{name}}}}}" for name in required if name not in used]
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered

@@ -64,13 +64,14 @@ class Plan:
 
     `base` is the branch it stacks on if `--base` named one, and the label is in its configured spelling. `repos` names
     the one repository in the workspace the run works in, or for a split, every repository its children are for. A
-    split has no branch: it pushes nothing.
+    split has no branch: it pushes nothing, and `request` is the id of the comment that asked for it.
     """
 
     branch: str | None
     base: str | None
     label: str
     repos: tuple[str, ...]
+    request: str | None = None
 
 
 def valid_slug(value: str) -> bool:
@@ -106,19 +107,21 @@ def start(
     base: str | None,
     context: str | None,
     repos: Sequence[str] = (),
+    request: str | None = None,
 ) -> Started:
     """Check the guards, lease a slot, record the run, and spawn `canopy _run` for it.
 
     `implement` works on `<branch_prefix><KEY>-<slug>`. `fix-ci` and `resume` continue the branch the journal recorded
     for the ticket, so they take no slug. `base` stacks the run on another ticket's branch (DESIGN §10); without it the
     run starts from the pool's base branch. `repos` names the repository in the workspace; it may be left out only in
-    a workspace of one. A `split` names every repository the ticket covers and leases nothing (DESIGN §18).
+    a workspace of one. A `split` names every repository the ticket covers and the comment that asked for it in
+    `request`, and leases nothing (DESIGN §18).
 
     Raises:
         Refusal: a guard refused, or the slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased.
     """
-    plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base)
+    plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
 
     # One dispatch at a time, so two cannot both pass the capacity check. Held across the lease and the spawn.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
@@ -154,6 +157,7 @@ def check(
     slug: str | None,
     base: str | None,
     repos: Sequence[str] = (),
+    request: str | None = None,
 ) -> Plan:
     """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
@@ -164,7 +168,7 @@ def check(
     Raises:
         Refusal: a guard refused.
     """
-    plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base)
+    plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
     planned = [
         str(d["ticket_key"])
         for d in db.decisions_for_tick(ctx.conn, tick_id)
@@ -176,16 +180,33 @@ def check(
 
 
 def _plan(
-    ctx: Context, key: str, kind: str, *, label: str | None, repos: Sequence[str], slug: str | None, base: str | None
+    ctx: Context,
+    key: str,
+    kind: str,
+    *,
+    label: str | None,
+    repos: Sequence[str],
+    slug: str | None,
+    base: str | None,
+    request: str | None,
 ) -> Plan:
     configured = _check_label(ctx.config.tracker.labels, key, label)
     if kind == SPLIT:
+        # Creating tickets is a human's call, never the overseer's own: a split names the authorized replier's comment
+        # that asked for it, and the splitter reads that comment again before creating anything (D055).
+        if request is None:
+            raise Refusal(
+                "unauthorized",
+                f"split needs --request naming the authorized replier's comment on {key} that asked for it",
+            )
         names = _check_split_repos(ctx, key, repos)
         if slug is not None:
             raise Refusal("bad_slug", "split creates tickets and pushes no branch; --slug is for implement")
         if base is not None:
             raise Refusal("bad_base", "split creates tickets and pushes no branch, so it has no base")
-        return Plan(branch=None, base=None, label=configured, repos=names)
+        return Plan(branch=None, base=None, label=configured, repos=names, request=request)
+    if request is not None:
+        raise Refusal("bad_request", f"--request names the comment that asked for a split; {kind} takes none")
     if len(set(repos)) > 1:
         raise Refusal(
             "unknown_repo",
@@ -356,7 +377,7 @@ def _spawn(
     }
     run_lease = None
     if lease is None or plan.branch is None:
-        values |= _split_values(ctx, plan.repos)
+        values |= _split_values(ctx, plan.repos, plan.request)
     else:
         # A stacked run starts from, and opens its PR against, the other ticket's branch; `_run` checks it is on origin.
         base = plan.base if plan.base is not None else lease.base_branch
@@ -413,8 +434,8 @@ def _branch_values(
     }
 
 
-def _split_values(ctx: Context, repos: Sequence[str]) -> dict[str, str]:
-    """The placeholders of a split run: the workspace it reads and the repositories its children are for."""
+def _split_values(ctx: Context, repos: Sequence[str], request: str | None) -> dict[str, str]:
+    """The placeholders of a split run: the comment that asked for it, the workspace it reads, and the repositories."""
     ws = ctx.workspace
     lines: list[str] = []
     for name in repos:
@@ -424,6 +445,7 @@ def _split_values(ctx: Context, repos: Sequence[str]) -> dict[str, str]:
         lines.append(f"- `{name}`, cloned at `{path}`{summary}")
     prose = ws.map_prose
     return {
+        "REQUEST": f"`{request}`",
         "WORKSPACE": str(ws.root),
         "REPOS": "\n".join(lines),
         "MAP": f"`{prose}`" if prose is not None else "none: this workspace has no MAP.md",

@@ -294,7 +294,7 @@ provider skill says which.
 ## 8. Dispatch and the worker contract
 
 `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG] [--base BRANCH]
-[--context TEXT] [--cursor NAME=ID]...`:
+[--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
 
 This section describes the kinds that work on a branch. A `split` creates tickets instead; where it differs, §18 says
 how.
@@ -309,7 +309,9 @@ how.
      are. canopy cannot read the tracker, so this does not prove the label is on the ticket; it makes the overseer
      name, for every dispatch, the label it read, and the decision records it in its configured spelling (D051). The
      refusal does not list the configured labels, so it cannot be answered by copying one. The worker's own read of
-     the ticket's labels is the independent check (step 3).
+     the ticket's labels is the independent check (step 3). Also a `split` without `--request`, the authorized
+     replier's comment that asked for it (§18, D055).
+   - `bad_request`: a `--request` with any kind but `split`.
    - `unknown_repo`: in a workspace, no `--repo`, or one that is not in the map, has no primary clone, or is not the
      repository of the ticket's earlier runs: a ticket stays in the repository of its first dispatch until joint runs
      (ROADMAP M7, D052), or not the one recorded for a ticket a split created. More than one `--repo` is refused for
@@ -916,8 +918,11 @@ PR per repository, each linking the others. That is for changes that cannot buil
 API and its client changed in lockstep, or a schema and the code reading it. `fix-ci` and `resume` normally name only
 the unit whose PR needs the work.
 
-A ticket that covers several repositories but is really several pieces of work is split instead (below). The overseer
-prompt prefers splitting and implements jointly only when the ticket or `MAP.md` shows the halves cannot stand alone.
+A ticket that covers several repositories stays one ticket with a PR per repository (D055). The overseer chooses how
+its units land: jointly, as above, when the changes must land together; in sequence when one consumes the other after it
+merges, such as a Terraform change that provisions a database and then the Kubernetes change that uses it, the next
+unit starting once the first has merged. Splitting the ticket into separate tracker tickets (below) happens only when an
+authorized replier asks for it.
 
 Guards (§8) change as follows:
 
@@ -946,13 +951,19 @@ Guards (§8) change as follows:
 
 ### Splitting
 
-Rationale in D033 and D054. canopy splits a ticket in the tracker, and never schedules what it split. The children are
-ordinary tickets that start without a queue label, so a human authorizes each one exactly as they authorize any ticket
-(TRUST_MODEL T1).
+Rationale in D033, D054, and D055. canopy splits a ticket in the tracker only when a human asks, and never schedules
+what it split. The children are ordinary tickets that start without a queue label, so a human authorizes each one
+exactly as they authorize any ticket (TRUST_MODEL T1).
 
-- The overseer dispatches `canopy dispatch <KEY> --label <label> --kind split --repo api --repo web`. The overseer is
-  read-only, so the tracker writes happen in a worker, like every other write. `split` takes no `--slug` (`bad_slug`)
-  and no `--base` (`bad_base`).
+- A split starts with an authorized replier's comment on the ticket asking for it. The overseer never splits on its
+  own judgment: a ticket that needs several repositories and has no such comment stays one ticket, and until M7 it is
+  `multi_repo` attention.
+- The overseer then dispatches `canopy dispatch <KEY> --label <label> --kind split --request <comment id> --repo api
+  --repo web`. The overseer is read-only, so the tracker writes happen in a worker, like every other write. A split
+  without `--request` is refused as `unauthorized`, as a dispatch without `--label` is: the claim is recorded with the
+  decision, and the splitter reads the comment again and creates nothing unless its author is an authorized replier
+  and it asks for a split (D051's pattern). A worker prompt for `split` without `{{REQUEST}}` is `bad_prompt`. `split`
+  takes no `--slug` (`bad_slug`) and no `--base` (`bad_base`).
 - `unknown_repo` refuses a split in a workspace of one, one that names fewer than two distinct repositories, one that
   names a repository not in the map or with no clone, a ticket with runs in a repository (D052: its work stays there),
   and a ticket a split created. The overseer splits only a ticket with no branch, as its prompt says.
@@ -961,10 +972,10 @@ ordinary tickets that start without a queue label, so a human authorizes each on
 - A split run leases no slot and pushes nothing. Its repositories are recorded in `run_repos`; the run has no slot,
   branch, or repository of its own. `_run` skips branch setup, push verification, and the slot return, and runs
   `split_cmd` with cwd the workspace root, where the repositories' primary clones are, after the same check of the
-  root's OpenCode config as the overseer's (§13). The prompt, `worker-split.md`, lists each repository's name, clone
-  path, and summary, and the path of `MAP.md`. Until M7's desks it reads the primary clones as they are checked out;
-  with desks it will read fresh worktrees instead (D054). Reconcile marks a dead split run `crashed` and returns
-  nothing.
+  root's OpenCode config as the overseer's (§13). The prompt, `worker-split.md`, names the requesting comment, and lists
+  each repository's name, clone path, and summary, and the path of `MAP.md`. Until M7's desks it reads the primary
+  clones as they are checked out; with desks it will read fresh worktrees instead (D054). Reconcile marks a dead split
+  run `crashed` and returns nothing.
 - The split worker runs as `canopy-splitter`: a separate agent definition with read-only file tools, no edit or bash,
   and the tracker MCP tools to create a ticket, link tickets, and comment. MCP tools whose names suggest labels,
   assignees, edits, transitions, or PR, branch, and file writes are denied by name. OpenCode cannot restrict a create
@@ -1041,13 +1052,15 @@ TRUST_MODEL is unchanged until the milestone that needs each change, whose PR ca
 - Whether the overseer should ever split a ticket it has already started implementing jointly.
 - A ticket whose work lands as several PRs in sequence, rather than jointly or as split children: the api change merges,
   then the web change that consumes it; or review feedback arrives on a PR that has just merged and needs a follow-up
-  PR. Today neither can happen inside the ticket. A merged PR marks it done (§7), D052 keeps it in the repository of its
-  first dispatch, `implement` has an attempt limit that never resets, and the loop cannot file a follow-up ticket for
-  itself (TRUST_MODEL T1), so a human has to file and label one. A candidate that keeps authorization where it is: an
-  authorized replier's comment on the ticket after its PR merged authorizes one follow-up `implement` on a new branch,
-  in the same or another repository, as a new unit of the ticket (M7), and the overseer marks the ticket done only
-  when no unit is open and no such reply is unhandled. Undecided: whether a follow-up counts against
-  `max_implement_attempts`, and how the overseer tells late feedback on a merged PR from ordinary comments.
+  PR. D055 decides that the first is in scope for M7: one ticket, units in sequence, the overseer choosing that or a
+  joint run. How is still open below. Today neither can happen inside the ticket. A merged PR marks it done (§7), D052
+  keeps it in the repository of its first dispatch, `implement` has an attempt limit that never resets, and the loop
+  cannot file a follow-up ticket for itself (TRUST_MODEL T1), so a human has to file and label one. A candidate that
+  keeps authorization where it is: an authorized replier's comment on the ticket after its PR merged authorizes one
+  follow-up `implement` on a new branch, in the same or another repository, as a new unit of the ticket (M7), and the
+  overseer marks the ticket done only when no unit is open and no such reply is unhandled. Undecided: whether a
+  follow-up counts against `max_implement_attempts`, and how the overseer tells late feedback on a merged PR from
+  ordinary comments.
 
 ## 19. Chores
 

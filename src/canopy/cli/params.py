@@ -77,3 +77,5 @@ TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 REPO = PatternType("NAME", workspace.REPO_NAME_RE, "repository name")
+# A tracker comment id, shaped like a cursor id: `--request` renders it into the splitter's prompt.
+COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")
