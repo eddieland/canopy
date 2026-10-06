@@ -5,10 +5,11 @@ Instructions for any agent working in this repository. Humans should read it too
 ## Read this first, in order
 
 1. `README.md`: what we are building and for whom.
-2. `docs/DESIGN.md`: target shape. Normative.
-3. `docs/TRUST_MODEL.md`: security posture. Normative.
-4. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
-5. `docs/DECISIONS.md`: why things are the way they are. Append, never rewrite.
+2. `docs/REQUIREMENTS.md`: what the primary operator needs, where canopy stands on each, and open conflicts.
+3. `docs/DESIGN.md`: target shape. Normative.
+4. `docs/TRUST_MODEL.md`: security posture. Normative.
+5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
+6. `docs/DECISIONS.md`: why things are the way they are. Append, never rewrite.
 
 If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entry says otherwise.
 

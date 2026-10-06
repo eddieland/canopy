@@ -270,6 +270,8 @@ if the operator asks.
   `canopy-notify-slack` script in canopy's own install, tested against a local HTTP server; the `TID251` ban on network
   modules in `src/canopy`, and the layer test refusing imports of the sink. One `uv tool install` still installs
   both (`tests/install-check.sh`, M5's clean-machine check).
+- A desktop sink (`notify-send` on Linux, `osascript` on macOS) ships before Slack: the operator wants the desktop
+  first, and a wrapper script of their own is the custom layer REQUIREMENTS H2 rules out (N2). DESIGN §20 gains it.
 - The TRUST_MODEL T2, T6, and §7 changes, with human approval.
 - DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
 
@@ -343,12 +345,63 @@ Accept: written with the design, before work starts.
 
 Status: not started.
 
+## M14. PR-scoped work
+
+REQUIREMENTS R9. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first, and it starts by settling
+REQUIREMENTS C4.
+
+- A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: `fix-ci` when its checks
+  fail, `resume` when review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
+- Authorization by a queue label on the PR, as on a ticket, so neither the operator nor a coworker learns a command.
+  Only PRs the operator authored, in the repository or workspace the loop runs for.
+- Where the worker pushes: the PR's head branch, or a prefixed branch with a PR into it (C4). Either way, never with
+  force, and never on a PR from a fork.
+- `canopy status` and the attention list name PR units by the PR, not a ticket key.
+- The TRUST_MODEL T1 and §6 changes, if C4 goes that way, with human approval.
+
+Accept: written with the design, before work starts.
+
+Status: not started.
+
+## M15. Sessions and recent runs
+
+REQUIREMENTS R4 and R6. Needs M2. Sketch only; the design comes first, and it starts by settling REQUIREMENTS C3.
+
+- Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
+  runtime-specific output beyond one validated field (D009, D026).
+- `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
+  session id, so the operator can open a transcript with OpenCode's own tools.
+- Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
+  wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
+- If C3 calls for it: an operator command that resumes a ticket with the operator's text, checked by the same guards
+  as any dispatch.
+
+Accept: written with the design, before work starts.
+
+Status: not started.
+
+## M16. Worktree setup for large monorepos
+
+REQUIREMENTS R10. Needs M2. Sketch only; the design comes first.
+
+- Where pools live: a user-only key for the pool root in a workspace, so the pools can sit on a fast disk apart from
+  the workspace, or a documented reason to keep the workspace there instead (§18 pins `TREEHOUSE_ROOT` for T7's sake).
+- A personal `.worktreeinclude` manifest passed as `treehouse get --include-file`, user-only.
+- Setup that runs after `_run` checks out the run's branch and fails the run when it fails, unlike treehouse's
+  `post_create` (PRIOR_ART "Open design questions"): a user-only command template, or an upstream treehouse change.
+- Bazel: a canary for the worker's `external_directory: deny` against reads through `bazel-out/`; a documented
+  `.bazelrc` recipe for a shared disk and repository cache; whether returning a slot should stop its Bazel server.
+
+Accept: written with the design, before work starts.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
   team adopts it. Proposal: `HOST_ISOLATION.md`.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
-- Second runtime (Copilot CLI, Claude Code): when a coworker asks; expected to
-  be a config change plus prompt tweaks, not code.
-- Web UI: not planned.
+- Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
+  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
+- Web UI: not planned. A localhost server is a listener (TRUST_MODEL §4); see REQUIREMENTS C2.
