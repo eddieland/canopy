@@ -852,10 +852,11 @@ Decision:
   `implement` whose `--slug` names another branch is refused as `bad_slug`. A run therefore has one branch, and a joint
   `fix-ci` or `resume` never covers units on different branches.
 - A run in one repository runs its worker in the worktree, as before; only a joint run gets a desk. Joint runs depend on
-  the desk canary; runs in one repository do not.
-- Migration 0005 moves every run's slot into `run_slots` and every ticket's PR and review and ci cursors into a unit,
-  and drops the old columns, so code reads one shape. Rows from before workspaces have no repository name; a workspace
-  of one ignores it and renames the unit on its next write.
+  the desk canary; runs in one repository do not. canopy marks each desk it makes and removes only those: anything
+  else under `desks/` is the operator's, and one in a desk's place refuses the run.
+- Migration 0005 moves every run's slot into `run_slots` and every ticket's PR, its phase about that PR, and its review
+  and ci cursors into a unit, and drops the old columns, so code reads one shape. Rows from before workspaces have no
+  repository name; a workspace of one ignores it and renames the unit on its next write.
 - A joint run's prompt must have `{{REPOSITORIES}}` and `{{PRS}}`; an override without them still serves a run in one
   repository.
 Consequences: a retry after a failed `implement` continues whatever that run pushed rather than starting a fresh branch.
@@ -866,3 +867,19 @@ Rejected:
 - Keeping the slot columns for old runs: two code paths for reconcile, attempt counts, and the state block.
 Revisit: if the desk canary fails (then, per D033, the worker's cwd is the first unit's worktree and the others are
 allowed as external directories); if operators need a fresh branch after a failed implement.
+
+## D056. Pending migrations wait for runs an earlier canopy started
+
+Context: `canopy _run` is detached and outlives the command that dispatched it. After an upgrade, the first canopy
+command migrates the journal while a `_run` of the old version may still be working; when its worker finishes it writes
+the old schema, and a migration that dropped a column (0005) makes that write fail, losing the run's result.
+Decision: `db.migrate` applies pending migrations only when no `running` run has a live `_run`. Otherwise it fails
+with a `MigrationError` naming the runs, and every command that opens the journal fails the same way until they finish.
+A run whose `_run` is gone does not hold migrations back; the next tick's reconcile closes it.
+Consequences: an operator who upgrades with workers running waits, at most the worker timeout, before canopy runs
+again. A migration may change or drop what an earlier canopy writes without keeping it compatible.
+Rejected:
+- Keeping dropped columns and old writes working until old runs drain: every migration would carry two shapes for a
+  window nobody can see the end of from the journal.
+- Draining from inside canopy (stop dispatching, wait, then migrate): the old version is the one dispatching.
+Revisit: if waiting out the worker timeout after upgrades is measured as friction.

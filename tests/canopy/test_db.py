@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import pytest
 
 from canopy.core import db
 from canopy.infra import resources
+from tests.canopy.test_reconcile import DEAD_PID
 
 
 def fresh(tmp_path: Path) -> sqlite3.Connection:
@@ -93,7 +95,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
 
 
 def test_units_carry_over_what_tickets_and_runs_held(tmp_path: Path) -> None:
-    """Migration 0005 moves each run's slot to `run_slots` and each ticket's branch, PR, and cursors to a unit."""
+    """Migration 0005 moves each run's slot to `run_slots`, and a ticket's branch, PR, phase, and cursors to a unit."""
     migrations = tmp_path / "migrations"
     migrations.mkdir()
     for path in sorted(resources.migrations_dir().glob("000[1-4]_*.sql")):
@@ -123,12 +125,16 @@ def test_units_carry_over_what_tickets_and_runs_held(tmp_path: Path) -> None:
         (2, "api", "/ws/1", "l2", "canopy:WS-2", "dev"),
     ]
     assert [tuple(r) for r in conn.execute("SELECT * FROM ticket_units ORDER BY ticket_key")] == [
-        ("OLD-1", None, "agent/OLD-1-work", "https://x.test/pr/1", None, "r1", "ci1"),
+        ("OLD-1", None, "agent/OLD-1-work", "https://x.test/pr/1", "ci_red", "r1", "ci1"),
         ("WS-2", "api", "agent/WS-2-work", None, None, None, None),
     ]
     old = db.get_ticket(conn, "OLD-1")
     assert old is not None
-    assert (old["phase"], old["branch"], old["last_comment_id"]) == ("ci_red", "agent/OLD-1-work", "c1")
+    assert (old["phase"], old["branch"], old["last_comment_id"]) == (None, "agent/OLD-1-work", "c1")
+    new = db.get_ticket(conn, "NEW-3")
+    assert new is not None
+    assert new["phase"] == "ready"  # the ticket's own phase stays
+    assert db.units(conn, "NEW-3") == []
     assert "pr_url" not in old.keys()  # noqa: SIM118  (a Row is not a mapping)
     run = db.get_run(conn, 1)
     assert run is not None
@@ -139,3 +145,36 @@ def test_units_carry_over_what_tickets_and_runs_held(tmp_path: Path) -> None:
     assert [(u["repo"], u["phase"], u["pr_url"]) for u in db.units(conn, "OLD-1")] == [
         ("renamed", "ci_running", "https://x.test/pr/1")
     ]
+
+
+def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
+    """D056: a live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
+    migrations = tmp_path / "migrations"
+    migrations.mkdir()
+    for path in sorted(resources.migrations_dir().glob("000[1-4]_*.sql")):
+        (migrations / path.name).write_text(path.read_text())
+    conn = fresh(tmp_path)
+    db.migrate(conn, migrations)
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    for key in ("OLD-1", "OLD-2", "OLD-3"):
+        db.touch_ticket(conn, key, "/r")
+    conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, slot_path, lease_id, lease_holder, base_branch, branch, "
+        "started_at, log_path, status, pid) VALUES "
+        "(1, 'OLD-1', 'implement', '/p/1', 'l1', 'canopy:OLD-1', 'main', 'agent/OLD-1-a', 'x', 'l', 'running', ?), "
+        "(1, 'OLD-2', 'implement', '/p/2', 'l2', 'canopy:OLD-2', 'main', 'agent/OLD-2-a', 'x', 'l', 'running', ?), "
+        "(1, 'OLD-3', 'implement', '/p/3', 'l3', 'canopy:OLD-3', 'main', 'agent/OLD-3-a', 'x', 'l', 'done', ?)",
+        (DEAD_PID, os.getpid(), os.getpid()),
+    )
+    for path in sorted(resources.migrations_dir().glob("*.sql")):
+        (migrations / path.name).write_text(path.read_text())
+    with pytest.raises(db.MigrationError, match="run 2 is still working for the canopy before it"):
+        db.migrate(conn, migrations)
+    assert [r[0] for r in conn.execute("SELECT version FROM schema_migrations")] == [1, 2, 3, 4]
+
+    # Once it finishes, the run whose `_run` died does not hold the journal back: reconcile closes it.
+    conn.execute("UPDATE runs SET status = 'done' WHERE id = 2")
+    assert db.migrate(conn, migrations) == [5]
+    # With nothing pending, a live run is no reason to refuse.
+    conn.execute("UPDATE runs SET status = 'running' WHERE id = 2")
+    assert db.migrate(conn, migrations) == []

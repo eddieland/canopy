@@ -138,10 +138,10 @@ def start(
         Refusal: a guard refused, or a slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased: leases are all or nothing.
     """
-    plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base)
-
-    # One dispatch at a time, so two cannot both pass the capacity check. Held across the leases and the spawn.
+    # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
+    # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base)
         attempt = _guard(ctx, key, kind, plan.repos)
         leases = _lease_all(ctx, key, plan.repos)
         try:
@@ -173,13 +173,13 @@ def check(
     Raises:
         Refusal: a guard refused.
     """
-    plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base)
     planned = [
         str(d["ticket_key"])
         for d in db.decisions_for_tick(ctx.conn, tick_id)
         if str(d["action"]).startswith("dispatch:") and d["ticket_key"] is not None
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base)
         _guard(ctx, key, kind, plan.repos, planned=planned)
     return plan
 

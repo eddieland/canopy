@@ -102,7 +102,7 @@ def ticket_group() -> None:
 @click.option(
     "--repo",
     type=REPO,
-    help="Set this unit's phase or review and ci cursors instead of the ticket's. Implied in a single repository.",
+    help="The unit a phase about a PR and the review and ci cursors are for. Implied in a single repository.",
 )
 @click.option("--phase", type=click.Choice(PHASES))
 @click.option("--cursor", "cursor_pairs", type=CursorType(), multiple=True)
@@ -119,14 +119,16 @@ def cmd_ticket_set(
 ) -> int:
     """Record a ticket's phase, cursors, or done flag, or a unit's phase and cursors.
 
-    The comment cursor and the done flag are the ticket's. The review and ci cursors are a unit's, one per repository
-    the ticket has a PR in. With --repo, --phase is that unit's; without it, the ticket's own.
+    The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in.
     """
     ctx = open_context(click_ctx)
     unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
+    unit_phase = phase if phase in db.UNIT_PHASES else None
     unit = _unit(ctx, repo)
-    if unit_pairs and unit is None:
-        raise click.UsageError(f"a {unit_pairs[0][0]} cursor belongs to one unit: name its repository with --repo")
+    if unit is None and (unit_pairs or unit_phase is not None):
+        what = f"a {unit_pairs[0][0]} cursor" if unit_pairs else f"the {unit_phase} phase"
+        raise click.UsageError(f"{what} belongs to one unit: name its repository with --repo")
     current = optional_tick(ctx)
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
@@ -136,7 +138,6 @@ def cmd_ticket_set(
         *(["not marked done"] if dry_run and done else []),
     ]
     ticket_cursors = {} if dry_run else {n: v for n, v in cursor_pairs if n in db.TICKET_CURSORS}
-    unit_phase = phase if repo is not None else None
     db.set_ticket(
         ctx.conn,
         key,

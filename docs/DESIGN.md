@@ -173,7 +173,9 @@ way, a tick does, in order:
 
 1. Acquire the lock. If held, log and exit 0. No `ticks` row is written.
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
-   is gone. Insert a `ticks` row; its id tags all logs.
+   is gone. Insert a `ticks` row; its id tags all logs. Pending migrations wait while any `running` run's `_run` is
+   alive: it was started by the canopy before the upgrade and writes the old schema (D056). The tick, and any command
+   that opens the journal, fails saying so until those runs finish.
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
      kill the process group of the worker `_run` started, if any of it is left (`runs.worker_pid`); mark the run
@@ -183,7 +185,8 @@ way, a tick does, in order:
    - For each leased slot in `treehouse status --json` with no live
      `runs` row and `lease_holder` matching our prefix: return it, log it. In a workspace this is done in every
      repository's pool that has a clone, and a run's slots go back to the pools of the repositories they record (§18).
-     In a workspace of several, a desk whose ticket has no running run is removed.
+     In a workspace of several, a desk canopy made whose ticket has no running run is removed; anything else under
+     `desks/` is left alone.
    - Compute `capacity = max_workers - count(runs where status='running')`.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
    - Record the harness's attention items for runs (§14) as this tick's decisions, and `repo_missing` for each
@@ -261,7 +264,9 @@ per tick. The JSON log gains `loop started` and `loop stopped` lines, with no ti
 
 Phases are derived by the overseer each tick from live state. They are recorded
 in `tickets.phase` for the status view, never read back as truth. The phases about a PR, `pushed_no_pr` to `merged`,
-are a unit's in a workspace of several (§18), recorded in `ticket_units.phase` with `canopy ticket set --repo`.
+are a unit's (§18), recorded in `ticket_units.phase`: `canopy ticket set` needs `--repo` for one in a workspace of
+several, and implies the repository in a workspace of one. Migration 0005 moved such a phase from the ticket to its
+unit.
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -964,7 +969,9 @@ their unit.
   runs its worker in the worktree, as before units. A joint run's worker runs in its desk, `desks/<KEY>/`, which `_run`
   makes just before starting it, with a relative link per worktree named for its repository. The trap removes the desk
   and returns every slot, and reconcile does both for a run whose `_run` died. A desk is made only in a `desks/` that is
-  not a symlink, and removing one never follows its links. A run is `unpushed` if any repository's branch is.
+  not a symlink, and removing one never follows its links. canopy marks each desk it makes with a `.canopy-desk` file
+  and removes only marked desks: anything else under `desks/` is the operator's, and something unmarked where a desk
+  goes refuses the run. A run is `unpushed` if any repository's branch is.
 - Before a joint run's worker starts, the shadowing check (§13) covers each worktree, `desks/`, and the workspace root,
   since the desk is not a repository and OpenCode may read config above it.
 - The worker prompt lists each repository: its name, path (in the desk for a joint run), branch, base, the unit's PR if

@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -11,9 +12,10 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.infra import procs
+from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
+from canopy.runs.dispatch import DISPATCH_LOCK
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import InlineRunner, in_tick, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
@@ -202,6 +204,32 @@ def test_units_have_their_own_attempts_and_share_the_branch(
     assert run("--repo", "web", kind="fix-ci") == 0
 
 
+def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(
+    ws: Ws, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A first implement that waited for the lock sees the branch another one named meanwhile, and may not rename it."""
+    seed_pools(ws, treehouse_state)
+    conn = ws.journal()
+    tick_id = in_tick(conn, monkeypatch)
+    codes: list[int] = []
+
+    def second() -> None:
+        codes.append(main(dispatch("PROJ-1", "--repo", "web", "--slug", "other"), runner=InlineRunner()))
+
+    with lock.hold(ws.state_dir / DISPATCH_LOCK, wait=True):
+        waiting = threading.Thread(target=second)
+        waiting.start()
+        time.sleep(0.5)  # long enough for it to reach the lock
+        # Another dispatch's first implement names the branch while this one waits.
+        db.touch_ticket(conn, "PROJ-1", str(ws.root))
+        conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", ("agent/PROJ-1-login", "PROJ-1"))
+    waiting.join(timeout=30)
+    assert codes == [1]
+    assert decisions(conn, tick_id) == [
+        ("refused:bad_slug", "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug")
+    ]
+
+
 def test_the_state_block_shows_each_unit(
     ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -262,7 +290,16 @@ def test_journal_commands_name_a_unit(
     assert (unit["repo"], unit["phase"], unit["last_review_id"], unit["branch"]) == ("api", "ci_red", "r-1", None)
     ticket = db.get_ticket(conn, "PROJ-1")
     assert ticket is not None
-    assert ticket["phase"] is None  # --phase with --repo is the unit's
+    assert ticket["phase"] is None  # a phase about the PR is the unit's
+    # A phase about the PR needs its unit; the ticket's own phases are the ticket's, --repo or not.
+    assert main(["ticket", "set", "PROJ-1", "--phase", "approved"]) == 2
+    assert "the approved phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
+    assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human"]) == 0
+    capsys.readouterr()
+    ticket = db.get_ticket(conn, "PROJ-1")
+    assert ticket is not None
+    assert ticket["phase"] == "needs_human"
+    assert [u["phase"] for u in db.units(conn, "PROJ-1")] == ["ci_red"]
 
     assert main(["attention", "PROJ-1", "needs_author", "--repo", "web", "--detail", "https://x.test/web/pull/2"]) == 0
     assert main(["attention", "PROJ-1", "needs_author", "--repo", "api", "--detail", "https://x.test/api/pull/1"]) == 0
@@ -318,7 +355,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
     assert run["worker_pid"] is not None, "`_run` never started the worker"
     pid, worker_pid = int(run["pid"]), int(run["worker_pid"])
     desk = ws.root / "desks" / "PROJ-1"
-    assert sorted(p.name for p in desk.iterdir()) == ["api", "web"]
+    assert sorted(p.name for p in desk.iterdir()) == [desks.MARKER, "api", "web"]
     # A desk some earlier run left behind, with no run of its ticket running.
     stale = desks.make(ws.root, "PROJ-9", [("api", ws.clone("api"))])
     os.kill(pid, signal.SIGKILL)
@@ -349,6 +386,27 @@ def test_desks_are_made_only_in_a_directory_canopy_owns(ws: Ws, tmp_path: Path) 
         desks.make(ws.root, "PROJ-1", [("api", ws.clone("api"))])
     assert list(elsewhere.iterdir()) == []
     assert desks.prune(ws.root, []) == []
+
+
+def test_canopy_removes_only_the_desks_it_made(ws: Ws) -> None:
+    """Anything else under `desks/`, a directory named for a ticket included, is the operator's."""
+    parent = ws.root / "desks"
+    (parent / "notes").mkdir(parents=True)
+    (parent / "notes" / "todo.md").write_text("mine\n")
+    (parent / "README").write_text("mine\n")
+    (parent / "PROJ-2").mkdir()
+    (parent / "PROJ-2" / "plan.md").write_text("mine\n")
+    (parent / "PROJ-3").symlink_to(ws.clone("web"), target_is_directory=True)
+    stale = desks.make(ws.root, "PROJ-9", [("api", ws.clone("api"))])
+
+    assert desks.prune(ws.root, []) == [stale]
+    assert sorted(p.name for p in parent.iterdir()) == ["PROJ-2", "PROJ-3", "README", "notes"]
+    for key in ("PROJ-2", "PROJ-3"):
+        with pytest.raises(desks.DeskError, match="canopy did not make it"):
+            desks.make(ws.root, key, [("api", ws.clone("api"))])
+        assert not desks.remove(desks.path(ws.root, key))
+    assert (parent / "PROJ-2" / "plan.md").read_text() == "mine\n"
+    assert (parent / "PROJ-3").resolve() == ws.clone("web").resolve()
 
 
 def test_a_single_repository_never_prunes_its_own_desks_directory(

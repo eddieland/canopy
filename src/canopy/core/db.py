@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from canopy.infra import procs
+
 DB_FILE_NAME = "canopy.db"
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 
@@ -22,6 +24,11 @@ _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
+# The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
+# others are the ticket's own. Migration 0005 lists them too.
+UNIT_PHASES = frozenset(
+    ("pushed_no_pr", "ci_running", "ci_red", "changes_requested", "green_unreviewed", "approved", "merged")
+)
 
 
 class MigrationError(Exception):
@@ -113,9 +120,10 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
         unknown = applied - {m.version for m in known}
         if unknown:
             raise MigrationError(f"the journal has migrations this canopy does not know: {sorted(unknown)}")
-        for m in known:
-            if m.version in applied:
-                continue
+        pending = [m for m in known if m.version not in applied]
+        if pending:
+            _check_no_live_runs(conn)
+        for m in pending:
             conn.executescript(m.path.read_text())
             conn.execute(
                 "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
@@ -123,6 +131,24 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
             )
             applied_now.append(m.version)
     return applied_now
+
+
+def _check_no_live_runs(conn: sqlite3.Connection) -> None:
+    """Refuse to migrate while a `_run` is alive: it was started by an earlier canopy, which wrote the old schema.
+
+    A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+    """
+    has_runs = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'runs'").fetchone()
+    if not has_runs:
+        return
+    rows = conn.execute("SELECT id, pid FROM runs WHERE status = 'running' AND pid IS NOT NULL ORDER BY id")
+    live = [int(r["id"]) for r in rows if procs.alive(int(r["pid"]))]
+    if live:
+        runs = f"run {live[0]} is" if len(live) == 1 else f"runs {', '.join(str(i) for i in live)} are"
+        raise MigrationError(
+            f"this canopy changes the journal, but {runs} still working for the canopy before it and would fail "
+            "writing the old journal. Run canopy again once they finish."
+        )
 
 
 def _rowid(cur: sqlite3.Cursor) -> int:
