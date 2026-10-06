@@ -13,12 +13,48 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
-    assert rows == [(1, "init"), (2, "runs_worker_pid"), (3, "attempts_from_runs"), (4, "workspace_repos")]
+    assert rows == [
+        (1, "init"),
+        (2, "runs_worker_pid"),
+        (3, "attempts_from_runs"),
+        (4, "workspace_repos"),
+        (5, "split"),
+    ]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+
+
+def test_runs_from_before_split_runs_survive_the_rebuild(tmp_path: Path) -> None:
+    earlier = tmp_path / "migrations"
+    earlier.mkdir()
+    for path in sorted(resources.migrations_dir().glob("000[1-4]_*.sql")):
+        (earlier / path.name).write_text(path.read_text())
+    conn = fresh(tmp_path)
+    db.migrate(conn, earlier)
+    tick = db.start_tick(conn, dry_run=False)
+    db.touch_ticket(conn, "PROJ-1", "/repo")
+    conn.execute(
+        "INSERT INTO runs (id, tick_id, ticket_key, kind, slot_path, lease_id, lease_holder, pid, base_branch, branch, "
+        "started_at, status, log_path, worker_pid, repo) "
+        "VALUES (7, ?, 'PROJ-1', 'implement', '/pool/1', 'l1', 'canopy:PROJ-1', 42, 'main', 'agent/PROJ-1-work', "
+        "'2026-10-01T00:00:00.000Z', 'running', '/state/runs/7.log', 43, 'api')",
+        (tick,),
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == [5]
+    run = db.get_run(conn, 7)
+    assert run is not None
+    assert (run["slot_path"], run["lease_id"], run["pid"], run["worker_pid"], run["repo"]) == (
+        "/pool/1",
+        "l1",
+        42,
+        43,
+        "api",
+    )
+    assert [r["id"] for r in db.running_runs(conn)] == [7]
+    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_new_migration_is_applied_and_recorded(tmp_path: Path) -> None:

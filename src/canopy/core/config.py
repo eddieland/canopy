@@ -161,6 +161,8 @@ class Policy(Section):
     max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
     fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # A split creates tickets in the tracker; one try, then a human looks (DESIGN §18).
+    max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
 
 
 class Trust(Section):
@@ -185,6 +187,10 @@ class Runtime(Section):
     )
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
+    )
+    # Runs the splitter, a separate agent with no edit, shell, or label tools (DESIGN §18). Its timeout is the worker's.
+    split_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}"
     )
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45

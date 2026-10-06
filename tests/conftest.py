@@ -54,11 +54,11 @@ def treehouse_state(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.Mon
 def agent_log(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Fake agent on PATH with default behavior. Returns the file each run appends its argv and cwd to.
 
-    Tests change behavior with monkeypatch.setenv on the FAKE_AGENT_* variables, or FAKE_OVERSEER_* and FAKE_WORKER_*
-    for one role only; see tests/fakes/agent.
+    Tests change behavior with monkeypatch.setenv on the FAKE_AGENT_* variables, or FAKE_OVERSEER_*, FAKE_WORKER_*, and
+    FAKE_SPLITTER_* for one role only; see tests/fakes/agent.
     """
     log = tmp_path / "agent.jsonl"
-    for role in ("AGENT", "OVERSEER", "WORKER"):
+    for role in ("AGENT", "OVERSEER", "WORKER", "SPLITTER"):
         for name in ("RESULT", "EXIT", "SLEEP", "COMMANDS"):
             monkeypatch.delenv(f"FAKE_{role}_{name}", raising=False)
     monkeypatch.setenv("FAKE_AGENT_LOG", str(log))
@@ -98,6 +98,7 @@ labels = ["agent-ready-tester"]
 [runtime]
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
 worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
+split_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-splitter {{prompt}}'
 
 [paths]
 state_dir = {json.dumps(str(state_dir))}

@@ -150,7 +150,9 @@ def _detail(run: sqlite3.Row) -> str:
             harness: object = result.get("harness")
             summary: object = result.get("summary")
             note = str(harness or summary or "")
-    text = f"run {run['id']} ({run['kind']}, {run['branch']}) ended {run['status']}"
+    # A split run has no branch.
+    what = f"{run['kind']}, {run['branch']}" if run["branch"] else str(run["kind"])
+    text = f"run {run['id']} ({what}) ended {run['status']}"
     if note:
         text += f": {note}"
     return f"{text}; log {run['log_path']}"[:2000]

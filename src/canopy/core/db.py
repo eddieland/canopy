@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -16,6 +16,8 @@ from pathlib import Path
 
 DB_FILE_NAME = "canopy.db"
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+# A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
+KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates.
 CURSOR_COLUMNS: Mapping[str, str] = {
@@ -27,6 +29,16 @@ CURSOR_COLUMNS: Mapping[str, str] = {
 
 class MigrationError(Exception):
     """The migrations on disk and the database disagree."""
+
+
+@dataclass(frozen=True)
+class RunLease:
+    """The slot a run works in: its path, the lease identity treehouse gave it, and the branch the run starts from."""
+
+    slot_path: Path
+    lease_id: str
+    lease_holder: str
+    base_branch: str
 
 
 @dataclass(frozen=True)
@@ -221,27 +233,29 @@ def insert_run(
     tick_id: int,
     key: str,
     kind: str,
-    slot_path: Path,
-    lease_id: str,
-    lease_holder: str,
-    base_branch: str,
-    branch: str,
+    lease: RunLease | None,
+    branch: str | None,
     runs_dir: Path,
     repo: str | None = None,
+    repos: Sequence[str] = (),
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
-    `repo` names the repository in the workspace map whose pool the slot came from.
+    `lease` is the slot the run works in, and `repo` names the repository in the workspace map whose pool it came from.
+    A split run has neither, nor a branch: it names its repositories in `repos` instead (DESIGN §18).
     """
+    slot = (str(lease.slot_path), lease.lease_id, lease.lease_holder, lease.base_branch) if lease else (None,) * 4
     with transaction(conn):
         cur = conn.execute(
             "INSERT INTO runs (tick_id, ticket_key, kind, slot_path, lease_id, lease_holder, base_branch, branch, "
             "started_at, log_path, repo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)",
-            (tick_id, key, kind, str(slot_path), lease_id, lease_holder, base_branch, branch, now(), repo),
+            (tick_id, key, kind, *slot, branch, now(), repo),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
-        conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
+        conn.executemany("INSERT INTO run_repos (run_id, repo) VALUES (?, ?)", [(run_id, r) for r in repos])
+        if branch is not None:
+            conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
     return run_id
 
 
@@ -269,13 +283,59 @@ def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
     conn.execute("UPDATE runs SET worker_pid = ? WHERE id = ?", (pid, run_id))
 
 
-def finish_run(conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None) -> bool:
-    """Close a running run. Returns False if it was already closed, which leaves it as it was."""
-    cur = conn.execute(
-        "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-        (now(), status, result_json, run_id),
-    )
-    return cur.rowcount == 1
+def finish_run(
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    result_json: str | None,
+    *,
+    children: Mapping[str, str] | None = None,
+) -> bool:
+    """Close a running run. Returns False if it was already closed, which leaves it as it was.
+
+    `children` are the tickets a split run created, by key, each with its repository. They are recorded with the run's
+    outcome, in one transaction, and only if this call closes the run.
+    """
+    with transaction(conn):
+        cur = conn.execute(
+            "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
+            (now(), status, result_json, run_id),
+        )
+        if cur.rowcount != 1:
+            return False
+        conn.executemany(
+            "INSERT INTO split_children (child_key, parent_key, repo, run_id) "
+            "SELECT ?, ticket_key, ?, id FROM runs WHERE id = ?",
+            [(child, repo, run_id) for child, repo in (children or {}).items()],
+        )
+    return True
+
+
+def run_repos(conn: sqlite3.Connection, run_id: int) -> list[str]:
+    """Return the repositories a split run was dispatched with, by name."""
+    rows = conn.execute("SELECT repo FROM run_repos WHERE run_id = ? ORDER BY repo", (run_id,))
+    return [str(r[0]) for r in rows]
+
+
+def has_runs(conn: sqlite3.Connection, key: str) -> bool:
+    """Return whether any run was ever dispatched for `key`."""
+    return conn.execute("SELECT 1 FROM runs WHERE ticket_key = ? LIMIT 1", (key,)).fetchone() is not None
+
+
+def split_child(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    """Return the `split_children` row for `key` if a split run created it, else None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM split_children WHERE child_key = ?", (key,)).fetchone()
+    return row
+
+
+def open_splits(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return the children of every parent not marked done, with the end time of the split run that created each."""
+    return conn.execute(
+        "SELECT c.child_key, c.parent_key, c.repo, c.run_id, r.ended_at FROM split_children c "
+        "JOIN runs r ON r.id = c.run_id "
+        "WHERE NOT EXISTS (SELECT 1 FROM tickets t WHERE t.key = c.parent_key AND t.done = 1) "
+        "ORDER BY c.parent_key, c.child_key"
+    ).fetchall()
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:

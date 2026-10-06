@@ -13,7 +13,7 @@ import click
 from canopy.core import db, workspace
 from canopy.runs import dispatch
 
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+KEY_RE = db.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 MAX_TEXT = 2000

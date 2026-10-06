@@ -104,7 +104,8 @@ canopy (harness, Python)
   runs/            worker runs on tickets (§8)
     dispatch.py    guards, lease, render the worker prompt, spawn detached _run
     policy.py      attempt limits and the fix-ci cooldown, derived from runs
-    worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return
+    worker.py      canopy _run: branch setup, the worker, result parsing, push verification, slot return; a split
+                   run's splitter and the children it reports
     reconcile.py   dead runs marked crashed, stale leases returned, the capacity left
 
   setup/
@@ -130,8 +131,8 @@ canopy (harness, Python)
 ```
 
 ```
-prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md
-agents/          OpenCode agent definitions: canopy-overseer, canopy-worker
+prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md
+agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-splitter
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
@@ -163,7 +164,8 @@ Roles:
 - **Worker**: an agent run with `worker_cmd` inside a leased worktree with a
   task prompt. Writes code, pushes a branch, opens or updates a PR, comments on
   the ticket, prints a result line, exits. Never merges, approves, or moves a
-  ticket to Done.
+  ticket to Done. A split run's worker is the splitter, run with `split_cmd`: it creates tickets and writes no code
+  (§18).
 
 ## 6. Tick
 
@@ -190,9 +192,10 @@ way, a tick does, in order:
    the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
    (name, path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query,
    labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy limits,
-   running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
+   running workers, the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
    next run if that is still ahead, the repository of its latest run, and that run: id, kind, status, branch, the base
-   it started from, start and end).
+   it started from, start and end), and `split_children`: each ticket a split run created whose parent is not marked
+   done, with its parent, repository, split run, and that run's end (§18).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention`
    read that variable to know which tick they belong to, and refuse if it is unset or names a tick that is not running
@@ -273,6 +276,7 @@ in `tickets.phase` for the status view, never read back as truth.
 | `merged` | PR merged | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label | dispatch `resume` pointing at the reply; the worker removes the label |
+| `split` | a split run created its children (§18) | wait, with `split_unlabeled`; done once every child closes |
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
 identifier, never a display name. If the tracker cannot say when a label was added, the worker's question comment is the
@@ -289,8 +293,11 @@ provider skill says which.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume [--repo NAME] [--slug SLUG] [--base BRANCH]
+`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG] [--base BRANCH]
 [--context TEXT] [--cursor NAME=ID]...`:
+
+This section describes the kinds that work on a branch. A `split` creates tickets instead; where it differs, §18 says
+how.
 
 1. Refuse if the dispatch names no configured queue label, if capacity is zero, if a `runs` row for KEY is `running`,
    or if the kind's attempt limit or cooldown blocks it. Guards are in code and are not overridable from the prompt. A
@@ -305,13 +312,17 @@ provider skill says which.
      the ticket's labels is the independent check (step 3).
    - `unknown_repo`: in a workspace, no `--repo`, or one that is not in the map, has no primary clone, or is not the
      repository of the ticket's earlier runs: a ticket stays in the repository of its first dispatch until joint runs
-     (ROADMAP M7, D052). In a workspace of one `--repo` may be left out, and if given must be the repository's name
-     (§18). A `--repo` that is not a repository name at all (`[a-z][a-z0-9-]*`) is a usage error, like a bad key.
-   - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci` or `resume`.
+     (ROADMAP M7, D052), or not the one recorded for a ticket a split created. More than one `--repo` is refused for
+     every kind but `split`, which has rules of its own (§18). In a workspace of one `--repo` may be left out, and if
+     given must be the repository's name (§18). A `--repo` that is not a repository name at all (`[a-z][a-z0-9-]*`) is
+     a usage error, like a bad key.
+   - `bad_slug`: a slug that is not lowercase words joined by hyphens, or any `--slug` with `fix-ci`, `resume`, or
+     `split`.
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal. They continue the branch the
      ticket's latest dispatch recorded (`tickets.branch`); `implement` is the only kind that names a new one.
    - `bad_base`: a `--base` that is not `<trust.branch_prefix>` followed by one plain ref component (letters, digits,
-     `_`, `-`, starting with a letter or digit, at most 200 characters), or that is the run's own branch (§10, D045).
+     `_`, `-`, starting with a letter or digit, at most 200 characters), that is the run's own branch (§10, D045), or
+     any `--base` with `split`.
    - `running`: a run for KEY is running.
    - `attempt_limit`: KEY has already had `policy.max_<kind>_attempts` runs of this kind. Every run counts, whatever it
      ended as, and the count never resets (D030). The refusal also records the `attempt_limit` attention item (§14).
@@ -381,6 +392,8 @@ Worker result contract, one JSON line, last line of stdout:
  "summary":"one paragraph","question":"only when blocked"}
 ```
 
+A split run's result has no branch or PR and adds `children` (§18).
+
 Worker obligations, stated in every worker prompt:
 
 - Work only inside the worktree. Push only to `agent/<KEY>-*`, never with force.
@@ -444,6 +457,10 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
   runs from before it, which were in the workspace of one's repository), status, result_json. Status is `running`,
   `done`, `blocked`, `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source
   for capacity, crash detection, attempt counts, the fix-ci cooldown, and a ticket's repository (its latest run's).
+  A split run has no slot, lease, branch, or repository (migration 0005 made those columns nullable).
+- `run_repos`: the repositories a split run was dispatched with (migration 0005).
+- `split_children`: one row per ticket a split run created: its key, its parent, its repository, and the run. Written
+  only by `canopy _run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action,
   rationale, and a repository for an attention item about one (`repo`, migration 0004). Audit log and
   prompt-evaluation corpus.
@@ -500,6 +517,7 @@ max_implement_attempts = 2
 max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
+max_split_attempts = 1
 
 [trust]
 branch_prefix = "agent/"
@@ -518,8 +536,9 @@ max_workers = 2
 [runtime]
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
+split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}'
 overseer_timeout_minutes = 15
-worker_timeout_minutes = 45
+worker_timeout_minutes = 45   # split runs too
 
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
@@ -568,13 +587,13 @@ Rules:
 
 A command template is split into words with shell quoting rules (`shlex`), then `{prompt}` and `{definitions_dir}` are
 replaced inside each word in one pass. No shell runs, so the prompt always lands in exactly one argument whatever it
-contains (D023). Both templates must contain `{prompt}` exactly once and `{definitions_dir}`, the directory canopy's
-agent definitions are in (§13), at least once; a template without it is a config error that prints the line to write
-instead. The check catches templates from before D040; it cannot tell where the runtime reads the value. A template
-that passes the directory somewhere OpenCode does not read it runs OpenCode's default agent, which allows everything, so
-a custom template, such as a sandbox wrapper's, must still end up setting `OPENCODE_CONFIG_DIR` to it. `env` in the
-default templates is the ordinary program, not a shell. `notify.cmd` is split the same way, gets its input on stdin, and
-must not contain `{prompt}`.
+contains (D023). The agent templates (`overseer_cmd`, `worker_cmd`, `split_cmd`) must contain `{prompt}` exactly once
+and `{definitions_dir}`, the directory canopy's agent definitions are in (§13), at least once; a template without it is
+a config error that prints the line to write instead. The check catches templates from before D040; it cannot tell where
+the runtime reads the value. A template that passes the directory somewhere OpenCode does not read it runs OpenCode's
+default agent, which allows everything, so a custom template, such as a sandbox wrapper's, must still end up setting
+`OPENCODE_CONFIG_DIR` to it. `env` in the default templates is the ordinary program, not a shell. `notify.cmd` is split
+the same way, gets its input on stdin, and must not contain `{prompt}`.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An override must keep what canopy's
 guards rely on: an overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include
@@ -605,10 +624,13 @@ Agent definitions ship in `agents/`, and agent runs load them from a directory c
   GitHub.
 - `canopy-worker`: edit and bash allowed within the worktree. MCP: the tracker (ticket comments, labels), GitHub
   (open/update PR, read reviews and checks).
+- `canopy-splitter`: read-only file tools in the workspace; no edit, bash, web fetch, or subagents. MCP: the tracker
+  (create tickets, link them, comment), with tools whose names suggest labels, assignees, edits, transitions, or PR,
+  branch, and file writes denied by name (§18).
 
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server.
 
-The runtime is swappable by editing the two command templates. No interface.
+The runtime is swappable by editing the command templates. No interface.
 
 ### Where the runtime finds canopy's definitions
 
@@ -625,7 +647,7 @@ canopy, still loading its snapshot. OpenCode scans both `agent/` and `agents/` (
 directory, and writes a `.gitignore` and a `node_modules/` into each one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), which must appear in every template that
-runs a canopy-shipped agent (`overseer_cmd`, `worker_cmd`, §19's `chore_cmd`, and §21's `review_cmd`):
+runs a canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `split_cmd`, §19's `chore_cmd`, and §21's `review_cmd`):
 
 ```toml
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
@@ -635,11 +657,11 @@ worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent c
 Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
 `OPENCODE_CONFIG_DIR` after the repository's config. A repository's definition of one of canopy's agents is merged into
 canopy's, not replaced by it, and could loosen its bash rules (D044). So before starting an agent, the harness looks at
-the OpenCode config in the directory the agent will start in (the repository root for the overseer, the worktree on the
-run's branch for a worker) and refuses to start if it defines one of canopy's agents: a file named for one under
-`.opencode/{agent,agents,mode,modes}/`, or an `opencode.json` or `opencode.jsonc` at the root or in `.opencode/` whose
-text names one. The overseer's refusal fails the tick (`overseer_failed`, summary naming the files); a worker's is a
-`crashed` run whose note names them, and its slot is returned. `canopy init` warns about the same files.
+the OpenCode config in the directory the agent will start in (the repository root for the overseer and the splitter, the
+worktree on the run's branch for a worker) and refuses to start if it defines one of canopy's agents: a file named for
+one under `.opencode/{agent,agents,mode,modes}/`, or an `opencode.json` or `opencode.jsonc` at the root or in
+`.opencode/` whose text names one. The overseer's refusal fails the tick (`overseer_failed`, summary naming the files);
+a worker's is a `crashed` run whose note names them, and its slot is returned. `canopy init` warns about the same files.
 
 Customizing canopy is adding skills where the runtime already looks: in the repository (`.agents/skills/`,
 `.claude/skills/`, `.opencode/skill/`) or the operator's home (`~/.agents/skills/`, `~/.claude/skills/`,
@@ -665,7 +687,7 @@ instead. It grants nothing: the overseer's and worker's bash rules are what they
 Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable only by the operator, after
 every tick: grouped by reason, one line per item with ticket key, age, and detail (usually a link). Reasons are exactly
 the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`,
-and in a workspace `repo_missing` and the overseer's `multi_repo` (§18).
+and in a workspace `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18).
 `canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
@@ -758,12 +780,13 @@ What the loop needs from a tracker, stated as capabilities. Each is used by the 
 | Post a comment (worker) | reports and questions |
 | Add and remove a label (worker) | `needs_human_label` |
 | Read blocker relations (overseer, optional) | ordering, stacking |
-| When a label was added (overseer, optional) | `human_replied` |
+| When a label was added (overseer, optional) | `human_replied`; split children (§18) |
+| Create a ticket and add a blocker relation (split worker, optional) | splitting (§18) |
 
 "Label" means the tracker's tagging primitive, whatever it is called. Without blocker relations, tickets are treated as
-unblocked. Without label history, the worker's question comment is the reference point for `human_replied`. If a tracker
-cannot do one of the required rows, the overseer records `skip` with rationale `tracker_unsupported: <capability>` and
-the operator fixes the MCP setup or writes a skill.
+unblocked. Without label history, the worker's question comment is the reference point for `human_replied`, and the
+overseer does not split tickets. If a tracker cannot do one of the required rows, the overseer records `skip` with
+rationale `tracker_unsupported: <capability>` and the operator fixes the MCP setup or writes a skill.
 
 ### Authorization is the same everywhere
 
@@ -783,9 +806,10 @@ code.
 
 ROADMAP M6 to M8. Rationale in D033. M6 built the workspace: the map and its config layer, state under the root, pools
 under the root with reconcile per repository, `repo_missing`, `canopy dispatch --repo` with one repository per ticket
-(D052), `canopy init --workspace`, and `canopy workspace sync`. Units, joint runs, and desks (M7) and splitting (M8)
-below are still plans; until M7 a ticket has exactly one repository, the one its first dispatch named. Earlier sections
-describe one repository, which is the workspace of one below.
+(D052), `canopy init --workspace`, and `canopy workspace sync`. M8 built splitting ahead of M7, without desks (D054).
+Units, joint runs, and desks (M7) below are still plans; until M7 a ticket has exactly one repository, the one its first
+dispatch named, and only `split` names several. Earlier sections describe one repository, which is the workspace of one
+below.
 
 ### Shape
 
@@ -922,39 +946,57 @@ Guards (§8) change as follows:
 
 ### Splitting
 
-canopy splits a ticket in the tracker, and never schedules what it split. The children are ordinary tickets that start
-without a queue label, so a human authorizes each one exactly as they authorize any ticket (TRUST_MODEL T1).
+Rationale in D033 and D054. canopy splits a ticket in the tracker, and never schedules what it split. The children are
+ordinary tickets that start without a queue label, so a human authorizes each one exactly as they authorize any ticket
+(TRUST_MODEL T1).
 
 - The overseer dispatches `canopy dispatch <KEY> --label <label> --kind split --repo api --repo web`. The overseer is
-  read-only, so the tracker writes happen in a worker, like every other write.
-- The split worker runs as `canopy-splitter`: a separate agent definition with read-only file and shell tools and the
-  tracker MCP tools to create a ticket, link tickets, and comment. It has no label tools and no GitHub write tools. It
-  runs in a desk of the named repositories' worktrees so it can read the code, and it pushes nothing. Where the
-  runtime can restrict a create tool's arguments, the definition forbids labels on create; where it cannot, the check
-  below still holds.
-- It creates one child per repository. Each child's body names its repository (`canopy-repo: web`) for people to
-  read, links the parent, and says what the child covers. Children that must land in order get the
-  tracker's blocker relation (`web` is blocked by `api`), so M4's ordering works them in order. Children carry no
-  queue label and are not assigned to anyone.
-- On the parent it posts a comment listing the children and saying which label starts each one. Its result line adds
-  `"children": {"PROJ-13": "api", "PROJ-14": "web"}`, each child's key and repository. `_run` validates it: every key
-  a valid ticket key (§17), every repository one the split was dispatched with, each at most once. Anything else makes
-  the run's status `unknown` and records nothing. A valid result is recorded in `split_children`, and a child's
-  repository comes from there afterwards.
+  read-only, so the tracker writes happen in a worker, like every other write. `split` takes no `--slug` (`bad_slug`)
+  and no `--base` (`bad_base`).
+- `unknown_repo` refuses a split in a workspace of one, one that names fewer than two distinct repositories, one that
+  names a repository not in the map or with no clone, a ticket with runs in a repository (D052: its work stays there),
+  and a ticket a split created. The overseer splits only a ticket with no branch, as its prompt says.
+- `split` has an attempt limit like every kind, `policy.max_split_attempts`, default 1, and counts against capacity
+  like any run.
+- A split run leases no slot and pushes nothing. Its repositories are recorded in `run_repos`; the run has no slot,
+  branch, or repository of its own. `_run` skips branch setup, push verification, and the slot return, and runs
+  `split_cmd` with cwd the workspace root, where the repositories' primary clones are, after the same check of the
+  root's OpenCode config as the overseer's (§13). The prompt, `worker-split.md`, lists each repository's name, clone
+  path, and summary, and the path of `MAP.md`. Until M7's desks it reads the primary clones as they are checked out;
+  with desks it will read fresh worktrees instead (D054). Reconcile marks a dead split run `crashed` and returns
+  nothing.
+- The split worker runs as `canopy-splitter`: a separate agent definition with read-only file tools, no edit or bash,
+  and the tracker MCP tools to create a ticket, link tickets, and comment. MCP tools whose names suggest labels,
+  assignees, edits, transitions, or PR, branch, and file writes are denied by name. OpenCode cannot restrict a create
+  tool's arguments, and a server whose one write tool both creates and labels (GitHub's `issue_write`) passes a name
+  check, so the label check below is the control and the permissions are defense in depth.
+- It creates one child per repository, at most. Each child's body names its repository (`canopy-repo: web`) for people
+  to read, links the parent, and says what the child covers. Children that must land in order get the tracker's
+  blocker relation (`web` is blocked by `api`), so M4's ordering works them in order. Children carry no labels and are
+  not assigned to anyone. A ticket whose shares can only work as one change is not split: the worker creates nothing
+  and reports `failed` with the reason, and the overseer records `multi_repo` for it until joint runs exist.
+- On the parent it posts a comment listing the children and saying which label starts each one. Its result line is
+  `{"status":"done|failed","summary":"...","children":{"PROJ-13":"api","PROJ-14":"web"}}`, each child's key and
+  repository, also when it reports `failed` after creating some. There is no `blocked`: the splitter has no label tools
+  to raise the needs-human label, so a `blocked` line is not a valid result. `_run` validates the children: every key a
+  valid ticket key (§17) of at most 100 characters, not the parent, not already a child, and with no runs in the
+  journal; every repository one the split was dispatched with, each at most once; and at least one child when the status
+  is `done`. Anything else makes the run's status `unknown`, with a harness note saying why, and records nothing. Valid
+  children are recorded in `split_children` in the transaction that closes the run, and a child's repository comes from
+  there afterwards.
 - The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
   open and unlabeled. The overseer marks the parent `done` in the journal once every child is closed. canopy does not
   touch the parent's tracker state.
-- A child is a candidate only if its queue label was added after the split run ended. The state block carries each
-  split run's end time and children, and the overseer compares it with the tracker's label history. A label the split
-  worker added itself, at creation or later, is therefore not counted, whatever the permissions allowed; the overseer
-  records attention `split_self_labeled` for that child instead, and it stays out of the queue until a human removes
-  the label and adds it again. A tracker without label history (the optional row of §17's contract) cannot tell the
-  two apart, so there the overseer records `skip` with `tracker_unsupported: label history` instead of dispatching
-  `split`.
+- A child is a candidate only if its queue label was added after the split run ended. The state block's
+  `split_children` carries each child with its parent, repository, and split run's end time, for every parent not marked
+  done, and the overseer compares that time with the tracker's label history. A label the split worker added itself,
+  at creation or later, is therefore not counted, whatever the permissions allowed; the overseer records attention
+  `split_self_labeled` for that child instead, and it stays out of the queue until a human removes the label and adds
+  it again. A tracker without label history (the optional row of §17's contract) cannot tell the two apart, so there
+  the overseer does not split: it records `multi_repo` with `tracker_unsupported: label history`.
 - This check is the overseer's, not a harness guard: the harness never reads the tracker (D003), so it cannot see
   labels at all. It is the same kind of control as the check that a ticket carries a queue label in the first place
-  (§17), and it has the same residual, stated in the trust model changes below.
-- `split` has an attempt limit like every kind, `policy.max_split_attempts`, default 1.
+  (§17), and it has the same residual, stated in TRUST_MODEL T1.
 - A child's work is ordinary: it is a one-repository ticket. `canopy dispatch` for a key in `split_children` refuses
   any `--repo` other than the one recorded there (`unknown_repo`), so editing the child's `canopy-repo` line later
   changes nothing. A ticket a human splits by hand has no such row; the overseer chooses its repository as for any
@@ -966,8 +1008,8 @@ without a queue label, so a human authorizes each one exactly as they authorize 
   displayed phase is its least advanced unit's.
 - `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. It replaces the slot columns of
   `runs` for new runs.
-- `split_children`: parent key, child key, repository, split run id. Written only by `_run` from a validated split
-  result.
+- `split_children` (built in M8): parent key, child key, repository, split run id. Written only by `_run` from a
+  validated split result. `run_repos` (M8) holds a split run's repositories until `run_slots` replaces it.
 - `tickets.repo` holds the workspace name.
 - Attention items carry an optional repository, and an item is identified by ticket, repository, and reason, so two
   units at their fix-ci limit are two items. `canopy attention` takes `--repo`.
@@ -976,15 +1018,15 @@ without a queue label, so a human authorizes each one exactly as they authorize 
 
 TRUST_MODEL is unchanged until the milestone that needs each change, whose PR carries the human approval:
 
-- T1: the loop may create tickets, but never with a queue label. What a split creates starts only when a human labels
-  it, and a label added during the split run does not count. The check is in the overseer prompt, backed by the
-  splitter's permissions, because the harness cannot read the tracker. Residual: canopy acts as the operator, so the
-  tracker cannot say who added a label, only when; a steered overseer that ignores the check can dispatch a
+- T1 (made in M8): the loop may create tickets, but never with a queue label. What a split creates starts only when a
+  human labels it, and a label added during the split run does not count. The check is in the overseer prompt, backed
+  by the splitter's permissions, because the harness cannot read the tracker. Residual: canopy acts as the operator, so
+  the tracker cannot say who added a label, only when; a steered overseer that ignores the check can dispatch a
   self-labeled child, as it could dispatch an unlabeled ticket today.
 - T4: a worker's edit permission covers the worktrees linked from its desk. M7 runs a canary like D021's to show that
   OpenCode's permission check allows edits through the desk's links and still denies paths outside them.
-- T6: the write scope is the repositories of the units the run covers, not one repository. The splitter's is creating
-  tickets, linking them, and commenting on the parent.
+- T6: the write scope is the repositories of the units the run covers, not one repository (M7). The splitter's is
+  creating tickets, linking them, and commenting on the parent (made in M8).
 - T7 (made in M6): the workspace file is a repository file for this purpose. Clone URLs are read only by an operator
   command. A workspace's state directory and definitions snapshots must be private to the operator (D053).
 - §7 (made in M6): branch protection is needed in every repository in the map; `canopy init --workspace` prints the

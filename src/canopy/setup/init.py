@@ -117,6 +117,7 @@ max_workers = 2
 # {{definitions_dir}} is the directory canopy's agent definitions and skills are in (D040). Keep it.
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-overseer {{prompt}}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-worker {{prompt}}'
+split_cmd    = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-splitter {{prompt}}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 

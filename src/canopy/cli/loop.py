@@ -78,7 +78,9 @@ def cmd_status(click_ctx: click.Context) -> int:
     running = db.running_runs(ctx.conn)
     click.echo(f"\nRunning workers ({len(running)}/{ctx.config.capacity.max_workers}):")
     for r in running:
-        click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {r['slot_path']}")
+        # A split run leases no worktree; it reads the workspace's clones from the workspace root.
+        where = r["slot_path"] or ctx.repo_root
+        click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {where}")
     if not running:
         click.echo("  none")
     return 0

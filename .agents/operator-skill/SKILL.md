@@ -88,7 +88,8 @@ Work through these in order and stop at the first that explains it.
      `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
      `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree), `bad_slug`,
      `bad_base`, `no_branch`, `unknown_repo` (in a workspace: no `--repo`, a repository not in the map or not cloned,
-     or not the one the ticket's earlier runs were in), `bad_prompt` (the worker prompt did not render; an override may
+     not the one the ticket's earlier runs were in or a split recorded for it, or a split naming fewer than two),
+     `bad_prompt` (the worker prompt did not render; an override may
      lack `{{LABELS}}`),
      `spawn_failed`. A run that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket
      closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
@@ -119,7 +120,9 @@ cause is gone; there is no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
-| `multi_repo` | The ticket needs changes in several repositories: split it into one ticket per repository. |
+| `multi_repo` | The ticket needs several repositories and canopy could not split it: split it by hand, or decide. |
+| `split_unlabeled` | canopy split the ticket: add your queue label to each child listed when you want it worked. |
+| `split_self_labeled` | A split child had a queue label before the split ended: remove the label and add it again. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 

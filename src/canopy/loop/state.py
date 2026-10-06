@@ -33,9 +33,14 @@ def state_block(
     last_runs: Mapping[str, sqlite3.Row],
     attempts: Mapping[str, Mapping[str, int]],
     fix_ci_cooldowns: Mapping[str, datetime],
+    splits: list[sqlite3.Row],
     now: datetime,
 ) -> str:
-    """Render the `## State` section the harness appends to the overseer prompt."""
+    """Render the `## State` section the harness appends to the overseer prompt.
+
+    `splits` are the children split runs created for parents not marked done, with each split run's end: a child is a
+    candidate only if its queue label was added after that (DESIGN §18).
+    """
     no_attempts = dict.fromkeys(policy.KINDS, 0)
     state = {
         "tick_id": tick_id,
@@ -83,6 +88,7 @@ def state_block(
             "max_fix_ci_attempts": config.policy.max_fix_ci_attempts,
             "fix_ci_cooldown_minutes": config.policy.fix_ci_cooldown_minutes,
             "max_resume_attempts": config.policy.max_resume_attempts,
+            "max_split_attempts": config.policy.max_split_attempts,
         },
         "running_workers": [
             {
@@ -110,6 +116,16 @@ def state_block(
                 "last_run": _run_summary(last_runs.get(str(t["key"]))),
             }
             for t in tickets
+        ],
+        "split_children": [
+            {
+                "key": c["child_key"],
+                "parent": c["parent_key"],
+                "repo": c["repo"],
+                "split_run_id": c["run_id"],
+                "split_ended_at": c["ended_at"],
+            }
+            for c in splits
         ],
     }
     if dry_run:

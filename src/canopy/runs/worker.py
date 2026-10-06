@@ -3,6 +3,9 @@
 Sets up the branch, runs `worker_cmd` with a timeout, parses the result line, verifies the branch is pushed, returns the
 slot, and closes the `runs` row. The slot is returned on every exit path this process can see: normal, exception, and
 SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next tick.
+
+A split run leases no slot and pushes nothing (DESIGN §18). It runs `split_cmd` at the workspace root, and records the
+children its result names once they pass `check_children`.
 """
 
 from __future__ import annotations
@@ -11,13 +14,13 @@ import json
 import os
 import signal
 import sqlite3
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
 from canopy.core import db, definitions, treehouse
 from canopy.core.config import render_command
@@ -28,6 +31,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
+# A child's key is rendered into the overseer's prompt every tick until its parent is done.
+MAX_CHILD_KEY = 100
 _GIT_TIMEOUT_SECONDS = 300
 # Never let git wait for credentials on a terminal nobody is watching.
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
@@ -69,13 +74,27 @@ class WorkerResult(BaseModel):
     question: Text | None = None
 
 
+class SplitResult(WorkerResult):
+    """A split run's result: the worker contract plus `children`, each created ticket's key and repository.
+
+    A splitter has no label tools, so it cannot ask a question the way a blocked worker does: `blocked` is invalid.
+    """
+
+    status: Literal["done", "failed"]
+    children: dict[StrictStr, StrictStr] = Field(default_factory=dict[str, str])
+
+
 @dataclass(frozen=True)
 class Outcome:
-    """How a run ended: its `runs.status` and the summary stored as `result_json`."""
+    """How a run ended: its `runs.status` and the summary stored as `result_json`.
+
+    `children` are the tickets a split run created, validated and ready to record.
+    """
 
     status: str
     result: WorkerResult | None
     note: str = ""
+    children: Mapping[str, str] = field(default_factory=dict[str, str])
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
@@ -85,15 +104,49 @@ class Outcome:
         return json.dumps(data)
 
 
-def parse_result(stdout: str) -> WorkerResult | None:
+def parse_result[R: WorkerResult](stdout: str, model: type[R]) -> R | None:
     """Parse the last non-empty line of `stdout` as the result contract. None if it is missing or invalid."""
     lines = [line.strip() for line in stdout.splitlines() if line.strip()]
     if not lines:
         return None
     try:
-        return WorkerResult.model_validate_json(lines[-1])
+        return model.model_validate_json(lines[-1])
     except ValidationError:
         return None
+
+
+def check_children(conn: sqlite3.Connection, parent: str, result: SplitResult, repos: Sequence[str]) -> str:
+    """Return why a split result's `children` cannot be recorded, or "" if they can (DESIGN §18).
+
+    Each child is a valid ticket key, new to the journal, for one of the repositories the split was dispatched with, and
+    no repository has two. A `done` split names at least one child.
+    """
+    if result.status == "done" and not result.children:
+        return "a done split names the tickets it created in children"
+    named = list(result.children.values())
+    twice = sorted({repo for repo in named if named.count(repo) > 1})
+    if twice:
+        return f"two children are for {twice[0][:MAX_CHILD_KEY]}"
+    for key, repo in result.children.items():
+        problem = _child_problem(conn, parent, key, repo, repos)
+        if problem:
+            return problem
+    return ""
+
+
+def _child_problem(conn: sqlite3.Connection, parent: str, key: str, repo: str, repos: Sequence[str]) -> str:
+    if len(key) > MAX_CHILD_KEY or db.KEY_RE.fullmatch(key) is None:
+        return f"{key[:MAX_CHILD_KEY]!r} is not a ticket key"
+    if key == parent:
+        return f"{key} is the ticket that was split"
+    if repo not in repos:
+        return f"{key}'s repository {repo[:MAX_CHILD_KEY]!r} is not one the split was dispatched with"
+    recorded = db.split_child(conn, key)
+    if recorded is not None:
+        return f"{key} is already a child of {recorded['parent_key']}"
+    if db.has_runs(conn, key):
+        return f"{key} already has runs, so this split did not create it"
+    return ""
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
@@ -114,7 +167,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     outcome = Outcome("crashed", None, "the run stopped before the worker finished")
     with _StopOnSignal() as stop:
         try:
-            outcome = _work(ctx, run, out, log)
+            outcome = _split(ctx, run, out, log) if run["kind"] == dispatch.SPLIT else _work(ctx, run, out, log)
         except Stopped as e:
             outcome = Outcome("crashed", None, str(e))
         except _SetupError as e:
@@ -126,10 +179,11 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             # From here on a signal is ignored: returning the slot and closing the row must not be interrupted.
             stop.armed = False
-            _return_slot(ctx, run, log)
+            if run["lease_id"] is not None:
+                _return_slot(ctx, run, log)
             if outcome.result is not None and outcome.result.pr and _plain_url(outcome.result.pr):
                 db.set_pr_url(ctx.conn, str(run["ticket_key"]), outcome.result.pr)
-            if not db.finish_run(ctx.conn, run_id, outcome.status, outcome.result_json()):
+            if not db.finish_run(ctx.conn, run_id, outcome.status, outcome.result_json(), children=outcome.children):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             log.info("run finished", extra={**fields, "status": outcome.status})
     return outcome
@@ -153,37 +207,65 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{base}")
     start = git.run("rev-parse", f"refs/heads/{branch}")
 
+    # Run on the branch the worker will work on: OpenCode reads the worktree's config too (D044).
+    result = _run_agent(ctx, run, template=ctx.config.runtime.worker_cmd, cwd=slot, out=out, log=log)
+    parsed = parse_result(result.stdout, WorkerResult)
+    status, note = _status(ctx, result, parsed)
+
+    unpushed = _ensure_pushed(git, branch, start, log)
+    if unpushed:
+        status, note = "unpushed", unpushed
+    return Outcome(status, parsed, note)
+
+
+def _split(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
+    """Run the splitter at the workspace root, where it reads the repositories' clones, and check its children."""
+    # The workspace root is where the overseer runs too: its OpenCode config must not define one of canopy's agents.
+    result = _run_agent(ctx, run, template=ctx.config.runtime.split_cmd, cwd=ctx.repo_root, out=out, log=log)
+    parsed = parse_result(result.stdout, SplitResult)
+    status, note = _status(ctx, result, parsed)
+    if parsed is None or note:
+        return Outcome(status, parsed, note)
+    problem = check_children(ctx.conn, str(run["ticket_key"]), parsed, db.run_repos(ctx.conn, int(run["id"])))
+    if problem:
+        # Nothing is recorded, so no child's repository comes from a result the harness could not check.
+        unchecked = parsed.model_copy(update={"children": {}})
+        return Outcome("unknown", unchecked, f"the split's children were not recorded: {problem}")
+    return Outcome(parsed.status, parsed, children=parsed.children)
+
+
+def _run_agent(
+    ctx: Context, run: sqlite3.Row, *, template: str, cwd: Path, out: TextIO, log: logs.TickAdapter
+) -> procs.Result:
+    """Run the worker agent from `template` in `cwd` with the run's prompt, writing its output to the run log."""
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044).
-    shadowing = definitions.shadowing(slot)
+    # OpenCode reads the config in `cwd` too (D044).
+    shadowing = definitions.shadowing(cwd)
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
-    argv = render_command(ctx.config.runtime.worker_cmd, prompt, definitions.ensure(ctx.state_dir))
+    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir))
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     log.info("running worker", extra={"run_id": run["id"], "cmd": argv[0], "timeout_minutes": timeout_minutes})
     run_id = int(run["id"])
     result = ctx.runner.run(
         argv,
-        cwd=slot,
+        cwd=cwd,
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
     )
     out.write(f"--- worker stdout ---\n{result.stdout}\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
+    return result
 
-    parsed = parse_result(result.stdout)
+
+def _status(ctx: Context, result: procs.Result, parsed: WorkerResult | None) -> tuple[str, str]:
+    """Return the run's status and the harness note saying why it differs from what the worker reported, if it does."""
     if result.timed_out:
-        status, note = "timeout", f"the worker timed out after {timeout_minutes} minutes"
-    elif parsed is None:
-        status, note = "unknown", "the worker's last line was not a valid result"
-    else:
-        status, note = parsed.status, ""
-
-    unpushed = _ensure_pushed(git, branch, start, log)
-    if unpushed:
-        status, note = "unpushed", unpushed
-    return Outcome(status, parsed, note)
+        return "timeout", f"the worker timed out after {ctx.config.runtime.worker_timeout_minutes} minutes"
+    if parsed is None:
+        return "unknown", "the worker's last line was not a valid result"
+    return parsed.status, ""
 
 
 def _ensure_pushed(git: _Git, branch: str, start: str, log: logs.TickAdapter) -> str:

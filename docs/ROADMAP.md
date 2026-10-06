@@ -207,6 +207,8 @@ runs.
   PRs (a follow-up after the first merged, or the next repository once the first lands) before designing units, since
   it decides whether a unit can start after the ticket's first PR has merged.
 - The desk permission canary, and the TRUST_MODEL T4 and T6 changes with human approval (T7 and §7 changed in M6).
+- M8 landed first: run the splitter in a desk of the split's worktrees instead of at the workspace root, and replace
+  `run_repos` with `run_slots` (D054).
 
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.
@@ -228,7 +230,13 @@ Accept: a real ticket covering two repositories is split into two linked childre
 with no queue label on either. Nothing is dispatched for them until the operator labels them; then they are worked in
 order, one PR each.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_split.py` holds the harness's half of the acceptance:
+a split leases nothing and records the children its worker reports, invalid children are recorded nowhere, and each
+child is dispatched only in its recorded repository), docs, and D054 are in. Started on request ahead of M7, so a split
+run has no desk: it reads the primary clones from the workspace root (D054). The overseer prompt, the
+`canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Not yet checked
+live: that OpenCode applies the splitter's name patterns for MCP tools; run the canary with them before the real split.
+Waiting on the operator: a real two-repository ticket split, its children labeled by hand and worked in order.
 
 ## M9. Chores
 

@@ -321,10 +321,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
             tick_id=earlier,
             key=key,
             kind=kind,
-            slot_path=Path("/pool/1"),
-            lease_id=f"lease-{key}",
-            lease_holder=f"canopy:{key}",
-            base_branch="main",
+            lease=db.RunLease(Path("/pool/1"), f"lease-{key}", f"canopy:{key}", "main"),
             branch=f"agent/{key}-work",
             runs_dir=canopy_env.state_dir / "runs",
         )
