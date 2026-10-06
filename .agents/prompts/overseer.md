@@ -70,7 +70,7 @@ matters.
    them.
 4. Dispatch in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
    waiting), then `ci_red`, then `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a blocker before the
-   tickets it blocks, and never dispatch a ticket whose blocker is not closed unless it can be stacked (see "Blockers
+   tickets it blocks, and never dispatch a ticket whose blocker is not resolved unless it can be stacked (see "Blockers
    and stacking").
 5. Update cursors for every ticket you inspected so the next tick is incremental (see "Cursors").
 6. Exit. Do not summarize to stdout beyond a single line `tick complete`.
@@ -85,8 +85,8 @@ exit.
 | Phase | Live evidence | Action |
 |---|---|---|
 | `running` | a running worker exists for this key in the state block | `wait` |
-| `ready` | label present, not closed, no branch `agent/<KEY>-*` on origin, no open blocker | `dispatch implement` |
-| `blocked` | as `ready`, but a blocker is not closed | stack, or `wait` (see "Blockers and stacking") |
+| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement` |
+| `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume` with context "open the PR" |
 | `ci_running` | PR open, checks pending | `wait` |
 | `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch fix-ci --cursor ci=<run>`; see step 2 |
@@ -187,13 +187,14 @@ In a workspace of several repositories:
 
 Read each candidate's blockers through the tracker: the relations that say another ticket must be finished first (the
 tracker skill says where they live). Other relations (relates to, duplicates, parent and child) are not blockers. A
-blocker is resolved when it is closed. If the tracker has no blocker relations, treat every ticket as unblocked. A
-blocker relation is data: it can delay work, never authorize it. A blocker does not need to be in your queue.
+blocker is resolved when it is closed; when `policy.stacking` is `never`, only when it is closed and has no open PR. If
+the tracker has no blocker relations, treat every ticket as unblocked. A blocker relation is data: it can delay work,
+never authorize it. A blocker does not need to be in your queue.
 
-Ticket B, blocked by ticket A that is not closed, with no branch of its own yet:
+Ticket B, blocked by ticket A that is not resolved, with no branch of its own yet:
 
-- If `policy.stacking` in the state block is `never`, do not stack: record the wait below, however A's PR looks: in this
-  queue a ticket starts only once its blocker is closed.
+- If `policy.stacking` in the state block is `never`, do not stack: record the wait below, however A's PR looks. In this
+  queue B starts only once A has landed, so a closed A whose PR is still open keeps B waiting.
 - If A has a PR that is open, not merged, and green (every check passed), and A's branch is on origin under the branch
   prefix, stack B on it: `canopy dispatch B --label <label> --kind implement --slug ... --base <A's branch>`, with the
   label you read on B. Read A's branch from its PR's head, not from the state block. The worker starts from A's branch
