@@ -20,16 +20,30 @@ VALUES = {
     "CONTEXT": "None.",
     "AUTHORIZED_REPLIERS": "`alice`",
     "LABELS": "`agent-ready-alice`",
+    # A split's own: it works in no slot and on no branch (DESIGN §18).
+    "WORKSPACE": "/work/acme",
+    "REPOS": "- `api`, cloned at `/work/acme/repos/api`: The API.",
+    "MAP": "`/work/acme/MAP.md`",
 }
+SPLIT_ONLY = ("WORKSPACE", "REPOS", "MAP")
+BRANCH_ONLY = ("SLOT", "BRANCH", "BASE", "STACKING", "NEEDS_HUMAN_LABEL", "PR_LABEL", "PR_URL")
 
 
 @pytest.mark.parametrize("kind", sorted(prompts.WORKER))
 def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: str) -> None:
-    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES)
+    # Dispatch renders each prompt with only its kind's placeholders, so a split prompt must not use a branch's.
+    unused = BRANCH_ONLY if kind == "split" else SPLIT_ONLY
+    values = {k: v for k, v in VALUES.items() if k not in unused}
+    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, values)
+    # No placeholder is left. The split's result line ends in `}}` legitimately: `children` is an object.
     assert "{{" not in text
-    assert "}}" not in text
-    assert '"branch":"agent/PROJ-1-work"' in text
     assert "attempt 1 of 2" in text
+    if kind == "split":
+        assert '"children":{' in text
+        assert "/work/acme/repos/api" in text
+    else:
+        assert "}}" not in text
+        assert '"branch":"agent/PROJ-1-work"' in text
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:

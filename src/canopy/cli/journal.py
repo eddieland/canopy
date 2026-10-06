@@ -22,6 +22,7 @@ PHASES = (
     "merged",
     "needs_human",
     "human_replied",
+    "split",
 )
 DECIDE_ACTIONS = ("wait", "skip", "done")
 

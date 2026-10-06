@@ -17,13 +17,18 @@ from canopy.core import db
 if TYPE_CHECKING:
     from canopy.core.config import Config
 
-KINDS = ("implement", "fix-ci", "resume")
+KINDS = ("implement", "fix-ci", "resume", "split")
 
 
 def limits(config: Config) -> dict[str, int]:
     """Return the most runs of each kind one ticket may have."""
     p = config.policy
-    return {"implement": p.max_implement_attempts, "fix-ci": p.max_fix_ci_attempts, "resume": p.max_resume_attempts}
+    return {
+        "implement": p.max_implement_attempts,
+        "fix-ci": p.max_fix_ci_attempts,
+        "resume": p.max_resume_attempts,
+        "split": p.max_split_attempts,
+    }
 
 
 def attempts(conn: sqlite3.Connection) -> dict[str, dict[str, int]]:

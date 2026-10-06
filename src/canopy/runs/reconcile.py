@@ -53,7 +53,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     pools = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
     returned = _close_dead_runs(ctx, log)
     running = db.running_runs(ctx.conn)
-    held = {str(r["lease_id"]) for r in running}
+    held = {str(r["lease_id"]) for r in running if r["lease_id"] is not None}
     leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
     if not running:
         # No run is live, so no run of an earlier canopy is still loading its snapshot.
@@ -82,6 +82,10 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
         if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
             log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
         db.finish_run(ctx.conn, int(run["id"]), "crashed", json.dumps({"harness": "the worker process is gone"}))
+        if run["lease_id"] is None:
+            # A split run leases nothing (DESIGN §18).
+            log.warning("worker process is gone; run marked crashed", extra=fields)
+            continue
         outcome = treehouse.return_slot(
             ctx.runner,
             Path(run["slot_path"]),

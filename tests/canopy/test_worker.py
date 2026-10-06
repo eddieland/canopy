@@ -298,7 +298,7 @@ def test_sigterm_returns_the_slot(
 
 
 def test_parse_result_takes_the_last_non_empty_line() -> None:
-    parsed = worker.parse_result('chatter\n{"status": "done"}\n\n  \n')
+    parsed = worker.parse_result('chatter\n{"status": "done"}\n\n  \n', worker.WorkerResult)
     assert parsed is not None
     assert parsed.status == "done"
-    assert worker.parse_result('{"status": "done"}\nmore chatter\n') is None
+    assert worker.parse_result('{"status": "done"}\nmore chatter\n', worker.WorkerResult) is None

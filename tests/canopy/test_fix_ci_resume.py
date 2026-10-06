@@ -230,7 +230,7 @@ def test_state_block_shows_attempts_and_the_cooldown(
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
     [ticket] = state["tickets"]
-    assert ticket["attempts"] == {"implement": 1, "fix-ci": 1, "resume": 0}
+    assert ticket["attempts"] == {"implement": 1, "fix-ci": 1, "resume": 0, "split": 0}
     until = db.parse_time(str(fix["ended_at"])) + timedelta(minutes=30)
     assert ticket["fix_ci_cooldown_until"] == db.format_time(until)
     assert state["policy"]["max_implement_attempts"] == 2

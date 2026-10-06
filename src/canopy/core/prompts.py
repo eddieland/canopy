@@ -17,7 +17,12 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 OVERSEER = "overseer.md"
-WORKER = {"implement": "worker-implement.md", "fix-ci": "worker-fix-ci.md", "resume": "worker-resume.md"}
+WORKER = {
+    "implement": "worker-implement.md",
+    "fix-ci": "worker-fix-ci.md",
+    "resume": "worker-resume.md",
+    "split": "worker-split.md",
+}
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.

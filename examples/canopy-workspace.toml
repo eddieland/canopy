@@ -22,6 +22,11 @@ provider = "jira"
 needs_human_label = "needs-human"
 query = 'project = ACME AND statusCategory != Done ORDER BY priority DESC, created ASC'
 
+[policy]
+# A ticket covering several repositories may be split into one ticket per repository, which a human then labels
+# (DESIGN.md §18). The workspace may only lower this; the default is one try.
+max_split_attempts = 1
+
 [trust]
 branch_prefix = "agent/"
 pr_label = "agent"

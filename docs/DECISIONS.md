@@ -819,3 +819,31 @@ Rejected:
 Residual: the check reads permissions, not provenance. A checkout made under a umask of 077 creates private
 directories, and files git adds inside a `.canopy/` canopy already made are the operator's own. `.gitignore` covers
 `.canopy/`, and review of the workspace repository is the backstop, as for the map itself.
+
+## D054. Split runs before joint runs: no lease, the workspace root, and a `split_cmd` of their own
+
+Context: M8 was taken ahead of M7, so there are no desks, no `run_slots`, and no repeated `--repo` for other kinds.
+DESIGN §18 planned the splitter in a desk of the named repositories' worktrees. A split only reads code and writes to
+the tracker; it never pushes.
+Decision (DESIGN §18):
+- A split run leases nothing. It runs at the workspace root, where every repository's primary clone is, as the
+  overseer does, after the same check of the root's OpenCode config. Its repositories are recorded in `run_repos`, and
+  `runs` was rebuilt with its slot, lease, and branch columns nullable (migration 0005).
+- `--repo` may repeat, but only `split` accepts more than one; every other kind still names one repository (D052).
+  A split needs a workspace and at least two cloned repositories, and is refused for a ticket that already has work in
+  a repository or was itself created by a split.
+- The splitter has its own template, `runtime.split_cmd`, defaulting to `--agent canopy-splitter`, rather than a
+  rewrite of `worker_cmd`. It shares `worker_timeout_minutes`.
+- `_run` records a child only if it is new to the journal (not already a child, no runs) and not the parent, besides
+  the checks DESIGN planned. A steered splitter could otherwise claim an existing ticket and pin it to a repository.
+- A tracker without label history gets `multi_repo` attention, not the planned per-ticket `skip`: a skip leaves the
+  ticket stuck with nobody told, and a human can still split it by hand.
+Rejected:
+- Leasing a slot per repository without a desk: the splitter could start in only one worktree, and reading the others
+  needs `external_directory` exceptions, which is M7's canary question.
+- Waiting for M7: splitting is the shape DESIGN prefers for most multi-repository tickets, and needs none of M7's
+  schema to be safe.
+Consequences: the splitter reads the primary clones as the operator left them checked out, which may be stale or on
+another branch. That costs split quality, not safety: it writes no code.
+Revisit: when M7 lands desks, run the splitter in one and drop `run_repos` for `run_slots`; if splits are judged on
+stale code.

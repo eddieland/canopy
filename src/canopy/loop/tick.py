@@ -85,6 +85,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         last_runs=db.latest_runs(ctx.conn),
         attempts=policy.attempts(ctx.conn),
         fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
+        splits=db.open_splits(ctx.conn),
         now=now,
     )
     prompt = prompts.render_overseer(ctx.config, block)

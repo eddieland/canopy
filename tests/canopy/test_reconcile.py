@@ -48,10 +48,7 @@ def add_run(
         tick_id=tick_id,
         key=key,
         kind="implement",
-        slot_path=Path(leased["path"]),
-        lease_id=leased["lease_id"],
-        lease_holder=leased["lease_holder"],
-        base_branch="main",
+        lease=db.RunLease(Path(leased["path"]), leased["lease_id"], leased["lease_holder"], "main"),
         branch=f"agent/{key}-work",
         runs_dir=Path("/state/runs"),
     )

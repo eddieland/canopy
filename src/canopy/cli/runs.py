@@ -26,9 +26,11 @@ from canopy.runs import dispatch, policy, worker
 )
 @click.option(
     "--repo",
+    "repos",
     type=REPO,
+    multiple=True,
     help="The repository in the workspace the work is in. Required in a workspace; a ticket stays in the repository of "
-    "its first dispatch. Optional in a single repository.",
+    "its first dispatch. Optional in a single repository. split repeats it, once per repository the ticket covers.",
 )
 @click.option(
     "--slug",
@@ -61,7 +63,7 @@ def cmd_dispatch(
     key: str,
     kind: str,
     label: str | None,
-    repo: str | None,
+    repos: tuple[str, ...],
     slug: str | None,
     base: str | None,
     context: str | None,
@@ -78,15 +80,23 @@ def cmd_dispatch(
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if dry_run:
             plan = dispatch.check(
-                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, repo=repo
+                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, repos=repos
             )
-            branch, queue_label, repo_name = plan.branch, plan.label, plan.repo
+            branch, queue_label, repo_names = plan.branch, plan.label, plan.repos
             started = None
         else:
             started = dispatch.start(
-                ctx, tick_id=tick_id, key=key, kind=kind, label=label, slug=slug, base=base, context=context, repo=repo
+                ctx,
+                tick_id=tick_id,
+                key=key,
+                kind=kind,
+                label=label,
+                slug=slug,
+                base=base,
+                context=context,
+                repos=repos,
             )
-            branch, queue_label, repo_name = started.branch, started.label, started.repo
+            branch, queue_label, repo_names = started.branch, started.label, started.repos
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         if r.guard == "attempt_limit":
@@ -96,8 +106,10 @@ def cmd_dispatch(
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling.
     on_base = f" on {base}" if base is not None else ""
-    # A workspace of one has one repository, so naming it would say nothing.
-    in_repo = "" if ctx.workspace.single else f" in {repo_name}"
+    # A workspace of one has one repository, so naming it would say nothing. A split has no branch: it names its
+    # repositories instead.
+    in_repo = "" if ctx.workspace.single else f" in {repo_names[0]}"
+    work = f"split it across {', '.join(repo_names)}" if branch is None else f"work on {branch}{on_base}{in_repo}"
     if started is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
@@ -107,7 +119,7 @@ def cmd_dispatch(
             "; ".join(
                 e
                 for e in [
-                    f"dry run: not dispatched; would work on {branch}{on_base}{in_repo}",
+                    f"dry run: not dispatched; would {work}",
                     f"label {queue_label}",
                     *extras,
                 ]
@@ -120,8 +132,11 @@ def cmd_dispatch(
         return 0
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=dict(cursor_pairs))
-    where = f"{in_repo} at {started.slot}" if in_repo else f" in {started.slot}"
-    rationale = f"run {started.run_id}: {branch}{on_base}{where}; label {queue_label}"
+    if branch is None:
+        what = f"split across {', '.join(repo_names)}"
+    else:
+        what = f"{branch}{on_base}" + (f"{in_repo} at {started.slot}" if in_repo else f" in {started.slot}")
+    rationale = f"run {started.run_id}: {what}; label {queue_label}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")

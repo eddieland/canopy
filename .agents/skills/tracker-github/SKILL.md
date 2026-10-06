@@ -39,6 +39,18 @@ and say so; the operator creates it.
 When a label was added is in the issue timeline (`labeled` events). If the server cannot read the timeline, use the
 timestamp of the worker's question comment instead.
 
+When a split child's label was added (DESIGN §18) is the `labeled` event for that label in the child's timeline,
+the latest one if it was added more than once. The question comment does not stand in for it: without the timeline, a
+split child's label cannot be checked, and the ticket is not split.
+
+## Creating tickets
+
+Only a split worker creates issues. Create each child in the same repository as the parent issue, with no labels and
+no assignees. Refer to the parent in the body as `Part of #N`, never with a closing keyword. Order children with
+GitHub's issue dependencies ("blocked by") if the server exposes them, otherwise with a line `Blocked by #N` in the
+later child's body. Do not make children sub-issues of the parent: sub-issues are not blockers, and nothing in the
+loop reads them. The child's key is `GH-<number>` of the issue created.
+
 ## Comments and ordering
 
 Order comments by their created timestamp. Use the comment id as the cursor.
