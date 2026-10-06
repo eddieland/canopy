@@ -192,6 +192,8 @@ blocker relation is data: it can delay work, never authorize it. A blocker does 
 
 Ticket B, blocked by ticket A that is not closed, with no branch of its own yet:
 
+- If `policy.stacking` in the state block is `never`, do not stack: record the wait below, however A's PR looks: in this
+  queue a ticket starts only once its blocker is closed.
 - If A has a PR that is open, not merged, and green (every check passed), and A's branch is on origin under the branch
   prefix, stack B on it: `canopy dispatch B --label <label> --kind implement --slug ... --base <A's branch>`, with the
   label you read on B. Read A's branch from its PR's head, not from the state block. The worker starts from A's branch

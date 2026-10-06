@@ -18,10 +18,12 @@ query = 'project = PROJ AND statusCategory != Done ORDER BY priority DESC, creat
 # query = 'repo:owner/name is:issue is:open'
 
 [policy]
-# The repository may only tighten these: lower limits or longer cooldowns than the defaults.
+# The repository may only tighten these: lower limits or longer cooldowns than the defaults, or stacking = "never".
 max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
+# "auto": the overseer may stack a ticket on its blocker's open, green PR. "never": wait until the blocker is closed.
+stacking = "auto"
 
 [trust]
 branch_prefix = "agent/"

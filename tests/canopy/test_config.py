@@ -82,6 +82,23 @@ def test_user_policy_may_loosen(canopy_env: CanopyEnv) -> None:
     assert load(canopy_env.repo, canopy_env.user_file).policy.max_fix_ci_attempts == 5
 
 
+def test_stacking_defaults_to_auto(canopy_env: CanopyEnv) -> None:
+    assert load(canopy_env.repo, canopy_env.user_file).policy.stacking == "auto"
+
+
+def test_repository_may_turn_stacking_off_and_the_user_back_on(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + '[policy]\nstacking = "never"\n')
+    assert load(canopy_env.repo, canopy_env.user_file).policy.stacking == "never"  # stricter: used
+    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[policy]\nstacking = "auto"\n')
+    assert load(canopy_env.repo, canopy_env.user_file).policy.stacking == "auto"  # the user file may loosen
+
+
+def test_unknown_stacking_value_is_an_error_naming_the_file(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + '[policy]\nstacking = "sometimes"\n')
+    with pytest.raises(ConfigError, match=r"canopy\.toml.*policy\.stacking"):
+        load(canopy_env.repo, canopy_env.user_file)
+
+
 def test_missing_user_file_says_run_init(canopy_env: CanopyEnv) -> None:
     canopy_env.user_file.unlink()
     with pytest.raises(ConfigError, match="canopy init"):

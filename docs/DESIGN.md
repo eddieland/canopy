@@ -190,8 +190,8 @@ way, a tick does, in order:
    section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root,
    the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
    (name, path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query,
-   labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy limits,
-   running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
+   labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy (limits
+   and stacking), running workers, and the `tickets` rows not marked done (phase, cursors, runs so far of each kind, when fix-ci may
    next run if that is still ahead, the repository of its latest run, and that run: id, kind, status, branch, the base
    it started from, start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
@@ -406,7 +406,7 @@ Worker obligations, stated in every worker prompt:
 
 ## 10. Dependencies and stacking
 
-Rationale in D045.
+Rationale in D045 and D054.
 
 - Blocker relations are read by the overseer through MCP, in whatever form the tracker has them (Jira "is blocked by"
   links, GitHub issue dependencies, and so on; the provider skill says where to look). A blocker is resolved when it
@@ -418,6 +418,9 @@ Rationale in D045.
   the blocker's branch, and the worker opens its PR against that branch, so the PR shows only this ticket's commits. The
   overseer stacks only on a ticket's single unresolved blocker, only when the blocker's PR is open, not merged, and
   green, and reads the blocker's branch from that PR, not from the journal.
+- `policy.stacking` (§12) is `"auto"` by default: the overseer stacks when the conditions above hold. `"never"` means
+  a blocked ticket waits until its blocker is closed. The state block carries it with the other policy, and the
+  overseer prompt follows it; the harness adds no guard (D054), so a `--base` dispatch under `"never"` is not refused.
 - The harness checks only the shape of `--base` (`bad_base`, §8): it must be under `trust.branch_prefix` and must not
   be the run's own branch. It does not look the base up in the journal, since the blocker may be in another operator's
   queue, and it cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run` step 2).
@@ -475,7 +478,7 @@ refuses to run. Unknown keys are errors in both files.
 | `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
 | `tracker.labels` | user-only | defines this operator's queue |
-| `policy.*` | shared; the repository may only tighten | limits spend and retries |
+| `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `capacity.*` | user-only | the operator's machine and spend |
@@ -501,6 +504,7 @@ max_implement_attempts = 2
 max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
+stacking = "auto"            # auto | never (§10); "never" is stricter
 
 [trust]
 branch_prefix = "agent/"
@@ -547,10 +551,10 @@ Rules:
   see only the local journal, so two loops on one label both work the same tickets. canopy cannot detect this; choosing
   distinct labels is an operator responsibility (TRUST_MODEL §7).
 - **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is
-  stricter than the built-in default: a lower attempt limit or a longer cooldown. Otherwise the default stands. The user
-  file may set any value, including a looser one: repository policy is a shared default, not a limit a team can impose
-  on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their machine could not enforce one
-  anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
+  stricter than the built-in default: a lower attempt limit, a longer cooldown, or `stacking = "never"`. Otherwise the
+  default stands. The user file may set any value, including a looser one: repository policy is a shared default, not a
+  limit a team can impose on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their
+  machine could not enforce one anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
 - `trust.branch_prefix` must be non-empty and end in `/`, and is made of plain ref components: letters, digits, `_`,
   and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
