@@ -826,7 +826,8 @@ Context: the operator's requirements say ticket B is not started until A lands (
 on A's open, green PR (D045), which starts B sooner. The operator, asked, chose to keep stacking but to control it, and
 preferred the control to be the overseer's judgment rather than a harness guard (REQUIREMENTS C1).
 Decision: a shared key `policy.stacking`, `"auto"` (default: the overseer stacks when DESIGN §10's conditions hold) or
-`"never"` (a blocked ticket waits until its blocker is closed). It is rendered into the state block with the other
+`"never"` (a blocked ticket waits until its blocker is closed and has no open PR, so a blocker closed before its PR
+merges has not landed). It is rendered into the state block with the other
 policy, and the overseer prompt follows it. The repository may only tighten it (`"never"` is stricter), as for every
 `policy.*` key. The harness adds no guard: whether to stack is policy, which lives in prompts (D008); `bad_base` still
 checks the base's shape.

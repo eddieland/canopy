@@ -276,10 +276,12 @@ if the operator asks.
 - The TRUST_MODEL T2, T6, and §7 changes, with human approval.
 - DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
 
-Accept: with the Slack sink on a real channel, one real ticket's dispatch, a blocked worker's question, and its PR each
-reach the channel once, and an attention item is posted once when it opens and once when it resolves. With the webhook
-file removed, Slack fails for several ticks while a second sink keeps delivering and reports `loop.sink_failing`;
-restoring the file delivers what was missed in one message. A digest arrives on its interval, including a quiet one.
+Accept: before Slack, the desktop sink shows one real ticket's blocked question and an attention item as desktop
+notifications on the operator's machine, once each. With the Slack sink on a real channel, one real ticket's dispatch, a
+blocked worker's question, and its PR each reach the channel once, and an attention item is posted once when it opens
+and once when it resolves. With the webhook file removed, Slack fails for several ticks while a second sink keeps
+delivering and reports `loop.sink_failing`; restoring the file delivers what was missed in one message. A digest arrives
+on its interval, including a quiet one.
 
 Status: not started.
 
@@ -360,7 +362,7 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
 - `canopy status` and the attention list name PR units by the PR, not a ticket key.
 - TRUST_MODEL T1 and §6 already allow it (D056).
 
-Accept: written with the design, before work starts.
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
 Status: not started.
 
@@ -384,7 +386,7 @@ REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 - Prompting is the operator's own input (T8): it is not checked against `trust.authorized_repliers`, and it lifts no
   guard. Capacity, attempt limits, the run's timeout, and push verification still apply.
 
-Accept: written with the design, before work starts.
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
 Status: not started.
 
@@ -400,7 +402,7 @@ REQUIREMENTS R10. Needs M2. Sketch only; the design comes first.
 - Bazel: a canary for the worker's `external_directory: deny` against reads through `bazel-out/`; a documented
   `.bazelrc` recipe for a shared disk and repository cache; whether returning a slot should stop its Bazel server.
 
-Accept: written with the design, before work starts.
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
 Status: not started.
 

@@ -1220,9 +1220,10 @@ event outbox in `core`, `cli/notify.py`, and the Slack sink's workspace member, 
 the new tables, §12 the sink keys, and §14 points here.
 
 Notifications reach the operator away from the terminal: issues as they happen, progress on a schedule. The first
-destination is a Slack channel. The harness stays a program that runs commands: a destination is a **sink**, a command
-that reads one message on stdin. canopy ships one sink, for Slack. Another destination is a small program of the
-operator's, not a change to canopy.
+destination is the operator's desktop, then a Slack channel (REQUIREMENTS N2). The harness stays a program that runs
+commands: a destination is a **sink**, a command that reads one message on stdin. canopy ships two sinks, desktop first
+and then Slack; M10 designs the desktop sink, which this section does not yet describe. Another destination is a small
+program of the operator's, not a change to canopy.
 
 ### Sinks
 
