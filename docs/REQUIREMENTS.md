@@ -148,16 +148,17 @@ Gaps:
 
 - **N1. Local web UI on localhost.** Deferred, and allowed under TRUST_MODEL T8 (C2, D055). OpenCode's own
   attach (M15) covers sessions first.
-- **N2. Notifications when something needs the operator, desktop first, Slack later.** Planned in M10, Slack first.
-  `notify.cmd` can reach the desktop today only through a wrapper script of the operator's (`notify-send` takes
-  arguments, not stdin), which H2 rules out. M10 should ship a desktop sink first.
+- **N2. Notifications when something needs the operator, desktop first, Slack later.** Planned in M10, which ships a
+  desktop sink before the Slack sink. `notify.cmd` can reach the desktop today only through a wrapper script of the
+  operator's (`notify-send` takes arguments, not stdin), which H2 rules out.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Planned in M8: the split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
-- **N4. Copilot CLI support.** Deferred until a coworker asks. ROADMAP expects "a config change plus prompt tweaks",
-  but canopy's definitions directory, its permissions, and the D044 guard are written in OpenCode's terms; a second
-  runtime needs its own definitions set and its own shadowing check.
-- **N5. Docker or remote sandbox runtimes later.** Deferred; proposal in `HOST_ISOLATION.md`. A remote sandbox must
-  still satisfy H1.
+- **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
+  directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
+  definitions set and its own shadowing check (ROADMAP's deferred list).
+- **N5. Docker or remote sandbox runtimes later.** Deferred; proposal in `HOST_ISOLATION.md`, which covers local
+  sandboxes only. A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
+  decision first.
 
 ## Non-goals for now
 
@@ -172,7 +173,8 @@ Each was settled by the operator on 2026-10-06 and recorded in `DECISIONS.md`.
 
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10, D045), so
   B starts before A lands. Settled by D054: stacking stays, controlled by `policy.stacking` (`"auto"` or `"never"`),
-  which the overseer prompt follows. No harness guard.
+  which the overseer prompt follows. No harness guard. Under `"never"`, B waits until A is closed and A has no open
+  PR, so a ticket closed before its PR merges does not count as landed.
 - **C2. Local web UI vs no listener (N1, H1).** Settled by D055: listeners are allowed on loopback, or on a private
   network address the operator sets, behind the operator's listener secret (TRUST_MODEL T8). Loopback is the default
   and keeps H1; a private-network address is the operator's choice to relax it. A UI is now deferred, not ruled out.
