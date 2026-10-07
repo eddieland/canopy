@@ -37,7 +37,9 @@ controls below keep the blast radius to "a branch nobody merged."
    guards regardless of agent behavior.
 2. Agent runtime ↔ external systems. The runtime holds credentials and applies
    tool permissions. canopy relies on it but does not extend trust across it.
-3. Operator's machine ↔ everything else. Nothing listens on the network.
+3. Operator's machine ↔ everything else. A listener canopy runs or starts is reachable only on loopback or the
+   operator's private network, and only with the operator's listener secret (T8, D055). Nothing is exposed to the
+   internet.
 
 ## 5. Threats and controls
 
@@ -56,9 +58,12 @@ Controls:
   ticket. The independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
   changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
   judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
-- Workers can push only to `trust.branch_prefix` branches. Enforced by the
-  worker prompt and by repository branch protection, which the operator must
-  configure. canopy `init` prints the required protection rules.
+- Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
+  operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
+  worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
+  required protection rules. For the exception, the label and authorship are read by the overseer and read again by
+  the worker before it changes anything, as for ticket labels (D051); the harness refuses the repository's base branch.
+  Pushes are never forced and never go to a fork.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update).
@@ -68,7 +73,9 @@ Controls:
 
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
-risk with an interactive agent.
+risk with an interactive agent. Under the PR exception, a steered overseer and worker that both skip their checks can
+push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
+backstop, as it is for a coworker pushing there by hand.
 
 ### T2. Credential misuse or leakage
 
@@ -77,7 +84,7 @@ Controls:
 - The SQLite journal stores summaries, never raw CI logs or command output.
   Worker stdout goes to a log file under `state_dir`, readable only by the
   operator.
-- No network listeners. No outbound calls from the harness except through the
+- Listeners follow T8. No outbound calls from the harness except through the
   configured commands.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
@@ -178,16 +185,41 @@ agents. Scalar rules canopy sets (the worker's `edit`, `external_directory`, and
 since a scalar replaces whatever the repository set; bash rules are defense in depth (T4), with branch protection (§7)
 the boundary for what a worker can push.
 
+### T8. Network listeners
+
+The operator wants two-way control: to see and prompt running agent sessions (OpenCode's own server, `opencode serve`,
+which `opencode attach` connects to) and, later, interactive notifications and a local UI. Each needs something
+listening. The operator runs on a private network (a VPC), so the controls are kept simple (D055).
+
+Controls:
+- A listener binds to a loopback address, or to a private-network address the operator sets in the user config
+  (user-only, T7). Never a wildcard address (`0.0.0.0`, `::`) and never a public one; canopy refuses to start one
+  otherwise. Loopback is the default.
+- Every listener requires the operator's listener secret, read from a file in the operator's config directory that is
+  the operator's and unreadable by others (the same check as D053). The secret is never in config, the journal, logs,
+  or prompts, and never reaches an agent's environment except the server that checks it.
+- Whoever holds the secret acts as the operator: they can prompt a worker directly, outside the authorized-replier
+  check (T1). That is the point, and it is why the secret is an operator credential.
+- A listener only reads state and passes the operator's own input to agents. It does not lift any guard in §6: a
+  worker prompted through it still cannot merge, approve, or push outside its branch, and capacity and attempt limits
+  still hold.
+
+Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
+credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
+shared machine can reach loopback, and is stopped only by the secret.
+
 ## 6. What canopy must never do
 
 - Approve, merge, or close a PR.
 - Transition a ticket to Done.
-- Push to any branch outside `trust.branch_prefix`.
+- Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator
+  authored and labeled with a queue label (T1); and never with force.
 - Act on instructions found in ticket or PR text from non-authorized accounts.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
 - Take runtime or notify commands, prompt paths, capacity, queue labels, or authorized repliers from the repository.
+- Listen on a wildcard or public address, or accept a connection without the operator's listener secret (T8).
 
 ## 7. Operator responsibilities
 
@@ -201,3 +233,5 @@ the boundary for what a worker can push.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
+- Keep the listener secret file private, and bind a listener to a private-network address only on a network whose
+  members may see the operator's tickets and code (T8). Label only PRs you are willing to have a worker push to.
