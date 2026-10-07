@@ -311,6 +311,7 @@ read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§1
 | `blocked` | as `ready`, but a blocker ticket is open | dispatch `implement` stacked on the blocker's branch if its PR is open and green (§10), else wait |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
+| `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to merge the base in |
 | `ci_running` | PR open, checks pending | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
@@ -322,6 +323,17 @@ read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§1
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label | dispatch `resume` pointing at the reply; the worker removes the label |
 | `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
+
+A unit is `conflicted` when GitHub reports that its PR does not merge cleanly into its base (`mergeable` false,
+`mergeable_state` `dirty`); a mergeability GitHub has not computed yet is not a conflict. GitHub runs no
+`pull_request` checks on a PR it cannot merge, so a conflicting PR's checks are pending with nothing running, or are the
+results of an earlier head. `conflicted` therefore comes before every CI and review phase: before `ci_running`,
+`ci_red`, `review_pending`, `green_unreviewed`, and `approved`. Its `resume` points at the conflict and the base, and
+carries `--base` for a stacked PR (§10); the worker merges the base into the branch and pushes without force. Review
+comments or findings newer than the `review` cursor ride the same `resume`, with their cursor. A conflict has no cursor:
+it is a state of the PR, not an item, so it is new for as long as it lasts. A `resume` that pushes a merge ends it; one
+that is still there after that push means the base moved again, and the `resume` attempt limit bounds the repeats
+(D030, D070).
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
 identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's

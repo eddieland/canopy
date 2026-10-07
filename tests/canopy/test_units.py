@@ -314,6 +314,22 @@ def test_journal_commands_name_a_unit(
     ]
 
 
+def test_a_merge_conflict_is_a_units_phase(
+    ws: Ws, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D070: a PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
+    conn = ws.journal()
+    in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--phase", "conflicted"]) == 2
+    assert "the conflicted phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
+    assert main(["ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted"]) == 0
+    [unit] = db.units(conn, "PROJ-1")
+    assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
+    ticket = db.get_ticket(conn, "PROJ-1")
+    assert ticket is not None
+    assert ticket["phase"] is None
+
+
 def test_a_joint_prompt_override_without_the_repositories_is_refused(
     ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

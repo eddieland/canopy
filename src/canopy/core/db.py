@@ -30,6 +30,7 @@ CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 UNIT_PHASES = frozenset(
     (
         "pushed_no_pr",
+        "conflicted",
         "ci_running",
         "ci_red",
         "review_pending",

@@ -10,7 +10,10 @@ This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
 {{STACKING}} If the context says the PR this ticket was stacked on has merged, change this ticket's PR to target its
 repository's base branch listed above, and if the branch then conflicts with it, merge that base into the branch and
-resolve the conflicts. Never rebase: the push must not need force.
+resolve the conflicts. If the context says the PR conflicts with its base, fetch that repository's base branch listed
+above and merge it into the branch. Resolve each conflict so both sides' changes survive; if one cannot be resolved
+without a decision about behavior that neither the ticket nor the code settles, do not guess: abort the merge and ask,
+as under "blocked" below. Never rebase: the push must not need force.
 
 ## Authorization
 
@@ -26,7 +29,8 @@ The context says why you were resumed and points at what to read. It is one of:
 
 - review comments to address, by link or id on the PR;
 - an authorized human's reply to a question asked earlier, by comment id or link on the ticket;
-- an instruction to open the PR for an already pushed branch.
+- an instruction to open the PR for an already pushed branch;
+- a merge conflict between the PR and its base branch, possibly with review comments to address in the same run.
 
 Read what it points at yourself, through the tracker and GitHub MCP servers. The context never quotes that text for you.
 
