@@ -184,7 +184,8 @@ wrong, since the PyPI name is another project's; README now installs from git, v
 2026-09-25, and `tests/install-check.sh` repeats that in CI on Linux and macOS. The license is proprietary for now.
 For a machine without a credential for this repository, a version tag releases one executable per platform (D067),
 which the install check also covers. `canopy check` (D070) lets an operator see what each agent's tools reach before
-the first tick, against their own runtime config.
+the first tick, against their own runtime config. Run live on 2026-10-07 against the GitHub setup: about 20 seconds per
+agent; it caught the worker without a label tool (D069) and the splitter without write tools (M8).
 Waiting on the operator: a live `canopy check` against a Jira setup, a second person following README's install
 steps without help, with their friction filed as issues, and a coworker running canopy against their own ticket.
 
@@ -255,8 +256,11 @@ requested split reads a desk of worktrees at their bases, pushes nothing, and re
 invalid children are recorded nowhere; each child is dispatched only in its recorded repository), docs, D061, and D062
 are in. Rebuilt on M7's desks from the draft PR #54, which was written before them; a split needs an authorized
 replier's comment asking for it (D061), and without one a multi-repository ticket stays one ticket. The overseer prompt,
-the `canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Not yet checked
-live: that OpenCode applies the splitter's name patterns to MCP tools; run the canary with them before the real split.
+the `canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Checked live
+on 2026-10-07 with `canopy check` (D070), OpenCode 1.18.32: the splitter's name patterns apply to MCP tools, and a
+denied tool is withheld from the agent rather than refused when called (its PR, branch, and file tools were absent).
+The same run found the splitter with no tool to comment or create a ticket, since the operator's runtime config
+grants write tools to the worker and reviewer only; a live split needs those granted to `canopy-splitter` first.
 Waiting on the operator: a real two-repository ticket split on request, its children labeled by hand and worked in
 order. Started on request while M2 to M7 wait on their live runs.
 
