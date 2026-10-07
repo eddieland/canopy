@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import db, definitions, outbox, treehouse
+from canopy.core import contract, db, definitions, outbox, treehouse
 from canopy.core.config import render_command
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 MAX_TEXT = 2000
 # A child key is a ticket key, and bounded like every other value an agent reports.
 MAX_CHILD_KEY = 100
+MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # Never let git wait for credentials on a terminal nobody is watching.
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
@@ -47,11 +48,7 @@ class _SetupError(Exception):
     """A git step before or after the worker failed."""
 
 
-def _bounded(value: str) -> str:
-    return value if len(value) <= MAX_TEXT else value[: MAX_TEXT - 3] + "..."
-
-
-Text = Annotated[StrictStr, AfterValidator(_bounded)]
+Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 
 
 class WorkerResult(BaseModel):
@@ -82,6 +79,8 @@ class SplitResult(BaseModel):
     """A split's result contract (DESIGN §18): the tickets it created, each with the repository it covers.
 
     Untrusted, so bounded; `_run` checks the children against the journal before recording any (`check_children`).
+    `children` is bounded by that check, not here: a valid split names one child per repository it was dispatched with,
+    and a refused one is stored without its children.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
@@ -93,13 +92,7 @@ class SplitResult(BaseModel):
 
 def parse_split(stdout: str) -> SplitResult | None:
     """Parse the last non-empty line of `stdout` as a split's result. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return SplitResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(SplitResult, stdout)
 
 
 def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], result: SplitResult) -> str:
@@ -144,7 +137,7 @@ class Outcome:
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
-        data: dict[str, object] = self.result.model_dump() if self.result is not None else {}
+        data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
         return json.dumps(data)
@@ -152,13 +145,7 @@ class Outcome:
 
 def parse_result(stdout: str) -> WorkerResult | None:
     """Parse the last non-empty line of `stdout` as the result contract. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return WorkerResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(WorkerResult, stdout)
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
@@ -289,7 +276,8 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     if invalid:
         log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
         status = "timeout" if result.timed_out else "unknown"
-        return Outcome(status, parsed, f"children not recorded: {invalid}")
+        # Stored without its children: a refused map is unbounded, and its note says what was wrong with it.
+        return Outcome(status, parsed.model_copy(update={"children": {}}), f"children not recorded: {invalid}")
     if parsed.children:
         # Also after a timeout: the children it reported exist in the tracker, and a retry must not make them again.
         db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)
@@ -409,12 +397,8 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     if not isinstance(outcome.result, WorkerResult) or not outcome.result.prs:
         return
     for repo, url in outcome.result.prs.items():
-        if url and _plain_url(url):
+        if url and contract.plain_url(url, MAX_PR_URL):
             db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, single=ctx.workspace.single, pr_url=url)
-
-
-def _plain_url(value: str) -> bool:
-    return value.startswith("https://") and len(value) <= 500 and not any(c.isspace() for c in value)  # noqa: PLR2004
 
 
 class _Git:

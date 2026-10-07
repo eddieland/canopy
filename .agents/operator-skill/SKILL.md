@@ -143,6 +143,10 @@ The overseer may record other reasons; the detail says what it wants.
 A worker that needs an answer posts its question as a ticket comment and adds `tracker.needs_human_label`. An
 authorized replier's comment on the ticket resumes it on a later tick; anyone else's comment is ignored.
 
+Workers post as the operator, so every comment they post starts with `trust.comment_prefix` (`CANOPY:` by default) and
+ends with `trust.comment_suffix`, whichever are set. A comment carrying those marks is a worker's: it never resumes,
+splits, or asks for changes, whoever wrote it. Do not start a reply meant to steer a worker with the prefix.
+
 ## Getting a ticket worked
 
 Add the operator's queue label (`tracker.labels` in the user config, `agent-ready-<user>` by default) to an open ticket

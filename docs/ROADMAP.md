@@ -147,7 +147,7 @@ docs, and D030 to D032 are in. Checked live on 2026-10-07:
   `changes_requested`. Bot reviews drive `resume` though they never count as approval.
 
 Waiting on the operator: an authorized answer on GH-68 that resumes it, a real PR with a failing check taken
-through fix-ci to the limit, and a PR that conflicts with its base taken through `conflicted` (D069) to a clean merge.
+through fix-ci to the limit, and a PR that conflicts with its base taken through `conflicted` (D070) to a clean merge.
 DESIGN §15's three-failure attention item is M10's `loop.failing`.
 
 ## M4. Dependencies and stacking

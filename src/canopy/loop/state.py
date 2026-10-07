@@ -115,6 +115,8 @@ def state_block(
         },
         "trust": {
             "authorized_repliers": list(config.trust.authorized_repliers),
+            "comment_prefix": config.trust.comment_prefix,
+            "comment_suffix": config.trust.comment_suffix,
             "branch_prefix": config.trust.branch_prefix,
             "pr_label": config.trust.pr_label,
         },

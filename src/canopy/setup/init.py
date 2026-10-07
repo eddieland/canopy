@@ -128,6 +128,10 @@ interval_minutes = 15
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.
 # Empty means nobody can.
 authorized_repliers = []
+# Every comment a worker posts starts with the prefix and ends with the suffix, each if set; set at least one.
+# A comment that carries every mark set is never feedback or an instruction.
+comment_prefix = "CANOPY:"
+comment_suffix = ""
 """
 
 

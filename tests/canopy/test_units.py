@@ -317,7 +317,7 @@ def test_journal_commands_name_a_unit(
 def test_a_merge_conflict_is_a_units_phase(
     ws: Ws, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """D069: a PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
+    """D070: a PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
     conn = ws.journal()
     in_tick(conn, monkeypatch)
     assert main(["ticket", "set", "PROJ-1", "--phase", "conflicted"]) == 2
