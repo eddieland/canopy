@@ -83,9 +83,9 @@ Re-read the tracker and GitHub before every decision that matters.
    Dispatches and attention items also count as decisions; the CLI records
    them.
 4. Dispatch in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
-   waiting), then `ci_red`, then `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a blocker before the
-   tickets it blocks, and never dispatch a ticket whose blocker is not resolved unless it can be stacked (see "Blockers
-   and stacking").
+   waiting), then `conflicted` and `ci_red`, then `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a
+   blocker before the tickets it blocks, and never dispatch a ticket whose blocker is not resolved unless it can be
+   stacked (see "Blockers and stacking").
 5. Update cursors for every ticket you inspected so the next tick is incremental (see "Cursors").
 6. Exit. Do not summarize to stdout beyond a single line `tick complete`.
 
@@ -106,6 +106,7 @@ ticket's one action from all of them: a unit whose PR needs work comes before on
 | `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement` |
 | `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume` with context "open the PR" |
+| `conflicted` | PR open, GitHub says it conflicts with its base | `dispatch resume` to merge the base in (below) |
 | `ci_running` | PR open, checks pending | `wait` |
 | `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch fix-ci --cursor ci=<run>`; see step 2 |
 | `review_pending` | with `reviews.agent_prs`: checks pass, no approval, head not reviewed | review (see "Reviews") |
@@ -129,6 +130,19 @@ If the tracker cannot say when a label was added, use the worker's question comm
 A `ci_red` ticket whose failure is not newer than the `ci` cursor was already handed to a fix-ci worker. If that
 worker's run ended `done` and checks are still failing on the same run, the fix did not reach CI yet or did not help:
 record `wait` until a newer check run exists. If it ended `blocked`, the ticket is `needs_human`.
+
+A PR that conflicts with its base gets no new checks: GitHub runs none on a PR it cannot merge, so its checks look
+pending with nothing running, or show an earlier head's results. Read the PR's mergeability before its checks. When
+GitHub reports it conflicting (`mergeable` false, `mergeable_state` `dirty`), the unit is `conflicted`, whatever its
+checks or reviews say: not `ci_running`, `ci_red`, `review_pending`, `green_unreviewed`, or `approved`. A mergeability
+GitHub has not computed yet (`mergeable` null, `mergeable_state` `unknown`) is not a conflict; derive the phase from
+the rest, and the next tick sees the answer. `mergeable_state` `blocked` means required checks or reviews, not a
+conflict. Dispatch `resume` with context naming the PR and its base branch, for example `--context 'PR 7 conflicts with
+its base main. Merge main in and resolve the conflicts.'`; for a stacked PR whose blocker is still open, pass the same
+`--base` (see "Blockers and stacking"). If the unit also has review comments or findings newer than its `review`
+cursor that a worker should address, name them in the same context and pass `--cursor review=<newest id>`, so one run
+handles both. A conflict has no cursor: it is new for as long as it lasts. The `resume` attempt limit bounds it (step
+2).
 
 ## Cursors
 

@@ -1154,3 +1154,32 @@ Consequences: a worker that forgets the marks costs what it did before this: a p
 attempt limit. A person whose comment carries the marks silences that comment; its ticket waits, visibly, on the
 attention list or in `needs_human`. Changing the marks leaves earlier workers' comments reading as the operator's.
 Revisit: when a bot identity (ROADMAP, deferred) lets comments be told apart by author.
+
+## D070. A merge conflict is a unit's phase, `conflicted`, handled by `resume`
+
+Context: the phase table had no row for a PR that conflicts with its base. GitHub runs no `pull_request` checks on a
+PR it cannot merge, so such a PR derived as `ci_running` with nothing running, or as green from an earlier head's
+results, which raised `needs_reviewer` or `ready_to_merge` for a PR nobody could merge. agent-orchestrator tracks
+mergeability for the same reason (PRIOR_ART "In prompts").
+Decision (DESIGN §7):
+- `conflicted` is a unit's phase, between `pushed_no_pr` and `ci_running`. The overseer derives it when GitHub reports
+  the PR conflicting (`mergeable` false, `mergeable_state` `dirty`), before reading checks or reviews, so it wins over
+  every CI and review phase. A mergeability GitHub has not computed yet is not a conflict.
+- The action is `resume`, with context naming the conflict and the base, and the same `--base` for a stacked PR. The
+  worker merges the base in and pushes without force, as it already does when a stacked PR is retargeted (D045). New
+  review comments or findings ride the same run with their cursor.
+- A conflict has no cursor. It is a state of the PR, not an item with an id, so it is new for as long as it lasts.
+  The `resume` attempt limit bounds a base that keeps moving (D030).
+- The harness adds only the phase name. It cannot read mergeability (D003), so there is no guard; the phase is the
+  overseer's reading, like every other.
+Rejected:
+- A `merge-base` dispatch kind with its own prompt and limit: `resume` already merges the base in, and a kind is a
+  guard, an attempt count, and a prompt to keep for the same work.
+- Rebasing: the push would need force, which workers never use.
+- Attention only: merging the base in is a change the author makes without a decision. A conflict that does need one
+  ends the run `blocked`, which raises attention already.
+- Folding it into `ci_red`: it would spend `fix-ci` attempts, and key newness on a check run that never ran.
+Consequences: conflicts spend `resume` attempts, shared with review comments and replies, so a long-lived PR on a busy
+base reaches `max_resume_attempts` sooner.
+Revisit: if the decisions corpus shows conflicts using up `resume` attempts that review comments needed; then a limit
+of their own.

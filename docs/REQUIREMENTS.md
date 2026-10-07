@@ -75,10 +75,10 @@ Partial on "the agent that owns the PR": each run is a fresh worker on the pushe
 before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate). Whether a feedback run should
 continue the earlier run's OpenCode session is a question for M15, answered against the decisions corpus.
 
-Known prompt gaps that make routing noisier than it should be (PRIOR_ART "In prompts"): CI newness is keyed on the
-check run id so a re-run counts as new, and a merge conflict has no phase. The worker's own PR replies no longer read
-back as new feedback: workers mark every comment with `trust.comment_prefix` and `trust.comment_suffix`, which only
-take authority away (§8, D069).
+Known prompt gap that makes routing noisier than it should be (PRIOR_ART "In prompts"): CI newness is keyed on the
+check run id so a re-run counts as new. The worker's own PR replies no longer read back as new feedback: workers mark
+every comment with `trust.comment_prefix` and `trust.comment_suffix`, which only take authority away (§8, D069). A
+merge conflict now has a phase: `conflicted` sends a `resume` to merge the base in (§7, D070).
 
 ### R5. Needs-a-human queue: one view of what is blocked on the operator
 
