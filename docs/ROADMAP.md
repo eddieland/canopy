@@ -390,17 +390,18 @@ the operator: whether each tick's block is legible over a working session.
 D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
 
 - Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run.
+  run. Worker and split runs do (D071); the overseer, chores, and reviews read the same events but record nothing yet.
 - A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
   to `loop.interval_minutes` when they cost less.
 - Spend in the loop's per-tick block and in `canopy status`.
-- Open: how the runtime reports cost (OpenCode's JSON output, its session store, or a command of its own) without the
-  harness growing runtime-specific parsing (D009); what the budget's unit is (per day, per tick, or both); whether a
-  worker's cost counts against the tick that dispatched it.
+- Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
+  dispatched it. How the runtime reports cost is settled by D071: OpenCode's JSON events on stdout.
 
 Accept: written with the design, before work starts.
 
-Status: not started.
+Status: in progress. Taken in part on request (2026-10-07), with M15's session ids: worker and split runs record their
+cost in dollars and tokens, and `canopy status` shows it per recent run (D071). Not designed yet: the budget, the
+pacing rule, and spend in the loop's per-tick block.
 
 ## M14. PR-scoped work
 
@@ -425,7 +426,8 @@ Status: not started.
 REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 
 - Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
-  runtime-specific output beyond one validated field (D009, D026).
+  runtime-specific output beyond one validated field (D009, D026). Done with `--format json` (D071), which also gives
+  M13 each run's cost.
 - `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
   session id, so the operator can open a transcript with OpenCode's own tools.
 - Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
@@ -442,7 +444,11 @@ REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: not started.
+Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
+`canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id (D071).
+Waiting on the operator: a real run under the pinned OpenCode with the default `worker_cmd`, whose session id opens its
+transcript (`opencode export <id>`); an operator's user file from before needs `--format json` added to `worker_cmd`.
+Not started: whether `fix-ci` and `resume` continue a session, and workers against OpenCode's server.
 
 ## M16. Worktree setup for large monorepos
 

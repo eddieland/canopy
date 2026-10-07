@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import contract, db, definitions, outbox, treehouse
+from canopy.core import agent_output, contract, db, definitions, outbox, treehouse
 from canopy.core.config import render_command
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -226,8 +226,12 @@ class _Slot:
 
 def _run_agent(
     ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter, *, template: str
-) -> procs.Result:
-    """Check the places the agent reads config from, make a joint run's desk, and run `template` in it."""
+) -> tuple[procs.Result, str]:
+    """Check the places the agent reads config from, make a joint run's desk, and run `template` in it.
+
+    Returns the agent's process and the text its result line is read from. The session and cost the runtime reported
+    are recorded on the run at once, so a git step after the agent that fails does not lose them (DESIGN §13).
+    """
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044). A joint run's
     # worker starts in a desk, not a repository, so OpenCode may look above it: the directories above it are checked.
@@ -256,16 +260,22 @@ def _run_agent(
     out.write(f"--- worker stdout ---\n{result.stdout}\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
-    return result
+    # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
+    output = agent_output.read(result.stdout)
+    if output.session_id is not None or output.usage is not None:
+        db.set_run_report(ctx.conn, run_id, output.session_id, output.usage)
+        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
+    return result, output.text
 
 
 def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid."""
     for slot in slots:
         _check_out_base(slot)
-    result = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
+    result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
-    parsed = parse_split(result.stdout)
+    parsed = parse_split(text)
     if parsed is None:
         if result.timed_out:
             # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
@@ -299,10 +309,10 @@ def _check_out_base(slot: _Slot) -> None:
 def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     branch = str(run["branch"])
     starts = [_set_up_branch(slot, branch) for slot in slots]
-    result = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.worker_cmd)
+    result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.worker_cmd)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
-    parsed = parse_result(result.stdout)
+    parsed = parse_result(text)
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:

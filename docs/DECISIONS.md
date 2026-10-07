@@ -1183,3 +1183,32 @@ Consequences: conflicts spend `resume` attempts, shared with review comments and
 base reaches `max_resume_attempts` sooner.
 Revisit: if the decisions corpus shows conflicts using up `resume` attempts that review comments needed; then a limit
 of their own.
+
+## D071. A run's session and cost are read from OpenCode's JSON events on stdout
+
+Context: the operator wants each run's OpenCode session id, to open its transcript, and what it cost (REQUIREMENTS R6,
+ROADMAP M13 and M15). `opencode run` prints neither in its default format. With `--format json` it prints one JSON
+event per line instead, every event carrying the run's `sessionID`, and each model call ending in a `step_finish`
+event with that call's dollar cost and tokens. The result contracts were the last line of stdout, which under
+`--format json` is an event.
+Decision: `core/agent_output.py` reads an agent's stdout one way for every agent. If any line is an event (a JSON
+object with a string `type` and a `sessionID`), the agent's text is the `part.text` of its `text` events, one per
+line, and the result line is read from that, as it was from stdout; the session is the first valid `sessionID`, and the
+cost is the sum of every `step_finish`. Otherwise stdout is the text, and nothing is reported. Each field is validated
+(D026): a session id of at most 100 letters, digits, `_` and `-`; costs and token counts non-negative and finite, and
+one `step_finish` that does not validate drops the whole cost rather than understating it. The default `worker_cmd`
+and `split_cmd` ask for `--format json`; `_run` records what was reported on the run as soon as the agent exits.
+Consequences: four field names of OpenCode's are known to the harness, in one module (D009's revisit, met by the
+smallest reading that works). A template without `--format json` still works and reports nothing, so an operator's
+user file from before this keeps working, without sessions or costs until its `worker_cmd` gains the flag. Run logs
+hold events rather than plain text. The overseer, chores, and reviews read their result line the same way, so their
+templates may ask for events too, but what they report is not recorded yet (M13). A subagent's session is OpenCode's
+own: its cost is not in the run's events, so a run that starts subagents costs more than it reports.
+Rejected:
+- OpenCode's session store (`opencode session list`, `opencode export`) after the run: finding the run's session
+  there races other runs in the same directory, and costs a second process per run for what the first one printed.
+- Asking the agent to put its session id and cost in its result line: the model does not know them, and anything it
+  writes there is untrusted.
+- Parsing the default format's text: it carries neither, and it is for people.
+Revisit: when OpenCode changes the event shape (the canary's `--format json` runs would show it), or when a second
+runtime reports sessions or cost differently (D009).

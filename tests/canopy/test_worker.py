@@ -5,6 +5,7 @@ Runs are dispatched with an `InlineRunner`, which spawns nothing, and then run i
 
 import json
 import os
+import re
 import signal
 import sqlite3
 import threading
@@ -313,3 +314,103 @@ def test_parse_result_takes_the_last_non_empty_line() -> None:
     assert parsed is not None
     assert parsed.status == "done"
     assert worker.parse_result('{"status": "done"}\nmore chatter\n') is None
+
+
+def report_events(canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Have the worker's template ask for OpenCode's JSON events, as the default does, with session `ses_w1`."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-worker", "--agent canopy-worker --format json")
+    canopy_env.write_user(text)
+    monkeypatch.setenv("FAKE_WORKER_SESSION", "ses_w1")
+
+
+def test_a_worker_records_the_session_and_cost_it_reported(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report_events(canopy_env, monkeypatch)
+    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
+    run = dispatch_and_run(conn, monkeypatch)
+
+    # The result line is read from the events' text, as it is from stdout without them.
+    assert run["status"] == "done"
+    assert json.loads(run["result_json"])["summary"] == "did it"
+    assert unit_of(conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
+    # Two model calls, summed.
+    assert run["session_id"] == "ses_w1"
+    assert run["cost_usd"] == 0.25
+    tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
+    assert tuple(run[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
+
+    capsys.readouterr()
+    assert main(["status"]) == 0
+    out = capsys.readouterr().out
+    assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
+    assert f"\n    did it\n    session ses_w1  $0.25, 11.5k tokens  log {run['log_path']}\n" in out
+
+
+def test_a_timed_out_worker_records_what_it_reported_before_the_kill(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report_events(canopy_env, monkeypatch)
+    tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
+    events = [
+        {"type": "step_finish", "sessionID": "ses_slow", "part": {"cost": 0.5, "tokens": tokens}},
+        {"type": "text", "sessionID": "ses_slow", "part": {"type": "text", "text": "still going"}},
+    ]
+    stdout = "".join(json.dumps(e) + "\n" for e in events)
+    run = dispatch_and_run(conn, monkeypatch, InlineRunner(timeout_agent=True, timeout_stdout=stdout))
+    assert run["status"] == "timeout"
+    assert (run["session_id"], run["cost_usd"], run["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
+
+
+def test_a_worker_without_events_reports_no_session(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    summary = "\x1b[2Jcleared the screen\nand  went on   " + "x" * 300
+    worker_does(monkeypatch, result=json.dumps({"status": "failed", "summary": summary, "pr": "https://x.test/\x1b"}))
+    run = dispatch_and_run(conn, monkeypatch)
+    assert (run["status"], run["session_id"], run["cost_usd"]) == ("failed", None, None)
+
+    capsys.readouterr()
+    assert main(["status"]) == 0
+    out = capsys.readouterr().out
+    # Agent-written text reaches the terminal on one line, without control characters, and cut; a PR that is not a
+    # plain URL is not printed at all.
+    assert re.search(r"\n  PROJ-1  implement  failed  \d+s ago\n", out)
+    assert "\x1b" not in out
+    assert "\n    [2Jcleared the screen and went on xxx" in out
+    assert "x" * 120 + "...\n" in out
+    assert f"\n    no session reported  log {run['log_path']}\n" in out
+
+
+def test_status_lists_recent_runs_newest_first(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["status"]) == 0
+    assert "\nRecent runs (0):\n  none\n" in capsys.readouterr().out
+    tick_id = db.start_tick(conn, dry_run=False)
+    db.touch_ticket(conn, "PROJ-1", str(canopy_env.repo))
+    for n in range(12):
+        run_id = db.insert_run(
+            conn, tick_id=tick_id, key="PROJ-1", kind="fix-ci", branch="b", slots=[], runs_dir=Path()
+        )
+        db.finish_run(conn, run_id, "done", json.dumps({"summary": f"run {n + 1}"}))
+    running = db.insert_run(conn, tick_id=tick_id, key="PROJ-1", kind="resume", branch="b", slots=[], runs_dir=Path())
+
+    assert main(["status"]) == 0
+    out = capsys.readouterr().out
+    recent = out[out.index("Recent runs") :]
+    assert re.match(r"Recent runs \(10\):\n  PROJ-1  fix-ci  done  \d+s ago\n    run 12\n", recent)
+    assert "run 3\n" in recent
+    assert "run 2\n" not in recent
+    assert db.get_run(conn, running) is not None
+    assert "resume" not in recent
