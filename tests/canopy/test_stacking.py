@@ -285,3 +285,18 @@ def test_two_linked_tickets_are_worked_in_order(
     assert git("merge-base", "--is-ancestor", FIRST, "agent/PROJ-2-second", cwd=git_pool.origin) == ""
     assert f"Open a PR against `{FIRST}`" in prompt_of(canopy_env, 2)
     assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+@pytest.mark.usefixtures("treehouse_state")
+def test_the_state_block_carries_the_stacking_policy(
+    canopy_env: CanopyEnv, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def stacking() -> str:
+        monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+        assert main(["tick"]) == 0
+        prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
+        return json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])["policy"]["stacking"]
+
+    assert stacking() == "auto"
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + '[policy]\nstacking = "never"\n')
+    assert stacking() == "never"

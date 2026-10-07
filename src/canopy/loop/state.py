@@ -83,6 +83,7 @@ def state_block(
             "max_fix_ci_attempts": config.policy.max_fix_ci_attempts,
             "fix_ci_cooldown_minutes": config.policy.fix_ci_cooldown_minutes,
             "max_resume_attempts": config.policy.max_resume_attempts,
+            "stacking": config.policy.stacking,
         },
         "running_workers": [
             {

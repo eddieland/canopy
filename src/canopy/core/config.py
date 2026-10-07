@@ -22,7 +22,7 @@ import tomllib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal, get_args
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
@@ -58,6 +58,8 @@ class Tighten(Enum):
 
     LOWER = "lower"
     HIGHER = "higher"
+    # For a field typed as a Literal of choices listed from loosest to strictest: a later choice is stricter.
+    LATER = "later"
 
 
 def _non_blank(value: str) -> str:
@@ -161,6 +163,8 @@ class Policy(Section):
     max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
     fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10, D054). Prompt policy, not a guard.
+    stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
 
 class Trust(Section):
@@ -357,6 +361,11 @@ def _stricter(spec: KeySpec, value: object) -> bool:
     dropping it.
     """
     default = spec.field.default
+    if spec.tighten is Tighten.LATER:
+        choices = get_args(spec.field.annotation)
+        if value not in choices or default not in choices:
+            return True
+        return choices.index(value) > choices.index(default)
     if not isinstance(value, int) or isinstance(value, bool) or not isinstance(default, int):
         return True
     return value < default if spec.tighten is Tighten.LOWER else value > default
