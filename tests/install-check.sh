@@ -34,6 +34,11 @@ export PATH="$UV_TOOL_BIN_DIR:$repo/tests/fakes:$PATH"
 
 canopy --version
 canopy --help >/dev/null
+# The sinks canopy ships come with the same install (DESIGN §20).
+for sink in canopy-notify-desktop canopy-notify-slack; do
+    [ "$(command -v "$sink")" = "$UV_TOOL_BIN_DIR/$sink" ] || fail "$sink was not installed with canopy"
+    "$sink" --help >/dev/null || fail "$sink --help failed"
+done
 # Output is captured before grep, so a command that fails after printing the expected text still fails the check.
 skill=$(canopy skill)
 echo "$skill" | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"

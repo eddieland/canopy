@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import result, view
-from canopy.core import db
+from canopy.core import db, outbox
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
@@ -100,7 +100,10 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
             argv = [sys.executable, "-m", "canopy", "_chore", str(run_id)]
             pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
         except (OSError, procs.ProcError) as e:
-            db.finish_chore_run(ctx.conn, run_id, "crashed", json.dumps({"harness": f"could not start the chore: {e}"}))
+            note = json.dumps({"harness": f"could not start the chore: {e}"})
+            db.finish_chore_run(
+                ctx.conn, run_id, "crashed", note, event=outbox.chore_ended(ctx.config, run, "crashed", note)
+            )
             raise Refusal("spawn_failed", str(e)) from e
         db.claim_chore_run(ctx.conn, run_id, pid)
         return Started(run_id, pid)

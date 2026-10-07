@@ -6,9 +6,10 @@ Connections run in autocommit mode; anything that must be atomic opens its own t
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -44,6 +45,15 @@ class RunSlot:
     lease_id: str
     lease_holder: str
     base_branch: str
+
+
+@dataclass(frozen=True)
+class Event:
+    """A point event for notification sinks (DESIGN §20), recorded with the fact it reports."""
+
+    group: str
+    kind: str
+    fields: Mapping[str, object]
 
 
 @dataclass(frozen=True)
@@ -154,6 +164,15 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
             f"this canopy changes the journal, but {runs} still working for the canopy before it and would fail "
             "writing the old journal. Run canopy again once they finish."
         )
+
+
+def record_event(conn: sqlite3.Connection, event: Event) -> int:
+    """Add `event` to the outbox and return its id. Inside a transaction, it commits or rolls back with the fact."""
+    cur = conn.execute(
+        "INSERT INTO notify_events (grp, kind, at, fields) VALUES (?, ?, ?, ?)",
+        (event.group, event.kind, now(), json.dumps(dict(event.fields))),
+    )
+    return _rowid(cur)
 
 
 def _rowid(cur: sqlite3.Cursor) -> int:
@@ -322,12 +341,14 @@ def insert_run(
     runs_dir: Path,
     single: bool = True,
     works_units: bool = True,
+    started: Callable[[int], Event | None] | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
     Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
     run's branch. `single` says the workspace is a workspace of one (see `set_unit`). A run that does not work in units,
-    a split, leaves the ticket's branch and units as they are: it pushes nothing (DESIGN §18).
+    a split, leaves the ticket's branch and units as they are: it pushes nothing (DESIGN §18). `started` builds the
+    `run.started` event from the run's id, recorded in the same transaction, or None when no sink takes it.
     """
     with transaction(conn):
         cur = conn.execute(
@@ -341,6 +362,9 @@ def insert_run(
             "VALUES (?, ?, ?, ?, ?, ?)",
             [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch) for s in slots],
         )
+        event = started(run_id) if started is not None else None
+        if event is not None:
+            record_event(conn, event)
         if not works_units:
             return run_id
         conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
@@ -397,13 +421,19 @@ def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
     conn.execute("UPDATE runs SET worker_pid = ? WHERE id = ?", (pid, run_id))
 
 
-def finish_run(conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None) -> bool:
-    """Close a running run. Returns False if it was already closed, which leaves it as it was."""
-    cur = conn.execute(
-        "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-        (now(), status, result_json, run_id),
-    )
-    return cur.rowcount == 1
+def finish_run(
+    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
+) -> bool:
+    """Close a running run, recording `event` with it. Returns False if it was already closed: nothing changes."""
+    with transaction(conn):
+        cur = conn.execute(
+            "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
+            (now(), status, result_json, run_id),
+        )
+        closed = cur.rowcount == 1
+        if closed and event is not None:
+            record_event(conn, event)
+    return closed
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
@@ -470,13 +500,19 @@ def set_chore_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None
     conn.execute("UPDATE chore_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
 
 
-def finish_chore_run(conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None) -> bool:
-    """Close a running chore run. Returns False if it was already closed, which leaves it as it was."""
-    cur = conn.execute(
-        "UPDATE chore_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-        (now(), status, result_json, run_id),
-    )
-    return cur.rowcount == 1
+def finish_chore_run(
+    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
+) -> bool:
+    """Close a running chore run, recording `event` with it. Returns False if it was already closed."""
+    with transaction(conn):
+        cur = conn.execute(
+            "UPDATE chore_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
+            (now(), status, result_json, run_id),
+        )
+        closed = cur.rowcount == 1
+        if closed and event is not None:
+            record_event(conn, event)
+    return closed
 
 
 def running_chore_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:

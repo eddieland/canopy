@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import db, outbox
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -27,7 +27,8 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         if row["agent_pid"] is not None and procs.kill_group(int(row["agent_pid"])):
             log.warning("killed the chore agent `_chore` left behind", extra={**fields, "agent_pid": row["agent_pid"]})
         note = json.dumps({"harness": "the chore process is gone"})
-        if db.finish_chore_run(ctx.conn, int(row["id"]), "crashed", note):
+        ended = outbox.chore_ended(ctx.config, row, "crashed", note)
+        if db.finish_chore_run(ctx.conn, int(row["id"]), "crashed", note, event=ended):
             closed.append(int(row["id"]))
             log.warning("chore process is gone; chore run marked crashed", extra=fields)
     return closed

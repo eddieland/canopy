@@ -101,7 +101,11 @@ Controls:
   Worker stdout goes to a log file under `state_dir`, readable only by the
   operator.
 - Listeners follow T8. No outbound calls from the harness except through the
-  configured commands.
+  configured commands. canopy ships one program that makes them, the Slack sink (DESIGN §20): it runs only as a sink
+  the operator configured, reads its webhook from an operator-only file of its own, and never from canopy's config,
+  argv, journal, or logs. Lint bans network modules in the harness (`urllib.request`, `http.client`, `socket`) and
+  any import of the sink, so the process that holds the journal and enforces the guards never opens a connection or
+  reads a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 
@@ -165,12 +169,17 @@ Controls:
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
+- Notifications carry text written by agents and org members (attention details, worker summaries and questions,
+  chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
+  cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
+  The desktop sink passes text to its tool as arguments, never as a shell command or a script.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
   tools, and denies MCP write tools by name.
 Residual: real. Sandboxing and egress controls are the eventual answer;
 until then this risk is accepted and documented. A chore steered by what it read can put up to 20 findings of its
 choosing in front of the operator and into `notify.cmd`, wherever that sends them, and a finding's link can carry data
-in its URL.
+in its URL. A steered agent likewise chooses up to 500 characters per attention item, and 300 per worker summary
+and question, that a sink puts in front of whoever reads its destination.
 
 ### T7. Hostile repository config
 
@@ -267,6 +276,9 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
+- Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
+  Slack sink's webhook file readable only by you. People who can read the channel see what the loop does; they cannot
+  steer it.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
 - Keep the listener secret file private, and bind a listener to a private-network address only on a network whose

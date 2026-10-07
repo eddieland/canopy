@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, prompts, treehouse
+from canopy.core import db, outbox, prompts, treehouse
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
@@ -493,6 +493,9 @@ def _spawn(
         runs_dir=runs_dir(ctx),
         single=ctx.workspace.single,
         works_units=not split,
+        started=outbox.run_started(
+            cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=policy.limits(cfg)[kind]
+        ),
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -503,7 +506,8 @@ def _spawn(
         argv = [sys.executable, "-m", "canopy", "_run", str(run_id)]
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
     except (OSError, procs.ProcError) as e:
-        db.finish_run(ctx.conn, run_id, "crashed", json.dumps({"harness": f"could not start the worker: {e}"}))
+        note = json.dumps({"harness": f"could not start the worker: {e}"})
+        db.finish_run(ctx.conn, run_id, "crashed", note, event=outbox.run_ended(cfg, run, "crashed", note))
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk)

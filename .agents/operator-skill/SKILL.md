@@ -36,13 +36,14 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 
 | Command | What it does |
 |---|---|
-| `canopy status` | The last tick, the attention list, running workers, and each chore. Start here. |
+| `canopy status` | The last tick, attention list, running workers, each chore, and each sink. Start here. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
 | `canopy init --workspace` | Sets up the current directory as a workspace: `canopy-workspace.toml`, `MAP.md`, `.gitignore`. |
 | `canopy workspace sync` | Clones the map's repositories that are missing under `repos/`; reports an `origin` that differs. |
+| `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
 | `canopy skill` | Prints this skill. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |
 
