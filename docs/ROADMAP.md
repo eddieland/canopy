@@ -111,7 +111,7 @@ and its slot returned.
 
 Status: done 2026-10-07.
 Learned:
-- Live, from an empty journal (after the migrations were squashed, #60), with OpenCode 1.18.32: GH-64 went from label
+- Live, from an empty journal (after the migrations were squashed, #60 and D068), with OpenCode 1.18.32: GH-64 went from label
   to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with SIGKILL,
   were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to PR #70.
 - An empty journal rebuilds its view from the tracker, but every comment cursor starts empty, so an old authorized
