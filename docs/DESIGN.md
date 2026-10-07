@@ -1695,6 +1695,7 @@ refuses, recording `refused:<guard>`, on the first of:
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is: a review must not
   race the push it is meant to judge.
 - `reviewed`: a review of this PR at this commit ended `done`. One review per commit, whatever the overseer asks.
+  The refusal names that review's verdict and comment, since the PR may have left the state block's window.
 - `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, whatever they ended as. This also records
   the `review_limit` attention item.
 - `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
@@ -1711,7 +1712,9 @@ failed lease deletes the row and refuses as `no_slot`), renders the prompt (`bad
 
 1. Claims the run by pid and drops `CANOPY_TICK_ID`, as `_run` does.
 2. In the slot: `git fetch origin <SHA>`, then `git checkout --detach <SHA>`, and checks that `HEAD` is `SHA`. A
-   failure is `failed` with a harness note: a PR in another repository fails here. No branch is created.
+   failure is `failed` with a harness note: a PR in another repository fails here. No branch is created. Then it
+   deletes every symlink the commit tracks that resolves outside the checkout: a PR could otherwise link to one of
+   the operator's files and have the reviewer quote it.
 3. Runs `review_cmd` with cwd `<state_dir>/reviews/<run_id>/`, a directory created readable only by the operator, and
    **not the checkout**. It holds one link, `checkout`, to the slot, and the prompt names that path: the reviewer reads
    the checkout through it, as a joint worker edits through its desk's links (§18, D065). Before it starts, the
@@ -1761,8 +1764,9 @@ Result contract, one JSON line, last line of stdout, validated with pydantic (D0
 ```
 
 - `done` means the review was read through and the comment posted, and `comment` is its plain `https://` URL, which
-  must begin with the reviewed PR's URL: a comment's link does on GitHub. A `done` without one is recorded as `failed`
-  with a harness note. `failed` means the reviewer could not review, and the summary says why.
+  must be the reviewed PR's URL followed by `#` or `/` (a comment's link is, on GitHub; PR 70's is not PR 7's). A
+  `done` without one is recorded as `failed` with a harness note. `failed` means the reviewer could not review, and
+  the summary says why.
 - The harness cannot check that the comment exists (principle 5; it has no VCS client). The overseer can, and does
   (below): a `done` run whose comment is missing costs that commit its review, not the PR its human review.
 - At most 20 findings. `title` and `location` are one line, cut at 200 and 300 characters, `summary` cut at 2000.

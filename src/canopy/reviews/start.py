@@ -217,7 +217,12 @@ def _check_limits(
     runs = db.review_runs_of(ctx.conn, request.pr)
     done = next((r for r in runs if r["sha"] == request.sha and r["status"] == "done"), None)
     if done is not None:
-        raise Refusal("reviewed", f"review run {done['id']} already reviewed {request.sha[:12]}; one review per commit")
+        # The PR may be out of the state block's window by now, so the refusal says what the review found.
+        stored = result.stored(done["result_json"])
+        found = f" ({stored.verdict}, {stored.comment})" if stored is not None else ""
+        raise Refusal(
+            "reviewed", f"review run {done['id']} already reviewed {request.sha[:12]}{found}; one review per commit"
+        )
     limit = cfg.policy.max_reviews_per_pr
     if len(runs) >= limit:
         raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")

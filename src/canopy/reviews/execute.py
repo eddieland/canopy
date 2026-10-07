@@ -101,6 +101,9 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     slot = Path(str(run["slot_path"]))
     sha = str(run["sha"])
     _check_out(ctx.runner, slot, sha)
+    dropped = _drop_escaping_links(ctx.runner, slot)
+    if dropped:
+        log.warning("removed links that leave the checkout", extra={"review_run_id": run["id"], "links": dropped})
     cwd = start.run_dir(ctx, int(run["id"]))
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
@@ -137,7 +140,7 @@ def judged(ctx: Context, run: sqlite3.Row, parsed: result.ReviewResult) -> Outco
     """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
     if parsed.status != "done":
         return Outcome("failed", parsed)
-    if parsed.comment is None or not parsed.comment.startswith(str(run["pr_url"])):
+    if parsed.comment is None or not on_pr(parsed.comment, str(run["pr_url"])):
         # A comment's link begins with its PR's on GitHub. Without one, the commit's review is lost, not the PR's.
         note = "the reviewer reported done without the URL of a comment on this PR"
         return Outcome("failed", parsed, note)
@@ -154,6 +157,29 @@ def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:
     head = _git(runner, slot, "rev-parse", "HEAD")
     if head != sha:
         raise _Unreviewable(f"HEAD is {head} after checking out {sha}")
+
+
+def on_pr(url: str, pr: str) -> bool:
+    """Whether `url` is `pr` or a link within it, as a comment's is: `.../pull/7#...`, never `.../pull/70`."""
+    return url == pr or url.startswith((f"{pr}#", f"{pr}/"))
+
+
+def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
+    """Remove the commit's symlinks that resolve outside the checkout, and return their paths (DESIGN §21).
+
+    A PR can commit a link to any path, such as one of the operator's files, and the reviewer reads through links.
+    """
+    root = slot.resolve()
+    dropped: list[str] = []
+    for entry in _git(runner, slot, "ls-files", "--stage", "-z").split("\0"):
+        mode, _, name = entry.partition("\t")
+        if not mode.startswith("120000 "):
+            continue
+        link = slot / name
+        if not link.resolve().is_relative_to(root):
+            link.unlink(missing_ok=True)
+            dropped.append(name)
+    return dropped
 
 
 def _git(runner: procs.Runner, slot: Path, *args: str) -> str:

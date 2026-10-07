@@ -189,7 +189,9 @@ def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, m
         "attention:review_limit",
     ]
     reasons = {d[2]: d[3] for d in decisions(conn, tick_id)}
-    assert reasons["refused:reviewed"] == f"review run 1 already reviewed {sha[:12]}; one review per commit"
+    assert reasons["refused:reviewed"] == (
+        f"review run 1 already reviewed {sha[:12]} (clean, {COMMENT}); one review per commit"
+    )
     assert reasons["refused:review_limit"] == "this PR has had 2 review runs and the limit is 2"
 
 
@@ -246,6 +248,8 @@ def test_a_dry_run_counts_its_reviews(reviews: CanopyEnv, monkeypatch: pytest.Mo
             "failed",
             "the reviewer reported done without",
         ),
+        # PR 70's comment starts with PR 7's URL, but is not on it.
+        ({**FINDINGS, "comment": f"{PR}0#issuecomment-1"}, "failed", "the reviewer reported done without"),
         (CLEAN, "done", "reported low impact, but review.low_impact is not set; recorded as normal"),
         ({**CLEAN, "findings": FINDINGS["findings"]}, "unknown", "the reviewer's last line was not a valid result"),
         ({"status": "failed", "summary": "cannot read the PR"}, "failed", ""),
@@ -270,6 +274,43 @@ def test_the_harness_checks_what_it_can_of_a_result(
     assert stored.get("harness", "").startswith(note)
     if status == "done":
         assert stored["impact"] == "normal"
+
+
+def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = tmp_path / "secret.txt"
+    secret.write_text("operator only\n")
+    work = git_pool.slots[1]
+    git("checkout", "--quiet", "-b", "pr-7", "origin/main", cwd=work)
+    (work / "inside").symlink_to("README.md" if (work / "README.md").exists() else ".")
+    (work / "outside").symlink_to(secret)
+    (work / "up").symlink_to("../..")
+    git("add", "inside", "outside", "up", cwd=work)
+    git("commit", "--quiet", "-m", "links", cwd=work)
+    git("push", "--quiet", "origin", "pr-7", cwd=work)
+    sha = git("rev-parse", "HEAD", cwd=work)
+    git("checkout", "--quiet", "--detach", cwd=work)
+    reviewer_reports(monkeypatch, FINDINGS, ["ls", "checkout/"])
+    run_id = run_inline(conn := journal(reviews), monkeypatch, sha=sha)
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "done", Path(row["log_path"]).read_text()
+    [reviewer] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+    [listing] = reviewer["commands"]
+    names = listing["stdout"].split()
+    assert "inside" in names
+    assert "outside" not in names
+    assert "up" not in names
+
+
+@pytest.mark.parametrize("phase", ["review_pending", "review_findings"])
+def test_the_review_phases_are_a_units(reviews: CanopyEnv, monkeypatch: pytest.MonkeyPatch, phase: str) -> None:
+    conn = journal(reviews)
+    in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--phase", phase]) == 0
+    [unit] = db.units(conn, "PROJ-1")
+    assert unit["phase"] == phase
 
 
 def test_a_commit_origin_does_not_have_fails_the_review(
