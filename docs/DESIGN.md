@@ -797,10 +797,11 @@ Chores add `chore_failed` and their findings, listed by chore after the ticket i
 `review_failed`, `review_unposted`, and `review_limit`, about a PR (§21). In
 a workspace of several, an item about one unit of a ticket names its repository too, and is shown as `KEY (repo)`.
 `canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal. `canopy status
---json` prints a JSON object with `attention` (items with `kind`, `ticket`, `repo`, and `message`) and `workers` (a
-`running` list with each run's `ticket`, `kind`, and `started_at`, plus the configured capacity as `max`). Review runs
-are included as workers with `kind` `review`, their PR URL as `pr`, and `ticket` set to the associated ticket or null.
-They count toward `workers.max` just as they do in the text output.
+--json` prints a JSON object with `latest_tick` (the latest tick's `id`, `status`, `dry_run`, `started_at`, and
+`summary`, or null before the first tick), `attention` (items with `kind`, `ticket`, `repo`, and `message`), and
+`workers` (a `running` list with each run's `ticket`, `kind`, and `started_at`, plus the configured capacity as `max`).
+Review runs are included as workers with `kind` `review`, their PR URL as `pr`, and `ticket` set to the associated
+ticket or null. They count toward `workers.max` just as they do in the text output.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
 ended `crashed` is `crashed`; `unpushed` is `unpushed`; `unknown` or `timeout` is `unknown_result`; `failed` is

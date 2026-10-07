@@ -90,9 +90,21 @@ def cmd_status(click_ctx: click.Context, *, as_json: bool) -> int:
 def _status_json(ctx: Context) -> dict[str, object]:
     """Build the stable machine-readable portion of `canopy status`."""
     items = attention.listed(ctx)
+    last = db.last_tick(ctx.conn)
     running = db.running_runs(ctx.conn)
     reviews = db.running_review_runs(ctx.conn)
     return {
+        "latest_tick": (
+            None
+            if last is None
+            else {
+                "id": int(last["id"]),
+                "status": str(last["status"]),
+                "dry_run": bool(last["dry_run"]),
+                "started_at": str(last["started_at"]),
+                "summary": last["summary"],
+            }
+        ),
         "attention": [
             {"kind": item.reason, "ticket": item.ticket_key, "repo": item.repo, "message": item.detail}
             for item in items
