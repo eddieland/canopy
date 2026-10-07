@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
-from pydantic import BaseModel, ConfigDict, Field, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictStr
 
 from canopy.core import contract, db, definitions, outbox, treehouse
 from canopy.core.config import render_command
@@ -32,10 +32,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
-# A child key is a ticket key, and bounded like every other value an agent reports; so is a child's repository.
+# A child key is a ticket key, and bounded like every other value an agent reports.
 MAX_CHILD_KEY = 100
-# A split makes at most one child per repository it was dispatched with; a result naming more is invalid.
-MAX_CHILDREN = 20
 MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # Never let git wait for credentials on a terminal nobody is watching.
@@ -51,7 +49,6 @@ class _SetupError(Exception):
 
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
-ChildName = Annotated[StrictStr, Field(max_length=MAX_CHILD_KEY)]
 
 
 class WorkerResult(BaseModel):
@@ -82,13 +79,15 @@ class SplitResult(BaseModel):
     """A split's result contract (DESIGN §18): the tickets it created, each with the repository it covers.
 
     Untrusted, so bounded; `_run` checks the children against the journal before recording any (`check_children`).
+    `children` is bounded by that check, not here: a valid split names one child per repository it was dispatched with,
+    and a refused one is stored without its children.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     status: Literal["done", "failed"]
     summary: Text = ""
-    children: Annotated[dict[ChildName, ChildName], Field(max_length=MAX_CHILDREN)] = {}
+    children: dict[StrictStr, StrictStr] = {}
 
 
 def parse_split(stdout: str) -> SplitResult | None:
@@ -117,14 +116,14 @@ def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], 
 
 
 def _check_child(conn: sqlite3.Connection, parent: str, repos: Sequence[str], key: str, repo: str) -> str:
-    if dispatch.KEY_RE.fullmatch(key) is None:
-        return f"child {key!r} is not a ticket key"
+    if len(key) > MAX_CHILD_KEY or dispatch.KEY_RE.fullmatch(key) is None:
+        return f"child {key[:MAX_CHILD_KEY]!r} is not a ticket key"
     if key == parent:
         return f"child {key} is the ticket that was split"
     if db.split_child(conn, key) is not None or db.has_runs(conn, key) or db.get_ticket(conn, key) is not None:
         return f"child {key} is not a new ticket: the journal already knows it"
     if repo not in repos:
-        return f"child {key}'s repository {repo!r} is not one the split was dispatched with"
+        return f"child {key}'s repository {repo[:MAX_CHILD_KEY]!r} is not one the split was dispatched with"
     return ""
 
 
@@ -277,7 +276,8 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     if invalid:
         log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
         status = "timeout" if result.timed_out else "unknown"
-        return Outcome(status, parsed, f"children not recorded: {invalid}")
+        # Stored without its children: a refused map is unbounded, and its note says what was wrong with it.
+        return Outcome(status, parsed.model_copy(update={"children": {}}), f"children not recorded: {invalid}")
     if parsed.children:
         # Also after a timeout: the children it reported exist in the tracker, and a retry must not make them again.
         db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)

@@ -204,6 +204,14 @@ def test_a_single_repository_is_never_split(
             {"status": "done", "children": {"PROJ-13": "api", "PROJ-14": "api"}},
             "two children cover api; a split makes at most one ticket per repository",
         ),
+        (
+            {"status": "done", "children": {"P-" + "1" * worker.MAX_CHILD_KEY: "api"}},
+            f"child {('P-' + '1' * (worker.MAX_CHILD_KEY - 2))!r} is not a ticket key",
+        ),
+        (
+            {"status": "done", "children": {f"PROJ-{i}": "api" for i in range(13, 5000)}},
+            "two children cover api; a split makes at most one ticket per repository",
+        ),
     ],
 )
 def test_invalid_children_are_recorded_nowhere(
@@ -224,7 +232,10 @@ def test_invalid_children_are_recorded_nowhere(
     assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
     run = wait_for_run(conn, 2)
     assert run["status"] == "unknown"
-    assert json.loads(run["result_json"])["harness"] == f"children not recorded: {note}"
+    stored = json.loads(run["result_json"])
+    assert stored["harness"] == f"children not recorded: {note}"
+    # A refused map is not stored: however many children it named, the journal keeps none of them.
+    assert stored["children"] == {}
     assert children(conn) == []
     assert pool_statuses(treehouse_state) == ["available", "available"]
     [item] = [i for i in attention.from_runs(conn) if i.ticket_key == "PROJ-12"]
@@ -238,19 +249,6 @@ def test_a_blocked_or_missing_split_result_is_unknown() -> None:
     assert worker.parse_split('{"status":"failed","summary":"one change"}') == worker.SplitResult(
         status="failed", summary="one change"
     )
-
-
-@pytest.mark.parametrize(
-    "children",
-    [
-        {"P-" + "1" * worker.MAX_CHILD_KEY: "api"},
-        {"PROJ-13": "a" * (worker.MAX_CHILD_KEY + 1)},
-        {f"PROJ-{i}": "api" for i in range(worker.MAX_CHILDREN + 1)},
-    ],
-)
-def test_a_split_result_past_its_bounds_is_unknown(children: dict[str, str]) -> None:
-    # Even a failed split's children are stored in result_json, so an oversized set is no result at all.
-    assert worker.parse_split(json.dumps({"status": "failed", "children": children})) is None
 
 
 def test_a_failed_split_records_what_it_created(
