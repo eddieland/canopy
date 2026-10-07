@@ -999,7 +999,9 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   directory name is (`Web_App` is `web-app`), unless given as `NAME=URL`. A URL the map already lists (compared as
   sync compares `origin`) is left as it is. A name the map already gives another URL, or a URL with no usable name,
   refuses the whole command, and nothing is written. The map is appended to as text, so its comments and layout
-  stay; the result is read back as a map before sync runs.
+  stay. The edit happens under the tick lock, after reading the map again, and is written to a temporary file renamed
+  over the map, so two adds never lose each other's tables and an interrupted one leaves the old map. The result is
+  read back as a map before sync runs.
 - `canopy workspace sync` prints each clone it is about to make, then clones it with `git clone -- <url>
   repos/<name>`, with credential prompts and git's `ext::` transport off. For a repository already cloned it compares
   `origin` with the map's URL (ignoring a trailing `/` or `.git`) and reports a difference; it changes no remote. It
@@ -1048,11 +1050,11 @@ api = 4                 # by repository name; wins over slots_per_repo
   With neither key, a pool is unmanaged: treehouse's own `max_trees` bounds it, and sync leaves it alone, as before.
 - Only a workspace's pools are sized. A workspace of one's pool is wherever treehouse's own config puts it, by default
   the operator's interactive pool under `~/.treehouse`, so canopy neither caps nor converges it.
-- **Leases stay within the size.** Before `treehouse get`, dispatch (§8) and a review (§21) read the pool. If it has its
-  declared size or more and none of its slots is available, the lease is refused as `no_slot` without asking
-  treehouse, which would make another. treehouse may still make a slot when the available ones are not ones it may
-  reuse, such as a slot recorded for another clone; canopy then returns that slot, destroys it, and refuses. A pool
-  under its size grows as before.
+- **Leases stay within the size.** Before `treehouse get`, dispatch (§8) and a review (§21) read the pool. If as many of
+  its slots as its declared size are busy, the lease is refused as `no_slot` without asking treehouse, which would make
+  another or hand out a slot of a pool bigger than declared; a size of 0 refuses every lease. treehouse may still make a
+  slot when the available ones are not ones it may reuse, such as a slot recorded for another clone; canopy then returns
+  that slot, destroys it, and refuses. A pool under its size grows as before.
 - **Sync fills each pool** to its size: it leases with the holder `canopy-sync` and `--no-fetch` until the pool has
   enough slots, then returns every one of those leases. treehouse makes a slot only when none is available, so holding
   each lease is what makes the next one new, and `post_create` runs in each new slot then rather than in a run's lease.
@@ -1066,13 +1068,18 @@ api = 4                 # by repository name; wins over slots_per_repo
   a pool that cannot reach its size because treehouse keeps a slot with work in it makes sync exit 1.
 - **Sync removes clones the map no longer lists.** Anything under `repos/` that the map does not name, other than dot
   entries, is removed with its pool's slots, but only when nothing would be lost: it must be a directory with a `.git`,
-  not a symlink; `git status --porcelain` and `git stash list` must be empty; every commit on a local branch must be on
-  a remote-tracking ref; and every slot in its pool must be available and destroyed by treehouse unforced. Anything
+  not a symlink; `git status --porcelain --ignored` and `git stash list` must be empty, ignored files included since a
+  primary clone holds the local config `.worktreeinclude` seeds into slots; every commit reachable from `HEAD`, a
+  branch, or a tag must be on a remote-tracking ref; and every slot in its pool must be available and destroyed by
+  treehouse unforced. Anything
   else is kept and reported, and sync exits 1. treehouse's record of the emptied pool stays under `.treehouse/`.
 - Sync holds the tick lock while it works, waiting for a running tick to end, so it never changes a pool while a tick
   reads it or leases from it. Runs already in progress keep their leases; their slots count as busy.
-- `canopy workspace sync --dry-run` reports what sync would clone, make, and remove, and changes nothing. A dry run
-  still runs the read-only checks, so a clone it says it would keep is one a real sync keeps.
+- `canopy workspace sync --dry-run` reports what sync would clone, make, and remove, and changes nothing in the
+  repositories or pools. A dry run still runs the read-only checks, so a clone it says it would keep is one a real
+  sync keeps; what it says it would remove, treehouse may still keep. A repository not cloned yet is previewed with
+  every slot to make.
+- A lease sync cannot return, its own or one a dead sync left, makes the pool `failed`, so sync exits 1.
 
 ### Units
 

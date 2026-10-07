@@ -114,7 +114,9 @@ def test_a_full_pool_refuses_a_dispatch_without_asking_treehouse_for_another_slo
     runner = InlineRunner()
 
     assert main(dispatch("api"), runner=runner) == 1
-    assert "dispatch refused (no_slot): api: all 1 slots are busy, and capacity declares 1" in capsys.readouterr().err
+    assert (
+        "dispatch refused (no_slot): api: 1 of its slots are busy, and capacity declares 1" in capsys.readouterr().err
+    )
     assert [c[0] for c in calls(treehouse_state)] == ["status"]
     assert len(slots_of(treehouse_state, ws, "api")) == 1
     assert runner.spawned == []
@@ -134,9 +136,32 @@ def test_a_slot_treehouse_makes_past_the_declared_size_is_destroyed(
     in_tick(conn, monkeypatch)
 
     assert main(dispatch("api"), runner=InlineRunner()) == 1
-    assert "no slot of the 1 could be reused, and capacity declares 1" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "no slot of the 1 could be reused, and capacity declares 1" in err
+    assert "the new slot " in err
+    assert " was removed" in err
     assert [c[0] for c in calls(treehouse_state)] == ["status", "get", "return", "destroy"]
     assert [s["path"] for s in slots_of(treehouse_state, ws, "api")] == [stale]
+
+
+def test_a_pool_declared_smaller_than_it_is_counts_its_busy_slots(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    declare(canopy_env, "[capacity.repo_slots]\napi = 0\nweb = 1")
+    set_slots(treehouse_state, ws, "api", "available")
+    set_slots(treehouse_state, ws, "web", "leased", "available")
+    conn = ws.journal()
+    in_tick(conn, monkeypatch)
+
+    assert main(dispatch("api"), runner=InlineRunner()) == 1
+    assert "api: 0 of its slots are busy, and capacity declares 0" in capsys.readouterr().err
+    assert main(dispatch("web"), runner=InlineRunner()) == 1
+    assert "web: 1 of its slots are busy, and capacity declares 1" in capsys.readouterr().err
+    assert [c[0] for c in calls(treehouse_state)] == ["status", "status"]
 
 
 def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
@@ -174,6 +199,19 @@ def test_sync_fills_each_pool_to_its_size_and_returns_every_lease_it_took(
 
     assert main(["workspace", "sync"]) == 0  # converged: nothing more to do
     assert "api: slots: 3 of 3\n" in capsys.readouterr().out
+
+
+def test_a_dry_run_previews_the_pool_of_a_repository_not_cloned_yet(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    declare(canopy_env, "[capacity.repo_slots]\ndocs = 2")
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("docs", "https://x.test/docs.git")))
+    assert main(["workspace", "sync", "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert (
+        f"docs: to clone: https://x.test/docs.git into {ws.clone('docs')}\ndocs: slots: 0 of 2, would make 2\n" in out
+    )
+    assert not ws.clone("docs").exists()
 
 
 def test_sync_returns_what_a_dead_sync_left_leased_before_counting(
@@ -315,9 +353,11 @@ def test_sync_removes_a_clean_clone_the_map_dropped_with_its_slots(
 @pytest.mark.parametrize(
     ("change", "reason"),
     [
-        ("untracked", "it has uncommitted or untracked files"),
+        ("untracked", "it has uncommitted, untracked, or ignored files"),
+        ("ignored", "it has uncommitted, untracked, or ignored files"),
         ("stash", "it has stashed changes"),
         ("unpushed", "it has commits no remote has"),
+        ("detached", "it has commits no remote has"),
         ("leased", "slot 1 is leased"),
     ],
 )
@@ -331,7 +371,12 @@ def test_sync_keeps_a_dropped_clone_with_anything_to_lose(
     if change == "stash":
         git("add", "notes.txt", cwd=clone)
         git("stash", "--quiet", cwd=clone)
-    if change == "unpushed":
+    if change == "ignored":
+        (clone / ".git" / "info" / "exclude").write_text(".env\n")
+        (clone / ".env").write_text("TOKEN=local")
+    if change in ("unpushed", "detached"):
+        if change == "detached":
+            git("checkout", "--quiet", "--detach", cwd=clone)
         git("commit", "--quiet", "--allow-empty", "-m", "local only", cwd=clone)
     drop_from_map(ws, "api")
 
@@ -375,7 +420,13 @@ def test_a_repository_is_named_after_its_url_unless_named(arg: str, expected: tu
 
 
 @pytest.mark.parametrize(
-    ("arg", "error"), [("--upload-pack=x", "must be a clone URL"), ("https://x.test/9/", "NAME=URL")]
+    ("arg", "error"),
+    [
+        ("--upload-pack", "must be a clone URL"),
+        ("--upload-pack=x", "repository name '--upload-pack'"),
+        ("API=https://x.test/api.git", "repository name 'API'"),
+        ("https://x.test/9/", "NAME=URL"),
+    ],
 )
 def test_a_repository_argument_that_cannot_be_used_is_refused(arg: str, error: str) -> None:
     with pytest.raises(ValueError, match=error):
@@ -395,6 +446,9 @@ def test_add_lists_new_urls_in_the_map_and_syncs_them(
     assert f"docs: cloning {docs} into {ws.clone('docs')}\ndocs: cloned\ndocs: slots: 2 of 2, made 2\n" in out
     assert [r.name for r in workspace.load(ws.root).repos] == ["api", "docs", "web"]
     assert git("log", "--format=%s", cwd=ws.clone("docs")) == "initial docs"
+
+    # The map is written whole and renamed into place, leaving no partial file.
+    assert not map_file.with_name(map_file.name + ".tmp").exists()
 
     # A name the map gives another URL refuses the whole add: nothing is written.
     before = map_file.read_text()

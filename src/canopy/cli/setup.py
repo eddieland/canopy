@@ -87,8 +87,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
     synced: list[setup_workspace.Checked] = []
     if repos:
         click.echo()
-        cli_workspace.add_repos(ws, repos)
-        synced = cli_workspace.sync(click_ctx, dry_run=False)
+        synced = cli_workspace.sync(click_ctx, dry_run=False, add=repos)
         ws = workspace.load(root)
         click.echo(
             f"\nWrite a one-line summary for each repository in {map_file}, and describe them in "

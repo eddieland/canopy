@@ -159,25 +159,35 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None, pool: Pool
     the output still names it. When it does not, or the return fails, the next tick's reconcile returns it. The error
     says which happened.
 
-    With `pool.slots` set, a pool that has that many slots and none available is full, and treehouse is not asked: it
-    would make another. treehouse may still make one when the available slots are not reusable (another clone's, say);
-    that slot is returned and destroyed, and the lease refused, so the pool keeps its size (DESIGN §18).
+    With `pool.slots` set, a pool with that many slots busy is full, and treehouse is not asked: it would make another,
+    or hand out a slot of a pool bigger than declared. treehouse may still make one when the available slots are not
+    reusable (another clone's, say); that slot is returned and destroyed, and the lease refused, so the pool keeps its
+    size (DESIGN §18).
     """
     if pool.slots is None:
         return lease_as(runner, holder_for(key), base=base, pool=pool)
     before = status(runner, pool=pool)
-    if len(before) >= pool.slots and not any(s.status == AVAILABLE for s in before):
-        raise TreehouseError(f"all {len(before)} slots are busy, and capacity declares {pool.slots} for this pool")
+    busy = sum(s.status != AVAILABLE for s in before)
+    if busy >= pool.slots:
+        raise TreehouseError(f"{busy} of its slots are busy, and capacity declares {pool.slots} for this pool")
     leased = lease_as(runner, holder_for(key), base=base, pool=pool)
     if len(before) < pool.slots or any(s.path == leased.path for s in before):
         return leased
-    outcome = return_slot(runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool)
-    if outcome is ReturnOutcome.RETURNED:
-        destroy(runner, leased.path, pool=pool)
     raise TreehouseError(
         f"no slot of the {len(before)} could be reused, and capacity declares {pool.slots} for this pool; "
-        f"`canopy workspace sync` removes the slots treehouse would not reuse when they are idle"
+        f"{_undo(runner, leased, pool)}"
     )
+
+
+def _undo(runner: procs.Runner, leased: Lease, pool: Pool) -> str:
+    """Return and destroy a slot `lease` made past the pool's size, and say how far that got, for the error."""
+    outcome = return_slot(runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool)
+    if outcome is not ReturnOutcome.RETURNED:
+        return f"returning the new slot {leased.path} said {outcome.value}; the next tick's reconcile returns it"
+    kept = destroy(runner, leased.path, pool=pool)
+    if kept is not None:
+        return f"treehouse kept the new slot {leased.path} ({kept}); `canopy workspace sync` removes it once it can"
+    return f"the new slot {leased.path} was removed"
 
 
 def lease_as(

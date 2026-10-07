@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -53,9 +54,8 @@ def cmd_add(click_ctx: click.Context, repos: tuple[str, ...]) -> int:
     already lists is left as it is. Write a one-line summary for each in the map, and describe them in MAP.md, for the
     overseer.
     """
-    root = _require_workspace()
-    add_repos(workspace.load(root), repos)
-    check_synced(sync(click_ctx, dry_run=False))
+    _require_workspace()
+    check_synced(sync(click_ctx, dry_run=False, add=repos))
     return 0
 
 
@@ -78,8 +78,12 @@ def add_repos(ws: workspace.Workspace, repos: Sequence[str]) -> None:
         click.echo(f"{a.name}: {a.outcome}{detail}")
 
 
-def sync(click_ctx: click.Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
-    """Make the workspace match its map and declared slots, between ticks. Returns what each step found or did."""
+def sync(click_ctx: click.Context, *, dry_run: bool, add: Sequence[str] = ()) -> list[setup_workspace.Checked]:
+    """Add the `[NAME=]URL`s in `add` to the map, then make the workspace match its map and declared slots.
+
+    Both happen between ticks, under the tick lock, which also serializes two of these. Returns what each sync step
+    found or did.
+    """
     ctx = open_context(click_ctx)
     with contextlib.ExitStack() as stack:
         # A tick leases slots and reads the pools; sync changes them only between ticks.
@@ -88,6 +92,10 @@ def sync(click_ctx: click.Context, *, dry_run: bool) -> list[setup_workspace.Che
         except lock.LockBusyError:
             click.echo("A tick is running; sync starts when it ends.")
             stack.enter_context(lock.hold(ctx.lock_path, wait=True))
+        if add:
+            # Read again under the lock: another add may have written the map since this command opened it.
+            add_repos(workspace.load(ctx.repo_root), add)
+            ctx = dataclasses.replace(ctx, ws=workspace.load(ctx.repo_root))
         return _sync(ctx, dry_run=dry_run)
 
 
@@ -108,6 +116,9 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
         want = ctx.config.capacity.slots_for(repo.name)
         if want is not None and repo.cloned:
             results.append(_report(setup_workspace.converge_pool(ctx.runner, ws, repo, want, dry_run=dry_run)))
+        elif want is not None and dry_run:
+            # Not cloned yet, so it has no pool: a real sync clones it, then makes every slot.
+            results.append(_report(setup_workspace.Checked(repo, "slots", f"0 of {want}, would make {want}")))
     results += [
         _report(setup_workspace.remove(ctx.runner, ws, r, dry_run=dry_run)) for r in setup_workspace.undeclared(ws)
     ]

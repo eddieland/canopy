@@ -152,6 +152,9 @@ def repo_arg(arg: str) -> tuple[str, str]:
         ValueError: the name or URL is not valid. The message says what to pass instead.
     """
     name, sep, url = arg.partition("=")
+    # A prefix with no ":" or "/" can only be a name, so an invalid one is refused rather than read as part of a URL.
+    if sep and not workspace.REPO_NAME_RE.fullmatch(name) and not any(c in name for c in ":/"):
+        raise ValueError(f"{arg!r}: repository name {name!r} must match {workspace.REPO_NAME_RE.pattern}")
     if not sep or not workspace.REPO_NAME_RE.fullmatch(name):
         name, url = "", arg
     error = workspace.url_error(url)
@@ -200,7 +203,10 @@ def add(ws: workspace.Workspace, entries: list[tuple[str, str]]) -> list[Added]:
     if tables:
         text = ws.map_file.read_text(encoding="utf-8")
         separator = "" if not text or text.endswith("\n") else "\n"
-        ws.map_file.write_text(text + separator + "".join(tables), encoding="utf-8")
+        # Written whole and renamed into place, so an interrupted add leaves the old map, never part of one.
+        partial = ws.map_file.with_name(ws.map_file.name + ".tmp")
+        partial.write_text(text + separator + "".join(tables), encoding="utf-8")
+        partial.replace(ws.map_file)
         workspace.load(ws.root)  # what was written must read back; it is checked before writing, so it does
     return added
 
@@ -284,10 +290,18 @@ def converge_pool(
 
 
 def _return_sync_leases(runner: procs.Runner, slots: list[treehouse.Slot], pool: treehouse.Pool) -> bool:
-    """Return the slots a sync that died left leased. Returns whether there were any."""
+    """Return the slots a sync that died left leased. Returns whether there were any.
+
+    Raises:
+        treehouse.TreehouseError: one could not be returned.
+    """
     left = [s for s in slots if s.lease_holder == treehouse.SYNC_HOLDER and s.lease_id]
     for slot in left:
-        treehouse.return_slot(runner, slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder, pool=pool)
+        outcome = treehouse.return_slot(
+            runner, slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder, pool=pool
+        )
+        if outcome is not treehouse.ReturnOutcome.RETURNED:
+            raise treehouse.TreehouseError(f"returning {slot.path}, left leased by a sync, said {outcome.value}")
     return bool(left)
 
 
@@ -318,12 +332,12 @@ def _fill(
         unreturned = _return_leases(runner, held, pool)
     made = len(known) - len(slots)
     detail = f"{len(known)} of {want}, made {made}"
-    if unreturned:
-        detail += f"; {unreturned} still leased as {treehouse.SYNC_HOLDER}, returned by the next sync"
     if error is not None:
         hint = "treehouse's max_trees (treehouse.toml, or ~/.config/treehouse/config.toml) may be lower"
-        return Checked(repo, "failed", f"{detail}: {error} ({hint})")
-    return Checked(repo, "slots", detail)
+        detail += f": {error} ({hint})"
+    if unreturned:
+        detail += f"; {unreturned} still leased as {treehouse.SYNC_HOLDER}, returned by the next sync"
+    return Checked(repo, "failed" if error is not None or unreturned else "slots", detail)
 
 
 def _return_leases(runner: procs.Runner, held: list[treehouse.Lease], pool: treehouse.Pool) -> int:
@@ -432,10 +446,15 @@ def _removable(
 def _unsaved(runner: procs.Runner, path: Path) -> str | None:
     """Say what in the clone at `path` would be lost by removing it, or None if nothing would."""
     checks = (
-        (["git", "status", "--porcelain"], "it has uncommitted or untracked files"),
+        # Ignored files too: a primary clone holds local config that `.worktreeinclude` seeds into slots (DESIGN §9).
+        (["git", "status", "--porcelain", "--ignored"], "it has uncommitted, untracked, or ignored files"),
         (["git", "stash", "list"], "it has stashed changes"),
-        # Commits on a local branch that no remote-tracking ref has: never pushed, as far as this clone knows.
-        (["git", "rev-list", "--max-count=1", "--branches", "--not", "--remotes"], "it has commits no remote has"),
+        # Commits that no remote-tracking ref has, on a branch, a tag, or a detached HEAD: never pushed, as far as this
+        # clone knows.
+        (
+            ["git", "rev-list", "--max-count=1", "HEAD", "--branches", "--tags", "--not", "--remotes"],
+            "it has commits no remote has",
+        ),
     )
     for args, reason in checks:
         try:
