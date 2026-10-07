@@ -387,8 +387,9 @@ def test_a_worker_without_events_reports_no_session(
     # plain URL is not printed at all.
     assert re.search(r"\n  PROJ-1  implement  failed  \d+s ago\n", out)
     assert "\x1b" not in out
-    assert "\n    [2Jcleared the screen and went on xxx" in out
-    assert "x" * 120 + "...\n" in out
+    [said] = [line for line in out.splitlines() if line.startswith("    [2J")]
+    assert said == "    [2Jcleared the screen and went on " + "x" * 123 + "..."
+    assert len(said) == 4 + 160
     assert f"\n    no session reported  log {run['log_path']}\n" in out
 
 

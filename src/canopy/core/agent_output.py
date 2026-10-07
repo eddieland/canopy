@@ -24,7 +24,11 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 # Printed by `canopy status` and pasted into a shell, so nothing a terminal or a shell would read as anything else.
 SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]{1,100}")
 
-Count = Annotated[StrictInt, Field(ge=0)]
+# Far above anything one model call reports, and low enough that no run's sums overflow a float or SQLite's integers.
+MAX_TOKENS = 10**12
+MAX_COST_USD = 10**6
+
+Count = Annotated[StrictInt, Field(ge=0, le=MAX_TOKENS)]
 
 
 class _Text(BaseModel):
@@ -52,7 +56,7 @@ class _Tokens(BaseModel):
 class _StepFinish(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    cost: Annotated[StrictFloat | StrictInt, Field(ge=0, allow_inf_nan=False)]
+    cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)]
     tokens: _Tokens
 
 

@@ -764,8 +764,10 @@ From events the harness also reads, each validated (D026):
 - the session id: the first `sessionID` of at most 100 letters, digits, `_`, and `-`. The operator opens the
   transcript with OpenCode's own tools (`opencode export <id>`, or `opencode --session <id>` in the run's directory).
 - the cost: the sum over `step_finish` events, one per model call, of `part.cost` in dollars and `part.tokens` (input,
-  output, reasoning, cache read, cache write). If one does not validate, the run reports no cost rather than too little.
-  Events with no model call cost nothing. A subagent's calls are its own session's, and not counted.
+  output, reasoning, cache read, cache write), each call's cost at most $1,000,000 and each count at most 10^12. If one
+  does not validate, the run reports no cost rather than too little. Events with no model call cost nothing. A run
+  killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
+  session's, and not counted.
 
 The default `worker_cmd` and `split_cmd` ask for events, and `_run` records what they report on the run (§8, §11).
 Other templates may ask for them too; what the overseer, chores, and reviews report is not recorded yet (ROADMAP M13).

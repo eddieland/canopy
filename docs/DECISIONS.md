@@ -1195,8 +1195,10 @@ Decision: `core/agent_output.py` reads an agent's stdout one way for every agent
 object with a string `type` and a `sessionID`), the agent's text is the `part.text` of its `text` events, one per
 line, and the result line is read from that, as it was from stdout; the session is the first valid `sessionID`, and the
 cost is the sum of every `step_finish`. Otherwise stdout is the text, and nothing is reported. Each field is validated
-(D026): a session id of at most 100 letters, digits, `_` and `-`; costs and token counts non-negative and finite, and
-one `step_finish` that does not validate drops the whole cost rather than understating it. The default `worker_cmd`
+(D026): a session id of at most 100 letters, digits, `_` and `-`; costs and token counts non-negative and bounded, so
+no sum overflows the journal, and one `step_finish` that does not validate drops the whole cost rather than
+understating it. A call cut off by a timeout has no `step_finish`, so a timed-out run's cost is its finished calls': a
+lower bound, kept because dropping it would hide what the most expensive runs spent. The default `worker_cmd`
 and `split_cmd` ask for `--format json`; `_run` records what was reported on the run as soon as the agent exits.
 Consequences: four field names of OpenCode's are known to the harness, in one module (D009's revisit, met by the
 smallest reading that works). A template without `--format json` still works and reports nothing, so an operator's
