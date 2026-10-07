@@ -445,6 +445,28 @@ Accept: written with the design, before work starts, and like every milestone's,
 
 Status: not started.
 
+## M17. Declared repositories and pools
+
+DESIGN §18 and D066. Needs M6. Taken on request (2026-10-07).
+
+- `capacity.slots_per_repo` and `[capacity.repo_slots]`, user-only; with neither, every pool behaves as before (the
+  existing tests pass unchanged).
+- Leases in a workspace stay within the declared size: dispatch and reviews refuse `no_slot` rather than grow a pool,
+  and a slot treehouse makes past the size anyway is returned and destroyed.
+- `canopy workspace sync` converges: fills each pool by leasing as `canopy-sync` and returning, trims idle slots with
+  treehouse's unforced `destroy`, and removes clones the map dropped when nothing in them would be lost. `--dry-run`.
+  It holds the tick lock.
+- The fake treehouse gains `destroy`.
+
+Accept: in a real two-repository workspace with sizes declared, sync makes each pool its size, and `post_create` runs
+in the new slots during sync, not during the first run. Lowering a size removes idle slots and never a leased one; a
+dispatch into a full pool is refused `no_slot`. Dropping a repository from the map removes its clone and slots, and a
+clone with an unpushed commit is kept and reported.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_pools.py` holds the harness's half of the acceptance),
+docs, and D066 are in. Waiting on the operator: the real run Accept describes. treehouse's `max_trees` (16 by default)
+must be at least the largest declared size; canopy cannot set it.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second

@@ -1046,3 +1046,28 @@ Rejected:
 - No checkout, MCP reads only: kept as the fallback if the reviewer canary fails.
 Revisit: if the reviewer canary fails (then MCP reads only); if reviewers need to run the PR's tests (then the
 operator's own definition, as DESIGN §21 says).
+
+## D066. Pool sizes are declared in the user file; `workspace sync` converges on them and on the map
+
+Context: the operator wants the workspace's repositories and treehouse slots managed declaratively. The map already
+declared the repositories, but sync only added clones, and a pool's size was treehouse's `max_trees`, which treehouse
+reads only from a repository's committed `treehouse.toml` or the operator's treehouse config, with no flag or variable
+to set it per command.
+Decision (DESIGN §18):
+- `capacity.slots_per_repo` and `[capacity.repo_slots]`, user-only, declare each workspace pool's size. Unset, the
+  default, leaves a pool unmanaged. A workspace of one's pool is never sized: it may be the operator's interactive one.
+- canopy enforces the size itself: a lease that would grow a pool past it is `no_slot`, and a slot treehouse makes
+  anyway is returned and destroyed. `max_trees` stays treehouse's; sync reports when it is below the declared size.
+- `canopy workspace sync` converges: it fills pools by leasing as `canopy-sync` and returning, trims them with
+  treehouse's unforced `destroy`, and removes clones the map dropped. Removal needs the clone clean, with no stash and
+  no commit missing from its remote-tracking refs, and every slot destroyed unforced; anything else is kept, and sync
+  exits 1. It holds the tick lock.
+Rejected:
+- Sizes in the map: a commit to a shared map would set how much of the operator's disk and machine canopy uses, which
+  TRUST_MODEL T7 keeps user-only, like the rest of `capacity`.
+- Writing `max_trees` into a `treehouse.toml`: the repository's file is committed and shared, and the user-level file
+  is every pool's, the interactive ones included.
+- Removing on request only (`sync --prune`): the operator chose convergence; the safety checks replace the flag.
+- A treehouse command to create slots: there is none; leasing and returning is how a slot is made ahead of a run.
+Revisit: if treehouse gains a per-command `max_trees` or a way to create slots, use it; if removal keeps a clone the
+operator considers disposable often enough to be friction, add a flag that skips the stash or unpushed check.

@@ -135,7 +135,7 @@ canopy (harness, Python)
 
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
-    workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: clone the map, check origins (§18)
+    workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
@@ -145,7 +145,7 @@ canopy (harness, Python)
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13); the guard against shadowing them
     prompts.py     prompt files and overrides; rendering worker prompts
-    treehouse.py   status --json, get --lease --json, return --force --if-lease-id; a Pool per repository (§18)
+    treehouse.py   status, get --lease, return, destroy; a Pool per repository, with its declared size (§18)
     workspace.py   the workspace: its map, repositories, their pools, the private state directory (§18)
 
   infra/           plumbing that knows nothing about tickets or agents
@@ -387,7 +387,8 @@ In a workspace of one, the ticket has one unit and `--repo` may be left out.
      the dispatch names ended.
    - `capacity`: `max_workers` runs and review runs, together, are running (§21).
 
-   Failures after the guards are recorded the same way: `no_slot` (a lease failed), `bad_prompt` (the worker prompt did
+   Failures after the guards are recorded the same way: `no_slot` (a lease failed, or would grow a workspace's pool
+   past its declared size, §18), `bad_prompt` (the worker prompt did
    not render), `spawn_failed`. None of them leaves a slot leased: leases are all or nothing, so when any repository's
    `get` fails, the slots already leased for the dispatch are returned before the refusal is recorded. A `get` that
    exits 0 with output canopy cannot parse is `no_slot` too: canopy reads the path, lease id, and holder from it if it
@@ -488,6 +489,8 @@ Worker obligations, stated in every worker prompt:
   not manage it.
 - treehouse `post_create` hooks (user-level config) are the place for
   per-slot environment setup. canopy does not duplicate them.
+- In a workspace, the operator may declare each pool's size; `canopy workspace sync` makes the slots ahead of time, so
+  their hooks and build caches are warm before the first run lands in one (§18).
 
 ## 10. Dependencies and stacking
 
@@ -677,6 +680,9 @@ Rules:
   else (§13). If the config does not load, for example a user file from an earlier canopy whose templates lack
   `{definitions_dir}`, it prints the error. It warns about copies of canopy's agent definitions in the repository's
   OpenCode config, which earlier versions installed there and which now stop runs (§13).
+- `capacity.slots_per_repo` and `[capacity.repo_slots]` declare how many slots each repository's pool has in a
+  workspace (§18). Unset, the default, leaves the pools unmanaged. They are user-only like the rest of `capacity`: a
+  pool's size is the operator's disk and machine, and a team's map must not grow it.
 - Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
   `git remote get-url --push --all origin`, which applies `insteadOf` and `pushInsteadOf` rewrites, and prints a
   warning naming every URL git would reach over SSH: `ssh://`, `git+ssh://`, or the scp-like `[user@]host:path`. It
@@ -919,7 +925,8 @@ code.
 ROADMAP M6 to M8. Rationale in D033, D058, D059, D061, and D062. M6 built the workspace: the map and its config layer,
 state under the root, pools under the root with reconcile per repository, `repo_missing`, `canopy init --workspace`, and
 `canopy workspace sync`. M7 built units, joint runs, and desks, which replaced M6's one repository per ticket (D052). M8
-built splitting, on an authorized replier's request (D061). Earlier sections describe one repository, which is the
+built splitting, on an authorized replier's request (D061). M17 made the repositories and pool sizes declarative:
+sync converges on them, and leases stay within them (D066). Earlier sections describe one repository, which is the
 workspace of one below.
 
 ### Shape
@@ -987,8 +994,9 @@ summary = "Customer web app. Consumes the api's generated client from a release.
 - `canopy workspace sync` prints each clone it is about to make, then clones it with `git clone -- <url>
   repos/<name>`, with credential prompts and git's `ext::` transport off. For a repository already cloned it compares
   `origin` with the map's URL (ignoring a trailing `/` or `.git`) and reports a difference; it changes no remote. It
-  exits 1 if any clone failed, or if `repos/<name>` exists and is not a clone. It prints a credential in a URL as
-  `***`, and `canopy init --workspace` names the repositories without their URLs.
+  also sizes the pools and removes clones the map no longer lists (below). It exits 1 if any clone failed, if
+  `repos/<name>` exists and is not a clone, or if anything declared could not be reached. It prints a credential in a
+  URL as `***`, and `canopy init --workspace` names the repositories without their URLs.
 - A workspace's state is always `<workspace>/.canopy/`, created readable only by the operator; `paths.state_dir`
   applies only to a workspace of one. Each workspace therefore has its own journal and locks. The root may be a
   checkout of a shared workspace repository, so a `.canopy/` that is a symlink, someone else's, or open to others is
@@ -1011,6 +1019,51 @@ repository's clone is gone, treehouse runs at the workspace root and finds the p
 pinned layout puts two levels below it. The overseer runs from the workspace root, which is not a repository, so the
 state block carries each pool's leased slots in place of the overseer's own `treehouse status`. Lease holders stay
 `canopy:<KEY>`; pools are per repository, so one ticket can hold a slot in several.
+
+### Declared repositories and slots
+
+Rationale in D066. The map declares which repositories the workspace has; the operator's user file declares how many
+slots each one's pool has. `canopy workspace sync` makes the workspace match both, and a tick never grows a pool past
+what is declared.
+
+```toml
+# ~/.config/canopy/config.toml
+[capacity]
+slots_per_repo = 2      # every repository's pool, in any workspace
+[capacity.repo_slots]
+api = 4                 # by repository name; wins over slots_per_repo
+```
+
+- Pool sizes are user-only (§12), not in the map: a commit to a shared map could otherwise fill the operator's disk
+  with checkouts. One user file serves every workspace, so `repo_slots` may name repositories this map does not list.
+  With neither key, a pool is unmanaged: treehouse's own `max_trees` bounds it, and sync leaves it alone, as before.
+- Only a workspace's pools are sized. A workspace of one's pool is wherever treehouse's own config puts it, by default
+  the operator's interactive pool under `~/.treehouse`, so canopy neither caps nor converges it.
+- **Leases stay within the size.** Before `treehouse get`, dispatch (§8) and a review (§21) read the pool. If it has its
+  declared size or more and none of its slots is available, the lease is refused as `no_slot` without asking
+  treehouse, which would make another. treehouse may still make a slot when the available ones are not ones it may
+  reuse, such as a slot recorded for another clone; canopy then returns that slot, destroys it, and refuses. A pool
+  under its size grows as before.
+- **Sync fills each pool** to its size: it leases with the holder `canopy-sync` and `--no-fetch` until the pool has
+  enough slots, then returns every one of those leases. treehouse makes a slot only when none is available, so holding
+  each lease is what makes the next one new, and `post_create` runs in each new slot then rather than in a run's lease.
+  `canopy-sync` is not a `canopy:` holder, so reconcile never touches it; a sync that died leaving one is cleaned up by
+  the next sync, which returns `canopy-sync` leases before counting. If treehouse refuses to grow the pool, usually
+  because `max_trees` in its config is below the declared size, sync reports the repository as failed; canopy cannot
+  set `max_trees`, which treehouse reads only from its own config files.
+- **Sync trims each pool** to its size: it removes available slots, highest name first, with `treehouse destroy --yes`
+  and none of its `--include-*` flags, so treehouse removes only a slot that is clean, merged, idle, and unleased. A
+  slot treehouse keeps is passed over for the next available one. Busy slots over the size are left for a later sync;
+  a pool that cannot reach its size because treehouse keeps a slot with work in it makes sync exit 1.
+- **Sync removes clones the map no longer lists.** Anything under `repos/` that the map does not name, other than dot
+  entries, is removed with its pool's slots, but only when nothing would be lost: it must be a directory with a `.git`,
+  not a symlink; `git status --porcelain` and `git stash list` must be empty; every commit on a local branch must be on
+  a remote-tracking ref; and every slot in its pool must be available and destroyed by treehouse unforced. Anything
+  else is kept and reported, and sync exits 1. treehouse's record of the emptied pool stays under `.treehouse/`.
+- Sync holds the tick lock while it works, waiting for a running tick to end, so it never changes a pool while a tick
+  reads it or leases from it. Runs already in progress keep their leases; their slots count as busy.
+- `canopy workspace sync --dry-run` reports what sync would clone, make, and remove, and changes nothing. A dry run
+  still runs the read-only checks, so a clone it says it would keep is one a real sync keeps.
 
 ### Units
 

@@ -42,7 +42,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
 | `canopy init --workspace` | Sets up the current directory as a workspace: `canopy-workspace.toml`, `MAP.md`, `.gitignore`. |
-| `canopy workspace sync` | Clones the map's repositories that are missing under `repos/`; reports an `origin` that differs. |
+| `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
 | `canopy skill` | Prints this skill. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |
@@ -88,13 +88,13 @@ Work through these in order and stop at the first that explains it.
    - `refused:<guard>`: the harness refused the dispatch. `unauthorized` (the overseer named no label from
      `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
      `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
-     `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree), `bad_slug`,
-     `bad_base`, `no_branch` (nothing to continue in that repository yet), `unknown_repo` (in a workspace: no
-     `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the worker prompt did not render; an
-     override may lack `{{LABELS}}`, or for a run over several repositories `{{REPOSITORIES}}` and `{{PRS}}`),
-     `spawn_failed`. In a workspace, attempt limits and the fix-ci cooldown count per repository of the ticket. A run
-     that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket closed or unlabeled;
-     it changed nothing, but it spent one of the kind's attempts.
+     `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree, or the pool is
+     at its declared size), `bad_slug`, `bad_base`, `no_branch` (nothing to continue in that repository yet),
+     `unknown_repo` (in a workspace: no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
+     worker prompt did not render; an override may lack `{{LABELS}}`, or for a run over several repositories
+     `{{REPOSITORIES}}` and `{{PRS}}`), `spawn_failed`. In a workspace, attempt limits and the fix-ci cooldown count per
+     repository of the ticket. A run that ends `failed` with a summary starting `not authorized:` is the worker finding
+     the ticket closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.
    - `attention:<reason>`: it is waiting on a human (below).
 4. If it was dispatched, look at its runs:

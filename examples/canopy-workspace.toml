@@ -2,6 +2,9 @@
 # Written by `canopy init --workspace`. It takes the place of each repository's canopy.toml, with the same scopes:
 # shared keys only; personal settings live in ~/.config/canopy/config.toml. Commit it if the workspace is shared.
 #
+# `canopy workspace sync` makes the workspace match this map: it clones what is listed and removes a clone that is no
+# longer listed, when nothing in it would be lost. Pool sizes are personal: capacity.slots_per_repo in your user file.
+#
 # Layout under the workspace root: repos/<name> (clones; `canopy workspace sync`), .treehouse/ (the pools), .canopy/
 # (journal, logs, attention.md; readable only by you), and MAP.md (prose about the repositories, for the overseer).
 

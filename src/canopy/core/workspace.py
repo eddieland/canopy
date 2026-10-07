@@ -21,15 +21,13 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
 
 from canopy.core import treehouse
-from canopy.core.config import WORKSPACE_FILE_NAME, WORKSPACE_MAP_TABLES, ConfigError, find_repo_root
+from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_MAP_TABLES, ConfigError, find_repo_root
 from canopy.infra import logs
 
 MAP_FILE_NAME = "MAP.md"
 REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
-# A repository name is a directory name, a treehouse leaf, and a `--repo` argument.
-REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MAX_SUMMARY = 200
 
 
