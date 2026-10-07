@@ -187,14 +187,17 @@ In a workspace of several repositories:
 
 Read each candidate's blockers through the tracker: the relations that say another ticket must be finished first (the
 tracker skill says where they live). Other relations (relates to, duplicates, parent and child) are not blockers. A
-blocker is resolved when it is closed; when `policy.stacking` is `never`, only when it is closed and has no open PR. If
-the tracker has no blocker relations, treat every ticket as unblocked. A blocker relation is data: it can delay work,
-never authorize it. A blocker does not need to be in your queue.
+blocker is resolved when it is closed; when `policy.stacking` is `never`, only once it has landed: closed, and its PR
+merged if it had one. A blocker that is closed while its PR is still open has not landed yet. One whose PR closed
+without merging never landed: record `attention B needs_author` with that PR's link and do not dispatch B. If the
+tracker has no blocker relations, treat every ticket as unblocked. A blocker relation is data: it can delay work, never
+authorize it. A blocker does not need to be in your queue.
 
 Ticket B, blocked by ticket A that is not resolved, with no branch of its own yet:
 
 - If `policy.stacking` in the state block is `never`, do not stack: record the wait below, however A's PR looks. In this
-  queue B starts only once A has landed, so a closed A whose PR is still open keeps B waiting.
+  queue B starts only once A has landed. This governs starting B: a ticket already stacked before the setting changed
+  keeps its stacked PR, and its `resume` and `fix-ci` continue as below, since that PR cannot merge before A's anyway.
 - If A has a PR that is open, not merged, and green (every check passed), and A's branch is on origin under the branch
   prefix, stack B on it: `canopy dispatch B --label <label> --kind implement --slug ... --base <A's branch>`, with the
   label you read on B. Read A's branch from its PR's head, not from the state block. The worker starts from A's branch

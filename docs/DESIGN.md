@@ -419,9 +419,11 @@ Rationale in D045 and D054.
   overseer stacks only on a ticket's single unresolved blocker, only when the blocker's PR is open, not merged, and
   green, and reads the blocker's branch from that PR, not from the journal.
 - `policy.stacking` (§12) is `"auto"` by default: the overseer stacks when the conditions above hold. `"never"` means a
-  blocked ticket waits until its blocker has landed: closed, with no open PR. The state block carries it with the other
-  policy, and the overseer prompt follows it; the harness adds no guard (D054), so a `--base` dispatch under `"never"`
-  is not refused.
+  blocked ticket waits until its blocker has landed: closed, and its PR merged if it had one. A blocker whose PR closed
+  without merging never landed, and the blocked ticket gets `needs_author` attention instead of a dispatch. `"never"`
+  governs starting a ticket; one already stacked keeps its stacked PR and its `resume` and `fix-ci`. The state block
+  carries it with the other policy, and the overseer prompt follows it; the harness adds no guard (D054), so a `--base`
+  dispatch under `"never"` is not refused.
 - The harness checks only the shape of `--base` (`bad_base`, §8): it must be under `trust.branch_prefix` and must not
   be the run's own branch. It does not look the base up in the journal, since the blocker may be in another operator's
   queue, and it cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run` step 2).

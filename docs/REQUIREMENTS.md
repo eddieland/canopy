@@ -173,8 +173,8 @@ Each was settled by the operator on 2026-10-06 and recorded in `DECISIONS.md`.
 
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10, D045), so
   B starts before A lands. Settled by D054: stacking stays, controlled by `policy.stacking` (`"auto"` or `"never"`),
-  which the overseer prompt follows. No harness guard. Under `"never"`, B waits until A is closed and A has no open
-  PR, so a ticket closed before its PR merges does not count as landed.
+  which the overseer prompt follows. No harness guard. Under `"never"`, B waits until A has landed: closed, and its PR
+  merged if it had one (D057).
 - **C2. Local web UI vs no listener (N1, H1).** Settled by D055: listeners are allowed on loopback, or on a private
   network address the operator sets, behind the operator's listener secret (TRUST_MODEL T8). Loopback is the default
   and keeps H1; a private-network address is the operator's choice to relax it. A UI is now deferred, not ruled out.
