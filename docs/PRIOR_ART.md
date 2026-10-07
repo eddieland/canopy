@@ -137,8 +137,9 @@ A bare § is a section of `DESIGN.md`; other documents are named, as in TRUST_MO
   `gh pr merge` deny in canopy's agent permissions, and branch protection, which governs. The deny is defense in depth
   (TRUST_MODEL T4, T7): it names only the `gh` CLI, not MCP merge tools, and a repository that gets past the shadowing
   check can add bash rules after it.
-- **Long-lived sessions fed events, a daemon, or a listener** (D042, TRUST_MODEL §4). agent-orchestrator's own
-  reverted re-engagement is the evidence.
+- **Long-lived sessions fed events, or a daemon** (D042). agent-orchestrator's own reverted re-engagement is the
+  evidence. Listeners are allowed since D055, on loopback or a private network behind the operator's secret
+  (TRUST_MODEL T8), for the operator's own input; events are still not pushed into sessions automatically.
 - **Tracker adapters.** agent-orchestrator has closed at least eight Jira attempts unmerged; canopy's tracker is MCP
   plus a contract (D003, D014).
 - **Pasting issue bodies or CI logs into prompts** (D031, T1).
