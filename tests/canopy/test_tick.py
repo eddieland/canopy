@@ -86,6 +86,18 @@ def test_dry_run_tick_records_the_overseer_plan(
     assert canopy_env.state_dir.stat().st_mode & 0o077 == 0
 
 
+def test_overseer_state_names_the_configured_needs_human_label(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    overseer_does(monkeypatch)
+    assert main(["tick", "--dry-run"]) == 0
+    [run] = agent_runs(agent_log)
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert '"needs_human_label": "blocked-on-team"' in str(argv[3])
+
+
 def test_next_tick_sees_the_journal(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

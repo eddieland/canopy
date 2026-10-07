@@ -8,6 +8,8 @@
 labels = ["agent-ready-yourname"]
 # Optional: narrow the repository's query to your labels to save the overseer reads.
 # query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
+# Optional: your own needs-human label, if it differs from the repository's.
+# needs_human_label = "needs-human"
 
 [capacity]
 max_workers = 2
