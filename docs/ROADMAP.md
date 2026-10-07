@@ -109,14 +109,16 @@ Accept: one real ticket goes from label to open PR unattended, with the slot
 returned and a correct `runs` row. A killed worker is detected on the next tick
 and its slot returned.
 
-Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, D028, D029, and
-D040's definitions directory with D044's guard are in; the worker definition and overseer prompt were approved in #10.
-The live OpenCode canary passed both tests, the precedence check included, on 2026-09-24 with OpenCode 1.18.32. Its
-first run found that OpenCode runs tools in `$PWD`, not its working directory, so a worker would have edited the
-directory canopy started in; `procs` now sets `PWD` for every child given a cwd. OpenCode also leaves a tool denied
-outright out of the model's toolset, so the canary no longer expects an attempted edit. Waiting on the operator: one
-real ticket from label to open PR, and a killed worker on a real run. It was started on request before M1 closed
-(2026-09-24).
+Status: done 2026-10-07.
+Learned:
+- Live, from an empty journal (after the migrations were squashed, #60), with OpenCode 1.18.32: GH-64 went from label
+  to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with SIGKILL,
+  were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to PR #70.
+- An empty journal rebuilds its view from the tracker, but every comment cursor starts empty, so an old authorized
+  comment reads as new: the overseer tried a `resume` that the `no_branch` guard refused.
+- The worker's write MCP tools (`create_pull_request`, `add_issue_comment`) cannot set labels. The `agent` label lands
+  only when the model happens to use `gh` (on #61 and #70, not on #62 and #69).
+Next: give the worker a reliable way to label, or have the harness do it; M3's `needs-human` label depends on the same.
 
 ## M3. Fix-CI and resume
 
@@ -133,12 +135,19 @@ Accept: a PR with a failing check gets exactly one fix attempt per cooldown
 window and stops at the limit. A blocked worker's question appears on the
 ticket; an authorized reply resumes it; an unauthorized reply does not.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py` holds the fix-ci half of the
-acceptance; `tests/canopy/test_attention.py`), docs, and D030 to D032 are in. Waiting on the operator: a real PR with a
-failing check taken through fix-ci to the limit, and a real blocked worker answered once by an authorized and once by an
-unauthorized account (prompt behavior the fakes cannot show). The overseer prompt change was approved in #11.
-M2's acceptance run is also still open; this milestone was started on request before M1 closed. Not done
-here, and not listed by any milestone: DESIGN §15's attention item after three consecutive overseer failures.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py`, `tests/canopy/test_attention.py`),
+docs, and D030 to D032 are in. Checked live on 2026-10-07:
+- A reply from an account not in `authorized_repliers` did not resume GH-65, and its comment cursor moved past it; with
+  the account added back, the same comment resumed it. The overseer checks a comment's author when it reads it, so
+  adding an account authorizes its earlier comments too.
+- GH-68's worker, told by the ticket to ask first, posted one concrete question, added `needs-human` with `gh` (its MCP
+  tools cannot label; see M2), and reported `blocked`. One tick earlier the overseer had raised `needs_author` itself
+  instead of dispatching; it dispatched on the next.
+- A review comment on PR #71 from a bot (Sourcery) was classified as a concrete change and resumed GH-66 as
+  `changes_requested`. Bot reviews drive `resume` though they never count as approval.
+
+Waiting on the operator: an authorized answer on GH-68 that resumes it, and a real PR with a failing check taken
+through fix-ci to the limit. DESIGN §15's three-failure attention item is M10's `loop.failing`.
 
 ## M4. Dependencies and stacking
 
@@ -149,12 +158,15 @@ here, and not listed by any milestone: DESIGN §15's attention item after three 
 Accept: two linked tickets are worked in order; the second's PR targets the
 first's branch when the first is open and green.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_stacking.py` holds the harness's half of the
-acceptance), docs, and D045 are in: `--base` checked by the `bad_base` guard, the stacked base in the run and the worker
-prompts, a `blocked` phase, and the overseer prompt's blockers and stacking section. The overseer prompt change needs
-human approval in its PR. Waiting on the operator: two real linked tickets worked in order, the second stacked on the
-first's open, green PR. Started on request while M2 and M3 wait on their live runs. `policy.stacking` (D054) lets the
-operator turn stacking off; the overseer prompt follows it, with no harness guard.
+Status: done 2026-10-07.
+Learned:
+- Live: GH-67, blocked by GH-66 through GitHub's issue dependencies, waited while GH-66 was being implemented and
+  reviewed, and was dispatched with `--base` on GH-66's branch once PR #71 was open and green. Its PR #73 targets that
+  branch.
+- The overseer's rationale while waiting said the blocker's PR "has not merged", though it stacks on a green PR rather
+  than waiting for a merge; the decision was right and its wording was not.
+Next: nothing checks what happens to a stacked PR when its base merges (GitHub retargets it if the base branch is
+deleted); watch it on #73. The `agent` label was missing on #73 as on #69 (M2's Next).
 
 ## M5. Shareable
 
@@ -214,15 +226,12 @@ runs.
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py` holds the harness's half of the acceptance:
-one run over two repositories pushes both and records both PRs, and a joint run killed mid-way has every slot returned
-and its desk removed on the next tick), docs, D058, D059, and D060 are in. D058 answers §18's open question: a unit may
-start after another unit's PR merged, in a repository the ticket has no unit in; a follow-up PR in the same repository
-is a new ticket. The desk canary is written (`tests/canopy/test_opencode_canary.py`, opt-in) and unrun. The overseer
-prompt, the worker definition's comment, and the TRUST_MODEL T4 and T6 changes need human approval in their PR. Waiting
-on the operator: the desk canary against real OpenCode, before any real joint run (if it fails, D059 says what changes);
-then one real ticket touching two repositories taken to two linked PRs, and a real joint run killed mid-way. Started on
-request while M2 to M6 wait on their live runs.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py`), docs, and D058 to D060 are in. The desk
+canary ran against OpenCode 1.18.32 on 2026-10-07: it passes when the workspace root is not a git checkout, and fails
+when it is, because OpenCode takes the enclosing repository as its project and allowed a write by absolute path beside
+the desk. Per D059, no real joint run in a workspace that is a checkout until that is resolved (keep the workspace out
+of git, or fall back to the first unit's worktree as the working directory). Waiting on the operator: one real ticket
+touching two repositories taken to two linked PRs, and a real joint run killed mid-way.
 
 ## M8. Split tickets
 
@@ -349,13 +358,13 @@ identified comment and nothing else happens to the PR: no push, no ticket, no Gi
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py` holds the harness's half of the
-acceptance: a review at the commit in a slot it reads through a link and never works in, the guards, one review per
-commit, the per-PR limit with its attention item, a killed review crashed with its slot returned, and nothing about
-reviews without a `[review]` table), the reviewer canary (opt-in, unrun), docs, and D065 are in. The overseer prompt,
-the `canopy-reviewer` definition, and the TRUST_MODEL T1, T3 to T7, §6, and §7 changes need human approval in their
-PR. Waiting on the operator: the reviewer canary against real OpenCode, before any real review (if it fails, D065
-says what changes); then the live runs Accept lists. Started on request while M2 to M10 wait on their live runs.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), docs, and D065 are in. Checked live on
+2026-10-07 with OpenCode 1.18.32: the reviewer canary passes, and with `agent_prs` on, PR #69 got one identified
+`clean` comment at its commit and no GitHub review. The canary checks reads only; the reviewer also needs the runtime's
+write MCP `add_issue_comment` allowed for `canopy-reviewer`, which README step 3 does not say. Without it, three
+reviews ended `unknown` (the reviewer exited with no result line) and were retried on the same commit, with no
+`review_failed` item until the third. Waiting on the operator: a finding taken through `resume` and re-reviewed to
+`needs_reviewer`, `review.query` on the operator's own PR, a review killed mid-way, and a PR at its limit.
 
 ## M12. The loop
 
@@ -370,7 +379,10 @@ Accept: fakes-based tests of the wait, both kinds of stop, the lock, and a tick 
 (`tests/canopy/test_loop.py`). The operator runs `canopy loop --dry-run` against the real queue for a working session,
 finds each tick's block legible, and stops it with Ctrl-C both during a tick and during the wait.
 
-Status: in progress. Code, tests, and docs are in. Waiting on the operator's session against the real queue.
+Status: in progress. Code, tests, and docs are in. Checked live on 2026-10-07: `canopy loop --every 3` ran 6 ticks
+against the real queue, dispatching, reviewing, and resuming; Ctrl-C during a tick stopped it when that tick finished,
+and Ctrl-C during the wait stopped it at once (exit 0). The closing line does not say a signal stopped it. Waiting on
+the operator: whether each tick's block is legible over a working session.
 
 ## M13. Spend-paced loop
 
