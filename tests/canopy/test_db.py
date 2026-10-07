@@ -15,7 +15,7 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
     assert rows == [
@@ -24,6 +24,7 @@ def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
         (3, "attempts_from_runs"),
         (4, "workspace_repos"),
         (5, "units"),
+        (6, "split_children"),
     ]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -116,7 +117,7 @@ def test_units_carry_over_what_tickets_and_runs_held(tmp_path: Path) -> None:
         "(1, 'OLD-1', 'implement', '/pool/1', 'l1', 'canopy:OLD-1', 'main', 'agent/OLD-1-work', 'x', 'l', NULL), "
         "(1, 'WS-2', 'implement', '/ws/1', 'l2', 'canopy:WS-2', 'dev', 'agent/WS-2-work', 'x', 'l', 'api')"
     )
-    for path in sorted(resources.migrations_dir().glob("*.sql")):
+    for path in sorted(resources.migrations_dir().glob("000[1-5]_*.sql")):
         (migrations / path.name).write_text(path.read_text())
     assert db.migrate(conn, migrations) == [5]
 
@@ -166,7 +167,7 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
         "(1, 'OLD-3', 'implement', '/p/3', 'l3', 'canopy:OLD-3', 'main', 'agent/OLD-3-a', 'x', 'l', 'done', ?)",
         (DEAD_PID, os.getpid(), os.getpid()),
     )
-    for path in sorted(resources.migrations_dir().glob("*.sql")):
+    for path in sorted(resources.migrations_dir().glob("000[1-5]_*.sql")):
         (migrations / path.name).write_text(path.read_text())
     with pytest.raises(db.MigrationError, match="run 2 is still working for the canopy before it"):
         db.migrate(conn, migrations)
