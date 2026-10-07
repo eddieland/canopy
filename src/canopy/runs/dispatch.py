@@ -35,6 +35,8 @@ SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
 BASE_TAIL_RE = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
 DEFAULT_SLUG = "work"
 JOINT_PR_NOTE = "one per repository, listed under Repositories"
+# A prompt carries at most this much of `MAP.md`.
+MAX_MAP = 20_000
 RUNS_DIR = "runs"
 
 
@@ -252,10 +254,13 @@ def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | No
 def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
     """Refuse any repository for a split's child other than the one the split recorded for it (DESIGN §18)."""
     child = db.split_child(ctx.conn, key)
-    if child is None or ctx.workspace.single:
+    if child is None:
         return
     recorded = str(child["repo"])
-    if tuple(repos) != (recorded,):
+    ws = ctx.workspace
+    # A workspace of one implies its repository; a child recorded for another is not worked here.
+    named = tuple(repos) or ((ws.repos[0].name,) if ws.single else ())
+    if named != (recorded,):
         raise Refusal(
             "unknown_repo",
             f"{key} was split from {child['parent_key']} to cover {recorded} only; dispatch it with --repo {recorded}",
@@ -470,7 +475,7 @@ def _spawn(
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
         "REQUEST": request or "",
-        "MAP": str(ctx.workspace.map_prose) if ctx.workspace.map_prose is not None else "none",
+        "MAP": map_note(ctx),
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
     # splitter's own check of who asked for the split needs the request (D061).
@@ -555,6 +560,20 @@ def repositories_note(
             ),
         ]
     return "\n".join(lines)
+
+
+def map_note(ctx: Context) -> str:
+    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18)."""
+    path = ctx.workspace.map_prose
+    if path is None:
+        return "None: this workspace has no MAP.md."
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError as e:
+        return f"None: MAP.md could not be read ({e.strerror})."
+    if len(text) > MAX_MAP:
+        return f"{text[:MAX_MAP]}\n\n[MAP.md is longer than {MAX_MAP} characters; the rest is left out.]"
+    return text or "None: MAP.md is empty."
 
 
 def split_repositories_note(ctx: Context, slots: Sequence[db.RunSlot], desk: Path | None) -> str:
