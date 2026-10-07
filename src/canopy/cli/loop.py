@@ -91,6 +91,7 @@ def _status_json(ctx: Context) -> dict[str, object]:
     """Build the stable machine-readable portion of `canopy status`."""
     items = attention.listed(ctx)
     running = db.running_runs(ctx.conn)
+    reviews = db.running_review_runs(ctx.conn)
     return {
         "attention": [
             {"kind": item.reason, "ticket": item.ticket_key, "repo": item.repo, "message": item.detail}
@@ -100,6 +101,15 @@ def _status_json(ctx: Context) -> dict[str, object]:
             "running": [
                 {"ticket": str(run["ticket_key"]), "kind": str(run["kind"]), "started_at": str(run["started_at"])}
                 for run in running
+            ]
+            + [
+                {
+                    "ticket": run["ticket_key"],
+                    "kind": "review",
+                    "started_at": str(run["started_at"]),
+                    "pr": str(run["pr_url"]),
+                }
+                for run in reviews
             ],
             "max": ctx.config.capacity.max_workers,
         },
