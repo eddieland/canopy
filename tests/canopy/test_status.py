@@ -1,0 +1,55 @@
+"""Machine-readable status output."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from canopy.cli.main import main
+from canopy.core import db
+from canopy.core.db import RunSlot
+from tests.canopy.helpers import journal
+from tests.conftest import CanopyEnv
+
+
+def test_status_json_reports_attention_and_running_workers(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    del treehouse_state, agent_log  # put the fakes on PATH, as for other CLI tests
+    conn = journal(canopy_env)
+    tick_id = db.start_tick(conn, dry_run=False)
+    db.touch_ticket(conn, "PROJ-1", str(canopy_env.repo))
+    run_id = db.insert_run(
+        conn,
+        tick_id=tick_id,
+        key="PROJ-1",
+        kind="implement",
+        branch="agent/PROJ-1-status-json",
+        slots=[RunSlot("api", canopy_env.repo, "lease", "canopy:PROJ-1", "main")],
+        runs_dir=canopy_env.state_dir / "runs",
+    )
+    run = db.get_run(conn, run_id)
+    assert run is not None
+    conn.execute("UPDATE runs SET started_at = ? WHERE id = ?", ("2026-10-07T12:34:56.000Z", run_id))
+    db.record_decision(
+        conn,
+        tick_id,
+        "PROJ-1",
+        "attention:green_unreviewed",
+        "PR needs review",
+        repo="api",
+    )
+    db.finish_tick(conn, tick_id, "ok", "test")
+
+    assert main(["status", "--json"]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output == {
+        "attention": [{"kind": "green_unreviewed", "ticket": "PROJ-1", "repo": "api", "message": "PR needs review"}],
+        "workers": {
+            "running": [{"ticket": "PROJ-1", "kind": "implement", "started_at": "2026-10-07T12:34:56.000Z"}],
+            "max": 2,
+        },
+    }
