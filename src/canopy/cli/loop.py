@@ -11,7 +11,7 @@ from rich.console import Console
 from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
 from canopy.core import db
-from canopy.infra import lock
+from canopy.infra import lock, logs
 from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
 
@@ -65,6 +65,8 @@ def cmd_tick(click_ctx: click.Context, *, dry_run: bool) -> int:
 def cmd_status(click_ctx: click.Context) -> int:
     """Print the attention list and running workers."""
     ctx = open_context(click_ctx)
+    click.echo(f"State directory: {ctx.state_dir}")
+    click.echo(f"Log file: {ctx.state_dir / logs.LOG_FILE_NAME}")
     last = db.last_tick(ctx.conn)
     if last is None:
         click.echo("No ticks yet.")
