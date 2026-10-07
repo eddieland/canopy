@@ -98,6 +98,20 @@ def test_overseer_state_names_the_configured_needs_human_label(
     assert '"needs_human_label": "blocked-on-team"' in str(argv[3])
 
 
+def test_overseer_state_names_the_comment_marks(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The overseer recognizes workers' comments by these, since workers post as the operator (D069).
+    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\ncomment_suffix = "(canopy)"\n')
+    overseer_does(monkeypatch)
+    assert main(["tick", "--dry-run"]) == 0
+    [run] = agent_runs(agent_log)
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert '"comment_prefix": "CANOPY:"' in str(argv[3])
+    assert '"comment_suffix": "(canopy)"' in str(argv[3])
+
+
 def test_next_tick_sees_the_journal(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

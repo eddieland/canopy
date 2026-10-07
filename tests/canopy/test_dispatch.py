@@ -99,6 +99,26 @@ def test_worker_is_told_the_configured_needs_human_label(
     assert "needs-human" not in text
 
 
+def test_worker_is_told_the_configured_comment_marks(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    canopy_env.write_user(
+        canopy_env.user_file.read_text()
+        + '\n[trust]\ncomment_prefix = "[bot]"\ncomment_suffix = "Posted by canopy for alice."\n'
+    )
+    in_tick(conn, monkeypatch)
+    args = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]
+    assert main(args, runner=InlineRunner()) == 0
+    text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
+    assert "start it with `[bot]` and a space, and end it with `Posted by canopy for alice.`" in text
+    assert "a comment that starts with `[bot]` and ends with `Posted by canopy for alice.`" in text
+    assert "CANOPY:" not in text
+
+
 def test_detached_run_finishes_on_its_own(
     canopy_env: CanopyEnv,
     git_pool: GitPool,

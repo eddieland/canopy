@@ -24,6 +24,8 @@ VALUES = {
     "LABELS": "`agent-ready-alice`",
     "REQUEST": "10234",
     "MAP": "/ws/MAP.md",
+    "WORKER_COMMENT": "starts with `CANOPY:`",
+    "MARK_COMMENTS": "In every comment and reply you post, start it with `CANOPY:` and a space.",
 }
 UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
 
@@ -123,3 +125,40 @@ def test_a_reviewer_override_must_name_the_commit_and_the_run(canopy_env: Canopy
     values = {"PR_URL": "u", "CHECKOUT": "c", "SHA": "s", "RUN_ID": "1"}
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{SHA\}\}, \{\{RUN_ID\}\}"):
         prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+
+
+@pytest.mark.parametrize(
+    ("prefix", "suffix", "recognized", "instruction"),
+    [
+        ("CANOPY:", "", "starts with `CANOPY:`", "start it with `CANOPY:` and a space,"),
+        ("", "-- canopy", "ends with `-- canopy`", "end it with `-- canopy`,"),
+        (
+            "CANOPY:",
+            "(canopy)",
+            "starts with `CANOPY:` and ends with `(canopy)`",
+            "start it with `CANOPY:` and a space, and end it with `(canopy)`,",
+        ),
+    ],
+)
+def test_comment_marks_name_every_mark_set(prefix: str, suffix: str, recognized: str, instruction: str) -> None:
+    # A worker's comment carries every mark set, and is recognized only by all of them (D069).
+    assert prompts.worker_comment(prefix, suffix) == recognized
+    assert instruction in prompts.mark_comments(prefix, suffix)
+
+
+@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+def test_shipped_worker_prompts_mark_and_recognize_worker_comments(canopy_env: CanopyEnv, kind: str) -> None:
+    # Everything posts as the operator, so a worker's own reply must not read back as feedback or a reply (D069).
+    values = {**VALUES, "MARK_COMMENTS": "<mark them>", "WORKER_COMMENT": "<is marked>"}
+    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, values)
+    assert "<mark them>" in text
+    # A fix-ci worker reads checks, never a comment that could instruct it, so only the others need to recognize one.
+    if kind != "fix-ci":
+        assert "a comment that <is marked>" in text
+
+
+def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
+    text = prompts.render_overseer(load(canopy_env.repo, canopy_env.user_file), "{}")
+    assert "## Workers' comments" in text
+    assert "`trust.comment_prefix`" in text
+    assert "`trust.comment_suffix`" in text
