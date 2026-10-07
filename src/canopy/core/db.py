@@ -139,6 +139,9 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
         applied = {int(r[0]) for r in conn.execute("SELECT version FROM schema_migrations")} if has_table else set()
         unknown = applied - {m.version for m in known}
         if unknown:
+            # Runs the journal's own canopy started come first: the fix for an unknown journal may be a fresh one, and
+            # moving this one aside under a live run would lose it (D068).
+            _check_no_live_runs(conn)
             raise MigrationError(f"the journal has migrations this canopy does not know: {sorted(unknown)}")
         pending = [m for m in known if m.version not in applied]
         if pending:

@@ -1112,12 +1112,15 @@ journal outside development needs to survive the upgrade.
 Decision: `migrations/0001_init.sql` creates the schema as of v0.1 directly; 0002 to 0009 are gone. The schema is the
 same as the nine produced, column for column and index for index, so the code is unchanged. A journal that applied the
 old series fails to open with the `MigrationError` for migrations this canopy does not know, and the operator moves
-`<state_dir>/canopy.db` aside to start a fresh one. After this, the rule holds again: never edit a shipped migration.
+`<state_dir>/canopy.db` aside to start a fresh one. While a run the old canopy started is alive, the error is D060's
+instead, naming the run, so the journal is never moved aside under a worker that a fresh journal would not know about.
+After this, the rule holds again: never edit a shipped migration.
 Rejected:
 - Adopting a journal at exactly the old 1 to 9 by rewriting its `schema_migrations`: code kept only to carry
   development journals across one release.
 - Refusing old journals with an error of their own: the generic one already names the cause.
 Consequences: a journal from before v0.1 loses its attempts, cursors, and notified items when moved aside; the world
 facts are re-read from their sources. `repo` in `ticket_units` and `run_slots` stays nullable, as the old series left
-it, though canopy never writes null there; tightening it is a migration of its own.
+it, though canopy never writes null there; tightening it is a migration of its own. A journal that applied only the
+old 0001, from M0 and never opened since, is taken as current and fails at its first query instead.
 Revisit: never for v0.1; a later squash needs its own decision and a plan for the journals then in use.

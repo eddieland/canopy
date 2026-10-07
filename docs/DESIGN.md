@@ -216,8 +216,9 @@ way, a tick does, in order:
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
    is gone. Insert a `ticks` row; its id tags all logs. Pending migrations wait while any `running` run's `_run`, or
    chore run's `_chore`, or review run's `_review`, is alive: it was started by the canopy before the upgrade and writes
-   the old schema (D060). The
-   tick, and any command that opens the journal, fails saying so until those runs finish.
+   the old schema (D060). So does the error for a journal with migrations this canopy does not know, so it is never
+   moved aside under a live run (D068). The tick, and any command that opens the journal, fails saying so until those
+   runs finish.
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
      kill the process group of the worker `_run` started, if any of it is left (`runs.worker_pid`); mark the run

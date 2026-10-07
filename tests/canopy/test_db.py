@@ -99,6 +99,25 @@ def test_a_workspace_of_one_renames_its_unit(tmp_path: Path) -> None:
     ]
 
 
+def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
+    """D068: a journal this canopy cannot open names its live runs first, so it is not moved aside under one."""
+    conn = fresh(tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (2, 'from_before_the_squash')")
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    db.touch_ticket(conn, "OLD-1", "/r")
+    conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status, pid) "
+        "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'running', ?)",
+        (os.getpid(),),
+    )
+    with pytest.raises(db.MigrationError, match="run 1 is still working for the canopy before it"):
+        db.migrate(conn, resources.migrations_dir())
+    conn.execute("UPDATE runs SET status = 'done' WHERE id = 1")
+    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[2\]"):
+        db.migrate(conn, resources.migrations_dir())
+
+
 def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
     """D060: a live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
     migrations = tmp_path / "migrations"
