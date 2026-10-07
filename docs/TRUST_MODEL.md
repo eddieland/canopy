@@ -66,7 +66,11 @@ Controls:
   Pushes are never forced and never go to a fork.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
-  MCP write scope limited to comments, labels, PR create/update).
+  MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
+  submission, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever the
+  operator's runtime grants (D069). Names differ by server, so a server's own name for one of these gets past it.
+  GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and has no narrower name to deny:
+  where it is granted, keeping it to labels is the prompt's. Jira's issue edit cannot change status.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
@@ -162,7 +166,8 @@ but must be distinguishable:
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>` or
   the runtime's own attribution. Never hidden.
-- PRs labeled `agent`.
+- PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D069); every PR title carries
+  the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
 - Every review comment says what it is in its first line ("an automated adversarial review ... not a human review and
