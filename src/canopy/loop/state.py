@@ -36,11 +36,14 @@ def state_block(
     attempts: Mapping[policy.Unit, Mapping[str, int]],
     fix_ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
+    split_attempts: Mapping[str, int],
+    split_children: list[sqlite3.Row],
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
     `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts` and
-    `fix_ci_cooldowns` are per unit (`policy.unit`).
+    `fix_ci_cooldowns` are per unit (`policy.unit`). `split_attempts` are per ticket, and `split_children` are the
+    children of splits not yet done, with their split run's end (DESIGN §18).
     """
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
@@ -122,6 +125,7 @@ def state_block(
             "max_fix_ci_attempts": config.policy.max_fix_ci_attempts,
             "fix_ci_cooldown_minutes": config.policy.fix_ci_cooldown_minutes,
             "max_resume_attempts": config.policy.max_resume_attempts,
+            "max_split_attempts": config.policy.max_split_attempts,
             "stacking": config.policy.stacking,
         },
         "running_workers": [
@@ -142,11 +146,23 @@ def state_block(
                 "branch": t["branch"],
                 "cursors": {name: t[column] for name, column in db.TICKET_CURSORS.items()},
                 "units": [unit_summary(str(t["key"]), u) for u in units.get(str(t["key"]), [])],
+                "split_attempts": split_attempts.get(str(t["key"]), 0),
                 "needs_human_since": t["needs_human_since"],
                 "last_seen_at": t["last_seen_at"],
                 "last_run": run_summary(last_runs.get(str(t["key"]))),
             }
             for t in tickets
+        ],
+        # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).
+        "split_children": [
+            {
+                "child": c["child_key"],
+                "parent": c["parent_key"],
+                "repo": c["repo"],
+                "split_run_id": c["run_id"],
+                "split_ended_at": c["ended_at"],
+            }
+            for c in split_children
         ],
     }
     if dry_run:

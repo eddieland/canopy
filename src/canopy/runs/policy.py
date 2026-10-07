@@ -7,6 +7,9 @@ covered the unit. `dispatch.py` enforces these; the overseer's state block shows
 
 In a workspace of one, a ticket has one unit whatever its repository was called when each run was made, so counts are
 per ticket there, under the unit `None`.
+
+A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Its runs are counted per
+ticket, and never in a unit's counts.
 """
 
 from __future__ import annotations
@@ -24,13 +27,21 @@ if TYPE_CHECKING:
 # A unit: a ticket key and a repository name, or None for a workspace of one's only repository.
 Unit = tuple[str, str | None]
 
+# The kinds that work in a unit, and every kind `canopy dispatch` takes.
 KINDS = ("implement", "fix-ci", "resume")
+SPLIT = "split"
+DISPATCH_KINDS = (*KINDS, SPLIT)
 
 
 def limits(config: Config) -> dict[str, int]:
-    """Return the most runs of each kind one ticket may have."""
+    """Return the most runs of each kind one unit may have, and for `split`, one ticket."""
     p = config.policy
-    return {"implement": p.max_implement_attempts, "fix-ci": p.max_fix_ci_attempts, "resume": p.max_resume_attempts}
+    return {
+        "implement": p.max_implement_attempts,
+        "fix-ci": p.max_fix_ci_attempts,
+        "resume": p.max_resume_attempts,
+        SPLIT: p.max_split_attempts,
+    }
 
 
 def unit(key: str, repo: str | None, *, single: bool) -> Unit:
@@ -43,12 +54,19 @@ def attempts(conn: sqlite3.Connection, *, single: bool) -> dict[Unit, dict[str, 
     counts: dict[Unit, dict[str, int]] = {}
     rows = conn.execute(
         "SELECT r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "GROUP BY r.ticket_key, s.repo, r.kind"
+        "WHERE r.kind != ? GROUP BY r.ticket_key, s.repo, r.kind",
+        (SPLIT,),
     )
     for row in rows:
         counts_of = counts.setdefault(unit(str(row[0]), row[1], single=single), dict.fromkeys(KINDS, 0))
         counts_of[str(row[2])] += int(row[3])
     return counts
+
+
+def split_attempts(conn: sqlite3.Connection) -> dict[str, int]:
+    """Return each ticket's count of split runs, whatever they ended as. Tickets never split are missing."""
+    rows = conn.execute("SELECT ticket_key, count(*) FROM runs WHERE kind = ? GROUP BY ticket_key", (SPLIT,))
+    return {str(r[0]): int(r[1]) for r in rows}
 
 
 def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None, *, single: bool) -> dict[str, int]:

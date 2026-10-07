@@ -37,6 +37,17 @@ labels, add or remove one, write the full list back. Never drop labels you did n
 When a label was added is in the issue changelog. If the server cannot read the changelog, use the timestamp of the
 worker's question comment instead.
 
+When a split child's label was added (DESIGN §18) is the changelog entry that added it to the child's `labels` field,
+the latest one if it was added more than once. The question comment does not stand in for it: without the changelog, a
+split child's label cannot be checked, and the ticket is not split.
+
+## Creating tickets
+
+Only a split worker creates issues. Create each child in the parent's project, with the parent's issue type unless that
+type cannot be created, with an empty `labels` field and no assignee. Link it to the parent with a "relates to" link,
+not as a subtask. Order children with "Blocks" links: the earlier child blocks the later one. The child's key is the key
+Jira returns for the created issue.
+
 ## Comments and ordering
 
 Order comments by their created timestamp. Use the comment id as the cursor. Keep comments plain text; the server

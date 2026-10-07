@@ -123,9 +123,15 @@ no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
-| `multi_repo` | The ticket is several independent pieces in several repositories: split it into one ticket each. |
+| `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
+| `split_unlabeled` | A split's children have no queue label: label each one you want worked. |
+| `split_self_labeled` | A split child was labeled before its split ended: remove the label, add it again. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
+
+To split a ticket that needs several repositories into one ticket per repository, an authorized replier comments on it
+asking for a split. In a workspace of several, a later tick dispatches a splitter, which creates the children with no
+labels and comments on the ticket; label each child to start it. Without such a comment a ticket is never split.
 
 The overseer may record other reasons; the detail says what it wants.
 

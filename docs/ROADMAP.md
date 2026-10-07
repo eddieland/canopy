@@ -229,15 +229,24 @@ Needs M4's blocker ordering.
 - `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
   contract validated into `split_children`, the child's recorded repository enforced by dispatch,
   `policy.max_split_attempts`.
-- Overseer prompt: choose split or joint; the `split` phase and `split_unlabeled` attention; a child is a candidate
-  only if its label was added after the split run ended, and `split_self_labeled` attention when one was not.
+- Overseer prompt: split only when an authorized replier asks for it (`--request`, D061), never on its own judgment;
+  the `split` phase and `split_unlabeled` attention; a child is a candidate only if its label was added after the split
+  run ended, and `split_self_labeled` attention when one was not.
 - The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
 
-Accept: a real ticket covering two repositories is split into two linked children, the second blocked by the first,
-with no queue label on either. Nothing is dispatched for them until the operator labels them; then they are worked in
-order, one PR each.
+Accept: a real ticket covering two repositories, whose split an authorized replier asked for in a comment, is split into
+two linked children, the second blocked by the first, with no queue label on either. Nothing is dispatched for them
+until the operator labels them; then they are worked in order, one PR each.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_split.py` holds the harness's half of the acceptance: a
+requested split reads a desk of worktrees at their bases, pushes nothing, and records the children its worker reports;
+invalid children are recorded nowhere; each child is dispatched only in its recorded repository), docs, D061, and D062
+are in. Rebuilt on M7's desks from the draft PR #54, which was written before them; a split needs an authorized
+replier's comment asking for it (D061), and without one a multi-repository ticket stays one ticket. The overseer prompt,
+the `canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Not yet checked
+live: that OpenCode applies the splitter's name patterns to MCP tools; run the canary with them before the real split.
+Waiting on the operator: a real two-repository ticket split on request, its children labeled by hand and worked in
+order. Started on request while M2 to M7 wait on their live runs.
 
 ## M9. Chores
 

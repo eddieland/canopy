@@ -70,10 +70,22 @@ Controls:
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
+- The loop may create tickets, but never decides to, and never authorizes them. A split run (DESIGN §18) starts only
+  from an authorized replier's comment asking for it: the dispatch must name that comment, and the splitter reads it
+  again and creates nothing unless its author is an authorized replier. It creates at most one child ticket per
+  repository, with no labels and no assignee; a child starts only when a human adds a queue label to it, and only a
+  label added after the split run ended counts. The overseer reads that from the tracker's label history and records
+  `split_self_labeled` instead of dispatching a child labeled earlier; without label history it does not split. The
+  splitter's permissions deny tools whose names suggest labels, assignees, or edits to existing tickets, as defense in
+  depth: a tracker whose create tool also takes labels passes that check. The harness records each child's repository
+  from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
 
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
-risk with an interactive agent. Under the PR exception, a steered overseer and worker that both skip their checks can
+risk with an interactive agent. canopy acts as the operator, so the tracker can say when a split child's label was added
+but not who added it, and the label-time check is the overseer's judgment: a steered overseer that ignores it can
+dispatch a self-labeled child, as it could dispatch an unlabeled ticket. That child's work is still a PR a human
+reviews. Under the PR exception, a steered overseer and worker that both skip their checks can
 push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
 backstop, as it is for a coworker pushing there by hand.
 
@@ -142,6 +154,10 @@ Controls:
 - Worker MCP write scope is comments and PRs on the ticket it was dispatched for and the repositories of the units its
   run covers: one repository, or each repository of a joint run (DESIGN §18). Prompts name those repositories and forbid
   writing elsewhere; permissions should match where the runtime allows.
+- The splitter's write scope is creating tickets in the parent's project, linking them, and one comment on the parent.
+  It has no edit, shell, web fetch, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
+  are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
+  nothing.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 Residual: real. Sandboxing and egress controls are the eventual answer;
 until then this risk is accepted and documented.

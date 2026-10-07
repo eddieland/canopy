@@ -22,6 +22,8 @@ query = 'project = PROJ AND statusCategory != Done ORDER BY priority DESC, creat
 max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
+# Splits of one ticket into one ticket per repository, in a workspace of several (DESIGN §18).
+max_split_attempts = 1
 # "auto": the overseer may stack a ticket on its blocker's open, green PR.
 # "never": wait until the blocker has landed: closed, and its PR merged if it had one.
 stacking = "auto"

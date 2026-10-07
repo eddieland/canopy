@@ -91,6 +91,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         attempts=policy.attempts(ctx.conn, single=single),
         fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now, single=single),
         now=now,
+        split_attempts=policy.split_attempts(ctx.conn),
+        split_children=db.open_split_children(ctx.conn),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)

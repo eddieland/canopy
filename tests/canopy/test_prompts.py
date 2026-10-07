@@ -22,10 +22,13 @@ VALUES = {
     "CONTEXT": "None.",
     "AUTHORIZED_REPLIERS": "`alice`",
     "LABELS": "`agent-ready-alice`",
+    "REQUEST": "10234",
+    "MAP": "/ws/MAP.md",
 }
+UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
 
 
-@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+@pytest.mark.parametrize("kind", UNIT_KINDS)
 def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: str) -> None:
     text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES)
     assert "{{" not in text
@@ -34,6 +37,24 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
     assert "attempt 1 of 2" in text
     # A joint run's worker learns its repositories from these, so the shipped prompts have them.
     prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_JOINT)
+
+
+def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    text = prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT)
+    assert "{{" not in text
+    assert "Read comment 10234 on PROJ-1." in text
+    assert text.rstrip().endswith('"children":{"<child key>":"<repository name>"}}')
+
+
+def test_a_split_prompt_needs_the_request(canopy_env: CanopyEnv) -> None:
+    # The splitter's own check of who asked for the split reads the request; an override without it fails closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-split.md").write_text("Split {{KEY}} over {{REPOSITORIES}} for {{LABELS}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REQUEST\}\}"):
+        prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT)
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:

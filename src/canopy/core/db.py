@@ -316,11 +316,13 @@ def insert_run(
     slots: Sequence[RunSlot],
     runs_dir: Path,
     single: bool = True,
+    works_units: bool = True,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
     Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
-    run's branch. `single` says the workspace is a workspace of one (see `set_unit`).
+    run's branch. `single` says the workspace is a workspace of one (see `set_unit`). A run that does not work in units,
+    a split, leaves the ticket's branch and units as they are: it pushes nothing (DESIGN §18).
     """
     with transaction(conn):
         cur = conn.execute(
@@ -334,6 +336,8 @@ def insert_run(
             "VALUES (?, ?, ?, ?, ?, ?)",
             [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch) for s in slots],
         )
+        if not works_units:
+            return run_id
         conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
         for slot in slots:
             if slot.repo is not None:
@@ -414,6 +418,45 @@ def record_decision(
         (tick_id, key, action, rationale, repo),
     )
     return _rowid(cur)
+
+
+# Split children
+
+
+def record_split_children(conn: sqlite3.Connection, parent: str, run_id: int, children: Mapping[str, str]) -> None:
+    """Record the children a split run created, each child key with the repository it covers, in one transaction."""
+    with transaction(conn):
+        conn.executemany(
+            "INSERT INTO split_children (child_key, parent_key, repo, run_id) VALUES (?, ?, ?, ?)",
+            [(child, parent, repo, run_id) for child, repo in children.items()],
+        )
+
+
+def split_child(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    """Return `key`'s row in `split_children` if a split created it, else None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM split_children WHERE child_key = ?", (key,)).fetchone()
+    return row
+
+
+def children_of(conn: sqlite3.Connection, parent: str) -> list[str]:
+    """Return the keys of the children a split of `parent` created, sorted."""
+    rows = conn.execute("SELECT child_key FROM split_children WHERE parent_key = ? ORDER BY child_key", (parent,))
+    return [str(r[0]) for r in rows]
+
+
+def open_split_children(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return the children of every split whose parent or child is not marked done, with their split run's end."""
+    return conn.execute(
+        "SELECT c.child_key, c.parent_key, c.repo, c.run_id, r.ended_at FROM split_children c "
+        "JOIN runs r ON r.id = c.run_id "
+        "LEFT JOIN tickets p ON p.key = c.parent_key LEFT JOIN tickets t ON t.key = c.child_key "
+        "WHERE coalesce(p.done, 0) = 0 OR coalesce(t.done, 0) = 0 ORDER BY c.parent_key, c.child_key"
+    ).fetchall()
+
+
+def has_runs(conn: sqlite3.Connection, key: str) -> bool:
+    """Return whether any run was ever dispatched for `key`."""
+    return conn.execute("SELECT 1 FROM runs WHERE ticket_key = ? LIMIT 1", (key,)).fetchone() is not None
 
 
 def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.Row]:

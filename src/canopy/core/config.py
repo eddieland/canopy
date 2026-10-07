@@ -163,6 +163,8 @@ class Policy(Section):
     max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
     fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
+    max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10, D054). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
@@ -189,6 +191,10 @@ class Runtime(Section):
     )
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
+    )
+    # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
+    split_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}"
     )
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45

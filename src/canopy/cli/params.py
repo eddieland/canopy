@@ -13,7 +13,7 @@ import click
 from canopy.core import db, workspace
 from canopy.runs import dispatch
 
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+KEY_RE = dispatch.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 MAX_TEXT = 2000
@@ -77,3 +77,5 @@ TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 REPO = PatternType("NAME", workspace.REPO_NAME_RE, "repository name")
+# A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
+COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")

@@ -946,3 +946,51 @@ Rejected:
   window nobody can see the end of from the journal.
 - Draining from inside canopy (stop dispatching, wait, then migrate): the old version is the one dispatching.
 Revisit: if waiting out the worker timeout after upgrades is measured as friction.
+
+## D061. A ticket over several repositories stays one ticket; the loop splits it only when an authorized replier asks
+
+Context: D033 had the overseer prefer splitting a multi-repository ticket into tracker tickets, implementing jointly
+only when the halves could not stand alone. The operator's own work does not fit that: a change that sets up a database
+edits the Terraform repository and then the Kubernetes repository, under one ticket, and the loop should watch both PRs.
+M7's units (D058) work such a ticket jointly or in sequence. Creating real tickets is something a person decides to do,
+not a default of the loop. First proposed in the draft PR #54, written before M7 landed.
+Decision (supersedes D033's preference for splitting):
+- A ticket that needs several repositories stays one ticket, with a unit per repository, joint or sequenced as the
+  overseer judges. One that is several independent pieces, with no request to split it, gets `multi_repo` attention.
+- The overseer splits a ticket only when an authorized replier's comment on it asks for a split. `canopy dispatch
+  --kind split` requires `--request <comment id>` and refuses without it as `unauthorized`; `--request` on another kind
+  is `bad_request`. The splitter reads that comment and creates nothing unless an authorized replier wrote it and it
+  asks for a split, and a split prompt without `{{REQUEST}}` does not render (D051's pattern).
+Rejected:
+- A dedicated split label: another label every tracker must be set up with, and one anyone who can label could add.
+- An operator command that starts a split outside a tick: a second path into dispatch's guards and journal for one
+  kind of run.
+Consequences: the harness cannot read the comment, so `--request` is a recorded claim; the splitter's own read is the
+independent check, as with labels. ROADMAP M8's acceptance starts from such a comment.
+Revisit: if operators ask for splits often enough that a comment per ticket is friction; if the overseer is measured
+choosing joint or sequenced wrongly.
+
+## D062. A split runs in a desk at the base branches, with its own command, and records only children new to the journal
+
+Context: DESIGN §18 planned the splitter in a desk of the named repositories' worktrees. With M7's desks and
+`run_slots` in place, a split can use the joint run's machinery; what differs is that it reads and never pushes.
+Decision (DESIGN §8, §18):
+- A split leases a slot per repository and runs in a desk like a joint run. `_run` checks each worktree out at its base,
+  detached, makes no branch, skips push verification, and records no branch or unit for the ticket (`runs.branch` is
+  empty). Its slots are returned and its desk removed as for any run.
+- The splitter has its own template, `runtime.split_cmd`, defaulting to `--agent canopy-splitter`, rather than a
+  rewrite of `worker_cmd`. It shares `worker_timeout_minutes`.
+- Split attempts are counted per ticket (`policy.max_split_attempts`, default 1), never in a unit's counts.
+- `_run` records a child only if it is new to the journal (not already a child, never dispatched) and not the parent,
+  besides the checks DESIGN planned. A steered splitter could otherwise claim an existing ticket and pin it to a
+  repository. A `failed` split's valid children are recorded too: they exist in the tracker.
+- `bad_split` refuses a split of a ticket that has a branch, of a split's child, in a workspace of one, or over fewer
+  than two repositories.
+- A tracker without label history gets `multi_repo` attention, not the planned tick-wide `skip`: a skip leaves the
+  ticket stuck with nobody told, and a human can still split it by hand.
+Rejected:
+- Running the splitter at the workspace root on the primary clones (PR #54, written before desks): they may be stale or
+  on another branch, and the root holds the journal.
+- A split per unit: a split is the ticket's and makes the units' work into other tickets.
+Revisit: if splits are judged on code the splitter could not read; when a runtime can restrict a create tool's
+arguments (then forbid labels on create in the definition).

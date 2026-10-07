@@ -77,12 +77,13 @@ class InlineRunner:
     """Runs processes for real, but `spawn` starts nothing and returns this process's pid.
 
     A test then runs `canopy _run <id>` in-process with `main`, which claims the run with that same pid. `timeout_agent`
-    makes the worker's run come back timed out.
+    makes the worker's run come back timed out, having printed `timeout_stdout`.
     """
 
     spawned: list[tuple[str, ...]] = field(default_factory=list)
     spawn_error: procs.ProcError | None = None
     timeout_agent: bool = False
+    timeout_stdout: str = "fake agent: starting\n"
 
     def run(
         self,
@@ -95,7 +96,7 @@ class InlineRunner:
         on_start: Callable[[int], None] | None = None,
     ) -> procs.Result:
         if self.timeout_agent and "agent" in args[:3]:
-            return procs.Result(tuple(args), -9, "fake agent: starting\n", "", timed_out=True)
+            return procs.Result(tuple(args), -9, self.timeout_stdout, "", timed_out=True)
         return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002  (starts nothing)
