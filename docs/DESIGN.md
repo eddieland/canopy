@@ -324,8 +324,9 @@ read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§1
 | `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
 
 "Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
-identifier, never a display name. If the tracker cannot say when a label was added, the worker's question comment is the
-reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's
+comment is never review feedback either. If the tracker cannot say when a label was added, the worker's question comment
+is the reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
 
 Cursors (`comment`, `review`, `ci`) hold the newest item of each kind the loop has handled, in the tracker's and
 GitHub's own ids; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci
@@ -455,6 +456,8 @@ Worker obligations, stated in every worker prompt:
 - Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
   repository.
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
+- Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
+  default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
 - On `blocked`: post the question as a ticket comment, add `needs_human_label`, and push nothing half-finished or
@@ -462,6 +465,20 @@ Worker obligations, stated in every worker prompt:
 - Never approve, merge, close PRs, or transition the ticket to Done, including indirectly: no closing keywords
   (`Fixes #12`) or tracker commands (Jira smart commits) in commit messages, PR titles, or PR bodies.
 - Push once. Do not poll CI. Do not retry.
+
+Everything posts as the operator (D010), who is usually an authorized replier, so without a mark a worker's PR reply
+would read back as new review feedback and spend a `resume` attempt, and its ticket comment could pass for an
+authorized reply. A comment that carries every mark set, starting with the prefix if there is one and ending with the
+suffix if there is one, outside any quote, is a worker's, whoever its author. The overseer, which reads the marks from
+the state block's `trust`, and workers never read one as an authorized reply, a split request, or review feedback: it
+makes no ticket `human_replied` or `changes_requested`, is not a new comment for `green_unreviewed`, and needs no
+handling, so a cursor may advance past it (§7). The marks can only take authority away, so they need no protection:
+anyone who marks a comment of theirs only silences it, and a comment without them is judged as before. They are plain
+text, which every tracker's markup keeps as written (Jira's would show or drop an HTML comment), and they tell a person
+reading the PR or ticket what wrote the comment. The harness never reads comments; the marks are for the agents that
+do. Worker prompts get them as `{{MARK_COMMENTS}}`, the instruction to mark, and `{{WORKER_COMMENT}}`, how to recognize
+a marked comment. Changing the marks leaves earlier workers' comments reading as the operator's. A prompt override
+without the placeholders still renders, and its workers' comments read as the operator's, as they all did before D069.
 
 ## 9. Aggressive release
 
@@ -569,6 +586,7 @@ run. Unknown keys are errors in both files.
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
+| `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
@@ -622,6 +640,8 @@ interval_minutes = 15   # `canopy loop` waits this long after each tick ends
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
+comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
+comment_suffix = ""          # and ends with this, if set
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -637,6 +657,9 @@ events = ["attention", "loop", "runs"]
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
 default and must be set; `trust.authorized_repliers` defaults to empty (nobody can resume blocked work).
+
+`trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter or
+digit, no backtick, and no surrounding spaces, and at least one is set.
 
 Rules:
 

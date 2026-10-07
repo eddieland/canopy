@@ -1124,3 +1124,33 @@ facts are re-read from their sources. `repo` in `ticket_units` and `run_slots` s
 it, though canopy never writes null there; tightening it is a migration of its own. A journal that applied only the
 old 0001, from M0 and never opened since, is taken as current and fails at its first query instead.
 Revisit: never for v0.1; a later squash needs its own decision and a plan for the journals then in use.
+
+## D069. Workers mark their comments with a configurable prefix and suffix that only take authority away
+
+Context: everything posts as the operator (D010), who is usually an authorized replier. A `resume` worker replies on
+the PR to each comment it addressed, after the dispatch set the `review` cursor, so the next tick saw a new comment by
+the operator on the PR and could classify it as review feedback and spend another `resume` attempt. A worker's ticket
+comment (a summary, a split's list of children) could likewise pass for an authorized reply. The harness never reads
+comments, so this is for the agents that do.
+Decision: every worker prompt has the worker start each comment and reply it posts, on a ticket or a PR, with
+`trust.comment_prefix` (`CANOPY:` by default) and end it with `trust.comment_suffix` (empty by default), each when it
+is set; at least one must be. The overseer reads both from the state block. A comment that carries every mark set,
+outside any quote, is a worker's, whoever its author: never an authorized reply, a split request, or review feedback,
+and handled as soon as it is read. The marks grant nothing, so forging them only silences the comment that carries
+them, and a comment without them is judged exactly as before. Both keys are user-only: the operator chooses how their
+comments look, and a repository file could otherwise pick marks that silence people.
+Rejected:
+- An HTML comment marker like the reviewer's (`<!-- canopy-worker -->`): trackers convert comments to their own markup.
+  Jira's shows raw HTML as text or drops it on the way to its document format, so the marker could vanish.
+- A fixed marker: the marks are visible to everyone who reads the comment, so the operator chooses them.
+- Counting a comment as a worker's when it carries any one of the marks set: a comment that only begins with a word
+  like `CANOPY:` would be silenced even when the operator also set a suffix. Requiring every mark set silences less.
+- Recording comment ids from worker results in the journal and putting them in the state block: the worker would have
+  to report every comment it posted, a steered worker could name a human's comment to silence it, and it needs a
+  migration and new result fields for what one prompt line does.
+- Requiring the placeholders in overrides, as `{{LABELS}}` is (D051): a missing label check grants authority; missing
+  marks only leave comments reading as the operator's, as before.
+Consequences: a worker that forgets the marks costs what it did before this: a possible extra `resume`, bounded by the
+attempt limit. A person whose comment carries the marks silences that comment; its ticket waits, visibly, on the
+attention list or in `needs_human`. Changing the marks leaves earlier workers' comments reading as the operator's.
+Revisit: when a bot identity (ROADMAP, deferred) lets comments be told apart by author.
