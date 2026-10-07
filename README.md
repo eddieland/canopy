@@ -39,7 +39,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      to GitHub, download `canopy-<platform>` from the
      [latest release](https://github.com/eddieland/canopy/releases/latest) (or `gh release download --repo
      eddieland/canopy --pattern 'canopy-linux-x86_64*'`), check it against its `.sha256`, and copy it to the machine
-     as `~/.local/bin/canopy`. Make it executable and link the sinks to it:
+     as `~/.local/bin/canopy` (`mkdir -p ~/.local/bin` first if it is missing, and put it on `PATH` if it is not).
+     Make it executable and link the sinks to it:
      `cd ~/.local/bin && chmod +x canopy && ln -sf canopy canopy-notify-desktop && ln -sf canopy canopy-notify-slack`.
      On macOS, a browser download needs `xattr -d com.apple.quarantine canopy` too. To upgrade, replace the file.
    - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an

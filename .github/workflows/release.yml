@@ -5,16 +5,19 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  # The build and check, without a release, for changes that could break them.
+  # The build and check, without a release, for changes to anything the executable holds or how it is built.
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - .agents/**
       - Makefile
+      - migrations/**
+      - packages/**
       - pyproject.toml
-      - uv.lock
-      - packages/*/pyproject.toml
       - scripts/build-binary.sh
+      - src/**
       - tests/install-check.sh
+      - uv.lock
   workflow_dispatch:
 
 permissions:
@@ -34,10 +37,13 @@ jobs:
         include:
           - runner: ubuntu-latest
             platform: linux-x86_64
+            arch: x86_64
           - runner: ubuntu-24.04-arm
             platform: linux-aarch64
+            arch: aarch64
           - runner: macos-latest
             platform: macos-aarch64
+            arch: arm64
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -48,6 +54,13 @@ jobs:
         uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: false
+
+      # The executable is built for the runner it runs on; a runner label that moves to another architecture must not
+      # ship under this platform's name.
+      - name: Check the runner's architecture
+        run: |
+          arch=$(uname -m)
+          [ "$arch" = "${{ matrix.arch }}" ] || { echo "runner is $arch, not ${{ matrix.arch }}"; exit 1; }
 
       - name: Check the tag names the version in pyproject.toml
         if: startsWith(github.ref, 'refs/tags/v')
@@ -92,9 +105,14 @@ jobs:
           path: out
           merge-multiple: true
 
-      - name: Create the release
+      # A rerun, after a partial upload or to rebuild, replaces the assets of the release the first run made.
+      - name: Create the release, or update its assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME" out/*
-          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" out/* \
+              --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          fi
