@@ -136,6 +136,7 @@ canopy (harness, Python)
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
     workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: converge clones and pools (§18)
+    check.py       canopy check: each agent tries what its tools allow on made-up targets, and is judged (§13)
 
   core/            what every feature shares
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
@@ -710,6 +711,30 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
 
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
 the command templates. No interface.
+
+### Checking what agents can reach
+
+Rationale in D070.
+
+What an agent can do is decided by the operator's runtime config (which MCP servers and tools exist) and by canopy's
+definitions (which of them are denied, by name), and tool names differ by server. `canopy check [--agent NAME]...
+[--ticket KEY]` shows the result. Each agent runs once, through its own command template, in an empty directory of its
+own (`<state_dir>/checks/<agent>/`), with the shipped `check.md` prompt instead of its usual one. The prompt lists
+steps, from reading a ticket to merging a PR, and has the agent try each once with an MCP tool, never the shell, on
+targets whose names cannot exist (GitHub owner `canopy--check`, Jira project `9CANOPYCHECK`), so a call that reaches
+its server fails there. The agent reports, per step, `no_tool`, `refused` (the runtime refused the call), or `reached`
+(the server answered), and lists every tool it has.
+
+The harness judges each step against what that agent must do (`allowed`: must be reached), must never do (`denied`:
+must be refused or have no tool), may reach with only its prompt to stop it (`prompt`: a warning, such as the worker's
+PR update tool, which can also close the PR), or either way (`any`, such as the worker's PR label, D069). It prints the
+tools and a line per step, keeps the prompt and output in `<state_dir>/checks/<agent>.log`, and exits 1 if any agent
+reached a denied step, missed an allowed one, left one unreported, or produced no valid last line. `--ticket` adds one
+real step for the worker: add `needs_human_label` to that ticket, read it back, remove it, read it back. Use a ticket
+outside the queue, since a loop running meanwhile would read the label.
+
+The verdicts rest on the agent's own report, read from its last line as for every run (D009). A model can misreport,
+so the log is the evidence, and the check proves nothing about the shell, which every worker has (TRUST_MODEL T4).
 
 ### Where the runtime finds canopy's definitions
 

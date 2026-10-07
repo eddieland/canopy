@@ -68,7 +68,8 @@ Controls:
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
   submission, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever the
-  operator's runtime grants (D069). Names differ by server, so a server's own name for one of these gets past it.
+  operator's runtime grants (D069). Names differ by server, so a server's own name for one of these gets past it;
+  `canopy check` shows what each agent can reach (D070).
   GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and has no narrower name to deny:
   where it is granted, keeping it to labels is the prompt's. Jira's issue edit cannot change status.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
@@ -302,6 +303,7 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Use queue labels no other operator uses. Two loops on one label work the same tickets, and neither can see the other.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
+- Run `canopy check` after changing the agent runtime's MCP servers or permissions, and fix what it reports.
 - Read the attention list.
 - A `review.query` that matches other people's PRs comments on their work in your name; tell them first. A reviewer
   definition of your own that runs commands runs the PR's code on your machine.

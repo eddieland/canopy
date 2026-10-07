@@ -1,4 +1,4 @@
-"""`canopy init`, and `canopy skill` for the operator's own agent sessions."""
+"""`canopy init`, `canopy check` of what agents can reach, and `canopy skill` for the operator's own agent sessions."""
 
 from __future__ import annotations
 
@@ -8,10 +8,11 @@ from pathlib import Path
 import click
 
 from canopy.cli import workspace as cli_workspace
-from canopy.cli.common import CliError, Obj
+from canopy.cli.common import CliError, Obj, open_context
+from canopy.cli.params import TICKET_KEY
 from canopy.core import config, definitions, workspace
 from canopy.infra import resources
-from canopy.setup import init
+from canopy.setup import check, init
 from canopy.setup import workspace as setup_workspace
 
 
@@ -131,6 +132,40 @@ def cmd_skill() -> int:
     """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
     click.echo(resources.operator_skill().read_text(encoding="utf-8"), nl=False)
     return 0
+
+
+@click.command("check")
+@click.option(
+    "--agent",
+    "agents",
+    multiple=True,
+    type=click.Choice(check.AGENT_NAMES),
+    help="Check only this agent; repeat for several. Default: every agent.",
+)
+@click.option(
+    "--ticket",
+    type=TICKET_KEY,
+    help="A real ticket outside your queue, on which the worker adds and removes tracker.needs_human_label.",
+)
+@click.pass_context
+def cmd_check(click_ctx: click.Context, agents: tuple[str, ...], ticket: str | None) -> int:
+    """Have each agent try what its tools allow, against made-up targets, and say what it must not reach.
+
+    Each agent runs once through its own command template, so this spends a model run per agent. Exit 1 if an agent
+    reached something it must not, could not reach something it needs, or did not report.
+    """
+    if ticket is not None and agents and "worker" not in agents:
+        raise click.UsageError("--ticket is the worker's round trip; add --agent worker")
+    ctx = open_context(click_ctx)
+    failed = False
+    for agent in check.AGENTS:
+        if agents and agent.name not in agents:
+            continue
+        click.echo(f"checking {agent.definition} (up to {check.TIMEOUT_MINUTES} minutes)...")
+        report = check.run(ctx, agent, ticket=ticket)
+        click.echo(check.render(report))
+        failed = failed or report.failed
+    return 1 if failed else 0
 
 
 def _print_report(report: init.Report, repo_root: Path, user_file: Path) -> None:
