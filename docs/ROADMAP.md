@@ -306,7 +306,17 @@ and once when it resolves. With the webhook file removed, Slack fails for severa
 delivering and reports `loop.sink_failing`; restoring the file delivers what was missed in one message. A digest arrives
 on its interval, including a quiet one.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_notify.py` holds the harness's half of the acceptance:
+per-sink delivery, a sink failing for several ticks while another delivers and reports `loop.sink_failing` once, the
+failed sink's catch-up in one message, digests on their interval including a quiet one, `loop.failing` and
+`loop.recovered`, bounds, and the upgrade from `notify.cmd` re-notifying nothing; `tests/canopy/test_sinks.py` the
+desktop sink against fake `notify-send` and `osascript`, and the Slack sink against a local HTTP server), docs, and
+D064 are in. The repository is a uv workspace, with the Slack sink its first member; one `uv tool install` installs
+canopy and both sinks (`tests/install-check.sh`). The `chores` group came with it, since M9 landed first. DESIGN §15's
+three-failure attention item is not built: the attention list is the latest `ok` tick's, so `loop.failing` is its
+notification half and the whole of it. The TRUST_MODEL T2, T6, and §7 changes need human approval in their PR.
+Waiting on the operator: the desktop sink on their machine, then the Slack sink on a real channel, as Accept says.
+Started on request while M2 to M9 wait on their live runs.
 
 ## M11. Reviews
 

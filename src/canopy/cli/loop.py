@@ -13,6 +13,7 @@ from canopy.cli.common import CliError, open_context
 from canopy.core import db
 from canopy.infra import lock
 from canopy.loop import attention, repeat, tick
+from canopy.notify import deliver
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -76,7 +77,20 @@ def cmd_status(click_ctx: click.Context) -> int:
     _print_attention(attention.listed(ctx))
     _print_workers(ctx)
     _print_chores(ctx)
+    _print_sinks(ctx)
     return 0
+
+
+def _print_sinks(ctx: Context) -> None:
+    """A line per notification sink: its last delivery, failures in a row and the last error, events waiting."""
+    sinks = deliver.status(ctx)
+    if not sinks:
+        return
+    click.echo(f"\nNotification sinks ({len(sinks)}):")
+    for s in sinks:
+        last = f"last delivered {attention.age(s.last_delivery_at)} ago" if s.last_delivery_at else "never delivered"
+        failing = f"; {s.failures} failed in a row: {s.last_error}" if s.failures else ""
+        click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{failing}")
 
 
 def _print_attention(items: list[attention.Item]) -> None:

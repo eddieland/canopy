@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, definitions, treehouse
+from canopy.core import db, definitions, outbox, treehouse
 from canopy.infra import logs, procs
 from canopy.runs import desks
 
@@ -90,7 +90,10 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
         # slots go back to their pools.
         if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
             log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
-        db.finish_run(ctx.conn, int(run["id"]), "crashed", json.dumps({"harness": "the worker process is gone"}))
+        note = json.dumps({"harness": "the worker process is gone"})
+        db.finish_run(
+            ctx.conn, int(run["id"]), "crashed", note, event=outbox.run_ended(ctx.config, run, "crashed", note)
+        )
         outcomes: list[str] = []
         for slot in slots:
             outcome = treehouse.return_slot(
