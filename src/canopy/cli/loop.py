@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -61,10 +62,15 @@ def cmd_tick(click_ctx: click.Context, *, dry_run: bool) -> int:
 
 
 @click.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Print machine-readable status as JSON.")
 @click.pass_context
-def cmd_status(click_ctx: click.Context) -> int:
+def cmd_status(click_ctx: click.Context, *, as_json: bool) -> int:
     """Print the attention list and running workers."""
     ctx = open_context(click_ctx)
+    if as_json:
+        click.echo(json.dumps(_status_json(ctx)))
+        return 0
+
     last = db.last_tick(ctx.conn)
     if last is None:
         click.echo("No ticks yet.")
@@ -79,6 +85,25 @@ def cmd_status(click_ctx: click.Context) -> int:
     _print_chores(ctx)
     _print_sinks(ctx)
     return 0
+
+
+def _status_json(ctx: Context) -> dict[str, object]:
+    """Build the stable machine-readable portion of `canopy status`."""
+    items = attention.listed(ctx)
+    running = db.running_runs(ctx.conn)
+    return {
+        "attention": [
+            {"kind": item.reason, "ticket": item.ticket_key, "repo": item.repo, "message": item.detail}
+            for item in items
+        ],
+        "workers": {
+            "running": [
+                {"ticket": str(run["ticket_key"]), "kind": str(run["kind"]), "started_at": str(run["started_at"])}
+                for run in running
+            ],
+            "max": ctx.config.capacity.max_workers,
+        },
+    }
 
 
 def _print_sinks(ctx: Context) -> None:
