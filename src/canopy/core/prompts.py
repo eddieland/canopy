@@ -40,11 +40,14 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT", "RUN_ID")
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
-    """Return how a worker's comment is recognized (D069), to follow "a comment that": it carries every mark set."""
+    """Return how a worker's comment is recognized (D069), to follow "a comment that": it carries every mark set.
+
+    Marks inside a quote do not count, so a human's reply that quotes a worker's comment stays the human's.
+    """
     marks = [f"starts with `{prefix}`"] if prefix else []
     if suffix:
         marks.append(f"ends with `{suffix}`")
-    return " and ".join(marks)
+    return f"{' and '.join(marks)} outside any quote"
 
 
 def mark_comments(prefix: str, suffix: str) -> str:

@@ -24,7 +24,7 @@ VALUES = {
     "LABELS": "`agent-ready-alice`",
     "REQUEST": "10234",
     "MAP": "/ws/MAP.md",
-    "WORKER_COMMENT": "starts with `CANOPY:`",
+    "WORKER_COMMENT": "starts with `CANOPY:` outside any quote",
     "MARK_COMMENTS": "In every comment and reply you post, start it with `CANOPY:` and a space.",
 }
 UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
@@ -130,12 +130,12 @@ def test_a_reviewer_override_must_name_the_commit_and_the_run(canopy_env: Canopy
 @pytest.mark.parametrize(
     ("prefix", "suffix", "recognized", "instruction"),
     [
-        ("CANOPY:", "", "starts with `CANOPY:`", "start it with `CANOPY:` and a space,"),
-        ("", "-- canopy", "ends with `-- canopy`", "end it with `-- canopy`,"),
+        ("CANOPY:", "", "starts with `CANOPY:` outside any quote", "start it with `CANOPY:` and a space,"),
+        ("", "-- canopy", "ends with `-- canopy` outside any quote", "end it with `-- canopy`,"),
         (
             "CANOPY:",
             "(canopy)",
-            "starts with `CANOPY:` and ends with `(canopy)`",
+            "starts with `CANOPY:` and ends with `(canopy)` outside any quote",
             "start it with `CANOPY:` and a space, and end it with `(canopy)`,",
         ),
     ],

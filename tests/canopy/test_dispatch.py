@@ -115,7 +115,7 @@ def test_worker_is_told_the_configured_comment_marks(
     assert main(args, runner=InlineRunner()) == 0
     text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
     assert "start it with `[bot]` and a space, and end it with `Posted by canopy for alice.`" in text
-    assert "a comment that starts with `[bot]` and ends with `Posted by canopy for alice.`" in text
+    assert "a comment that starts with `[bot]` and ends with `Posted by canopy for alice.` outside any quote" in text
     assert "CANOPY:" not in text
 
 
