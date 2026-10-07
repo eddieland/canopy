@@ -167,10 +167,19 @@ operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessio
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
+scripts/         build-binary.sh: the single executable a release ships (D067)
 ```
 
 `prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
 them, and `migrations/`, under `canopy/_data/` (D022).
+
+A release ships the same wheels as one executable per platform (D067): a pex in venv mode, holding canopy,
+canopy-notify-slack, and the dependencies `uv.lock` pins, inside a scie that carries its own Python. Run, it unpacks
+into the operator's cache once, so `resources.py` finds the bundled files as in any install, and `sys.executable` is
+an interpreter that imports canopy, which dispatch, chores, and reviews need to start `_run`, `_chore`, and `_review`
+as `python -m canopy`. One file serves all three commands, chosen by the name it runs under: `canopy`, or a link named
+`canopy-notify-desktop` or `canopy-notify-slack`. `make binary` builds it for the platform it runs on, and the release
+workflow builds it on each platform, runs the install check against each, and attaches them to the tag's release.
 
 Where later work goes:
 

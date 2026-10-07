@@ -43,6 +43,9 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
+- `make binary` builds `dist/canopy`, the single executable a release ships (D067), and
+  `make install-check INSTALL_SOURCE=dist/canopy` checks it. The release workflow runs both on every platform it ships
+  for, on a version tag and on pull requests that touch packaging.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
