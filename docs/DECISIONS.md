@@ -1152,3 +1152,28 @@ Consequences: on GitHub, PRs may lack the `agent` label unless the operator gran
 prompt alone keeps it to labels. The deny list matches names on GitHub's and Atlassian's servers; a server with other
 names for the same actions gets past it, which is why it is defense in depth (TRUST_MODEL T1).
 Revisit: when GitHub's server gains a label-only tool, or when a deny is found not to apply to MCP tools.
+
+## D070. `canopy check`: agents try their tools on made-up targets, and the harness judges what they report
+
+Context: what an agent can do is the operator's runtime config (which MCP servers and tools exist) minus canopy's
+denies by tool name (D069), and tool names differ by server. Nothing showed the result short of a live run on real
+tickets. OpenCode can print an agent's resolved permission rules (`opencode debug agent`) but not its MCP tools, so
+matching rules to tools offline is not possible, and would be OpenCode-specific besides.
+Decision: `canopy check` runs each agent through its own command template with a prompt that lists steps and has it try
+each once with an MCP tool, on targets whose names cannot exist, then report `no_tool`, `refused`, or `reached` per step
+and list its tools. The harness judges the steps against a table in `setup/check.py` of what each agent must, must
+never, or may only by prompt reach, prints a line per step, and exits 1 on any failure. `--ticket` adds a real,
+reversible round trip of `needs_human_label` for the worker.
+Rejected:
+- Classifying tools by name in the harness from the runtime's tool list: no runtime-neutral way to get the list, and
+  name heuristics are what is being checked.
+- Trying forbidden actions on real objects: a tool the agent should not have would change them. Invalid names make a
+  reached call fail at the server.
+- Parsing the runtime's event stream to verify each call, as the M1 canary does: runtime-specific (D009), and the
+  command templates do not ask for it.
+- A pytest canary only: the point is the operator's own runtime config, on the operator's machine.
+Consequences: a check costs a model run per agent. Its verdicts rest on the agent's report; a model can misreport, and
+the log under `<state_dir>/checks/` is the evidence. It says nothing about the shell (TRUST_MODEL T4) or about which
+repositories a token reaches.
+Revisit: if the runtime gains a way to list an agent's tools without a model; when a sandbox lands (HOST_ISOLATION.md),
+to check it the same way.

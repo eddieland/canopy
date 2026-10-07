@@ -45,6 +45,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
 | `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
+| `canopy check [--agent NAME] [--ticket KEY]` | Each agent tries its tools on made-up targets; reports what it reached. |
 | `canopy skill` | Prints this skill. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |
 

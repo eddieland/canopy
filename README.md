@@ -55,9 +55,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    repository has none, and installs nothing else: agent runs load canopy's agent definitions and skills from its own
    directory (D040). Use an HTTPS remote with a credential helper; init warns if `origin` pushes over SSH, which worker
    sandboxing is not expected to support (D038).
-5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
-   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
-   repeats until you press Ctrl-C.
+5. Run `canopy check`: each agent tries its tools on made-up targets, and the check says what it reached that it must
+   not. Then add your label (`agent-ready-<you>` by default) to a ticket, run `canopy loop --dry-run --ticks 1`, and
+   read the plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by
+   default), and repeats until you press Ctrl-C.
 
 ## Daily surface
 
