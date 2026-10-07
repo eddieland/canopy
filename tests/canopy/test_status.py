@@ -34,6 +34,10 @@ def test_status_json_reports_attention_and_running_workers(
 ) -> None:
     del treehouse_state, agent_log  # put the fakes on PATH, as for other CLI tests
     conn = journal(canopy_env)
+    earlier_tick_id = db.start_tick(conn, dry_run=True)
+    conn.execute("UPDATE ticks SET started_at = ? WHERE id = ?", ("2026-10-07T12:00:00.000Z", earlier_tick_id))
+    db.finish_tick(conn, earlier_tick_id, "skipped", "earlier tick")
+
     tick_id = db.start_tick(conn, dry_run=False)
     conn.execute("UPDATE ticks SET started_at = ? WHERE id = ?", ("2026-10-07T12:30:00.000Z", tick_id))
     db.touch_ticket(conn, "PROJ-1", str(canopy_env.repo))
