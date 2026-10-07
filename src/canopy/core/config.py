@@ -50,6 +50,8 @@ PROMPT = "{prompt}"
 DEFINITIONS_DIR = "{definitions_dir}"
 DEFINITIONS_ENV_PREFIX = f"env OPENCODE_CONFIG_DIR={DEFINITIONS_DIR} "
 _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}")
+# A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
+REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
 CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MIN_CHORE_EVERY_MINUTES = 15
@@ -192,6 +194,15 @@ class Trust(Section):
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
 
 
+def _repo_name(value: str) -> str:
+    if not REPO_NAME_RE.fullmatch(value):
+        raise ValueError(f"repository name {value!r} must match {REPO_NAME_RE.pattern}")
+    return value
+
+
+RepoName = Annotated[str, AfterValidator(_repo_name)]
+
+
 class Capacity(Section):
     """The `[capacity]` table."""
 
@@ -201,6 +212,15 @@ class Capacity(Section):
     # Review runs at once, within max_workers, and started in any 24 hours; 0 turns reviews off (DESIGN §21).
     max_reviews: Annotated[Count, Scope.USER] = 1
     max_reviews_per_day: Annotated[Count, Scope.USER] = 20
+    # Slots in each repository's pool, in a workspace: `canopy workspace sync` creates and removes slots to match, and
+    # no lease grows a pool past it. None leaves the pools unmanaged, as treehouse's own `max_trees` has them. Names in
+    # `repo_slots` need not be in this workspace's map: one user file serves every workspace (DESIGN §18).
+    slots_per_repo: Annotated[Count | None, Scope.USER] = None
+    repo_slots: Annotated[dict[RepoName, Count], Scope.USER] = {}
+
+    def slots_for(self, repo: str) -> int | None:
+        """The slots declared for repository `repo`'s pool, or None if its pool is not managed."""
+        return self.repo_slots.get(repo, self.slots_per_repo)
 
 
 class Runtime(Section):

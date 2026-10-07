@@ -1,7 +1,8 @@
 """The treehouse worktree pool, through its CLI (D002).
 
-canopy uses three commands: `status --json`, `get --lease --json`, and `return --force --if-lease-id --if-lease-holder`.
-Lease holders are `canopy:<KEY>`.
+canopy uses `status --json`, `get --lease --json`, and `return --force --if-lease-id --if-lease-holder`, and
+`canopy workspace sync` also uses `destroy --yes` to remove idle slots a pool has beyond its declared size. Lease
+holders are `canopy:<KEY>`; sync's own short leases are `canopy-sync`, which reconcile never returns.
 
 treehouse finds a repository's pool from its working directory. In a workspace, every command runs in the repository's
 primary clone with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot goes, so the pools live
@@ -20,6 +21,10 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictStr, TypeAdap
 from canopy.infra import procs
 
 HOLDER_PREFIX = "canopy:"
+# Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
+# ticket key can name it and reconcile leaves it to the next sync.
+SYNC_HOLDER = "canopy-sync"
+AVAILABLE = "available"
 ROOT_ENV = "TREEHOUSE_ROOT"
 # treehouse's own default layout, pinned: a repository's `treehouse.toml` cannot move a workspace's slots, and `return`
 # finds a slot's pool two levels above it even when the repository's clone is gone.
@@ -103,11 +108,13 @@ class Pool:
 
     `cwd` is a directory in the repository, from which treehouse finds its pool; None is this process's working
     directory. `root` is the workspace root, passed as `TREEHOUSE_ROOT`; None leaves treehouse's own config in charge,
-    as in a workspace of one.
+    as in a workspace of one. `slots` is the pool's declared size (`capacity.slots_for`), which `lease` never grows the
+    pool past. None leaves the size to treehouse's `max_trees`.
     """
 
     cwd: Path | None = None
     root: Path | None = None
+    slots: int | None = None
 
 
 DEFAULT_POOL = Pool()
@@ -146,13 +153,53 @@ def status(runner: procs.Runner, *, pool: Pool = DEFAULT_POOL) -> list[Slot]:
 
 
 def lease(runner: procs.Runner, key: str, *, base: str | None = None, pool: Pool = DEFAULT_POOL) -> Lease:
-    """Lease a slot for ticket `key` from `pool`, optionally based on branch `base`.
+    """Lease a slot for ticket `key` from `pool`, optionally based on branch `base`, within the pool's declared size.
 
     If treehouse leased a slot but its output is not a `Lease`, the slot is returned before the error is raised when
     the output still names it. When it does not, or the return fails, the next tick's reconcile returns it. The error
     says which happened.
+
+    With `pool.slots` set, a pool with that many slots busy is full, and treehouse is not asked: it would make another,
+    or hand out a slot of a pool bigger than declared. treehouse may still make one when the available slots are not
+    reusable (another clone's, say); that slot is returned and destroyed, and the lease refused, so the pool keeps its
+    size (DESIGN §18).
     """
-    args = ["get", "--lease", "--lease-holder", holder_for(key), "--json"]
+    if pool.slots is None:
+        return lease_as(runner, holder_for(key), base=base, pool=pool)
+    before = status(runner, pool=pool)
+    busy = sum(s.status != AVAILABLE for s in before)
+    if busy >= pool.slots:
+        raise TreehouseError(f"{busy} of its slots are busy, and capacity declares {pool.slots} for this pool")
+    leased = lease_as(runner, holder_for(key), base=base, pool=pool)
+    if len(before) < pool.slots or any(s.path == leased.path for s in before):
+        return leased
+    raise TreehouseError(
+        f"no slot of the {len(before)} could be reused, and capacity declares {pool.slots} for this pool; "
+        f"{_undo(runner, leased, pool)}"
+    )
+
+
+def _undo(runner: procs.Runner, leased: Lease, pool: Pool) -> str:
+    """Return and destroy a slot `lease` made past the pool's size, and say how far that got, for the error."""
+    outcome = return_slot(runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool)
+    if outcome is not ReturnOutcome.RETURNED:
+        return f"returning the new slot {leased.path} said {outcome.value}; the next tick's reconcile returns it"
+    kept = destroy(runner, leased.path, pool=pool)
+    if kept is not None:
+        return f"treehouse kept the new slot {leased.path} ({kept}); `canopy workspace sync` removes it once it can"
+    return f"the new slot {leased.path} was removed"
+
+
+def lease_as(
+    runner: procs.Runner, holder: str, *, base: str | None = None, pool: Pool = DEFAULT_POOL, fetch: bool = True
+) -> Lease:
+    """Lease any slot of `pool` for `holder`, making one if none is available, whatever the pool's declared size.
+
+    Without `fetch`, the slot is cut from the clone's existing refs; a later `get` that reuses it fetches.
+    """
+    args = ["get", "--lease", "--lease-holder", holder, "--json"]
+    if not fetch:
+        args.append("--no-fetch")
     if base is not None:
         args += ["--base", base]
     if pool.root is not None:
@@ -198,3 +245,15 @@ def return_slot(
     if result.returncode == 3:  # noqa: PLR2004
         return ReturnOutcome.DIRTY
     raise _fail(result)
+
+
+def destroy(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> str | None:
+    """Remove slot `path` from its pool if treehouse finds it disposable: clean, merged, idle, and unleased.
+
+    Never forced: none of `destroy`'s `--include-*` flags is passed, so treehouse keeps a slot with anything to lose.
+    Returns None when the slot is gone, else what treehouse said about keeping it.
+    """
+    result = _run(runner, ["destroy", "--yes", str(path)], pool)
+    if result.ok:
+        return None
+    return (result.stderr.strip() or result.stdout.strip() or f"exited {result.returncode}")[:500]
