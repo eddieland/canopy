@@ -114,9 +114,12 @@ ticket's one action from all of them: a unit whose PR needs work comes before on
 | `green_unreviewed` | checks pass, no human approval, no new comments | `attention needs_reviewer` |
 | `approved` | approved by a human, not merged; `[bot]` reviews do not count | `attention ready_to_merge` |
 | `merged` | every unit's PR merged, no other repository to change | `canopy ticket set --done`; `decide done` |
-| `needs_human` | needs-human label present, no authorized reply newer than it | `wait` |
-| `human_replied` | authorized replier's comment newer than the needs-human label | `dispatch resume` (below) |
+| `needs_human` | `tracker.needs_human_label` present, no authorized reply newer than it | `wait` |
+| `human_replied` | authorized replier's comment newer than `tracker.needs_human_label` | `dispatch resume` (below) |
 | `split` | a `parent` in `split_children` | `wait`; attention `split_unlabeled`; `done` (see "Splitting") |
+
+The needs-human label is whatever the state block names in `tracker.needs_human_label`; `needs-human` is only the
+default. Never look for a label by its default name.
 
 `[bot]` approvals do not count as approval: a green PR approved only by bots is `green_unreviewed`, not `approved`.
 

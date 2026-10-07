@@ -35,6 +35,15 @@ def test_user_file_wins_over_repository_for_shared_keys(canopy_env: CanopyEnv) -
     assert cfg.trust.pr_label == "mine"
 
 
+def test_needs_human_label_is_set_by_the_repository_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    assert load(canopy_env.repo, canopy_env.user_file).tracker.needs_human_label == "blocked-on-team"
+    canopy_env.write_user(
+        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nneeds_human_label = "ask-me"\n', 1)
+    )
+    assert load(canopy_env.repo, canopy_env.user_file).tracker.needs_human_label == "ask-me"
+
+
 @pytest.mark.parametrize(
     "section_key",
     [
