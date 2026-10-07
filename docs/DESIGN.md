@@ -315,8 +315,7 @@ per tick. The JSON log gains `loop started` and `loop stopped` lines, with no ti
 Phases are derived by the overseer each tick from live state. They are recorded
 in `tickets.phase` for the status view, never read back as truth. The phases about a PR, `pushed_no_pr` to `merged`,
 are a unit's (§18), recorded in `ticket_units.phase`: `canopy ticket set` needs `--repo` for one in a workspace of
-several, and implies the repository in a workspace of one. Migration 0005 moved such a phase from the ticket to its
-unit.
+several, and implies the repository in a workspace of one.
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -535,44 +534,46 @@ Rationale in D045 and D054.
 
 ## 11. State model
 
-Schema in `migrations/0001_init.sql`. Tables and purpose:
+Schema in `migrations/0001_init.sql`, which holds the whole schema as of v0.1: the migrations before it were squashed
+into it, and a journal that applied them is not upgraded (D068). Each later change is a new migration. Tables and
+purpose:
 
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `skipped`,
   `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick and its decisions,
-  the latest tick by default: the way to read a dry run's plan. A tick that cannot take the lock writes no row,
-  although the schema comment lists `lock_busy`.
+  the latest tick by default: the way to read a dry run's plan. A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), done flag. Cursors make ticks
   incremental. Attempt counts and the fix-ci cooldown are not stored; they are derived from `runs` and `run_slots`
-  (D030, migration 0003).
-- `ticket_units`: one row per unit, a ticket's work in one repository (§18, migration 0005); ticket, repository,
+  (D030).
+- `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository,
   branch, PR URL, the unit's phase, and its cursors (`last_review_id`, `last_ci_run_id`).
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
-  _run`, pid of the worker agent (`worker_pid`, migration 0002), status, result_json. Status is `running`, `done`,
+  _run`, pid of the worker agent (`worker_pid`), status, result_json. Status is `running`, `done`,
   `blocked`, `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for
   capacity, crash detection, attempt counts, and the fix-ci cooldown.
-- `run_slots`: one row per slot a run leased (migration 0005); the repository whose pool it came from, slot path,
+- `run_slots`: one row per slot a run leased; the repository whose pool it came from, slot path,
   lease id and holder, and the base branch the run started from there. A joint run has one per repository.
-- `review_runs`: one row per review run (migration 0009); the PR's URL, the commit, the ticket of an agent PR, the
+- `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the
   repository and slot, pids, times, status, the validated result (§21). `decisions.pr` names the PR of a decision
   about a review.
-- `split_children`: one row per ticket a split created (migration 0006); its parent, the repository it covers, and the
+- `split_children`: one row per ticket a split created; its parent, the repository it covers, and the
   split run. Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
-  repository or a ticket's unit, that repository (`repo`, migration 0004). Audit log and prompt-evaluation corpus.
-- `chore_runs`: one row per chore run (migration 0007); the chore, pids of `_chore` and its agent, times, status, the
+  repository or a ticket's unit, that repository (`repo`). Audit log and prompt-evaluation corpus.
+- `chore_runs`: one row per chore run; the chore, pids of `_chore` and its agent, times, status, the
   validated result (§19). `decisions.chore` names the chore of a decision about one, which has no ticket key.
 - `notifications`: one row per notification sink and attention item it was told about that is still open, keyed by the
   sink and a fingerprint of its ticket, reason, and repository if it has one, so an open item is notified once per
-  sink (§14, §20; the `sink` column is migration 0008).
-- `notify_events`: the outbox of point events for sinks (migration 0008), and `notify_sinks`: each sink's cursor, last
+  sink (§14, §20).
+- `notify_events`: the outbox of point events for sinks, and `notify_sinks`: each sink's cursor, last
   delivery, last digest, and failures in a row (§20).
 
 Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
 
-A `repo` in `ticket_units` or `run_slots` is null only on rows migration 0005 carried over from runs made before
-workspaces, in a workspace of one. Its one unit is renamed to the repository's current name the next time canopy
-writes it, and every lookup in a workspace of one ignores the name, so renaming the checkout never strands a ticket.
+In a workspace of one, the ticket's one unit is renamed to the repository's current name the next time canopy writes
+it, and every lookup ignores the name, so renaming the checkout never strands a ticket (D052). `repo` in
+`ticket_units` and `run_slots` is nullable, a remnant of journals from before workspaces; canopy never writes null
+there.
 
 ## 12. Configuration
 
@@ -1215,9 +1216,8 @@ authorize any ticket (TRUST_MODEL T1).
 
 - `ticket_units`: ticket key, repository, branch, PR URL, phase, `last_review_id`, `last_ci_run_id`. `tickets.phase`
   is the ticket's own; the state block shows it and each unit's.
-- `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. Migration 0005 moved every run's
-  slot here and dropped the slot columns of `runs`.
-- `split_children` (migration 0006): child key, parent key, repository, split run id. Written only by `_run` from a
+- `run_slots`: run id, repository, slot path, lease id, lease holder, base branch. `runs` has no slot columns.
+- `split_children`: child key, parent key, repository, split run id. Written only by `_run` from a
   validated split result.
 - `tickets.repo` holds the workspace root.
 - Attention items carry an optional repository, and an item is identified by ticket, repository, and reason, so two
@@ -1529,10 +1529,9 @@ chore run (`_chore`, its reconcile), and the publish step for `loop.*`. Its ids 
 pruning never lets a new event take an id a cursor already passed. Each sink has a cursor in `notify_sinks`, the last
 event id it delivered. `loop.failing` and `loop.sink_failing` are recorded once per streak.
 
-The migration gives every existing `notifications` row the sink `default`, the name `notify.cmd` becomes, and keeps its
-fingerprint, so an operator who upgrades with `notify.cmd` set is not told again about items already notified. If the
-config has no `default` sink, those rows go at the first publish like any removed sink's (Delivery, below), and each
-named sink hears about every open item once, as a new sink does.
+`notify.cmd` is the sink named `default`, so switching between the two notifies nothing again. If the config has no
+`default` sink, its rows go at the first publish like any removed sink's (Delivery, below), and each named sink hears
+about every open item once, as a new sink does.
 
 ### Delivery
 

@@ -1103,3 +1103,21 @@ Rejected:
 Revisit: if a platform needs an older glibc than its wheels allow (pin pex's target with `--complete-platform`); if
 the machine that runs canopy should fetch releases itself (then a read-only credential, or a store it already uses);
 with D046, before any public release.
+
+## D068. The migrations are squashed into one for v0.1, and older journals are not upgraded
+
+Context: nine migrations had built the schema, two of them (0005, 0008) moving data between shapes the code no longer
+reads. Every fresh journal replayed all nine, and the docs explained columns by the migration that added them. No
+journal outside development needs to survive the upgrade.
+Decision: `migrations/0001_init.sql` creates the schema as of v0.1 directly; 0002 to 0009 are gone. The schema is the
+same as the nine produced, column for column and index for index, so the code is unchanged. A journal that applied the
+old series fails to open with the `MigrationError` for migrations this canopy does not know, and the operator moves
+`<state_dir>/canopy.db` aside to start a fresh one. After this, the rule holds again: never edit a shipped migration.
+Rejected:
+- Adopting a journal at exactly the old 1 to 9 by rewriting its `schema_migrations`: code kept only to carry
+  development journals across one release.
+- Refusing old journals with an error of their own: the generic one already names the cause.
+Consequences: a journal from before v0.1 loses its attempts, cursors, and notified items when moved aside; the world
+facts are re-read from their sources. `repo` in `ticket_units` and `run_slots` stays nullable, as the old series left
+it, though canopy never writes null there; tightening it is a migration of its own.
+Revisit: never for v0.1; a later squash needs its own decision and a plan for the journals then in use.

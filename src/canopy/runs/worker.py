@@ -222,7 +222,7 @@ class _Slot:
 
     @classmethod
     def of(cls, ctx: Context, row: sqlite3.Row) -> _Slot:
-        # A run from before migration 0005 in a workspace of one has no repository name; it is the only repository.
+        # A slot without a repository name can only be in a workspace of one, whose only repository it is.
         repo = str(row["repo"]) if row["repo"] is not None else ctx.workspace.repos[0].name
         path = Path(row["slot_path"])
         # A workspace of one's only repository goes unnamed in errors, as before workspaces.

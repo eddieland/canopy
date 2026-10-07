@@ -26,7 +26,7 @@ TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 # The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
-# others are the ticket's own. Migration 0005 lists them too.
+# others are the ticket's own.
 UNIT_PHASES = frozenset(
     (
         "pushed_no_pr",
