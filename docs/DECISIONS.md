@@ -994,3 +994,19 @@ Rejected:
 - A split per unit: a split is the ticket's and makes the units' work into other tickets.
 Revisit: if splits are judged on code the splitter could not read; when a runtime can restrict a create tool's
 arguments (then forbid labels on create in the definition).
+
+## D063. A chore names the workspaces it runs in; by default it runs in every one
+
+Context: chores come from the user file, which every loop the operator runs reads, and each workspace has its own
+journal (D033). A chore therefore ran in every workspace, each with its own `every_minutes` guard, so a build-health
+chore for one CI system would run once per workspace. DESIGN §19 left open whether to scope chores by a list per chore
+or a table per workspace.
+Decision: a chore may set `workspaces`, a list of workspace names (a map's `[workspace] name`, or a workspace of one's
+repository name). It runs only in those; with none it runs in every workspace, as before. A chore not configured for a
+workspace is invisible there: no state block entry, `unknown_chore` on `canopy chore run`, nothing on the attention list.
+Rejected:
+- A `[workspaces.<name>.chores.<chore>]` table per workspace: every chore written once per workspace, and the user file
+  learns a second layout for one key.
+- A global journal of chore runs shared by workspaces: the journal is per workspace (D053), and a second one would need
+  its own locks and migrations.
+Revisit: if operators keep many chores that differ by workspace (then a table per workspace).

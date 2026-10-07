@@ -14,12 +14,10 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import sqlite3
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from types import FrameType, TracebackType
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
@@ -27,7 +25,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, Validatio
 from canopy.core import db, definitions, treehouse
 from canopy.core.config import render_command
 from canopy.core.workspace import DESKS_DIR
-from canopy.infra import logs, procs
+from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, policy
 
 if TYPE_CHECKING:
@@ -47,15 +45,6 @@ class WorkerError(Exception):
 
 class _SetupError(Exception):
     """A git step before or after the worker failed."""
-
-
-class Stopped(BaseException):
-    """This process got a signal asking it to stop. A BaseException, so only the cleanup code catches it."""
-
-    def __init__(self, signum: int) -> None:
-        """Record which signal."""
-        super().__init__(f"stopped by signal {signal.Signals(signum).name}")
-        self.signum = signum
 
 
 def _bounded(value: str) -> str:
@@ -190,13 +179,13 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     log.info("run started", extra={**fields, **where, "branch": run["branch"]})
 
     outcome = Outcome("crashed", None, "the run stopped before the worker finished")
-    with _StopOnSignal() as stop:
+    with stopping.StopOnSignal() as stop:
         try:
             if not slots:
                 raise _SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             work = _split if run["kind"] == policy.SPLIT else _work
             outcome = work(ctx, run, slots, out, log)
-        except Stopped as e:
+        except stopping.Stopped as e:
             outcome = Outcome("crashed", None, str(e))
         except (_SetupError, desks.DeskError) as e:
             outcome = Outcome("crashed", None, str(e))
@@ -424,32 +413,6 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
 
 def _plain_url(value: str) -> bool:
     return value.startswith("https://") and len(value) <= 500 and not any(c.isspace() for c in value)  # noqa: PLR2004
-
-
-class _StopOnSignal:
-    """While armed, SIGTERM, SIGHUP, and SIGINT raise `Stopped`, so cleanup runs. Disarmed, they are ignored."""
-
-    SIGNALS = (signal.SIGTERM, signal.SIGHUP, signal.SIGINT)
-
-    def __init__(self) -> None:
-        self.armed = True
-        self._previous: dict[signal.Signals, Callable[[int, FrameType | None], object] | int | None] = {}
-
-    def _handle(self, signum: int, frame: FrameType | None) -> None:  # noqa: ARG002
-        if self.armed:
-            self.armed = False
-            raise Stopped(signum)
-
-    def __enter__(self) -> Self:
-        for s in self.SIGNALS:
-            self._previous[s] = signal.signal(s, self._handle)
-        return self
-
-    def __exit__(
-        self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None
-    ) -> None:
-        for s, handler in self._previous.items():
-            signal.signal(s, handler)
 
 
 class _Git:

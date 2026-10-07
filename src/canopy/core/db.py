@@ -138,13 +138,18 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
 
     A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
     """
-    has_runs = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'runs'").fetchone()
-    if not has_runs:
-        return
-    rows = conn.execute("SELECT id, pid FROM runs WHERE status = 'running' AND pid IS NOT NULL ORDER BY id")
-    live = [int(r["id"]) for r in rows if procs.alive(int(r["pid"]))]
+    live: list[str] = []
+    # Every table of detached runs: each process writes its own row when it ends.
+    for table, what in (("runs", "run"), ("chore_runs", "chore run")):
+        exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
+        if not exists:
+            continue
+        # The table name comes from the fixed list above, never from input.
+        sql = f"SELECT id, pid FROM {table} WHERE status = 'running' AND pid IS NOT NULL ORDER BY id"  # noqa: S608
+        rows = conn.execute(sql)
+        live += [f"{what} {r['id']}" for r in rows if procs.alive(int(r["pid"]))]
     if live:
-        runs = f"run {live[0]} is" if len(live) == 1 else f"runs {', '.join(str(i) for i in live)} are"
+        runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(
             f"this canopy changes the journal, but {runs} still working for the canopy before it and would fail "
             "writing the old journal. Run canopy again once they finish."
@@ -410,14 +415,83 @@ def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
 
 
 def record_decision(
-    conn: sqlite3.Connection, tick_id: int, key: str | None, action: str, rationale: str, *, repo: str | None = None
+    conn: sqlite3.Connection,
+    tick_id: int,
+    key: str | None,
+    action: str,
+    rationale: str,
+    *,
+    repo: str | None = None,
+    chore: str | None = None,
 ) -> int:
-    """Insert a decision for `tick_id` and return its id. `repo` is set for an item about a repository."""
+    """Insert a decision for `tick_id` and return its id.
+
+    `repo` is set for an item about a repository, and `chore` for a decision about a chore, which has no ticket key.
+    """
     cur = conn.execute(
-        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, repo) VALUES (?, ?, ?, ?, ?)",
-        (tick_id, key, action, rationale, repo),
+        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, repo, chore) VALUES (?, ?, ?, ?, ?, ?)",
+        (tick_id, key, action, rationale, repo, chore),
     )
     return _rowid(cur)
+
+
+# Chore runs (DESIGN §19)
+
+
+def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int, chore: str, logs_dir: Path) -> int:
+    """Insert a `running` chore run with no pid yet, logging to `<logs_dir>/<id>.log`, and return its id."""
+    with transaction(conn):
+        cur = conn.execute(
+            "INSERT INTO chore_runs (tick_id, chore, started_at, log_path) VALUES (?, ?, ?, '')",
+            (tick_id, chore, now()),
+        )
+        run_id = _rowid(cur)
+        conn.execute("UPDATE chore_runs SET log_path = ? WHERE id = ?", (str(logs_dir / f"{run_id}.log"), run_id))
+    return run_id
+
+
+def get_chore_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+    """Return the chore run with `run_id`, or None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
+    return row
+
+
+def claim_chore_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
+    """Record `pid` as the process working a running chore run; only the first process to claim it gets it."""
+    cur = conn.execute(
+        "UPDATE chore_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
+        (pid, run_id, pid),
+    )
+    return cur.rowcount == 1
+
+
+def set_chore_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
+    """Record the pid, and so the process group, of a chore run's agent."""
+    conn.execute("UPDATE chore_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
+
+
+def finish_chore_run(conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None) -> bool:
+    """Close a running chore run. Returns False if it was already closed, which leaves it as it was."""
+    cur = conn.execute(
+        "UPDATE chore_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
+        (now(), status, result_json, run_id),
+    )
+    return cur.rowcount == 1
+
+
+def running_chore_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return chore runs with status `running`, oldest first."""
+    return conn.execute("SELECT * FROM chore_runs WHERE status = 'running' ORDER BY started_at").fetchall()
+
+
+def chore_runs(
+    conn: sqlite3.Connection, chore: str, limit: int = 1000, *, before: int | None = None
+) -> list[sqlite3.Row]:
+    """Return `chore`'s runs, newest first: at most `limit`, and only those before run id `before` if it is given."""
+    return conn.execute(
+        "SELECT * FROM chore_runs WHERE chore = ? AND id < ? ORDER BY id DESC LIMIT ?",
+        (chore, before if before is not None else 2**63 - 1, limit),
+    ).fetchall()
 
 
 # Split children

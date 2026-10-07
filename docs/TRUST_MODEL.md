@@ -80,6 +80,10 @@ Controls:
   depth: a tracker whose create tool also takes labels passes that check. The harness records each child's repository
   from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
 
+- Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
+  findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
+  inform only when the chore runs again, never what is done about a ticket.
+
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
 risk with an interactive agent. canopy acts as the operator, so the tracker can say when a split child's label was added
@@ -107,6 +111,8 @@ Controls in code, not prompts:
 - One running worker per ticket.
 - Workers push once and exit. They do not poll CI or retry.
 - A tick that cannot acquire the lock exits immediately.
+- Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
+  `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 
 ### T4. Damage to the operator's machine
 
@@ -159,15 +165,19 @@ Controls:
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
+- A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
+  tools, and denies MCP write tools by name.
 Residual: real. Sandboxing and egress controls are the eventual answer;
-until then this risk is accepted and documented.
+until then this risk is accepted and documented. A chore steered by what it read can put up to 20 findings of its
+choosing in front of the operator and into `notify.cmd`, wherever that sends them, and a finding's link can carry data
+in its URL.
 
 ### T7. Hostile repository config
 
 The repository's `canopy.toml` is read on every tick, from whatever the operator's checkout contains. Anyone who can
 push to the repository can change it, and a checkout of someone else's unreviewed branch carries their version. Unlike
 build scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent
-starts. If it could set the runtime commands, `notify.cmd`, prompt paths, capacity, queue labels, or authorized
+starts. If it could set the runtime commands, `notify.cmd`, chores, prompt paths, capacity, queue labels, or authorized
 repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who steers
 their workers.
 
@@ -240,7 +250,9 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
-- Take runtime or notify commands, prompt paths, capacity, queue labels, or authorized repliers from the repository.
+- Take runtime or notify commands, chores, prompt paths, capacity, queue labels, or authorized repliers from the
+  repository.
+- Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
 - Listen on a wildcard or public address, or accept a connection without the operator's listener secret (T8).
 
 ## 7. Operator responsibilities
@@ -255,5 +267,7 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
+- If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
+  assume chore tools only read.
 - Keep the listener secret file private, and bind a listener to a private-network address only on a network whose
   members may see the operator's tickets and code (T8). Label only PRs you are willing to have a worker push to.

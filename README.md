@@ -58,6 +58,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. Set `notify.cmd` to have changes piped to a
   command of your own.
 - Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
+  overseer runs when due and that report findings to the attention list (DESIGN §19).
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.

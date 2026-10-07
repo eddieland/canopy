@@ -40,6 +40,9 @@ PROMPT = "{prompt}"
 DEFINITIONS_DIR = "{definitions_dir}"
 DEFINITIONS_ENV_PREFIX = f"env OPENCODE_CONFIG_DIR={DEFINITIONS_DIR} "
 _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}")
+# A chore's name appears in file paths and on the command line (DESIGN §19).
+CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+MIN_CHORE_EVERY_MINUTES = 15
 
 
 class ConfigError(Exception):
@@ -181,6 +184,8 @@ class Capacity(Section):
     """The `[capacity]` table."""
 
     max_workers: Annotated[Count, Scope.USER] = 2
+    # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
+    max_chores: Annotated[Count, Scope.USER] = 1
 
 
 class Runtime(Section):
@@ -195,6 +200,10 @@ class Runtime(Section):
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
     split_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}"
+    )
+    # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
+    chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
     )
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
@@ -221,6 +230,29 @@ class Notify(Section):
     cmd: Annotated[NotifyCommand, Scope.USER] = ""
 
 
+def _chore_name(value: str) -> str:
+    if not CHORE_NAME_RE.fullmatch(value):
+        raise ValueError(f"chore name {value!r} must match {CHORE_NAME_RE.pattern}")
+    return value
+
+
+class Chore(Section):
+    """One `[chores.<name>]` table: recurring work the operator defines and the overseer delegates (DESIGN §19)."""
+
+    prompt: UserPath
+    # Its own template need not name canopy's definitions: a chore that runs the operator's tools has its own agent.
+    cmd: CommandTemplate | None = None
+    every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
+    when: StrictStr = ""
+    timeout_minutes: Minutes = 15
+    cwd: UserPath | None = None
+    # The workspaces it runs in, by name; empty means every workspace whose loop reads this file (D063).
+    workspaces: tuple[NonBlank, ...] = ()
+
+
+ChoreName = Annotated[str, AfterValidator(_chore_name)]
+
+
 class Config(Section):
     """The merged, validated configuration."""
 
@@ -232,6 +264,8 @@ class Config(Section):
     loop: Loop
     paths: Paths
     notify: Notify
+    # Tables of tables, keyed by name; user-only as a whole (TABLE_SECTIONS).
+    chores: Annotated[dict[ChoreName, Chore], Scope.USER] = {}
 
 
 SECTIONS: dict[str, type[Section]] = {
@@ -256,19 +290,22 @@ class KeySpec:
     field: FieldInfo
 
 
-def _spec(section: str, key: str, field: FieldInfo) -> KeySpec:
+def _spec(name: str, field: FieldInfo) -> KeySpec:
     scopes = [m for m in field.metadata if isinstance(m, Scope)]
     tightens = [m for m in field.metadata if isinstance(m, Tighten)]
     if len(scopes) != 1:
-        raise TypeError(f"{section}.{key} must declare exactly one Scope")
-    return KeySpec(f"{section}.{key}", scopes[0], tightens[0] if tightens else None, field)
+        raise TypeError(f"{name} must declare exactly one Scope")
+    return KeySpec(name, scopes[0], tightens[0] if tightens else None, field)
 
 
 SPECS: dict[str, KeySpec] = {
-    f"{section}.{key}": _spec(section, key, field)
+    f"{section}.{key}": _spec(f"{section}.{key}", field)
     for section, model in SECTIONS.items()
     for key, field in model.model_fields.items()
 }
+# Sections whose tables are named by the operator, such as `[chores.build-health]`: one key each, the whole section.
+TABLE_SECTIONS = ("chores",)
+SPECS.update({name: _spec(name, Config.model_fields[name]) for name in TABLE_SECTIONS})
 
 
 def user_config_dir() -> Path:
@@ -313,16 +350,7 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
         raise ConfigError(f"no user config at {user_file}; run `canopy init`")
     user_values = _read(user_file)
 
-    merged: dict[str, dict[str, object]] = {section: {} for section in SECTIONS}
-    origin: dict[str, Path] = {}
-    for source, values in ((repo_file, repo_values), (user_file, user_values)):
-        for name, value in values.items():
-            spec = SPECS[name]
-            if source == repo_file and spec.tighten is not None and not _stricter(spec, value):
-                continue
-            section, key = name.split(".", 1)
-            merged[section][key] = value
-            origin[name] = source
+    merged, origin = _merge(((repo_file, repo_values), (user_file, user_values)), repo_file)
     # Unset or empty: `prompts/` next to the user file.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
@@ -334,6 +362,27 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
         return Config.model_validate(merged)
     except ValidationError as e:
         raise ConfigError(_describe(e, origin, repo_file, user_file)) from e
+
+
+def _merge(
+    layers: tuple[tuple[Path, dict[str, object]], ...], repo_file: Path
+) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
+    """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file."""
+    merged: dict[str, dict[str, object]] = {section: {} for section in (*SECTIONS, *TABLE_SECTIONS)}
+    origin: dict[str, Path] = {}
+    for source, values in layers:
+        for name, value in values.items():
+            spec = SPECS[name]
+            if source == repo_file and spec.tighten is not None and not _stricter(spec, value):
+                continue
+            origin[name] = source
+            if isinstance(value, dict) and name in TABLE_SECTIONS:
+                # A table of tables, such as every `[chores.<name>]`: the user file's replaces any other whole.
+                merged[name] = {str(k): v for k, v in value.items()}
+                continue
+            section, key = name.split(".", 1)
+            merged[section][key] = value
+    return merged, origin
 
 
 def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
@@ -352,6 +401,9 @@ def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
             continue
         if not isinstance(table, dict):
             raise ConfigError(f"{path}: unknown key {section}")
+        if section in TABLE_SECTIONS:
+            values[section] = table
+            continue
         for key, raw in table.items():
             name = f"{section}.{key}"
             if name not in SPECS:
@@ -380,7 +432,13 @@ def _stricter(spec: KeySpec, value: object) -> bool:
 def _describe(error: ValidationError, origin: dict[str, Path], repo_file: Path, user_file: Path) -> str:
     lines: list[str] = []
     for e in error.errors():
-        loc = [str(p) for p in e["loc"]]
+        loc = [str(p) for p in e["loc"] if p != "[key]"]
+        if loc[0] in TABLE_SECTIONS:
+            # A named table's errors are about one of its keys: `chores.build-health.every_minutes`.
+            source = origin.get(loc[0])
+            prefix = f"{source}: " if source is not None else ""
+            lines.append(f"{prefix}{'.'.join(loc[:3])}{''.join(f'[{p}]' for p in loc[3:])}: {e['msg']}")
+            continue
         name = ".".join(loc[:2])
         where = name + "".join(f"[{p}]" for p in loc[2:])
         if e["type"] == "missing":
