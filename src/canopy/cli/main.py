@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 import click
 
-from canopy.cli import chores, journal, loop, runs, setup, workspace
+from canopy.cli import chores, journal, loop, notify, runs, setup, workspace
 from canopy.cli.common import Obj
 from canopy.core import config, db
 from canopy.infra import procs
@@ -63,5 +63,6 @@ for command in (
     workspace.workspace_group,
     chores.chore_group,
     chores.cmd_chore_process,
+    notify.notify_group,
 ):
     cli.add_command(command)

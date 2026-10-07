@@ -34,7 +34,7 @@ where OpenCode already looks (§13). Worktree setup is treehouse's own hooks and
 still ask the operator to keep code or text of their own in step with canopy:
 
 - A notification destination other than the shipped ones is "a small program of the operator's" (§20). The desktop
-  destination the operator wants first (N2) must therefore ship with canopy.
+  and Slack destinations the operator wants (N2) ship with canopy (M10).
 - Prompt overrides (§12) are copies the operator maintains, and an override must keep what canopy's guards rely on
   (D051). Prefer a skill; treat an override as a last resort.
 
@@ -148,9 +148,9 @@ Gaps:
 
 - **N1. Local web UI on localhost.** Deferred, and allowed under TRUST_MODEL T8 (C2, D055). OpenCode's own
   attach (M15) covers sessions first.
-- **N2. Notifications when something needs the operator, desktop first, Slack later.** Planned in M10, which ships a
-  desktop sink before the Slack sink. `notify.cmd` can reach the desktop today only through a wrapper script of the
-  operator's (`notify-send` takes arguments, not stdin), which H2 rules out.
+- **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
+  pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
+  D064). No wrapper script of the operator's is needed.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
   request: an authorized replier's comment asks for the split (D061). The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).

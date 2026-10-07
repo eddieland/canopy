@@ -1,0 +1,19 @@
+[project]
+name = "canopy-notify-slack"
+version = "0.0.1"
+description = "canopy's Slack notification sink: posts each message it reads on stdin to a Slack incoming webhook."
+license = "LicenseRef-Proprietary"
+classifiers = ["Private :: Do Not Upload"]
+requires-python = ">=3.12"
+# Stdlib only, and nothing from canopy: it runs as its own process, as a sink command (DESIGN §20, D041).
+dependencies = []
+
+[project.scripts]
+canopy-notify-slack = "canopy_notify_slack:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/canopy_notify_slack"]

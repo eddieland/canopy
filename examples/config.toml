@@ -41,9 +41,18 @@ prompt_overrides = "~/.config/canopy/prompts"
 state_dir = "~/.canopy"
 
 [notify]
-# Optional. Receives the attention-list diff on stdin after each tick.
-# Example: a two-line script that posts to a Slack webhook.
+# Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.
 cmd = ""
+
+# Optional notification sinks (DESIGN §20): each a command that reads one message on stdin, at most 5.
+# [notify.sinks.desktop]
+# cmd = "canopy-notify-desktop"
+# events = ["attention", "loop", "runs"]        # attention | loop | runs | chores
+#
+# [notify.sinks.slack]
+# cmd = "canopy-notify-slack"                   # reads its webhook from ~/.config/canopy/slack-webhook, mode 600
+# events = ["attention", "loop", "runs"]
+# digest_every_minutes = 240
 
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.

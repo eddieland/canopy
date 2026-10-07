@@ -55,8 +55,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket.
 - Review PRs. Humans approve and merge; the agent never does.
-- Read the attention list: `canopy status`, or `~/.canopy/attention.md`. Set `notify.cmd` to have changes piped to a
-  command of your own.
+- Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
+  sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
+  channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
 - Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
   overseer runs when due and that report findings to the attention list (DESIGN §19).

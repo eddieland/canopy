@@ -1010,3 +1010,19 @@ Rejected:
 - A global journal of chore runs shared by workspaces: the journal is per workspace (D053), and a second one would need
   its own locks and migrations.
 Revisit: if operators keep many chores that differ by workspace (then a table per workspace).
+
+## D064. The desktop sink ships inside canopy as a script; the Slack sink stays its own distribution
+
+Context: the operator wants desktop notifications before Slack (REQUIREMENTS N2), and a wrapper script of their own
+is a custom layer H2 rules out. D035 and D041 made the Slack sink a separate distribution so that the harness never
+holds a secret or opens a connection.
+Decision (DESIGN §20): `canopy-notify-desktop` is a module of canopy (`canopy.notify.desktop`) with a console script in
+canopy's own install. It runs only as a configured sink command, like any other, and passes the title and body to
+`notify-send` or `osascript` as arguments. The Slack sink stays a uv workspace member, `canopy-notify-slack`, whose
+script canopy's install also provides.
+Rejected:
+- A second workspace member for the desktop sink: it holds no secret and needs no network, which are the reasons the
+  Slack sink is separate; a distribution of its own would add packaging for nothing.
+- `notify.cmd` pointed at `notify-send`: it takes arguments, not stdin, so it needs a wrapper of the operator's.
+Consequences: one `uv tool install` puts `canopy`, `canopy-notify-desktop`, and `canopy-notify-slack` on `PATH`.
+Revisit: if a desktop sink needs a dependency the harness should not carry (then a workspace member like Slack's).

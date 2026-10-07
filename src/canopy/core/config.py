@@ -24,7 +24,16 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -223,11 +232,67 @@ class Paths(Section):
     state_dir: Annotated[UserPath, Scope.USER] = Path("~/.canopy")
 
 
+# A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
+SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+MAX_SINKS = 5
+# The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
+EVENT_GROUPS = ("attention", "loop", "runs", "chores")
+EventGroup = Literal["attention", "loop", "runs", "chores"]
+# The sink `notify.cmd` stands for.
+DEFAULT_SINK = "default"
+MIN_DIGEST_MINUTES = 60
+
+
+def _sink_name(value: str) -> str:
+    if not SINK_NAME_RE.fullmatch(value):
+        raise ValueError(f"sink name {value!r} must match {SINK_NAME_RE.pattern}")
+    return value
+
+
+def _sink_command(value: str) -> str:
+    if not notify_words(value):
+        raise ValueError("must not be empty")
+    return value
+
+
+class Sink(Section):
+    """One `[notify.sinks.<name>]` table: a command that reads one message on stdin (DESIGN §20)."""
+
+    cmd: Annotated[StrictStr, AfterValidator(_notify_command), AfterValidator(_sink_command)]
+    format: Literal["json", "text"] = "json"
+    events: tuple[EventGroup, ...] = ("attention", "loop")
+    digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+
+
+SinkName = Annotated[str, AfterValidator(_sink_name)]
+
+
 class Notify(Section):
     """The `[notify]` table."""
 
-    # Receives the attention diff on stdin. Split into argv like the runtime templates, with no `{prompt}`.
+    # Receives the attention diff on stdin. Split into argv like the runtime templates, with no `{prompt}`. Shorthand
+    # for a sink named `default` that takes the attention list as text (DESIGN §20).
     cmd: Annotated[NotifyCommand, Scope.USER] = ""
+    sinks: Annotated[dict[SinkName, Sink], Scope.USER] = {}
+
+    @model_validator(mode="after")
+    def _one_default(self) -> Notify:
+        if self.cmd and DEFAULT_SINK in self.sinks:
+            raise ValueError(f"set notify.cmd or [notify.sinks.{DEFAULT_SINK}], not both: notify.cmd is that sink")
+        if len(self.all_sinks()) > MAX_SINKS:
+            raise ValueError(f"at most {MAX_SINKS} sinks, counting notify.cmd: each can hold the tick lock 60 seconds")
+        return self
+
+    def all_sinks(self) -> dict[str, Sink]:
+        """Every sink by name, in name order, `notify.cmd` included as `default`."""
+        found = dict(self.sinks)
+        if self.cmd:
+            found[DEFAULT_SINK] = Sink(cmd=self.cmd, format="text", events=("attention",))
+        return dict(sorted(found.items()))
+
+    def takes(self, group: str) -> bool:
+        """Whether any sink takes `group`: events of a group no sink takes are not recorded."""
+        return any(group in sink.events for sink in self.all_sinks().values())
 
 
 def _chore_name(value: str) -> str:

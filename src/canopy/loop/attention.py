@@ -9,14 +9,12 @@ A chore's open findings are on the list too, from its latest `ok` run, and a cho
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
 ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed (`listed`).
 
-After every tick, `publish` rewrites `<state_dir>/attention.md` and, when `notify.cmd` is set, pipes it what changed
-since the last notification. The `notifications` table holds the items already notified that are still open, so an
-open item is notified once however many ticks it lasts.
+After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the list to the notification sinks
+(`canopy.notify`), each told about each open item once however many ticks it lasts (DESIGN §20).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
@@ -25,12 +23,11 @@ from typing import TYPE_CHECKING
 
 from canopy.chores import view as chore_view
 from canopy.core import db
-from canopy.core.config import notify_words
-from canopy.infra import logs, procs
+from canopy.core.items import Item, age, fingerprint, one_line, subject
+from canopy.infra import logs
+from canopy.notify import deliver
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from canopy.core.context import Context
 
 ACTION_PREFIX = "attention:"
@@ -48,35 +45,8 @@ RUN_REASONS = {
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
 FILE_NAME = "attention.md"
-NOTIFY_TIMEOUT_SECONDS = 60
-
-
-@dataclass(frozen=True)
-class Item:
-    """One attention item: a ticket or a repository, why it needs a human, and since when.
-
-    An item about a repository, such as `repo_missing`, has `repo` set and no ticket key. An item about a chore has
-    `chore:<name>` as its ticket key; a chore's finding has the finding's id as its reason and `finding` set.
-    """
-
-    ticket_key: str | None
-    reason: str
-    detail: str
-    since: str  # created_at of the first tick in the unbroken run of ticks that recorded this item
-    repo: str | None = None
-    finding: bool = False
-
-    @property
-    def subject(self) -> str:
-        """What the item is about, for display: `PROJ-1`, `api`, or `PROJ-1 (api)`."""
-        return subject(self.ticket_key, self.repo)
-
-
-def subject(ticket_key: str | None, repo: str | None) -> str:
-    """Name an item's ticket, its repository, or both, for display."""
-    if ticket_key is None:
-        return repo or "-"
-    return f"{ticket_key} ({repo})" if repo else ticket_key
+# Kept importable from here: tests and the CLI name items through this module.
+__all__ = ["ACTION_PREFIX", "CHORE_PREFIX", "FILE_NAME", "Item", "age", "current", "fingerprint", "listed", "subject"]
 
 
 def decided_about(decision: sqlite3.Row) -> str:
@@ -202,19 +172,6 @@ def _detail(run: sqlite3.Row) -> str:
     return f"{text}; log {run['log_path']}"[:2000]
 
 
-def age(timestamp: str, now: datetime | None = None) -> str:
-    """Return how long ago `timestamp` was, in its largest whole unit: `3d`, `2h`, `5m`, `40s`."""
-    seconds = max(0, int(((now or datetime.now(UTC)) - db.parse_time(timestamp)).total_seconds()))
-    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
-        if seconds >= size:
-            return f"{seconds // size}{unit}"
-    return f"{seconds}s"
-
-
-def _one_line(text: str) -> str:
-    return " ".join(text.split())
-
-
 def render(items: list[Item], now: datetime) -> str:
     """Return `attention.md`: the items grouped by reason, one line each with key, age, and detail."""
     stamp = now.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -227,82 +184,21 @@ def render(items: list[Item], now: datetime) -> str:
     reasons = [i for i in items if not i.finding]
     for reason in sorted({i.reason for i in reasons}):
         lines += [f"## {reason}", ""]
-        lines += [f"- {i.subject}, {age(i.since, now)}: {_one_line(i.detail)}" for i in reasons if i.reason == reason]
+        lines += [f"- {i.subject}, {age(i.since, now)}: {one_line(i.detail)}" for i in reasons if i.reason == reason]
         lines.append("")
     # A section per chore after the ticket items: one line per finding, with its title, age, and link (DESIGN §19).
     findings = [i for i in items if i.finding]
     for chore in sorted({i.subject for i in findings}):
         lines += [f"## {chore}", ""]
-        lines += [f"- {_one_line(i.detail)}, {age(i.since, now)} ({i.reason})" for i in findings if i.subject == chore]
+        lines += [f"- {one_line(i.detail)}, {age(i.since, now)} ({i.reason})" for i in findings if i.subject == chore]
         lines.append("")
     return "\n".join(lines)
 
 
-def fingerprint(ticket_key: str | None, reason: str, repo: str | None = None) -> str:
-    """Identify an item across ticks. The detail is left out: rewording it does not make a new item.
-
-    An item without a repository has the fingerprint it had before items could have one, so none is notified again.
-    """
-    text = f"{ticket_key or ''}\0{reason}" + (f"\0{repo}" if repo is not None else "")
-    return hashlib.sha256(text.encode()).hexdigest()
-
-
-def _fingerprint(item: Item) -> str:
-    return fingerprint(item.ticket_key, item.reason, item.repo)
-
-
-@dataclass(frozen=True)
-class Diff:
-    """What changed since the last notification: new items, and notified items whose cause is gone."""
-
-    added: list[Item]
-    resolved: list[tuple[str, str]]  # (subject, reason)
-    resolved_fingerprints: list[str]
-
-    def __bool__(self) -> bool:
-        """Whether anything changed."""
-        return bool(self.added or self.resolved)
-
-    def text(self, path: Path) -> str:
-        """Return the notification: one line per change, then where the full list is."""
-        lines = [f"canopy attention: {len(self.added)} new, {len(self.resolved)} resolved"]
-        lines += [f"+ {i.subject} {i.reason}: {_one_line(i.detail)}" for i in self.added]
-        lines += [f"- {name} {reason}" for name, reason in self.resolved]
-        lines.append(f"Full list: {path}")
-        return "\n".join(lines) + "\n"
-
-
-def diff(conn: sqlite3.Connection, items: list[Item]) -> Diff:
-    """Compare `items` with the open items already notified."""
-    notified = {
-        str(r[0]): (subject(r[1], r[3]), str(r[2]))
-        for r in conn.execute("SELECT fingerprint, ticket_key, reason, repo FROM notifications")
-    }
-    now_open = {_fingerprint(i) for i in items}
-    added = [i for i in items if _fingerprint(i) not in notified]
-    gone = sorted((item, fp) for fp, item in notified.items() if fp not in now_open)
-    return Diff(added, [item for item, _ in gone], [fp for _, fp in gone])
-
-
-def mark_sent(conn: sqlite3.Connection, change: Diff) -> None:
-    """Record a notified diff: its new items become notified, its resolved items are forgotten."""
-    ts = db.now()
-    with db.transaction(conn):
-        conn.executemany(
-            "DELETE FROM notifications WHERE fingerprint = ?", [(fp,) for fp in change.resolved_fingerprints]
-        )
-        conn.executemany(
-            "INSERT OR REPLACE INTO notifications (fingerprint, ticket_key, reason, repo, sent_at) "
-            "VALUES (?, ?, ?, ?, ?)",
-            [(_fingerprint(i), i.ticket_key, i.reason, i.repo, ts) for i in change.added],
-        )
-
-
 def publish(ctx: Context, log: logs.TickAdapter) -> None:
-    """Rewrite `attention.md` and, if `notify.cmd` is set and something changed, notify (DESIGN §6 step 7).
+    """Rewrite `attention.md` and deliver to the notification sinks (DESIGN §6 step 7, §20).
 
-    Failures are logged, never raised: the tick is already closed. A notification that fails is sent again next tick,
-    since nothing is marked sent until the command succeeds.
+    Failures are logged, never raised: the tick is already closed. A delivery that fails is tried again next tick.
     """
     items = listed(ctx)
     path = ctx.state_dir / FILE_NAME
@@ -310,21 +206,7 @@ def publish(ctx: Context, log: logs.TickAdapter) -> None:
         logs.write_private(path, render(items, datetime.now(UTC)))
     except OSError as e:
         log.error("could not write the attention list", extra={"path": str(path), "error": str(e)})  # noqa: TRY400
-    argv = notify_words(ctx.config.notify.cmd)
-    if not argv:
-        return
-    change = diff(ctx.conn, items)
-    if not change:
-        return
-    fields = {"added": len(change.added), "resolved": len(change.resolved), "cmd": argv[0]}
     try:
-        result = ctx.runner.run(argv, cwd=ctx.repo_root, stdin=change.text(path), timeout=NOTIFY_TIMEOUT_SECONDS)
-    except procs.ProcError as e:
-        log.warning("notify command could not start", extra={**fields, "error": str(e)})
-        return
-    if not result.ok:
-        status = "timed out" if result.timed_out else f"exited {result.returncode}"
-        log.warning("notify command failed", extra={**fields, "status": status, "stderr": result.stderr[-500:]})
-        return
-    mark_sent(ctx.conn, change)
-    log.info("notified", extra=fields)
+        deliver.publish(ctx, items, path, log)
+    except Exception as e:
+        log.exception("notification failed", extra={"error": str(e)})

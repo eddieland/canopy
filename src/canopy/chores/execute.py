@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import result, start, view
-from canopy.core import db, definitions
+from canopy.core import db, definitions, outbox
 from canopy.core.config import render_command
 from canopy.infra import logs, stopping
 
@@ -77,7 +77,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             log.exception("chore run failed", extra=fields)
         finally:
             stop.armed = False
-            if not db.finish_chore_run(ctx.conn, run_id, outcome.status, outcome.result_json()):
+            stored = outcome.result_json()
+            ended = outbox.chore_ended(ctx.config, run, outcome.status, stored)
+            if not db.finish_chore_run(ctx.conn, run_id, outcome.status, stored, event=ended):
                 log.warning("chore run was already closed; its outcome is not recorded", extra=fields)
             log.info("chore run finished", extra={**fields, "status": outcome.status})
     return outcome

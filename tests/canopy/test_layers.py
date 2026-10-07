@@ -12,12 +12,15 @@ LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"__main__"}),
     frozenset({"cli"}),
     frozenset({"loop"}),
-    frozenset({"runs", "setup", "chores"}),
+    frozenset({"runs", "setup", "chores", "notify"}),
     frozenset({"core"}),
     frozenset({"infra"}),
 )
 # Third-party packages only one canopy package may import.
 CONFINED = {"click": "cli"}
+# Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink holds a secret and
+# opens connections, which the harness never does (DESIGN §20).
+SEPARATE = frozenset({"canopy_notify_slack"})
 
 
 def layer_of(package: str) -> int:
@@ -61,6 +64,8 @@ def violations(path: Path, source: str) -> list[str]:
     found: list[str] = []
     for line, name in imported(ast.parse(source, filename=str(path))):
         top, _, rest = name.partition(".")
+        if top in SEPARATE:
+            found.append(f"{where}:{line}: imports {name}, a separate program canopy runs only as a command")
         if top in CONFINED and CONFINED[top] != own:
             found.append(f"{where}:{line}: imports {name}, which only canopy.{CONFINED[top]} may import")
         if top != "canopy" or not rest:
@@ -85,6 +90,7 @@ import click
 from canopy import cli
 from canopy.core import db
 from canopy.setup.init import run
+import canopy_notify_slack
 
 if TYPE_CHECKING:
     from canopy.loop.tick import Outcome
@@ -94,5 +100,6 @@ if TYPE_CHECKING:
         "imports click, which only canopy.cli may import",
         "canopy.runs imports canopy.cli, which is not in a lower layer",
         "canopy.runs imports canopy.setup.init, which is not in a lower layer",
+        "imports canopy_notify_slack, a separate program canopy runs only as a command",
         "canopy.runs imports canopy.loop.tick, which is not in a lower layer",
     ]

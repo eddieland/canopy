@@ -96,6 +96,7 @@ canopy (harness, Python)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, _chore
+    notify.py      notify test
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -118,6 +119,12 @@ canopy (harness, Python)
     result.py      the result contract, validated with pydantic
     reconcile.py   chore runs whose _chore is gone marked crashed
 
+  notify/          notification sinks (§20)
+    deliver.py     each sink in turn: its attention diff, events, digest; one message; the loop's own events
+    message.py     the message in text or json, its bounds, the digest
+    journal.py     sinks' cursors and failures, what each was told, the outbox's reads and pruning
+    desktop.py     canopy-notify-desktop: the desktop sink, a separate command
+
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
     workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: clone the map, check origins (§18)
@@ -126,6 +133,8 @@ canopy (harness, Python)
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     db.py          SQLite journal, migrations
+    items.py       the attention item: its subject, fingerprint, and age
+    outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13); the guard against shadowing them
     prompts.py     prompt files and overrides; rendering worker prompts
     treehouse.py   status --json, get --lease --json, return --force --if-lease-id; a Pool per repository (§18)
@@ -147,6 +156,8 @@ agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, can
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
+packages/        uv workspace members: separate programs canopy ships, run only as commands
+  canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
 ```
 
 `prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
@@ -154,14 +165,14 @@ them, and `migrations/`, under `canopy/_data/` (D022).
 
 Where later work goes:
 
-- A feature is a package in the features layer with a command module in `cli/`: `chores` (§19), and later `notify`
-  (§20) and `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block.
+- A feature is a package in the features layer with a command module in `cli/`: `chores` (§19), `notify` (§20), and
+  later `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block.
   Deleting a feature is deleting its package, its command module, and those calls.
-- A feature other features write to keeps its writing half in `core`: dispatch and `_run` record §20's notification
-  events through `core`, and `notify` delivers them.
+- A feature other features write to keeps its writing half in `core`: dispatch, `_run`, `_chore`, and reconcile record
+  §20's notification events through `core.outbox`, and `notify` delivers them.
 - Code that runs in its own process and must not share the harness's imports or dependencies is not a package here but
-  a separate distribution, a uv workspace member under `packages/`. The first is §20's Slack sink, and the repository
-  becomes a workspace when it lands; `canopy` stays the workspace root, so nothing above moves.
+  a separate distribution, a uv workspace member under `packages/`. The first is §20's Slack sink; `canopy` is the
+  workspace root and lists the sink's script among its own, so one install puts both on `PATH`.
 - A module that takes on a second concern splits into a package of the same name in the same layer, as `cli.py` did.
 
 Roles:
@@ -235,8 +246,9 @@ way, a tick does, in order:
    bounds it: keys and attention reasons are validated, phases come from the table in §7, cursor ids must match
    `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at 2000 characters.
 6. Close the `ticks` row with a summary.
-7. **Publish attention** (§14): rewrite `attention.md` from the journal, and if `notify.cmd` is set and the list
-   changed since the last notification, pipe the change to it. This comes after the tick is closed because the list is
+7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20):
+   the list's change since that sink last heard, the events it takes, and a digest when one is due; `notify.cmd` is the
+   sink `default`. This comes after the tick is closed because the list is
    the latest `ok` tick's, and this tick may be it. It runs after a failed or skipped tick too, when the list is the one
    before. A failure here is logged and does not change the tick's status. Release the lock.
 
@@ -519,8 +531,11 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
   repository or a ticket's unit, that repository (`repo`, migration 0004). Audit log and prompt-evaluation corpus.
 - `chore_runs`: one row per chore run (migration 0007); the chore, pids of `_chore` and its agent, times, status, the
   validated result (§19). `decisions.chore` names the chore of a decision about one, which has no ticket key.
-- `notifications`: one row per attention item that `notify.cmd` was told about and that is still open, keyed by a
-  fingerprint of its ticket, reason, and repository if it has one, so an open item is notified once (§14).
+- `notifications`: one row per notification sink and attention item it was told about that is still open, keyed by the
+  sink and a fingerprint of its ticket, reason, and repository if it has one, so an open item is notified once per
+  sink (§14, §20; the `sink` column is migration 0008).
+- `notify_events`: the outbox of point events for sinks (migration 0008), and `notify_sinks`: each sink's cursor, last
+  delivery, last digest, and failures in a row (§20).
 
 Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
 
@@ -612,7 +627,11 @@ prompt_overrides = "~/.config/canopy/prompts"
 state_dir = "~/.canopy"
 
 [notify]
-cmd = ""   # optional; receives the attention diff on stdin
+cmd = ""   # optional; receives the attention diff on stdin: the sink `default` (§20)
+
+[notify.sinks.desktop]         # optional; any number up to 5 (§20)
+cmd = "canopy-notify-desktop"
+events = ["attention", "loop", "runs"]
 ```
 
 Built-in defaults are the values shown above, except `tracker.provider`, `tracker.query`, and `tracker.labels`, which
@@ -780,8 +799,9 @@ overseer keeps asking for that work. In a workspace of several, the refusal's it
 
 Notification (D032). An item is identified by its ticket and reason, and its repository if it has one, so two units
 at their fix-ci limit are two items; its detail can be reworded without making it new.
-When `notify.cmd` is set, each tick compares the list with the `notifications` table: items not in the table are new,
-and rows whose item is no longer listed are resolved. If either exists, the command gets one message on stdin, a
+Each notification sink (§20), `notify.cmd` among them, keeps its own record of what it was told. When `notify.cmd` is
+set, each tick compares the list with its rows in the `notifications` table: items not in the table are new, and rows
+whose item is no longer listed are resolved. If either exists, the command gets one message on stdin, a
 summary line, a `+ KEY reason: detail` line per new item, a `- KEY reason` line per resolved one, and the path of
 `attention.md`. Only when it exits 0 within 60 seconds are new items added to the table and resolved ones removed, so a
 failed notification is retried next tick, an open item is never notified twice, and an item that comes back after
@@ -798,8 +818,10 @@ going away is new again.
 - Stale lease without a run: returned in reconcile.
 - treehouse unavailable or failing in reconcile: tick closes with `reconcile_failed`; the overseer does not run.
 - Overseer timeout or bad output: tick closes with `overseer_failed`; nothing
-  is dispatched; next tick retries. Three consecutive failures produce an
-  attention item.
+  is dispatched; next tick retries. Three consecutive ticks that end other than `ok` produce a `loop.failing`
+  notification for sinks that take `loop`, once per streak, and `loop.recovered` at the next `ok` tick (§20). The
+  attention item DESIGN once planned for it is not built: the attention list is the latest `ok` tick's, so a failing
+  loop cannot add to it.
 - MCP unavailable: the overseer reports it with a tick-wide `skip`; the tick closes as `skipped` and `canopy tick`
   exits 1; no decisions are made on partial data, and the attention list stays as it was (D037). The overseer prompt
   says so explicitly.
@@ -814,7 +836,7 @@ going away is new again.
   under `opencode run`. Answered from OpenCode's source in M1: `ask` is auto-rejected and `deny` is enforced (D021).
   The live canary (`tests/canopy/test_opencode_canary.py`) is opt-in; its first real run confirms or overturns this.
 - Whether a Slack notification path should use `notify.cmd` with a small script or the overseer posting via MCP.
-  Planned answer (§20, D035): a sink command, with a Slack sink shipped in canopy. The overseer does not post.
+  Answered in M10 (§20, D035): a sink command, with a Slack sink shipped in canopy. The overseer does not post.
 - Whether `merged` should trigger a tracker transition. Default no; humans own
   ticket state.
 - One operator on several repositories. Answered in M6 by the workspace (§18): one queue, one user file, and state
@@ -1340,16 +1362,13 @@ Made in M9, whose PR carries the human approval:
 
 ## 20. Notifications
 
-Planned for ROADMAP M10; none of it is built. Rationale in D035. It generalizes `notify.cmd` (§14, D032), which stays
-and behaves as it does today. M10 updates the earlier sections when it builds this: §5 gains the `notify` package, the
-event outbox in `core`, `cli/notify.py`, and the Slack sink's workspace member, §6 step 7 delivers to sinks, §11 lists
-the new tables, §12 the sink keys, and §14 points here.
+Built in ROADMAP M10. Rationale in D035 and D064. It generalizes `notify.cmd` (§14, D032), which stays and behaves as
+it did.
 
 Notifications reach the operator away from the terminal: issues as they happen, progress on a schedule. The first
 destination is the operator's desktop, then a Slack channel (REQUIREMENTS N2). The harness stays a program that runs
-commands: a destination is a **sink**, a command that reads one message on stdin. canopy ships two sinks, desktop first
-and then Slack; M10 designs the desktop sink, which this section does not yet describe. Another destination is a small
-program of the operator's, not a change to canopy.
+commands: a destination is a **sink**, a command that reads one message on stdin. canopy ships two sinks, the desktop
+sink and the Slack sink (below). Another destination is a small program of the operator's, not a change to canopy.
 
 ### Sinks
 
@@ -1370,14 +1389,13 @@ format = "text"
   repository root, the message on stdin, and a 60-second timeout. Exit 0 means delivered; anything else, a timeout
   included, means try again next tick. Its stdout is ignored and the tail of its stderr is logged.
 - `format` is `json` (the default) or `text`.
-- `events` lists the groups the sink receives: `attention`, `loop`, `runs`. Default `["attention", "loop"]`. M9 adds
-  `chores`.
+- `events` lists the groups the sink receives: `attention`, `loop`, `runs`, `chores`. Default `["attention", "loop"]`.
 - `digest_every_minutes` is optional and at least 60 (Digest, below).
 - `notify.cmd = "X"` is shorthand for a sink named `default` with `cmd = "X"`, `format = "text"`,
   `events = ["attention"]`, and no digest. Setting both `notify.cmd` and `[notify.sinks.default]` is a config error.
 
 With no `notify.cmd` and no sinks, nothing below happens: no events are recorded and publishing is §14 without the
-notification.
+notification. More generally, an event is recorded only when some sink takes its group.
 
 ### Events
 
@@ -1388,21 +1406,24 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `attention` | `attention.opened` | a listed item the sink was not told of | ticket, reason, detail (500), since |
 | `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, reason |
 | `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
-| `runs` | `run.ended` | a run's row was closed | ticket, run, kind, status, branch, pr, summary, question |
+| `runs` | `run.ended` | a run's row was closed | ticket, run, kind, status, branch, pr, prs, summary, question |
+| `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
 | `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
 | `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
 
-`summary` and `question` are cut at 300 characters. `question` is set only for a `blocked` run; a blocked worker waits
-on the ticket's needs-human label, which is not an attention item, so `run.ended` is how a sink hears that a worker
-asked something.
+`summary` and `question` are cut at 300 characters, each PR URL at 500. `pr` is the run's first PR and `prs` every PR a
+joint run reported. A run's kind is `run_kind` in the `json` format, since `kind` is the event's. `question` is set only
+for a `blocked` run; a blocked worker waits on the ticket's needs-human label, which is not an attention item, so
+`run.ended` is how a sink hears that a worker asked something.
 
 Attention stays a diff of state, per sink (D032). `notifications` gains a `sink` column, so each sink is told about
 each open item once, and a sink that was down for a day gets the net change instead of every flip. The other kinds are
 point events. They are written to an outbox table, `notify_events`, in the transaction that records the fact: the
-dispatch that inserts the run, whatever closes the run's row (`_run`, or reconcile marking it `crashed`), and the
-publish step for `loop.*`. Each sink has a cursor in `notify_sinks`, the last event id it delivered. `loop.failing` and
-`loop.sink_failing` are recorded once per streak.
+dispatch that inserts the run, whatever closes the run's row (`_run`, or reconcile marking it `crashed`), the same for a
+chore run (`_chore`, its reconcile), and the publish step for `loop.*`. Its ids never repeat (`AUTOINCREMENT`), so
+pruning never lets a new event take an id a cursor already passed. Each sink has a cursor in `notify_sinks`, the last
+event id it delivered. `loop.failing` and `loop.sink_failing` are recorded once per streak.
 
 The migration gives every existing `notifications` row the sink `default`, the name `notify.cmd` becomes, and keeps its
 fingerprint, so an operator who upgrades with `notify.cmd` set is not told again about items already notified. If the
@@ -1414,10 +1435,12 @@ named sink hears about every open item once, as a new sink does.
 §6 step 7, after `attention.md` is written, for each sink in name order:
 
 1. Gather the sink's attention diff if it takes `attention`, its events after its cursor in the groups it takes, and a
-   digest if one is due. If there is nothing, skip the sink.
+   digest if one is due. If there is nothing, skip the sink, moving its cursor past events of groups it does not take.
 2. Render one message in the sink's format and run the command.
-3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, and set
-   the digest time. On anything else, change nothing, log the failure, and count it toward `loop.sink_failing`.
+3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, set the
+   digest time, and reset its failure count. On anything else, change nothing else, log the failure (`notify command
+   failed`, with the sink's name), and count it toward `loop.sink_failing`, which the third failure in a row records
+   once, in the same transaction as the count. A sink that takes `loop` hears about its own failing when it comes back.
 
 Bounds:
 
@@ -1427,7 +1450,8 @@ Bounds:
 - A new sink's cursor starts at the newest event, so it gets no backlog. It hears about every open attention item on
   its first delivery, as `notify.cmd` does today.
 - A sink removed from the config loses its `notify_sinks` and `notifications` rows at the next publish. Events every
-  sink has passed are deleted after 7 days.
+  sink has passed are deleted after 7 days, except the newest `loop.failing` or `loop.recovered`: it is how a streak
+  that outlasts a week is told from a new one. `loop.recovered` counts every failed tick of the streak.
 - Sinks run one after another under the tick lock, so a hung sink delays the next tick by up to 60 seconds, and five
   hung sinks by five minutes.
 
@@ -1435,20 +1459,21 @@ Bounds:
 
 - A sink with `digest_every_minutes` gets a digest at its first delivery, and then at the first delivery at least that
   long after its previous one.
-- The digest covers the time since the sink's previous digest, from the journal only: ticks by status; runs started,
-  by kind; runs ended, by status, with each `done` run's ticket and PR and each `blocked` run's ticket; the open
-  attention list, counted by reason, with the oldest item's age; the workers running now.
+- The digest covers the time since the sink's previous digest (the first, one interval back), from the journal only:
+  ticks by status; runs started, by kind; runs ended, by status, with each `done` run's ticket and PR and each `blocked`
+  run's ticket; the open attention list, counted by reason, with the oldest item's age; the workers running now.
 - It is sent even when nothing happened ("24 ticks ok, nothing ran, nothing needs you"). A digest that stops arriving
   is how the operator learns that the loop, a scheduler, or the machine stopped running ticks, which canopy itself
   cannot report.
 - No model writes it. A progress report that needs judgment, such as what changed on the operator's PRs today, is a
-  chore (§19). Its summary reaches sinks as a `chore.ended` event in a `chores` group. Neither exists before chores do:
-  if M10 lands first, its groups are the three above, and M9 adds `chores` and `chore.ended` to this section.
+  chore (§19). Its summary reaches sinks as a `chore.ended` event in the `chores` group.
 
 ### Formats
 
 `text` is lines for a person. A message holding only attention is exactly §14's, so `notify.cmd` does not change. Other
-parts add a line per event and the digest's lines after the attention lines.
+parts add a line per event and the digest's lines after the attention lines, then the closing path line. A message
+with no attention change starts `canopy: N events`, or `canopy digest` for a digest alone. An event line starts with
+`>` for a run that started, `<` for a run or chore run that ended, `!` for the loop's own events, and `*` for a test.
 
 `json` is one object:
 
@@ -1464,9 +1489,31 @@ parts add a line per event and the digest's lines after the attention lines.
  "text": "the same message in the text format"}
 ```
 
-`attention` is null for a sink that does not take it. `omitted` counts what the bounds left out. `version` changes only
+`attention` is null for a sink that does not take it, and its `added` and `resolved` items also carry their `repo`. Each
+event carries its fields and `line`, its line in the text format; the digest carries its counts and `lines`.
+`omitted` counts what the bounds left out. `version` changes only
 on an incompatible change; sinks ignore fields they do not know. `text` lets a sink that only forwards a string read one
 field.
+
+### The desktop sink
+
+Rationale in D064. `canopy-notify-desktop` is a script in canopy's own install (`canopy.notify.desktop`), stdlib only.
+It holds no secret and opens no connection, so it needs no distribution of its own; it still runs only as a configured
+sink command, never inside the harness.
+
+```toml
+[notify.sinks.desktop]
+cmd = "canopy-notify-desktop"
+events = ["attention", "loop", "runs"]   # runs: a blocked worker's question arrives as run.ended
+```
+
+- It reads either format: a `json` message's `text` field, or a `text` message as it is. The notification's body is
+  the message's lines without the closing path line, at most 12 lines and 1000 characters; its title is `canopy`, or
+  `canopy: <repository directory name>` from a `json` message.
+- On Linux it runs `notify-send --app-name=canopy -- TITLE BODY`; on macOS `osascript` with a fixed script that reads
+  the title and body from its arguments. Neither is ever built into a shell command or a script, so text written by an
+  agent or an org member cannot run anything.
+- It exits 0 when the tool did, 1 when the tool failed, and 2 when the tool is not installed or stdin is empty.
 
 ### The Slack sink
 
@@ -1478,11 +1525,13 @@ on it and lists the `canopy-notify-slack` script in its own `[project.scripts]`,
 - It reads the `json` format on stdin, posts one message to a Slack incoming webhook, and exits 0 on a 2xx response
   and 1 otherwise, with Slack's reply on stderr. A rate-limited post is retried by the next tick like any failure.
 - The webhook URL comes from a file: `--webhook-file PATH`, default `$XDG_CONFIG_HOME/canopy/slack-webhook`
-  (`~/.config/canopy/slack-webhook`). The file must belong to the operator, be unreadable by group and others, and hold
-  one `https://hooks.slack.com/` URL; otherwise the sink exits 2 saying which. The URL is never in canopy's config,
+  (`~/.config/canopy/slack-webhook`). The file must be a regular file (checked before it is opened), belong to the
+  operator, be unreadable by group and others, and hold one `https://hooks.slack.com/` URL whose parsed host is that
+  host; otherwise the sink exits 2 saying which. The URL is never in canopy's config,
   argv, journal, or logs.
 - The message has a header with the repository's directory name and the counts, a line per item or event with the
-  ticket key, reason or status, and link, and the digest as a short block.
+  ticket key, reason or status, and link, and the digest as a short block. It is posted as `{"text": ...}`, at most 45
+  lines.
 - Text from the journal is escaped for Slack's markup (`&`, `<`, `>`), so text written by an agent or an org member
   cannot mention `@channel` or a person, or show one link and point at another. Bare URLs stay clickable; Slack links
   them itself.
@@ -1521,9 +1570,9 @@ and could fit under T8 once something long-running holds the connection. What fi
 
 The `json` format's `version` and the sink's stdout, which M10 ignores, are where that attaches.
 
-### Trust model changes needed
+### Trust model changes
 
-TRUST_MODEL is unchanged until M10, whose PR carries the human approval:
+Made in M10, whose PR carries the human approval:
 
 - T2: the harness still makes no outbound call except through configured commands and never reads a token. canopy
   now ships one program that does both, the Slack sink. It runs only as a sink the operator configured, reads its
