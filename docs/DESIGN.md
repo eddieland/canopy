@@ -1033,7 +1033,8 @@ authorize any ticket (TRUST_MODEL T1).
   files denied by pattern. Where the runtime can restrict a create tool's arguments, a definition could also forbid
   labels on create; where it cannot, the check below still holds.
 - It runs as a joint run does, in a desk of the named repositories' worktrees, so it can read the code, with the
-  worker's timeout. `_run` checks each worktree out at its base branch, detached, and makes no branch; it pushes and
+  worker's timeout. Its prompt carries `MAP.md`'s text (its first 20,000 characters), since the splitter may not read
+  outside its desk. `_run` checks each worktree out at its base branch, detached, and makes no branch; it pushes and
   verifies nothing, and records no branch or unit for the ticket (`runs.branch` is empty). The slots are returned and
   the desk removed on every exit path, and reconcile treats a dead split run like any other.
 - It creates one child per repository that has a share of the work, if each share can be built and reviewed on its
@@ -1044,10 +1045,11 @@ authorize any ticket (TRUST_MODEL T1).
 - On the parent it posts a comment listing the children and saying which label starts each one. Its result line is
   `{"status":"done|failed","summary":"...","children":{"PROJ-13":"api","PROJ-14":"web"}}`, each child's key and
   repository, every child it created even when it reports `failed`. `_run` validates it: every key a valid ticket key
-  (§17) of at most 100 characters, new to the journal (never a split's child, never dispatched) and not the parent;
-  every repository one the split was dispatched with, each at most once; a `done` split names at least one child.
-  `blocked` is not a split's status. Anything else makes the run's status `unknown` and records nothing. A valid result
-  is recorded in `split_children`, and a child's repository comes from there afterwards.
+  (§17) of at most 100 characters, new to the journal (never a split's child, never dispatched, never in `tickets`)
+  and not the parent; every repository one the split was dispatched with, each at most once; a `done` split names at
+  least one child. `blocked` is not a split's status. Anything else makes the run's status `unknown` and records
+  nothing. A valid result is recorded in `split_children`, also when the run timed out after printing it, and a
+  child's repository comes from there afterwards, in a workspace of one too.
 - The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
   open and unlabeled. Any dispatch for it is refused as `bad_split`: its children carry the work. The overseer marks the
   parent `done` in the journal once every child is closed. canopy does not touch the parent's tracker state.

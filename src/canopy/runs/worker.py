@@ -116,9 +116,9 @@ def parse_split(stdout: str) -> SplitResult | None:
 def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], result: SplitResult) -> str:
     """Return why a split's reported children cannot be recorded, or "" if they can.
 
-    Every key must be a ticket key, new to the journal (never a split's child, never dispatched) and not the parent,
-    so a steered splitter cannot claim an existing ticket and pin it to a repository. Every repository must be one the
-    split was dispatched with, each covered at most once. A `done` split names at least one child.
+    Every key must be a ticket key, new to the journal (never a split's child, never dispatched, never in `tickets`) and
+    not the parent, so a steered splitter cannot claim an existing ticket and pin it to a repository. Every repository
+    must be one the split was dispatched with, each covered at most once. A `done` split names at least one child.
     """
     if result.status == "done" and not result.children:
         return "a done split must name the tickets it created"
@@ -138,7 +138,7 @@ def _check_child(conn: sqlite3.Connection, parent: str, repos: Sequence[str], ke
         return f"child {key[:MAX_CHILD_KEY]!r} is not a ticket key"
     if key == parent:
         return f"child {key} is the ticket that was split"
-    if db.split_child(conn, key) is not None or db.has_runs(conn, key):
+    if db.split_child(conn, key) is not None or db.has_runs(conn, key) or db.get_ticket(conn, key) is not None:
         return f"child {key} is not a new ticket: the journal already knows it"
     if repo not in repos:
         return f"child {key}'s repository {repo[:MAX_CHILD_KEY]!r} is not one the split was dispatched with"
@@ -288,19 +288,23 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     result = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = parse_split(result.stdout)
-    if result.timed_out:
-        # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
-        return Outcome("timeout", parsed, f"the splitter timed out after {timeout_minutes} minutes")
     if parsed is None:
+        if result.timed_out:
+            # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
+            return Outcome("timeout", None, f"the splitter timed out after {timeout_minutes} minutes")
         return Outcome("unknown", None, "the splitter's last line was not a valid split result")
     key = str(run["ticket_key"])
     invalid = check_children(ctx.conn, key, [s.repo for s in slots], parsed)
     if invalid:
         log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
-        return Outcome("unknown", parsed, f"children not recorded: {invalid}")
+        status = "timeout" if result.timed_out else "unknown"
+        return Outcome(status, parsed, f"children not recorded: {invalid}")
     if parsed.children:
+        # Also after a timeout: the children it reported exist in the tracker, and a retry must not make them again.
         db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)
         log.info("split children recorded", extra={"run_id": run["id"], "children": parsed.children})
+    if result.timed_out:
+        return Outcome("timeout", parsed, f"the splitter timed out after {timeout_minutes} minutes")
     return Outcome(parsed.status, parsed)
 
 
