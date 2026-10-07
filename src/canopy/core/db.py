@@ -26,7 +26,7 @@ TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 # The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
-# others are the ticket's own. Migration 0005 lists them too.
+# others are the ticket's own.
 UNIT_PHASES = frozenset(
     (
         "pushed_no_pr",
@@ -139,6 +139,9 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
         applied = {int(r[0]) for r in conn.execute("SELECT version FROM schema_migrations")} if has_table else set()
         unknown = applied - {m.version for m in known}
         if unknown:
+            # Runs the journal's own canopy started come first: the fix for an unknown journal may be a fresh one, and
+            # moving this one aside under a live run would lose it (D068).
+            _check_no_live_runs(conn)
             raise MigrationError(f"the journal has migrations this canopy does not know: {sorted(unknown)}")
         pending = [m for m in known if m.version not in applied]
         if pending:

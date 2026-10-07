@@ -11,7 +11,6 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
-from canopy.infra import resources
 from tests.canopy.helpers import InlineRunner, in_tick, journal, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
@@ -95,7 +94,7 @@ def test_a_repository_cannot_add_a_sink(canopy_env: CanopyEnv) -> None:
         load(canopy_env.repo, canopy_env.user_file)
 
 
-def test_an_upgrade_with_notify_cmd_renotifies_nothing(
+def test_notify_cmd_is_the_sink_named_default(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
@@ -103,16 +102,11 @@ def test_an_upgrade_with_notify_cmd_renotifies_nothing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Migration 0008 gives every notified item to the sink `notify.cmd` becomes, keeping its fingerprint."""
-    migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    for path in sorted(resources.migrations_dir().glob("000[1-7]_*.sql")):
-        (migrations / path.name).write_text(path.read_text())
-    conn = db.connect(canopy_env.state_dir / "canopy.db")
-    db.migrate(conn, migrations)
+    """`notify.cmd` is the sink `default`: what was notified as `default` is not notified again."""
+    conn = journal(canopy_env)
     conn.execute(
-        "INSERT INTO notifications (fingerprint, ticket_key, reason, repo, sent_at) "
-        "VALUES (?, 'PROJ-3', 'needs_reviewer', NULL, 'x')",
+        "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
+        "VALUES ('default', ?, 'PROJ-3', 'needs_reviewer', NULL, 'x')",
         (fingerprint("PROJ-3", "needs_reviewer"),),
     )
     out = tmp_path / "notified.txt"
