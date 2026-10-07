@@ -527,7 +527,8 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
 
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `skipped`,
   `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick and its decisions,
-  the latest tick by default: the way to read a dry run's plan. A tick that cannot take the lock writes no row,
+  the latest tick by default; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is
+  the way to read a dry run's plan. A tick that cannot take the lock writes no row,
   although the schema comment lists `lock_busy`.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), done flag. Cursors make ticks
