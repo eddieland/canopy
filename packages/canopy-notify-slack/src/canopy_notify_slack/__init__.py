@@ -23,6 +23,7 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import TextIO
 
 SLACK_PREFIX = "https://hooks.slack.com/"
 TIMEOUT_SECONDS = 30
@@ -138,14 +139,14 @@ def read_message(stdin: str) -> dict[str, object]:
     return {str(k): v for k, v in parsed.items()}
 
 
-def run(argv: list[str], stdin: str, *, prefix: str = SLACK_PREFIX) -> int:
+def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX) -> int:
     """Post the message on `stdin`. Returns the exit code. `prefix` is what the webhook URL must start with."""
     parser = argparse.ArgumentParser(prog="canopy-notify-slack", description=__doc__.split("\n", 1)[0])
     parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
     args = parser.parse_args(argv)
     try:
         url = read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix)
-        parsed = read_message(stdin)
+        parsed = read_message(stdin.read())
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
         return 2
@@ -158,4 +159,4 @@ def run(argv: list[str], stdin: str, *, prefix: str = SLACK_PREFIX) -> int:
 
 def main() -> int:
     """The `canopy-notify-slack` command."""
-    return run(sys.argv[1:], sys.stdin.read())
+    return run(sys.argv[1:], sys.stdin)
