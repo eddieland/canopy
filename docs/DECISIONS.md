@@ -820,7 +820,70 @@ Residual: the check reads permissions, not provenance. A checkout made under a u
 directories, and files git adds inside a `.canopy/` canopy already made are the operator's own. `.gitignore` covers
 `.canopy/`, and review of the workspace repository is the backstop, as for the map itself.
 
-## D054. A ticket's work is units, one per repository; a unit may start after another unit's PR merged
+## D054. Stacking stays, and the operator controls it through the overseer's policy
+
+Context: the operator's requirements say ticket B is not started until A lands (REQUIREMENTS R8); the overseer stacks B
+on A's open, green PR (D045), which starts B sooner. The operator, asked, chose to keep stacking but to control it, and
+preferred the control to be the overseer's judgment rather than a harness guard (REQUIREMENTS C1).
+Decision: a shared key `policy.stacking`, `"auto"` (default: the overseer stacks when DESIGN §10's conditions hold) or
+`"never"` (a blocked ticket waits until its blocker is closed and has no open PR, so a blocker closed before its PR
+merges has not landed). It is rendered into the state block with the other
+policy, and the overseer prompt follows it. The repository may only tighten it (`"never"` is stricter), as for every
+`policy.*` key. The harness adds no guard: whether to stack is policy, which lives in prompts (D008); `bad_base` still
+checks the base's shape.
+Rejected:
+- A `bad_base` refusal under `"never"`: a second place for a preference the operator asked to keep in the overseer.
+- A boolean: leaves no room for a later per-ticket or per-relation mode without renaming the key.
+Revisit: if the overseer stacks under `"never"` in the decisions corpus (then add the guard); if the operator wants
+per-ticket control, such as a label that forbids or allows stacking for one ticket.
+
+## D055. Listeners are allowed on loopback or a private network, behind the operator's secret
+
+Context: TRUST_MODEL §4 said nothing listens on the network, which ruled out prompting a running session (OpenCode's
+server), interactive notifications, and a local UI (REQUIREMENTS C2, C3). The operator wants two-way communication and
+runs on a private VPC, and asked for simple protection.
+Decision (TRUST_MODEL §4, T8, §6): a listener canopy runs or starts binds to loopback by default, or to a private
+address the operator sets in the user config; never a wildcard or public address. Every listener checks the operator's
+listener secret, read from an operator-only file. Whoever holds it acts as the operator. Listeners lift no guard.
+The first listener is OpenCode's own server, so the operator can attach to a worker's session and prompt it (ROADMAP
+M15); a local UI and interactive notifications may follow under the same rules.
+Consequences: DESIGN §3 no longer lists a network listener or a web UI as non-goals. `canopy loop` is still not a
+daemon and listens on nothing itself (D042) until a milestone gives it a listener.
+Rejected:
+- Loopback only: the operator asked for the VPC; loopback stays the default.
+- mTLS or per-user accounts: more than a single-operator tool on a private network needs now.
+- No secret on loopback: any local user could steer the operator's workers.
+Revisit: if canopy is run by more than one person per machine or listener, or on a network the operator does not
+control (then per-user authentication).
+
+## D056. A worker may push to the head branch of a PR the operator wrote and labeled
+
+Context: the operator wants canopy to fix CI and address review on their own hand-written PRs (REQUIREMENTS R9). Those
+PRs' branches are not under `trust.branch_prefix`, where workers are limited to pushing (TRUST_MODEL T1, §6). The
+operator chose direct pushes over a fix branch with a PR into theirs (REQUIREMENTS C4).
+Decision (TRUST_MODEL T1, §6; built in ROADMAP M14): a PR's head branch may be pushed to if the PR is open, not from a
+fork, authored by the operator, and labeled with one of `tracker.labels`. The label is the authorization, as on a ticket
+(D051): the overseer reads it and the author, and the worker reads both again before changing anything. Pushes are
+never forced. The harness refuses the repository's base branch; it cannot read PRs (D003), so authorship is the agents'
+check.
+Rejected:
+- A prefixed fix branch with a PR into the operator's: keeps T1 unchanged but adds a merge per fix, which the operator
+  declined.
+- Any PR with the label, whoever wrote it: lets a label put a worker's commits on a coworker's branch.
+Revisit: if the decisions corpus shows a dispatch for a PR the operator did not write.
+
+## D057. Under `policy.stacking = "never"`, a blocker has landed only when its PR merged
+
+Context: D054 defined `"never"` as waiting until the blocker is closed and has no open PR. A blocker whose PR was closed
+without merging also has no open PR, so that definition would start B on a prerequisite that never landed.
+Decision: supersedes D054's definition only. A blocker has landed when it is closed and its PR, if it had one, merged.
+One whose PR closed unmerged never landed: the overseer records `needs_author` for B, as it already does for a stacked
+ticket whose blocker's PR closed unmerged (DESIGN §10). `"never"` governs starting a ticket; one already stacked when
+the setting changes keeps its stacked PR and its follow-up runs, since that PR cannot merge before its blocker's.
+The rest of D054 stands, including no harness guard.
+Revisit: with D054's triggers.
+
+## D058. A ticket's work is units, one per repository; a unit may start after another unit's PR merged
 
 Context: D052 kept a ticket in the repository of its first dispatch until M7. M7 builds units (DESIGN §18), and the
 open question was whether a unit can start once the ticket's first PR has merged: the next repository once the first
@@ -843,7 +906,7 @@ Rejected:
   and a new authorization path (TRUST_MODEL T1) for a need nobody has measured. Revisit: if filing follow-up tickets for
   late review feedback is measured as friction; if the overseer is measured adding units a ticket did not need.
 
-## D055. One branch per ticket; a desk only for a joint run; `run_slots` holds every run's slots
+## D059. One branch per ticket; a desk only for a joint run; `run_slots` holds every run's slots
 
 Context: M7's units share a run's branch, and a joint run leases a slot per repository (DESIGN §18). Before units, a
 retry `implement` could name a new slug, and every run held one slot, in columns of `runs`.
@@ -868,7 +931,7 @@ Rejected:
 Revisit: if the desk canary fails (then, per D033, the worker's cwd is the first unit's worktree and the others are
 allowed as external directories); if operators need a fresh branch after a failed implement.
 
-## D056. Pending migrations wait for runs an earlier canopy started
+## D060. Pending migrations wait for runs an earlier canopy started
 
 Context: `canopy _run` is detached and outlives the command that dispatched it. After an upgrade, the first canopy
 command migrates the journal while a `_run` of the old version may still be working; when its worker finishes it writes

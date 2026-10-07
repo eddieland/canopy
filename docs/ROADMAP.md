@@ -153,7 +153,8 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_stacking.py` ho
 acceptance), docs, and D045 are in: `--base` checked by the `bad_base` guard, the stacked base in the run and the worker
 prompts, a `blocked` phase, and the overseer prompt's blockers and stacking section. The overseer prompt change needs
 human approval in its PR. Waiting on the operator: two real linked tickets worked in order, the second stacked on the
-first's open, green PR. Started on request while M2 and M3 wait on their live runs.
+first's open, green PR. Started on request while M2 and M3 wait on their live runs. `policy.stacking` (D054) lets the
+operator turn stacking off; the overseer prompt follows it, with no harness guard.
 
 ## M5. Shareable
 
@@ -213,12 +214,12 @@ detected on the next tick and all its slots are returned.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py` holds the harness's half of the acceptance:
 one run over two repositories pushes both and records both PRs, and a joint run killed mid-way has every slot returned
-and its desk removed on the next tick), docs, D054, and D055 are in. D054 answers §18's open question: a unit may start
-after another unit's PR merged, in a repository the ticket has no unit in; a follow-up PR in the same repository is a
-new ticket. The desk canary is written (`tests/canopy/test_opencode_canary.py`, opt-in) and unrun. The overseer prompt,
-the worker definition's comment, and the TRUST_MODEL T4 and T6 changes need human approval in their PR. Waiting on the
-operator: the desk canary against real OpenCode, before any real joint run (if it fails, D055 says what changes); then
-one real ticket touching two repositories taken to two linked PRs, and a real joint run killed mid-way. Started on
+and its desk removed on the next tick), docs, D058, D059, and D060 are in. D058 answers §18's open question: a unit may
+start after another unit's PR merged, in a repository the ticket has no unit in; a follow-up PR in the same repository
+is a new ticket. The desk canary is written (`tests/canopy/test_opencode_canary.py`, opt-in) and unrun. The overseer
+prompt, the worker definition's comment, and the TRUST_MODEL T4 and T6 changes need human approval in their PR. Waiting
+on the operator: the desk canary against real OpenCode, before any real joint run (if it fails, D059 says what changes);
+then one real ticket touching two repositories taken to two linked PRs, and a real joint run killed mid-way. Started on
 request while M2 to M6 wait on their live runs.
 
 ## M8. Split tickets
@@ -278,13 +279,17 @@ if the operator asks.
   `canopy-notify-slack` script in canopy's own install, tested against a local HTTP server; the `TID251` ban on network
   modules in `src/canopy`, and the layer test refusing imports of the sink. One `uv tool install` still installs
   both (`tests/install-check.sh`, M5's clean-machine check).
+- A desktop sink (`notify-send` on Linux, `osascript` on macOS) ships before Slack: the operator wants the desktop
+  first, and a wrapper script of their own is the custom layer REQUIREMENTS H2 rules out (N2). DESIGN §20 gains it.
 - The TRUST_MODEL T2, T6, and §7 changes, with human approval.
 - DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
 
-Accept: with the Slack sink on a real channel, one real ticket's dispatch, a blocked worker's question, and its PR each
-reach the channel once, and an attention item is posted once when it opens and once when it resolves. With the webhook
-file removed, Slack fails for several ticks while a second sink keeps delivering and reports `loop.sink_failing`;
-restoring the file delivers what was missed in one message. A digest arrives on its interval, including a quiet one.
+Accept: before Slack, the desktop sink shows one real ticket's blocked question and an attention item as desktop
+notifications on the operator's machine, once each. With the Slack sink on a real channel, one real ticket's dispatch, a
+blocked worker's question, and its PR each reach the channel once, and an attention item is posted once when it opens
+and once when it resolves. With the webhook file removed, Slack fails for several ticks while a second sink keeps
+delivering and reports `loop.sink_failing`; restoring the file delivers what was missed in one message. A digest arrives
+on its interval, including a quiet one.
 
 Status: not started.
 
@@ -351,12 +356,70 @@ Accept: written with the design, before work starts.
 
 Status: not started.
 
+## M14. PR-scoped work
+
+REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first.
+
+- A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: `fix-ci` when its checks
+  fail, `resume` when review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
+- Authorization by a queue label on the PR, as on a ticket, so neither the operator nor a coworker learns a command.
+  Only PRs the operator authored, in the repository or workspace the loop runs for.
+- The worker pushes to the PR's head branch, never with force, never on a PR from a fork; the harness refuses the
+  repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
+  both (D051's pattern).
+- `canopy status` and the attention list name PR units by the PR, not a ticket key.
+- TRUST_MODEL T1 and §6 already allow it (D056).
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
+## M15. Sessions and recent runs
+
+REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
+
+- Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
+  runtime-specific output beyond one validated field (D009, D026).
+- `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
+  session id, so the operator can open a transcript with OpenCode's own tools.
+- Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
+  wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
+- Workers run against OpenCode's server (`opencode serve`, with `opencode run --attach`), so the operator can
+  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a user-only bind address,
+  loopback by default, refused if wildcard or public; the operator's listener secret from an operator-only file, passed
+  only to the server. Verify OpenCode's server authentication on the pinned version first.
+- Whether one server serves every run or each run gets its own, and what happens to a session whose run has ended: its
+  slot is returned and may be leased again, so prompting it must not run tools in that directory. Either the session
+  is read-only once its run ends, or prompting it starts a `resume` dispatch through the guards.
+- Prompting is the operator's own input (T8): it is not checked against `trust.authorized_repliers`, and it lifts no
+  guard. Capacity, attempt limits, the run's timeout, and push verification still apply.
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
+## M16. Worktree setup for large monorepos
+
+REQUIREMENTS R10. Needs M2. Sketch only; the design comes first.
+
+- Where pools live: a user-only key for the pool root in a workspace, so the pools can sit on a fast disk apart from
+  the workspace, or a documented reason to keep the workspace there instead (§18 pins `TREEHOUSE_ROOT` for T7's sake).
+- A personal `.worktreeinclude` manifest passed as `treehouse get --include-file`, user-only.
+- Setup that runs after `_run` checks out the run's branch and fails the run when it fails, unlike treehouse's
+  `post_create` (PRIOR_ART "Open design questions"): a user-only command template, or an upstream treehouse change.
+- Bazel: a canary for the worker's `external_directory: deny` against reads through `bazel-out/`; a documented
+  `.bazelrc` recipe for a shared disk and repository cache; whether returning a slot should stop its Bazel server.
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
   team adopts it. Proposal: `HOST_ISOLATION.md`.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
-- Second runtime (Copilot CLI, Claude Code): when a coworker asks; expected to
-  be a config change plus prompt tweaks, not code.
-- Web UI: not planned.
+- Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
+  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
+- Web UI: when `canopy status` and `opencode attach` stop being enough. Allowed under TRUST_MODEL T8 (D055).

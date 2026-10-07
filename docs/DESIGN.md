@@ -46,8 +46,9 @@ cannot reach internal systems and require handing a vendor write access.
 ## 3. Non-goals
 
 - Replacing human review, approval, or merge.
-- A hosted service, a background daemon, a network listener, a web UI, or a workflow DSL. `canopy loop` (§6) runs in
-  the foreground, where the operator started it.
+- A hosted service, a background daemon, or a workflow DSL. `canopy loop` (§6) runs in the foreground, where the
+  operator started it. A listener is allowed only on loopback or the operator's private network, behind the operator's
+  secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
 - Sandboxing agents (deferred; see TRUST_MODEL and ROADMAP).
@@ -174,7 +175,7 @@ way, a tick does, in order:
 1. Acquire the lock. If held, log and exit 0. No `ticks` row is written.
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
    is gone. Insert a `ticks` row; its id tags all logs. Pending migrations wait while any `running` run's `_run` is
-   alive: it was started by the canopy before the upgrade and writes the old schema (D056). The tick, and any command
+   alive: it was started by the canopy before the upgrade and writes the old schema (D060). The tick, and any command
    that opens the journal, fails saying so until those runs finish.
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
@@ -195,11 +196,11 @@ way, a tick does, in order:
    section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root,
    the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
    (name, path, summary, whether it is cloned, and its pool's leased slots, §18), tracker config (provider, query,
-   labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy limits,
-   running workers and their repositories, and the `tickets` rows not marked done: the ticket's phase, branch, and
-   comment cursor; its units (§18), each with its repository, branch, PR, phase, review and ci cursors, runs so far of
-   each kind, and when fix-ci may next run if that is still ahead; and its latest run (id, kind, status, branch, each
-   repository it leased in with the base it started from, start and end).
+   labels, needs-human label), trust config (authorized repliers, branch prefix, PR label), capacity, policy (limits
+   and stacking), running workers and their repositories, and the `tickets` rows not marked done: the ticket's phase,
+   branch, and comment cursor; its units (§18), each with its repository, branch, PR, phase, review and ci cursors,
+   runs so far of each kind, and when fix-ci may next run if that is still ahead; and its latest run (id, kind,
+   status, branch, each repository it leased in with the base it started from, start and end).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention`
    read that variable to know which tick they belong to, and refuse if it is unset or names a tick that is not running
@@ -318,12 +319,12 @@ In a workspace of one, the ticket has one unit and `--repo` may be left out.
      refusal does not list the configured labels, so it cannot be answered by copying one. The worker's own read of
      the ticket's labels is the independent check (step 3).
    - `unknown_repo`: in a workspace, no `--repo`, or one that is not in the map or has no primary clone. Naming a
-     repository the ticket has no unit in yet adds that unit (§18, D054). In a workspace of one `--repo` may be left
+     repository the ticket has no unit in yet adds that unit (§18, D058). In a workspace of one `--repo` may be left
      out, and if given must be the repository's name (§18). A repository named twice is one unit. A `--repo` that is
      not a repository name at all (`[a-z][a-z0-9-]*`) is a usage error, like a bad key.
    - `bad_slug`: a slug that is not lowercase words joined by hyphens; any `--slug` with `fix-ci` or `resume`; or, on
      a later `implement`, a `--slug` naming another branch than the ticket's. The ticket's first `implement` names its
-     branch, and every later dispatch continues it, in every unit (D055).
+     branch, and every later dispatch continues it, in every unit (D059).
    - `no_branch`: `fix-ci` or `resume` for a ticket with no branch in the journal (`tickets.branch`), or, in a
      workspace of several, naming a unit with no branch yet: a repository no `implement` has covered.
    - `bad_base`: a `--base` that is not `<trust.branch_prefix>` followed by one plain ref component (letters, digits,
@@ -437,7 +438,7 @@ Worker obligations, stated in every worker prompt:
 
 ## 10. Dependencies and stacking
 
-Rationale in D045.
+Rationale in D045 and D054.
 
 - Blocker relations are read by the overseer through MCP, in whatever form the tracker has them (Jira "is blocked by"
   links, GitHub issue dependencies, and so on; the provider skill says where to look). A blocker is resolved when it
@@ -449,6 +450,12 @@ Rationale in D045.
   the blocker's branch, and the worker opens its PR against that branch, so the PR shows only this ticket's commits. The
   overseer stacks only on a ticket's single unresolved blocker, only when the blocker's PR is open, not merged, and
   green, and reads the blocker's branch from that PR, not from the journal.
+- `policy.stacking` (§12) is `"auto"` by default: the overseer stacks when the conditions above hold. `"never"` means a
+  blocked ticket waits until its blocker has landed: closed, and its PR merged if it had one. A blocker whose PR closed
+  without merging never landed, and the blocked ticket gets `needs_author` attention instead of a dispatch. `"never"`
+  governs starting a ticket; one already stacked keeps its stacked PR and its `resume` and `fix-ci`. The state block
+  carries it with the other policy, and the overseer prompt follows it; the harness adds no guard (D054), so a `--base`
+  dispatch under `"never"` is not refused.
 - The harness checks only the shape of `--base` (`bad_base`, §8): it must be under `trust.branch_prefix` and must not
   be the run's own branch. It does not look the base up in the journal, since the blocker may be in another operator's
   queue, and it cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run` step 2).
@@ -514,7 +521,7 @@ refuses to run. Unknown keys are errors in both files.
 | `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
 | `tracker.labels` | user-only | defines this operator's queue |
-| `policy.*` | shared; the repository may only tighten | limits spend and retries |
+| `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `capacity.*` | user-only | the operator's machine and spend |
@@ -540,6 +547,7 @@ max_implement_attempts = 2
 max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
+stacking = "auto"            # auto | never (§10); "never" is stricter
 
 [trust]
 branch_prefix = "agent/"
@@ -585,11 +593,11 @@ Rules:
   any of them. Two operators must never share a label: the guards (one worker per ticket, attempt limits, cooldowns)
   see only the local journal, so two loops on one label both work the same tickets. canopy cannot detect this; choosing
   distinct labels is an operator responsibility (TRUST_MODEL §7).
-- **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is
-  stricter than the built-in default: a lower attempt limit or a longer cooldown. Otherwise the default stands. The user
-  file may set any value, including a looser one: repository policy is a shared default, not a limit a team can impose
-  on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their machine could not enforce one
-  anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
+- **The repository may only tighten policy.** A `policy.*` value from the repository file is used only if it is stricter
+  than the built-in default: a lower attempt limit, a longer cooldown, or `stacking = "never"`. Otherwise the default
+  stands. The user file may set any value, including a looser one: repository policy is a shared default, not a limit a
+  team can impose on an operator. The operator is fully trusted (TRUST_MODEL §3), and a harness on their machine could
+  not enforce one anyway. The rule exists so a commit cannot loosen limits for operators who never set them.
 - `trust.branch_prefix` must be non-empty and end in `/`, and is made of plain ref components: letters, digits, `_`,
   and `-`, each starting with a letter or digit, joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
@@ -824,7 +832,7 @@ code.
 
 ## 18. Workspaces and multi-repo tickets
 
-ROADMAP M6 to M8. Rationale in D033, D054, and D055. M6 built the workspace: the map and its config layer, state under
+ROADMAP M6 to M8. Rationale in D033, D058, and D059. M6 built the workspace: the map and its config layer, state under
 the root, pools under the root with reconcile per repository, `repo_missing`, `canopy init --workspace`, and `canopy
 workspace sync`. M7 built units, joint runs, and desks, which replaced M6's one repository per ticket (D052). Splitting
 (M8) below is still a plan. Earlier sections describe one repository, which is the workspace of one below.
@@ -923,7 +931,7 @@ state block carries each pool's leased slots in place of the overseer's own `tre
 
 A ticket's work is divided into units, one per repository it changes. A unit has its own PR, phase, review and CI
 cursors, and attempt counts. The comment cursor and the ticket's own phase (`ready`, `blocked`, `needs_human`, and the
-others not about a PR) stay per ticket, and so does the branch: every unit uses the ticket's (D055). A single-repository
+others not about a PR) stay per ticket, and so does the branch: every unit uses the ticket's (D059). A single-repository
 ticket has one unit and behaves as it did before units.
 
 A ticket's units are the repositories it has been dispatched to. Each dispatch names the units it covers with `--repo`
@@ -934,7 +942,7 @@ API and its client changed in lockstep, or a schema and the code reading it. `fi
 the unit whose PR needs the work.
 
 A unit can also start after another unit's PR has merged: a later `implement` naming a repository the ticket has no unit
-in adds one (D054). That is a sequenced change, for work whose second part builds on the first once it lands, such as a
+in adds one (D058). That is a sequenced change, for work whose second part builds on the first once it lands, such as a
 web change consuming the api's released client. The label on the ticket authorizes it, as it authorized the first. A
 repository has at most one unit per ticket, so a follow-up PR in a repository whose unit has merged is not a unit: a
 human files a new ticket for it (TRUST_MODEL T1). The overseer marks the ticket done when every unit's PR has merged
@@ -1060,7 +1068,7 @@ TRUST_MODEL changes with the milestone that needs each, whose PR carries the hum
   against them before they merge.
 - Whether the overseer should ever split a ticket it has already started implementing jointly.
 - Whether a follow-up PR in a repository whose unit has merged, for late review feedback, should be possible inside the
-  ticket, authorized by an authorized replier's comment after the merge. D054 leaves it to a new ticket; revisit if
+  ticket, authorized by an authorized replier's comment after the merge. D058 leaves it to a new ticket; revisit if
   filing those is measured as friction.
 
 ## 19. Chores
@@ -1271,9 +1279,10 @@ event outbox in `core`, `cli/notify.py`, and the Slack sink's workspace member, 
 the new tables, §12 the sink keys, and §14 points here.
 
 Notifications reach the operator away from the terminal: issues as they happen, progress on a schedule. The first
-destination is a Slack channel. The harness stays a program that runs commands: a destination is a **sink**, a command
-that reads one message on stdin. canopy ships one sink, for Slack. Another destination is a small program of the
-operator's, not a change to canopy.
+destination is the operator's desktop, then a Slack channel (REQUIREMENTS N2). The harness stays a program that runs
+commands: a destination is a **sink**, a command that reads one message on stdin. canopy ships two sinks, desktop first
+and then Slack; M10 designs the desktop sink, which this section does not yet describe. Another destination is a small
+program of the operator's, not a change to canopy.
 
 ### Sinks
 
@@ -1429,9 +1438,10 @@ never opens a connection or reads a sink's secret.
 
 ### Two-way, later
 
-Not in M10. Two rules shape it: nothing listens on the network (TRUST_MODEL §4), and the loop runs ticks in the
-foreground (§6), holding no connection between them. Slack's interactive features (buttons, slash commands, the Events
-API, Socket Mode) each need a listener or a long-running connection, so they are out. What fits, in order:
+Not in M10. The loop runs ticks in the foreground (§6), holding no connection between them, and a listener must follow
+TRUST_MODEL T8 (D055): loopback or the operator's private network, behind the operator's secret. Slack's Events API
+and slash commands need Slack to reach the listener from the internet, so they stay out; Socket Mode connects outward
+and could fit under T8 once something long-running holds the connection. What fits, in order:
 
 1. **Replies on the ticket.** Works with M10 as designed. Every message names the ticket and carries what links the
    journal has; a question is answered on the ticket, and an authorized reply resumes the worker as it does now. Slack

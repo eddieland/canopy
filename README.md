@@ -14,7 +14,8 @@ attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds
 standing write access to your repositories, your tracker, or your internal tools.
 
-**Status:** pre-alpha, under construction. See [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** pre-alpha, under construction. See [docs/ROADMAP.md](docs/ROADMAP.md). What it must do, and how far
+along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 ## Why this exists
 

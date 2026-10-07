@@ -257,7 +257,7 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
 
 
 def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence[str]) -> str:
-    """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D055)."""
+    """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D059)."""
     ticket = db.get_ticket(ctx.conn, key)
     recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
     if kind == "implement":

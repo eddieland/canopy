@@ -148,7 +148,7 @@ def test_units_carry_over_what_tickets_and_runs_held(tmp_path: Path) -> None:
 
 
 def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
-    """D056: a live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
+    """D060: a live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
     migrations = tmp_path / "migrations"
     migrations.mkdir()
     for path in sorted(resources.migrations_dir().glob("000[1-4]_*.sql")):
