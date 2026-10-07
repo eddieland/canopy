@@ -37,7 +37,7 @@ def test_dry_run_tick_records_the_overseer_plan(
         monkeypatch,
         ["decide", "PROJ-1", "wait", "--rationale", "checks pending"],
         ["ticket", "set", "PROJ-1", "--phase", "ci_running", "--cursor", "ci=run-1"],
-        ["dispatch", "PROJ-2", "--kind", "implement"],
+        ["dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement"],
         ["attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"],
         ["decide", "PROJ-4;rm", "wait", "--rationale", "bad key"],
     )
@@ -71,8 +71,9 @@ def test_dry_run_tick_records_the_overseer_plan(
         ("PROJ-3", "attention:needs_reviewer"),
     ]
     proj1 = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert proj1["phase"] == "ci_running"
-    assert proj1["last_ci_run_id"] is None  # a dry run never advances cursors
+    assert proj1["phase"] is None
+    [unit] = db.units(conn, "PROJ-1")  # a phase about the PR is the unit's
+    assert (unit["phase"], unit["last_ci_run_id"]) == ("ci_running", None)  # a dry run never advances cursors
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0  # nothing was dispatched
     assert [c[0] for c in json.loads(treehouse_state.read_text())["calls"]] == ["status"]
 

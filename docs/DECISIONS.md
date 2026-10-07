@@ -715,3 +715,334 @@ Rejected:
   refused dispatch.
 - Tracking treehouse's `main`: unreviewed upstream changes to the JSON canopy parses would land on the next install.
 Revisit: when a treehouse release includes `base_branch`; switch the default back to a release tag.
+
+## D049. A second stop signal within one second of the first is the same Ctrl-C
+
+Context: D042 has the loop's first SIGINT or SIGTERM stop after the tick and a second abort it. Run as `uv run canopy
+loop` (a checkout, a developer), one Ctrl-C aborted the tick: the terminal sends SIGINT to the foreground process
+group, which holds both uv and canopy, and uv 0.11 forwards the SIGINT it got to its child about 200 ms later. canopy
+cannot tell the forwarded copy from a second keypress by its content.
+Decision (DESIGN §6): `repeat.signals` ignores a stop signal that arrives less than `SAME_SIGNAL_SECONDS` (1.0) after
+the first, measured on a monotonic clock, for SIGINT and SIGTERM alike. The clock is injected, so tests need no sleeps.
+Rejected:
+- Detecting uv (its env vars or parent process) and ignoring one extra signal: couples canopy to one launcher's
+  behavior and version, and misfires if uv stops forwarding.
+- Moving canopy into its own process group: the terminal's Ctrl-C would then reach only uv, so canopy would depend on
+  uv forwarding it, and a `canopy loop` run directly would lose Ctrl-C altogether.
+- A shorter window, such as 300 ms: close to uv's 200 ms delay on a loaded machine, for no gain; a person reads the
+  "stopping after this tick" line before pressing Ctrl-C again.
+Revisit: if a launcher forwards signals later than a second, or operators find a deliberate double Ctrl-C ignored.
+
+## D050. Build canopy rather than adopt Symphony, agent-orchestrator, or Hermes Kanban
+
+Context: three open-source projects overlap with canopy's loop (surveyed 2026-09-29 in `PRIOR_ART.md`). Polling,
+dispatch, a worktree per ticket, and sending CI and review back to an agent are common to all of them.
+Decision: keep building canopy; take their lessons, not their code, as with Azimuth (D001). What none of them offers,
+and canopy is for: any tracker through MCP with no tracker code (D003, D014); never merging (TRUST_MODEL §6), held by
+the prompts, a `gh pr merge` deny in canopy's agent permissions as defense in depth (TRUST_MODEL T4, T7), and branch
+protection, which is the boundary; no daemon or listener (D042); worktrees released while waiting (D005); a fresh
+overseer each tick (DESIGN §6).
+Rejected:
+- Implementing Symphony's spec: it targets the Codex app-server protocol and a tracker adapter per provider, keeps
+  state in memory, and lets a repository file set the agent command and shell hooks (TRUST_MODEL T7).
+- Configuring agent-orchestrator: its tracker intake is GitHub and GitLab only, its sessions are long-lived and fed
+  messages, and it runs listeners.
+- Hermes Kanban: its tasks live on its own board, not the team's tracker, and it has no CI or review follow-up.
+Revisit: if agent-orchestrator ships tracker intake through MCP or Jira and a fresh session per run; if Symphony's spec
+drops the Codex requirement and moves CI and review follow-up into scope; if Hermes lands tracker-driven issue
+resolution ([#404](https://github.com/NousResearch/hermes-agent/issues/404)).
+
+## D051. A dispatch names the queue label it relies on, and the worker checks it again
+
+Context: labels are canopy's only authorization to start work (TRUST_MODEL T1), and until now only the overseer's
+prompt checked them. In the live acceptance run on 2026-09-25 the overseer (OpenCode with `gpt-6-luna`) dispatched an
+unlabeled ticket twice, dry and live: the ticket was in the state block from an earlier dry run, the prompt says to
+union the state block with the query, and the overseer skipped the label read for it. Other ticks skipped the same
+tickets correctly, so the check is unreliable rather than absent. canopy has no tracker code (D009), so it cannot read
+labels itself.
+Decision: `canopy dispatch` requires `--label LABEL`, one of `tracker.labels` compared case-insensitively (GitHub
+labels are), and refuses otherwise as `unauthorized`, the first guard. The refusal does not list the configured labels,
+so the overseer cannot copy one from it. The decision's rationale records the configured spelling. Every worker prompt
+starts by reading the ticket and reporting `failed` (`not authorized: ...`) without changes if it is closed or carries
+none of the queue labels, which the harness renders into the prompt; a worker prompt without `{{LABELS}}`, such as an
+override written before this decision, fails to render and the dispatch is refused as `bad_prompt`. The overseer
+prompt says the state block authorizes nothing and that `[bot]` approvals do not count as approval.
+Rejected:
+- Prompt wording alone: it already said labels authorize; the failure was a skipped step, which a required argument
+  turns into an explicit claim.
+- Reading labels in the harness: that is a tracker client (D009), per provider.
+- Narrowing `tracker.query` to the operator's label: the state-block union still brings old tickets back, and the
+  query is shared across operators.
+Residual: `--label` is a recorded claim, not a check: the harness knows only that the label is configured, not that it
+is on the ticket, so an overseer that names a label it did not read passes the guard. The independent check is the
+worker's own read of the ticket's labels, a separate agent run with its own tracker access; it is a prompt instruction,
+so it too can be skipped. Human review of every PR is the backstop.
+Revisit: if a tracker-neutral way to read labels appears (for example a runtime command canopy can call without
+provider code), move the check into code.
+
+## D052. Until joint runs, a ticket has one repository: the one its first dispatch named
+
+Context: M6 makes several repositories one queue, but units, joint runs, and per-unit attempts are M7 (DESIGN §18).
+The journal still has one branch, PR, and set of attempt counts per ticket, so a second repository for a ticket would
+overwrite its branch, count its attempts against the first repository's, and leave `fix-ci` and `resume` without a way
+to tell which branch they continue.
+Decision: in a workspace, every `canopy dispatch` names exactly one repository with `--repo`. Each run records it
+(`runs.repo`), and a ticket's repository is its latest run's. A dispatch naming any other repository for a ticket that
+has runs is refused as `unknown_repo`, the guard §18 already defines for "not the one recorded". The overseer prompt
+records attention `multi_repo` for a ticket that needs several repositories, so a human splits it. In a workspace of
+one, `--repo` is optional and the check is skipped, so renaming the checkout's directory never strands a ticket.
+Rejected:
+- Letting a later implement move the ticket: the branch and PR of the first repository would be forgotten, and its
+  attempts would count against the second.
+- Building units now: M7's schema (`ticket_units`, `run_slots`) and its canary belong together; M6 would ship half.
+Revisit: M7 replaces the check with units: `implement` may add a repository to a ticket, and `fix-ci` and `resume` name
+the unit whose PR needs work. Units added one after another, such as a follow-up PR after the first merged, are an
+open question (DESIGN §18, Open): the check here is what blocks them now.
+
+## D053. A workspace's state directory, and any definitions snapshot, must be private to the operator
+
+Context: a workspace keeps its state under its root (`.canopy/`, D033), and the root may be a checkout of a shared
+workspace repository. Before M6 the state directory was the operator's own (`~/.canopy`). Inside a checkout, anyone who
+can push to the workspace repository could commit a `.canopy/` holding a journal, or a definitions snapshot named for a
+released canopy's digest whose agents allow everything; canopy would load it, breaking TRUST_MODEL T7's rule that
+canopy's agent definitions never come from the repository (D040).
+Decision: every command in a workspace that opens the journal refuses a `.canopy/` that is a symlink, belongs to someone
+else, or has group or other permission bits, as a config error naming the fix (remove it; canopy recreates it). canopy
+creates it 0700, and git creates directories from the umask, typically 0755. Separately, and in every workspace, a
+definitions snapshot is used only if it passes the same test: canopy's own are made with `mkdtemp`, so they are 0700. A
+refused snapshot fails the tick as `overseer_failed` or a run as `crashed`, with the message.
+Rejected:
+- Asking git whether `.canopy/` is tracked: a process per command, and the workspace root need not be a repository.
+- Verifying a snapshot's contents against the bundled files: OpenCode writes its own files into the snapshot, and
+  extra files (an `opencode.json` at its root) would need their own rules.
+- State outside the workspace: D033 keeps each workspace's journal with it, so deleting the workspace removes it.
+Residual: the check reads permissions, not provenance. A checkout made under a umask of 077 creates private
+directories, and files git adds inside a `.canopy/` canopy already made are the operator's own. `.gitignore` covers
+`.canopy/`, and review of the workspace repository is the backstop, as for the map itself.
+
+## D054. Stacking stays, and the operator controls it through the overseer's policy
+
+Context: the operator's requirements say ticket B is not started until A lands (REQUIREMENTS R8); the overseer stacks B
+on A's open, green PR (D045), which starts B sooner. The operator, asked, chose to keep stacking but to control it, and
+preferred the control to be the overseer's judgment rather than a harness guard (REQUIREMENTS C1).
+Decision: a shared key `policy.stacking`, `"auto"` (default: the overseer stacks when DESIGN §10's conditions hold) or
+`"never"` (a blocked ticket waits until its blocker is closed and has no open PR, so a blocker closed before its PR
+merges has not landed). It is rendered into the state block with the other
+policy, and the overseer prompt follows it. The repository may only tighten it (`"never"` is stricter), as for every
+`policy.*` key. The harness adds no guard: whether to stack is policy, which lives in prompts (D008); `bad_base` still
+checks the base's shape.
+Rejected:
+- A `bad_base` refusal under `"never"`: a second place for a preference the operator asked to keep in the overseer.
+- A boolean: leaves no room for a later per-ticket or per-relation mode without renaming the key.
+Revisit: if the overseer stacks under `"never"` in the decisions corpus (then add the guard); if the operator wants
+per-ticket control, such as a label that forbids or allows stacking for one ticket.
+
+## D055. Listeners are allowed on loopback or a private network, behind the operator's secret
+
+Context: TRUST_MODEL §4 said nothing listens on the network, which ruled out prompting a running session (OpenCode's
+server), interactive notifications, and a local UI (REQUIREMENTS C2, C3). The operator wants two-way communication and
+runs on a private VPC, and asked for simple protection.
+Decision (TRUST_MODEL §4, T8, §6): a listener canopy runs or starts binds to loopback by default, or to a private
+address the operator sets in the user config; never a wildcard or public address. Every listener checks the operator's
+listener secret, read from an operator-only file. Whoever holds it acts as the operator. Listeners lift no guard.
+The first listener is OpenCode's own server, so the operator can attach to a worker's session and prompt it (ROADMAP
+M15); a local UI and interactive notifications may follow under the same rules.
+Consequences: DESIGN §3 no longer lists a network listener or a web UI as non-goals. `canopy loop` is still not a
+daemon and listens on nothing itself (D042) until a milestone gives it a listener.
+Rejected:
+- Loopback only: the operator asked for the VPC; loopback stays the default.
+- mTLS or per-user accounts: more than a single-operator tool on a private network needs now.
+- No secret on loopback: any local user could steer the operator's workers.
+Revisit: if canopy is run by more than one person per machine or listener, or on a network the operator does not
+control (then per-user authentication).
+
+## D056. A worker may push to the head branch of a PR the operator wrote and labeled
+
+Context: the operator wants canopy to fix CI and address review on their own hand-written PRs (REQUIREMENTS R9). Those
+PRs' branches are not under `trust.branch_prefix`, where workers are limited to pushing (TRUST_MODEL T1, §6). The
+operator chose direct pushes over a fix branch with a PR into theirs (REQUIREMENTS C4).
+Decision (TRUST_MODEL T1, §6; built in ROADMAP M14): a PR's head branch may be pushed to if the PR is open, not from a
+fork, authored by the operator, and labeled with one of `tracker.labels`. The label is the authorization, as on a ticket
+(D051): the overseer reads it and the author, and the worker reads both again before changing anything. Pushes are
+never forced. The harness refuses the repository's base branch; it cannot read PRs (D003), so authorship is the agents'
+check.
+Rejected:
+- A prefixed fix branch with a PR into the operator's: keeps T1 unchanged but adds a merge per fix, which the operator
+  declined.
+- Any PR with the label, whoever wrote it: lets a label put a worker's commits on a coworker's branch.
+Revisit: if the decisions corpus shows a dispatch for a PR the operator did not write.
+
+## D057. Under `policy.stacking = "never"`, a blocker has landed only when its PR merged
+
+Context: D054 defined `"never"` as waiting until the blocker is closed and has no open PR. A blocker whose PR was closed
+without merging also has no open PR, so that definition would start B on a prerequisite that never landed.
+Decision: supersedes D054's definition only. A blocker has landed when it is closed and its PR, if it had one, merged.
+One whose PR closed unmerged never landed: the overseer records `needs_author` for B, as it already does for a stacked
+ticket whose blocker's PR closed unmerged (DESIGN §10). `"never"` governs starting a ticket; one already stacked when
+the setting changes keeps its stacked PR and its follow-up runs, since that PR cannot merge before its blocker's.
+The rest of D054 stands, including no harness guard.
+Revisit: with D054's triggers.
+
+## D058. A ticket's work is units, one per repository; a unit may start after another unit's PR merged
+
+Context: D052 kept a ticket in the repository of its first dispatch until M7. M7 builds units (DESIGN §18), and the
+open question was whether a unit can start once the ticket's first PR has merged: the next repository once the first
+lands, or a follow-up PR after late review feedback.
+Decision: a ticket's units are the repositories it has been dispatched to, each with its own PR, phase, review and ci
+cursors, and attempt counts. Any `implement` may add a unit for a repository the ticket has none in, before or after
+another unit's PR merged: that is how a sequenced change (web consuming the api's release) is worked inside one ticket.
+The queue label authorizes it, as it authorized the first. A repository has at most one unit per ticket, so a
+follow-up PR in a repository whose unit has merged is a new ticket a human files. The overseer marks the ticket done
+only when every unit's PR has merged and no other repository is left to change. Attention items about a unit name its
+repository. D052's check is gone.
+Consequences: attempt limits and the fix-ci cooldown are per unit, so a new unit starts with none used; one worker per
+ticket still holds. The harness cannot tell a sequenced unit from a joint one or check that the first PR merged (D003):
+the overseer prompt carries that judgment, and `multi_repo` still asks a human to split a ticket that is several
+independent pieces until M8.
+Rejected:
+- No unit after a merge: the common cross-repository ticket, a contract change then its consumer, would need a second
+  ticket for work the first already describes and authorizes.
+- A follow-up in the same repository, authorized by a reply after the merge: two units per repository, a second branch,
+  and a new authorization path (TRUST_MODEL T1) for a need nobody has measured. Revisit: if filing follow-up tickets for
+  late review feedback is measured as friction; if the overseer is measured adding units a ticket did not need.
+
+## D059. One branch per ticket; a desk only for a joint run; `run_slots` holds every run's slots
+
+Context: M7's units share a run's branch, and a joint run leases a slot per repository (DESIGN §18). Before units, a
+retry `implement` could name a new slug, and every run held one slot, in columns of `runs`.
+Decision:
+- The ticket's first `implement` names its branch, and every later dispatch continues it in every unit. A later
+  `implement` whose `--slug` names another branch is refused as `bad_slug`. A run therefore has one branch, and a joint
+  `fix-ci` or `resume` never covers units on different branches.
+- A run in one repository runs its worker in the worktree, as before; only a joint run gets a desk. Joint runs depend on
+  the desk canary; runs in one repository do not. canopy marks each desk it makes and removes only those: anything
+  else under `desks/` is the operator's, and one in a desk's place refuses the run.
+- Migration 0005 moves every run's slot into `run_slots` and every ticket's PR, its phase about that PR, and its review
+  and ci cursors into a unit, and drops the old columns, so code reads one shape. Rows from before workspaces have no
+  repository name; a workspace of one ignores it and renames the unit on its next write.
+- A joint run's prompt must have `{{REPOSITORIES}}` and `{{PRS}}`; an override without them still serves a run in one
+  repository.
+Consequences: a retry after a failed `implement` continues whatever that run pushed rather than starting a fresh branch.
+Result lines with the old single `pr` are still read for a run in one repository.
+Rejected:
+- A branch per unit: a joint run with several branches, and `--slug` per repository.
+- A desk for every run in a workspace: every run would depend on the canary, for no gain in one repository.
+- Keeping the slot columns for old runs: two code paths for reconcile, attempt counts, and the state block.
+Revisit: if the desk canary fails (then, per D033, the worker's cwd is the first unit's worktree and the others are
+allowed as external directories); if operators need a fresh branch after a failed implement.
+
+## D060. Pending migrations wait for runs an earlier canopy started
+
+Context: `canopy _run` is detached and outlives the command that dispatched it. After an upgrade, the first canopy
+command migrates the journal while a `_run` of the old version may still be working; when its worker finishes it writes
+the old schema, and a migration that dropped a column (0005) makes that write fail, losing the run's result.
+Decision: `db.migrate` applies pending migrations only when no `running` run has a live `_run`. Otherwise it fails
+with a `MigrationError` naming the runs, and every command that opens the journal fails the same way until they finish.
+A run whose `_run` is gone does not hold migrations back; the next tick's reconcile closes it.
+Consequences: an operator who upgrades with workers running waits, at most the worker timeout, before canopy runs
+again. A migration may change or drop what an earlier canopy writes without keeping it compatible.
+Rejected:
+- Keeping dropped columns and old writes working until old runs drain: every migration would carry two shapes for a
+  window nobody can see the end of from the journal.
+- Draining from inside canopy (stop dispatching, wait, then migrate): the old version is the one dispatching.
+Revisit: if waiting out the worker timeout after upgrades is measured as friction.
+
+## D061. A ticket over several repositories stays one ticket; the loop splits it only when an authorized replier asks
+
+Context: D033 had the overseer prefer splitting a multi-repository ticket into tracker tickets, implementing jointly
+only when the halves could not stand alone. The operator's own work does not fit that: a change that sets up a database
+edits the Terraform repository and then the Kubernetes repository, under one ticket, and the loop should watch both PRs.
+M7's units (D058) work such a ticket jointly or in sequence. Creating real tickets is something a person decides to do,
+not a default of the loop. First proposed in the draft PR #54, written before M7 landed.
+Decision (supersedes D033's preference for splitting):
+- A ticket that needs several repositories stays one ticket, with a unit per repository, joint or sequenced as the
+  overseer judges. One that is several independent pieces, with no request to split it, gets `multi_repo` attention.
+- The overseer splits a ticket only when an authorized replier's comment on it asks for a split. `canopy dispatch
+  --kind split` requires `--request <comment id>` and refuses without it as `unauthorized`; `--request` on another kind
+  is `bad_request`. The splitter reads that comment and creates nothing unless an authorized replier wrote it and it
+  asks for a split, and a split prompt without `{{REQUEST}}` does not render (D051's pattern).
+Rejected:
+- A dedicated split label: another label every tracker must be set up with, and one anyone who can label could add.
+- An operator command that starts a split outside a tick: a second path into dispatch's guards and journal for one
+  kind of run.
+Consequences: the harness cannot read the comment, so `--request` is a recorded claim; the splitter's own read is the
+independent check, as with labels. ROADMAP M8's acceptance starts from such a comment.
+Revisit: if operators ask for splits often enough that a comment per ticket is friction; if the overseer is measured
+choosing joint or sequenced wrongly.
+
+## D062. A split runs in a desk at the base branches, with its own command, and records only children new to the journal
+
+Context: DESIGN §18 planned the splitter in a desk of the named repositories' worktrees. With M7's desks and
+`run_slots` in place, a split can use the joint run's machinery; what differs is that it reads and never pushes.
+Decision (DESIGN §8, §18):
+- A split leases a slot per repository and runs in a desk like a joint run. `_run` checks each worktree out at its base,
+  detached, makes no branch, skips push verification, and records no branch or unit for the ticket (`runs.branch` is
+  empty). Its slots are returned and its desk removed as for any run.
+- The splitter has its own template, `runtime.split_cmd`, defaulting to `--agent canopy-splitter`, rather than a
+  rewrite of `worker_cmd`. It shares `worker_timeout_minutes`.
+- Split attempts are counted per ticket (`policy.max_split_attempts`, default 1), never in a unit's counts.
+- `_run` records a child only if it is new to the journal (not already a child, never dispatched) and not the parent,
+  besides the checks DESIGN planned. A steered splitter could otherwise claim an existing ticket and pin it to a
+  repository. A `failed` split's valid children are recorded too: they exist in the tracker.
+- `bad_split` refuses a split of a ticket that has a branch, of a split's child, in a workspace of one, or over fewer
+  than two repositories.
+- A tracker without label history gets `multi_repo` attention, not the planned tick-wide `skip`: a skip leaves the
+  ticket stuck with nobody told, and a human can still split it by hand.
+Rejected:
+- Running the splitter at the workspace root on the primary clones (PR #54, written before desks): they may be stale or
+  on another branch, and the root holds the journal.
+- A split per unit: a split is the ticket's and makes the units' work into other tickets.
+Revisit: if splits are judged on code the splitter could not read; when a runtime can restrict a create tool's
+arguments (then forbid labels on create in the definition).
+
+## D063. A chore names the workspaces it runs in; by default it runs in every one
+
+Context: chores come from the user file, which every loop the operator runs reads, and each workspace has its own
+journal (D033). A chore therefore ran in every workspace, each with its own `every_minutes` guard, so a build-health
+chore for one CI system would run once per workspace. DESIGN §19 left open whether to scope chores by a list per chore
+or a table per workspace.
+Decision: a chore may set `workspaces`, a list of workspace names (a map's `[workspace] name`, or a workspace of one's
+repository name). It runs only in those; with none it runs in every workspace, as before. A chore not configured for a
+workspace is invisible there: no state block entry, `unknown_chore` on `canopy chore run`, nothing on the attention list.
+Rejected:
+- A `[workspaces.<name>.chores.<chore>]` table per workspace: every chore written once per workspace, and the user file
+  learns a second layout for one key.
+- A global journal of chore runs shared by workspaces: the journal is per workspace (D053), and a second one would need
+  its own locks and migrations.
+Revisit: if operators keep many chores that differ by workspace (then a table per workspace).
+
+## D064. The desktop sink ships inside canopy as a script; the Slack sink stays its own distribution
+
+Context: the operator wants desktop notifications before Slack (REQUIREMENTS N2), and a wrapper script of their own
+is a custom layer H2 rules out. D035 and D041 made the Slack sink a separate distribution so that the harness never
+holds a secret or opens a connection.
+Decision (DESIGN §20): `canopy-notify-desktop` is a module of canopy (`canopy.notify.desktop`) with a console script in
+canopy's own install. It runs only as a configured sink command, like any other, and passes the title and body to
+`notify-send` or `osascript` as arguments. The Slack sink stays a uv workspace member, `canopy-notify-slack`, whose
+script canopy's install also provides.
+Rejected:
+- A second workspace member for the desktop sink: it holds no secret and needs no network, which are the reasons the
+  Slack sink is separate; a distribution of its own would add packaging for nothing.
+- `notify.cmd` pointed at `notify-send`: it takes arguments, not stdin, so it needs a wrapper of the operator's.
+Consequences: one `uv tool install` puts `canopy`, `canopy-notify-desktop`, and `canopy-notify-slack` on `PATH`.
+Revisit: if a desktop sink needs a dependency the harness should not carry (then a workspace member like Slack's).
+
+## D065. The reviewer reads its checkout through a link in a directory of its own; reviews name their repository
+
+Context: DESIGN §21 put the reviewer's working directory outside the checkout, so that a PR cannot supply the
+runtime's configuration, and left open how the reviewer then reads the checkout and how reviews work in a workspace of
+several repositories. The worker's `external_directory: deny` refuses paths outside the working directory, and the
+desk canary (D059) showed OpenCode lets edits through a link inside it.
+Decision (DESIGN §21):
+- `_review` makes `<state_dir>/reviews/<id>/` holding one link, `checkout`, to the slot, and runs the reviewer there
+  with `external_directory: deny`. The prompt names the link. The directory is removed, never following the link,
+  when the run ends or reconcile closes it.
+- `canopy review run` takes `--repo`, required in a workspace of several (`unknown_repo` otherwise), and leases from
+  that repository's pool. A PR of a repository outside the workspace still fails at the fetch.
+- A running review counts toward `max_workers` in dispatch's `capacity` guard and the state block's capacity, since it
+  holds a slot.
+Rejected:
+- `external_directory: allow`: the reviewer could read anything on the machine, such as the operator's home.
+- No checkout, MCP reads only: kept as the fallback if the reviewer canary fails.
+Revisit: if the reviewer canary fails (then MCP reads only); if reviewers need to run the PR's tests (then the
+operator's own definition, as DESIGN §21 says).

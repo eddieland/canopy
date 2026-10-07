@@ -17,30 +17,109 @@ VALUES = {
     "ATTEMPT": "1",
     "MAX_ATTEMPTS": "2",
     "PR_URL": "https://example.test/pr/1",
+    "REPOSITORIES": "This run works in one repository:\n- `repo` at `/pool/1/repo`: branch `agent/PROJ-1-work`",
+    "PRS": '{"repo":"<url or null>"}',
     "CONTEXT": "None.",
     "AUTHORIZED_REPLIERS": "`alice`",
+    "LABELS": "`agent-ready-alice`",
+    "REQUEST": "10234",
+    "MAP": "/ws/MAP.md",
 }
+UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
 
 
-@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+@pytest.mark.parametrize("kind", UNIT_KINDS)
 def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: str) -> None:
     text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES)
     assert "{{" not in text
     assert "}}" not in text
-    assert '"branch":"agent/PROJ-1-work"' in text
+    assert '"branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"}' in text
     assert "attempt 1 of 2" in text
+    # A joint run's worker learns its repositories from these, so the shipped prompts have them.
+    prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_JOINT)
+
+
+def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    text = prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT)
+    assert "{{" not in text
+    assert "Read comment 10234 on PROJ-1." in text
+    assert text.rstrip().endswith('"children":{"<child key>":"<repository name>"}}')
+
+
+def test_a_split_prompt_needs_the_request(canopy_env: CanopyEnv) -> None:
+    # The splitter's own check of who asked for the split reads the request; an override without it fails closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-split.md").write_text("Split {{KEY}} over {{REPOSITORIES}} for {{LABELS}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REQUEST\}\}"):
+        prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT)
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-implement.md").write_text("{{KEY}} {{BRANCH}}\n")
+    (overrides / "worker-implement.md").write_text("{{KEY}} {{BRANCH}} {{LABELS}}\n")
     cfg = load(canopy_env.repo, canopy_env.user_file)
     text = prompts.render_worker(cfg, "implement", {**VALUES, "KEY": "{{BRANCH}}"})
-    assert text == "{{BRANCH}} agent/PROJ-1-work\n"
+    assert text == "{{BRANCH}} agent/PROJ-1-work `agent-ready-alice`\n"
 
 
 def test_unknown_placeholder_is_an_error(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.repo, canopy_env.user_file)
-    with pytest.raises(prompts.PromptError, match=r"unknown placeholder \{\{BASE\}\}"):
-        prompts.render_worker(cfg, "implement", {k: v for k, v in VALUES.items() if k != "BASE"})
+    with pytest.raises(prompts.PromptError, match=r"unknown placeholder \{\{REPOSITORIES\}\}"):
+        prompts.render_worker(cfg, "implement", {k: v for k, v in VALUES.items() if k != "REPOSITORIES"})
+
+
+@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+def test_worker_prompt_without_the_labels_is_an_error(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override from before D051 would drop the worker's own label check; it must not render.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} on {{BRANCH}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{LABELS\}\}"):
+        prompts.render_worker(cfg, kind, VALUES)
+
+
+def test_a_joint_run_needs_the_repositories(canopy_env: CanopyEnv) -> None:
+    # An override from before joint runs still serves a run in one repository, and fails closed for a joint one.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text("Work {{KEY}} in {{SLOT}} for {{LABELS}}; PR {{PR_URL}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    assert prompts.render_worker(cfg, "implement", VALUES).startswith("Work PROJ-1 in /pool/1/repo")
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REPOSITORIES\}\}, \{\{PRS\}\}"):
+        prompts.render_worker(cfg, "implement", VALUES, required=prompts.REQUIRED_JOINT)
+
+
+def test_the_shipped_reviewer_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    values = {
+        "PR_URL": "https://github.com/acme/api/pull/7",
+        "SHA": "a" * 40,
+        "CHECKOUT": "/state/reviews/1/checkout",
+        "RUN_ID": "1",
+        "TICKET": "PROJ-1",
+        "TRACKER_PROVIDER": "jira",
+        "LOW_IMPACT": "Only docs change.",
+        "ATTEMPT": "1",
+        "MAX_ATTEMPTS": "3",
+        "CONTEXT": "None.",
+        "TIMEOUT_MINUTES": "20",
+        "CONTRACT": "{}",
+    }
+    text = prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+    assert "{{" not in text
+    assert '<!-- canopy-review {"v":1,"run":1,"sha":"' + "a" * 40 + '",' in text
+
+
+def test_a_reviewer_override_must_name_the_commit_and_the_run(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "reviewer.md").write_text("Review {{PR_URL}} in {{CHECKOUT}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    values = {"PR_URL": "u", "CHECKOUT": "c", "SHA": "s", "RUN_ID": "1"}
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{SHA\}\}, \{\{RUN_ID\}\}"):
+        prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)

@@ -15,7 +15,8 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_EXIT, FAKE_WORKER_SLEEP, and
 FAKE_WORKER_COMMANDS first, falling back to the FAKE_AGENT_* ones, so one test can script an overseer and the workers it
-dispatches. `--agent canopy-overseer` reads FAKE_OVERSEER_* the same way.
+dispatches. `--agent canopy-overseer` reads FAKE_OVERSEER_* the same way, and `--agent canopy-splitter`
+FAKE_SPLITTER_*.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """

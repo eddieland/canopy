@@ -7,10 +7,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from canopy.chores import reconcile as chore_reconcile
+from canopy.chores import view as chore_view
 from canopy.core import db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
+from canopy.reviews import reconcile as review_reconcile
+from canopy.reviews import view as review_view
 from canopy.runs import policy, reconcile
 
 if TYPE_CHECKING:
@@ -57,26 +61,50 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         return Outcome(tick_id, status, summary)
 
     try:
-        capacity = reconcile.run(ctx, log)
+        # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
+        review_reconcile.run(ctx, log)
+        reconciled = reconcile.run(ctx, log)
     except treehouse.TreehouseError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
+    chore_reconcile.run(ctx, log)
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+    for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
+        action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
+        db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
+    for repo in ctx.workspace.repos:
+        # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
+        if not repo.cloned:
+            detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
+            db.record_decision(
+                ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
+            )
 
     now = datetime.now(UTC)
+    running = db.running_runs(ctx.conn)
+    last_runs = db.latest_runs(ctx.conn)
+    single = ctx.workspace.single
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
         tick_id=tick_id,
         dry_run=dry_run,
-        capacity=capacity,
-        running=db.running_runs(ctx.conn),
+        capacity=reconciled.capacity,
+        workspace=ctx.workspace,
+        leased=reconciled.leased,
+        running=running,
         tickets=db.open_tickets(ctx.conn),
-        last_runs=db.latest_runs(ctx.conn),
-        attempts=policy.attempts(ctx.conn),
-        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
+        units=db.all_units(ctx.conn),
+        last_runs=last_runs,
+        run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
+        attempts=policy.attempts(ctx.conn, single=single),
+        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now, single=single),
         now=now,
+        split_attempts=policy.split_attempts(ctx.conn),
+        split_children=db.open_split_children(ctx.conn),
+        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
+        reviews=review_view.state_section(ctx.conn, ctx.config, now),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
@@ -103,7 +131,12 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
         failure = definitions.shadowing_message(shadowing)
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure
-    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions.ensure(ctx.state_dir))
+    try:
+        definitions_dir = definitions.ensure(ctx.state_dir)
+    except definitions.DefinitionsError as e:
+        log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
+        return str(e)
+    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions_dir)
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     try:

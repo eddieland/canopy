@@ -22,6 +22,7 @@ from canopy.core import config, db
 from canopy.core.context import Context
 from canopy.infra import lock, logs, procs
 from canopy.loop import repeat
+from tests.canopy.helpers import journal
 from tests.conftest import CanopyEnv
 
 
@@ -108,7 +109,7 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     overseer_does(
         monkeypatch,
         canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-        canopy("dispatch", "PROJ-2", "--kind", "implement", "--slug", "login"),
+        canopy("dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "login"),
         canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"),
     )
     time = FakeTime()
@@ -146,6 +147,41 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     assert "stopped after 2 ticks: ok=2" in tick2
 
 
+def test_a_narrow_terminal_shortens_only_the_rationale(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    slug = "docs-readme-add-troubleshooting-section"
+    overseer_does(
+        monkeypatch,
+        canopy("dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement", "--slug", slug),
+        canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3/" + "x" * 80),
+    )
+    time = FakeTime()
+    time.on_sleep = lambda: overseer_does(monkeypatch, canopy("decide", "PROJ-3", "wait", "--rationale", "approved"))
+    out = io.StringIO()
+    term = Console(file=out, width=80, highlight=False)
+
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    text = out.getvalue()
+    assert all(len(line) <= 80 for line in text.splitlines())
+    tick1, tick2 = text.split("tick 1  ok")[1].split("tick 2  ok")
+    assert "    PROJ-2  dispatch:implement  dry run: not dispatched; would work on" in tick1
+    assert slug not in tick1  # the rationale is what gives way
+    assert "…" in tick1
+    assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3/" in tick1
+    assert "-   PROJ-3  needs_reviewer  resolved" in tick2
+
+
 class SlowOutput(io.StringIO):
     """Output that takes a second of fake time per write, and notes when tick 1's report line was written."""
 
@@ -181,6 +217,28 @@ def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
     # Tick 1 ended just before its report line was written. Printing the rest of the report took fake time, and the
     # wait still ends exactly the interval after the tick did.
     assert time.woke[-1] == out.written_at["tick 1"] + 300
+
+
+def test_the_footer_counts_running_reviews_as_workers(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = journal(canopy_env)
+    tick_id = db.start_tick(conn, dry_run=True)
+    db.finish_tick(conn, tick_id, "ok", "test")
+    run_id = db.insert_review_run(
+        conn,
+        tick_id=tick_id,
+        pr_url="https://example.test/pr/1",
+        sha="a" * 40,
+        ticket=None,
+        repo=None,
+        logs_dir=canopy_env.state_dir,
+    )
+    assert db.claim_review_run(conn, run_id, os.getpid())  # alive, so reconcile leaves it running
+    overseer_does(monkeypatch)
+    term, out = console()
+    repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
+    assert "workers 1/" in out.getvalue()
 
 
 def test_the_overseer_text_is_printed_as_text_not_rich_markup(
@@ -271,19 +329,64 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
     assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
 
 
+def seconds_apart(seconds: float) -> Callable[[], float]:
+    """A clock for `repeat.signals` that moves on by `seconds` each time it is read: one read per signal."""
+    now = [0.0]
+
+    def clock() -> float:
+        now[0] += seconds
+        return now[0]
+
+    return clock
+
+
 def test_a_second_ctrl_c_aborts_the_tick_and_the_next_tick_closes_it(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     overseer_does(monkeypatch, interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x"))
     term, _ = console()
     stop = repeat.Stop()
-    with repeat.signals(stop), pytest.raises(KeyboardInterrupt):
+    clock = seconds_apart(repeat.SAME_SIGNAL_SECONDS + 0.5)
+    with repeat.signals(stop, clock=clock), pytest.raises(KeyboardInterrupt):
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop)
     assert tick_statuses(canopy_env) == ["running"]
 
     overseer_does(monkeypatch)
     assert main(["tick", "--dry-run"]) == 0  # both locks were released
     assert tick_statuses(canopy_env) == ["abandoned", "ok"]
+
+
+def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under `uv run`, one Ctrl-C reaches canopy twice: from the terminal, then forwarded by uv about 200 ms later."""
+    overseer_does(monkeypatch, interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x"))
+    term, _ = console()
+    stop = repeat.Stop()
+    with repeat.signals(stop, clock=seconds_apart(0.2)):
+        statuses = repeat.run(
+            context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop
+        )
+    assert statuses == {"ok": 1}
+    conn = db.connect(canopy_env.state_dir / db.DB_FILE_NAME)
+    assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+
+
+@pytest.mark.parametrize(
+    ("gap", "aborts"),
+    [(0.0, False), (repeat.SAME_SIGNAL_SECONDS - 0.01, False), (repeat.SAME_SIGNAL_SECONDS, True), (60.0, True)],
+)
+def test_a_second_signal_aborts_only_after_the_window(gap: float, aborts: bool) -> None:  # noqa: FBT001
+    stop = repeat.Stop()
+    with repeat.signals(stop, clock=seconds_apart(gap)):
+        os.kill(os.getpid(), signal.SIGTERM)
+        assert stop.requested
+        if aborts:
+            with pytest.raises(KeyboardInterrupt):
+                os.kill(os.getpid(), signal.SIGINT)
+        else:
+            os.kill(os.getpid(), signal.SIGINT)
+    assert stop.requested
 
 
 def test_a_tick_that_raises_ends_that_tick_not_the_loop(

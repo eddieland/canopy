@@ -1,4 +1,7 @@
-"""Layered configuration: built-in defaults, then the repository's `canopy.toml`, then the user's `config.toml`.
+"""Layered configuration: built-in defaults, then the shared file, then the user's `config.toml`.
+
+The shared file is the workspace's `canopy-workspace.toml` in a workspace, and the repository's `canopy.toml` in a
+workspace of one (DESIGN §18). Both are the "repository file" of what follows.
 
 Every key has a scope (DESIGN §12). A shared key may be set in either file and the user file wins. A user-only key may
 be set only in the user file; a repository file that sets one is an error, because anyone who can push to the
@@ -19,19 +22,37 @@ import tomllib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Literal, get_args
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
 REPO_FILE_NAME = "canopy.toml"
+WORKSPACE_FILE_NAME = "canopy-workspace.toml"
+# A workspace's state is always here, under its root; `paths.state_dir` applies only to a workspace of one.
+WORKSPACE_STATE_DIR = ".canopy"
+# Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
+WORKSPACE_MAP_TABLES = ("workspace", "repos")
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
 DEFINITIONS_DIR = "{definitions_dir}"
 DEFINITIONS_ENV_PREFIX = f"env OPENCODE_CONFIG_DIR={DEFINITIONS_DIR} "
 _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}")
+# A chore's name appears in file paths and on the command line (DESIGN §19).
+CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+MIN_CHORE_EVERY_MINUTES = 15
 
 
 class ConfigError(Exception):
@@ -50,6 +71,8 @@ class Tighten(Enum):
 
     LOWER = "lower"
     HIGHER = "higher"
+    # For a field typed as a Literal of choices listed from loosest to strictest: a later choice is stricter.
+    LATER = "later"
 
 
 def _non_blank(value: str) -> str:
@@ -153,6 +176,12 @@ class Policy(Section):
     max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
     fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
+    max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
+    # Review runs per PR, whatever they ended as (DESIGN §21).
+    max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10, D054). Prompt policy, not a guard.
+    stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
 
 class Trust(Section):
@@ -167,6 +196,11 @@ class Capacity(Section):
     """The `[capacity]` table."""
 
     max_workers: Annotated[Count, Scope.USER] = 2
+    # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
+    max_chores: Annotated[Count, Scope.USER] = 1
+    # Review runs at once, within max_workers, and started in any 24 hours; 0 turns reviews off (DESIGN §21).
+    max_reviews: Annotated[Count, Scope.USER] = 1
+    max_reviews_per_day: Annotated[Count, Scope.USER] = 20
 
 
 class Runtime(Section):
@@ -178,8 +212,32 @@ class Runtime(Section):
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
     )
+    # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
+    split_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}"
+    )
+    # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
+    chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
+    )
+    # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
+    review_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer {prompt}"
+    )
+    review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
+
+
+class Review(Section):
+    """The `[review]` table: which PRs get an adversarial review (DESIGN §21). Every key is user-only."""
+
+    # The loop's own PRs, before a human is asked to review them.
+    agent_prs: Annotated[StrictBool, Scope.USER] = False
+    # PRs the operator names in the VCS host's own search syntax. It authorizes, unlike tracker.query.
+    query: Annotated[StrictStr, Scope.USER] = ""
+    # Plain language for the reviewer: which changes it may call low impact. Without it, none.
+    low_impact: Annotated[StrictStr, Scope.USER] = ""
 
 
 class Loop(Section):
@@ -196,11 +254,90 @@ class Paths(Section):
     state_dir: Annotated[UserPath, Scope.USER] = Path("~/.canopy")
 
 
+# A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
+SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+MAX_SINKS = 5
+# The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
+EVENT_GROUPS = ("attention", "loop", "runs", "chores", "reviews")
+EventGroup = Literal["attention", "loop", "runs", "chores", "reviews"]
+# The sink `notify.cmd` stands for.
+DEFAULT_SINK = "default"
+MIN_DIGEST_MINUTES = 60
+
+
+def _sink_name(value: str) -> str:
+    if not SINK_NAME_RE.fullmatch(value):
+        raise ValueError(f"sink name {value!r} must match {SINK_NAME_RE.pattern}")
+    return value
+
+
+def _sink_command(value: str) -> str:
+    if not notify_words(value):
+        raise ValueError("must not be empty")
+    return value
+
+
+class Sink(Section):
+    """One `[notify.sinks.<name>]` table: a command that reads one message on stdin (DESIGN §20)."""
+
+    cmd: Annotated[StrictStr, AfterValidator(_notify_command), AfterValidator(_sink_command)]
+    format: Literal["json", "text"] = "json"
+    events: tuple[EventGroup, ...] = ("attention", "loop")
+    digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+
+
+SinkName = Annotated[str, AfterValidator(_sink_name)]
+
+
 class Notify(Section):
     """The `[notify]` table."""
 
-    # Receives the attention diff on stdin. Split into argv like the runtime templates, with no `{prompt}`.
+    # Receives the attention diff on stdin. Split into argv like the runtime templates, with no `{prompt}`. Shorthand
+    # for a sink named `default` that takes the attention list as text (DESIGN §20).
     cmd: Annotated[NotifyCommand, Scope.USER] = ""
+    sinks: Annotated[dict[SinkName, Sink], Scope.USER] = {}
+
+    @model_validator(mode="after")
+    def _one_default(self) -> Notify:
+        if self.cmd and DEFAULT_SINK in self.sinks:
+            raise ValueError(f"set notify.cmd or [notify.sinks.{DEFAULT_SINK}], not both: notify.cmd is that sink")
+        if len(self.all_sinks()) > MAX_SINKS:
+            raise ValueError(f"at most {MAX_SINKS} sinks, counting notify.cmd: each can hold the tick lock 60 seconds")
+        return self
+
+    def all_sinks(self) -> dict[str, Sink]:
+        """Every sink by name, in name order, `notify.cmd` included as `default`."""
+        found = dict(self.sinks)
+        if self.cmd:
+            found[DEFAULT_SINK] = Sink(cmd=self.cmd, format="text", events=("attention",))
+        return dict(sorted(found.items()))
+
+    def takes(self, group: str) -> bool:
+        """Whether any sink takes `group`: events of a group no sink takes are not recorded."""
+        return any(group in sink.events for sink in self.all_sinks().values())
+
+
+def _chore_name(value: str) -> str:
+    if not CHORE_NAME_RE.fullmatch(value):
+        raise ValueError(f"chore name {value!r} must match {CHORE_NAME_RE.pattern}")
+    return value
+
+
+class Chore(Section):
+    """One `[chores.<name>]` table: recurring work the operator defines and the overseer delegates (DESIGN §19)."""
+
+    prompt: UserPath
+    # Its own template need not name canopy's definitions: a chore that runs the operator's tools has its own agent.
+    cmd: CommandTemplate | None = None
+    every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
+    when: StrictStr = ""
+    timeout_minutes: Minutes = 15
+    cwd: UserPath | None = None
+    # The workspaces it runs in, by name; empty means every workspace whose loop reads this file (D063).
+    workspaces: tuple[NonBlank, ...] = ()
+
+
+ChoreName = Annotated[str, AfterValidator(_chore_name)]
 
 
 class Config(Section):
@@ -212,8 +349,16 @@ class Config(Section):
     capacity: Capacity
     runtime: Runtime
     loop: Loop
+    review: Review
     paths: Paths
     notify: Notify
+    # Tables of tables, keyed by name; user-only as a whole (TABLE_SECTIONS).
+    chores: Annotated[dict[ChoreName, Chore], Scope.USER] = {}
+
+    @property
+    def reviews_on(self) -> bool:
+        """Whether reviews run at all: `max_reviews` above 0 and something to review (DESIGN §21)."""
+        return self.capacity.max_reviews > 0 and (self.review.agent_prs or bool(self.review.query.strip()))
 
 
 SECTIONS: dict[str, type[Section]] = {
@@ -223,6 +368,7 @@ SECTIONS: dict[str, type[Section]] = {
     "capacity": Capacity,
     "runtime": Runtime,
     "loop": Loop,
+    "review": Review,
     "paths": Paths,
     "notify": Notify,
 }
@@ -238,19 +384,22 @@ class KeySpec:
     field: FieldInfo
 
 
-def _spec(section: str, key: str, field: FieldInfo) -> KeySpec:
+def _spec(name: str, field: FieldInfo) -> KeySpec:
     scopes = [m for m in field.metadata if isinstance(m, Scope)]
     tightens = [m for m in field.metadata if isinstance(m, Tighten)]
     if len(scopes) != 1:
-        raise TypeError(f"{section}.{key} must declare exactly one Scope")
-    return KeySpec(f"{section}.{key}", scopes[0], tightens[0] if tightens else None, field)
+        raise TypeError(f"{name} must declare exactly one Scope")
+    return KeySpec(name, scopes[0], tightens[0] if tightens else None, field)
 
 
 SPECS: dict[str, KeySpec] = {
-    f"{section}.{key}": _spec(section, key, field)
+    f"{section}.{key}": _spec(f"{section}.{key}", field)
     for section, model in SECTIONS.items()
     for key, field in model.model_fields.items()
 }
+# Sections whose tables are named by the operator, such as `[chores.build-health]`: one key each, the whole section.
+TABLE_SECTIONS = ("chores",)
+SPECS.update({name: _spec(name, Config.model_fields[name]) for name in TABLE_SECTIONS})
 
 
 def user_config_dir() -> Path:
@@ -274,11 +423,18 @@ def find_repo_root(start: Path) -> Path:
 
 
 def load(repo_root: Path, user_file: Path | None = None) -> Config:
-    """Read and validate the layered config for the repository at `repo_root`."""
-    user_file = user_file or user_config_path()
-    repo_file = repo_root / REPO_FILE_NAME
+    """Read and validate the layered config for the workspace at `repo_root`.
 
-    repo_values: dict[str, object] = _read(repo_file) if repo_file.exists() else {}
+    A `canopy-workspace.toml` at `repo_root` is the shared layer, and its state directory is `<repo_root>/.canopy`
+    whatever `paths.state_dir` says. Without one, the repository's `canopy.toml` is, as it always was.
+    """
+    user_file = user_file or user_config_path()
+    workspace_file = repo_root / WORKSPACE_FILE_NAME
+    in_workspace = workspace_file.is_file()
+    repo_file = workspace_file if in_workspace else repo_root / REPO_FILE_NAME
+
+    skip = WORKSPACE_MAP_TABLES if in_workspace else ()
+    repo_values: dict[str, object] = _read(repo_file, skip=skip) if repo_file.exists() else {}
     for name in repo_values:
         if SPECS[name].scope is Scope.USER:
             raise ConfigError(
@@ -288,19 +444,13 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
         raise ConfigError(f"no user config at {user_file}; run `canopy init`")
     user_values = _read(user_file)
 
-    merged: dict[str, dict[str, object]] = {section: {} for section in SECTIONS}
-    origin: dict[str, Path] = {}
-    for source, values in ((repo_file, repo_values), (user_file, user_values)):
-        for name, value in values.items():
-            spec = SPECS[name]
-            if source == repo_file and spec.tighten is not None and not _stricter(spec, value):
-                continue
-            section, key = name.split(".", 1)
-            merged[section][key] = value
-            origin[name] = source
+    merged, origin = _merge(((repo_file, repo_values), (user_file, user_values)), repo_file)
     # Unset or empty: `prompts/` next to the user file.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
+    if in_workspace:
+        # Each workspace has its own journal and locks, so two workspaces never share a queue's state (DESIGN §18).
+        merged["paths"]["state_dir"] = str(repo_root.absolute() / WORKSPACE_STATE_DIR)
 
     try:
         return Config.model_validate(merged)
@@ -308,7 +458,29 @@ def load(repo_root: Path, user_file: Path | None = None) -> Config:
         raise ConfigError(_describe(e, origin, repo_file, user_file)) from e
 
 
-def _read(path: Path) -> dict[str, object]:
+def _merge(
+    layers: tuple[tuple[Path, dict[str, object]], ...], repo_file: Path
+) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
+    """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file."""
+    merged: dict[str, dict[str, object]] = {section: {} for section in (*SECTIONS, *TABLE_SECTIONS)}
+    origin: dict[str, Path] = {}
+    for source, values in layers:
+        for name, value in values.items():
+            spec = SPECS[name]
+            if source == repo_file and spec.tighten is not None and not _stricter(spec, value):
+                continue
+            origin[name] = source
+            if isinstance(value, dict) and name in TABLE_SECTIONS:
+                # A table of tables, such as every `[chores.<name>]`: the user file's replaces any other whole.
+                merged[name] = {str(k): v for k, v in value.items()}
+                continue
+            section, key = name.split(".", 1)
+            merged[section][key] = value
+    return merged, origin
+
+
+def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
+    """Return the file's config keys as `section.key` names. Tables named in `skip` are someone else's to read."""
     try:
         with path.open("rb") as f:
             doc = tomllib.load(f)
@@ -319,8 +491,13 @@ def _read(path: Path) -> dict[str, object]:
 
     values: dict[str, object] = {}
     for section, table in doc.items():
+        if section in skip:
+            continue
         if not isinstance(table, dict):
             raise ConfigError(f"{path}: unknown key {section}")
+        if section in TABLE_SECTIONS:
+            values[section] = table
+            continue
         for key, raw in table.items():
             name = f"{section}.{key}"
             if name not in SPECS:
@@ -336,6 +513,11 @@ def _stricter(spec: KeySpec, value: object) -> bool:
     dropping it.
     """
     default = spec.field.default
+    if spec.tighten is Tighten.LATER:
+        choices = get_args(spec.field.annotation)
+        if value not in choices or default not in choices:
+            return True
+        return choices.index(value) > choices.index(default)
     if not isinstance(value, int) or isinstance(value, bool) or not isinstance(default, int):
         return True
     return value < default if spec.tighten is Tighten.LOWER else value > default
@@ -344,7 +526,13 @@ def _stricter(spec: KeySpec, value: object) -> bool:
 def _describe(error: ValidationError, origin: dict[str, Path], repo_file: Path, user_file: Path) -> str:
     lines: list[str] = []
     for e in error.errors():
-        loc = [str(p) for p in e["loc"]]
+        loc = [str(p) for p in e["loc"] if p != "[key]"]
+        if loc[0] in TABLE_SECTIONS:
+            # A named table's errors are about one of its keys: `chores.build-health.every_minutes`.
+            source = origin.get(loc[0])
+            prefix = f"{source}: " if source is not None else ""
+            lines.append(f"{prefix}{'.'.join(loc[:3])}{''.join(f'[{p}]' for p in loc[3:])}: {e['msg']}")
+            continue
         name = ".".join(loc[:2])
         where = name + "".join(f"[{p}]" for p in loc[2:])
         if e["type"] == "missing":

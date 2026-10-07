@@ -11,7 +11,16 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    commit_and_push,
+    in_tick,
+    journal,
+    pool,
+    slot_of,
+    wait_for_run,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool
 
 
@@ -33,23 +42,31 @@ def test_dispatch_leases_records_and_spawns(
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--slug", "add-login"], runner=runner) == 0
+    assert (
+        main(
+            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"],
+            runner=runner,
+        )
+        == 0
+    )
 
     run = db.get_run(conn, 1)
     assert run is not None
     assert (run["ticket_key"], run["kind"], run["status"]) == ("PROJ-1", "implement", "running")
     assert run["branch"] == "agent/PROJ-1-add-login"
-    assert run["base_branch"] == "main"
-    assert run["lease_holder"] == "canopy:PROJ-1"
     assert run["pid"] == os.getpid()
     assert run["log_path"] == str(canopy_env.state_dir / "runs" / "1.log")
+    leased = slot_of(conn, 1)
+    assert (leased["repo"], leased["base_branch"], leased["lease_holder"]) == ("repo", "main", "canopy:PROJ-1")
     [slot] = [s for s in pool(treehouse_state) if s["status"] == "leased"]
-    assert (slot["path"], slot["lease_id"]) == (run["slot_path"], run["lease_id"])
+    assert (slot["path"], slot["lease_id"]) == (leased["slot_path"], leased["lease_id"])
 
     assert runner.spawned == [(sys.executable, "-m", "canopy", "_run", "1")]
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "dispatch:implement"
-    assert rationale == f"run 1: agent/PROJ-1-add-login in {run['slot_path']}"
+    assert rationale == f"run 1: agent/PROJ-1-add-login in {leased['slot_path']}; label agent-ready-tester"
+    # The worker is told which labels authorize it, so it can check the ticket itself (D051).
+    assert "`agent-ready-tester`" in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert ticket["branch"] == "agent/PROJ-1-add-login"
 
@@ -58,8 +75,10 @@ def test_dispatch_leases_records_and_spawns(
     text = prompt.read_text()
     assert text.startswith("# canopy worker: implement")
     assert "{{" not in text
-    assert "ticket PROJ-1 in an isolated worktree at " + str(run["slot_path"]) in text
-    assert "`agent/PROJ-1-add-login` is checked out, based on `main`" in text
+    assert f"ticket PROJ-1 in {leased['slot_path']}." in text
+    assert "This run works in one repository:\n- `repo` at `" + str(leased["slot_path"]) in text
+    assert ": branch `agent/PROJ-1-add-login` from `main`; PR: not recorded; look up the PR for " in text
+    assert '"prs":{"repo":"<url or null>"}' in text
     assert "the label `agent`" in text
     assert "Time limit: 45 minutes" in text
 
@@ -74,7 +93,7 @@ def test_detached_run_finishes_on_its_own(
 ) -> None:
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
     in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"]) == 0
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
     run = wait_for_run(conn, 1)
     assert run["status"] == "done", Path(run["log_path"]).read_text()
     assert git_pool.remote_head("agent/PROJ-1-work") is not None
@@ -95,8 +114,8 @@ def test_capacity_guard(
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_workers = 1\n")
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=runner) == 0
-    assert main(["dispatch", "PROJ-2", "--kind", "implement"], runner=runner) == 1
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 0
+    assert main(["dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 1
     assert "dispatch refused (capacity): 1 of 1 workers are running" in capsys.readouterr().err
     assert decisions(conn, tick_id)[1] == ("refused:capacity", "1 of 1 workers are running")
     assert sum(s["status"] == "leased" for s in pool(treehouse_state)) == 1
@@ -108,8 +127,8 @@ def test_one_worker_per_ticket(
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=runner) == 0
-    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--slug", "again"], runner=runner) == 1
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 0
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 1
     assert decisions(conn, tick_id)[1] == ("refused:running", "run 1 is already working PROJ-1")
 
 
@@ -118,7 +137,100 @@ def test_bad_slugs_are_usage_errors(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, slug: str
 ) -> None:
     in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement", "--slug", slug], runner=InlineRunner()) == 2
+    assert (
+        main(
+            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", slug],
+            runner=InlineRunner(),
+        )
+        == 2
+    )
+
+
+@pytest.mark.parametrize("mode", ["live", "dry run"])
+@pytest.mark.parametrize("kind", ["implement", "fix-ci", "resume"])
+@pytest.mark.parametrize(
+    ("label", "reason"),
+    [
+        (None, "--label is required: name the queue label you read on PROJ-1"),
+        ("agent-ready-someone-else", "'agent-ready-someone-else' is not a configured queue label"),
+    ],
+)
+def test_dispatch_without_a_configured_label_is_unauthorized(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    label: str | None,
+    reason: str,
+    kind: str,
+    mode: str,
+) -> None:
+    # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D051).
+    db.touch_ticket(conn, "PROJ-1", str(canopy_env.repo))
+    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so fix-ci and resume could
+    tick_id = in_tick(conn, monkeypatch, dry_run=mode == "dry run")
+    args = ["dispatch", "PROJ-1", "--kind", kind] + ([] if label is None else ["--label", label])
+    assert main(args, runner=InlineRunner()) == 1
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "refused:unauthorized"
+    assert rationale.startswith(reason)
+    assert "agent-ready-tester" not in rationale  # the refusal never hands the overseer a label to copy
+    assert not treehouse_state.exists()  # refused before leasing
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
+def test_unauthorized_is_checked_before_the_other_guards(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No branch to continue, a slug fix-ci does not take, and a bad base: the missing label is still what is reported.
+    tick_id = in_tick(conn, monkeypatch)
+    args = ["dispatch", "PROJ-1", "--kind", "fix-ci", "--slug", "again", "--base", "main"]
+    assert main(args, runner=InlineRunner()) == 1
+    assert [action for action, _ in decisions(conn, tick_id)] == ["refused:unauthorized"]
+    # With the label, the next guard in line refuses instead.
+    assert main([*args, "--label", "agent-ready-tester"], runner=InlineRunner()) == 1
+    assert [action for action, _ in decisions(conn, tick_id)][-1] == "refused:bad_slug"
+    assert not treehouse_state.exists()
+
+
+@pytest.mark.parametrize("mode", ["live", "dry run"])
+def test_label_matches_case_insensitively_and_records_the_configured_spelling(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    # GitHub labels are case-insensitive, so an overseer that reads `Agent-Ready-Tester` has read the configured label.
+    tick_id = in_tick(conn, monkeypatch, dry_run=mode == "dry run")
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "Agent-Ready-TESTER", "--kind", "implement"], runner=InlineRunner()) == 0
+    )
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "dispatch:implement"
+    assert rationale.endswith("; label agent-ready-tester")
+
+
+def test_stale_worker_prompt_override_is_refused(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An override written before D051 has no `{{LABELS}}`, so its worker would skip the label check: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text("Work {{KEY}} on {{BRANCH}}\n")
+    tick_id = in_tick(conn, monkeypatch)
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{LABELS}}" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
 def test_no_slot(
@@ -126,10 +238,29 @@ def test_no_slot(
 ) -> None:
     treehouse_state.write_text(json.dumps({"max_trees": 0}))
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=InlineRunner()) == 1
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "refused:no_slot"
     assert "max_trees" in rationale
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+
+
+def test_unparseable_lease_is_returned_and_refused(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # treehouse leased the slot, but its output lacks a field canopy needs: the slot goes back in the same dispatch.
+    treehouse_state.write_text(json.dumps({"get_omit": ["base_branch"]}))
+    tick_id = in_tick(conn, monkeypatch)
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "refused:no_slot"
+    assert "base_branch" in rationale
+    assert "returned" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
@@ -144,7 +275,9 @@ def test_bad_prompt_override_returns_the_slot(
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work {{KEY}} on {{BRNACH}}\n")
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=InlineRunner()) == 1
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "refused:bad_prompt"
     assert "unknown placeholder {{BRNACH}}" in rationale
@@ -161,7 +294,7 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner(spawn_error=procs.ProcError("no processes left"))
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=runner) == 1
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 1
     assert decisions(conn, tick_id) == [("refused:spawn_failed", "no processes left")]
     run = db.get_run(conn, 1)
     assert run is not None
@@ -175,7 +308,7 @@ def test_dry_run_still_starts_nothing(
 ) -> None:
     in_tick(conn, monkeypatch, dry_run=True)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--kind", "implement"], runner=runner) == 0
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 0
     assert runner.spawned == []
     assert not treehouse_state.exists()
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
@@ -193,11 +326,8 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
             tick_id=earlier,
             key=key,
             kind=kind,
-            slot_path=Path("/pool/1"),
-            lease_id=f"lease-{key}",
-            lease_holder=f"canopy:{key}",
-            base_branch="main",
             branch=f"agent/{key}-work",
+            slots=[db.RunSlot("repo", Path("/pool/1"), f"lease-{key}", f"canopy:{key}", "main")],
             runs_dir=canopy_env.state_dir / "runs",
         )
         if status == "running":
@@ -212,14 +342,14 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
     tick_id = in_tick(conn, monkeypatch, dry_run=True)
     runner = InlineRunner()
     for args, code in [
-        (["LIMIT", "--kind", "fix-ci"], 1),
-        (["COOL", "--kind", "fix-ci"], 1),
-        (["BUSY", "--kind", "resume"], 1),
-        (["NEW", "--kind", "fix-ci"], 1),
-        (["NEW", "--kind", "implement", "--base", "main"], 1),
-        (["NEW", "--kind", "implement"], 0),  # BUSY and this one fill max_workers = 2
-        (["NEW", "--kind", "implement"], 1),
-        (["OTHER", "--kind", "implement"], 1),
+        (["LIMIT", "--label", "agent-ready-tester", "--kind", "fix-ci"], 1),
+        (["COOL", "--label", "agent-ready-tester", "--kind", "fix-ci"], 1),
+        (["BUSY", "--label", "agent-ready-tester", "--kind", "resume"], 1),
+        (["NEW", "--label", "agent-ready-tester", "--kind", "fix-ci"], 1),
+        (["NEW", "--label", "agent-ready-tester", "--kind", "implement", "--base", "main"], 1),
+        (["NEW", "--label", "agent-ready-tester", "--kind", "implement"], 0),  # BUSY and this one fill max_workers = 2
+        (["NEW", "--label", "agent-ready-tester", "--kind", "implement"], 1),
+        (["OTHER", "--label", "agent-ready-tester", "--kind", "implement"], 1),
     ]:
         assert main(["dispatch", *args], runner=runner) == code, args
 

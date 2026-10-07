@@ -153,7 +153,8 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_stacking.py` ho
 acceptance), docs, and D045 are in: `--base` checked by the `bad_base` guard, the stacked base in the run and the worker
 prompts, a `blocked` phase, and the overseer prompt's blockers and stacking section. The overseer prompt change needs
 human approval in its PR. Waiting on the operator: two real linked tickets worked in order, the second stacked on the
-first's open, green PR. Started on request while M2 and M3 wait on their live runs.
+first's open, green PR. Started on request while M2 and M3 wait on their live runs. `policy.stacking` (D054) lets the
+operator turn stacking off; the overseer prompt follows it, with no harness guard.
 
 ## M5. Shareable
 
@@ -188,19 +189,38 @@ DESIGN §18 and D033. Tickets still touch one repository each; the workspace mak
 Accept: a two-repository workspace; one real ticket in each repository goes from label to open PR, from one queue,
 with every worktree under the workspace root.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_workspace.py` holds the harness's half of the
+acceptance: two tickets in two repositories, each run's worktree under the workspace root), docs, D052, and D053 are in.
+Until M7 a ticket stays in the repository of its first dispatch (D052), and the overseer records `multi_repo` for one
+that needs several. A workspace's `.canopy/` sits inside what may be a shared checkout, so it, and any definitions
+snapshot, must be private to the operator (D053). The workspace file is new repository-controlled config, so the
+TRUST_MODEL T7 and §7 changes moved here from M7. The overseer prompt and TRUST_MODEL changes need human approval in
+their PR. Waiting on the operator: the real two-repository run. Started on request while M2 to M5 wait on their live
+runs.
 
 ## M7. Joint multi-repo runs
 
 - `ticket_units`, `run_slots`, repeated `--repo`, all-or-nothing leases.
 - Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
-- Per-unit phases, cursors, and attempt counts; attention items with a repository.
-- The desk permission canary, and the TRUST_MODEL T4, T6, T7, and §7 changes with human approval.
+- Per-unit phases, cursors, and attempt counts; attention items about a unit, and `canopy attention --repo`. M6 added
+  the `repo` column and items about a repository (`repo_missing`); M7 gives ticket items one.
+- Lift D052's one repository per ticket: `implement` may add a unit. Decide DESIGN §18's open question on sequenced
+  PRs (a follow-up after the first merged, or the next repository once the first lands) before designing units, since
+  it decides whether a unit can start after the ticket's first PR has merged.
+- The desk permission canary, and the TRUST_MODEL T4 and T6 changes with human approval (T7 and §7 changed in M6).
 
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py` holds the harness's half of the acceptance:
+one run over two repositories pushes both and records both PRs, and a joint run killed mid-way has every slot returned
+and its desk removed on the next tick), docs, D058, D059, and D060 are in. D058 answers §18's open question: a unit may
+start after another unit's PR merged, in a repository the ticket has no unit in; a follow-up PR in the same repository
+is a new ticket. The desk canary is written (`tests/canopy/test_opencode_canary.py`, opt-in) and unrun. The overseer
+prompt, the worker definition's comment, and the TRUST_MODEL T4 and T6 changes need human approval in their PR. Waiting
+on the operator: the desk canary against real OpenCode, before any real joint run (if it fails, D059 says what changes);
+then one real ticket touching two repositories taken to two linked PRs, and a real joint run killed mid-way. Started on
+request while M2 to M6 wait on their live runs.
 
 ## M8. Split tickets
 
@@ -209,15 +229,24 @@ Needs M4's blocker ordering.
 - `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
   contract validated into `split_children`, the child's recorded repository enforced by dispatch,
   `policy.max_split_attempts`.
-- Overseer prompt: choose split or joint; the `split` phase and `split_unlabeled` attention; a child is a candidate
-  only if its label was added after the split run ended, and `split_self_labeled` attention when one was not.
+- Overseer prompt: split only when an authorized replier asks for it (`--request`, D061), never on its own judgment;
+  the `split` phase and `split_unlabeled` attention; a child is a candidate only if its label was added after the split
+  run ended, and `split_self_labeled` attention when one was not.
 - The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
 
-Accept: a real ticket covering two repositories is split into two linked children, the second blocked by the first,
-with no queue label on either. Nothing is dispatched for them until the operator labels them; then they are worked in
-order, one PR each.
+Accept: a real ticket covering two repositories, whose split an authorized replier asked for in a comment, is split into
+two linked children, the second blocked by the first, with no queue label on either. Nothing is dispatched for them
+until the operator labels them; then they are worked in order, one PR each.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_split.py` holds the harness's half of the acceptance: a
+requested split reads a desk of worktrees at their bases, pushes nothing, and records the children its worker reports;
+invalid children are recorded nowhere; each child is dispatched only in its recorded repository), docs, D061, and D062
+are in. Rebuilt on M7's desks from the draft PR #54, which was written before them; a split needs an authorized
+replier's comment asking for it (D061), and without one a multi-repository ticket stays one ticket. The overseer prompt,
+the `canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Not yet checked
+live: that OpenCode applies the splitter's name patterns to MCP tools; run the canary with them before the real split.
+Waiting on the operator: a real two-repository ticket split on request, its children labeled by hand and worked in
+order. Started on request while M2 to M7 wait on their live runs.
 
 ## M9. Chores
 
@@ -240,7 +269,13 @@ reach the attention list and are notified once, and each disappears after a run 
 killed mid-way is detected on the next tick as `crashed` with a `chore_failed` item. Deleting the chore from the config
 clears its items at the next tick.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_chores.py` holds the harness's half of the acceptance:
+the guards, findings listed and notified once and resolved when no longer reported, a killed chore run crashed with
+`chore_failed`, a deleted chore's items cleared, and no `chores` key without chores), docs, and D063 are in. D063
+settles §19's open question on workspaces: a chore may list the workspaces it runs in. The overseer prompt, the
+`canopy-chore` definition, and the TRUST_MODEL T1, T3, T6, T7, §6, and §7 changes need human approval in their PR.
+Waiting on the operator: a real build-health chore over several working days. Started on request while M2 to M8 wait
+on their live runs.
 
 ## M10. Notification sinks
 
@@ -259,15 +294,29 @@ if the operator asks.
   `canopy-notify-slack` script in canopy's own install, tested against a local HTTP server; the `TID251` ban on network
   modules in `src/canopy`, and the layer test refusing imports of the sink. One `uv tool install` still installs
   both (`tests/install-check.sh`, M5's clean-machine check).
+- A desktop sink (`notify-send` on Linux, `osascript` on macOS) ships before Slack: the operator wants the desktop
+  first, and a wrapper script of their own is the custom layer REQUIREMENTS H2 rules out (N2). DESIGN §20 gains it.
 - The TRUST_MODEL T2, T6, and §7 changes, with human approval.
 - DESIGN §5, §6, §11, §12, and §14 updated, and §20's planned note removed. README's daily surface names sinks.
 
-Accept: with the Slack sink on a real channel, one real ticket's dispatch, a blocked worker's question, and its PR each
-reach the channel once, and an attention item is posted once when it opens and once when it resolves. With the webhook
-file removed, Slack fails for several ticks while a second sink keeps delivering and reports `loop.sink_failing`;
-restoring the file delivers what was missed in one message. A digest arrives on its interval, including a quiet one.
+Accept: before Slack, the desktop sink shows one real ticket's blocked question and an attention item as desktop
+notifications on the operator's machine, once each. With the Slack sink on a real channel, one real ticket's dispatch, a
+blocked worker's question, and its PR each reach the channel once, and an attention item is posted once when it opens
+and once when it resolves. With the webhook file removed, Slack fails for several ticks while a second sink keeps
+delivering and reports `loop.sink_failing`; restoring the file delivers what was missed in one message. A digest arrives
+on its interval, including a quiet one.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_notify.py` holds the harness's half of the acceptance:
+per-sink delivery, a sink failing for several ticks while another delivers and reports `loop.sink_failing` once, the
+failed sink's catch-up in one message, digests on their interval including a quiet one, `loop.failing` and
+`loop.recovered`, bounds, and the upgrade from `notify.cmd` re-notifying nothing; `tests/canopy/test_sinks.py` the
+desktop sink against fake `notify-send` and `osascript`, and the Slack sink against a local HTTP server), docs, and
+D064 are in. The repository is a uv workspace, with the Slack sink its first member; one `uv tool install` installs
+canopy and both sinks (`tests/install-check.sh`). The `chores` group came with it, since M9 landed first. DESIGN §15's
+three-failure attention item is not built: the attention list is the latest `ok` tick's, so `loop.failing` is its
+notification half and the whole of it. The TRUST_MODEL T2, T6, and §7 changes need human approval in their PR.
+Waiting on the operator: the desktop sink on their machine, then the Slack sink on a real channel, as Accept says.
+Started on request while M2 to M9 wait on their live runs.
 
 ## M11. Reviews
 
@@ -298,7 +347,13 @@ identified comment and nothing else happens to the PR: no push, no ticket, no Gi
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py` holds the harness's half of the
+acceptance: a review at the commit in a slot it reads through a link and never works in, the guards, one review per
+commit, the per-PR limit with its attention item, a killed review crashed with its slot returned, and nothing about
+reviews without a `[review]` table), the reviewer canary (opt-in, unrun), docs, and D065 are in. The overseer prompt,
+the `canopy-reviewer` definition, and the TRUST_MODEL T1, T3 to T7, §6, and §7 changes need human approval in their
+PR. Waiting on the operator: the reviewer canary against real OpenCode, before any real review (if it fails, D065
+says what changes); then the live runs Accept lists. Started on request while M2 to M10 wait on their live runs.
 
 ## M12. The loop
 
@@ -332,12 +387,70 @@ Accept: written with the design, before work starts.
 
 Status: not started.
 
+## M14. PR-scoped work
+
+REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first.
+
+- A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: `fix-ci` when its checks
+  fail, `resume` when review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
+- Authorization by a queue label on the PR, as on a ticket, so neither the operator nor a coworker learns a command.
+  Only PRs the operator authored, in the repository or workspace the loop runs for.
+- The worker pushes to the PR's head branch, never with force, never on a PR from a fork; the harness refuses the
+  repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
+  both (D051's pattern).
+- `canopy status` and the attention list name PR units by the PR, not a ticket key.
+- TRUST_MODEL T1 and §6 already allow it (D056).
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
+## M15. Sessions and recent runs
+
+REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
+
+- Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
+  runtime-specific output beyond one validated field (D009, D026).
+- `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
+  session id, so the operator can open a transcript with OpenCode's own tools.
+- Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
+  wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
+- Workers run against OpenCode's server (`opencode serve`, with `opencode run --attach`), so the operator can
+  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a user-only bind address,
+  loopback by default, refused if wildcard or public; the operator's listener secret from an operator-only file, passed
+  only to the server. Verify OpenCode's server authentication on the pinned version first.
+- Whether one server serves every run or each run gets its own, and what happens to a session whose run has ended: its
+  slot is returned and may be leased again, so prompting it must not run tools in that directory. Either the session
+  is read-only once its run ends, or prompting it starts a `resume` dispatch through the guards.
+- Prompting is the operator's own input (T8): it is not checked against `trust.authorized_repliers`, and it lifts no
+  guard. Capacity, attempt limits, the run's timeout, and push verification still apply.
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
+## M16. Worktree setup for large monorepos
+
+REQUIREMENTS R10. Needs M2. Sketch only; the design comes first.
+
+- Where pools live: a user-only key for the pool root in a workspace, so the pools can sit on a fast disk apart from
+  the workspace, or a documented reason to keep the workspace there instead (§18 pins `TREEHOUSE_ROOT` for T7's sake).
+- A personal `.worktreeinclude` manifest passed as `treehouse get --include-file`, user-only.
+- Setup that runs after `_run` checks out the run's branch and fails the run when it fails, unlike treehouse's
+  `post_create` (PRIOR_ART "Open design questions"): a user-only command template, or an upstream treehouse change.
+- Bazel: a canary for the worker's `external_directory: deny` against reads through `bazel-out/`; a documented
+  `.bazelrc` recipe for a shared disk and repository cache; whether returning a slot should stop its Bazel server.
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
   team adopts it. Proposal: `HOST_ISOLATION.md`.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
-- Second runtime (Copilot CLI, Claude Code): when a coworker asks; expected to
-  be a config change plus prompt tweaks, not code.
-- Web UI: not planned.
+- Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
+  their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
+- Web UI: when `canopy status` and `opencode attach` stop being enough. Allowed under TRUST_MODEL T8 (D055).
