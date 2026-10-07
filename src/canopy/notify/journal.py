@@ -70,8 +70,13 @@ def prune_events(conn: sqlite3.Connection, now: datetime) -> int:
     """Delete events every sink has passed that are older than `KEEP_EVENTS`. Returns how many were deleted."""
     cursors = [int(r[0]) for r in conn.execute("SELECT cursor FROM notify_sinks")]
     passed = min(cursors) if cursors else newest_event_id(conn)
+    # The newest `loop.failing` or `loop.recovered` stays: it is how a long streak is told from a new one.
+    marker = conn.execute(
+        "SELECT coalesce(max(id), 0) FROM notify_events WHERE kind IN ('loop.failing', 'loop.recovered')"
+    ).fetchone()[0]
     cur = conn.execute(
-        "DELETE FROM notify_events WHERE id <= ? AND at < ?", (passed, db.format_time(now - KEEP_EVENTS))
+        "DELETE FROM notify_events WHERE id <= ? AND at < ? AND id != ?",
+        (passed, db.format_time(now - KEEP_EVENTS), marker),
     )
     return cur.rowcount
 

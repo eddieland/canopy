@@ -272,6 +272,35 @@ def test_loop_failing_and_recovered_are_sent_once_each(
     assert len(messages(out)) == 2
 
 
+def test_a_long_failing_streak_is_one_streak(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pruning keeps the streak's `loop.failing`, and the recovery counts every failed tick, however many."""
+    out = tmp_path / "phone.txt"
+    add_sink(canopy_env, sink_script, "phone", out, extra='format = "text"\nevents = ["loop"]\n')
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "gave up")
+    for _ in range(3):
+        tick(ok=False)
+    assert len(messages(out)) == 1
+    conn = journal(canopy_env)
+    conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
+    conn.executemany(
+        "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, 'overseer_failed')",
+        [(db.now(), db.now())] * 1100,
+    )
+    tick(ok=False)
+    tick(ok=False)
+    assert len(messages(out)) == 1
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    tick()
+    assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
+
+
 def test_a_digest_arrives_on_its_interval_even_when_quiet(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
