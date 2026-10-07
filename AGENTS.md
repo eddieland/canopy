@@ -79,7 +79,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
   there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
-  startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one.
+  startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
+  squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `~/.canopy/canopy.log`. Every tick has an id that appears in every log line it

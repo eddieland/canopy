@@ -526,7 +526,7 @@ def _unit_prs(ctx: Context, key: str) -> dict[str, str]:
     found: dict[str, str] = {}
     for u in db.units(ctx.conn, key):
         if u["pr_url"]:
-            # A workspace of one's unit may predate its repository's name (migration 0005).
+            # A workspace of one has only the one repository, whatever its unit calls it (D052).
             name = ctx.workspace.repos[0].name if ctx.workspace.single else str(u["repo"])
             found[name] = str(u["pr_url"])
     return found
