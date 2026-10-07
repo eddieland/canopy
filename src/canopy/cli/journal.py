@@ -28,6 +28,7 @@ PHASES = (
     "blocked",
     "running",
     "pushed_no_pr",
+    "conflicted",
     "ci_running",
     "ci_red",
     "changes_requested",

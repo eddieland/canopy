@@ -76,8 +76,8 @@ before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contami
 continue the earlier run's OpenCode session is a question for M15, answered against the decisions corpus.
 
 Known prompt gaps that make routing noisier than it should be (PRIOR_ART "In prompts"): the worker's own PR replies can
-read back as new feedback, CI newness is keyed on the check run id so a re-run counts as new, and a merge conflict has
-no phase.
+read back as new feedback, and CI newness is keyed on the check run id so a re-run counts as new. A third, a merge
+conflict with no phase, is closed: `conflicted` sends a `resume` to merge the base in (§7, D069).
 
 ### R5. Needs-a-human queue: one view of what is blocked on the operator
 
