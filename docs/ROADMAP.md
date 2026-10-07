@@ -170,6 +170,8 @@ Status: in progress. The skill, the install check, and the license are in (D046,
 operator's own agent sessions: `canopy skill` prints it and agent runs do not load it. `uv tool install canopy` was
 wrong, since the PyPI name is another project's; README now installs from git, verified from an empty HOME on
 2026-09-25, and `tests/install-check.sh` repeats that in CI on Linux and macOS. The license is proprietary for now.
+For a machine without a credential for this repository, a version tag releases one executable per platform (D067),
+which the install check also covers.
 Waiting on the operator: a second person following README's install steps without help, with their friction filed as
 issues, and a coworker running canopy against their own ticket.
 

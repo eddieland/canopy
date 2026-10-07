@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test install-check treehouse
+.PHONY: help all check fmt lint test install-check binary treehouse
 
 ##@ General
 
@@ -28,8 +28,14 @@ test: ## Run all tests
 	uv run pytest -q
 
 # Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
-install-check: ## Install canopy with uv tool install into an empty HOME and run it against the fakes
-	tests/install-check.sh
+# INSTALL_SOURCE is what to install: this checkout by default, or dist/canopy after `make binary`.
+install-check: ## Install canopy into an empty HOME and run it against the fakes (INSTALL_SOURCE: default this checkout)
+	tests/install-check.sh $(INSTALL_SOURCE)
+
+##@ Release
+
+binary: ## Build dist/canopy, one executable with Python and the locked dependencies, for this platform (D067)
+	scripts/build-binary.sh
 
 ##@ Setup
 

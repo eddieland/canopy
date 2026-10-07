@@ -1074,3 +1074,32 @@ Rejected:
 - A treehouse command to create slots: there is none; leasing and returning is how a slot is made ahead of a run.
 Revisit: if treehouse gains a per-command `max_trees` or a way to create slots, use it; if removal keeps a clone the
 operator considers disposable often enough to be friction, add a flag that skips the stash or unpushed check.
+
+## D067. Releases ship one executable per platform, built by CI and copied to the machine that runs canopy
+
+Context: D046's install is `uv tool install git+https://...` from a private repository, so the machine that runs canopy
+needs a git credential for canopy's own repository, and uv and the package index besides. The operator wants a machine
+that holds no credential for this repository, which is D046's revisit condition.
+Decision (DESIGN §5):
+- A release is a single executable per platform: linux-x86_64, linux-aarch64, macos-aarch64. It is a pex
+  (`pex-tool/pex`) in venv mode inside a scie, holding a python-build-standalone interpreter, canopy,
+  canopy-notify-slack, and the dependencies `uv.lock` pins, with their hashes. `scripts/build-binary.sh` builds it
+  from `uv build` and `uv export`; pex runs through `uvx` at a pinned version, so it is a build tool, not a dependency.
+- Pushing a tag `vX.Y.Z` that matches `pyproject.toml`'s version runs `.github/workflows/release.yml`: it builds on
+  each platform's runner, runs the install check against each executable, and attaches them with their checksums to a
+  GitHub Release. It uses only the job's own token.
+- The operator downloads a release where they are signed in to GitHub and copies the file to the machine that runs
+  canopy. That machine needs no credential, no Python, no uv, and no network for the install.
+- The git install stays for anyone who has the credential.
+Rejected:
+- PyInstaller, Nuitka onefile: `sys.executable` is the frozen program, so `sys.executable -m canopy`, how dispatch,
+  chores, and reviews start their runs, does not work.
+- shiv, a plain zipapp, a pex without venv mode: `sys.executable` is a bare interpreter that cannot import canopy.
+- PyApp, uvbox: they install on first run from the network.
+- Wheels attached to the release, installed with `uv tool install ./canopy-*.whl`: still needs uv and the index on the
+  machine, resolves afresh rather than from `uv.lock`, and resolves `canopy-notify-slack` from PyPI, where anyone can
+  register the name, whenever its wheel is left out.
+- Public release assets: the executable holds the source.
+Revisit: if a platform needs an older glibc than its wheels allow (pin pex's target with `--complete-platform`); if
+the machine that runs canopy should fetch releases itself (then a read-only credential, or a store it already uses);
+with D046, before any public release.
