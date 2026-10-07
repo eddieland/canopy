@@ -21,6 +21,7 @@ import os
 import stat
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import TextIO
@@ -44,19 +45,33 @@ def read_webhook(path: Path, *, prefix: str = SLACK_PREFIX) -> str:
     """Return the webhook URL in `path`, which must be the operator's, closed to others, and hold one Slack URL."""
     try:
         st = path.stat()
-        text = path.read_text(encoding="utf-8")
     except OSError as e:
         raise SinkError(f"cannot read the webhook file {path}: {e.strerror}") from e
+    # Checked before reading: opening a FIFO would block.
     if not stat.S_ISREG(st.st_mode):
         raise SinkError(f"the webhook file {path} is not a regular file")
     if st.st_uid != os.getuid():
         raise SinkError(f"the webhook file {path} belongs to someone else; it must be yours")
     if st.st_mode & 0o077:
         raise SinkError(f"the webhook file {path} is readable by others; run: chmod 600 {path}")
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise SinkError(f"cannot read the webhook file {path}: {e}") from e
     url = text.strip()
-    if not url.startswith(prefix) or any(c.isspace() for c in url):
+    if not url.startswith(prefix) or any(c.isspace() for c in url) or not _same_origin(url, prefix):
         raise SinkError(f"the webhook file {path} must hold one URL starting {prefix}")
     return url
+
+
+def _same_origin(url: str, prefix: str) -> bool:
+    """Whether `url` parses to the scheme and host of `prefix`, with no user part: a prefix match cannot hide a host."""
+    try:
+        got, want = urllib.parse.urlsplit(url), urllib.parse.urlsplit(prefix)
+        _ = got.port  # raises on a malformed port
+    except ValueError:
+        return False
+    return (got.scheme, got.hostname, got.username) == (want.scheme, want.hostname, None)
 
 
 def escape(text: object) -> str:
@@ -106,8 +121,9 @@ def render(message: dict[str, object]) -> str:
     if isinstance(digest, dict):
         counts.append("digest")
         lines += ["", "*Digest*", *(escape(line) for line in _lines(digest.get("lines")))]
-    if len(lines) > _MAX_LINES:
-        lines = [*lines[: _MAX_LINES - 1], f"_... and {len(lines) - _MAX_LINES + 1} more lines_"]
+    # The header is one of the at most `_MAX_LINES` lines.
+    if len(lines) > _MAX_LINES - 1:
+        lines = [*lines[: _MAX_LINES - 2], f"_... and {len(lines) - _MAX_LINES + 2} more lines_"]
     header = f"*canopy* · {escape(repo)}" + (f": {', '.join(counts)}" if counts else "")
     return "\n".join([header, *lines])
 

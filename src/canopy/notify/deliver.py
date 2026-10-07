@@ -85,10 +85,12 @@ def _deliver(
         journal.mark_delivered(ctx.conn, name, change, cursor=cursor, digest=digest is not None)
         log.info("notified", extra=fields)
         return Delivery(name, "delivered")
-    failures = journal.mark_failed(ctx.conn, name, failure)
+    # The count and its alert are one write, so a stop between them cannot skip the alert for this streak.
+    with db.transaction(ctx.conn):
+        failures = journal.mark_failed(ctx.conn, name, failure)
+        if failures == FAILING_AFTER and ctx.config.notify.takes(outbox.LOOP):
+            db.record_event(ctx.conn, outbox.sink_failing(name, failure))
     log.warning("notify command failed", extra={**fields, "error": failure, "failures": failures})
-    if failures == FAILING_AFTER and ctx.config.notify.takes(outbox.LOOP):
-        db.record_event(ctx.conn, outbox.sink_failing(name, failure))
     return Delivery(name, "failed", failure)
 
 
@@ -116,24 +118,36 @@ def _digest_due(row: sqlite3.Row, sink: Sink, now: datetime) -> bool:
 
 def _record_loop_events(ctx: Context) -> None:
     """Record `loop.failing` once when the latest ticks all failed, and `loop.recovered` at the first `ok` after it."""
-    statuses = ctx.conn.execute("SELECT id, status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1000")
-    ticks = [(int(r[0]), str(r[1])) for r in statuses]
-    if not ticks:
+    latest = ctx.conn.execute(
+        "SELECT id, status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if latest is None:
         return
+    tick_id, status = int(latest[0]), str(latest[1])
+    # Pruning always keeps the newest of these (journal.prune_events), so a long streak is never taken for a new one.
     last = ctx.conn.execute(
         "SELECT kind FROM notify_events WHERE kind IN ('loop.failing', 'loop.recovered') ORDER BY id DESC LIMIT 1"
     ).fetchone()
     failing = last is not None and last[0] == "loop.failing"
-    if ticks[0][1] == "ok":
+    if status == "ok":
         if failing:
-            streak = next((i for i, (_, status) in enumerate(ticks[1:]) if status == "ok"), len(ticks) - 1)
-            db.record_event(ctx.conn, outbox.loop_recovered(streak))
+            db.record_event(ctx.conn, outbox.loop_recovered(_failed_before(ctx.conn, tick_id)))
         return
-    streak = next((i for i, (_, status) in enumerate(ticks) if status == "ok"), len(ticks))
+    streak = _failed_before(ctx.conn, tick_id + 1)
     if streak >= FAILING_AFTER and not failing:
-        tick_id, status = ticks[0]
         log_path = ctx.state_dir / "ticks" / f"{tick_id}.log"
         db.record_event(ctx.conn, outbox.loop_failing(streak, status, tick_id, str(log_path)))
+
+
+def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
+    """How many ended ticks before `tick_id` failed since the last `ok` one: the whole streak, however long."""
+    return int(
+        conn.execute(
+            "SELECT count(*) FROM ticks WHERE id < ? AND status NOT IN ('running', 'ok') "
+            "AND id > coalesce((SELECT max(id) FROM ticks WHERE id < ? AND status = 'ok'), 0)",
+            (tick_id, tick_id),
+        ).fetchone()[0]
+    )
 
 
 def test(ctx: Context, names: list[str]) -> list[Delivery]:

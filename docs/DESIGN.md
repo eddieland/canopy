@@ -1440,7 +1440,7 @@ named sink hears about every open item once, as a new sink does.
 3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, set the
    digest time, and reset its failure count. On anything else, change nothing else, log the failure (`notify command
    failed`, with the sink's name), and count it toward `loop.sink_failing`, which the third failure in a row records
-   once. A sink that takes `loop` hears about its own failing when it comes back.
+   once, in the same transaction as the count. A sink that takes `loop` hears about its own failing when it comes back.
 
 Bounds:
 
@@ -1450,7 +1450,8 @@ Bounds:
 - A new sink's cursor starts at the newest event, so it gets no backlog. It hears about every open attention item on
   its first delivery, as `notify.cmd` does today.
 - A sink removed from the config loses its `notify_sinks` and `notifications` rows at the next publish. Events every
-  sink has passed are deleted after 7 days.
+  sink has passed are deleted after 7 days, except the newest `loop.failing` or `loop.recovered`: it is how a streak
+  that outlasts a week is told from a new one. `loop.recovered` counts every failed tick of the streak.
 - Sinks run one after another under the tick lock, so a hung sink delays the next tick by up to 60 seconds, and five
   hung sinks by five minutes.
 
@@ -1524,8 +1525,9 @@ on it and lists the `canopy-notify-slack` script in its own `[project.scripts]`,
 - It reads the `json` format on stdin, posts one message to a Slack incoming webhook, and exits 0 on a 2xx response
   and 1 otherwise, with Slack's reply on stderr. A rate-limited post is retried by the next tick like any failure.
 - The webhook URL comes from a file: `--webhook-file PATH`, default `$XDG_CONFIG_HOME/canopy/slack-webhook`
-  (`~/.config/canopy/slack-webhook`). The file must belong to the operator, be unreadable by group and others, and hold
-  one `https://hooks.slack.com/` URL; otherwise the sink exits 2 saying which. The URL is never in canopy's config,
+  (`~/.config/canopy/slack-webhook`). The file must be a regular file (checked before it is opened), belong to the
+  operator, be unreadable by group and others, and hold one `https://hooks.slack.com/` URL whose parsed host is that
+  host; otherwise the sink exits 2 saying which. The URL is never in canopy's config,
   argv, journal, or logs.
 - The message has a header with the repository's directory name and the counts, a line per item or event with the
   ticket key, reason or status, and link, and the digest as a short block. It is posted as `{"text": ...}`, at most 45

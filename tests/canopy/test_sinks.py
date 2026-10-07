@@ -166,6 +166,30 @@ def test_the_webhook_file_is_checked(
     assert message in capsys.readouterr().err
 
 
+def test_a_webhook_that_only_looks_like_the_prefix_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # It starts with the prefix, but its host is evil.test: the part before `@` is a user name.
+    path = webhook_file(tmp_path, "http://127.0.0.1:1@evil.test/hook")
+    assert slack.run(["--webhook-file", str(path)], io.StringIO(json.dumps(MESSAGE)), prefix="http://127.0.0.1:") == 2
+    assert "must hold one URL starting http://127.0.0.1:" in capsys.readouterr().err
+
+
+def test_a_fifo_webhook_file_is_refused_without_opening_it(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "slack-webhook"
+    os.mkfifo(path, 0o600)
+    assert slack.run(["--webhook-file", str(path)], io.StringIO(json.dumps(MESSAGE))) == 2
+    assert "is not a regular file" in capsys.readouterr().err
+
+
+def test_a_long_slack_message_is_45_lines_with_its_header() -> None:
+    events = [{"kind": "run.started", "line": f"event {n}"} for n in range(60)]
+    text = slack.render({"repo": "/r/api", "events": events})
+    lines = text.splitlines()
+    assert len(lines) == 45
+    assert lines[-1] == "_... and 17 more lines_"
+
+
 def test_the_slack_sink_reads_its_default_file_and_needs_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
