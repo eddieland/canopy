@@ -41,6 +41,34 @@ permission:
     "canopy *": deny
     "treehouse *": deny
     "sudo *": deny
+  # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
+  # in depth, whatever write tools the operator's runtime config grants (D069). The worker comments on its ticket,
+  # edits the ticket's labels, and opens and updates its PRs. Denied: merging, review submissions, transitions,
+  # creating tickets, writing files or branches through the API instead of git, deleting, forking, and starting other
+  # agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them, and has no
+  # narrower name to deny; the prompt keeps it to labels.
+  "*merge*": deny
+  "*review_write*": deny
+  "*pending_review*": deny
+  "*submit*": deny
+  "*approve*": deny
+  "*transition*": deny
+  "*create_issue*": deny
+  "*createJiraIssue*": deny
+  "*sub_issue*": deny
+  "*create_branch*": deny
+  "*create_or_update_file*": deny
+  "*push_files*": deny
+  "*delete*": deny
+  "*fork*": deny
+  "*create_repository*": deny
+  "*copilot*": deny
+  "*run_workflow*": deny
+  "*run_trigger*": deny
+  "*rerun*": deny
+  "*cancel*": deny
+  "*createConfluence*": deny
+  "*updateConfluence*": deny
 ---
 The system prompt is supplied by the harness at invocation time via the
 `{prompt}` argument to `opencode run`. Keep this body minimal so the agent does

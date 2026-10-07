@@ -1124,3 +1124,31 @@ facts are re-read from their sources. `repo` in `ticket_units` and `run_slots` s
 it, though canopy never writes null there; tightening it is a migration of its own. A journal that applied only the
 old 0001, from M0 and never opened since, is taken as current and fails at its first query instead.
 Revisit: never for v0.1; a later squash needs its own decision and a plan for the journals then in use.
+
+## D069. Workers set labels through the tracker's MCP edit tool; the PR label is best-effort; workers deny by name
+
+Context: live runs in M2 to M4 left the `agent` PR label and the `needs-human` ticket label to chance. The worker's MCP
+write tools in the operator's runtime were `create_pull_request` and `add_issue_comment`, neither of which sets labels,
+so a label landed only when the model reached for `gh`. A command-line client is not available on every machine that
+runs canopy, and is GitHub-only where the primary tracker is Jira. The worker definition also denied no MCP tools at
+all, so whatever write tools the operator's runtime granted, the worker had.
+Decision:
+- Ticket labels, `needs_human_label` among them, are set with the tracker's MCP issue edit tool, passing only labels.
+  The tracker skills name the tool. On Jira, an edit cannot change an issue's status, so granting it does not let a
+  worker move a ticket to Done.
+- The PR label is set only if the worker has a GitHub tool that sets labels; otherwise the PR is opened without one and
+  the summary says so. Nothing reads the PR label (it is attribution, TRUST_MODEL T5), and GitHub's only such tool,
+  `issue_write`, also creates and closes issues and PRs. Granting it is the operator's call.
+- `canopy-worker` denies, by tool name, merging, review submission, transitions, ticket creation, API file and branch
+  writes, deletes, forks, Copilot agents, and workflow runs, as the reviewer and splitter already do. Deny rules in
+  canopy's definitions load after the operator's config, so they win over an operator's broader allow.
+Rejected:
+- `gh issue edit --add-label` and `gh pr edit --add-label`: additive and narrow, but GitHub-only and dependent on a
+  client and credential the runtime does not hold.
+- Allowing `issue_write` by default: one tool for labels, creating issues, and closing issues and PRs; OpenCode
+  permissions match tool names, not arguments.
+- The harness setting labels: it has no tracker or GitHub code, by design (D003, D014).
+Consequences: on GitHub, PRs may lack the `agent` label unless the operator grants `issue_write` and accepts that the
+prompt alone keeps it to labels. The deny list matches names on GitHub's and Atlassian's servers; a server with other
+names for the same actions gets past it, which is why it is defense in depth (TRUST_MODEL T1).
+Revisit: when GitHub's server gains a label-only tool, or when a deny is found not to apply to MCP tools.
