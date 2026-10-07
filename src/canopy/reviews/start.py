@@ -118,7 +118,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             repo=repo,
             logs_dir=reviews_dir(ctx),
         )
-        pool = ctx.workspace.pool(repo)
+        pool = ctx.pool(repo)
         try:
             lease = treehouse.lease(ctx.runner, f"{HOLDER_KEY}{run_id}", pool=pool)
         except treehouse.TreehouseError as e:

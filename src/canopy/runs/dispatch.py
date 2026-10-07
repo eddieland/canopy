@@ -405,7 +405,7 @@ def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, 
     leases: list[tuple[str, treehouse.Lease]] = []
     for repo in repos:
         try:
-            leases.append((repo, treehouse.lease(ctx.runner, key, pool=ctx.workspace.pool(repo))))
+            leases.append((repo, treehouse.lease(ctx.runner, key, pool=ctx.pool(repo))))
         except treehouse.TreehouseError as e:
             _return_all(ctx, leases)
             where = "" if ctx.workspace.single else f"{repo}: "

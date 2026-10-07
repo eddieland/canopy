@@ -213,6 +213,9 @@ for everything in this section, and the repositories' own `canopy.toml` files ar
 shared workspace repository, so it is exposed the same way. It also holds the map: repository names, one-line
 summaries, and clone URLs. Names and summaries are data, like ticket text. URLs are read only by `canopy workspace
 sync`, a command the operator runs, which prints each clone before making it; a tick never clones or changes a remote.
+Dropping a repository from the map makes the operator's next sync remove its clone under `repos/` and its slots, but
+only when nothing in them would be lost: a clean clone with no stash and no commit its remote lacks, and slots treehouse
+destroys unforced (D066). A pool's size is user-only (`capacity`), so the map cannot grow the operator's pools.
 
 Controls, in code:
 - Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A repository file
