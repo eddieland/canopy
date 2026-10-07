@@ -1026,3 +1026,23 @@ Rejected:
 - `notify.cmd` pointed at `notify-send`: it takes arguments, not stdin, so it needs a wrapper of the operator's.
 Consequences: one `uv tool install` puts `canopy`, `canopy-notify-desktop`, and `canopy-notify-slack` on `PATH`.
 Revisit: if a desktop sink needs a dependency the harness should not carry (then a workspace member like Slack's).
+
+## D065. The reviewer reads its checkout through a link in a directory of its own; reviews name their repository
+
+Context: DESIGN §21 put the reviewer's working directory outside the checkout, so that a PR cannot supply the
+runtime's configuration, and left open how the reviewer then reads the checkout and how reviews work in a workspace of
+several repositories. The worker's `external_directory: deny` refuses paths outside the working directory, and the
+desk canary (D059) showed OpenCode lets edits through a link inside it.
+Decision (DESIGN §21):
+- `_review` makes `<state_dir>/reviews/<id>/` holding one link, `checkout`, to the slot, and runs the reviewer there
+  with `external_directory: deny`. The prompt names the link. The directory is removed, never following the link,
+  when the run ends or reconcile closes it.
+- `canopy review run` takes `--repo`, required in a workspace of several (`unknown_repo` otherwise), and leases from
+  that repository's pool. A PR of a repository outside the workspace still fails at the fetch.
+- A running review counts toward `max_workers` in dispatch's `capacity` guard and the state block's capacity, since it
+  holds a slot.
+Rejected:
+- `external_directory: allow`: the reviewer could read anything on the machine, such as the operator's home.
+- No checkout, MCP reads only: kept as the fallback if the reviewer canary fails.
+Revisit: if the reviewer canary fails (then MCP reads only); if reviewers need to run the PR's tests (then the
+operator's own definition, as DESIGN §21 says).

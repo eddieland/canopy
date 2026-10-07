@@ -58,6 +58,9 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     running = db.running_runs(ctx.conn)
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     held = {str(s["lease_id"]) for slots in running_slots.values() for s in slots}
+    # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
+    reviews = db.running_review_runs(ctx.conn)
+    held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
     leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
     if not ws.single:
         # Only a workspace of several has desks; in a workspace of one, `desks/` would be the repository's own.
@@ -66,7 +69,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     if not running:
         # No run is live, so no run of an earlier canopy is still loading its snapshot.
         _prune_definitions(ctx, log)
-    capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running))
+    capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running) + len(reviews))
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
     return Reconciled(capacity, leased)
 

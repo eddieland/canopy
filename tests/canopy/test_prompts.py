@@ -92,3 +92,34 @@ def test_a_joint_run_needs_the_repositories(canopy_env: CanopyEnv) -> None:
     assert prompts.render_worker(cfg, "implement", VALUES).startswith("Work PROJ-1 in /pool/1/repo")
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REPOSITORIES\}\}, \{\{PRS\}\}"):
         prompts.render_worker(cfg, "implement", VALUES, required=prompts.REQUIRED_JOINT)
+
+
+def test_the_shipped_reviewer_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    values = {
+        "PR_URL": "https://github.com/acme/api/pull/7",
+        "SHA": "a" * 40,
+        "CHECKOUT": "/state/reviews/1/checkout",
+        "RUN_ID": "1",
+        "TICKET": "PROJ-1",
+        "TRACKER_PROVIDER": "jira",
+        "LOW_IMPACT": "Only docs change.",
+        "ATTEMPT": "1",
+        "MAX_ATTEMPTS": "3",
+        "CONTEXT": "None.",
+        "TIMEOUT_MINUTES": "20",
+        "CONTRACT": "{}",
+    }
+    text = prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+    assert "{{" not in text
+    assert '<!-- canopy-review {"v":1,"run":1,"sha":"' + "a" * 40 + '",' in text
+
+
+def test_a_reviewer_override_must_name_the_commit_and_the_run(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "reviewer.md").write_text("Review {{PR_URL}} in {{CHECKOUT}}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    values = {"PR_URL": "u", "CHECKOUT": "c", "SHA": "s", "RUN_ID": "1"}
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{SHA\}\}, \{\{RUN_ID\}\}"):
+        prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)

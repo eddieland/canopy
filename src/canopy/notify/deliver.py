@@ -28,7 +28,7 @@ TIMEOUT_SECONDS = 60
 # A sink that fails this many deliveries in a row raises `loop.sink_failing` once; so many failed ticks raise
 # `loop.failing` once.
 FAILING_AFTER = 3
-_POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES)
+_POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS)
 
 
 @dataclass(frozen=True)

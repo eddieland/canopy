@@ -112,7 +112,8 @@ def _print_attention(items: list[attention.Item]) -> None:
 def _print_workers(ctx: Context) -> None:
     running = db.running_runs(ctx.conn)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    click.echo(f"\nRunning workers ({len(running)}/{ctx.config.capacity.max_workers}):")
+    busy = len(running) + len(db.running_review_runs(ctx.conn))
+    click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories; a workspace of one's needs no name.
         where = ", ".join(
@@ -120,7 +121,10 @@ def _print_workers(ctx: Context) -> None:
             for s in slots[int(r["id"])]
         )
         click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {where}")
-    if not running:
+    # A review holds a slot and counts toward max_workers (DESIGN §21).
+    for r in db.running_review_runs(ctx.conn):
+        click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
+    if not running and not db.running_review_runs(ctx.conn):
         click.echo("  none")
 
 

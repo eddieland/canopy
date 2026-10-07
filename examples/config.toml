@@ -62,3 +62,11 @@ cmd = ""
 # when = "Weekdays, 08:00 to 18:00 America/New_York. Skip it when the last run found nothing."
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
+
+# Optional: adversarial reviews of PRs (DESIGN §21). Each new commit gets one comment from a fresh reviewer; it never
+# approves. Point review_cmd at a different model than worker_cmd, so the reviewer does not share the author's blind
+# spots.
+# [review]
+# agent_prs = true                                            # the loop's own PRs, before a human is asked
+# query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs; it authorizes comments in your name
+# low_impact = "Only docs, comments, or tests change."
