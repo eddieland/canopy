@@ -107,6 +107,8 @@ canopy tick
   exit
 ```
 
+For definitions of the terms used here, see the [Glossary in DESIGN](docs/DESIGN.md#glossary).
+
 canopy has no tracker code. Agents reach the tracker through its MCP server, guided by a short provider-neutral contract
 and, where it helps, a provider skill (Jira and GitHub Issues ship). See [docs/DESIGN.md](docs/DESIGN.md) §17.
 
