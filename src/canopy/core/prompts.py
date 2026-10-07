@@ -17,7 +17,12 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 OVERSEER = "overseer.md"
-WORKER = {"implement": "worker-implement.md", "fix-ci": "worker-fix-ci.md", "resume": "worker-resume.md"}
+WORKER = {
+    "implement": "worker-implement.md",
+    "fix-ci": "worker-fix-ci.md",
+    "resume": "worker-resume.md",
+    "split": "worker-split.md",
+}
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
@@ -25,6 +30,9 @@ REQUIRED_WORKER = ("LABELS",)
 # Placeholders a joint run's prompt must also use: its worker learns its repositories and the result's `prs` from them
 # (DESIGN §18). A prompt without them still serves a run in one repository.
 REQUIRED_JOINT = ("REPOSITORIES", "PRS")
+# Placeholders a split's prompt must also use: its repositories, and the comment that asked for the split, which the
+# splitter reads to check who asked (D061). An override without it would split on the overseer's word alone.
+REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
 
 
 class PromptError(Exception):

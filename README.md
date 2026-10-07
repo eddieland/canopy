@@ -69,8 +69,9 @@ directory, `canopy init --workspace`, list the repositories under `[repos.<name>
 describe them in `MAP.md`, then `canopy workspace sync` to clone them under `repos/`. Run `canopy loop` from the
 workspace. The overseer picks the repositories each ticket needs. Most tickets change one; a change that cannot land in
 parts is worked jointly, one worker opening a linked PR in each repository; and one that builds on another repository's
-merged PR is worked there next. The pools, journal, and attention list live inside the workspace. See
-`examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
+merged PR is worked there next. To have a ticket split into one ticket per repository instead, comment on it asking for
+a split: a worker creates the children unlabeled, and you label each one you want worked. The pools, journal, and
+attention list live inside the workspace. See `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
 
 ## Troubleshooting
 

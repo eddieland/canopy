@@ -151,7 +151,8 @@ Gaps:
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Planned in M10, which ships a
   desktop sink before the Slack sink. `notify.cmd` can reach the desktop today only through a wrapper script of the
   operator's (`notify-send` takes arguments, not stdin), which H2 rules out.
-- **N3. Planner agent that splits a larger ticket into worker tasks.** Planned in M8: the split creates child tickets
+- **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
+  request: an authorized replier's comment asks for the split (D061). The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
