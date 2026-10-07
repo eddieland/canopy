@@ -41,6 +41,11 @@ interval_minutes = 15
 # Tracker account ids whose ticket comments may resume your blocked work. Use the
 # tracker's stable id, not a display name: Jira accountId, GitHub login.
 authorized_repliers = ["replace-with-your-account-id"]
+# Every comment a worker posts starts with the prefix and ends with the suffix, each if set; set at least one.
+# Workers post as you, so this is how canopy tells their comments from yours: a comment that carries every mark
+# set is never feedback or an instruction.
+comment_prefix = "CANOPY:"
+comment_suffix = ""
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"

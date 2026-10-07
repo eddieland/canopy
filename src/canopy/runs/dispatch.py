@@ -479,6 +479,8 @@ def _spawn(
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
         "REQUEST": request or "",
         "MAP": map_note(ctx),
+        "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
+        "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
     # splitter's own check of who asked for the split needs the request (D061).

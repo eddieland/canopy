@@ -167,6 +167,12 @@ but must be distinguishable:
   loop did and why.
 - Every review comment says what it is in its first line ("an automated adversarial review ... not a human review and
   not an approval") and carries a machine-readable `canopy-review` marker on its last.
+- Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
+  `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
+  them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
+  them gains nothing: they silence the comment that carries them, and a comment without them is judged as before. They
+  are user-only, so a repository cannot pick marks that silence people. They are a prompt obligation; a worker that
+  omits them leaves its comment reading as the operator's, which the attempt limits bound.
 
 ### T6. Data exfiltration by a compromised worker
 

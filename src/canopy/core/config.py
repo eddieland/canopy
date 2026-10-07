@@ -94,6 +94,27 @@ def _branch_prefix(value: str) -> str:
     return value
 
 
+MAX_COMMENT_MARK = 80
+
+
+def _comment_mark(value: str) -> str:
+    # What workers start or end every comment with; a comment that carries it is never feedback or an instruction
+    # (DESIGN §8, D069). Empty means not used. Prompts quote it in backticks, and one without a letter or digit (`-`,
+    # `>`) would match ordinary list items and quotes.
+    if value and (
+        len(value) > MAX_COMMENT_MARK
+        or value != value.strip()
+        or not value.isprintable()
+        or "`" in value
+        or not any(c.isalnum() for c in value)
+    ):
+        raise ValueError(
+            f"must be empty, or one line of at most {MAX_COMMENT_MARK} characters with a letter or digit, no backtick, "
+            "and no surrounding spaces"
+        )
+    return value
+
+
 def command_words(template: str) -> list[str]:
     """Split a command template into words, as `render_command` does. It must mention `{prompt}` exactly once."""
     words = shlex.split(template)
@@ -192,6 +213,17 @@ class Trust(Section):
     branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
     pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
+    # What every worker comment starts and ends with, when set (DESIGN §8, D069). They only take authority away, from
+    # the comments that carry them; user-only, so a repository cannot pick marks that silence people's comments.
+    comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
+    comment_suffix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = ""
+
+    @model_validator(mode="after")
+    def _one_comment_mark(self) -> Trust:
+        # With neither, a worker's comment reads as the operator's, and its PR replies as new review feedback.
+        if not self.comment_prefix and not self.comment_suffix:
+            raise ValueError("set trust.comment_prefix, trust.comment_suffix, or both: workers mark their comments")
+        return self
 
 
 def _repo_name(value: str) -> str:
