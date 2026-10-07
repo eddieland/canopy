@@ -10,7 +10,9 @@ The repositories this split covers, as the overseer chose them:
 
 {{REPOSITORIES}}
 
-The workspace map, prose about what each repository owns and how they depend on each other: {{MAP}}.
+The workspace map, `MAP.md`, prose about what each repository owns and how they depend on each other:
+
+{{MAP}}
 
 ## Authorization
 

@@ -46,6 +46,7 @@ def test_a_split_reads_a_desk_and_records_its_children(
 ) -> None:
     """M8 acceptance, against the fakes: a requested split creates a child per repository and pushes nothing."""
     seed_pools(ws, treehouse_state)
+    (ws.root / "MAP.md").write_text("# Map\n\napi serves {{KEY}}; web calls it.\n")
     conn = ws.journal()
     tick_id = in_tick(conn, monkeypatch)
     result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
@@ -91,6 +92,8 @@ def test_a_split_reads_a_desk_and_records_its_children(
     assert f"- `api` at `{desk / 'api'}`, at `main`. The api repository." in prompt
     assert f"- `web` at `{desk / 'web'}`, at `main`. The web repository." in prompt
     assert "attempt 1 of 1" in prompt
+    # The map's text, not its path: the splitter may not read outside its desk. Its placeholders are left as they are.
+    assert "how they depend on each other:\n\n# Map\n\napi serves {{KEY}}; web calls it.\n" in prompt
 
 
 @pytest.mark.parametrize(
@@ -190,6 +193,10 @@ def test_a_single_repository_is_never_split(
             "child OLD-1 is not a new ticket: the journal already knows it",
         ),
         (
+            {"status": "done", "children": {"SEEN-1": "api"}},
+            "child SEEN-1 is not a new ticket: the journal already knows it",
+        ),
+        (
             {"status": "done", "children": {"PROJ-13": "docs"}},
             "child PROJ-13's repository 'docs' is not one the split was dispatched with",
         ),
@@ -205,8 +212,10 @@ def test_invalid_children_are_recorded_nowhere(
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
     in_tick(conn, monkeypatch)
-    # OLD-1 is a ticket the journal has dispatched before: a splitter must not claim it.
+    # OLD-1 is a ticket the journal has dispatched before, and SEEN-1 one the overseer has decided about: a splitter
+    # must claim neither.
     db.touch_ticket(conn, "OLD-1", str(ws.root))
+    db.touch_ticket(conn, "SEEN-1", str(ws.root))
     conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status) "
         "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-work', 'x', 'l', 'done')"
@@ -242,6 +251,43 @@ def test_a_failed_split_records_what_it_created(
     run = wait_for_run(conn, 1)
     assert run["status"] == "failed"
     assert children(conn) == [("PROJ-13", "PROJ-12", "api", 1)]
+
+
+def test_a_timed_out_split_records_the_children_it_reported(
+    ws: Ws, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_pools(ws, treehouse_state)
+    conn = ws.journal()
+    in_tick(conn, monkeypatch)
+    result = {"status": "done", "summary": "split", "children": {"PROJ-13": "api"}}
+    runner = InlineRunner(timeout_agent=True, timeout_stdout=json.dumps(result) + "\n")
+    assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 0
+    assert main(["_run", "1"], runner=runner) == 0
+    run = db.get_run(conn, 1)
+    assert run is not None
+    assert run["status"] == "timeout"
+    assert json.loads(run["result_json"])["harness"] == "the splitter timed out after 45 minutes"
+    # The child exists in the tracker, so the journal knows it and a retry cannot make it again.
+    assert children(conn) == [("PROJ-13", "PROJ-12", "api", 1)]
+    assert pool_statuses(treehouse_state) == ["available", "available"]
+
+
+def test_a_child_is_not_worked_in_a_workspace_of_another_repository(
+    canopy_env: CanopyEnv, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = journal(canopy_env)
+    tick_id = in_tick(conn, monkeypatch, dry_run=True)
+    db.touch_ticket(conn, "PROJ-12", str(canopy_env.repo))
+    conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status) "
+        "VALUES (?, 'PROJ-12', 'split', '', 'x', 'y', 'l', 'done')",
+        (tick_id,),
+    )
+    db.record_split_children(conn, "PROJ-12", 1, {"PROJ-13": "api"})
+    assert main(["dispatch", "PROJ-13", "--label", LABEL, "--kind", "implement"]) == 1
+    assert decisions(conn, tick_id) == [
+        ("refused:unknown_repo", "PROJ-13 was split from PROJ-12 to cover api only; dispatch it with --repo api")
+    ]
 
 
 def test_a_child_is_dispatched_only_in_its_repository(
