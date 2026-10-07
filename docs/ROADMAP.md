@@ -153,7 +153,8 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_stacking.py` ho
 acceptance), docs, and D045 are in: `--base` checked by the `bad_base` guard, the stacked base in the run and the worker
 prompts, a `blocked` phase, and the overseer prompt's blockers and stacking section. The overseer prompt change needs
 human approval in its PR. Waiting on the operator: two real linked tickets worked in order, the second stacked on the
-first's open, green PR. Started on request while M2 and M3 wait on their live runs.
+first's open, green PR. Started on request while M2 and M3 wait on their live runs. `policy.stacking` (D054) lets the
+operator turn stacking off; the overseer prompt follows it, with no harness guard.
 
 ## M5. Shareable
 

@@ -871,3 +871,14 @@ Rejected:
   declined.
 - Any PR with the label, whoever wrote it: lets a label put a worker's commits on a coworker's branch.
 Revisit: if the decisions corpus shows a dispatch for a PR the operator did not write.
+
+## D057. Under `policy.stacking = "never"`, a blocker has landed only when its PR merged
+
+Context: D054 defined `"never"` as waiting until the blocker is closed and has no open PR. A blocker whose PR was closed
+without merging also has no open PR, so that definition would start B on a prerequisite that never landed.
+Decision: supersedes D054's definition only. A blocker has landed when it is closed and its PR, if it had one, merged.
+One whose PR closed unmerged never landed: the overseer records `needs_author` for B, as it already does for a stacked
+ticket whose blocker's PR closed unmerged (DESIGN §10). `"never"` governs starting a ticket; one already stacked when
+the setting changes keeps its stacked PR and its follow-up runs, since that PR cannot merge before its blocker's.
+The rest of D054 stands, including no harness guard.
+Revisit: with D054's triggers.
