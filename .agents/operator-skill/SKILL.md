@@ -41,8 +41,9 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
-| `canopy init --workspace` | Sets up the current directory as a workspace: `canopy-workspace.toml`, `MAP.md`, `.gitignore`. |
+| `canopy init --workspace [[NAME=]URL...]` | Sets up a workspace: map, `MAP.md`, `.gitignore`; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
+| `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
 | `canopy skill` | Prints this skill. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |

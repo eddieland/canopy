@@ -456,9 +456,12 @@ DESIGN §18 and D066. Needs M6. Taken on request (2026-10-07).
 - `canopy workspace sync` converges: fills each pool by leasing as `canopy-sync` and returning, trims idle slots with
   treehouse's unforced `destroy`, and removes clones the map dropped when nothing in them would be lost. `--dry-run`.
   It holds the tick lock.
+- `canopy workspace add [NAME=]URL...`, and the same URLs on `canopy init --workspace`: append them to the map,
+  then sync.
 - The fake treehouse gains `destroy`.
 
-Accept: in a real two-repository workspace with sizes declared, sync makes each pool its size, and `post_create` runs
+Accept: `canopy init --workspace` with two real clone URLs, in an empty directory with sizes declared, clones both and
+makes each pool its size, and `post_create` runs
 in the new slots during sync, not during the first run. Lowering a size removes idle slots and never a leased one; a
 dispatch into a full pool is refused `no_slot`. Dropping a repository from the map removes its clone and slots, and a
 clone with an unpushed commit is kept and reported.

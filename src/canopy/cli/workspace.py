@@ -1,8 +1,9 @@
-"""`canopy workspace sync`: make the workspace match its map and the declared slots (DESIGN §18)."""
+"""`canopy workspace sync` and `add`: make the workspace match its map and the declared slots (DESIGN §18)."""
 
 from __future__ import annotations
 
 import contextlib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -37,8 +38,48 @@ def cmd_sync(click_ctx: click.Context, *, dry_run: bool) -> int:
     size. Removes a clone under repos/ that the map no longer lists, with its slots, when nothing in either would be
     lost. Prints each clone before it runs. Never changes an existing clone's remotes. Waits for a running tick to end.
     """
-    if workspace.find_root(Path.cwd()) is None:
+    _require_workspace()
+    check_synced(sync(click_ctx, dry_run=dry_run))
+    return 0
+
+
+@workspace_group.command("add")
+@click.argument("repos", metavar="[NAME=]URL...", nargs=-1, required=True)
+@click.pass_context
+def cmd_add(click_ctx: click.Context, repos: tuple[str, ...]) -> int:
+    """Add repositories to the map by clone URL, then sync.
+
+    Each repository is named after its URL's last path segment without .git, unless given as NAME=URL. A URL the map
+    already lists is left as it is. Write a one-line summary for each in the map, and describe them in MAP.md, for the
+    overseer.
+    """
+    root = _require_workspace()
+    add_repos(workspace.load(root), repos)
+    check_synced(sync(click_ctx, dry_run=False))
+    return 0
+
+
+def _require_workspace() -> Path:
+    root = workspace.find_root(Path.cwd())
+    if root is None:
         raise CliError(f"no {config.WORKSPACE_FILE_NAME} here or above; run `canopy init --workspace` first")
+    return root
+
+
+def add_repos(ws: workspace.Workspace, repos: Sequence[str]) -> None:
+    """Add each `[NAME=]URL` in `repos` to the map, and print what was added. Nothing is written if one is refused."""
+    try:
+        entries = [setup_workspace.repo_arg(arg) for arg in repos]
+        added = setup_workspace.add(ws, entries)
+    except ValueError as e:
+        raise CliError(f"{e}; nothing was added to {ws.map_file}") from e
+    for a in added:
+        detail = f": {a.detail}" if a.detail else ""
+        click.echo(f"{a.name}: {a.outcome}{detail}")
+
+
+def sync(click_ctx: click.Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
+    """Make the workspace match its map and declared slots, between ticks. Returns what each step found or did."""
     ctx = open_context(click_ctx)
     with contextlib.ExitStack() as stack:
         # A tick leases slots and reads the pools; sync changes them only between ticks.
@@ -47,11 +88,14 @@ def cmd_sync(click_ctx: click.Context, *, dry_run: bool) -> int:
         except lock.LockBusyError:
             click.echo("A tick is running; sync starts when it ends.")
             stack.enter_context(lock.hold(ctx.lock_path, wait=True))
-        results = _sync(ctx, dry_run=dry_run)
+        return _sync(ctx, dry_run=dry_run)
+
+
+def check_synced(results: Sequence[setup_workspace.Checked]) -> None:
+    """Refuse, exit 1, if any step did not reach what is declared."""
     unmet = sum(r.outcome in _UNMET for r in results)
     if unmet:
         raise CliError(f"{unmet} of {len(results)} steps did not reach what is declared; see above")
-    return 0
 
 
 def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:

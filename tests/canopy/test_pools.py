@@ -1,6 +1,7 @@
 """Declared repositories and slots (DESIGN §18, ROADMAP M17): `capacity` sizes the pools, sync converges."""
 
 import json
+import os
 import sqlite3
 import threading
 from pathlib import Path
@@ -9,9 +10,10 @@ from typing import Any
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db
+from canopy.core import config, db, workspace
 from canopy.infra import lock
-from tests.canopy.conftest import Ws, map_text, seed_pools
+from canopy.setup import workspace as setup_workspace
+from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
 from tests.canopy.helpers import InlineRunner
 from tests.conftest import CanopyEnv, git, user_toml
 
@@ -352,3 +354,88 @@ def test_sync_keeps_what_under_repos_is_not_a_clone(
     assert (ws.root / "repos" / "notes").is_file()
     assert (ws.root / "repos" / "linked").is_symlink()
     assert treehouse_state.exists() is False
+
+
+# Repositories by clone URL
+
+
+@pytest.mark.parametrize(
+    ("arg", "expected"),
+    [
+        ("https://github.com/acme/api.git", ("api", "https://github.com/acme/api.git")),
+        ("https://github.com/acme/Web_App/", ("web-app", "https://github.com/acme/Web_App/")),
+        ("git@github.com:acme/api.git", ("api", "git@github.com:acme/api.git")),
+        ("/srv/git/docs.git", ("docs", "/srv/git/docs.git")),
+        ("site=https://github.com/acme/www.git", ("site", "https://github.com/acme/www.git")),
+        ("https://x.test/r?ref=main", ("r-ref-main", "https://x.test/r?ref=main")),
+    ],
+)
+def test_a_repository_is_named_after_its_url_unless_named(arg: str, expected: tuple[str, str]) -> None:
+    assert setup_workspace.repo_arg(arg) == expected
+
+
+@pytest.mark.parametrize(
+    ("arg", "error"), [("--upload-pack=x", "must be a clone URL"), ("https://x.test/9/", "NAME=URL")]
+)
+def test_a_repository_argument_that_cannot_be_used_is_refused(arg: str, error: str) -> None:
+    with pytest.raises(ValueError, match=error):
+        setup_workspace.repo_arg(arg)
+
+
+def test_add_lists_new_urls_in_the_map_and_syncs_them(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    declare(canopy_env, "[capacity.repo_slots]\ndocs = 2")
+    docs = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
+    map_file = ws.root / config.WORKSPACE_FILE_NAME
+
+    assert main(["workspace", "add", str(docs), str(ws.origins["api"]) + "/"]) == 0
+    out = capsys.readouterr().out
+    assert "docs: added\napi: present: the map already lists it\n" in out
+    assert f"docs: cloning {docs} into {ws.clone('docs')}\ndocs: cloned\ndocs: slots: 2 of 2, made 2\n" in out
+    assert [r.name for r in workspace.load(ws.root).repos] == ["api", "docs", "web"]
+    assert git("log", "--format=%s", cwd=ws.clone("docs")) == "initial docs"
+
+    # A name the map gives another URL refuses the whole add: nothing is written.
+    before = map_file.read_text()
+    assert main(["workspace", "add", "https://x.test/new.git", "docs=https://x.test/other.git"]) == 1
+    assert "docs: the map already has a repository by that name" in capsys.readouterr().err
+    assert map_file.read_text() == before
+
+
+def test_init_with_clone_urls_sets_up_a_workspace_ready_to_run(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(var, "canopy-test")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    origins = [bare_origin(tmp_path / "origins" / f"{n}.git", tmp_path) for n in ("api", "web")]
+    declare(canopy_env, "slots_per_repo = 2")
+    root = tmp_path / "acme"
+    root.mkdir()
+    monkeypatch.chdir(root)
+
+    assert main(["init", "--workspace", "--provider", "github", *map(str, origins)]) == 0
+    out = capsys.readouterr().out
+    assert "api: added\nweb: added\n" in out
+    assert "api: cloned\napi: slots: 2 of 2, made 2\n" in out
+    assert "web: cloned\nweb: slots: 2 of 2, made 2\n" in out
+    assert "  - api\n  - web\n" in out  # branch protection names both
+    ws = workspace.load(root)
+    assert [(r.name, r.url, r.cloned) for r in ws.repos] == [
+        ("api", str(origins[0]), True),
+        ("web", str(origins[1]), True),
+    ]
+    assert config.load(root, canopy_env.user_file).tracker.provider == "github"
+    assert len(fake_state(treehouse_state)["pools"]) == 2
+
+
+def test_clone_urls_without_a_workspace_are_refused(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["init", "--provider", "jira", "https://x.test/api.git"]) == 2
+    assert "pass --workspace" in capsys.readouterr().err
+    assert not (canopy_env.repo / config.WORKSPACE_FILE_NAME).exists()

@@ -981,16 +981,25 @@ summary = "Customer web app. Consumes the api's generated client from a release.
 - Config layers are built-in defaults, the workspace file, then the user file. The workspace file takes the repository
   file's place with the same scopes and the same rule that repository policy may only tighten. The repositories' own
   `canopy.toml` files are not read inside a workspace: a workspace has one tracker and one queue.
-- The map may be committed to a shared workspace repository, so a team maintains it together. It is then exposed like
-  a repository file (TRUST_MODEL T7) and gets the same controls. `url` is read only by `canopy workspace sync`, an
-  operator command that prints what it clones before cloning. Map URLs should be HTTPS (D038); `sync` warns about SSH
-  ones as `canopy init` does and clones them anyway. A tick never clones a repository or changes a remote; a
-  repository in the map with no clone is an attention item, `repo_missing`, and cannot be dispatched to.
+- The map may be committed to a shared workspace repository, so a team maintains it together. It is then exposed like a
+  repository file (TRUST_MODEL T7) and gets the same controls. `url` is read only by `canopy workspace sync`, an
+  operator command that prints what it clones before cloning, and by `canopy workspace add`, which writes it. Map URLs
+  should be HTTPS (D038); `sync` warns about SSH ones as `canopy init` does and clones them anyway. A tick never clones
+  a repository or changes a remote; a repository in the map with no clone is an attention item, `repo_missing`, and
+  cannot be dispatched to.
 - `canopy init --workspace` writes the skeleton: the workspace file (asking for the tracker provider, as `canopy init`
   does), a `MAP.md` to fill in, a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and `.canopy/` (a
   `.gitignore` that exists only gains the lines it lacks), and the user file if missing. It overwrites nothing, and
   prints the branch protection rules with every repository in the map they must be configured in. Plain `canopy init`
-  inside a workspace does the same.
+  inside a workspace does the same. Given clone URLs, `canopy init --workspace [NAME=]URL...` also does what
+  `canopy workspace add` does with them, between writing the skeleton and printing the rules, so one command takes an
+  empty directory to cloned repositories and sized pools.
+- `canopy workspace add [NAME=]URL...` appends a `[repos.<name>]` table per URL to the map, with an empty summary to
+  fill in, then syncs. The name is the URL's last path segment without `.git`, reduced as a workspace of one's
+  directory name is (`Web_App` is `web-app`), unless given as `NAME=URL`. A URL the map already lists (compared as
+  sync compares `origin`) is left as it is. A name the map already gives another URL, or a URL with no usable name,
+  refuses the whole command, and nothing is written. The map is appended to as text, so its comments and layout
+  stay; the result is read back as a map before sync runs.
 - `canopy workspace sync` prints each clone it is about to make, then clones it with `git clone -- <url>
   repos/<name>`, with credential prompts and git's `ext::` transport off. For a repository already cloned it compares
   `origin` with the map's URL (ignoring a trailing `/` or `.git`) and reports a difference; it changes no remote. It

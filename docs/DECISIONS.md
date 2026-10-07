@@ -1062,6 +1062,9 @@ Decision (DESIGN §18):
   treehouse's unforced `destroy`, and removes clones the map dropped. Removal needs the clone clean, with no stash and
   no commit missing from its remote-tracking refs, and every slot destroyed unforced; anything else is kept, and sync
   exits 1. It holds the tick lock.
+- Repositories can be added by clone URL, `canopy workspace add` or `canopy init --workspace URL...`, which write the
+  map and sync, so a workspace goes from an empty directory to sized pools in one command. The map stays the record:
+  the command appends tables to it, rather than keeping a list of its own.
 Rejected:
 - Sizes in the map: a commit to a shared map would set how much of the operator's disk and machine canopy uses, which
   TRUST_MODEL T7 keeps user-only, like the rest of `capacity`.

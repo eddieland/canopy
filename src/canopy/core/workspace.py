@@ -43,10 +43,18 @@ def _summary(value: str) -> str:
     return value
 
 
-def _url(value: str) -> str:
+def url_error(value: str) -> str | None:
+    """Say why `value` cannot be a map's clone URL, or None if it can."""
     # The URL reaches `git clone`'s argv after `--`; refusing a leading "-" and blanks keeps it one plain argument.
     if not value.strip() or value.startswith("-") or any(c.isspace() for c in value):
-        raise ValueError("must be a clone URL: not empty, no whitespace, not starting with '-'")
+        return "must be a clone URL: not empty, no whitespace, not starting with '-'"
+    return None
+
+
+def _url(value: str) -> str:
+    error = url_error(value)
+    if error is not None:
+        raise ValueError(error)
     return value
 
 
@@ -134,9 +142,13 @@ def of_one(repo_root: Path) -> Workspace:
 
 def one_name(repo_root: Path) -> str:
     """Name a workspace of one's repository after its directory, reduced to a valid repository name."""
-    reduced = re.sub(r"[^a-z0-9-]+", "-", repo_root.name.lower()).strip("-")
-    reduced = reduced.lstrip("0123456789-")
-    return reduced or "repo"
+    return reduce_name(repo_root.name) or "repo"
+
+
+def reduce_name(text: str) -> str:
+    """Reduce `text` to a valid repository name: lowercased, other characters made hyphens. Empty if nothing is left."""
+    reduced = re.sub(r"[^a-z0-9-]+", "-", text.lower()).strip("-")
+    return reduced.lstrip("0123456789-")
 
 
 def find_root(start: Path) -> Path | None:

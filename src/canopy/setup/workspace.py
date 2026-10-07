@@ -143,6 +143,68 @@ class Checked:
     detail: str = ""
 
 
+def repo_arg(arg: str) -> tuple[str, str]:
+    """Split a `[NAME=]URL` argument into the repository's name and clone URL.
+
+    Without a name, it is the URL's last path segment without `.git`, reduced as a workspace of one's name is.
+
+    Raises:
+        ValueError: the name or URL is not valid. The message says what to pass instead.
+    """
+    name, sep, url = arg.partition("=")
+    if not sep or not workspace.REPO_NAME_RE.fullmatch(name):
+        name, url = "", arg
+    error = workspace.url_error(url)
+    if error is not None:
+        raise ValueError(f"{arg!r}: {error}")
+    if not name:
+        name = workspace.reduce_name(url.rstrip("/").removesuffix(".git").replace(":", "/").rpartition("/")[2])
+        if not name:
+            raise ValueError(f"{arg!r}: no repository name in the URL; pass NAME=URL")
+    return name, url
+
+
+@dataclass(frozen=True)
+class Added:
+    """What `add` did with one `[NAME=]URL`: `added`, or `present` when the map already lists it."""
+
+    name: str
+    outcome: str
+    detail: str = ""
+
+
+def add(ws: workspace.Workspace, entries: list[tuple[str, str]]) -> list[Added]:
+    """Add each `(name, url)` to the map as a `[repos.<name>]` table, unless the map already lists that URL.
+
+    Nothing is written if any entry conflicts: a name the map gives another URL, or a name given twice.
+
+    Raises:
+        ValueError: an entry conflicts. The message names it.
+    """
+    if ws.map_file is None:
+        raise ValueError("a workspace of one has no map to add repositories to")
+    listed = {r.name: str(r.url) for r in ws.repos}
+    added: list[Added] = []
+    tables: list[str] = []
+    for name, url in entries:
+        same = next((n for n, u in listed.items() if _same_url(u, url)), None)
+        if same is not None:
+            added.append(Added(same, "present", "the map already lists it"))
+            continue
+        if name in listed:
+            raise ValueError(f"{name}: the map already has a repository by that name; pass NAME=URL for this one")
+        listed[name] = url
+        # json.dumps writes a TOML basic string: its escapes are valid TOML.
+        tables.append(f'\n[repos.{name}]\nurl = {json.dumps(url)}\nsummary = ""  # one line for the overseer\n')
+        added.append(Added(name, "added"))
+    if tables:
+        text = ws.map_file.read_text(encoding="utf-8")
+        separator = "" if not text or text.endswith("\n") else "\n"
+        ws.map_file.write_text(text + separator + "".join(tables), encoding="utf-8")
+        workspace.load(ws.root)  # what was written must read back; it is checked before writing, so it does
+    return added
+
+
 def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
     """Return the map's repositories with no clone, which sync would clone."""
     return [r for r in ws.repos if not r.cloned]
