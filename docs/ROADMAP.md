@@ -347,7 +347,13 @@ identified comment and nothing else happens to the PR: no push, no ticket, no Gi
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py` holds the harness's half of the
+acceptance: a review at the commit in a slot it reads through a link and never works in, the guards, one review per
+commit, the per-PR limit with its attention item, a killed review crashed with its slot returned, and nothing about
+reviews without a `[review]` table), the reviewer canary (opt-in, unrun), docs, and D065 are in. The overseer prompt,
+the `canopy-reviewer` definition, and the TRUST_MODEL T1, T3 to T7, §6, and §7 changes need human approval in their
+PR. Waiting on the operator: the reviewer canary against real OpenCode, before any real review (if it fails, D065
+says what changes); then the live runs Accept lists. Started on request while M2 to M10 wait on their live runs.
 
 ## M12. The loop
 

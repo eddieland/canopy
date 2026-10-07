@@ -29,6 +29,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StrictStr,
     ValidationError,
@@ -177,6 +178,8 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
+    # Review runs per PR, whatever they ended as (DESIGN §21).
+    max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10, D054). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
@@ -195,6 +198,9 @@ class Capacity(Section):
     max_workers: Annotated[Count, Scope.USER] = 2
     # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
     max_chores: Annotated[Count, Scope.USER] = 1
+    # Review runs at once, within max_workers, and started in any 24 hours; 0 turns reviews off (DESIGN §21).
+    max_reviews: Annotated[Count, Scope.USER] = 1
+    max_reviews_per_day: Annotated[Count, Scope.USER] = 20
 
 
 class Runtime(Section):
@@ -214,8 +220,24 @@ class Runtime(Section):
     chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
     )
+    # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
+    review_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer {prompt}"
+    )
+    review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
+
+
+class Review(Section):
+    """The `[review]` table: which PRs get an adversarial review (DESIGN §21). Every key is user-only."""
+
+    # The loop's own PRs, before a human is asked to review them.
+    agent_prs: Annotated[StrictBool, Scope.USER] = False
+    # PRs the operator names in the VCS host's own search syntax. It authorizes, unlike tracker.query.
+    query: Annotated[StrictStr, Scope.USER] = ""
+    # Plain language for the reviewer: which changes it may call low impact. Without it, none.
+    low_impact: Annotated[StrictStr, Scope.USER] = ""
 
 
 class Loop(Section):
@@ -236,8 +258,8 @@ class Paths(Section):
 SINK_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MAX_SINKS = 5
 # The event groups a sink may take. `attention` is the attention list's diff; the others are point events.
-EVENT_GROUPS = ("attention", "loop", "runs", "chores")
-EventGroup = Literal["attention", "loop", "runs", "chores"]
+EVENT_GROUPS = ("attention", "loop", "runs", "chores", "reviews")
+EventGroup = Literal["attention", "loop", "runs", "chores", "reviews"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60
@@ -327,10 +349,16 @@ class Config(Section):
     capacity: Capacity
     runtime: Runtime
     loop: Loop
+    review: Review
     paths: Paths
     notify: Notify
     # Tables of tables, keyed by name; user-only as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.USER] = {}
+
+    @property
+    def reviews_on(self) -> bool:
+        """Whether reviews run at all: `max_reviews` above 0 and something to review (DESIGN §21)."""
+        return self.capacity.max_reviews > 0 and (self.review.agent_prs or bool(self.review.query.strip()))
 
 
 SECTIONS: dict[str, type[Section]] = {
@@ -340,6 +368,7 @@ SECTIONS: dict[str, type[Section]] = {
     "capacity": Capacity,
     "runtime": Runtime,
     "loop": Loop,
+    "review": Review,
     "paths": Paths,
     "notify": Notify,
 }

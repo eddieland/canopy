@@ -97,6 +97,7 @@ canopy (harness, Python)
     workspace.py   workspace sync
     chores.py      chore run, chore wait, _chore
     notify.py      notify test
+    reviews.py     review run, review wait, _review
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -125,6 +126,13 @@ canopy (harness, Python)
     journal.py     sinks' cursors and failures, what each was told, the outbox's reads and pruning
     desktop.py     canopy-notify-desktop: the desktop sink, a separate command
 
+  reviews/         adversarial reviews of PRs (§21)
+    start.py       canopy review run: guards, the slot, the reviewer's prompt, spawn detached _review
+    execute.py     canopy _review: checkout at the commit, the reviewer outside it, result checks, slot return
+    result.py      the result contract, validated with pydantic
+    view.py        the state block's reviews
+    reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
+
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
     workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: clone the map, check origins (§18)
@@ -151,8 +159,9 @@ canopy (harness, Python)
 ```
 
 ```
-prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md
-agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-splitter, canopy-chore
+prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md, reviewer.md
+agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-splitter, canopy-chore,
+                 canopy-reviewer
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
@@ -166,7 +175,7 @@ them, and `migrations/`, under `canopy/_data/` (D022).
 Where later work goes:
 
 - A feature is a package in the features layer with a command module in `cli/`: `chores` (§19), `notify` (§20), and
-  later `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block.
+  `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block.
   Deleting a feature is deleting its package, its command module, and those calls.
 - A feature other features write to keeps its writing half in `core`: dispatch, `_run`, `_chore`, and reconcile record
   §20's notification events through `core.outbox`, and `notify` delivers them.
@@ -182,7 +191,8 @@ Roles:
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world through MCP
   and the harness's state summary, decides one next action per ticket, and
   acts only through `canopy dispatch`, `canopy decide`, and `canopy attention`, and for the operator's chores
-  `canopy chore run` and `canopy chore wait` (§19). Read-only everywhere else.
+  `canopy chore run` and `canopy chore wait` (§19), and `canopy review run` and `canopy review wait` (§21). Read-only
+  everywhere else.
 - **Worker**: an agent run with `worker_cmd` inside a leased worktree with a
   task prompt. Writes code, pushes a branch, opens or updates a PR, comments on
   the ticket, prints a result line, exits. Never merges, approves, or moves a
@@ -196,7 +206,8 @@ way, a tick does, in order:
 1. Acquire the lock. If held, log and exit 0. No `ticks` row is written.
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
    is gone. Insert a `ticks` row; its id tags all logs. Pending migrations wait while any `running` run's `_run`, or
-   chore run's `_chore`, is alive: it was started by the canopy before the upgrade and writes the old schema (D060). The
+   chore run's `_chore`, or review run's `_review`, is alive: it was started by the canopy before the upgrade and writes
+   the old schema (D060). The
    tick, and any command that opens the journal, fails saying so until those runs finish.
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
@@ -211,7 +222,10 @@ way, a tick does, in order:
      `desks/` is left alone.
    - For each `chore_runs` row with `status='running'` whose `_chore` is dead or never recorded: kill what is left of
      its agent's process group and mark it `crashed` (§19). Chore runs hold no slot and take no worker capacity.
-   - Compute `capacity = max_workers - count(runs where status='running')`.
+   - For each `review_runs` row with `status='running'` whose `_review` is dead or never recorded: kill what is left of
+     its reviewer, remove its directory, return its slot, and mark it `crashed` (§21). This runs before the worker runs'
+     reconcile, and a running review's lease is never returned as stale.
+   - Compute `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
    - Record the harness's attention items for runs (§14) as this tick's decisions, `chore_failed` for each configured
      chore whose latest ended run did not end `ok` (§19), and `repo_missing` for each repository in the map with no
@@ -303,6 +317,8 @@ unit.
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `ci_running` | PR open, checks pending | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
+| `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
+| `review_findings` | with `review.agent_prs`: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | review comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
 | `green_unreviewed` | checks pass, no approval | attention: needs a reviewer |
 | `approved` | approved, not merged | attention: ready to merge |
@@ -369,7 +385,7 @@ In a workspace of one, the ticket has one unit and `--repo` may be left out.
      about that unit in a workspace of several.
    - `cooldown`: `fix-ci` only, less than `policy.fix_ci_cooldown_minutes` after the latest fix-ci run covering a unit
      the dispatch names ended.
-   - `capacity`: `max_workers` runs are running.
+   - `capacity`: `max_workers` runs and review runs, together, are running (§21).
 
    Failures after the guards are recorded the same way: `no_slot` (a lease failed), `bad_prompt` (the worker prompt did
    not render), `spawn_failed`. None of them leaves a slot leased: leases are all or nothing, so when any repository's
@@ -525,6 +541,9 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
   capacity, crash detection, attempt counts, and the fix-ci cooldown.
 - `run_slots`: one row per slot a run leased (migration 0005); the repository whose pool it came from, slot path,
   lease id and holder, and the base branch the run started from there. A joint run has one per repository.
+- `review_runs`: one row per review run (migration 0009); the PR's URL, the commit, the ticket of an agent PR, the
+  repository and slot, pids, times, status, the validated result (§21). `decisions.pr` names the PR of a decision
+  about a review.
 - `split_children`: one row per ticket a split created (migration 0006); its parent, the repository it covers, and the
   split run. Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
@@ -574,6 +593,7 @@ refuses to run. Unknown keys are errors in both files.
 | `notify.*` | user-only | a command run on the operator's machine |
 | `paths.*` | user-only | where prompts and state are read from |
 | `chores.*` | user-only | a chore runs a command and a prompt, and spends money (§19) |
+| `review.*` | user-only | `review.query` authorizes comments in the operator's name (§21) |
 
 Anyone who can push to the repository, or any branch the operator happens to have checked out, controls the repository
 file. That is why keys that run commands, choose prompts, spend money, or authorize anyone are user-only. See
@@ -704,6 +724,9 @@ Agent definitions ship in `agents/`, and agent runs load them from a directory c
   GitHub.
 - `canopy-worker`: edit and bash allowed within the worktree. MCP: the tracker (ticket comments, labels), GitHub
   (open/update PR, read reviews and checks).
+- `canopy-reviewer`: no edits, shell, web fetch, or subagents; reads only through the link to its checkout. MCP: read
+  tools, and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
+  and edits denied by name (§21).
 - `canopy-chore`: no edits, shell, or subagents, and MCP write tools denied by name (§19). A chore that runs the
   operator's own tools uses the operator's own copy of it.
 - `canopy-splitter`: read-only file tools in its desk; no edit, shell, web fetch, or subagents. MCP: the tracker
@@ -770,7 +793,8 @@ Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), re
 every tick: grouped by reason, one line per item with ticket key, age, and detail (usually a link). Reasons are exactly
 the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`,
 and in a workspace `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18).
-Chores add `chore_failed` and their findings, listed by chore after the ticket items (§19). In
+Chores add `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add
+`review_failed`, `review_unposted`, and `review_limit`, about a PR (§21). In
 a workspace of several, an item about one unit of a ticket names its repository too, and is shown as `KEY (repo)`.
 `canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
 
@@ -1389,7 +1413,8 @@ format = "text"
   repository root, the message on stdin, and a 60-second timeout. Exit 0 means delivered; anything else, a timeout
   included, means try again next tick. Its stdout is ignored and the tail of its stderr is logged.
 - `format` is `json` (the default) or `text`.
-- `events` lists the groups the sink receives: `attention`, `loop`, `runs`, `chores`. Default `["attention", "loop"]`.
+- `events` lists the groups the sink receives: `attention`, `loop`, `runs`, `chores`, `reviews`. Default
+  `["attention", "loop"]`.
 - `digest_every_minutes` is optional and at least 60 (Digest, below).
 - `notify.cmd = "X"` is shorthand for a sink named `default` with `cmd = "X"`, `format = "text"`,
   `events = ["attention"]`, and no digest. Setting both `notify.cmd` and `[notify.sinks.default]` is a config error.
@@ -1408,6 +1433,7 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
 | `runs` | `run.ended` | a run's row was closed | ticket, run, kind, status, branch, pr, prs, summary, question |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
+| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, comment |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
 | `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
 | `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
@@ -1596,11 +1622,7 @@ Made in M10, whose PR carries the human approval:
 
 ## 21. Reviews
 
-Planned for ROADMAP M11; none of it is built. Rationale in D039. Earlier sections describe the loop without reviews; M11
-updates them when it builds this: §5 gains the `reviews` package (`_review` and review reconcile) and `cli/reviews.py`
-(`canopy review`), the overseer's role gains `canopy review run` and `canopy review wait`, §6 step 3 reconciles review
-runs, §7 gains the phases below, §11 lists `review_runs` and `decisions.pr`, §12 the review keys, §13 the
-`canopy-reviewer` definition, §14 the review items, and §20 a `reviews` event group.
+Built in ROADMAP M11. Rationale in D039 and D065.
 
 A review is an adversarial read of one PR at one commit by a fresh agent run: no transcript of whoever wrote the
 change, told to assume the change is wrong until the code shows otherwise. It posts one comment on the PR that says
@@ -1639,7 +1661,8 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 ```
 
 - `agent_prs` defaults to false. `query` is the VCS host's own PR search syntax, as `tracker.query` is the tracker's.
-  It is empty by default, meaning no PRs besides the loop's own.
+  It is empty by default, meaning no PRs besides the loop's own. Reviews are on when `max_reviews` is above 0 and
+  either is set.
 - `review.query` authorizes, unlike `tracker.query` (§17): only the operator writes it. It authorizes whatever it
   matches, so a query without an author filter sends reviews to other people's PRs, in the operator's name. That is
   allowed, and it is how a team gets reviews on every low-impact PR, but it is the operator's choice to make
@@ -1651,24 +1674,28 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 
 ### Off unless configured
 
-With no `[review]` table, or `capacity.max_reviews = 0`, nothing about reviews reaches the overseer: the state block
+With no `[review]` table, or one with neither `agent_prs` nor `query`, or `capacity.max_reviews = 0`, nothing about
+reviews reaches the overseer: the state block
 has no `reviews` key, the phase table is §7's as it stands, and every `canopy review run` refuses as `reviews_off`. A
 test holds this. With `agent_prs` off, the phase table is also unchanged. A loop PR that `query` happens to match is
 then reviewed like any other match: one comment, and no `resume` for its findings.
 
 ### Running a review
 
-`canopy review run --pr URL --sha SHA [--ticket KEY] [--context '<text>']` requires `CANOPY_TICK_ID` like `dispatch`
-(D020). `URL` is the PR's `https://` URL, which the harness treats as an opaque string and never parses. `SHA` is the
-full head commit the overseer read. `--ticket` links an agent PR to its ticket. Under the dispatch lock, it refuses,
-recording `refused:<guard>`, on the first of:
+`canopy review run --pr URL --sha SHA [--ticket KEY] [--repo NAME] [--context '<text>']` requires `CANOPY_TICK_ID` like
+`dispatch` (D020). `URL` is the PR's `https://` URL, which the harness treats as an opaque string and never parses.
+`SHA` is the full head commit the overseer read. `--ticket` links an agent PR to its ticket. Under the dispatch lock, it
+refuses, recording `refused:<guard>`, on the first of:
 
 - `reviews_off`: see above.
 - `bad_pr`: `URL` is not a plain `https://` URL of at most 300 characters, `SHA` is not 40 or 64 lowercase hex
   characters, or `--ticket` is not a valid key (§17).
+- `unknown_repo`: in a workspace of several, no `--repo`, or one not in the map or with no clone; the slot comes from
+  that repository's pool. In a workspace of one `--repo` may be left out.
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is: a review must not
   race the push it is meant to judge.
 - `reviewed`: a review of this PR at this commit ended `done`. One review per commit, whatever the overseer asks.
+  The refusal names that review's verdict and comment, since the PR may have left the state block's window.
 - `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, whatever they ended as. This also records
   the `review_limit` attention item.
 - `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
@@ -1676,21 +1703,29 @@ recording `refused:<guard>`, on the first of:
 - `capacity`: `max_workers` runs and review runs, together, are running. A review holds a slot, so it counts.
 
 A dry run checks the same guards, counting reviews already recorded in this tick as running, records `dispatch:review`
-with rationale `dry run: not dispatched`, and starts nothing (D036).
+with rationale `dry run: not dispatched; would review <SHA>`, and starts nothing (D036). Worker dispatches count a
+running review toward `capacity` as well (§8).
 
-Once the guards pass, the command leases a slot with holder `canopy:review:<run_id>`, inserts a `review_runs` row, and
-spawns `python -m canopy _review <run_id>` detached, as dispatch spawns `_run` (§8 step 4). `_review`:
+Once the guards pass, the command inserts a `review_runs` row, leases a slot with holder `canopy:review:<run_id>` (a
+failed lease deletes the row and refuses as `no_slot`), renders the prompt (`bad_prompt` if it does not), and spawns
+`python -m canopy _review <run_id>` detached, as dispatch spawns `_run` (§8 step 4). `_review`:
 
 1. Claims the run by pid and drops `CANOPY_TICK_ID`, as `_run` does.
 2. In the slot: `git fetch origin <SHA>`, then `git checkout --detach <SHA>`, and checks that `HEAD` is `SHA`. A
-   failure is `failed` with a harness note: a PR in another repository fails here. No branch is created.
+   failure is `failed` with a harness note: a PR in another repository fails here. No branch is created. Then it
+   deletes every symlink the commit tracks that resolves outside the checkout: a PR could otherwise link to one of
+   the operator's files and have the reviewer quote it.
 3. Runs `review_cmd` with cwd `<state_dir>/reviews/<run_id>/`, a directory created readable only by the operator, and
-   **not the checkout**. The prompt names the checkout's path. The checkout holds code the loop did not write, and an
-   agent runtime reads its configuration and agent definitions from its working directory, so a PR could otherwise
-   rewrite the reviewer that reads it. Timeout `review_timeout_minutes`, with the agent's pid recorded.
-4. Parses the result, then always returns the slot with `--force`, which discards anything the reviewer left in the
-   checkout. It traps signals and exits the way `_run` does (§8 step 6), and reconcile treats a dead `_review` as it
-   treats a dead `_run`.
+   **not the checkout**. It holds one link, `checkout`, to the slot, and the prompt names that path: the reviewer reads
+   the checkout through it, as a joint worker edits through its desk's links (§18, D065). Before it starts, the
+   shadowing check (§13) covers that directory and the workspace root. The checkout holds code the loop did not write,
+   and an agent runtime reads its configuration and agent definitions from its working directory, so a PR could
+   otherwise rewrite the reviewer that reads it. Timeout `review_timeout_minutes`, with the agent's pid recorded.
+4. Parses the result, then always removes its directory, never following the link, and returns the slot with
+   `--force`, which discards anything the reviewer left in the checkout. It traps signals and exits the way `_run` does
+   (§8 step 6), and reconcile treats a dead `_review` as it treats a dead `_run`: it kills what is left of the reviewer,
+   removes the directory, returns the slot, and marks the run `crashed`. A running review's lease is never returned as
+   stale.
 
 The prompt is `prompts/reviewer.md` (or the override), with the PR URL, the commit, the checkout path, the ticket key
 and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, and
@@ -1729,12 +1764,14 @@ Result contract, one JSON line, last line of stdout, validated with pydantic (D0
 ```
 
 - `done` means the review was read through and the comment posted, and `comment` is its plain `https://` URL, which
-  must begin with the reviewed PR's URL: a comment's link does on GitHub. A `done` without one is recorded as `failed`
-  with a harness note. `failed` means the reviewer could not review, and the summary says why.
+  must be the reviewed PR's URL followed by `#` or `/` (a comment's link is, on GitHub; PR 70's is not PR 7's). A
+  `done` without one is recorded as `failed` with a harness note. `failed` means the reviewer could not review, and
+  the summary says why.
 - The harness cannot check that the comment exists (principle 5; it has no VCS client). The overseer can, and does
   (below): a `done` run whose comment is missing costs that commit its review, not the PR its human review.
-- At most 20 findings. `title` at most 200 characters, `location` at most 300, `summary` at most 2000. `verdict` is
-  `findings` exactly when `findings` is not empty.
+- At most 20 findings. `title` and `location` are one line, cut at 200 and 300 characters, `summary` cut at 2000.
+  `verdict` is `findings` exactly when `findings` is not empty, and a `done` review has a verdict and an impact.
+- `low` without `review.low_impact` is recorded as `normal`, with a harness note.
 - Anything else is `unknown`. `review_runs` status is `running`, `done`, `failed`, `unknown`, `timeout`, or `crashed`.
 
 ### The verdict, and automating on it
@@ -1795,9 +1832,10 @@ Review decisions are `decisions` rows with the PR's URL in a new `pr` column: `d
 - Findings are not attention items. They are on the PR, where the author reads them. For an agent PR, what follows
   from them is a `resume`, or the `needs_author` or `needs_reviewer` items that already exist.
 
-`canopy attention` gains `--pr URL` in place of a ticket key. In `notifications`, such an item's row holds
-`pr:<URL>` in `ticket_key`, which no ticket key can equal (§17). With M10, a `reviews` event group adds
-`review.ended`: PR, ticket, run, status, verdict, impact, comment.
+`canopy attention` gains `--pr URL`, in place of a ticket key for a PR with no ticket, or beside one for an agent PR.
+An item with only a PR is shown as `pr:<URL>`, and in `notifications` its row holds that in `ticket_key`, which no
+ticket key can equal (§17). The `reviews` event group (§20) carries `review.ended`: PR, ticket, run, status, verdict,
+impact, comment.
 
 ### Agent definition
 
@@ -1821,9 +1859,9 @@ call to make, and a reason to keep `review.query` to PRs whose authors they trus
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=run:<id>`.
 
-### Trust model changes needed
+### Trust model changes
 
-TRUST_MODEL is unchanged until M11, whose PR carries the human approval:
+Made in M11, whose PR carries the human approval:
 
 - T1: the reviewer reads the most hostile text the loop meets, a diff by anyone `review.query` matches. What it writes
   is data wherever it goes: the overseer classifies findings as it classifies review comments, and the worker reads the
@@ -1851,9 +1889,8 @@ TRUST_MODEL is unchanged until M11, whose PR carries the human approval:
   that can edit any of the operator's comments.
 - Whether a repository should be able to offer a review rubric, such as its own `low_impact`, that an operator opts
   into by name, the way it offers its tracker query.
-- Reviews of other repositories' PRs. Until M6, a loop reviews PRs of its own repository only. In a workspace (§18),
-  `canopy review run` gets a `--repo` like dispatch has, and the checkout comes from that repository's pool.
 - A comment tool the runtime lets the reviewer call once, on one PR. It would turn T6's residual into a control. canopy
   will not ship one: it would be VCS code (principle 5).
-- Whether OpenCode can confine reads to one directory outside the working directory. The M11 canary settles it. If it
-  cannot, the reviewer runs without a checkout and reads the PR only through MCP.
+- Whether OpenCode lets the reviewer read through its `checkout` link and nothing beside it. The reviewer canary
+  (`tests/canopy/test_opencode_canary.py`, opt-in) settles it. If it cannot, the reviewer runs without a checkout and
+  reads the PR only through MCP.

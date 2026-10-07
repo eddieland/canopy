@@ -80,6 +80,10 @@ Controls:
   depth: a tracker whose create tool also takes labels passes that check. The harness records each child's repository
   from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
 
+- The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches. What
+  it writes is data wherever it goes: the overseer classifies its findings as it classifies review comments, and a
+  worker reads its comment as it reads any other. `review.query` authorizes a review, and only the operator writes it
+  (user-only, T7). The loop recognizes its reviews by its journal, never by the marker in a comment.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -115,6 +119,8 @@ Controls in code, not prompts:
 - One running worker per ticket.
 - Workers push once and exit. They do not poll CI or retry.
 - A tick that cannot acquire the lock exits immediately.
+- Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR, `capacity.max_reviews_per_day`, and
+  `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 
@@ -140,6 +146,11 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 
+- A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
+  directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
+  configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
+  that link; a canary like the desk's checks the reads (DESIGN §21).
+
 Deferred (ROADMAP): running `worker_cmd` inside a container or OS sandbox. The
 command template is the plug point; nothing else changes.
 
@@ -154,6 +165,8 @@ but must be distinguishable:
 - PRs labeled `agent`.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
+- Every review comment says what it is in its first line ("an automated adversarial review ... not a human review and
+  not an approval") and carries a machine-readable `canopy-review` marker on its last.
 
 ### T6. Data exfiltration by a compromised worker
 
@@ -173,22 +186,27 @@ Controls:
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
+- The reviewer can write one kind of thing, a comment on a PR's conversation. Its definition denies submitting a PR
+  review, pushing, writing files, labels, and edits by name.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
   tools, and denies MCP write tools by name.
 Residual: real. Sandboxing and egress controls are the eventual answer;
 until then this risk is accepted and documented. A chore steered by what it read can put up to 20 findings of its
 choosing in front of the operator and into `notify.cmd`, wherever that sends them, and a finding's link can carry data
 in its URL. A steered agent likewise chooses up to 500 characters per attention item, and 300 per worker summary
-and question, that a sink puts in front of whoever reads its destination.
+and question, that a sink puts in front of whoever reads its destination. A steered reviewer can put what it read into
+a comment, and the GitHub MCP server cannot limit which PR it comments on, or how many times: the prompt asks for one
+comment, and nothing in code enforces it. Extra comments are noise, not authority, since the loop reads reviews from its
+journal. A repository that gates merges on the review marker trusts every agent the operator runs.
 
 ### T7. Hostile repository config
 
 The repository's `canopy.toml` is read on every tick, from whatever the operator's checkout contains. Anyone who can
 push to the repository can change it, and a checkout of someone else's unreviewed branch carries their version. Unlike
 build scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent
-starts. If it could set the runtime commands, `notify.cmd`, chores, prompt paths, capacity, queue labels, or authorized
-repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who steers
-their workers.
+starts. If it could set the runtime commands, `notify.cmd`, chores, the review query, prompt paths, capacity, queue
+labels, or authorized repliers, one commit would be enough to run commands on operators' machines, raise their spend, or
+pick who steers their workers.
 
 In a workspace of several repositories (DESIGN §18), the workspace file `canopy-workspace.toml` is the repository file
 for everything in this section, and the repositories' own `canopy.toml` files are not read. It may be committed to a
@@ -251,7 +269,8 @@ shared machine can reach loopback, and is stopped only by the secret.
 
 ## 6. What canopy must never do
 
-- Approve, merge, or close a PR.
+- Approve, merge, or close a PR, or submit a PR review of any kind (approve or request changes).
+- Push to or edit a PR the loop is only reviewing.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator
   authored and labeled with a queue label (T1); and never with force.
@@ -259,8 +278,8 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
-- Take runtime or notify commands, chores, prompt paths, capacity, queue labels, or authorized repliers from the
-  repository.
+- Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, or authorized
+  repliers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only lower it.)
 - Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
 - Listen on a wildcard or public address, or accept a connection without the operator's listener secret (T8).
 
@@ -276,6 +295,8 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
+- A `review.query` that matches other people's PRs comments on their work in your name; tell them first. A reviewer
+  definition of your own that runs commands runs the PR's code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
   Slack sink's webhook file readable only by you. People who can read the channel see what the loop does; they cannot
   steer it.

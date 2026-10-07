@@ -24,6 +24,11 @@ def valid_key(value: str) -> bool:
     return KEY_RE.fullmatch(value) is not None
 
 
+def plain_pr_url(value: str) -> bool:
+    """A PR's URL as the overseer passes it: a plain https:// URL, at most 300 characters (DESIGN §21)."""
+    return value.startswith("https://") and len(value) <= 300 and not any(c.isspace() for c in value)  # noqa: PLR2004
+
+
 def truncate(value: str) -> str:
     """Bound free text the overseer writes to the journal."""
     return value if len(value) <= MAX_TEXT else value[: MAX_TEXT - 3] + "..."

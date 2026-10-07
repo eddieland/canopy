@@ -13,6 +13,8 @@ from canopy.core import db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
+from canopy.reviews import reconcile as review_reconcile
+from canopy.reviews import view as review_view
 from canopy.runs import policy, reconcile
 
 if TYPE_CHECKING:
@@ -59,6 +61,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         return Outcome(tick_id, status, summary)
 
     try:
+        # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
+        review_reconcile.run(ctx, log)
         reconciled = reconcile.run(ctx, log)
     except treehouse.TreehouseError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
@@ -100,6 +104,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         split_attempts=policy.split_attempts(ctx.conn),
         split_children=db.open_split_children(ctx.conn),
         chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
+        reviews=review_view.state_section(ctx.conn, ctx.config, now),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)

@@ -31,8 +31,10 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 ACTION_PREFIX = "attention:"
-# Where a ticket key would be, an item about a chore names it so. A ticket key has no colon (DESIGN §17).
+# Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
+# no colon (DESIGN §17), so neither can equal one.
 CHORE_PREFIX = "chore:"
+PR_PREFIX = "pr:"
 # Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
 # worker left no usable result line.
 RUN_REASONS = {
@@ -53,6 +55,8 @@ def decided_about(decision: sqlite3.Row) -> str:
     """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick."""
     if decision["chore"] is not None:
         return f"{CHORE_PREFIX}{decision['chore']}"
+    if decision["ticket_key"] is None and decision["pr"] is not None:
+        return f"{PR_PREFIX}{decision['pr']}"
     return str(decision["ticket_key"] or decision["repo"] or "-")
 
 
@@ -77,7 +81,7 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         return []
     # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore FROM decisions "  # noqa: S608
+        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore, pr FROM decisions "  # noqa: S608
         f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
         ticks,
     ).fetchall()
@@ -86,6 +90,8 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         key = None if r["ticket_key"] is None else str(r["ticket_key"])
         if r["chore"] is not None:
             key = f"{CHORE_PREFIX}{r['chore']}"
+        elif key is None and r["pr"] is not None:
+            key = f"{PR_PREFIX}{r['pr']}"
         repo = None if r["repo"] is None else str(r["repo"])
         item_id: _ItemId = (key, str(r["action"]).removeprefix(ACTION_PREFIX), repo)
         by_tick[int(r["tick_id"])].setdefault(item_id, (str(r["rationale"]), str(r["created_at"])))

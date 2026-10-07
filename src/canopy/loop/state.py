@@ -39,6 +39,7 @@ def state_block(
     split_attempts: Mapping[str, int],
     split_children: list[sqlite3.Row],
     chores: list[dict[str, object]],
+    reviews: dict[str, object] | None,
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
@@ -169,6 +170,9 @@ def state_block(
     }
     if chores:
         state["chores"] = chores
+    # With reviews off, nothing about them reaches the overseer (DESIGN §21).
+    if reviews is not None:
+        state["reviews"] = reviews
     if dry_run:
         mode = (
             "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "

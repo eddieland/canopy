@@ -188,10 +188,12 @@ def check(
     Raises:
         Refusal: a guard refused.
     """
+    # Each stands for a run this dry run would have started: a worker run, or a review, which holds a slot too. A
+    # review of a PR with no ticket is named by its PR, so it counts toward capacity and blocks no ticket.
     planned = [
-        str(d["ticket_key"])
+        str(d["ticket_key"] or f"pr:{d['pr']}")
         for d in db.decisions_for_tick(ctx.conn, tick_id)
-        if str(d["action"]).startswith("dispatch:") and d["ticket_key"] is not None
+        if str(d["action"]).startswith("dispatch:") and (d["ticket_key"] is not None or d["pr"] is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
         plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
@@ -390,8 +392,9 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
 
 
 def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str]) -> None:
+    """Refuse when `max_workers` runs and review runs are running: a review holds a slot too (DESIGN §21)."""
     max_workers = ctx.config.capacity.max_workers
-    busy = len(running) + len(planned)
+    busy = len(running) + len(db.running_review_runs(ctx.conn)) + len(planned)
     if busy >= max_workers:
         planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")

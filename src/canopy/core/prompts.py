@@ -33,6 +33,10 @@ REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 # Placeholders a split's prompt must also use: its repositories, and the comment that asked for the split, which the
 # splitter reads to check who asked (D061). An override without it would split on the overseer's word alone.
 REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
+# The reviewer's prompt (DESIGN §21). An override must still name the commit, the checkout, and the run, which the
+# reviewer's comment marker carries, so the loop can tell its reviews from anything else.
+REVIEWER = "reviewer.md"
+REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT", "RUN_ID")
 
 
 class PromptError(Exception):
@@ -60,18 +64,26 @@ def render_worker(config: Config, kind: str, values: Mapping[str, str], *, requi
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
     `REQUIRED_WORKER`, or of `required`.
     """
-    path = prompt_path(config, WORKER[kind])
+    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required))
+
+
+def render(config: Config, name: str, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
+    """Return prompt file `name` with every `{{NAME}}` replaced from `values`, in one pass.
+
+    A placeholder with no value is an error, and so is a prompt that lacks one of `required`.
+    """
+    path = prompt_path(config, name)
     text = path.read_text(encoding="utf-8")
 
     def replace(m: re.Match[str]) -> str:
-        name = m.group(1)
-        if name not in values:
-            raise PromptError(f"{path}: unknown placeholder {{{{{name}}}}}")
-        return values[name]
+        placeholder = m.group(1)
+        if placeholder not in values:
+            raise PromptError(f"{path}: unknown placeholder {{{{{placeholder}}}}}")
+        return values[placeholder]
 
     rendered = _PLACEHOLDER_RE.sub(replace, text)
     used = set(_PLACEHOLDER_RE.findall(text))
-    missing = [f"{{{{{name}}}}}" for name in (*REQUIRED_WORKER, *required) if name not in used]
+    missing = [f"{{{{{n}}}}}" for n in required if n not in used]
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered

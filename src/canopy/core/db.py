@@ -28,7 +28,17 @@ CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 # The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
 # others are the ticket's own. Migration 0005 lists them too.
 UNIT_PHASES = frozenset(
-    ("pushed_no_pr", "ci_running", "ci_red", "changes_requested", "green_unreviewed", "approved", "merged")
+    (
+        "pushed_no_pr",
+        "ci_running",
+        "ci_red",
+        "review_pending",
+        "review_findings",
+        "changes_requested",
+        "green_unreviewed",
+        "approved",
+        "merged",
+    )
 )
 
 
@@ -150,7 +160,7 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     """
     live: list[str] = []
     # Every table of detached runs: each process writes its own row when it ends.
-    for table, what in (("runs", "run"), ("chore_runs", "chore run")):
+    for table, what in (("runs", "run"), ("chore_runs", "chore run"), ("review_runs", "review run")):
         exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
         if not exists:
             continue
@@ -453,14 +463,16 @@ def record_decision(
     *,
     repo: str | None = None,
     chore: str | None = None,
+    pr: str | None = None,
 ) -> int:
     """Insert a decision for `tick_id` and return its id.
 
-    `repo` is set for an item about a repository, and `chore` for a decision about a chore, which has no ticket key.
+    `repo` is set for an item about a repository, `chore` for a decision about a chore, which has no ticket key, and
+    `pr` for a decision about a PR the loop reviews, which has a ticket key only for one of the loop's own PRs.
     """
     cur = conn.execute(
-        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, repo, chore) VALUES (?, ?, ?, ?, ?, ?)",
-        (tick_id, key, action, rationale, repo, chore),
+        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, repo, chore, pr) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (tick_id, key, action, rationale, repo, chore, pr),
     )
     return _rowid(cur)
 
@@ -528,6 +540,94 @@ def chore_runs(
         "SELECT * FROM chore_runs WHERE chore = ? AND id < ? ORDER BY id DESC LIMIT ?",
         (chore, before if before is not None else 2**63 - 1, limit),
     ).fetchall()
+
+
+# Review runs (DESIGN §21)
+
+
+def insert_review_run(
+    conn: sqlite3.Connection,
+    *,
+    tick_id: int,
+    pr_url: str,
+    sha: str,
+    ticket: str | None,
+    repo: str | None,
+    logs_dir: Path,
+) -> int:
+    """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id."""
+    with transaction(conn):
+        cur = conn.execute(
+            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, repo, started_at, log_path) "
+            "VALUES (?, ?, ?, ?, ?, ?, '')",
+            (tick_id, pr_url, sha, ticket, repo, now()),
+        )
+        run_id = _rowid(cur)
+        conn.execute("UPDATE review_runs SET log_path = ? WHERE id = ?", (str(logs_dir / f"{run_id}.log"), run_id))
+    return run_id
+
+
+def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
+    """Forget a review run that never started: no slot, or no prompt. It counts toward no limit."""
+    conn.execute("DELETE FROM review_runs WHERE id = ? AND pid IS NULL", (run_id,))
+
+
+def set_review_slot(conn: sqlite3.Connection, run_id: int, *, slot: Path, lease_id: str, lease_holder: str) -> None:
+    """Record the slot a review run leased."""
+    conn.execute(
+        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ? WHERE id = ?",
+        (str(slot), lease_id, lease_holder, run_id),
+    )
+
+
+def get_review_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+    """Return the review run with `run_id`, or None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM review_runs WHERE id = ?", (run_id,)).fetchone()
+    return row
+
+
+def claim_review_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
+    """Record `pid` as the process working a running review run; only the first process to claim it gets it."""
+    cur = conn.execute(
+        "UPDATE review_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
+        (pid, run_id, pid),
+    )
+    return cur.rowcount == 1
+
+
+def set_review_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
+    """Record the pid, and so the process group, of a review run's agent."""
+    conn.execute("UPDATE review_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
+
+
+def finish_review_run(
+    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
+) -> bool:
+    """Close a running review run, recording `event` with it. Returns False if it was already closed."""
+    with transaction(conn):
+        cur = conn.execute(
+            "UPDATE review_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
+            (now(), status, result_json, run_id),
+        )
+        closed = cur.rowcount == 1
+        if closed and event is not None:
+            record_event(conn, event)
+    return closed
+
+
+def running_review_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return review runs with status `running`, oldest first."""
+    return conn.execute("SELECT * FROM review_runs WHERE status = 'running' ORDER BY started_at").fetchall()
+
+
+def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[sqlite3.Row]:
+    """Return a PR's review runs, newest first."""
+    return conn.execute("SELECT * FROM review_runs WHERE pr_url = ? ORDER BY id DESC", (pr_url,)).fetchall()
+
+
+def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+    """Return the review runs started at or after `since`, newest first."""
+    return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
 
 
 # Split children
