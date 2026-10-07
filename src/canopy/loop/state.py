@@ -38,12 +38,14 @@ def state_block(
     now: datetime,
     split_attempts: Mapping[str, int],
     split_children: list[sqlite3.Row],
+    chores: list[dict[str, object]],
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
     `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts` and
     `fix_ci_cooldowns` are per unit (`policy.unit`). `split_attempts` are per ticket, and `split_children` are the
-    children of splits not yet done, with their split run's end (DESIGN §18).
+    children of splits not yet done, with their split run's end (DESIGN §18). `chores` are the configured chores
+    (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed.
     """
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
@@ -79,7 +81,7 @@ def state_block(
             "ended_at": run["ended_at"],
         }
 
-    state = {
+    state: dict[str, object] = {
         "tick_id": tick_id,
         "now": db.format_time(now),
         "dry_run": dry_run,
@@ -165,6 +167,8 @@ def state_block(
             for c in split_children
         ],
     }
+    if chores:
+        state["chores"] = chores
     if dry_run:
         mode = (
             "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "

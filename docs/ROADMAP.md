@@ -269,7 +269,13 @@ reach the attention list and are notified once, and each disappears after a run 
 killed mid-way is detected on the next tick as `crashed` with a `chore_failed` item. Deleting the chore from the config
 clears its items at the next tick.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_chores.py` holds the harness's half of the acceptance:
+the guards, findings listed and notified once and resolved when no longer reported, a killed chore run crashed with
+`chore_failed`, a deleted chore's items cleared, and no `chores` key without chores), docs, and D063 are in. D063
+settles §19's open question on workspaces: a chore may list the workspaces it runs in. The overseer prompt, the
+`canopy-chore` definition, and the TRUST_MODEL T1, T3, T6, T7, §6, and §7 changes need human approval in their PR.
+Waiting on the operator: a real build-health chore over several working days. Started on request while M2 to M8 wait
+on their live runs.
 
 ## M10. Notification sinks
 

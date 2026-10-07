@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db, prompts, treehouse
+from canopy.core.context import DISPATCH_LOCK
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -36,7 +37,6 @@ DEFAULT_SLUG = "work"
 JOINT_PR_NOTE = "one per repository, listed under Repositories"
 # A prompt carries at most this much of `MAP.md`.
 MAX_MAP = 20_000
-DISPATCH_LOCK = "dispatch.lock"
 RUNS_DIR = "runs"
 
 

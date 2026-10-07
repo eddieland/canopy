@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from canopy.chores import reconcile as chore_reconcile
+from canopy.chores import view as chore_view
 from canopy.core import db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
@@ -61,8 +63,12 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     except treehouse.TreehouseError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
+    chore_reconcile.run(ctx, log)
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+    for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
+        action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
+        db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
     for repo in ctx.workspace.repos:
         # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
         if not repo.cloned:
@@ -93,6 +99,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         now=now,
         split_attempts=policy.split_attempts(ctx.conn),
         split_children=db.open_split_children(ctx.conn),
+        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)

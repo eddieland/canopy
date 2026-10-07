@@ -11,6 +11,9 @@ from canopy.core import db
 from canopy.core.workspace import Workspace, of_one
 from canopy.infra import lock, procs
 
+# Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
+DISPATCH_LOCK = "dispatch.lock"
+
 if TYPE_CHECKING:
     from canopy.core.config import Config
 
@@ -43,6 +46,11 @@ class Context:
     def lock_path(self) -> Path:
         """The tick lock file."""
         return self.state_dir / lock.LOCK_FILE_NAME
+
+    @property
+    def dispatch_lock_path(self) -> Path:
+        """The lock that serializes dispatches and chore runs."""
+        return self.state_dir / DISPATCH_LOCK
 
     @property
     def repo(self) -> str:
