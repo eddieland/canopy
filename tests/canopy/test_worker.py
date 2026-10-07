@@ -15,7 +15,16 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, definitions
 from canopy.runs import worker
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    commit_and_push,
+    in_tick,
+    journal,
+    pool,
+    slot_of,
+    unit_of,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool, git
 
 
@@ -69,11 +78,12 @@ def test_worker_that_pushes_is_done(
         "status": "done",
         "branch": "agent/PROJ-1-work",
         "pr": "https://example.test/pr/1",
+        "prs": {"repo": "https://example.test/pr/1"},  # a result from before joint runs is read as the new contract
         "summary": "did it",
         "question": None,
     }
     [w] = agent_runs(agent_log)
-    assert w["cwd"] == run["slot_path"]
+    assert w["cwd"] == slot_of(conn, run["id"])["slot_path"]
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
     assert w["env"] == {"OPENCODE_CONFIG_DIR": str(definitions.ensure(canopy_env.state_dir))}
     argv = w["argv"]
@@ -81,14 +91,13 @@ def test_worker_that_pushes_is_done(
     assert argv[:3] == ["run", "--agent", "canopy-worker"]
     assert argv[3] == (canopy_env.state_dir / "runs" / "1.prompt").read_text()
 
-    slot = Path(run["slot_path"])
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
     assert git("rev-parse", "--abbrev-ref", "HEAD", cwd=slot) == "agent/PROJ-1-work"
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
     # The branch started from origin/main, without tracking it: a bare `git push` must not target main.
     assert git("rev-parse", "HEAD~1", cwd=slot) == git_pool.remote_head("main")
     assert all(s["status"] == "available" for s in pool(treehouse_state))
-    ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert ticket["pr_url"] == "https://example.test/pr/1"
+    assert unit_of(conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
     assert "run 1: done" in capsys.readouterr().out
 
 
@@ -109,7 +118,9 @@ def test_unpushed_commits_are_pushed_once(
     worker_does(monkeypatch, ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: forgot to push"])
     run = dispatch_and_run(conn, monkeypatch)
     assert run["status"] == "done"
-    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=Path(run["slot_path"]))
+    assert git_pool.remote_head("agent/PROJ-1-work") == git(
+        "rev-parse", "HEAD", cwd=Path(slot_of(conn, run["id"])["slot_path"])
+    )
 
 
 def test_failed_push_is_unpushed(

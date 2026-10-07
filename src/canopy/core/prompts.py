@@ -7,7 +7,7 @@ prompts canopy ships. Worker prompts name their inputs as `{{NAME}}` placeholder
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +22,9 @@ _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
 REQUIRED_WORKER = ("LABELS",)
+# Placeholders a joint run's prompt must also use: its worker learns its repositories and the result's `prs` from them
+# (DESIGN §18). A prompt without them still serves a run in one repository.
+REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 
 
 class PromptError(Exception):
@@ -42,12 +45,12 @@ def render_overseer(config: Config, block: str) -> str:
     return f"{body}\n\n{block}"
 
 
-def render_worker(config: Config, kind: str, values: Mapping[str, str]) -> str:
+def render_worker(config: Config, kind: str, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
     Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
-    `REQUIRED_WORKER`.
+    `REQUIRED_WORKER`, or of `required`.
     """
     path = prompt_path(config, WORKER[kind])
     text = path.read_text(encoding="utf-8")
@@ -60,7 +63,7 @@ def render_worker(config: Config, kind: str, values: Mapping[str, str]) -> str:
 
     rendered = _PLACEHOLDER_RE.sub(replace, text)
     used = set(_PLACEHOLDER_RE.findall(text))
-    missing = [f"{{{{{name}}}}}" for name in REQUIRED_WORKER if name not in used]
+    missing = [f"{{{{{name}}}}}" for name in (*REQUIRED_WORKER, *required) if name not in used]
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered

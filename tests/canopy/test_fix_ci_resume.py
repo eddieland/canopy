@@ -10,7 +10,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.loop import attention
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, wait_for_run, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, unit_of, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
 
@@ -102,7 +102,7 @@ def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
     assert prompt.startswith("# canopy worker: resume")
     assert context in prompt
     assert "one of `alice`, `5b10ac` carries instructions" in prompt
-    assert "PR: not recorded; look up the PR for `agent/PROJ-1-work` through the GitHub MCP." in prompt
+    assert "PR: not recorded; look up the PR for `agent/PROJ-1-work` in `repo` through the GitHub MCP." in prompt
     assert "This is attempt 1 of 3." in prompt
 
 
@@ -210,7 +210,8 @@ def test_cursors_advance_only_when_the_worker_starts(
     assert main(args, runner=runner) == 1  # capacity
     rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
     assert rows["PROJ-1"]["last_comment_id"] == "c1"
-    assert (rows["PROJ-2"]["last_comment_id"], rows["PROJ-2"]["last_review_id"]) == (None, None)
+    assert rows["PROJ-2"]["last_comment_id"] is None
+    assert db.units(conn, "PROJ-2") == []  # nor its review cursor, nor a unit at all
 
 
 def test_state_block_shows_attempts_and_the_cooldown(
@@ -230,9 +231,11 @@ def test_state_block_shows_attempts_and_the_cooldown(
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
     [ticket] = state["tickets"]
-    assert ticket["attempts"] == {"implement": 1, "fix-ci": 1, "resume": 0}
+    [unit] = ticket["units"]
+    assert (unit["repo"], unit["branch"]) == ("repo", "agent/PROJ-1-work")
+    assert unit["attempts"] == {"implement": 1, "fix-ci": 1, "resume": 0}
     until = db.parse_time(str(fix["ended_at"])) + timedelta(minutes=30)
-    assert ticket["fix_ci_cooldown_until"] == db.format_time(until)
+    assert unit["fix_ci_cooldown_until"] == db.format_time(until)
     assert state["policy"]["max_implement_attempts"] == 2
     assert db.parse_time(state["now"]) < until
 
@@ -297,6 +300,5 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
 
     assert [r["kind"] for r in conn.execute("SELECT kind FROM runs ORDER BY id")] == ["implement", "fix-ci", "fix-ci"]
     assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("PROJ-1", "attempt_limit")]
-    ticket = db.get_ticket(conn, "PROJ-1")
-    assert ticket is not None
-    assert ticket["last_ci_run_id"] == "run-1"  # advanced by the dispatches that started, not by the refused ones
+    # Advanced by the dispatches that started, not by the refused ones.
+    assert unit_of(conn, "PROJ-1")["last_ci_run_id"] == "run-1"
