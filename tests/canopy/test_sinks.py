@@ -1,5 +1,6 @@
 """The sinks canopy ships (DESIGN §20): the desktop sink, and the Slack sink against a local HTTP server."""
 
+import io
 import json
 import os
 import threading
@@ -54,7 +55,7 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
-    assert desktop.run([], json.dumps(MESSAGE), runner=SubprocessRunner(), platform="linux") == 0
+    assert desktop.run([], io.StringIO(json.dumps(MESSAGE)), runner=SubprocessRunner(), platform="linux") == 0
     [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
     assert argv[1:4] == ["--app-name=canopy", "--", "canopy: api"]
     assert argv[4] == "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x"
@@ -62,7 +63,7 @@ def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
 
 def test_the_desktop_sink_passes_text_to_osascript_as_arguments(tools: Path) -> None:
     text = 'canopy attention: 1 new, 0 resolved\n+ PROJ-1 crashed: "quoted" and \\ backslash\nFull list: /x\n'
-    assert desktop.run([], text, runner=SubprocessRunner(), platform="darwin") == 0
+    assert desktop.run([], io.StringIO(text), runner=SubprocessRunner(), platform="darwin") == 0
     [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
     assert argv[1:7] == [
         "-e",
@@ -86,9 +87,9 @@ def test_the_desktop_sink_without_its_tool(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("PATH", str(tmp_path))
-    assert desktop.run([], "hello\n", runner=SubprocessRunner(), platform="linux") == 2
+    assert desktop.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
     assert "notify-send is not installed" in capsys.readouterr().err
-    assert desktop.run([], "", runner=SubprocessRunner(), platform="linux") == 2
+    assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
 
 
 # Slack
@@ -131,7 +132,7 @@ def webhook_file(tmp_path: Path, url: str, mode: int = 0o600) -> Path:
 
 def test_the_slack_sink_posts_one_escaped_message(hook: str, tmp_path: Path) -> None:
     path = webhook_file(tmp_path, hook)
-    assert slack.run(["--webhook-file", str(path)], json.dumps(MESSAGE), prefix="http://127.0.0.1:") == 0
+    assert slack.run(["--webhook-file", str(path)], io.StringIO(json.dumps(MESSAGE)), prefix="http://127.0.0.1:") == 0
     [posted] = _Hook.received
     assert set(posted) == {"text"}
     assert posted["text"].splitlines() == [
@@ -145,7 +146,7 @@ def test_the_slack_sink_posts_one_escaped_message(hook: str, tmp_path: Path) -> 
 def test_slack_refusing_a_post_is_exit_1(hook: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     _Hook.status = 400
     path = webhook_file(tmp_path, hook)
-    assert slack.run(["--webhook-file", str(path)], json.dumps(MESSAGE), prefix="http://127.0.0.1:") == 1
+    assert slack.run(["--webhook-file", str(path)], io.StringIO(json.dumps(MESSAGE)), prefix="http://127.0.0.1:") == 1
     assert "Slack refused the post: HTTP 400: invalid_payload" in capsys.readouterr().err
 
 
@@ -161,7 +162,7 @@ def test_the_webhook_file_is_checked(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], url: str, mode: int, message: str
 ) -> None:
     path = webhook_file(tmp_path, url, mode)
-    assert slack.run(["--webhook-file", str(path)], json.dumps(MESSAGE)) == 2
+    assert slack.run(["--webhook-file", str(path)], io.StringIO(json.dumps(MESSAGE))) == 2
     assert message in capsys.readouterr().err
 
 
@@ -170,11 +171,11 @@ def test_the_slack_sink_reads_its_default_file_and_needs_json(
 ) -> None:
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert slack.default_webhook_file() == tmp_path / "canopy" / "slack-webhook"
-    assert slack.run([], json.dumps(MESSAGE)) == 2
+    assert slack.run([], io.StringIO(json.dumps(MESSAGE))) == 2
     assert f"cannot read the webhook file {tmp_path / 'canopy' / 'slack-webhook'}" in capsys.readouterr().err
     (tmp_path / "canopy").mkdir()
     webhook_file(tmp_path / "canopy", "https://hooks.slack.com/services/T/B/x")
-    assert slack.run([], "canopy attention: 1 new\n") == 2
+    assert slack.run([], io.StringIO("canopy attention: 1 new\n")) == 2
     assert 'set format = "json" for this sink' in capsys.readouterr().err
 
 
@@ -188,3 +189,20 @@ def test_a_digest_is_a_short_block() -> None:
         }
     )
     assert text.splitlines() == ["*canopy* · api: digest", "", "*Digest*", "Digest since x: 2 ticks", "nothing ran"]
+
+
+class _Unread(io.StringIO):
+    @override
+    def read(self, size: int | None = -1, /) -> str:
+        raise AssertionError(f"--help read stdin ({size})")
+
+
+def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as desktop_exit:
+        desktop.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux")
+    with pytest.raises(SystemExit) as slack_exit:
+        slack.run(["--help"], _Unread())
+    assert (desktop_exit.value.code, slack_exit.value.code) == (0, 0)
+    out = capsys.readouterr().out
+    assert "usage: canopy-notify-desktop" in out
+    assert "usage: canopy-notify-slack" in out

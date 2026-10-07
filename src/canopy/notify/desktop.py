@@ -20,6 +20,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import TextIO
 
 from canopy.infra import procs
 
@@ -71,11 +72,12 @@ def command(title: str, body: str, platform: str) -> list[str] | None:
     return None
 
 
-def run(argv: list[str], stdin: str, *, runner: procs.Runner, platform: str) -> int:
-    """Show `stdin` as a desktop notification. Returns the exit code."""
+def run(argv: list[str], stdin: TextIO, *, runner: procs.Runner, platform: str) -> int:
+    """Show the message on `stdin` as a desktop notification. Returns the exit code."""
     parser = argparse.ArgumentParser(prog="canopy-notify-desktop", description=__doc__.split("\n", 1)[0])
+    # Arguments first: `--help` must not wait for a message on stdin.
     parser.parse_args(argv)
-    title, body = message(stdin)
+    title, body = message(stdin.read())
     if not body:
         print("canopy-notify-desktop: no message on stdin", file=sys.stderr)  # noqa: T201
         return 2
@@ -97,4 +99,4 @@ def run(argv: list[str], stdin: str, *, runner: procs.Runner, platform: str) -> 
 
 def main() -> int:
     """The `canopy-notify-desktop` command."""
-    return run(sys.argv[1:], sys.stdin.read(), runner=procs.SubprocessRunner(), platform=sys.platform)
+    return run(sys.argv[1:], sys.stdin, runner=procs.SubprocessRunner(), platform=sys.platform)
