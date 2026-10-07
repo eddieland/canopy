@@ -102,6 +102,9 @@ def test_the_state_directory_must_be_private(ws: Ws, capsys: pytest.CaptureFixtu
     assert "is not private to you" in capsys.readouterr().err
     ws.state_dir.rmdir()
     assert main(["status"]) == 0
+    output = capsys.readouterr().out
+    assert output.startswith(f"State directory: {ws.state_dir}\nLog file: {ws.state_dir / 'canopy.log'}\n")
+    assert output.index("State directory:") < output.index("Attention (")
     assert ws.state_dir.stat().st_mode & 0o777 == 0o700
 
 

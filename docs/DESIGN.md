@@ -796,7 +796,9 @@ and in a workspace `repo_missing` and the overseer's `multi_repo`, `split_unlabe
 Chores add `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add
 `review_failed`, `review_unposted`, and `review_limit`, about a PR (§21). In
 a workspace of several, an item about one unit of a ticket names its repository too, and is shown as `KEY (repo)`.
-`canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
+`canopy status` starts with the state directory and log file paths resolved for the current context, then prints the
+last tick, the list, running workers, configured chores, and notification sinks. In a workspace, these paths point into
+that workspace's `.canopy/` directory. Items disappear when their cause is gone; no manual dismissal.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). A ticket not marked done whose latest run
 ended `crashed` is `crashed`; `unpushed` is `unpushed`; `unknown` or `timeout` is `unknown_result`; `failed` is
