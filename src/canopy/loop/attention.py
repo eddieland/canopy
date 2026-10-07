@@ -5,30 +5,36 @@ for what it reads in the world, and by the harness for runs that ended in a way 
 current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
 longer records it.
 
-After every tick, `publish` rewrites `<state_dir>/attention.md` and, when `notify.cmd` is set, pipes it what changed
-since the last notification. The `notifications` table holds the items already notified that are still open, so an
-open item is notified once however many ticks it lasts.
+A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
+`chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
+ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed (`listed`).
+
+After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the list to the notification sinks
+(`canopy.notify`), each told about each open item once however many ticks it lasts (DESIGN §20).
 """
 
 from __future__ import annotations
 
-import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from canopy.chores import view as chore_view
 from canopy.core import db
-from canopy.core.config import notify_words
-from canopy.infra import logs, procs
+from canopy.core.items import Item, age, fingerprint, one_line, subject
+from canopy.infra import logs
+from canopy.notify import deliver
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from canopy.core.context import Context
 
 ACTION_PREFIX = "attention:"
+# Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
+# no colon (DESIGN §17), so neither can equal one.
+CHORE_PREFIX = "chore:"
+PR_PREFIX = "pr:"
 # Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
 # worker left no usable result line.
 RUN_REASONS = {
@@ -41,17 +47,25 @@ RUN_REASONS = {
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
 FILE_NAME = "attention.md"
-NOTIFY_TIMEOUT_SECONDS = 60
+# Kept importable from here: tests and the CLI name items through this module.
+__all__ = ["ACTION_PREFIX", "CHORE_PREFIX", "FILE_NAME", "Item", "age", "current", "fingerprint", "listed", "subject"]
 
 
-@dataclass(frozen=True)
-class Item:
-    """One attention item: a ticket, why it needs a human, and since when."""
+def decided_about(decision: sqlite3.Row) -> str:
+    """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick."""
+    if decision["chore"] is not None:
+        return f"{CHORE_PREFIX}{decision['chore']}"
+    if decision["ticket_key"] is None and decision["pr"] is not None:
+        return f"{PR_PREFIX}{decision['pr']}"
+    return str(decision["ticket_key"] or decision["repo"] or "-")
 
-    ticket_key: str
-    reason: str
-    detail: str
-    since: str  # created_at of the first tick in the unbroken run of ticks that recorded this item
+
+# An item is its ticket, its reason, and its repository if it has one.
+_ItemId = tuple[str | None, str, str | None]
+
+
+def _sort_key(item_id: _ItemId) -> tuple[str, str, str]:
+    return (item_id[0] or "", item_id[1], item_id[2] or "")
 
 
 def current(conn: sqlite3.Connection) -> list[Item]:
@@ -67,26 +81,58 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         return []
     # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at FROM decisions "  # noqa: S608
+        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore, pr FROM decisions "  # noqa: S608
         f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
         ticks,
     ).fetchall()
-    by_tick: dict[int, dict[tuple[str, str], tuple[str, str]]] = {t: {} for t in ticks}
+    by_tick: dict[int, dict[_ItemId, tuple[str, str]]] = {t: {} for t in ticks}
     for r in rows:
-        item_id = (str(r["ticket_key"]), str(r["action"]).removeprefix(ACTION_PREFIX))
+        key = None if r["ticket_key"] is None else str(r["ticket_key"])
+        if r["chore"] is not None:
+            key = f"{CHORE_PREFIX}{r['chore']}"
+        elif key is None and r["pr"] is not None:
+            key = f"{PR_PREFIX}{r['pr']}"
+        repo = None if r["repo"] is None else str(r["repo"])
+        item_id: _ItemId = (key, str(r["action"]).removeprefix(ACTION_PREFIX), repo)
         by_tick[int(r["tick_id"])].setdefault(item_id, (str(r["rationale"]), str(r["created_at"])))
 
     latest = by_tick[ticks[0]]
     items: list[Item] = []
-    for item_id, (detail, created_at) in sorted(latest.items()):
-        since = created_at
+    for item_id in sorted(latest, key=_sort_key):
+        detail, since = latest[item_id]
         for tick_id in ticks[1:]:
             earlier = by_tick[tick_id].get(item_id)
             if earlier is None:
                 break
             since = earlier[1]
-        items.append(Item(item_id[0], item_id[1], detail, since))
+        items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
     return items
+
+
+def listed(ctx: Context) -> list[Item]:
+    """Return the attention list as it is shown and notified: `current`, with the chores this workspace runs.
+
+    A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all (DESIGN §19).
+    """
+    configured = set(chore_view.configured(ctx.config, ctx.workspace))
+    items = [
+        i
+        for i in current(ctx.conn)
+        if i.ticket_key is None
+        or not i.ticket_key.startswith(CHORE_PREFIX)
+        or i.ticket_key.removeprefix(CHORE_PREFIX) in configured
+    ]
+    findings = [
+        Item(
+            f"{CHORE_PREFIX}{f.chore}",
+            f.finding.id,
+            " ".join(part for part in (f.finding.title, f.finding.link or "") if part),
+            f.since,
+            finding=True,
+        )
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+    ]
+    return items + findings
 
 
 @dataclass(frozen=True)
@@ -124,23 +170,12 @@ def _detail(run: sqlite3.Row) -> str:
             harness: object = result.get("harness")
             summary: object = result.get("summary")
             note = str(harness or summary or "")
-    text = f"run {run['id']} ({run['kind']}, {run['branch']}) ended {run['status']}"
+    # A split works on no branch.
+    what = f"{run['kind']}, {run['branch']}" if run["branch"] else str(run["kind"])
+    text = f"run {run['id']} ({what}) ended {run['status']}"
     if note:
         text += f": {note}"
     return f"{text}; log {run['log_path']}"[:2000]
-
-
-def age(timestamp: str, now: datetime | None = None) -> str:
-    """Return how long ago `timestamp` was, in its largest whole unit: `3d`, `2h`, `5m`, `40s`."""
-    seconds = max(0, int(((now or datetime.now(UTC)) - db.parse_time(timestamp)).total_seconds()))
-    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
-        if seconds >= size:
-            return f"{seconds // size}{unit}"
-    return f"{seconds}s"
-
-
-def _one_line(text: str) -> str:
-    return " ".join(text.split())
 
 
 def render(items: list[Item], now: datetime) -> str:
@@ -152,90 +187,32 @@ def render(items: list[Item], now: datetime) -> str:
         return "\n".join(lines)
     count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
     lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
-    for reason in sorted({i.reason for i in items}):
+    reasons = [i for i in items if not i.finding]
+    for reason in sorted({i.reason for i in reasons}):
         lines += [f"## {reason}", ""]
-        lines += [f"- {i.ticket_key}, {age(i.since, now)}: {_one_line(i.detail)}" for i in items if i.reason == reason]
+        lines += [f"- {i.subject}, {age(i.since, now)}: {one_line(i.detail)}" for i in reasons if i.reason == reason]
+        lines.append("")
+    # A section per chore after the ticket items: one line per finding, with its title, age, and link (DESIGN §19).
+    findings = [i for i in items if i.finding]
+    for chore in sorted({i.subject for i in findings}):
+        lines += [f"## {chore}", ""]
+        lines += [f"- {one_line(i.detail)}, {age(i.since, now)} ({i.reason})" for i in findings if i.subject == chore]
         lines.append("")
     return "\n".join(lines)
 
 
-def fingerprint(ticket_key: str, reason: str) -> str:
-    """Identify an item across ticks. The detail is left out: rewording it does not make a new item."""
-    return hashlib.sha256(f"{ticket_key}\0{reason}".encode()).hexdigest()
-
-
-@dataclass(frozen=True)
-class Diff:
-    """What changed since the last notification: new items, and notified items whose cause is gone."""
-
-    added: list[Item]
-    resolved: list[tuple[str, str]]  # (ticket key, reason)
-
-    def __bool__(self) -> bool:
-        """Whether anything changed."""
-        return bool(self.added or self.resolved)
-
-    def text(self, path: Path) -> str:
-        """Return the notification: one line per change, then where the full list is."""
-        lines = [f"canopy attention: {len(self.added)} new, {len(self.resolved)} resolved"]
-        lines += [f"+ {i.ticket_key} {i.reason}: {_one_line(i.detail)}" for i in self.added]
-        lines += [f"- {key} {reason}" for key, reason in self.resolved]
-        lines.append(f"Full list: {path}")
-        return "\n".join(lines) + "\n"
-
-
-def diff(conn: sqlite3.Connection, items: list[Item]) -> Diff:
-    """Compare `items` with the open items already notified."""
-    notified = {
-        str(r[0]): (str(r[1]), str(r[2]))
-        for r in conn.execute("SELECT fingerprint, ticket_key, reason FROM notifications")
-    }
-    now_open = {fingerprint(i.ticket_key, i.reason) for i in items}
-    added = [i for i in items if fingerprint(i.ticket_key, i.reason) not in notified]
-    resolved = sorted(item for fp, item in notified.items() if fp not in now_open)
-    return Diff(added, resolved)
-
-
-def mark_sent(conn: sqlite3.Connection, change: Diff) -> None:
-    """Record a notified diff: its new items become notified, its resolved items are forgotten."""
-    ts = db.now()
-    with db.transaction(conn):
-        conn.executemany(
-            "DELETE FROM notifications WHERE fingerprint = ?", [(fingerprint(k, r),) for k, r in change.resolved]
-        )
-        conn.executemany(
-            "INSERT OR REPLACE INTO notifications (fingerprint, ticket_key, reason, sent_at) VALUES (?, ?, ?, ?)",
-            [(fingerprint(i.ticket_key, i.reason), i.ticket_key, i.reason, ts) for i in change.added],
-        )
-
-
 def publish(ctx: Context, log: logs.TickAdapter) -> None:
-    """Rewrite `attention.md` and, if `notify.cmd` is set and something changed, notify (DESIGN §6 step 7).
+    """Rewrite `attention.md` and deliver to the notification sinks (DESIGN §6 step 7, §20).
 
-    Failures are logged, never raised: the tick is already closed. A notification that fails is sent again next tick,
-    since nothing is marked sent until the command succeeds.
+    Failures are logged, never raised: the tick is already closed. A delivery that fails is tried again next tick.
     """
-    items = current(ctx.conn)
+    items = listed(ctx)
     path = ctx.state_dir / FILE_NAME
     try:
         logs.write_private(path, render(items, datetime.now(UTC)))
     except OSError as e:
         log.error("could not write the attention list", extra={"path": str(path), "error": str(e)})  # noqa: TRY400
-    argv = notify_words(ctx.config.notify.cmd)
-    if not argv:
-        return
-    change = diff(ctx.conn, items)
-    if not change:
-        return
-    fields = {"added": len(change.added), "resolved": len(change.resolved), "cmd": argv[0]}
     try:
-        result = ctx.runner.run(argv, cwd=ctx.repo_root, stdin=change.text(path), timeout=NOTIFY_TIMEOUT_SECONDS)
-    except procs.ProcError as e:
-        log.warning("notify command could not start", extra={**fields, "error": str(e)})
-        return
-    if not result.ok:
-        status = "timed out" if result.timed_out else f"exited {result.returncode}"
-        log.warning("notify command failed", extra={**fields, "status": status, "stderr": result.stderr[-500:]})
-        return
-    mark_sent(ctx.conn, change)
-    log.info("notified", extra=fields)
+        deliver.publish(ctx, items, path, log)
+    except Exception as e:
+        log.exception("notification failed", extra={"error": str(e)})

@@ -14,7 +14,8 @@ attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds
 standing write access to your repositories, your tracker, or your internal tools.
 
-**Status:** pre-alpha, under construction. See [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** pre-alpha, under construction. See [docs/ROADMAP.md](docs/ROADMAP.md). What it must do, and how far
+along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 ## Why this exists
 
@@ -54,12 +55,36 @@ standing write access to your repositories, your tracker, or your internal tools
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket.
 - Review PRs. Humans approve and merge; the agent never does.
-- Read the attention list: `canopy status`, or `~/.canopy/attention.md`. Set `notify.cmd` to have changes piped to a
-  command of your own.
+- Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
+  sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
+  channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
 - Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
+  PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
+- Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
+  overseer runs when due and that report findings to the attention list (DESIGN §19).
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
+
+## Several repositories
+
+When one queue's tickets land in several repositories, make a workspace instead of running canopy in each: in an empty
+directory, `canopy init --workspace`, list the repositories under `[repos.<name>]` in `canopy-workspace.toml` and
+describe them in `MAP.md`, then `canopy workspace sync` to clone them under `repos/`. Run `canopy loop` from the
+workspace. The overseer picks the repositories each ticket needs. Most tickets change one; a change that cannot land in
+parts is worked jointly, one worker opening a linked PR in each repository; and one that builds on another repository's
+merged PR is worked there next. To have a ticket split into one ticket per repository instead, comment on it asking for
+a split: a worker creates the children unlabeled, and you label each one you want worked. The pools, journal, and
+attention list live inside the workspace. See `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
+
+## Troubleshooting
+
+- If canopy cannot find `treehouse`, check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
+  outdated, rerun the pinned install from step 1 above or run `make treehouse` in a canopy checkout.
+- If the overseer records `skip` with `mcp_unavailable: github`, configure the GitHub MCP server in your agent runtime.
+- For more detail, check `canopy decisions`, `canopy status`, and the effective log path reported by canopy's command
+  output.
 
 ## How it works, briefly
 
@@ -97,6 +122,9 @@ Details in [docs/DESIGN.md](docs/DESIGN.md). Security posture in
   orchestrator. Different shape: canopy is unattended and queue-driven.
 - **GitHub Copilot coding agent, Atlassian Rovo Dev**: hosted equivalents. See
   "Why this exists".
+- **OpenAI Symphony, agent-orchestrator, Hermes Agent Kanban**: open-source loops that dispatch agents from a
+  tracker or board. Why canopy is built anyway, and what their issue trackers taught: D050 and
+  [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 ## License
 

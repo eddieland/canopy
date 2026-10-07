@@ -9,6 +9,7 @@ license-files = ["LICENSE"]
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
+    "canopy-notify-slack",
     "click>=8.5.0",
     "pydantic>=2.13.5",
     "rich>=15.0.0",
@@ -16,6 +17,10 @@ dependencies = [
 
 [project.scripts]
 canopy = "canopy.cli.main:main"
+# Notification sinks canopy ships (DESIGN §20). They run as sink commands, never inside the harness.
+canopy-notify-desktop = "canopy.notify.desktop:main"
+# Its own distribution, a workspace member (D041); listed here so the install that puts canopy on PATH puts it there too.
+canopy-notify-slack = "canopy_notify_slack:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -32,6 +37,13 @@ packages = ["src/canopy"]
 ".agents/agents" = "canopy/_data/agents"
 ".agents/skills" = "canopy/_data/skills"
 ".agents/operator-skill" = "canopy/_data/operator-skill"
+
+# The repository is a uv workspace: canopy at the root, separate programs it ships under packages/ (D041).
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+canopy-notify-slack = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -72,6 +84,10 @@ ban-relative-imports = "all"
 "subprocess".msg = "Run external processes through canopy.infra.procs."
 "os.system".msg = "Run external processes through canopy.infra.procs."
 "os.popen".msg = "Run external processes through canopy.infra.procs."
+# The harness makes no network call except through configured commands (TRUST_MODEL T2, DESIGN §20).
+"urllib.request".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+"http.client".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+"socket".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 
 [tool.ruff.lint.per-file-ignores]
 # The subprocess boundary (D015). Arguments are an argv list, never a shell string.
@@ -85,6 +101,8 @@ ban-relative-imports = "all"
 ]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
+# The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
+"packages/canopy-notify-slack/**" = ["TID251"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -92,6 +110,6 @@ testpaths = ["tests"]
 # Strict preset (D017). The fakes are extensionless, so list them explicitly.
 [tool.pyrefly]
 preset = "strict"
-project-includes = ["src", "tests", "tests/fakes/agent", "tests/fakes/treehouse"]
+project-includes = ["src", "packages", "tests", "tests/fakes/agent", "tests/fakes/treehouse"]
 # Tests are packages under the repository root (D019) and import shared helpers from `tests.conftest`.
-search-path = ["src", "."]
+search-path = ["src", "packages/canopy-notify-slack/src", "."]

@@ -18,12 +18,16 @@ import tempfile
 import time
 from pathlib import Path
 
-from canopy.infra import resources
+from canopy.infra import logs, resources
 
 RUNTIME_DIR = "runtime"
 _TMP_PREFIX = ".tmp-"
 # A temporary directory this old belongs to a process that died mid-copy; a copy takes well under a second.
 _STALE_TMP_SECONDS = 3600
+
+
+class DefinitionsError(Exception):
+    """The snapshot for this canopy exists but is not one canopy made, so no run may load it."""
 
 
 def _files(root: Path) -> list[Path]:
@@ -48,11 +52,18 @@ def agent_names() -> list[str]:
 
 
 def ensure(state_dir: Path) -> Path:
-    """Return the snapshot for the installed canopy, creating it if missing. Safe to call from concurrent processes."""
+    """Return the snapshot for the installed canopy, creating it if missing. Safe to call from concurrent processes.
+
+    canopy creates a snapshot readable only by the operator. One that is not was put there by something else, such as a
+    checkout of a shared workspace (DESIGN §18), and could loosen canopy's agents, so it is refused, never loaded.
+
+    Raises:
+        DefinitionsError: the snapshot's directory exists and is not private to the operator.
+    """
     runtime = state_dir / RUNTIME_DIR
     final = runtime / digest()
-    if final.is_dir():
-        return final
+    if final.is_dir() or final.is_symlink():
+        return _checked(final)
     runtime.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=_TMP_PREFIX, dir=runtime))
     try:
@@ -63,9 +74,18 @@ def ensure(state_dir: Path) -> Path:
         shutil.rmtree(tmp, ignore_errors=True)
         # Another process renamed its copy into place first; theirs has the same contents.
         if final.is_dir():
-            return final
+            return _checked(final)
         raise
     return final
+
+
+def _checked(snapshot: Path) -> Path:
+    if not logs.private_dir(snapshot):
+        raise DefinitionsError(
+            f"{snapshot} is not a snapshot canopy made: canopy creates it readable only by you, and this one is a "
+            "symlink, someone else's, or open to others. Remove it; canopy recreates it."
+        )
+    return snapshot
 
 
 def prune(state_dir: Path, keep: Path) -> list[Path]:

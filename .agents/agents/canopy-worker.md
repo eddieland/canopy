@@ -9,7 +9,8 @@ mode: primary
 temperature: 0.2
 permission:
   # Edits inside the worktree, which is the working directory `canopy _run` starts the worker in. Files outside it
-  # are refused.
+  # are refused. A joint run's working directory is its desk, whose links lead to the worktrees it leased (DESIGN
+  # §18); the desk canary in tests/canopy/test_opencode_canary.py checks edits follow them and go nowhere else.
   edit: allow
   external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.

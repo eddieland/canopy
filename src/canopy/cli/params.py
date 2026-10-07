@@ -10,10 +10,10 @@ from typing import override
 
 import click
 
-from canopy.core import db
+from canopy.core import config, db, workspace
 from canopy.runs import dispatch
 
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+KEY_RE = dispatch.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 MAX_TEXT = 2000
@@ -22,6 +22,11 @@ MAX_TEXT = 2000
 def valid_key(value: str) -> bool:
     """Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
     return KEY_RE.fullmatch(value) is not None
+
+
+def plain_pr_url(value: str) -> bool:
+    """A PR's URL as the overseer passes it: a plain https:// URL, at most 300 characters (DESIGN §21)."""
+    return value.startswith("https://") and len(value) <= 300 and not any(c.isspace() for c in value)  # noqa: PLR2004
 
 
 def truncate(value: str) -> str:
@@ -76,3 +81,7 @@ class TextType(click.ParamType[str, object]):
 TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
+REPO = PatternType("NAME", workspace.REPO_NAME_RE, "repository name")
+CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name")
+# A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
+COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")

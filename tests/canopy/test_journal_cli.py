@@ -27,7 +27,7 @@ def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_ru
 @pytest.mark.parametrize(
     "argv",
     [
-        ["dispatch", "{key}", "--kind", "implement"],
+        ["dispatch", "{key}", "--label", "agent-ready-tester", "--kind", "implement"],
         ["decide", "{key}", "wait", "--rationale", "r"],
         ["attention", "{key}", "needs_reviewer", "--detail", "d"],
         ["ticket", "set", "{key}", "--phase", "ready"],
@@ -97,16 +97,38 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
     assert (
-        main(["dispatch", "PROJ-2", "--kind", "implement", "--context", "see comment 7", "--cursor", "comment=7"]) == 0
+        main(
+            [
+                "dispatch",
+                "PROJ-2",
+                "--label",
+                "agent-ready-tester",
+                "--kind",
+                "implement",
+                "--context",
+                "see comment 7",
+                "--cursor",
+                "comment=7",
+            ]
+        )
+        == 0
     )
-    assert main(["dispatch", "PROJ-3", "--kind", "implement", "--slug", "add-login"]) == 0
+    assert (
+        main(["dispatch", "PROJ-3", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"]) == 0
+    )
     rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
     assert rows == [
         (
             "dispatch:implement",
-            "dry run: not dispatched; would work on agent/PROJ-2-work; cursor comment=7; context=see comment 7",
+            (
+                "dry run: not dispatched; would work on agent/PROJ-2-work; label agent-ready-tester; cursor comment=7; "
+                "context=see comment 7"
+            ),
         ),
-        ("dispatch:implement", "dry run: not dispatched; would work on agent/PROJ-3-add-login"),
+        (
+            "dispatch:implement",
+            "dry run: not dispatched; would work on agent/PROJ-3-add-login; label agent-ready-tester",
+        ),
     ]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
     assert ticket["last_comment_id"] is None  # a dry run never advances cursors
@@ -120,7 +142,10 @@ def test_dry_run_ticket_set_records_the_phase_only(
     assert main(["ticket", "set", "PROJ-1", "--phase", "merged", "--cursor", "review=9", "--done"]) == 0
     assert capsys.readouterr().out == "updated PROJ-1; dry run, cursors not advanced and not marked done\n"
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["phase"], row["last_review_id"], row["done"]) == ("merged", None, 0)
+    assert (row["phase"], row["done"]) == (None, 0)
+    # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
+    [unit] = db.units(conn, "PROJ-1")
+    assert (unit["phase"], unit["last_review_id"]) == ("merged", None)
     assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
@@ -159,7 +184,10 @@ def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn:
     args = ["ticket", "set", "PROJ-1", "--cursor", "comment=10001", "--cursor", "review=PRR_kw1", "--done"]
     assert main(args) == 0
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["last_comment_id"], row["last_review_id"], row["done"]) == ("10001", "PRR_kw1", 1)
+    assert (row["last_comment_id"], row["done"]) == ("10001", 1)
+    # In a single repository, the review cursor goes to the ticket's one unit without naming it.
+    [unit] = db.units(conn, "PROJ-1")
+    assert (unit["repo"], unit["last_review_id"]) == ("repo", "PRR_kw1")
 
 
 @pytest.mark.parametrize("value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)"])
