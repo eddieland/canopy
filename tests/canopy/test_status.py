@@ -34,6 +34,16 @@ def test_status_json_reports_attention_and_running_workers(
     run = db.get_run(conn, run_id)
     assert run is not None
     conn.execute("UPDATE runs SET started_at = ? WHERE id = ?", ("2026-10-07T12:34:56.000Z", run_id))
+    review_id = db.insert_review_run(
+        conn,
+        tick_id=tick_id,
+        pr_url="https://example.test/pr/2",
+        sha="a" * 40,
+        ticket=None,
+        repo=None,
+        logs_dir=canopy_env.state_dir / "reviews",
+    )
+    conn.execute("UPDATE review_runs SET started_at = ? WHERE id = ?", ("2026-10-07T12:35:56.000Z", review_id))
     db.record_decision(
         conn,
         tick_id,
@@ -49,7 +59,15 @@ def test_status_json_reports_attention_and_running_workers(
     assert output == {
         "attention": [{"kind": "green_unreviewed", "ticket": "PROJ-1", "repo": "api", "message": "PR needs review"}],
         "workers": {
-            "running": [{"ticket": "PROJ-1", "kind": "implement", "started_at": "2026-10-07T12:34:56.000Z"}],
+            "running": [
+                {"ticket": "PROJ-1", "kind": "implement", "started_at": "2026-10-07T12:34:56.000Z"},
+                {
+                    "ticket": None,
+                    "kind": "review",
+                    "started_at": "2026-10-07T12:35:56.000Z",
+                    "pr": "https://example.test/pr/2",
+                },
+            ],
             "max": 2,
         },
     }
