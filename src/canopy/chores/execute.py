@@ -90,8 +90,10 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if chore is None:
         raise _SetupError(f"chore {name} is no longer configured for this workspace")
     cwd = _cwd(ctx, name, chore)
-    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044).
-    shadowing = definitions.shadowing(cwd)
+    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
+    # reads project config from the directories above it too.
+    here = cwd.resolve()
+    shadowing = [found for d in (here, *here.parents) for found in definitions.shadowing(d)]
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")

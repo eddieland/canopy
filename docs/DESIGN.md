@@ -1179,8 +1179,8 @@ workspaces = ["acme"]     # optional; default every workspace
   is an instruction, unlike anything a chore reads.
 - `timeout_minutes` defaults to 15. `cwd` is where the chore runs, absolute or starting with `~`; by default a
   directory of its own, `<state_dir>/chores/<name>/`, created readable only by the operator. Before the agent starts,
-  the shadowing check (§13) covers `cwd`: a run there whose OpenCode config defines one of canopy's agents is
-  `crashed`.
+  the shadowing check (§13) covers `cwd` and every directory above it, since OpenCode reads project config from
+  those too: a run whose OpenCode config there defines one of canopy's agents is `crashed`.
 - `workspaces` lists the workspaces the chore runs in, by name: a map's `[workspace] name`, or a workspace of one's
   repository name (§18). Empty, the default, means every workspace whose loop reads the user file. Each workspace
   has its own journal, so a chore listed in two runs in each (D063).

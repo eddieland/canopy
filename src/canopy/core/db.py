@@ -484,9 +484,14 @@ def running_chore_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM chore_runs WHERE status = 'running' ORDER BY started_at").fetchall()
 
 
-def chore_runs(conn: sqlite3.Connection, chore: str, limit: int = 1000) -> list[sqlite3.Row]:
-    """Return `chore`'s runs, newest first."""
-    return conn.execute("SELECT * FROM chore_runs WHERE chore = ? ORDER BY id DESC LIMIT ?", (chore, limit)).fetchall()
+def chore_runs(
+    conn: sqlite3.Connection, chore: str, limit: int = 1000, *, before: int | None = None
+) -> list[sqlite3.Row]:
+    """Return `chore`'s runs, newest first: at most `limit`, and only those before run id `before` if it is given."""
+    return conn.execute(
+        "SELECT * FROM chore_runs WHERE chore = ? AND id < ? ORDER BY id DESC LIMIT ?",
+        (chore, before if before is not None else 2**63 - 1, limit),
+    ).fetchall()
 
 
 # Split children

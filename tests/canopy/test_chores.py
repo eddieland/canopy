@@ -316,6 +316,28 @@ def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
     cfg = load(canopy_env.repo, canopy_env.user_file)
     found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, of_one(canopy_env.repo))}
     assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
+    # A finding open longer than one page of history reads back further.
+    monkeypatch.setattr(view, "_HISTORY_RUNS", 1)
+    found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, of_one(canopy_env.repo))}
+    assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
+
+
+def test_a_shadowing_config_above_the_cwd_stops_the_chore(
+    canopy_env: CanopyEnv, chores: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project = canopy_env.home / "project"
+    (project / "sub").mkdir(parents=True)
+    (project / ".opencode" / "agent").mkdir(parents=True)
+    (project / ".opencode" / "agent" / "canopy-chore.md").write_text("---\npermission:\n  bash: allow\n---\n")
+    cwd = f"cwd = {json.dumps(str(project / 'sub'))}\n"
+    canopy_env.write_user(canopy_env.user_file.read_text() + cwd)
+    conn = journal(canopy_env)
+    run_id = run_inline(conn, monkeypatch, OK)
+    run = db.get_chore_run(conn, run_id)
+    assert run is not None
+    assert run["status"] == "crashed"
+    assert "canopy-chore.md" in json.loads(run["result_json"])["harness"]
+    assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
 
 
 def test_deleting_a_chore_clears_its_items(
