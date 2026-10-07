@@ -3,101 +3,19 @@
 import json
 import os
 import sqlite3
-from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions, workspace
-from canopy.infra import resources
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
+from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
 from tests.canopy.helpers import InlineRunner, commit_and_push, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
-
-
-def map_text(*repos: tuple[str, str], extra: str = "") -> str:
-    tables = "".join(f'\n[repos.{name}]\nurl = "{url}"\nsummary = "The {name} repository."\n' for name, url in repos)
-    return f"""\
-[workspace]
-name = "acme"
-{tables}
-[tracker]
-provider = "github"
-query = "is:issue is:open"
-{extra}"""
-
-
-@dataclass(frozen=True)
-class Ws:
-    """A workspace of two repositories, `api` and `web`, each cloned from a bare origin under tmp_path."""
-
-    root: Path
-    origins: dict[str, Path]
-    state_dir: Path
-
-    def journal(self) -> sqlite3.Connection:
-        self.state_dir.mkdir(mode=0o700, exist_ok=True)  # as canopy creates it; anything wider is refused
-        conn = db.connect(self.state_dir / "canopy.db")
-        db.migrate(conn, resources.migrations_dir())
-        return conn
-
-    def clone(self, name: str) -> Path:
-        return self.root / "repos" / name
-
-    def remote_head(self, name: str, branch: str) -> str | None:
-        out = git("for-each-ref", "--format=%(objectname)", f"refs/heads/{branch}", cwd=self.origins[name])
-        return out or None
-
-
-def bare_origin(path: Path, tmp_path: Path) -> Path:
-    path.mkdir(parents=True)
-    git("init", "--quiet", "--bare", "--initial-branch=main", cwd=path)
-    seed = tmp_path / f"seed-{path.stem}"
-    seed.mkdir()
-    git("init", "--quiet", "--initial-branch=main", cwd=seed)
-    git("commit", "--quiet", "--allow-empty", "-m", f"initial {path.stem}", cwd=seed)
-    git("push", "--quiet", str(path), "main", cwd=seed)
-    return path
-
-
-@pytest.fixture
-def ws(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Ws:
-    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
-        monkeypatch.setenv(var, "canopy test")
-    for var in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
-        monkeypatch.setenv(var, "test@example.test")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-    root = tmp_path / "acme"
-    root.mkdir()
-    origins = {name: bare_origin(tmp_path / "origins" / f"{name}.git", tmp_path) for name in ("api", "web")}
-    for name, origin in origins.items():
-        git("clone", "--quiet", str(origin), str(root / "repos" / name), cwd=tmp_path)
-    (root / config.WORKSPACE_FILE_NAME).write_text(map_text(*((n, str(o)) for n, o in origins.items())))
-    monkeypatch.chdir(root)
-    return Ws(root, origins, root / ".canopy")
-
-
-def seed_pools(ws: Ws, treehouse_state: Path) -> None:
-    """Give each repository's pool one slot, a clone of its origin, where canopy's pinned layout puts it."""
-    pools: dict[str, object] = {}
-    for name, origin in ws.origins.items():
-        slot = ws.root / ".treehouse" / f"{name}-fake" / "1" / name
-        slot.parent.mkdir(parents=True)
-        git("clone", "--quiet", str(origin), str(slot), cwd=ws.root)
-        git("checkout", "--quiet", "--detach", cwd=slot)
-        pools[str(ws.clone(name))] = {"slots": [{"name": "1", "path": str(slot), "status": "available"}]}
-    treehouse_state.write_text(json.dumps({"pools": pools}))
-
-
-def th(treehouse_state: Path) -> dict[str, list[object]]:
-    state: dict[str, list[object]] = json.loads(treehouse_state.read_text())
-    return state
 
 
 def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> int:
@@ -239,7 +157,10 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
             f"{ws.root / 'repos' / 'docs'} has no clone; run `canopy workspace sync` in {ws.root}",
         ),
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
-        ("refused:unknown_repo", "--repo is required in a workspace: name the repository for PROJ-2 (api, docs, web)"),
+        (
+            "refused:unknown_repo",
+            "--repo is required in a workspace: name the repositories for PROJ-2 (api, docs, web)",
+        ),
     ]
     [item] = attention.current(conn)
     assert (item.ticket_key, item.reason, item.repo, item.subject) == (None, "repo_missing", "docs", "docs")
@@ -287,8 +208,9 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
 
     run = db.get_run(conn, 1)
     assert run is not None
-    assert (run["repo"], run["branch"]) == ("api", "agent/PROJ-1-login")
-    assert Path(run["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    [slot] = db.run_slots(conn, 1)
+    assert (slot["repo"], run["branch"]) == ("api", "agent/PROJ-1-login")
+    assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
     state = th(treehouse_state)
     assert state["calls"][-1] == [
         "get",
@@ -308,15 +230,15 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     ]
     assert decisions(conn, tick_id)[1][1] == "'nope' is not a repository in this workspace (api, docs, web)"
     assert decisions(conn, tick_id)[2][1].startswith("docs has no clone at ")
-    assert decisions(conn, tick_id)[3][1] == f"run 1: agent/PROJ-1-login in api at {run['slot_path']}; label {LABEL}"
+    assert decisions(conn, tick_id)[3][1] == f"run 1: agent/PROJ-1-login in api at {slot['slot_path']}; label {LABEL}"
 
-    # The ticket's work is in api now: another repository is refused until joint runs (D052).
+    # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
     db.finish_run(conn, 1, "done", "{}")
     resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
     assert main(resume, runner=runner) == 1
     assert decisions(conn, tick_id)[-1] == (
-        "refused:unknown_repo",
-        "PROJ-1 is worked in api; a ticket stays in the repository of its first dispatch (D052)",
+        "refused:no_branch",
+        "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web",
     )
     assert main([*resume[:-1], "api"], runner=runner) == 0
 
@@ -334,18 +256,19 @@ def test_two_tickets_in_two_repositories_end_to_end(
     assert main(dispatch("PROJ-2", "--repo", "web")) == 0
     second = wait_for_run(conn, 2)
 
-    for run in (first, second):
+    slots = [db.run_slots(conn, 1)[0], db.run_slots(conn, 2)[0]]
+    for run, slot in zip((first, second), slots, strict=True):
         assert run["status"] == "done", Path(run["log_path"]).read_text()
         # Every worktree is under the workspace root.
-        assert Path(run["slot_path"]).is_relative_to(ws.root / ".treehouse")
-    assert (first["repo"], second["repo"]) == ("api", "web")
+        assert Path(slot["slot_path"]).is_relative_to(ws.root / ".treehouse")
+    assert [s["repo"] for s in slots] == ["api", "web"]
     assert ws.remote_head("api", "agent/PROJ-1-work") is not None
     assert ws.remote_head("web", "agent/PROJ-2-work") is not None
     assert ws.remote_head("web", "agent/PROJ-1-work") is None
     pools = json.loads(treehouse_state.read_text())["pools"]
     assert [s["status"] for p in pools.values() for s in p["slots"]] == ["available", "available"]
     workers = [json.loads(line) for line in agent_log.read_text().splitlines()]
-    assert [w["cwd"] for w in workers] == [first["slot_path"], second["slot_path"]]
+    assert [w["cwd"] for w in workers] == [s["slot_path"] for s in slots]
 
 
 def test_reconcile_returns_leases_in_each_pool(
@@ -374,7 +297,7 @@ def test_reconcile_returns_leases_in_each_pool(
     assert [s["status"] for p in state["pools"].values() for s in p["slots"]] == ["available", "available"]
     returns = [(c, x) for c, x in zip(state["calls"], state["contexts"], strict=True) if c[0] == "return"]
     assert [(c[-1], x["cwd"]) for c, x in returns] == [
-        (run["slot_path"], str(ws.clone("api"))),
+        (db.run_slots(conn, 1)[0]["slot_path"], str(ws.clone("api"))),
         (str(ws.root / ".treehouse" / "web-fake" / "1" / "web"), str(ws.clone("web"))),
     ]
 

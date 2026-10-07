@@ -67,8 +67,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 When one queue's tickets land in several repositories, make a workspace instead of running canopy in each: in an empty
 directory, `canopy init --workspace`, list the repositories under `[repos.<name>]` in `canopy-workspace.toml` and
 describe them in `MAP.md`, then `canopy workspace sync` to clone them under `repos/`. Run `canopy loop` from the
-workspace. Each ticket is worked in one repository, which the overseer picks; the pools, journal, and attention list
-live inside the workspace. See `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
+workspace. The overseer picks the repositories each ticket needs. Most tickets change one; a change that cannot land in
+parts is worked jointly, one worker opening a linked PR in each repository; and one that builds on another repository's
+merged PR is worked there next. The pools, journal, and attention list live inside the workspace. See
+`examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
 
 ## Troubleshooting
 

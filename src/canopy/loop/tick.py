@@ -72,6 +72,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
             )
 
     now = datetime.now(UTC)
+    running = db.running_runs(ctx.conn)
+    last_runs = db.latest_runs(ctx.conn)
+    single = ctx.workspace.single
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -80,11 +83,13 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         capacity=reconciled.capacity,
         workspace=ctx.workspace,
         leased=reconciled.leased,
-        running=db.running_runs(ctx.conn),
+        running=running,
         tickets=db.open_tickets(ctx.conn),
-        last_runs=db.latest_runs(ctx.conn),
-        attempts=policy.attempts(ctx.conn),
-        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
+        units=db.all_units(ctx.conn),
+        last_runs=last_runs,
+        run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
+        attempts=policy.attempts(ctx.conn, single=single),
+        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now, single=single),
         now=now,
     )
     prompt = prompts.render_overseer(ctx.config, block)

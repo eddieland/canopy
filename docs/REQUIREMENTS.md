@@ -53,9 +53,9 @@ change, which needs human approval.
 
 ### R2. Worktree pool: create, track, and clean up worktrees per ticket, with a capacity limit
 
-Built. treehouse is the pool (D002): canopy leases a slot per run, records it in `runs`, returns it on every exit path,
-and returns stale leases in reconcile (§6, §8). The capacity limit is `capacity.max_workers`; treehouse's `max_trees`
-bounds the pool.
+Built. treehouse is the pool (D002): canopy leases a slot per run, one in each repository a joint run covers (§18),
+records it in `run_slots`, returns it on every exit path, and returns stale leases in reconcile (§6, §8). The capacity
+limit is `capacity.max_workers`; treehouse's `max_trees` bounds the pool.
 
 The shape differs from "a worktree per ticket": a ticket holds a slot only while a run is working on it, and its pushed
 branch is its checkpoint between runs (§9). That is what makes R3 possible.

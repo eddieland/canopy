@@ -76,9 +76,15 @@ def cmd_status(click_ctx: click.Context) -> int:
         click.echo("  nothing needs you")
 
     running = db.running_runs(ctx.conn)
+    slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     click.echo(f"\nRunning workers ({len(running)}/{ctx.config.capacity.max_workers}):")
     for r in running:
-        click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {r['slot_path']}")
+        # A joint run holds a slot in each of its repositories; a workspace of one's needs no name.
+        where = ", ".join(
+            str(s["slot_path"]) if ctx.workspace.single else f"{s['repo']} {s['slot_path']}"
+            for s in slots[int(r["id"])]
+        )
+        click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {where}")
     if not running:
         click.echo("  none")
     return 0

@@ -8,25 +8,42 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from canopy.infra import procs
+
 DB_FILE_NAME = "canopy.db"
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 
-# `canopy ticket set --cursor NAME=ID` names, and the column each one updates.
-CURSOR_COLUMNS: Mapping[str, str] = {
-    "comment": "last_comment_id",
-    "review": "last_review_id",
-    "ci": "last_ci_run_id",
-}
+# `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
+# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18).
+TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id"}
+UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
+CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
+# The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
+# others are the ticket's own. Migration 0005 lists them too.
+UNIT_PHASES = frozenset(
+    ("pushed_no_pr", "ci_running", "ci_red", "changes_requested", "green_unreviewed", "approved", "merged")
+)
 
 
 class MigrationError(Exception):
     """The migrations on disk and the database disagree."""
+
+
+@dataclass(frozen=True)
+class RunSlot:
+    """One slot a run leased: the repository whose pool it came from, the slot, its lease, and the run's base there."""
+
+    repo: str | None
+    slot_path: Path
+    lease_id: str
+    lease_holder: str
+    base_branch: str
 
 
 @dataclass(frozen=True)
@@ -103,9 +120,10 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
         unknown = applied - {m.version for m in known}
         if unknown:
             raise MigrationError(f"the journal has migrations this canopy does not know: {sorted(unknown)}")
-        for m in known:
-            if m.version in applied:
-                continue
+        pending = [m for m in known if m.version not in applied]
+        if pending:
+            _check_no_live_runs(conn)
+        for m in pending:
             conn.executescript(m.path.read_text())
             conn.execute(
                 "INSERT OR IGNORE INTO schema_migrations (version, name) VALUES (?, ?)",
@@ -113,6 +131,24 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
             )
             applied_now.append(m.version)
     return applied_now
+
+
+def _check_no_live_runs(conn: sqlite3.Connection) -> None:
+    """Refuse to migrate while a `_run` is alive: it was started by an earlier canopy, which wrote the old schema.
+
+    A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+    """
+    has_runs = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'runs'").fetchone()
+    if not has_runs:
+        return
+    rows = conn.execute("SELECT id, pid FROM runs WHERE status = 'running' AND pid IS NOT NULL ORDER BY id")
+    live = [int(r["id"]) for r in rows if procs.alive(int(r["pid"]))]
+    if live:
+        runs = f"run {live[0]} is" if len(live) == 1 else f"runs {', '.join(str(i) for i in live)} are"
+        raise MigrationError(
+            f"this canopy changes the journal, but {runs} still working for the canopy before it and would fail "
+            "writing the old journal. Run canopy again once they finish."
+        )
 
 
 def _rowid(cur: sqlite3.Cursor) -> int:
@@ -183,17 +219,72 @@ def set_ticket(
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
 ) -> None:
-    """Record a ticket's phase, cursors, or done flag in one transaction."""
+    """Record a ticket's own phase, its comment cursor, or its done flag in one transaction."""
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
             conn.execute("UPDATE tickets SET phase = ? WHERE key = ?", (phase, key))
         for name, value in (cursors or {}).items():
             # The column name comes from a fixed mapping, never from input.
-            sql = f"UPDATE tickets SET {CURSOR_COLUMNS[name]} = ? WHERE key = ?"  # noqa: S608
+            sql = f"UPDATE tickets SET {TICKET_CURSORS[name]} = ? WHERE key = ?"  # noqa: S608
             conn.execute(sql, (value, key))
         if done:
             conn.execute("UPDATE tickets SET done = 1 WHERE key = ?", (key,))
+
+
+def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str, *, single: bool) -> None:
+    """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction.
+
+    A workspace of one has one repository, whose name follows its directory, so its ticket's one unit is renamed to
+    `unit` rather than a second one made: renaming the checkout never strands a ticket (D052).
+    """
+    if single:
+        conn.execute("UPDATE ticket_units SET repo = ? WHERE ticket_key = ?", (unit, key))
+    conn.execute(
+        "INSERT INTO ticket_units (ticket_key, repo) VALUES (?, ?) ON CONFLICT (ticket_key, repo) DO NOTHING",
+        (key, unit),
+    )
+
+
+def set_unit(
+    conn: sqlite3.Connection,
+    key: str,
+    repo: str,
+    unit: str,
+    *,
+    single: bool,
+    phase: str | None = None,
+    cursors: Mapping[str, str] | None = None,
+    pr_url: str | None = None,
+) -> None:
+    """Record a unit's phase, review and ci cursors, or PR in one transaction, creating the unit if it has no row.
+
+    `repo` is the workspace root, as for `set_ticket`; `unit` is the repository's name in the workspace.
+    """
+    with transaction(conn):
+        touch_ticket(conn, key, repo)
+        _ensure_unit(conn, key, unit, single=single)
+        where = "WHERE ticket_key = ? AND repo = ?"
+        if phase is not None:
+            conn.execute(f"UPDATE ticket_units SET phase = ? {where}", (phase, key, unit))  # noqa: S608
+        for name, value in (cursors or {}).items():
+            # The column name comes from a fixed mapping, never from input.
+            conn.execute(f"UPDATE ticket_units SET {UNIT_CURSORS[name]} = ? {where}", (value, key, unit))  # noqa: S608
+        if pr_url is not None:
+            conn.execute(f"UPDATE ticket_units SET pr_url = ? {where}", (pr_url, key, unit))  # noqa: S608
+
+
+def units(conn: sqlite3.Connection, key: str) -> list[sqlite3.Row]:
+    """Return `key`'s units, by repository."""
+    return conn.execute("SELECT * FROM ticket_units WHERE ticket_key = ? ORDER BY repo", (key,)).fetchall()
+
+
+def all_units(conn: sqlite3.Connection) -> dict[str, list[sqlite3.Row]]:
+    """Return every ticket's units, by ticket key, each list by repository."""
+    found: dict[str, list[sqlite3.Row]] = {}
+    for row in conn.execute("SELECT * FROM ticket_units ORDER BY ticket_key, repo"):
+        found.setdefault(str(row["ticket_key"]), []).append(row)
+    return found
 
 
 def get_ticket(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
@@ -221,28 +312,56 @@ def insert_run(
     tick_id: int,
     key: str,
     kind: str,
-    slot_path: Path,
-    lease_id: str,
-    lease_holder: str,
-    base_branch: str,
     branch: str,
+    slots: Sequence[RunSlot],
     runs_dir: Path,
-    repo: str | None = None,
+    single: bool = True,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
-    `repo` names the repository in the workspace map whose pool the slot came from.
+    Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
+    run's branch. `single` says the workspace is a workspace of one (see `set_unit`).
     """
     with transaction(conn):
         cur = conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, slot_path, lease_id, lease_holder, base_branch, branch, "
-            "started_at, log_path, repo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)",
-            (tick_id, key, kind, str(slot_path), lease_id, lease_holder, base_branch, branch, now(), repo),
+            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path) VALUES (?, ?, ?, ?, ?, '')",
+            (tick_id, key, kind, branch, now()),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
+        conn.executemany(
+            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch) for s in slots],
+        )
         conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
+        for slot in slots:
+            if slot.repo is not None:
+                _ensure_unit(conn, key, slot.repo, single=single)
+                conn.execute(
+                    "UPDATE ticket_units SET branch = ? WHERE ticket_key = ? AND repo = ?", (branch, key, slot.repo)
+                )
     return run_id
+
+
+def run_slots(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
+    """Return the slots run `run_id` leased, by repository."""
+    return conn.execute("SELECT * FROM run_slots WHERE run_id = ? ORDER BY repo", (run_id,)).fetchall()
+
+
+def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, list[sqlite3.Row]]:
+    """Return the slots of each run in `run_ids`, by run id, each list by repository."""
+    found: dict[int, list[sqlite3.Row]] = {i: [] for i in run_ids}
+    if not run_ids:
+        return found
+    # Only the placeholder count is interpolated; the run ids are bound parameters.
+    rows = conn.execute(
+        f"SELECT * FROM run_slots WHERE run_id IN ({','.join('?' * len(run_ids))}) ORDER BY run_id, repo",  # noqa: S608
+        list(run_ids),
+    )
+    for row in rows:
+        found[int(row["run_id"])].append(row)
+    return found
 
 
 def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
@@ -284,17 +403,6 @@ def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
         "SELECT * FROM runs r WHERE r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key)"
     ).fetchall()
     return {str(r["ticket_key"]): r for r in rows}
-
-
-def ticket_repo(conn: sqlite3.Connection, key: str) -> str | None:
-    """Return the repository of `key`'s latest run: the one a ticket's work is in. None if it has none recorded."""
-    row = conn.execute("SELECT repo FROM runs WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)).fetchone()
-    return None if row is None or row[0] is None else str(row[0])
-
-
-def set_pr_url(conn: sqlite3.Connection, key: str, pr_url: str) -> None:
-    """Record the PR a worker reported for `key`. Display only, like the phase."""
-    conn.execute("UPDATE tickets SET pr_url = ? WHERE key = ?", (pr_url, key))
 
 
 def record_decision(

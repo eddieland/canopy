@@ -54,7 +54,7 @@ in it is readable only by the operator; in the commands below, replace `~/.canop
 | Path | What it holds |
 |---|---|
 | `attention.md` | The attention list, rewritten after every tick. |
-| `canopy.db` | The SQLite journal: `ticks`, `tickets`, `runs`, `decisions`. |
+| `canopy.db` | The SQLite journal: `ticks`, `tickets`, `ticket_units`, `runs`, `run_slots`, `decisions`. |
 | `canopy.log` | JSON lines, one object per line with `ts`, `level`, `msg`, and `tick_id`. |
 | `ticks/<tick id>.log` | The overseer's full output for that tick. |
 | `runs/<run id>.log` | A worker run's output, including the worker agent's own. |
@@ -87,11 +87,12 @@ Work through these in order and stop at the first that explains it.
      `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
      `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
      `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree), `bad_slug`,
-     `bad_base`, `no_branch`, `unknown_repo` (in a workspace: no `--repo`, a repository not in the map or not cloned,
-     or not the one the ticket's earlier runs were in), `bad_prompt` (the worker prompt did not render; an override may
-     lack `{{LABELS}}`),
-     `spawn_failed`. A run that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket
-     closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
+     `bad_base`, `no_branch` (nothing to continue in that repository yet), `unknown_repo` (in a workspace: no
+     `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the worker prompt did not render; an
+     override may lack `{{LABELS}}`, or for a run over several repositories `{{REPOSITORIES}}` and `{{PRS}}`),
+     `spawn_failed`. In a workspace, attempt limits and the fix-ci cooldown count per repository of the ticket. A run
+     that ends `failed` with a summary starting `not authorized:` is the worker finding the ticket closed or unlabeled;
+     it changed nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.
    - `attention:<reason>`: it is waiting on a human (below).
 4. If it was dispatched, look at its runs:
@@ -101,6 +102,8 @@ Work through these in order and stop at the first that explains it.
      "select id, kind, status, branch, started_at, ended_at, result_json from runs where ticket_key = 'KEY' order by id"
    ```
 
+   `run_slots` holds each run's worktrees, one per repository, and `ticket_units` each repository's PR for the ticket.
+
    Then read `runs/<id>.log`. A run that ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed` is on the
    attention list, and the overseer will not dispatch the ticket again until an account in
    `trust.authorized_repliers` comments on the ticket after the run ended. That comment is how a human says "try
@@ -108,8 +111,9 @@ Work through these in order and stop at the first that explains it.
 
 ## The attention list
 
-`canopy status` or `attention.md`. Each item is a ticket and a reason, and it disappears on its own the first tick its
-cause is gone; there is no dismissing. Reasons:
+`canopy status` or `attention.md`. Each item is a ticket and a reason, and in a workspace sometimes the repository of
+the ticket's PR it is about, shown as `KEY (repo)`. It disappears on its own the first tick its cause is gone; there is
+no dismissing. Reasons:
 
 | Reason | What the human does |
 |---|---|
@@ -119,7 +123,7 @@ cause is gone; there is no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
-| `multi_repo` | The ticket needs changes in several repositories: split it into one ticket per repository. |
+| `multi_repo` | The ticket is several independent pieces in several repositories: split it into one ticket each. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 

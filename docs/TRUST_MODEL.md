@@ -106,6 +106,12 @@ Controls now:
 - Workers run inside a treehouse worktree with cwd set there, and the prompt
   forbids leaving it. OpenCode agent permissions restrict edit paths and deny
   destructive command patterns.
+- A joint run over several repositories (DESIGN §18) runs its worker in a desk: a directory canopy makes under the
+  workspace, holding one link to each worktree the run leased, and nothing else of canopy's. The worker's edit
+  permission covers the worktrees linked from its desk and nothing beside it. A canary like M1's
+  (`tests/canopy/test_opencode_canary.py`) checks that OpenCode lets edits through the links and still refuses paths
+  outside the desk, with the workspace a plain directory and a git checkout. canopy makes a desk only in a `desks/`
+  that is not a symlink, and removing one never follows its links.
 - Config-level permissions are defense in depth, not the boundary. M1 verifies
   with a canary agent that denies actually hold under `opencode run`. The canary
   loads its definition the way canopy loads its own (DESIGN §13), and checks that
@@ -133,9 +139,9 @@ A worker steered by injected text could read a file and post it as a comment
 or PR body.
 
 Controls:
-- Worker MCP write scope is comments and PRs on the repository and ticket it
-  was dispatched for. Prompts forbid writing elsewhere; permissions should
-  match where the runtime allows.
+- Worker MCP write scope is comments and PRs on the ticket it was dispatched for and the repositories of the units its
+  run covers: one repository, or each repository of a joint run (DESIGN §18). Prompts name those repositories and forbid
+  writing elsewhere; permissions should match where the runtime allows.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 Residual: real. Sandboxing and egress controls are the eventual answer;
 until then this risk is accepted and documented.

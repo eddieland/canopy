@@ -11,7 +11,16 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    commit_and_push,
+    in_tick,
+    journal,
+    pool,
+    slot_of,
+    wait_for_run,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool
 
 
@@ -45,17 +54,17 @@ def test_dispatch_leases_records_and_spawns(
     assert run is not None
     assert (run["ticket_key"], run["kind"], run["status"]) == ("PROJ-1", "implement", "running")
     assert run["branch"] == "agent/PROJ-1-add-login"
-    assert run["base_branch"] == "main"
-    assert run["lease_holder"] == "canopy:PROJ-1"
     assert run["pid"] == os.getpid()
     assert run["log_path"] == str(canopy_env.state_dir / "runs" / "1.log")
+    leased = slot_of(conn, 1)
+    assert (leased["repo"], leased["base_branch"], leased["lease_holder"]) == ("repo", "main", "canopy:PROJ-1")
     [slot] = [s for s in pool(treehouse_state) if s["status"] == "leased"]
-    assert (slot["path"], slot["lease_id"]) == (run["slot_path"], run["lease_id"])
+    assert (slot["path"], slot["lease_id"]) == (leased["slot_path"], leased["lease_id"])
 
     assert runner.spawned == [(sys.executable, "-m", "canopy", "_run", "1")]
     [(action, rationale)] = decisions(conn, tick_id)
     assert action == "dispatch:implement"
-    assert rationale == f"run 1: agent/PROJ-1-add-login in {run['slot_path']}; label agent-ready-tester"
+    assert rationale == f"run 1: agent/PROJ-1-add-login in {leased['slot_path']}; label agent-ready-tester"
     # The worker is told which labels authorize it, so it can check the ticket itself (D051).
     assert "`agent-ready-tester`" in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
@@ -66,8 +75,10 @@ def test_dispatch_leases_records_and_spawns(
     text = prompt.read_text()
     assert text.startswith("# canopy worker: implement")
     assert "{{" not in text
-    assert "ticket PROJ-1 in an isolated worktree at " + str(run["slot_path"]) in text
-    assert "`agent/PROJ-1-add-login` is checked out, based on `main`" in text
+    assert f"ticket PROJ-1 in {leased['slot_path']}." in text
+    assert "This run works in one repository:\n- `repo` at `" + str(leased["slot_path"]) in text
+    assert ": branch `agent/PROJ-1-add-login` from `main`; PR: not recorded; look up the PR for " in text
+    assert '"prs":{"repo":"<url or null>"}' in text
     assert "the label `agent`" in text
     assert "Time limit: 45 minutes" in text
 
@@ -117,13 +128,7 @@ def test_one_worker_per_ticket(
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner()
     assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 0
-    assert (
-        main(
-            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "again"],
-            runner=runner,
-        )
-        == 1
-    )
+    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 1
     assert decisions(conn, tick_id)[1] == ("refused:running", "run 1 is already working PROJ-1")
 
 
@@ -321,11 +326,8 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
             tick_id=earlier,
             key=key,
             kind=kind,
-            slot_path=Path("/pool/1"),
-            lease_id=f"lease-{key}",
-            lease_holder=f"canopy:{key}",
-            base_branch="main",
             branch=f"agent/{key}-work",
+            slots=[db.RunSlot("repo", Path("/pool/1"), f"lease-{key}", f"canopy:{key}", "main")],
             runs_dir=canopy_env.state_dir / "runs",
         )
         if status == "running":
