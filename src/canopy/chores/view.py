@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
 # Chore run statuses that raise `chore_failed`: the chore could not check, or left no usable result.
 FAILED = frozenset({"failed", "unknown", "timeout", "crashed"})
 FAILED_REASON = "chore_failed"
-# How many of a chore's runs to read back when working out how long a finding has been open.
+# How many of a chore's runs to read back at a time. A finding open longer than that reads further back.
 _HISTORY_RUNS = 200
 
 
@@ -52,11 +53,15 @@ class OpenFinding:
 
 @dataclass(frozen=True)
 class ChoreState:
-    """One configured chore: its definition, its runs newest first, and what follows from them."""
+    """One configured chore: its definition, its newest runs first, and what follows from them.
+
+    `older` returns the page of runs before a run id, newest first, for a finding open longer than `runs` reaches.
+    """
 
     name: str
     chore: Chore
     runs: list[sqlite3.Row]
+    older: Callable[[int], list[sqlite3.Row]]
 
     @property
     def running(self) -> sqlite3.Row | None:
@@ -82,26 +87,40 @@ class ChoreState:
 
     def findings(self) -> list[OpenFinding]:
         """The findings of the latest `ok` run. A run that ended any other way leaves them standing."""
-        oks = [(r, parsed) for r in self.runs if r["status"] == "ok" and (parsed := result.stored(r["result_json"]))]
+        oks = _oks(self.runs)
         if not oks:
             return []
-        found: list[OpenFinding] = []
-        for finding in oks[0][1].findings:
-            since = str(oks[0][0]["started_at"])
-            for run, parsed in oks[1:]:
-                if not any(f.id == finding.id for f in parsed.findings):
-                    break
+        return [OpenFinding(self.name, f, self._since(f.id, oks)) for f in oks[0][1].findings]
+
+    def _since(self, finding_id: str, oks: list[tuple[sqlite3.Row, result.ChoreResult]]) -> str:
+        """When the unbroken sequence of `ok` runs reporting `finding_id` started, reading back page by page."""
+        since = str(oks[0][0]["started_at"])
+        page, rest = self.runs, oks[1:]
+        while True:
+            for run, parsed in rest:
+                if not any(f.id == finding_id for f in parsed.findings):
+                    return since
                 since = str(run["started_at"])
-            found.append(OpenFinding(self.name, finding, since))
-        return found
+            if len(page) < _HISTORY_RUNS:
+                return since
+            page = self.older(int(page[-1]["id"]))
+            rest = _oks(page)
+
+
+def _oks(runs: list[sqlite3.Row]) -> list[tuple[sqlite3.Row, result.ChoreResult]]:
+    return [(r, parsed) for r in runs if r["status"] == "ok" and (parsed := result.stored(r["result_json"]))]
 
 
 def states(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[ChoreState]:
     """Return every configured chore's state, by name."""
-    return [
-        ChoreState(name, chore, db.chore_runs(conn, name, _HISTORY_RUNS))
-        for name, chore in configured(config, workspace).items()
-    ]
+    return [_state(conn, name, chore) for name, chore in configured(config, workspace).items()]
+
+
+def _state(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
+    def older(before: int) -> list[sqlite3.Row]:
+        return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
+
+    return ChoreState(name, chore, db.chore_runs(conn, name, _HISTORY_RUNS), older)
 
 
 def open_findings(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[OpenFinding]:
