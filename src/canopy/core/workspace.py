@@ -21,7 +21,7 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
 
 from canopy.core import treehouse
-from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_MAP_TABLES, ConfigError, find_repo_root
+from canopy.core.config import WORKSPACE_FILE_NAME, WORKSPACE_MAP_TABLES, ConfigError, RepoName, find_repo_root
 from canopy.infra import logs
 
 MAP_FILE_NAME = "MAP.md"
@@ -29,12 +29,6 @@ REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
 MAX_SUMMARY = 200
-
-
-def _repo_name(value: str) -> str:
-    if not REPO_NAME_RE.fullmatch(value):
-        raise ValueError(f"repository name {value!r} must match {REPO_NAME_RE.pattern}")
-    return value
 
 
 def _summary(value: str) -> str:
@@ -63,7 +57,7 @@ class _Table(BaseModel):
 
 
 class _WorkspaceTable(_Table):
-    name: Annotated[StrictStr, AfterValidator(_repo_name)] | None = None
+    name: RepoName | None = None
 
 
 class _RepoTable(_Table):
@@ -73,7 +67,7 @@ class _RepoTable(_Table):
 
 class _Map(_Table):
     workspace: _WorkspaceTable = _WorkspaceTable()
-    repos: dict[Annotated[str, AfterValidator(_repo_name)], _RepoTable] = {}
+    repos: dict[RepoName, _RepoTable] = {}
 
 
 @dataclass(frozen=True)

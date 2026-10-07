@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox, prompts, treehouse
+from canopy.core import contract, db, outbox, prompts, treehouse
 from canopy.infra import lock, logs, procs
 from canopy.reviews import result
 
@@ -241,7 +241,7 @@ def _check_limits(
 
 def _check_shape(request: Request) -> None:
     """`bad_pr`: the URL, commit, and ticket key reach the prompt, the journal, and git's argv."""
-    if not result.plain_url(request.pr) or len(request.pr) > MAX_PR_URL:
+    if not contract.plain_url(request.pr, MAX_PR_URL):
         raise Refusal("bad_pr", f"--pr must be the PR's plain https:// URL, at most {MAX_PR_URL} characters")
     if SHA_RE.fullmatch(request.sha) is None:
         raise Refusal("bad_pr", "--sha must be the full head commit: 40 or 64 lowercase hex characters")
