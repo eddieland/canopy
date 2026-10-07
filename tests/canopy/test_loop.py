@@ -22,6 +22,7 @@ from canopy.core import config, db
 from canopy.core.context import Context
 from canopy.infra import lock, logs, procs
 from canopy.loop import repeat
+from tests.canopy.helpers import journal
 from tests.conftest import CanopyEnv
 
 
@@ -216,6 +217,28 @@ def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
     # Tick 1 ended just before its report line was written. Printing the rest of the report took fake time, and the
     # wait still ends exactly the interval after the tick did.
     assert time.woke[-1] == out.written_at["tick 1"] + 300
+
+
+def test_the_footer_counts_running_reviews_as_workers(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = journal(canopy_env)
+    tick_id = db.start_tick(conn, dry_run=True)
+    db.finish_tick(conn, tick_id, "ok", "test")
+    run_id = db.insert_review_run(
+        conn,
+        tick_id=tick_id,
+        pr_url="https://example.test/pr/1",
+        sha="a" * 40,
+        ticket=None,
+        repo=None,
+        logs_dir=canopy_env.state_dir,
+    )
+    assert db.claim_review_run(conn, run_id, os.getpid())  # alive, so reconcile leaves it running
+    overseer_does(monkeypatch)
+    term, out = console()
+    repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
+    assert "workers 1/" in out.getvalue()
 
 
 def test_the_overseer_text_is_printed_as_text_not_rich_markup(

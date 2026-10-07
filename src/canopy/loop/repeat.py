@@ -247,7 +247,8 @@ def _report(
     if rows.row_count:
         console.print(rows)
 
-    running = len(db.running_runs(ctx.conn))
+    # Running reviews take worker capacity too (D065).
+    running = len(db.running_runs(ctx.conn)) + len(db.running_review_runs(ctx.conn))
     footer = Text("  ", style="dim")
     footer.append(f"workers {running}/{ctx.config.capacity.max_workers}")
     footer.append("  ·  ")

@@ -125,6 +125,7 @@ no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
+| `review_failed`, `review_unposted`, `review_limit` | A PR's review failed, lost its comment, or hit its limit. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |

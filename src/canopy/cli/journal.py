@@ -7,7 +7,16 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context, optional_tick, require_tick
-from canopy.cli.params import KEY_RE, REASON, REPO, TICKET_KEY, CursorType, TextType, valid_key
+from canopy.cli.params import (
+    KEY_RE,
+    REASON_RE,
+    REPO,
+    TICKET_KEY,
+    CursorType,
+    TextType,
+    plain_pr_url,
+    valid_key,
+)
 from canopy.core import db
 from canopy.loop import attention
 
@@ -28,6 +37,8 @@ PHASES = (
     "needs_human",
     "human_replied",
     "split",
+    "review_pending",
+    "review_findings",
 )
 DECIDE_ACTIONS = ("wait", "skip", "done")
 
@@ -76,20 +87,33 @@ def _unit(ctx: Context, repo: str | None) -> str | None:
 
 
 @click.command("attention")
-@click.argument("key", type=TICKET_KEY)
-@click.argument("reason", type=REASON)
+# click has no optional positional before a required one, so `[KEY] REASON` is parsed by hand.
+@click.argument("words", nargs=-1, required=True, metavar="[KEY] REASON")
 @click.option("--detail", required=True, type=TextType())
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit the item is about, in a workspace.")
+@click.option("--pr", "pr", metavar="URL", help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
 @click.pass_context
-def cmd_attention(click_ctx: click.Context, key: str, reason: str, detail: str, repo: str | None) -> int:
-    """Record an attention item (overseer only)."""
+def cmd_attention(
+    click_ctx: click.Context, words: tuple[str, ...], detail: str, repo: str | None, pr: str | None
+) -> int:
+    """Record an attention item about a ticket, or about a PR with --pr (overseer only)."""
+    if len(words) > 2 or (len(words) == 1 and pr is None):  # noqa: PLR2004
+        raise click.UsageError("expected KEY REASON, or REASON with --pr", click_ctx)
+    key, reason = (None, words[0]) if len(words) == 1 else words
+    if key is not None and not valid_key(key):
+        raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
+    if not REASON_RE.fullmatch(reason):
+        raise click.UsageError(f"invalid reason {reason!r}: must match {REASON_RE.pattern}", click_ctx)
+    if pr is not None and not plain_pr_url(pr):
+        raise click.UsageError("--pr must be a plain https:// URL of at most 300 characters", click_ctx)
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
     # A workspace of one's item names no repository: there is only one, and naming it would make the item new (D032).
     unit = None if ctx.workspace.single else _unit(ctx, repo)
-    db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit)
-    click.echo(f"recorded attention {reason} for {attention.subject(key, unit)}")
+    if key is not None:
+        db.touch_ticket(ctx.conn, key, ctx.repo)
+    db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
+    click.echo(f"recorded attention {reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}")
     return 0
 
 

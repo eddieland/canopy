@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 RUNS = "runs"
 LOOP = "loop"
 CHORES = "chores"
+REVIEWS = "reviews"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
 
@@ -89,6 +90,23 @@ def chore_ended(config: Config, run: sqlite3.Row, status: str, result_json: str 
         "findings": len(findings) if isinstance(findings, list) else 0,
     }
     return Event(CHORES, "chore.ended", fields)
+
+
+def review_ended(config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> Event | None:
+    """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
+    if not config.notify.takes(REVIEWS):
+        return None
+    result = _object(result_json)
+    fields: dict[str, object] = {
+        "pr": run["pr_url"],
+        "ticket": run["ticket_key"],
+        "run": run["id"],
+        "status": status,
+        "verdict": result.get("verdict"),
+        "impact": result.get("impact"),
+        "comment": cut(result["comment"], DETAIL_LIMIT) if result.get("comment") else None,
+    }
+    return Event(REVIEWS, "review.ended", fields)
 
 
 def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:
