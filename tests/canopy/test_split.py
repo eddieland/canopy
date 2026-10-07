@@ -240,6 +240,19 @@ def test_a_blocked_or_missing_split_result_is_unknown() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "children",
+    [
+        {"P-" + "1" * worker.MAX_CHILD_KEY: "api"},
+        {"PROJ-13": "a" * (worker.MAX_CHILD_KEY + 1)},
+        {f"PROJ-{i}": "api" for i in range(worker.MAX_CHILDREN + 1)},
+    ],
+)
+def test_a_split_result_past_its_bounds_is_unknown(children: dict[str, str]) -> None:
+    # Even a failed split's children are stored in result_json, so an oversized set is no result at all.
+    assert worker.parse_split(json.dumps({"status": "failed", "children": children})) is None
+
+
 def test_a_failed_split_records_what_it_created(
     ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -140,6 +140,7 @@ canopy (harness, Python)
   core/            what every feature shares
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
+    contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
     db.py          SQLite journal, migrations
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
@@ -1189,12 +1190,12 @@ authorize any ticket (TRUST_MODEL T1).
   Children carry no queue label and are not assigned to anyone.
 - On the parent it posts a comment listing the children and saying which label starts each one. Its result line is
   `{"status":"done|failed","summary":"...","children":{"PROJ-13":"api","PROJ-14":"web"}}`, each child's key and
-  repository, every child it created even when it reports `failed`. `_run` validates it: every key a valid ticket key
-  (§17) of at most 100 characters, new to the journal (never a split's child, never dispatched, never in `tickets`)
-  and not the parent; every repository one the split was dispatched with, each at most once; a `done` split names at
-  least one child. `blocked` is not a split's status. Anything else makes the run's status `unknown` and records
-  nothing. A valid result is recorded in `split_children`, also when the run timed out after printing it, and a
-  child's repository comes from there afterwards, in a workspace of one too.
+  repository, every child it created even when it reports `failed`. `_run` validates it: at most 20 children, each key
+  and repository at most 100 characters; every key a valid ticket key (§17), new to the journal (never a split's
+  child, never dispatched, never in `tickets`) and not the parent; every repository one the split was dispatched
+  with, each at most once; a `done` split names at least one child. `blocked` is not a split's status. Anything else
+  makes the run's status `unknown` and records nothing. A valid result is recorded in `split_children`, also when the
+  run timed out after printing it, and a child's repository comes from there afterwards, in a workspace of one too.
 - The parent's phase becomes `split`: wait, with an attention item `split_unlabeled` naming each child that is still
   open and unlabeled. Any dispatch for it is refused as `bad_split`: its children carry the work. The overseer marks the
   parent `done` in the journal once every child is closed. canopy does not touch the parent's tracker state.

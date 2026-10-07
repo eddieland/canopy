@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
-from canopy.core import db, definitions, outbox, treehouse
+from canopy.core import contract, db, definitions, outbox, treehouse
 from canopy.core.config import render_command
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -32,8 +32,11 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
-# A child key is a ticket key, and bounded like every other value an agent reports.
+# A child key is a ticket key, and bounded like every other value an agent reports; so is a child's repository.
 MAX_CHILD_KEY = 100
+# A split makes at most one child per repository it was dispatched with; a result naming more is invalid.
+MAX_CHILDREN = 20
+MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # Never let git wait for credentials on a terminal nobody is watching.
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
@@ -47,11 +50,8 @@ class _SetupError(Exception):
     """A git step before or after the worker failed."""
 
 
-def _bounded(value: str) -> str:
-    return value if len(value) <= MAX_TEXT else value[: MAX_TEXT - 3] + "..."
-
-
-Text = Annotated[StrictStr, AfterValidator(_bounded)]
+Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
+ChildName = Annotated[StrictStr, Field(max_length=MAX_CHILD_KEY)]
 
 
 class WorkerResult(BaseModel):
@@ -88,18 +88,12 @@ class SplitResult(BaseModel):
 
     status: Literal["done", "failed"]
     summary: Text = ""
-    children: dict[StrictStr, StrictStr] = {}
+    children: Annotated[dict[ChildName, ChildName], Field(max_length=MAX_CHILDREN)] = {}
 
 
 def parse_split(stdout: str) -> SplitResult | None:
     """Parse the last non-empty line of `stdout` as a split's result. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return SplitResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(SplitResult, stdout)
 
 
 def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], result: SplitResult) -> str:
@@ -123,14 +117,14 @@ def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], 
 
 
 def _check_child(conn: sqlite3.Connection, parent: str, repos: Sequence[str], key: str, repo: str) -> str:
-    if len(key) > MAX_CHILD_KEY or dispatch.KEY_RE.fullmatch(key) is None:
-        return f"child {key[:MAX_CHILD_KEY]!r} is not a ticket key"
+    if dispatch.KEY_RE.fullmatch(key) is None:
+        return f"child {key!r} is not a ticket key"
     if key == parent:
         return f"child {key} is the ticket that was split"
     if db.split_child(conn, key) is not None or db.has_runs(conn, key) or db.get_ticket(conn, key) is not None:
         return f"child {key} is not a new ticket: the journal already knows it"
     if repo not in repos:
-        return f"child {key}'s repository {repo[:MAX_CHILD_KEY]!r} is not one the split was dispatched with"
+        return f"child {key}'s repository {repo!r} is not one the split was dispatched with"
     return ""
 
 
@@ -144,7 +138,7 @@ class Outcome:
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
-        data: dict[str, object] = self.result.model_dump() if self.result is not None else {}
+        data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
         return json.dumps(data)
@@ -152,13 +146,7 @@ class Outcome:
 
 def parse_result(stdout: str) -> WorkerResult | None:
     """Parse the last non-empty line of `stdout` as the result contract. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return WorkerResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(WorkerResult, stdout)
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
@@ -409,12 +397,8 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     if not isinstance(outcome.result, WorkerResult) or not outcome.result.prs:
         return
     for repo, url in outcome.result.prs.items():
-        if url and _plain_url(url):
+        if url and contract.plain_url(url, MAX_PR_URL):
             db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, single=ctx.workspace.single, pr_url=url)
-
-
-def _plain_url(value: str) -> bool:
-    return value.startswith("https://") and len(value) <= 500 and not any(c.isspace() for c in value)  # noqa: PLR2004
 
 
 class _Git:

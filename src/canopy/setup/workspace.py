@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import definitions, treehouse, workspace
-from canopy.core.config import WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
+from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
 from canopy.infra import procs
 from canopy.setup import init
 
@@ -153,9 +153,9 @@ def repo_arg(arg: str) -> tuple[str, str]:
     """
     name, sep, url = arg.partition("=")
     # A prefix with no ":" or "/" can only be a name, so an invalid one is refused rather than read as part of a URL.
-    if sep and not workspace.REPO_NAME_RE.fullmatch(name) and not any(c in name for c in ":/"):
-        raise ValueError(f"{arg!r}: repository name {name!r} must match {workspace.REPO_NAME_RE.pattern}")
-    if not sep or not workspace.REPO_NAME_RE.fullmatch(name):
+    if sep and not REPO_NAME_RE.fullmatch(name) and not any(c in name for c in ":/"):
+        raise ValueError(f"{arg!r}: repository name {name!r} must match {REPO_NAME_RE.pattern}")
+    if not sep or not REPO_NAME_RE.fullmatch(name):
         name, url = "", arg
     error = workspace.url_error(url)
     if error is not None:
