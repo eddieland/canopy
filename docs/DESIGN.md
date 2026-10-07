@@ -95,6 +95,7 @@ canopy (harness, Python)
     runs.py        dispatch, _run
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
+    chores.py      chore run, chore wait, _chore
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -109,6 +110,13 @@ canopy (harness, Python)
                    a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
+
+  chores/          the operator's recurring chores (§19)
+    view.py        each configured chore: due time, runs, open findings; chore_failed items; its state block part
+    start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
+    execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
+    result.py      the result contract, validated with pydantic
+    reconcile.py   chore runs whose _chore is gone marked crashed
 
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
@@ -127,6 +135,7 @@ canopy (harness, Python)
     procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
                    a child's PWD names its cwd (OpenCode runs tools in PWD); detached spawns and pid liveness
     lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
+    stopping.py    SIGTERM, SIGHUP, and SIGINT become an exception the cleanup of _run and _chore catches
     logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files and
                    directories
     resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
@@ -134,7 +143,7 @@ canopy (harness, Python)
 
 ```
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md
-agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-splitter
+agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-splitter, canopy-chore
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
@@ -145,9 +154,9 @@ them, and `migrations/`, under `canopy/_data/` (D022).
 
 Where later work goes:
 
-- A feature is a package in the features layer with a command module in `cli/`: `chores` (§19), `notify` (§20),
-  `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block. Deleting a
-  feature is deleting its package, its command module, and those calls.
+- A feature is a package in the features layer with a command module in `cli/`: `chores` (§19), and later `notify`
+  (§20) and `reviews` (§21). `loop` calls a feature's reconcile and publish steps and its part of the state block.
+  Deleting a feature is deleting its package, its command module, and those calls.
 - A feature other features write to keeps its writing half in `core`: dispatch and `_run` record §20's notification
   events through `core`, and `notify` delivers them.
 - Code that runs in its own process and must not share the harness's imports or dependencies is not a package here but
@@ -161,8 +170,8 @@ Roles:
   once per tick and workers on demand.
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world through MCP
   and the harness's state summary, decides one next action per ticket, and
-  acts only through `canopy dispatch`, `canopy decide`, and `canopy attention`.
-  Read-only everywhere else.
+  acts only through `canopy dispatch`, `canopy decide`, and `canopy attention`, and for the operator's chores
+  `canopy chore run` and `canopy chore wait` (§19). Read-only everywhere else.
 - **Worker**: an agent run with `worker_cmd` inside a leased worktree with a
   task prompt. Writes code, pushes a branch, opens or updates a PR, comments on
   the ticket, prints a result line, exits. Never merges, approves, or moves a
@@ -175,9 +184,9 @@ way, a tick does, in order:
 
 1. Acquire the lock. If held, log and exit 0. No `ticks` row is written.
 2. Apply pending migrations. Close any `ticks` row still `running` as `abandoned`: holding the lock proves its process
-   is gone. Insert a `ticks` row; its id tags all logs. Pending migrations wait while any `running` run's `_run` is
-   alive: it was started by the canopy before the upgrade and writes the old schema (D060). The tick, and any command
-   that opens the journal, fails saying so until those runs finish.
+   is gone. Insert a `ticks` row; its id tags all logs. Pending migrations wait while any `running` run's `_run`, or
+   chore run's `_chore`, is alive: it was started by the canopy before the upgrade and writes the old schema (D060). The
+   tick, and any command that opens the journal, fails saying so until those runs finish.
 3. **Reconcile local state.**
    - For each `runs` row with `status='running'`: if its pid (the `canopy _run` process) is dead or was never recorded,
      kill the process group of the worker `_run` started, if any of it is left (`runs.worker_pid`); mark the run
@@ -189,10 +198,13 @@ way, a tick does, in order:
      repository's pool that has a clone, and a run's slots go back to the pools of the repositories they record (§18).
      In a workspace of several, a desk canopy made whose ticket has no running run is removed; anything else under
      `desks/` is left alone.
+   - For each `chore_runs` row with `status='running'` whose `_chore` is dead or never recorded: kill what is left of
+     its agent's process group and mark it `crashed` (§19). Chore runs hold no slot and take no worker capacity.
    - Compute `capacity = max_workers - count(runs where status='running')`.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop. The overseer does not run.
-   - Record the harness's attention items for runs (§14) as this tick's decisions, and `repo_missing` for each
-     repository in the map with no clone.
+   - Record the harness's attention items for runs (§14) as this tick's decisions, `chore_failed` for each configured
+     chore whose latest ended run did not end `ok` (§19), and `repo_missing` for each repository in the map with no
+     clone.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated state block: a `## State`
    section holding one JSON object with the tick id, the current time, whether it is a dry run, the repository root,
    the workspace (name, whether it is a single repository, the path of `MAP.md` if there is one) and its repositories
@@ -201,7 +213,8 @@ way, a tick does, in order:
    and stacking), running workers and their repositories, and the `tickets` rows not marked done: the ticket's phase,
    branch, and comment cursor; its units (§18), each with its repository, branch, PR, phase, review and ci cursors,
    runs so far of each kind, and when fix-ci may next run if that is still ahead; and its latest run (id, kind,
-   status, branch, each repository it leased in with the base it started from, start and end).
+   status, branch, each repository it leased in with the base it started from, start and end). With chores configured,
+   it also has `chores` (§19); without, it has no such key.
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` set in its environment. `canopy dispatch`, `decide`, and `attention`
    read that variable to know which tick they belong to, and refuse if it is unset or names a tick that is not running
@@ -504,6 +517,8 @@ Schema in `migrations/0001_init.sql`. Tables and purpose:
   split run. Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
   repository or a ticket's unit, that repository (`repo`, migration 0004). Audit log and prompt-evaluation corpus.
+- `chore_runs`: one row per chore run (migration 0007); the chore, pids of `_chore` and its agent, times, status, the
+  validated result (§19). `decisions.chore` names the chore of a decision about one, which has no ticket key.
 - `notifications`: one row per attention item that `notify.cmd` was told about and that is still open, keyed by a
   fingerprint of its ticket, reason, and repository if it has one, so an open item is notified once (§14).
 
@@ -543,6 +558,7 @@ refuses to run. Unknown keys are errors in both files.
 | `runtime.*` | user-only | commands run on the operator's machine |
 | `notify.*` | user-only | a command run on the operator's machine |
 | `paths.*` | user-only | where prompts and state are read from |
+| `chores.*` | user-only | a chore runs a command and a prompt, and spends money (§19) |
 
 Anyone who can push to the repository, or any branch the operator happens to have checked out, controls the repository
 file. That is why keys that run commands, choose prompts, spend money, or authorize anyone are user-only. See
@@ -669,6 +685,8 @@ Agent definitions ship in `agents/`, and agent runs load them from a directory c
   GitHub.
 - `canopy-worker`: edit and bash allowed within the worktree. MCP: the tracker (ticket comments, labels), GitHub
   (open/update PR, read reviews and checks).
+- `canopy-chore`: no edits, shell, or subagents, and MCP write tools denied by name (§19). A chore that runs the
+  operator's own tools uses the operator's own copy of it.
 - `canopy-splitter`: read-only file tools in its desk; no edit, shell, web fetch, or subagents. MCP: the tracker
   (create and link tickets, comment), with tools for labels, assignees, edits, PRs, branches, and files denied by name
   (§18).
@@ -732,7 +750,8 @@ instead. It grants nothing: the overseer's and worker's bash rules are what they
 Rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable only by the operator, after
 every tick: grouped by reason, one line per item with ticket key, age, and detail (usually a link). Reasons are exactly
 the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`, `attempt_limit`,
-and in a workspace `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). In
+and in a workspace `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18).
+Chores add `chore_failed` and their findings, listed by chore after the ticket items (§19). In
 a workspace of several, an item about one unit of a ticket names its repository too, and is shown as `KEY (repo)`.
 `canopy status` prints the list too. Items disappear when their cause is gone; no manual dismissal.
 
@@ -1112,10 +1131,7 @@ TRUST_MODEL changes with the milestone that needs each, whose PR carries the hum
 
 ## 19. Chores
 
-Planned for ROADMAP M9; none of it is built. Rationale in D034. Earlier sections describe the loop without chores; M9
-updates them when it builds this: §5 gains the `chores` package (`_chore` and chore reconcile) and `cli/chores.py` (the
-`canopy chore` commands), the overseer's role gains `canopy chore run` and `canopy chore wait`, §6 step 3 reconciles
-chore runs, §11 lists `chore_runs`, §12 the chore keys, and §14 the chore items.
+Built in ROADMAP M9. Rationale in D034 and D063.
 
 A chore is recurring work the operator defines and the overseer delegates: an agent run that is not about one of the
 queue's tickets, holds no worktree, pushes nothing, and reports findings to the attention list. The motivating chore is
@@ -1147,6 +1163,7 @@ when = """Weekdays, 08:00 to 18:00 America/New_York.
 Skip it when the last run found nothing and nothing has merged to main since."""
 timeout_minutes = 20
 cwd = "~/src/build-tools"
+workspaces = ["acme"]     # optional; default every workspace
 ```
 
 - A chore name matches `[a-z][a-z0-9-]*`. It appears in file paths and on the command line.
@@ -1159,7 +1176,12 @@ cwd = "~/src/build-tools"
   pointless or urgent. Optional; without it the overseer runs a chore whenever it is due. It is operator-written, so it
   is an instruction, unlike anything a chore reads.
 - `timeout_minutes` defaults to 15. `cwd` is where the chore runs, absolute or starting with `~`; by default a
-  directory of its own, `<state_dir>/chores/<name>/`, created readable only by the operator.
+  directory of its own, `<state_dir>/chores/<name>/`, created readable only by the operator. Before the agent starts,
+  the shadowing check (§13) covers `cwd`: a run there whose OpenCode config defines one of canopy's agents is
+  `crashed`.
+- `workspaces` lists the workspaces the chore runs in, by name: a map's `[workspace] name`, or a workspace of one's
+  repository name (§18). Empty, the default, means every workspace whose loop reads the user file. Each workspace
+  has its own journal, so a chore listed in two runs in each (D063).
 
 ### Off unless configured
 
@@ -1216,13 +1238,15 @@ beyond what the operator's prompt says.
 `canopy chore run` requires `CANOPY_TICK_ID` like `dispatch` (D020) and refuses, recording `refused:<guard>`, on the
 first of:
 
-- `unknown_chore`: no chore of that name in the user config.
+- `unknown_chore`: no chore of that name in the user config, or not for this workspace, or `max_chores` is 0.
 - `running`: a run of this chore is running.
 - `not_due`: less than `every_minutes` since this chore's latest run started, whatever that run ended as.
 - `chore_capacity`: `capacity.max_chores` chore runs are running.
 
-In a dry run it checks the same guards, records `dispatch:chore` with rationale `dry run: not dispatched` or the
-refusal, and starts nothing (D036). Chore decisions
+In a dry run it checks the same guards, counting each chore this dry run already ran as running, records
+`dispatch:chore` with rationale `dry run: not dispatched` or the refusal, and starts nothing (D036). A live run's
+rationale is `chore run <id>`, with the context if there was one. `canopy chore wait` refuses a chore that is not
+configured here, recording nothing. Chore decisions
 are `decisions` rows with the chore's name in a new `chore` column and no ticket key: `dispatch:chore`, `wait`, and
 `refused:<guard>`. Chore runs are serialized with dispatches by the same `dispatch.lock`.
 
@@ -1234,10 +1258,10 @@ chore's command in its `cwd` with its timeout, records the agent's pid, parses t
 goes to `<state_dir>/chores/<run_id>.log`. There is no lease, branch, or push, so there is nothing to return or verify.
 
 The prompt is the operator's file followed by a generated `## Run` section holding one JSON object: the chore's name,
-the current time, the run id, the overseer's context, the latest completed run's end time, summary, and findings (id,
-title, link), and the result contract. The previous findings let a chore reuse the same id for the same problem and
-say when one is gone. The rendered prompt is written to `<state_dir>/chores/<run_id>.prompt`, readable only by the
-operator.
+the current time, the run id, the overseer's context, the latest ended run (id, status, end time, summary), the open
+findings (id, title, link) of the latest `ok` run, and the result contract. The previous findings let a chore reuse the
+same id for the same problem and say when one is gone. The rendered prompt is written to
+`<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
 
 Result contract, one JSON line, last line of stdout:
 
@@ -1249,8 +1273,8 @@ Result contract, one JSON line, last line of stdout:
 - `ok` means the chore did its check; no findings means nothing needs a human. `failed` means it could not check (a
   tool broke, CI unreachable) and says why in the summary.
 - A finding's `id` is stable across runs for the same problem, matches `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and is at most
-  200 characters. `title` is at most 200 characters, `detail` at most 2000, `link` a plain `https://` URL or absent. At
-  most 20 findings; ids unique within a run.
+  200 characters. `title` is one line, cut at 200 characters, `detail` cut at 2000, `link` a plain `https://` URL of
+  at most 500 characters, or absent. `summary` is cut at 2000. At most 20 findings; ids unique within a run.
 - Validated with pydantic (D026). Anything else is `unknown`, and the findings are not recorded.
 
 `chore_runs` status is `running`, `ok`, `failed`, `unknown`, `timeout`, or `crashed`. Reconcile (§6 step 3) treats
@@ -1264,11 +1288,14 @@ the run is `crashed`. Chore runs do not count against `max_workers`.
   previous findings standing.
 - A chore whose latest run ended `failed`, `unknown`, `timeout`, or `crashed` also has a `chore_failed` item, raised by
   the harness after reconcile as for worker runs (D028). It goes away when a later run ends `ok`.
-- `attention.md` gets a section per chore after the ticket items: one line per finding with its title, age, and link.
+- `attention.md` gets a section per chore after the ticket items, headed `chore:<name>`: one line per finding with its
+  title and link, its age, and its id. `canopy status` lists them the same way, and adds a line per configured chore:
+  running, or its latest run and when it is next due.
   A finding's age runs from the first run of the unbroken sequence of `ok` runs that reported its id.
 - Notification follows D032, with a finding identified by its chore and id. The message line is
   `+ chore:<name> <id>: <title> <link>`. In `notifications`, a finding's row holds `chore:<name>` in `ticket_key`, which
-  no ticket key can equal since the key pattern (§17) has no colon, and its id in `reason`.
+  no ticket key can equal since the key pattern (§17) has no colon, and its id in `reason`. A `chore_failed` item's row
+  holds `chore:<name>` too, and the line is `+ chore:<name> chore_failed: <detail>`.
 
 ### Journal
 
@@ -1277,9 +1304,9 @@ the run is `crashed`. Chore runs do not count against `max_workers`.
   lease, and branch columns a chore does not have.
 - `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
 
-### Trust model changes needed
+### Trust model changes
 
-TRUST_MODEL is unchanged until M9, whose PR carries the human approval:
+Made in M9, whose PR carries the human approval:
 
 - T1: chores read text from people outside the operator's queue (other people's PRs, build logs). Their findings are
   data wherever they go: the attention list, the notification, and the overseer's state block.
@@ -1304,9 +1331,8 @@ TRUST_MODEL is unchanged until M9, whose PR carries the human approval:
   Findings are written by an agent that read untrusted text, so they could only ever hold work back or raise attention,
   never make a ticket a candidate. Opt-in per chore when it comes, so a chore's reports can be trusted before its
   influence is.
-- Where a chore runs in a workspace (§18). Chores come from the user file, which every loop the operator runs reads, so
-  once state is per workspace (M6) each workspace would run every chore. M9 either gives a chore an optional list of
-  the workspaces it runs in or moves chores into a user file table per workspace.
+- Whether `workspaces` should become a table per workspace in the user file, if operators end up with many chores
+  that differ by workspace (D063).
 - Whether a repository should be able to offer chores that an operator opts into by name, the way it offers its tracker
   query.
 

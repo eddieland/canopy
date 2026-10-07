@@ -11,12 +11,16 @@ labels = ["agent-ready-yourname"]
 
 [capacity]
 max_workers = 2
+# Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
+max_chores = 1
 
 [runtime]
 # {definitions_dir} is the directory canopy's agent definitions and skills are in (D040). Every template that runs one
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
+# Chores run this unless they set their own `cmd` (DESIGN §19).
+chore_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}'
 # The splitter creates one ticket per repository when an authorized replier asks for a split (DESIGN §18).
 split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}'
 overseer_timeout_minutes = 15
@@ -40,3 +44,12 @@ state_dir = "~/.canopy"
 # Optional. Receives the attention-list diff on stdin after each tick.
 # Example: a two-line script that posts to a Slack webhook.
 cmd = ""
+
+# Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
+# your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.
+# [chores.build-health]
+# prompt = "~/.config/canopy/chores/build-health.md"
+# every_minutes = 120
+# when = "Weekdays, 08:00 to 18:00 America/New_York. Skip it when the last run found nothing."
+# timeout_minutes = 20
+# workspaces = ["acme"]   # default: every workspace

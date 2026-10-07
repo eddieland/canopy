@@ -12,7 +12,7 @@ LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"__main__"}),
     frozenset({"cli"}),
     frozenset({"loop"}),
-    frozenset({"runs", "setup"}),
+    frozenset({"runs", "setup", "chores"}),
     frozenset({"core"}),
     frozenset({"infra"}),
 )

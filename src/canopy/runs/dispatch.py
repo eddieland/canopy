@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db, prompts, treehouse
+from canopy.core.context import DISPATCH_LOCK
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -34,7 +35,6 @@ SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
 BASE_TAIL_RE = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
 DEFAULT_SLUG = "work"
 JOINT_PR_NOTE = "one per repository, listed under Repositories"
-DISPATCH_LOCK = "dispatch.lock"
 RUNS_DIR = "runs"
 
 

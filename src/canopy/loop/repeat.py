@@ -118,7 +118,7 @@ def run(
         log.info("loop started", extra={"dry_run": dry_run, "interval_minutes": interval_minutes, "repo": ctx.repo})
         _header(console, ctx, dry_run=dry_run, interval_minutes=interval_minutes, max_ticks=max_ticks)
         while not stop.requested:
-            before = attention.current(ctx.conn)
+            before = attention.listed(ctx)
             started = clock()
             with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
                 outcome = _tick(ctx, dry_run=dry_run, log=log)
@@ -242,7 +242,7 @@ def _report(
     rows.add_column(style="dim", ratio=1)
     if outcome.tick_id is not None:
         _decision_rows(rows, ctx, outcome.tick_id, failed=outcome.status == "overseer_failed")
-    after = attention.current(ctx.conn)
+    after = attention.listed(ctx)
     _attention_rows(rows, before, after)
     if rows.row_count:
         console.print(rows)
@@ -266,7 +266,7 @@ def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> 
             continue
         style = "red" if action.startswith("refused:") else "green" if action.startswith("dispatch:") else ""
         rationale = _detail(str(d["rationale"]))
-        rows.add_row("", Text(str(d["ticket_key"] or "-")), Text(action, style=style), rationale)
+        rows.add_row("", Text(attention.decided_about(d)), Text(action, style=style), rationale)
     output = ctx.state_dir / "ticks" / f"{tick_id}.log"
     if failed and output.exists():
         # Not `_detail`: collapsing whitespace would print a path that does not exist.

@@ -5,6 +5,10 @@ for what it reads in the world, and by the harness for runs that ended in a way 
 current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
 longer records it.
 
+A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
+`chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
+ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed (`listed`).
+
 After every tick, `publish` rewrites `<state_dir>/attention.md` and, when `notify.cmd` is set, pipes it what changed
 since the last notification. The `notifications` table holds the items already notified that are still open, so an
 open item is notified once however many ticks it lasts.
@@ -19,6 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from canopy.chores import view as chore_view
 from canopy.core import db
 from canopy.core.config import notify_words
 from canopy.infra import logs, procs
@@ -29,6 +34,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 ACTION_PREFIX = "attention:"
+# Where a ticket key would be, an item about a chore names it so. A ticket key has no colon (DESIGN §17).
+CHORE_PREFIX = "chore:"
 # Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
 # worker left no usable result line.
 RUN_REASONS = {
@@ -48,7 +55,8 @@ NOTIFY_TIMEOUT_SECONDS = 60
 class Item:
     """One attention item: a ticket or a repository, why it needs a human, and since when.
 
-    An item about a repository, such as `repo_missing`, has `repo` set and no ticket key.
+    An item about a repository, such as `repo_missing`, has `repo` set and no ticket key. An item about a chore has
+    `chore:<name>` as its ticket key; a chore's finding has the finding's id as its reason and `finding` set.
     """
 
     ticket_key: str | None
@@ -56,6 +64,7 @@ class Item:
     detail: str
     since: str  # created_at of the first tick in the unbroken run of ticks that recorded this item
     repo: str | None = None
+    finding: bool = False
 
     @property
     def subject(self) -> str:
@@ -68,6 +77,13 @@ def subject(ticket_key: str | None, repo: str | None) -> str:
     if ticket_key is None:
         return repo or "-"
     return f"{ticket_key} ({repo})" if repo else ticket_key
+
+
+def decided_about(decision: sqlite3.Row) -> str:
+    """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick."""
+    if decision["chore"] is not None:
+        return f"{CHORE_PREFIX}{decision['chore']}"
+    return str(decision["ticket_key"] or decision["repo"] or "-")
 
 
 # An item is its ticket, its reason, and its repository if it has one.
@@ -91,13 +107,15 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         return []
     # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
-        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo FROM decisions "  # noqa: S608
+        f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore FROM decisions "  # noqa: S608
         f"WHERE action LIKE 'attention:%' AND tick_id IN ({','.join('?' * len(ticks))}) ORDER BY id",
         ticks,
     ).fetchall()
     by_tick: dict[int, dict[_ItemId, tuple[str, str]]] = {t: {} for t in ticks}
     for r in rows:
         key = None if r["ticket_key"] is None else str(r["ticket_key"])
+        if r["chore"] is not None:
+            key = f"{CHORE_PREFIX}{r['chore']}"
         repo = None if r["repo"] is None else str(r["repo"])
         item_id: _ItemId = (key, str(r["action"]).removeprefix(ACTION_PREFIX), repo)
         by_tick[int(r["tick_id"])].setdefault(item_id, (str(r["rationale"]), str(r["created_at"])))
@@ -113,6 +131,32 @@ def current(conn: sqlite3.Connection) -> list[Item]:
             since = earlier[1]
         items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
     return items
+
+
+def listed(ctx: Context) -> list[Item]:
+    """Return the attention list as it is shown and notified: `current`, with the chores this workspace runs.
+
+    A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all (DESIGN §19).
+    """
+    configured = set(chore_view.configured(ctx.config, ctx.workspace))
+    items = [
+        i
+        for i in current(ctx.conn)
+        if i.ticket_key is None
+        or not i.ticket_key.startswith(CHORE_PREFIX)
+        or i.ticket_key.removeprefix(CHORE_PREFIX) in configured
+    ]
+    findings = [
+        Item(
+            f"{CHORE_PREFIX}{f.chore}",
+            f.finding.id,
+            " ".join(part for part in (f.finding.title, f.finding.link or "") if part),
+            f.since,
+            finding=True,
+        )
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+    ]
+    return items + findings
 
 
 @dataclass(frozen=True)
@@ -180,9 +224,16 @@ def render(items: list[Item], now: datetime) -> str:
         return "\n".join(lines)
     count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
     lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
-    for reason in sorted({i.reason for i in items}):
+    reasons = [i for i in items if not i.finding]
+    for reason in sorted({i.reason for i in reasons}):
         lines += [f"## {reason}", ""]
-        lines += [f"- {i.subject}, {age(i.since, now)}: {_one_line(i.detail)}" for i in items if i.reason == reason]
+        lines += [f"- {i.subject}, {age(i.since, now)}: {_one_line(i.detail)}" for i in reasons if i.reason == reason]
+        lines.append("")
+    # A section per chore after the ticket items: one line per finding, with its title, age, and link (DESIGN §19).
+    findings = [i for i in items if i.finding]
+    for chore in sorted({i.subject for i in findings}):
+        lines += [f"## {chore}", ""]
+        lines += [f"- {_one_line(i.detail)}, {age(i.since, now)} ({i.reason})" for i in findings if i.subject == chore]
         lines.append("")
     return "\n".join(lines)
 
@@ -253,7 +304,7 @@ def publish(ctx: Context, log: logs.TickAdapter) -> None:
     Failures are logged, never raised: the tick is already closed. A notification that fails is sent again next tick,
     since nothing is marked sent until the command succeeds.
     """
-    items = current(ctx.conn)
+    items = listed(ctx)
     path = ctx.state_dir / FILE_NAME
     try:
         logs.write_private(path, render(items, datetime.now(UTC)))

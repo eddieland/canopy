@@ -58,7 +58,7 @@ def agent_log(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPat
     for one role only; see tests/fakes/agent.
     """
     log = tmp_path / "agent.jsonl"
-    for role in ("AGENT", "OVERSEER", "WORKER", "SPLITTER"):
+    for role in ("AGENT", "OVERSEER", "WORKER", "SPLITTER", "CHORE"):
         for name in ("RESULT", "EXIT", "SLEEP", "COMMANDS"):
             monkeypatch.delenv(f"FAKE_{role}_{name}", raising=False)
     monkeypatch.setenv("FAKE_AGENT_LOG", str(log))

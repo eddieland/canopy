@@ -15,7 +15,7 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6, 7]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
     assert rows == [
@@ -25,6 +25,7 @@ def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
         (4, "workspace_repos"),
         (5, "units"),
         (6, "split_children"),
+        (7, "chores"),
     ]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1

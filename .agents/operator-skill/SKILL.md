@@ -36,7 +36,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 
 | Command | What it does |
 |---|---|
-| `canopy status` | The last tick, the attention list, and running workers. Start here. |
+| `canopy status` | The last tick, the attention list, running workers, and each chore. Start here. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
@@ -54,11 +54,12 @@ in it is readable only by the operator; in the commands below, replace `~/.canop
 | Path | What it holds |
 |---|---|
 | `attention.md` | The attention list, rewritten after every tick. |
-| `canopy.db` | The SQLite journal: `ticks`, `tickets`, `ticket_units`, `runs`, `run_slots`, `decisions`. |
+| `canopy.db` | The journal: `ticks`, `tickets`, `ticket_units`, `runs`, `run_slots`, `decisions`, `chore_runs`, ... |
 | `canopy.log` | JSON lines, one object per line with `ts`, `level`, `msg`, and `tick_id`. |
 | `ticks/<tick id>.log` | The overseer's full output for that tick. |
 | `runs/<run id>.log` | A worker run's output, including the worker agent's own. |
 | `runs/<run id>.prompt` | The prompt that run's worker got. |
+| `chores/<run id>.log`, `.prompt` | A chore run's output and prompt; `chores/<name>/` is a chore's own directory. |
 
 Config: the user file `~/.config/canopy/config.toml` (`$XDG_CONFIG_HOME/canopy/config.toml`), personal, and the
 repository's `canopy.toml` (in a workspace, `canopy-workspace.toml`, which also lists the repositories), shared. The
@@ -122,6 +123,7 @@ no dismissing. Reasons:
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
+| `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |

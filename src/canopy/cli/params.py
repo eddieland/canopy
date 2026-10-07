@@ -10,7 +10,7 @@ from typing import override
 
 import click
 
-from canopy.core import db, workspace
+from canopy.core import config, db, workspace
 from canopy.runs import dispatch
 
 KEY_RE = dispatch.KEY_RE
@@ -77,5 +77,6 @@ TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 REPO = PatternType("NAME", workspace.REPO_NAME_RE, "repository name")
+CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name")
 # A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
 COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")

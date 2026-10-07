@@ -171,7 +171,7 @@ def test_repository_policy_never_loosens_the_defaults(tmp_path: Path, attempts: 
 
 
 def test_every_config_key_declares_a_scope() -> None:
-    assert set(config.SECTIONS) == set(config.Config.model_fields)
+    assert {*config.SECTIONS, *config.TABLE_SECTIONS} == set(config.Config.model_fields)
     for spec in config.SPECS.values():
         assert spec.scope in (config.Scope.SHARED, config.Scope.USER)
     user_only = {name for name, spec in config.SPECS.items() if spec.scope is config.Scope.USER}
@@ -185,6 +185,10 @@ def test_every_config_key_declares_a_scope() -> None:
         "capacity.max_workers",
         "tracker.labels",
         "trust.authorized_repliers",
+        "runtime.split_cmd",
+        "runtime.chore_cmd",
+        "capacity.max_chores",
+        "chores",
     }
 
 
@@ -192,9 +196,12 @@ def test_every_config_key_declares_a_scope() -> None:
 def test_repository_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> None:
     if config.SPECS[name].scope is not config.Scope.USER:
         return
-    section, key = name.split(".")
     (tmp_path / ".git").mkdir()
-    extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
+    if name in config.TABLE_SECTIONS:
+        extra = f'[{name}.x]\nprompt = "~/x"\n'
+    else:
+        section, key = name.split(".")
+        extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
     (tmp_path / "canopy.toml").write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
     user = tmp_path / "config.toml"
     user.write_text('[tracker]\nlabels = ["mine"]\n')
