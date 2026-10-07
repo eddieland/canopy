@@ -66,6 +66,8 @@ name = {json.dumps(name)}
 
 [tracker]
 provider = {json.dumps(provider)}
+# Added by a worker that needs an answer, removed when it resumes. Any label your tracker accepts; it must
+# already exist, since canopy does not create labels.
 needs_human_label = "needs-human"
 # How to find candidate tickets: the tracker's own search syntax, or plain language. Edit this.
 # Finding is not authorizing: each operator's own labels are checked on every ticket.

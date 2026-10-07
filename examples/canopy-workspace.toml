@@ -22,6 +22,8 @@ summary = "Customer web app. Consumes the api's generated client from a release.
 
 [tracker]
 provider = "jira"
+# Added by a worker that needs an answer, removed when it resumes. Any label your tracker accepts; it must
+# already exist, since canopy does not create labels.
 needs_human_label = "needs-human"
 query = 'project = ACME AND statusCategory != Done ORDER BY priority DESC, created ASC'
 
