@@ -48,6 +48,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      project. To upgrade, run the same command with `--reinstall`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
+   Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer, to comment on a PR.
+   Grant nothing more: canopy's definitions deny the dangerous ones by name, but names differ by server. On GitHub
+   the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D084).
 4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
    default `~/.config/canopy/config.toml`, with a queue label of your own), writes a shared `canopy.toml` if the
    repository has none, and installs nothing else: agent runs load canopy's agent definitions and skills from its own
@@ -61,7 +64,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
-  attention list.
+  attention list. Press `t` while it waits to tick now.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, and every ticket's
   conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the secret
   `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so does
@@ -72,11 +75,17 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
   reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
   KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
-- Review PRs. Humans approve and merge; the agent never does.
+- To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY`: its next
+  implement starts on a new branch. Its earlier runs still count toward the attempt limits (DESIGN §22).
+- Review PRs. Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a
+  worker back to a PR on their own; anyone else's comments, a review bot's included, wait on the attention list as
+  `untrusted_review` until you say what to do with `canopy reply KEY 'use your judgement on the bot's review'` or the
+  web UI. The reply stays in canopy, never on the ticket (DESIGN §7).
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
-- Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
+  add `--ticket KEY` to filter. `canopy loop` prints each tick's cost as it goes.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
   `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own

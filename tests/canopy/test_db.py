@@ -15,10 +15,17 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
-    assert rows == [(1, "init"), (2, "run_sessions"), (3, "conversations"), (4, "mirrored_comments")]
+    assert rows == [
+        (1, "init"),
+        (2, "run_sessions"),
+        (3, "conversations"),
+        (4, "mirrored_comments"),
+        (5, "forget"),
+        (6, "tick_cost"),
+    ]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
@@ -148,7 +155,7 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
     assert db.migrate(conn, migrations) == []
 
 
-def test_a_v01_journal_gains_run_sessions_with_nothing_reported(tmp_path: Path) -> None:
+def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: Path) -> None:
     migrations = tmp_path / "migrations"
     migrations.mkdir()
     (migrations / "0001_init.sql").write_text((resources.migrations_dir() / "0001_init.sql").read_text())
@@ -160,7 +167,10 @@ def test_a_v01_journal_gains_run_sessions_with_nothing_reported(tmp_path: Path) 
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status) "
         "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'done')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4]
+    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4, 5, 6]
     run = db.get_run(conn, 1)
     assert run is not None
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)
+    tick = db.get_tick(conn, 1)
+    assert tick is not None
+    assert (tick["session_id"], tick["cost_usd"], tick["tokens_input"]) == (None, None, None)

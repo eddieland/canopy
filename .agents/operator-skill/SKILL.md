@@ -25,8 +25,8 @@ Everything below is for an agent helping the operator in their own session.
 - `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
   tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
   ticket worked is its queue label, or `canopy start` (below).
-- `canopy start`, `stop`, and `reply` are the operator's own: they authorize work and answer workers. Suggest them;
-  run one only when the operator asks you to, with the words they gave you.
+- `canopy start`, `stop`, `reply`, and `forget` are the operator's own: they authorize work and answer workers.
+  Suggest them; run one only when the operator asks you to, with the words they gave you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -42,7 +42,8 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy show REF` | A ticket's phase, PRs, runs, conversation, and comments; `run:ID` a run, `chore:NAME` a chore. |
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | Nothing dispatches a started ticket again until `canopy start`; `--now` ends its run. |
-| `canopy reply KEY [TEXT]` | Answers a started ticket's question, with TEXT or stdin. A waiting loop wakes for it. |
+| `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
+| `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
@@ -129,6 +130,7 @@ no dismissing. Reasons:
 | `needs_reviewer` | The PR is green and unreviewed: review it. |
 | `ready_to_merge` | The PR is approved: merge it. canopy never merges. |
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
+| `untrusted_review` | Feedback from a reviewer not in `trust.trusted_reviewers`: say what to do with `canopy reply`. |
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
@@ -148,6 +150,12 @@ The overseer may record other reasons; the detail says what it wants.
 
 A worker that needs an answer posts its question as a ticket comment and adds `tracker.needs_human_label`. An
 authorized replier's comment on the ticket resumes it on a later tick; anyone else's comment is ignored.
+
+Only reviewers in `trust.trusted_reviewers` (GitHub logins, and `canopy:review` for canopy's own reviewer) send a
+worker to their PR comments unasked. Anyone else's comments wait as `untrusted_review` until the operator answers in
+canopy, with `canopy reply KEY 'use your judgement on the bot's review'` or the web UI: the reply is the worker's
+instruction, the comments stay data, and nothing of the reply reaches the ticket. A reply that says to leave them
+lets the ticket move on.
 
 Workers post as the operator, so every comment they post starts with `trust.comment_prefix` (`CANOPY:` by default) and
 ends with `trust.comment_suffix`, whichever are set. A comment carrying those marks is a worker's: it never resumes,

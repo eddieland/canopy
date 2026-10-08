@@ -63,10 +63,15 @@ git init --quiet
 git remote add origin https://example.test/team/project.git
 canopy init --provider github
 
-# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require.
+# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require. init writes no [runtime]:
+# the defaults run OpenCode.
 config="$XDG_CONFIG_HOME/canopy/config.toml"
-sed 's/opencode run --agent/agent --agent/' "$config" >"$config.new"
-mv "$config.new" "$config"
+cat >>"$config" <<'TOML'
+
+[runtime]
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-overseer --format json {prompt}'
+worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-worker --format json {prompt}'
+TOML
 
 export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
 export FAKE_AGENT_RESULT="tick complete"
@@ -94,14 +99,14 @@ if [ "$binary" = 1 ]; then
     # The executable cannot run a script of ours, and has no path to this checkout. What it snapshotted must be what
     # this checkout ships.
     # The private worker's definition is rendered with the tracker's server and tools (DESIGN §22): with those lines,
-    # the only ones a two-space quoted key starts, taken out, it is the shipped file.
+    # the only ones a two-space quoted key on the github server starts, taken out, it is the shipped file.
     private=agents/canopy-worker-private.md
     for dir in agents skills; do
         diff -r -x "${private#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" >/dev/null ||
             fail "the snapshot's $dir are not .agents/"
     done
     grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" || fail "the snapshot's $private names no tracker tools"
-    grep -v '^  "' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
+    grep -v '^  "github_' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
         fail "the snapshot's $private is not .agents/ with the tracker's tools"
     echo "install-check: ok"
     exit 0

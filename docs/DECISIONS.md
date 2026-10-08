@@ -536,3 +536,83 @@ Rejected: a one-time link the loop prints (good once, for one browser, and only 
 kept by the page and sent on every request (any script on the page could read it, and `EventSource` sends no
 headers); server-side sessions (lost on every restart, with nothing gained over a signed cookie for one operator).
 Revisit: with D055's revisit, when more than one person signs in, or if sessions must be ended one at a time.
+
+## D083. The loop paces idle ticks from the journal, not by checking the world for changes first
+
+A tick whose overseer run finds nothing new is waste however little it cost, so `canopy loop` doubles its wait after
+each idle tick in a row, up to `loop.idle_max_minutes`, and wakes early on the events it can see itself: an operator
+message, or a run, chore run, or review run ending (DESIGN §6). Idleness is read from what the tick recorded: its
+status, decisions, attention list, tickets and units, and runs. The harness still cannot see the world between ticks
+(D003), so a teammate's comment waits for the next tick, up to the cap.
+Rejected: polling GitHub or the tracker in Python to skip unchanged ticks (a VCS client in the harness, D003); a
+cheaper pre-check agent each tick (still an LLM call per tick, and a second prompt's judgment gating the first's);
+quiet hours in config (a guess at when teammates work, wrong across time zones, where backoff learns it); pacing by
+cost alone (M13; a cheap tick that finds nothing is still not worth running); webhooks (deferred; a listener, T8).
+Revisit: if the cap's latency on teammates' comments or CI is felt; then quiet hours, or D003's own revisit.
+
+## D084. Workers set labels through the tracker's MCP edit tool, and deny dangerous MCP tools by name
+
+Labels landed only when a worker reached for `gh`, which is GitHub-only and not on every machine. Ticket labels are set
+with the tracker's issue edit tool, passing only labels; the PR label only where a GitHub tool sets labels, since
+GitHub's one such tool, `issue_write`, also creates and closes issues, and granting it is the operator's call.
+`canopy-worker` and `canopy-worker-private` deny merging, review submission, closing, transitions, ticket creation, API
+file and branch writes, deletes, forks, Copilot agents, and workflow runs by tool name; `test_definitions.py` checks.
+Label writes replace the whole set, so skills read it right before writing. Names differ by server: defense in depth.
+Rejected: `gh ... --add-label` (GitHub-only, a credential the runtime does not hold); allowing `issue_write` by default
+(permissions match names, not arguments); the harness setting labels (no tracker code, D003, D014).
+Revisit: when GitHub's server gains a label-only tool, or a deny is found not to apply to MCP tools.
+
+## D085. canopy's version is built from the latest `v*` tag with uv-dynamic-versioning
+
+Pushing a `v*` tag is the whole release step (D067): no commit bumps a version first, so the tag and the version
+cannot disagree. Between tags a build names its distance and commit (`0.2.1.dev3+1a2b3c4`), so `canopy --version` says
+which build is running. `uv-dynamic-versioning` is a build-time dependency only, pinned in `build-system.requires`;
+stdlib cannot supply a hatchling version source. canopy-notify-slack keeps its static version for now.
+Rejected: a static version with a CI check that the tag matches it (a release takes a commit and a tag that must
+agree); hatch-vcs (pulls in setuptools-scm and setuptools for the same result).
+Revisit: if a build that matters runs without the repository's tags, as a shallow clone does.
+
+## D086. `canopy forget` clears a ticket's branch and units and marks a boundary; it keeps every run
+
+The operator can have canopy forget a ticket's work so its next implement starts over (DESIGN §22). It clears the
+branch, units, and phases, and records the ticket's newest run and message, which the loop's reads then skip; it deletes
+no run and no message. Runs stay because the attempt limits and the cooldown are derived from them (D030): a forget that
+reset them would be the reset command D030 rules out. It is the operator's only, like `start` (T1), and it closes no PR
+and deletes no branch: canopy reaches GitHub only through agents (D003), and never closes a PR.
+Rejected: deleting the ticket's rows (loses the history `show` and the decisions corpus read, and resets attempts);
+clearing the comment cursor too (handled comments would read as new); a forget the overseer can call.
+Revisit: if operators routinely raise a limit just to start a forgotten ticket over; then count attempts per branch.
+
+## D087. `canopy init` writes only keys whose default does not serve
+
+A default written into a config file is pinned there: when canopy changes it (as the agent templates did for
+`{definitions_dir}`, D040, and for the overseer's `--format json`), every file init wrote keeps the old value. So the
+user file gets the queue label and an empty `trust.authorized_repliers` to fill in; `canopy.toml` and
+`canopy-workspace.toml` get the provider and a query. `examples/config.toml` documents every key.
+Rejected: writing every key the operator might tune, commented or not (they go stale, and read as choices to make).
+Revisit: if operators routinely miss a key they needed to change; then print it from init instead of writing it.
+
+## D088. A key at the loop's countdown ticks now, with no one-minute floor
+
+An operator who wants a tick sooner can press `t` during the wait rather than open a second terminal for `canopy tick`.
+It skips `repeat.WAKE_MIN_SECONDS`, which exists so messages arriving in a burst cannot make the loop spin; a keypress
+is a deliberate request for exactly one tick, as `canopy tick` by hand already is, and every hard guard still holds.
+Keys come from the terminal in cbreak mode through stdlib `termios`; keys typed during a tick are dropped.
+Rejected: a full-screen TUI library (a new dependency for one key); a key that also aborts or skips a running tick.
+
+## D089. Untrusted reviewers wait for the operator's go-ahead, given with `canopy reply` on any ticket
+
+A review bot's comment resumed a ticket as `changes_requested` (M3's live check), and the operator wants only reviewers
+they trust to start a fixup. `trust.trusted_reviewers` (user-only, empty by default) lists them by VCS host login, with
+`canopy:review` for canopy's own reviewer, which posts as the operator. Anyone else's feedback is `untrusted_review` on
+the attention list until the operator answers in canopy, with `canopy reply` or the web UI, which now take a public
+ticket the journal has. The answer is the worker's instruction ("use your best judgement on the bot's review"); the
+review stays data. The overseer gates it and the resume worker checks again, both by prompt: the harness cannot read a
+comment's author (D003). The operator chose the empty default, the reply channel, and the configurable entry for
+canopy's reviewer.
+Rejected: a list of untrusted reviewers (a new bot would be trusted until noticed); defaulting to everyone (today's
+behavior, but a bot's comments steer workers until the operator acts); the go-ahead as a ticket comment by an authorized
+replier (public on the ticket, a Jira account where the reviewer is a GitHub login, and no web UI path); a harness
+guard on resume (it cannot see whose comments a run addresses).
+Revisit: if the overseer is found dispatching for untrusted feedback without a go-ahead; then a `--review-from` claim
+on `canopy dispatch` checked against the list, as `--label` is (D051).

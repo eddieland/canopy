@@ -76,6 +76,17 @@ class Usage:
         """Every token the model read or wrote, cache reads and writes included."""
         return self.input + self.output + self.reasoning + self.cache_read + self.cache_write
 
+    def describe(self) -> str:
+        """What it cost for a person, as `$0.25, 12.3k tokens`."""
+        return f"${self.cost_usd:.2f}, {_count(self.tokens)} tokens"
+
+
+def _count(n: int) -> str:
+    for size, suffix in ((1_000_000, "M"), (1_000, "k")):
+        if n >= size:
+            return f"{n / size:.1f}{suffix}"
+    return str(n)
+
 
 @dataclass(frozen=True)
 class AgentOutput:
