@@ -286,7 +286,8 @@ the guards, findings listed and notified once and resolved when no longer report
 `chore_failed`, a deleted chore's items cleared, and no `chores` key without chores), docs, and D063 are in. D063
 settles §19's open question on workspaces: a chore may list the workspaces it runs in. `canopy chore try` (D098)
 runs a chore by hand, recording nothing, for writing the build-health prompt. A chore's `days` and `hours` (D099)
-are a guard in code, so `when` holds only judgment. The overseer prompt, the
+are a guard in code, so `when` holds only judgment. `canopy reply chore:NAME` (D100) leaves the chore a note its next
+runs follow. The overseer prompt, the
 `canopy-chore` definition, and the TRUST_MODEL T1, T3, T6, T7, §6, and §7 changes need human approval in their PR.
 Waiting on the operator: a real build-health chore over several working days. Started on request while M2 to M8 wait
 on their live runs.
