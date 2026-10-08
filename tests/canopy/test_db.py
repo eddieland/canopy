@@ -96,7 +96,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
 
 
 def test_a_workspace_of_one_renames_its_unit(tmp_path: Path) -> None:
-    """D052: a workspace of one names its unit when it next writes it, whatever the repository was called before."""
+    """D033: a workspace of one names its unit when it next writes it, whatever the repository was called before."""
     conn = fresh(tmp_path)
     db.migrate(conn, resources.migrations_dir())
     db.set_unit(conn, "PROJ-1", "/r", "before", single=True, pr_url="https://x.test/pr/1")
