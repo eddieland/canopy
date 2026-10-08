@@ -571,3 +571,14 @@ stdlib cannot supply a hatchling version source. canopy-notify-slack keeps its s
 Rejected: a static version with a CI check that the tag matches it (a release takes a commit and a tag that must
 agree); hatch-vcs (pulls in setuptools-scm and setuptools for the same result).
 Revisit: if a build that matters runs without the repository's tags, as a shallow clone does.
+
+## D086. `canopy forget` clears a ticket's branch and units and marks a boundary; it keeps every run
+
+The operator can have canopy forget a ticket's work so its next implement starts over (DESIGN §22). It clears the
+branch, units, and phases, and records the ticket's newest run and message, which the loop's reads then skip; it deletes
+no run and no message. Runs stay because the attempt limits and the cooldown are derived from them (D030): a forget that
+reset them would be the reset command D030 rules out. It is the operator's only, like `start` (T1), and it closes no PR
+and deletes no branch: canopy reaches GitHub only through agents (D003), and never closes a PR.
+Rejected: deleting the ticket's rows (loses the history `show` and the decisions corpus read, and resets attempts);
+clearing the comment cursor too (handled comments would read as new); a forget the overseer can call.
+Revisit: if operators routinely raise a limit just to start a forgotten ticket over; then count attempts per branch.

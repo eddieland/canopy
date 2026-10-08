@@ -1,8 +1,8 @@
-"""The operator's verbs on a subject (DESIGN §22, D075): `canopy start`, `stop`, `reply`, and `show`.
+"""The operator's verbs on a subject (DESIGN §22, D075): `canopy start`, `stop`, `reply`, `forget`, and `show`.
 
 Each takes a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, or `run:ID`. A
-kind refuses a verb it does not take. `start`, `stop`, and `reply` write through `canopy.core.conversation`, which every
-channel shares, and refuse inside canopy's own ticks and runs.
+kind refuses a verb it does not take. `start`, `stop`, `reply`, and `forget` write through `canopy.core.conversation`,
+which every channel shares, and refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from canopy.cli.loop import chore_line, one_line, prs_of, result_of, spent
 from canopy.core import conversation, db
 from canopy.infra import logs
 from canopy.loop import attention
-from canopy.runs import halt
+from canopy.runs import halt, policy
 
 if TYPE_CHECKING:
     import sqlite3
@@ -132,6 +132,44 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     return 0
 
 
+@click.command("forget")
+@click.argument("ref", metavar="REF")
+@click.pass_context
+def cmd_forget(click_ctx: click.Context, ref: str) -> int:
+    """Forget a ticket's branch and PRs, so its next implement starts over on a new branch.
+
+    Its runs and conversation stay in the journal for `canopy show`, and its runs still count toward the attempt limits.
+    Close its PRs and delete its branch yourself: canopy never does.
+    """
+    _operator("forget")
+    subject = _ref(ref, "forget")
+    ctx = open_context(click_ctx)
+    try:
+        forgot = conversation.forget(ctx.conn, subject, dispatch_lock=ctx.dispatch_lock_path)
+    except conversation.Refused as r:
+        raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "ticket forgotten", extra={"ticket": subject.id, "branch": forgot.branch, "prs": forgot.prs}
+    )
+    click.echo(f"{subject} is forgotten: its next implement starts over on a new branch.")
+    if forgot.branch is not None or forgot.prs:
+        named = [*([f"branch {forgot.branch}"] if forgot.branch is not None else []), *forgot.prs]
+        click.echo(f"canopy no longer tracks {', '.join(named)}.")
+        click.echo(
+            "Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and "
+            "the ticket cannot start over."
+        )
+    limit = ctx.config.policy.max_implement_attempts
+    for (key, repo), counts in sorted(policy.attempts(ctx.conn, single=ctx.workspace.single).items(), key=str):
+        if key == subject.id and counts["implement"] >= limit:
+            where = "" if repo is None else f" in {repo}"
+            click.echo(
+                f"It has had {counts['implement']} implement runs{where}, and policy.max_implement_attempts is "
+                f"{limit}: raise it in your config for another."
+            )
+    return 0
+
+
 @click.command("show")
 @click.argument("ref", metavar="REF")
 @click.pass_context
@@ -162,6 +200,11 @@ def _show_ticket(ctx: Context, key: str) -> None:
     if ticket is not None:
         done = ", done" if ticket["done"] else ""
         click.echo(f"  phase {ticket['phase'] or 'unknown'}{done}; branch {ticket['branch'] or 'none yet'}")
+        if ticket["forgotten_at"]:
+            click.echo(
+                f"  forgotten {attention.age(str(ticket['forgotten_at']))} ago: the runs and messages before then are "
+                "history, and the loop reads only what came after"
+            )
         for unit in db.units(ctx.conn, key):
             name = "" if ctx.workspace.single else f"{unit['repo']}  "
             click.echo(f"  {name}PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")

@@ -95,7 +95,7 @@ canopy (harness, Python)
     setup.py       init, init --workspace, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
-    conversation.py start, stop, reply, show: the operator's verbs on a subject (§22)
+    conversation.py start, stop, reply, forget, show: the operator's verbs on a subject (§22)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, _chore
@@ -675,8 +675,10 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   the way to read a dry run's plan. A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
-  (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag. Cursors make ticks
-  incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not stored (D030).
+  (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
+  work, when, with its newest run and message then (`forgotten_at`, `forgotten_run_id`, `forgotten_message_id`, §22).
+  Cursors make ticks incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not
+  stored (D030).
 - `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository, branch, PR URL, the
   unit's phase, and its cursors (`last_review_id`, `last_ci_run_id`).
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
@@ -2103,6 +2105,7 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy start REF` | work it privately, in place of a queue label |
 | `canopy stop REF [--now]` | no new dispatches; a running run finishes unless `--now` ends it |
 | `canopy reply REF [TEXT]` | answer it, with TEXT or stdin |
+| `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
 | `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
 
 `canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
@@ -2165,8 +2168,8 @@ separate `list`.
   message after the run ended.
 - `canopy reply` refuses a subject that was not started: a public ticket's replies belong on the ticket. `show`
   drops control characters from every message.
-- `start`, `stop`, and `reply` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`, and `_review`
-  set `CANOPY_RUN_ID` for their agents.
+- `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`,
+  and `_review` set `CANOPY_RUN_ID` for their agents.
 - The private worker runs with `runtime.private_worker_cmd`, a template of its own as `split_cmd` is (D080). Its prompt
   carries `{{CONVERSATION}}`: the ticket's latest 20 messages, oldest first, at most 30,000 characters, each labeled
   the operator's (an instruction) or an earlier worker's (data). That is how a resumed worker reads the operator's
@@ -2176,6 +2179,33 @@ separate `list`.
 - `canopy start` on a ticket the overseer marked done clears the done flag: the operator asked for it again. On a
   ticket with a public run still going, it says so: that run may still write to the ticket, and `_run` ends any public
   run that had not started its worker yet `stopped`.
+
+### Forgetting a ticket's work
+
+`canopy forget REF` has canopy drop a ticket's work so the loop starts it over (D086). It takes a ticket, public or
+private, from the operator's shell only, and:
+
+- refuses `unknown` for a ticket the journal has no row for, `running` while a run works it (wait for it, or end a
+  started ticket's with `canopy stop --now`), and `split` for a ticket a split made children of: they are tickets of
+  their own, and forgetting the parent would not undo them.
+- clears the ticket's branch, phase, `needs_human_since`, and done flag, and deletes its units, with their branches,
+  PRs, phases, and review and ci cursors. The next `implement` names a new branch with its `--slug`; from then on
+  `bad_slug` (§8) binds to that one.
+- records `forgotten_at` with the ticket's newest run and message ids, and the loop's reads skip what came before
+  them: `last_run` in the state block, the run reasons on the attention list (§14), a private ticket's waiting question
+  (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it answers
+  nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
+- keeps the rest. `runs` and `run_slots` stay, so the attempt limits and the fix-ci cooldown count every run, before
+  and after (D030); a ticket at its implement limit needs the limit raised in config, and `forget` says so. The comment
+  and mirror cursors stay, so tracker comments already handled stay handled. The message cursor stays, and the boundary
+  overrules it. The start record stays: a started ticket stays started, a stopped one stopped. `show` prints the whole
+  history and when the work was forgotten.
+- holds the dispatch lock, which a dispatch holds from its plan through its run's insert, so a dispatch that read the
+  old branch cannot record it again after `forget` commits.
+- touches nothing outside the journal. The old PR and the branch on origin are the operator's to close and delete, and
+  the command names them: until they are gone the overseer still finds the `agent/<KEY>-*` branch (§7's `ready` needs
+  none on origin) and dispatches to continue it, refused `no_branch`. A ticket stacked on the old branch (§10) loses
+  its base when that branch is deleted, so forget a blocker only once nothing is stacked on it.
 
 ### References
 
@@ -2244,7 +2274,7 @@ limits, and cooldowns hold as for any tick.
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| cli | `canopy start`, `stop`, `reply`, `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
 | web (M20) | reply, start, stop | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
@@ -2365,7 +2395,10 @@ mirroring each new comment (M19), are in the prompt.
   elsewhere; the overseer's `--context` holds 2000 characters.
 - Whether a private ticket's PR body and branch should name the ticket key.
 - `canopy reply` on a public ticket: refused today. A journal note that authorizes nothing could come later.
-- Forgetting a ticket's conversation, for client data the operator must not keep.
+- Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
+- `forget` in the web UI. It is the CLI's only; the web channel would call the same function.
+- A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a
+  limit from the `attempt_limit` refusal rather than before dispatching.
 - Mirrored comments edited or deleted after the mirror.
 - PR review comments in the journal, alongside ticket comments, once PRs are subjects (M14).
 - Slack replies: a bridge holding a Socket Mode connection that runs `canopy reply` (a uv workspace member, like
