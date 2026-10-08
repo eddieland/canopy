@@ -25,8 +25,8 @@ Everything below is for an agent helping the operator in their own session.
 - `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
   tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
   ticket worked is its queue label, or `canopy start` (below).
-- `canopy start`, `stop`, and `reply` are the operator's own: they authorize work and answer workers. Suggest them;
-  run one only when the operator asks you to, with the words they gave you.
+- `canopy start`, `stop`, `reply`, and `forget` are the operator's own: they authorize work and answer workers.
+  Suggest them; run one only when the operator asks you to, with the words they gave you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -43,6 +43,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | Nothing dispatches a started ticket again until `canopy start`; `--now` ends its run. |
 | `canopy reply KEY [TEXT]` | Answers a started ticket's question, with TEXT or stdin. A waiting loop wakes for it. |
+| `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |

@@ -1,9 +1,10 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, and later the web UI) calls the functions
-here, so the guards live in one place: the subject is valid and supports the verb, the command does not run inside one
-of canopy's own runs, the ticket was started, and the body is within its bound. Agents never write a message: `_run`
-records a run's report and question from its result line (`close_run`), and nothing else a worker can call does.
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, and the web UI) calls the
+functions here, so the guards live in one place: the subject is valid and supports the verb, the command does not run
+inside one of canopy's own runs, the ticket was started, and the body is within its bound. Agents never write a
+message: `_run` records a run's report and question from its result line (`close_run`), and nothing else a worker can
+call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). The overseer records the one other kind of message, a tracker comment it
@@ -24,8 +25,11 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, outbox
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
+from canopy.infra import lock
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from canopy.core.config import Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
@@ -63,7 +67,7 @@ RUN = "run"
 # The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
 # `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "show", MIRROR_ACTION),
+    TICKET: ("start", "stop", "reply", "forget", "show", MIRROR_ACTION),
     PR: (),
     CHORE: ("show",),
     RUN: ("show",),
@@ -140,7 +144,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, or replies",
+                "stops, replies, or forgets",
             )
 
 
@@ -277,6 +281,51 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submis
     return Replied(message_id=message_id, answers=answers, new=new)
 
 
+@dataclass(frozen=True)
+class Forgot:
+    """What `forget` cleared: the ticket's branch and its units' PRs, as the journal had them."""
+
+    branch: str | None
+    prs: list[str]
+
+
+def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot:
+    """Forget a ticket's work, so its next `implement` starts over on a new branch (DESIGN §22).
+
+    Clears its branch, units, phases, and done flag, and marks where the loop's view of it begins: the overseer's state
+    block and the attention list skip its earlier runs, and its waiting question, new operator messages, and a private
+    worker's conversation skip its earlier messages. The runs stay, so attempt limits still count them (D030), and the
+    cursors stay, so what was handled stays handled. It holds the dispatch lock, so a dispatch that read the old branch
+    cannot record it again afterwards.
+
+    Raises:
+        Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket canopy has no record of,
+            `running` while a run works it, `split` for a ticket a split made children of.
+    """
+    check_verb(ref, "forget")
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
+        ticket = db.get_ticket(conn, ref.id)
+        if ticket is None:
+            raise Refused("unknown", f"canopy has no record of {ref}, so there is nothing to forget")
+        running = db.running_run_of(conn, ref.id)
+        if running is not None:
+            raise Refused(
+                "running",
+                f"run {running['id']} ({running['kind']}) is working {ref}; wait for it to end, or on a started "
+                f"ticket end it with `canopy stop {ref} --now`",
+            )
+        children = db.children_of(conn, ref.id)
+        if children:
+            raise Refused(
+                "split",
+                f"a split made {', '.join(children)} from {ref}; they are tickets of their own, and forgetting {ref} "
+                "would not undo them",
+            )
+        prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
+        db.forget_ticket(conn, ref.id)
+    return Forgot(branch=ticket["branch"], prs=prs)
+
+
 # The overseer's mirror of tracker comments
 
 
@@ -398,11 +447,14 @@ def _comment_time(text: str) -> str:
 
 
 def latest_question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
-    """Return a ticket's latest question if no operator message came after it, else None."""
+    """Return a ticket's latest question if no operator message came after it, else None.
+
+    A question asked before the operator forgot the ticket's work waits on nothing.
+    """
     row: sqlite3.Row | None = conn.execute(
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' "
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' AND id > ? "
         "ORDER BY id DESC LIMIT 1",
-        (TICKET, key),
+        (TICKET, key, db.forgotten_message_id(conn, key)),
     ).fetchone()
     if row is None or operator_messages_after(conn, key, int(row["id"])):
         return None
@@ -447,12 +499,14 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
     """Return a private ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
+    Messages from before the operator forgot the ticket's work are not new, whatever the cursor says.
     """
     key = str(ticket["key"])
     record = start_of(conn, key)
     if record is None:
         return None
     cursor = int(ticket["last_message_id"] or 0)
+    forgotten = int(ticket["forgotten_message_id"] or 0)
     question = latest_question(conn, key)
     return {
         "status": record["status"],
@@ -460,7 +514,7 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
         "message_cursor": cursor or None,
         "new_operator_messages": [
             {"id": m["id"], "at": m["at"], "answers": m["answers"], "body": m["body"]}
-            for m in operator_messages_after(conn, key, cursor)
+            for m in operator_messages_after(conn, key, max(cursor, forgotten))
         ],
         "awaiting_reply": None
         if question is None
@@ -469,8 +523,11 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
 
 
 def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
-    """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded."""
-    rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES)
+    """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded.
+
+    Messages from before the operator forgot the ticket's work are left out: they are about work that is gone.
+    """
+    rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES, after=db.forgotten_message_id(conn, key))
     blocks = [_prompt_message(m) for m in rows]
     total = 0
     kept: list[str] = []

@@ -515,9 +515,11 @@ def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
-    """Return each ticket's most recent run, by ticket key."""
+    """Return each ticket's most recent run, by ticket key: none for a ticket forgotten since its latest run."""
     rows = conn.execute(
-        "SELECT * FROM runs r WHERE r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key)"
+        "SELECT r.* FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key "
+        "WHERE r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key) "
+        "AND r.id > coalesce(t.forgotten_run_id, 0)"
     ).fetchall()
     return {str(r["ticket_key"]): r for r in rows}
 
@@ -826,11 +828,13 @@ def get_message(conn: sqlite3.Connection, message_id: int) -> sqlite3.Row | None
     return row
 
 
-def messages_of(conn: sqlite3.Connection, subject_kind: str, subject_id: str, limit: int) -> list[sqlite3.Row]:
-    """Return a subject's latest `limit` messages, oldest first."""
+def messages_of(
+    conn: sqlite3.Connection, subject_kind: str, subject_id: str, limit: int, *, after: int = 0
+) -> list[sqlite3.Row]:
+    """Return a subject's latest `limit` messages newer than message id `after`, oldest first."""
     rows = conn.execute(
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? ORDER BY id DESC LIMIT ?",
-        (subject_kind, subject_id, limit),
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? ORDER BY id DESC LIMIT ?",
+        (subject_kind, subject_id, after, limit),
     ).fetchall()
     return rows[::-1]
 
@@ -918,3 +922,24 @@ def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: s
         "SELECT max(id) FROM messages WHERE subject_kind = ? AND subject_id = ?", (subject_kind, subject_id)
     ).fetchone()
     return None if row[0] is None else int(row[0])
+
+
+def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
+    """Clear what the journal knows of a ticket's branch, PRs, and phases, and mark where its loop view begins.
+
+    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22).
+    """
+    conn.execute(
+        "UPDATE tickets SET branch = NULL, phase = NULL, needs_human_since = NULL, done = 0, forgotten_at = ?, "
+        "forgotten_run_id = (SELECT max(id) FROM runs WHERE ticket_key = ?), "
+        "forgotten_message_id = (SELECT max(id) FROM messages WHERE subject_kind = ? AND subject_id = ?) "
+        "WHERE key = ?",
+        (now(), key, SUBJECT_TICKET, key, key),
+    )
+    conn.execute("DELETE FROM ticket_units WHERE ticket_key = ?", (key,))
+
+
+def forgotten_message_id(conn: sqlite3.Connection, key: str) -> int:
+    """Return the newest message of `key` the operator forgot with its work, or 0: the loop reads only later ones."""
+    row = conn.execute("SELECT forgotten_message_id FROM tickets WHERE key = ?", (key,)).fetchone()
+    return int(row[0] or 0) if row is not None else 0
