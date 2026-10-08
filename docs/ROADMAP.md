@@ -507,9 +507,13 @@ REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design com
 - `canopy dispatch` needs no `--label` for a started ticket, checking the start record in code, and refuses a private
   `split`.
 - The private worker prompt variant and `canopy-worker-private`, allowing only the tracker's read tools by name and
-  denying the rest of its server; verify OpenCode enforces that wildcard deny.
-- `dispatch` picks the private worker in code for a started ticket; `start`, `stop`, and `dispatch` serialize on the
-  start record, and `_run` re-reads it before the worker starts.
+  denying the rest of its server and the known tracker CLIs in bash; verify OpenCode enforces that wildcard deny.
+- `tracker.read_tools`, with defaults for Atlassian's remote MCP and GitHub's MCP server named from their tool lists;
+  `canopy start` refuses `no_read_tools` without them. D044's guard refuses a private run whose worktree config names
+  the tracker's tools.
+- `dispatch` picks the private worker in code for a started ticket and refuses a stopped one; `stop` marks the
+  record stopped rather than deleting it; `start`, `stop`, and `dispatch` serialize on it, and `_run` re-reads it
+  before the worker starts.
 - The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
   A prompt change, which needs the operator's approval.
 - `awaiting_reply` on the attention list, raised by the harness; `run.ended` carries the question's message id.
@@ -529,7 +533,8 @@ Status: not started.
 REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes first.
 
 - `canopy mirror`, overseer-only, bounded, idempotent on the subject and comment id.
-- The overseer prompt mirrors every comment past a ticket's comment cursor, worker-marked ones (D069) included. A
+- The overseer prompt mirrors every comment past a subject's own mirror cursor, worker-marked ones (D069) included;
+  the cursor starts empty, so a subject's history is mirrored once. A
   prompt change, which needs the operator's approval.
 - `canopy show REF` shows mirrored comments with their source, for public tickets as for private ones.
 - Open: whether PR review comments join the journal here or later.
