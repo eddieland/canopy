@@ -63,10 +63,15 @@ git init --quiet
 git remote add origin https://example.test/team/project.git
 canopy init --provider github
 
-# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require.
+# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require. init writes no [runtime]:
+# the defaults run OpenCode.
 config="$XDG_CONFIG_HOME/canopy/config.toml"
-sed 's/opencode run --agent/agent --agent/' "$config" >"$config.new"
-mv "$config.new" "$config"
+cat >>"$config" <<'TOML'
+
+[runtime]
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-overseer --format json {prompt}'
+worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-worker --format json {prompt}'
+TOML
 
 export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
 export FAKE_AGENT_RESULT="tick complete"
