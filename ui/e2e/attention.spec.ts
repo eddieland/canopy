@@ -62,3 +62,13 @@ test('the counters show the loop at a glance, and the nav counts the list on eve
     await expect(page.getByTestId('nav-attention-count')).toHaveText('5')
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })
+
+test('the runs working now are listed under the attention list', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const workers = page.getByTestId('workers')
+    await expect(workers.getByRole('listitem')).toHaveCount(2)
+    await expect(workers.getByTestId('worker-41')).toContainText('ABC-101')
+    await expect(workers.getByTestId('worker-41')).toContainText('implement')
+    await expect(workers.getByTestId('worker-43')).toContainText('ABC-104')
+})

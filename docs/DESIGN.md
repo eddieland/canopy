@@ -2359,12 +2359,12 @@ Served by `canopy loop` from a thread (D073):
   pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
-- Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected
-  item's conversation and reply form, under counters of running runs, questions waiting, the list, and the last 24
-  hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
-  pool's slots, below), and tickets, each with its conversation. Actions: the CLI's verbs, reply, start, and stop
-  (with or without `now`). OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session
-  id, and attach joins once M15 runs workers against OpenCode's server.
+- Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
+  conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
+  the list, and the last 24 hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
+  pool's slots, below), and tickets, each with its conversation. Actions: the CLI's verbs, reply, start, and stop (with
+  or without `now`). OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and
+  attach joins once M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
