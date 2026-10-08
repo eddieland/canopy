@@ -1261,8 +1261,9 @@ Decision (DESIGN §22; built in ROADMAP M20):
   mostly waits: a tick waits on the overseer's process, and workers run detached.
 - The server opens its own journal connection, never takes the tick lock, and writes only through the functions the
   CLI uses. A server failure is logged and the server restarted; it never ends the loop.
-- It lives in `src/canopy/serve/`, the one package exempt from the network ban, which M20 extends to `http.server` and
-  `socketserver`. It listens and calls out to nothing.
+- It lives in `src/canopy/serve/`, the only package that imports the web stack (D074). The ban on `socket`,
+  `http.client`, and `urllib.request` stays absolute: the stack opens the listening socket, not canopy's code. It
+  listens and calls out to nothing.
 - The loop wakes early on an operator message by checking the journal during its wait, so a reply from another
   process (`canopy reply`) and one through the server wake it the same way.
 Rejected:
@@ -1274,3 +1275,28 @@ Rejected:
 Consequences: stopping the loop stops the UI. AGENTS.md's "do not build a web UI" is lifted by M20; DESIGN §3's
 listener line and principle 6's daily surface change when it is built.
 Revisit: when the operator wants the UI while the loop is stopped, or a server fault is seen to disturb ticks.
+
+## D074. FastAPI on uvicorn, with Jinja2 templates, for the web UI
+
+Context: the web UI (D073, ROADMAP M20) needs routing, form parsing, escaping, and a server that runs in a thread and
+stops on request. Load is one operator's browser, so performance does not decide. The operator offered FastAPI.
+Decision (DESIGN §22; added to `pyproject.toml` in M20, not before):
+- `fastapi` for routing and request validation. It validates with pydantic, which canopy already uses for everything
+  parsed from outside (D026), so a form body is a model like a worker's result line.
+- `uvicorn` without its `standard` extras, run as `uvicorn.Server` in the loop's thread. Without the extras it is pure
+  Python (h11), which keeps D067's per-platform binary to the wheels it already builds.
+- `jinja2` for pages, with autoescaping on, so escaping journal text is the default rather than a call each template
+  must remember. `python-multipart` for form posts.
+- `httpx`, dev only, for FastAPI's test client.
+- Only `src/canopy/serve/` imports any of them; ruff's banned-api rule bans them elsewhere.
+Rejected:
+- stdlib `http.server`: routing, form parsing, request validation, and escaping would all be canopy's to write and
+  get right, in the one package that faces a browser. It also needs `socketserver`, against the spirit of §20's ban.
+- Starlette alone: FastAPI adds only pydantic validation of requests, which D026 asks for anyway.
+- Flask: WSGI, so a second server package all the same, and no pydantic integration.
+- A JavaScript front end with a build step: a toolchain the repository does not have, for a few pages and forms.
+Consequences: four runtime dependencies and their own (starlette, anyio, h11, markupsafe), installed for every
+operator, including those who run `--no-serve`. AGENTS.md's list of adopted dependencies gains them when M20 adds
+them.
+Revisit: if the dependencies cause install or binary-build friction on a platform the release ships for, or if the
+UI's needs shrink to a page or two that stdlib could serve.

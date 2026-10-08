@@ -1868,8 +1868,8 @@ runs the PR's code).
 
 ## 22. Conversations
 
-Planned, not built: ROADMAP M18 to M20. Rationale in D072 and D073. Until M18 is done, this section is target shape;
-§7, §8, and §20 describe what runs.
+Planned, not built: ROADMAP M18 to M20. Rationale in D072, D073, and D074. Until M18 is done, this section is target
+shape; §7, §8, and §20 describe what runs.
 
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
@@ -1989,12 +1989,16 @@ Served by `canopy loop` from a thread (D073):
   it.
 - Pages: the attention list, running and recent runs, and tickets with their conversations. Actions: reply, take a
   ticket privately, release it.
+- FastAPI on uvicorn, with Jinja2 templates (D074). uvicorn's `Server` runs in the thread, installs no signal
+  handlers there (the loop's own handle Ctrl-C, §6), and stops when the loop sets its `should_exit`. Form bodies and
+  query parameters are validated with pydantic models, as everything else parsed from outside is (D026).
 - Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
-  the operator's session. No inline script built from data. Writes require a per-session token and a same-origin
-  request.
-- It lives in `src/canopy/serve/`, a features-layer package, the one place the network ban (§20) is lifted: M20 adds
-  `http.server` and `socketserver` to the banned modules, and `serve/` alone is exempt. It listens and calls out to
-  nothing, so T2's "no outbound call" stands.
+  the operator's session. Templates are rendered with autoescaping on, and nothing marks journal text safe. No inline
+  script built from data. Writes require a per-session token and a same-origin request.
+- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`,
+  `uvicorn`, or `jinja2`; ruff's banned-api rule bans them everywhere else, and `tests/canopy/test_layers.py` checks it,
+  as for click in `cli/`. The ban on `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code
+  opens no socket itself. It listens and calls out to nothing, so T2's "no outbound call" stands.
 
 ### Trust model changes
 

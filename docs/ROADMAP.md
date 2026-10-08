@@ -531,15 +531,15 @@ Status: not started.
 
 ## M20. Web UI
 
-REQUIREMENTS N1, DESIGN §22, D055, D073. Needs M18; M19 makes it one inbox. Sketch only; the design comes first.
+REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbox. Sketch only; the design comes first.
 
 - `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
-  all user-only. The network ban extended to `http.server` and `socketserver`, with `serve/` alone exempt.
+  all user-only. FastAPI on uvicorn with Jinja2 templates (D074), imported nowhere else.
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, take privately,
   and release, through the same functions as the CLI.
-- Open: how the browser gets the listener secret; whether stdlib `http.server` is enough or the UI earns a dependency
-  (its own `DECISIONS.md` entry); whether M15's session attach belongs in the UI.
+- The release binary (D067) bundles the templates and builds on every platform it ships for.
+- Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
