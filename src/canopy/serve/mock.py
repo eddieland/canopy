@@ -137,6 +137,7 @@ def _fixtures(conn: sqlite3.Connection, repo: str) -> None:
         ("ABC-101", "implementing", "agent/ABC-101-login", 10),
         ("ABC-102", "needs_human", "agent/ABC-102-export", -4),
         ("ABC-103", "in_review", "agent/ABC-103-billing-v2", -80),
+        ("ABC-104", "ci_failing", "agent/ABC-104-retry-queue", 5),
     )
     for key, phase, branch, seen in tickets:
         conn.execute(
@@ -213,6 +214,7 @@ def _fixtures(conn: sqlite3.Connection, repo: str) -> None:
             1.07,
         ),
         (41, "ABC-101", "implement", "agent/ABC-101-login", 0, None, "running", None, 0, 0.42),
+        (43, "ABC-104", "fix-ci", "agent/ABC-104-retry-queue", 5, None, "running", None, 1, 0.12),
     )
     for run_id, key, kind, branch, started, ended, status, result, private, cost in runs:
         conn.execute(
@@ -241,9 +243,14 @@ def _fixtures(conn: sqlite3.Connection, repo: str) -> None:
         (LIVE_RUN, "/home/op/.treehouse/web-1", "lease-1", "canopy:ABC-101", "main"),
     )
     conn.execute(
-        "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) VALUES ('ticket', ?, ?, ?, ?)",
-        ("ABC-102", "started", at(-35), "web"),
+        "INSERT INTO run_slots (run_id, slot_path, lease_id, lease_holder, base_branch) VALUES (?, ?, ?, ?, ?)",
+        (43, "/home/op/.treehouse/web-2", "lease-2", "canopy:ABC-104", "main"),
     )
+    for key, started in (("ABC-102", -35), ("ABC-104", -20)):
+        conn.execute(
+            "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) VALUES ('ticket', ?, ?, ?, ?)",
+            (key, "started", at(started), "web"),
+        )
     conn.execute(
         "INSERT INTO starts (subject_kind, subject_id, status, started_at, stopped_at, channel) "
         "VALUES ('ticket', ?, 'stopped', ?, ?, 'cli')",

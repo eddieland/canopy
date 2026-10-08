@@ -76,6 +76,17 @@ decisions=$(canopy decisions)
 echo "$decisions" | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
 
+# The web UI (DESIGN §22): the listener secret, then the loop serving the UI this install bundles. The wheel bundles it
+# when npm was on PATH at build time; a release always has it.
+secret=$(canopy secret 2>/dev/null)
+[ "${#secret}" -ge 32 ] || fail "canopy secret printed no secret"
+printf '\n[serve]\nport = 18765\n' >>"$config"
+loop=$(canopy loop --dry-run --ticks 1)
+echo "$loop" | grep -q 'web UI .*http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
+if [ "$binary" = 1 ] || command -v npm >/dev/null; then
+    if echo "$loop" | grep -q 'not built'; then fail "the web UI is not built into this install"; fi
+fi
+
 # The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
 state="$HOME/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"

@@ -26,14 +26,11 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `accent`, `accent-foreground` | The one accent: active nav hairline, live indicator, links, primary buttons, focus. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `grid-line` | The background grid only. |
-| `status-running` | A session working. Pulses. |
-| `status-blocked` | A session waiting on a person. |
-| `status-idle` | A session alive with nothing to do. |
-| `status-done` | A session that finished. |
-| `status-failed` | A session that failed. Also shadcn's `destructive`. |
-| `lease-held` | A lease a session holds. |
-| `lease-expiring` | A held lease near its end. Pulses. |
-| `lease-released` | A lease back in the pool. |
+| `status-running` | A run working. Pulses. |
+| `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
+| `status-stopped` | A run the operator stopped. |
+| `status-done` | A run that finished. |
+| `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 
 Rules:
 
@@ -41,8 +38,8 @@ Rules:
   `text-white`), or arbitrary color values. `npm run lint` fails on them (`scripts/check-source.mjs`).
 - **No `dark:` in components.** Both themes are first-class and come from the same tokens. If a component looks wrong
   in one theme, the token is wrong: fix the value in `tokens.css`, for that theme. The lint fails on `dark:`.
-- **Status colors** work three ways, in both themes, on `surface` and `surface-raised`: as a dot (`SessionDot`,
-  `LeaseDot` in `src/components/status.tsx`), as text, and as a 15% tint (`bg-status-failed/15`). Map a state to its
+- **Status colors** work three ways, in both themes, on `surface` and `surface-raised`: as a dot (`RunDot` in
+  `src/components/status.tsx`), as text, and as a tint (`bg-status-blocked/8` behind a question). Map a state to its
   classes through a `Record<State, string>` written out in full, never by building a class name from a string:
   Tailwind only generates classes it can see.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
@@ -73,7 +70,7 @@ Rules:
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms.
-- Only `running` sessions and `expiring` leases pulse.
+- Only `running` runs pulse.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly and pulses are hidden.
 
 ## No layout shift
@@ -89,3 +86,17 @@ Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent m
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key.
+
+## Patterns
+
+- **Lists are rows in a panel**, divided by hairlines: a fixed-width key column (a ticket key, a state), then the
+  text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
+  the local time on hover.
+- **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
+- **A conversation** is a column of messages, each with a 2px left rule: `border` for a worker's report or a
+  tracker comment, `accent` on a faint accent tint for the operator's own words, `status-blocked` on its tint for a
+  question. Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.
+- **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
+  did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
+  once more inline (Stop now, then End run N now), never through a browser dialog.
+- **Signed out**, the whole page is the sign-in card, centered on the grid: no shell, nothing from the journal.

@@ -1,15 +1,22 @@
 import { defineConfig, devices } from '@playwright/test'
 
+import { E2E_SECRET } from './e2e/secret.ts'
+
 // End-to-end tests run against the production build served by FastAPI (canopy.serve), never the Vite dev server:
 // that is what operators get, base href, CSP, and SPA fallback included. `npm run test:e2e` builds first.
 //
-// Two servers, both with mock data:
-//   root      at /, with no stream events, so screenshots are stable
-//   prefixed  at /canopy, with an event every 250 ms, for the base path and live updates
+// Two servers, both over a journal seeded from fixtures (canopy/serve/mock.py):
+//   root      at /, behind the listener secret E2E_SECRET, with no changes to the journal, so screenshots are stable
+//   prefixed  at /canopy, signing nobody in, changing the journal every 250 ms, for the base path, live updates, and
+//             writes (which would change root's screenshots)
 const ROOT_PORT = 8766
 const PREFIXED_PORT = 8767
 
 const serve = (args: string): string => `uv run --quiet python -m canopy.serve --mock --ui-dir ui/dist ${args}`
+// The secret file must be the operator's alone (canopy/serve/secret.py), which git cannot check out: write one.
+const withSecret = (args: string): string =>
+    `sh -c 'umask 077 && d=$(mktemp -d) && printf %s ${E2E_SECRET} > "$d/secret" && ` +
+    `exec ${serve(`--secret-file "$d/secret" ${args}`)}'`
 
 export default defineConfig({
     testDir: './e2e',
@@ -44,15 +51,15 @@ export default defineConfig({
     ],
     webServer: [
         {
-            command: serve(`--port ${ROOT_PORT} --mock-event-seconds 0`),
+            command: withSecret(`--port ${ROOT_PORT} --mock-event-seconds 0`),
             cwd: '..',
-            url: `http://127.0.0.1:${ROOT_PORT}/api/meta`,
+            url: `http://127.0.0.1:${ROOT_PORT}/api/session`,
             reuseExistingServer: !process.env.CI,
         },
         {
             command: serve(`--port ${PREFIXED_PORT} --base-path /canopy --mock-event-seconds 0.25`),
             cwd: '..',
-            url: `http://127.0.0.1:${PREFIXED_PORT}/canopy/api/meta`,
+            url: `http://127.0.0.1:${PREFIXED_PORT}/canopy/api/session`,
             reuseExistingServer: !process.env.CI,
         },
     ],
