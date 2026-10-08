@@ -1,6 +1,7 @@
 # ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
-# Written by `canopy init` if missing. Overrides the repository's canopy.toml key by key.
-# Keys marked user-only in DESIGN.md §12 may be set only here.
+# Overrides the repository's canopy.toml key by key. Keys marked user-only in DESIGN.md §12 may be set only here.
+# Every key, most at its default. `canopy init` writes only tracker.labels and trust.authorized_repliers: set the rest
+# only to change them (D087).
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a
