@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from canopy.core import definitions
-from canopy.core.config import REPO_FILE_NAME, Runtime
+from canopy.core.config import REPO_FILE_NAME
 from canopy.infra import procs
 
 # A provider name becomes a directory name; keep it to one plain path component.
@@ -100,10 +100,10 @@ def default_label() -> str:
 
 def user_config_text(label: str) -> str:
     """Return the text of a new user config file with queue label `label`."""
-    runtime = Runtime()  # the default templates, written as TOML literal strings: none has a single quote
     return f"""\
 # canopy user config: personal, never committed. Overrides the repository's canopy.toml key by key.
-# Keys marked user-only in DESIGN.md §12 may be set only here. Every key, with comments:
+# Only what is yours to decide is here; every other key keeps its default, and gets new ones as canopy changes. Keys
+# marked user-only in DESIGN.md §12 may be set only here. Every key, with its default:
 # https://github.com/eddieland/canopy/blob/main/examples/config.toml
 
 [tracker]
@@ -111,28 +111,10 @@ def user_config_text(label: str) -> str:
 # both loops would work the same tickets.
 labels = [{json.dumps(label)}]
 
-[capacity]
-max_workers = 2
-
-[runtime]
-# {{definitions_dir}} is the directory canopy's agent definitions and skills are in (D040). Keep it.
-overseer_cmd = '{runtime.overseer_cmd}'
-worker_cmd   = '{runtime.worker_cmd}'
-overseer_timeout_minutes = 15
-worker_timeout_minutes = 45
-
-[loop]
-# `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
-interval_minutes = 15
-
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.
-# Empty means nobody can.
+# Empty means nobody can, you included: add your own.
 authorized_repliers = []
-# Every comment a worker posts starts with the prefix and ends with the suffix, each if set; set at least one.
-# A comment that carries every mark set is never feedback or an instruction.
-comment_prefix = "CANOPY:"
-comment_suffix = ""
 """
 
 
@@ -145,16 +127,11 @@ def repo_config_text(provider: str) -> str:
 
 [tracker]
 provider = {json.dumps(provider)}
-# Added by a worker that needs an answer, removed when it resumes. Any label your tracker accepts; it must
-# already exist, since canopy does not create labels.
-needs_human_label = "needs-human"
 # How to find candidate tickets: the tracker's own search syntax, or plain language. Edit this.
 # Finding is not authorizing: each operator's own labels are checked on every ticket.
 query = {json.dumps(query)}
-
-[trust]
-branch_prefix = "agent/"
-pr_label = "agent"
+# A worker that needs an answer adds the label `needs-human`, and removes it when it resumes. Create it in your tracker,
+# since canopy does not create labels, or set needs_human_label to one you have.
 """
 
 

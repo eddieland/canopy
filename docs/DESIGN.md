@@ -846,10 +846,13 @@ Rules:
 - `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
-- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the label.
-  It writes `canopy.toml` only if the repository has none. It never overwrites either file and installs nothing else
-  (§13). If the config does not load (for example, templates lacking `{definitions_dir}`), it prints the error. It
-  warns about copies of canopy's agent definitions in the repository's OpenCode config, which stop runs (§13).
+- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
+  `trust.authorized_repliers` to fill in, and prints the label. It writes `canopy.toml` only if the repository has
+  none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose default serves: a default
+  written into a file is pinned there, and a later canopy's never reaches it (D087). It never overwrites either file
+  and installs nothing else (§13). If the config does not load (for example, templates lacking `{definitions_dir}`),
+  it prints the error. It warns about copies of canopy's agent definitions in the repository's OpenCode config, which
+  stop runs (§13).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
