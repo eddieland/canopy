@@ -83,7 +83,8 @@ Re-read the tracker and GitHub before every decision that matters.
    than `now` and fix-ci for that unit must wait: record `wait`. If the ticket's `last_run` in the state block ended
    `crashed`, `unpushed`, `unknown`, `timeout`, or `failed`, the harness has already put it on the attention list.
    Record `wait` and do not dispatch it, unless an authorized replier has commented on the ticket since that run's
-   `ended_at`, in a comment that is not a worker's (see "Workers' comments"); then decide from its phase as usual.
+   `ended_at`, in a comment that is not a worker's (see "Workers' comments"), or an `operator` message is dated after
+   it (see "Reviewers and the operator's go-ahead"); then decide from its phase as usual.
 3. Decide exactly one action per ticket. Record every decision with
    `canopy decide`, including waits and skips, with a one-sentence rationale.
    Dispatches and attention items also count as decisions; the CLI records
@@ -219,6 +220,7 @@ Examples:
 - `resume` for a go-ahead: `--context 'Operator message 42 on review comments 1501 and 1502 by codebot[bot] on PR 7'`
 - `resume` for a pushed branch: `--context 'The branch is pushed but has no PR. Open the PR.'`
 - `implement` after a failed run: `--context 'Try again: authorized reply in ticket comment 10240'`
+- `implement` after a failed run, from the operator: `--context 'Try again: operator message 42'`
 
 ## Classifying review comments
 
@@ -270,8 +272,10 @@ message:
   with `canopy ticket set`, and decide the ticket from what is left.
 - When it answers a question or asks for other work, it is `human_replied` as an authorized reply is: dispatch `resume`
   with `--cursor message=<message id>` and context naming the message.
-- When the ticket has nothing a `resume` can continue (no branch), record `wait`, say why, and advance the `message`
-  cursor with `canopy ticket set`.
+- When the ticket has nothing a `resume` can continue (no branch), the message rides its `implement`: dispatch it as
+  the ticket's phase says, with `--cursor message=<message id>` and context naming the message. The worker reads the
+  message from its prompt. Until that dispatch can happen (a blocker, capacity, a limit), record what the phase says
+  and leave the `message` cursor, so the message is still new next tick.
 
 ## Authorization
 

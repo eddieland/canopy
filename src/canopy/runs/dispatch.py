@@ -520,6 +520,8 @@ def _spawn(
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
         values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        if not split and conversation.has_operator_messages(ctx.conn, key):
+            required = (*required, *prompts.REQUIRED_OPERATOR)
     try:
         prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
     except (OSError, prompts.PromptError) as e:

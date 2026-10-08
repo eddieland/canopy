@@ -33,6 +33,9 @@ WORKER_PRIVATE = {
     "resume": "worker-resume-private.md",
 }
 REQUIRED_PRIVATE = ("CONVERSATION",)
+# A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
+# still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping it.
+REQUIRED_OPERATOR = ("OPERATOR_MESSAGES",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
