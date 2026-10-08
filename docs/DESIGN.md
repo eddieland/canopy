@@ -1902,7 +1902,7 @@ Who writes:
   that closes the run's row, for every ticket. The harness already has both from the result line (§8), so no agent
   gains a write.
 - Operator input goes through one function in `core/conversation.py` that every channel calls, with the guards in one
-  place: the key is valid (§17), the ticket was taken, the body is within its bound.
+  place: the key is valid (§17), the ticket was started, the body is within its bound.
 - Mirrored comments are recorded by the overseer (M19, below).
 
 Agents never write a message directly. No worker command records one, and the overseer records only mirrored tracker
@@ -1915,7 +1915,7 @@ The journal is what the operator reads. Authority comes from where a message ori
 - **Public ticket.** Authorization and replies are as §7 and §17 say: the overseer's live read of the tracker. A
   mirrored comment is the overseer's claim, like `--label`; it never makes a ticket `human_replied`, authorizes a
   split, or counts as "try again" after a failed run.
-- **Private ticket.** The journal is the source. Its take record and the operator's messages are canopy's own facts,
+- **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
   written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
   (D003). Tracker comments on a private ticket are data, whoever wrote them.
 
@@ -1929,20 +1929,28 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 
 | Command | Does |
 |---|---|
-| `canopy take REF` | work it privately, in place of a queue label |
-| `canopy drop REF` | stop: no new dispatches; a running run finishes, as when a label is removed today |
+| `canopy start REF` | work it privately, in place of a queue label |
+| `canopy stop REF [--now]` | no new dispatches; a running run finishes unless `--now` ends it |
 | `canopy reply REF [TEXT]` | answer it, with TEXT or stdin |
 | `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
 
-`canopy status` lists what was taken, with each subject's phase, beside the attention list and runs; there is no
+`canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
 separate `list`.
 
-- The take record is the authorization. Only the operator's commands write it, short of T1's residual (below).
+- `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
+  conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
+  later `--public` could start a ticket whose conversation stays on the tracker; none is planned.
+- `stop` without `--now` is graceful: it says which run is still going and that it will finish. With `--now` it also
+  ends that run: its process group is killed and its slots returned and desk removed as reconcile does for a
+  crashed run (§6), and the run is marked `stopped`, a status that raises no attention item and counts toward attempt
+  limits like any ended run. `stop` refuses a ticket that was not started: a public ticket stops when its queue label
+  is removed.
+- The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
 - The state block marks each private ticket and carries its operator messages newer than its comment cursor.
-- `canopy dispatch` needs no `--label` for a taken ticket. It checks the take record in code, a guard where a public
+- `canopy dispatch` needs no `--label` for a started ticket. It checks the start record in code, a guard where a public
   ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
   in the tracker.
-- The worker prompt has a private variant: no label check, since the harness checked the take record; never comment
+- The worker prompt has a private variant: no label check, since the harness checked the start record; never comment
   on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
   `canopy-worker-private`, `canopy-worker` with the tracker's write tools denied by name, as the splitter's and the
   reviewer's are (§13).
@@ -1955,9 +1963,9 @@ separate `list`.
   `run.ended` (§20), which gains the question's message id so a channel can say what a reply answers.
 - After `crashed`, `worker_failed`, and the other run reasons (§14), "try again" on a private ticket is an operator
   message after the run ended.
-- `canopy reply` refuses a subject that was not taken: a public ticket's replies belong on the ticket. `show`
+- `canopy reply` refuses a subject that was not started: a public ticket's replies belong on the ticket. `show`
   drops control characters from every message.
-- `take`, `drop`, and `reply` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`, and `_review`
+- `start`, `stop`, and `reply` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`, and `_review`
   set `CANOPY_RUN_ID` for their agents.
 
 ### References
@@ -1972,7 +1980,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | `chore:NAME` | a chore (§19) | `show`, until a chore has a conversation |
 | `run:ID` | a run | `show` |
 
-A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and take records are keyed
+A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
 by subject (its kind and id), not by ticket key, so a new kind adds a row here, not a table. Every form is parsed and
 validated in code, as ticket keys are (§17).
 
@@ -1997,8 +2005,8 @@ limits, and cooldowns hold as for any tick.
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy take`, `drop`, `reply` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, take, drop | pages | the listener secret (TRUST_MODEL T8) |
+| cli | `canopy start`, `stop`, `reply` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| web (M20) | reply, start, stop | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -2015,7 +2023,7 @@ Served by `canopy loop` from a thread (D073):
   A server failure is logged and the server restarted with a backoff; it never ends the loop. Stopping the loop stops
   it.
 - Pages: the attention list, running and recent runs, and tickets with their conversations. Actions: the CLI's
-  verbs, reply, take, and drop.
+  verbs, reply, start, and stop.
 - FastAPI on uvicorn, with Jinja2 templates (D074). uvicorn's `Server` runs in the thread, installs no signal
   handlers there (the loop's own handle Ctrl-C, §6), and stops when the loop sets its `should_exit`. Form bodies and
   query parameters are validated with pydantic models, as everything else parsed from outside is (D026).
@@ -2031,11 +2039,11 @@ Served by `canopy loop` from a thread (D073):
 
 Proposed, not in TRUST_MODEL. Each needs the operator's approval note in the PR of the milestone that builds it.
 
-- T1 (M18): a private ticket is authorized by its take record and its replies by operator messages, both written only
-  through `core/conversation.py` by a channel that authenticated the operator (`canopy take` and `reply`, later
-  the web UI); `canopy dispatch` checks the take record in code. Tracker comments on a private ticket are data,
+- T1 (M18): a private ticket is authorized by its start record and its replies by operator messages, both written only
+  through `core/conversation.py` by a channel that authenticated the operator (`canopy start` and `reply`, later
+  the web UI); `canopy dispatch` checks the start record in code. Tracker comments on a private ticket are data,
   whoever wrote them. Residual: until workers are sandboxed (HOST_ISOLATION), a worker's bash runs as the operator and
-  can run `canopy reply` or `canopy take`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID`
+  can run `canopy reply` or `canopy start`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID`
   is set, which stops a worker that follows injected text naively, not one that unsets them. This is the same class
   as a worker writing the journal file directly, which sandboxing also removes.
 - T1 (M19): mirrored comments are the overseer's claims and authorize nothing.

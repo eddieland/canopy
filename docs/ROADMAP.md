@@ -415,8 +415,8 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
   repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
   both (D051's pattern).
 - `canopy status` and the attention list name PR units by the PR, not a ticket key.
-- PR references (`repo#N` or the PR's URL) in `canopy take`, `drop`, `reply`, and `show` (DESIGN §22, D075), so the
-  operator can also take one of their own PRs privately instead of labeling it. That is a T1 change beside D056's,
+- PR references (`repo#N` or the PR's URL) in `canopy start`, `stop`, `reply`, and `show` (DESIGN §22, D075), so
+  the operator can also start one of their own PRs privately instead of labeling it. That is a T1 change beside D056's,
   needing the operator's approval as M18's does.
 - TRUST_MODEL T1 and §6 already allow it (D056).
 
@@ -499,10 +499,11 @@ must be at least the largest declared size; canopy cannot set it.
 REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design comes first.
 
 - A `messages` table, in a new migration. `_run` records each run's report and question there, for every ticket.
-- `canopy take`, `drop`, `reply`, and `show` for ticket references, and taken subjects in `canopy status`, writing
-  through `core/conversation.py`, with `take`, `drop`, and `reply` refusing inside canopy's runs (`CANOPY_TICK_ID`,
+- `canopy start`, `stop` (with `--now`, and the `stopped` run status), `reply`, and `show` for ticket references, and
+  started subjects in `canopy status`, writing through `core/conversation.py`, with `start`, `stop`, and `reply`
+  refusing inside canopy's runs (`CANOPY_TICK_ID`,
   and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
-- `canopy dispatch` needs no `--label` for a taken ticket, checking the take record in code, and refuses a private
+- `canopy dispatch` needs no `--label` for a started ticket, checking the start record in code, and refuses a private
   `split`.
 - The private worker prompt variant and `canopy-worker-private`, with the tracker's write tools denied by name.
 - The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
@@ -511,9 +512,9 @@ REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design com
 - The loop's wait ends early on an operator message (D073).
 - TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note.
 
-Accept: a fakes-based test: a taken ticket with no label is dispatched to the private worker definition, the fake
+Accept: a fakes-based test: a started ticket with no label is dispatched to the private worker definition, the fake
 worker ends `blocked`, the question is on the attention list and in `canopy show`, `canopy reply` ends
-the loop's wait, and the `resume` prompt carries the reply. Live, the operator takes a real ticket privately, answers a
+the loop's wait, and the `resume` prompt carries the reply. Live, the operator starts a real ticket privately, answers a
 question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
 
 Status: not started.
@@ -540,8 +541,8 @@ REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbo
 - `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
   all user-only. FastAPI on uvicorn with Jinja2 templates (D074), imported nowhere else.
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
-- Pages for the attention list, running and recent runs, and tickets with their conversations; reply, take, and
-  drop, through the same functions as the CLI.
+- Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
+  stop, through the same functions as the CLI.
 - The release binary (D067) bundles the templates and builds on every platform it ships for.
 - Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
 

@@ -1225,7 +1225,7 @@ Decision (DESIGN §22):
 - A `messages` table records every ticket's conversation. The harness writes workers' reports and questions from their
   result lines; the operator's input goes through one function every channel calls; the overseer mirrors tracker
   comments (M19).
-- A ticket is private when the operator takes it in canopy (`canopy take`) instead of labeling it. Its take
+- A ticket is private when the operator starts it in canopy (`canopy start`) instead of labeling it. Its start
   record and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never
   write to the tracker: a private prompt variant, and the tracker's write tools denied by name.
 - Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
@@ -1307,16 +1307,20 @@ Context: the operator asked for intuitive verbs. Grouping them under `canopy tic
 canopy already works on and reports about more than tickets: PRs (reviews, and ROADMAP M14's PR-scoped work), chores,
 repositories, and runs, which the attention list names today (`core/items.py`).
 Decision (DESIGN §22):
-- `canopy take`, `drop`, `reply`, and `show` are top-level and take one reference, `REF`, whose shape names its kind:
-  a ticket key, `repo#N` or a PR URL, `chore:NAME`, `run:ID`. `canopy status` lists what was taken; there is no
-  `list`. The overseer's `canopy mirror REF` follows the same rule.
+- `canopy start`, `stop`, `reply`, and `show` are top-level and take one reference, `REF`, whose shape names its
+  kind: a ticket key, `repo#N` or a PR URL, `chore:NAME`, `run:ID`. `canopy status` lists what was started; there is
+  no `list`. The overseer's `canopy mirror REF` follows the same rule.
+- `start` and `stop` are the pair people guess without reading. `stop` lets a running run finish and says so, as
+  `docker stop` waits for a container; `stop --now` ends the run as well.
 - A kind that does not support a verb refuses it by name. A new kind adds a reference form and the verbs it supports,
   not commands.
-- Messages and take records are keyed by subject, not ticket key, so M14's PRs and later kinds need no new table.
+- Messages and start records are keyed by subject, not ticket key, so M14's PRs and later kinds need no new table.
 Rejected:
-- Verbs under a noun per kind (`canopy ticket take`, `canopy pr take`): the same verb learned once per kind, and a new
+- Verbs under a noun per kind (`canopy ticket start`, `canopy pr start`): the same verb learned once per kind, and a new
   kind is a new command group.
-- Verbs under one generic noun (`canopy work take`): a layer that says nothing the reference does not.
+- Verbs under one generic noun (`canopy work start`): a layer that says nothing the reference does not.
+- `take` and `drop`, the first names: `take` could mean claim, fetch, or assign, and `drop` could mean delete; neither
+  says that work starts or stops.
 - A `--kind` flag: the reference's shape already says it.
 Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, `ticket set`); renaming them would
 change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
