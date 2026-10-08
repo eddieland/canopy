@@ -102,6 +102,13 @@ inline script and checks it against the store's key.
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
+- **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
+  (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
+  `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer
+  (`awaiting_reply`, `untrusted_review`), then every other reason, then chores' findings; within each, the item open
+  longest first. A reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The
+  selection is `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation and
+  the reply form; an item about no ticket shows its detail and nothing to answer.
 - **A conversation** is a column of messages, each with a 2px left rule: `border` for a worker's report or a
   tracker comment, `accent` on a faint accent tint for the operator's own words, `status-blocked` on its tint for a
   question. Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.
