@@ -114,9 +114,10 @@ Rejected: `--import-mode=importlib`, which changes how `conftest.py` is imported
 
 ## D020. The overseer reaches the journal through the CLI, keyed by `CANOPY_TICK_ID`
 
-The tick sets `CANOPY_TICK_ID`, and the overseer's commands refuse without a running tick, so the journal holds only
-what the loop did. Attention items are decisions with action `attention:<reason>`; the current list is the latest `ok`
-tick's, so there is no attention table. Dry-run behavior: D036.
+The tick sets `CANOPY_TICK_ID`, and `dispatch`, `decide`, and `attention` refuse without a running tick, so the journal
+holds only what the loop did; `ticket set` uses it only to detect a dry run. Attention items are decisions with action
+`attention:<reason>`; the current list is the latest `ok` tick's, so there is no attention table. Dry-run behavior:
+D036.
 
 ## D021. OpenCode permissions under `opencode run` (the M1 canary)
 
@@ -189,8 +190,9 @@ Every worker prompt names the authorized repliers, and the worker checks authors
 
 ## D032. Attention notifications: an item is its ticket and reason, and is notified once while it stays open
 
-An item is identified by ticket and reason, so the overseer's rewording does not re-notify. A notification goes out when
-items are new or resolved; only a zero exit within 60 seconds counts as sent, so a failed command is retried.
+An item is identified by ticket, reason, and repository, so the overseer's rewording does not re-notify. Each sink
+tracks what it was sent (D035). A notification goes out when items are new or resolved; only a zero exit within 60
+seconds counts as sent, so a failed command is retried.
 Revisit: if operators want reminders for long-open items, or routing finer than groups.
 
 ## D033. Workspaces: one directory, a repository map, pools inside it
@@ -212,9 +214,10 @@ dispatches).
 
 ## D035. Notifications: sinks are commands fed by the journal; Slack ships as one sink
 
-A sink is a command that gets one JSON message on stdin at the end of a tick. Events and digests are derived from the
-journal with no model; an outbox with a cursor per sink lets a failing sink retry alone. The harness makes no network
-call and holds no secret; the Slack sink is a separate process with its own webhook file.
+A sink is a command that gets one message on stdin at the end of a tick, JSON by default; `notify.cmd` and text sinks
+get text. Events and digests are derived from the journal with no model; an outbox with a cursor per sink lets a failing
+sink retry alone. The harness makes no network call and holds no secret; the Slack sink is a separate process with its
+own webhook file.
 Rejected: HTTP or an SDK in the harness (T2); the overseer posting through Slack MCP (an LLM in every delivery);
 interactive Slack features (each needs a listener).
 
@@ -329,7 +332,8 @@ or world-accessible. It checks permissions, not provenance.
 ## D054. Stacking stays, and the operator controls it through the overseer's policy
 
 `policy.stacking` is `"auto"` (default) or `"never"`, followed by the overseer prompt with no harness guard, at the
-operator's choice (REQUIREMENTS C1). Under `"never"`, a blocker has landed only when closed with its PR merged (D057).
+operator's choice (REQUIREMENTS C1). Under `"never"`, a blocker has landed only when closed and its PR, if it had one,
+merged (D057).
 Revisit: if the overseer stacks under `"never"`; then add the guard.
 
 ## D055. Listeners are allowed on loopback or a private network, behind the operator's secret
@@ -346,7 +350,8 @@ Rejected: any labeled PR (a label would put commits on a coworker's branch).
 
 ## D057. Under `policy.stacking = "never"`, a blocker has landed only when its PR merged
 
-Amends D054's definition: a blocker whose PR closed unmerged never landed, and the dependent ticket gets `needs_author`.
+Amends D054's definition: a blocker has landed when it is closed and its PR, if it had one, merged. One whose PR closed
+unmerged never landed, and the dependent ticket gets `needs_author`.
 
 ## D058. A ticket's work is units, one per repository; a unit may start after another unit's PR merged
 
@@ -361,8 +366,9 @@ joint run gets a desk of worktrees. Every run's slots live in `run_slots`, so co
 
 ## D060. Pending migrations wait for runs an earlier canopy started
 
-A detached `_run` from before an upgrade writes the old schema. Migrations apply only when no running run has a live
-`_run`; until then every command fails naming the runs. So a migration may drop what an earlier canopy wrote.
+A detached run from before an upgrade writes the old schema. Migrations apply only when no running run, chore run, or
+review run has a live process; until then every command fails naming them. So a migration may drop what an earlier
+canopy wrote.
 
 ## D061. A ticket over several repositories stays one ticket; the loop splits it only when an authorized replier asks
 
@@ -391,8 +397,8 @@ are the reasons the Slack sink is separate.
 ## D065. The reviewer reads its checkout through a link in a directory of its own; reviews name their repository
 
 The reviewer runs in `<state_dir>/reviews/<id>/`, holding one link to the slot, with `external_directory: deny`, so the
-PR supplies no runtime config and the reviewer reads nothing else. A review leases from its `--repo` pool and counts
-toward `max_workers`.
+PR supplies no runtime config and the reviewer reads no other files; it still reads the PR and tickets through MCP. A
+review leases from its `--repo` pool and counts toward `max_workers`.
 
 ## D066. Pool sizes are declared in the user file; `workspace sync` converges on them and on the map
 
@@ -403,20 +409,21 @@ clone only when nothing in it would be lost.
 ## D067. Releases ship one executable per platform, built by CI and copied to the machine that runs canopy
 
 A release is a pex in venv mode inside a scie per platform, with an interpreter and `uv.lock`'s pinned dependencies, so
-the machine that runs canopy needs no credential, Python, uv, or network. Built and attached by the tag workflow.
+the machine that runs canopy needs no credential, Python, uv, or network to install it. Built and attached by the tag
+workflow.
 Rejected: PyInstaller, Nuitka, shiv, zipapp (`sys.executable -m canopy` breaks); PyApp, uvbox (install from the
 network).
 
 ## D068. The migrations are squashed into one for v0.1, and older journals are not upgraded
 
-`0001_init.sql` creates the v0.1 schema directly. A journal from the old series fails to open, and the operator moves
-it aside. A one-time exception; never edit a shipped migration.
+`0001_init.sql` creates the v0.1 schema directly. A journal from the old series is not upgraded; the operator moves it
+aside. A one-time exception; never edit a shipped migration.
 
 ## D069. Workers mark their comments with a configurable prefix and suffix that only take authority away
 
 Everything posts as the operator, so a worker's comment could read back as an authorized reply or review feedback.
-Workers mark every comment with `trust.comment_prefix` and `comment_suffix` (user-only); a comment carrying every mark
-is a worker's and is never authority. Forging the marks only silences the forger.
+Workers mark every comment with `trust.comment_prefix` and `comment_suffix` (user-only); a comment carrying every mark,
+outside any quote, is a worker's and is never authority. Forging the marks only silences the forger.
 Rejected: an HTML comment marker (trackers such as Jira drop or escape it).
 
 ## D070. A merge conflict is a unit's phase, `conflicted`, handled by `resume`
@@ -427,9 +434,9 @@ Rejected: a separate dispatch kind (`resume` already merges the base); rebasing 
 
 ## D071. A run's session and cost are read from OpenCode's JSON events on stdout
 
-The default templates use `--format json`; `core/agent_output.py` takes the result text, session id, and summed
-`step_finish` cost from the events, and reads plain stdout otherwise. One invalid cost drops the whole cost rather than
-understating it.
+The default worker and split templates use `--format json`; `core/agent_output.py` takes the result text, session id,
+and summed `step_finish` cost from the events, and reads plain stdout otherwise. One invalid cost drops the whole cost
+rather than understating it.
 Revisit: when OpenCode changes the event shape, or a second runtime reports these differently.
 
 ## D072. The journal holds every ticket's conversation; authority stays with its source
