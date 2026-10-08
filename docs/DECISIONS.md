@@ -1214,3 +1214,115 @@ Rejected:
 - Parsing the default format's text: it carries neither, and it is for people.
 Revisit: when OpenCode changes the event shape (the canary's `--format json` runs would show it), or when a second
 runtime reports sessions or cost differently (D009).
+
+## D072. The journal holds every ticket's conversation; authority stays with its source
+
+Context: the operator delivers tickets their clients file and does not want the agent's reports, its questions, or
+their own answers on the client's ticket (REQUIREMENTS R11). The ticket was the only channel for a worker's questions
+and the operator's replies (DESIGN §7), and the planned web UI (M20) and Slack replies would each have needed a
+conversation of their own. The operator wants one record of every ticket's conversation (R12).
+Decision (DESIGN §22):
+- A `messages` table records every ticket's conversation. The harness writes workers' reports and questions from their
+  result lines; the operator's input goes through one function every channel calls; the overseer mirrors tracker
+  comments (M19).
+- A ticket is private when the operator starts it in canopy (`canopy start`) instead of labeling it. Its start
+  record and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never
+  write to the tracker: a private prompt variant, and the tracker's write tools denied by name.
+- Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
+  the overseer's claim and authorizes nothing. On a private ticket only operator messages authorize; tracker comments
+  are data.
+- Channels authenticate the operator. The overseer and workers never see which channel a message came from, so a new
+  channel changes no prompt.
+Rejected:
+- A shadow ticket in a tracker only the operator sees: works today with no code, but the operator copies each ticket
+  by hand and misses the client's later edits.
+- A shadow ticket linked to the client's: still a second ticket per ticket, and a split in the tracker contract (§17)
+  between where a task comes from and where its conversation happens, for what is one more channel.
+- Slack as the private channel first: adds a service, a bot token, and a T1 change for a conversation the operator can
+  have locally, and a Slack workspace may be shared with the client.
+- The journal as the source for public tickets too: the harness cannot read the tracker (D003), so the journal's copy
+  of a comment is an agent's claim, and authorizing from it would let a steered overseer forge a reply.
+- Agents writing messages directly: a steered worker could write the operator's reply to its own question.
+Consequences: the journal holds tracker comment bodies and client text, in the operator-only state directory. A private
+ticket's replies are typed into canopy, not the tracker. Until workers are sandboxed (HOST_ISOLATION), a worker's bash
+can run `canopy reply`; the command refuses inside canopy's runs, which stops a worker that follows injected
+text, not one that unsets the markers.
+Revisit: if mirroring costs a material share of each tick (M13's spend records will show it), or when sandboxing lands
+and the residual goes.
+
+## D073. The web UI is served by `canopy loop`, from a thread, behind an off switch
+
+Context: the operator expects a local web UI to become their main surface, hosted by canopy itself (REQUIREMENTS N1,
+C5). D042 kept the loop listening on nothing until a milestone gives it a listener; D055 allows one on loopback or a
+private network, behind the operator's secret. ruff's banned-api rule bans `socket`, `http.client`, and
+`urllib.request` everywhere in `src/canopy`, no exceptions (DESIGN §20).
+Decision (DESIGN §22; built in ROADMAP M20):
+- `canopy loop` serves the UI from a thread, on unless `--no-serve` or `serve.enabled = false`. The loop's process
+  mostly waits: a tick waits on the overseer's process, and workers run detached.
+- The server opens its own journal connection, never takes the tick lock, and writes only through the functions the
+  CLI uses. A server failure is logged and the server restarted; it never ends the loop.
+- It lives in `src/canopy/serve/`, the only package that imports the web stack (D074). The ban on `socket`,
+  `http.client`, and `urllib.request` stays absolute: the stack opens the listening socket, not canopy's code. It
+  listens and calls out to nothing.
+- The loop wakes early on an operator message by checking the journal during its wait, so a reply from another
+  process (`canopy reply`) and one through the server wake it the same way.
+Rejected:
+- A separate `canopy serve` process: workable, since the journal is shared in WAL mode, but two commands to keep
+  running for one operator. The seam (a context opener and the journal) keeps it a small change later.
+- A uv workspace member, like the Slack sink: it may not import canopy, so it could not read the journal or share the
+  write path.
+- Waking the loop with an in-process event: covers the server only, not `canopy reply` from a shell.
+Consequences: stopping the loop stops the UI. AGENTS.md's "do not build a web UI" is lifted by M20; DESIGN §3's
+listener line and principle 6's daily surface change when it is built.
+Revisit: when the operator wants the UI while the loop is stopped, or a server fault is seen to disturb ticks.
+
+## D074. FastAPI on uvicorn, with Jinja2 templates, for the web UI
+
+Context: the web UI (D073, ROADMAP M20) needs routing, form parsing, escaping, and a server that runs in a thread and
+stops on request. Load is one operator's browser, so performance does not decide. The operator offered FastAPI.
+Decision (DESIGN §22; added to `pyproject.toml` in M20, not before):
+- `fastapi` for routing and request validation. It validates with pydantic, which canopy already uses for everything
+  parsed from outside (D026), so a form body is a model like a worker's result line.
+- `uvicorn` without its `standard` extras, run as `uvicorn.Server` in the loop's thread. Without the extras it is pure
+  Python (h11), which keeps D067's per-platform binary to the wheels it already builds.
+- `jinja2` for pages, with autoescaping on, so escaping journal text is the default rather than a call each template
+  must remember. `python-multipart` for form posts.
+- `httpx`, dev only, for FastAPI's test client.
+- Only `src/canopy/serve/` imports any of them; ruff's banned-api rule bans them elsewhere.
+Rejected:
+- stdlib `http.server`: routing, form parsing, request validation, and escaping would all be canopy's to write and
+  get right, in the one package that faces a browser. It also needs `socketserver`, against the spirit of §20's ban.
+- Starlette alone: FastAPI adds only pydantic validation of requests, which D026 asks for anyway.
+- Flask: WSGI, so a second server package all the same, and no pydantic integration.
+- A JavaScript front end with a build step: a toolchain the repository does not have, for a few pages and forms.
+Consequences: four runtime dependencies and their own (starlette, anyio, h11, markupsafe), installed for every
+operator, including those who run `--no-serve`. AGENTS.md's list of adopted dependencies gains them when M20 adds
+them.
+Revisit: if the dependencies cause install or binary-build friction on a platform the release ships for, or if the
+UI's needs shrink to a page or two that stdlib could serve.
+
+## D075. The operator's commands are top-level verbs that take a reference to any subject
+
+Context: the operator asked for intuitive verbs. Grouping them under `canopy ticket` tied every one to tickets, while
+canopy already works on and reports about more than tickets: PRs (reviews, and ROADMAP M14's PR-scoped work), chores,
+repositories, and runs, which the attention list names today (`core/items.py`).
+Decision (DESIGN §22):
+- `canopy start`, `stop`, `reply`, and `show` are top-level and take one reference, `REF`, whose shape names its
+  kind: a ticket key, `repo#N` or a PR URL, `chore:NAME`, `run:ID`. `canopy status` lists what was started; there is
+  no `list`. The overseer's `canopy mirror REF` follows the same rule.
+- `start` and `stop` are the pair people guess without reading. `stop` lets a running run finish and says so, as
+  `docker stop` waits for a container; `stop --now` ends the run as well.
+- A kind that does not support a verb refuses it by name. A new kind adds a reference form and the verbs it supports,
+  not commands.
+- Messages and start records are keyed by subject, not ticket key, so M14's PRs and later kinds need no new table.
+Rejected:
+- Verbs under a noun per kind (`canopy ticket start`, `canopy pr start`): the same verb learned once per kind, and a new
+  kind is a new command group.
+- Verbs under one generic noun (`canopy work start`): a layer that says nothing the reference does not.
+- `take` and `drop`, the first names: `take` could mean claim, fetch, or assign, and `drop` could mean delete; neither
+  says that work starts or stops.
+- A `--kind` flag: the reference's shape already says it.
+Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, `ticket set`); renaming them would
+change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
+stay.
+Revisit: if two kinds' reference forms ever collide, or a kind needs a verb with a meaning the others do not share.
