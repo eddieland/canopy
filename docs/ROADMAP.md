@@ -514,7 +514,8 @@ REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design com
   A prompt change, which needs the operator's approval.
 - `awaiting_reply` on the attention list, raised by the harness; `run.ended` carries the question's message id.
 - The loop's wait ends early on an operator message (D073).
-- TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note.
+- TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note. Sandboxing
+  is not a prerequisite: the operator accepted T1's forged-reply residual (D076).
 
 Accept: a fakes-based test: a started ticket with no label is dispatched to the private worker definition, the fake
 worker ends `blocked`, the question is on the attention list and in `canopy show`, `canopy reply` ends

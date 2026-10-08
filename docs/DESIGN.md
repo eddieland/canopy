@@ -2035,7 +2035,7 @@ Served by `canopy loop` from a thread (D073):
 - On unless `--no-serve` or `serve.enabled = false`. `serve.bind` (loopback by default, or a private address) and
   `serve.port`. Every `serve.*` key is user-only (T7).
 - It requires the operator's listener secret (T8). Without the secret file, the loop says how to make one and serves
-  nothing.
+  nothing. It serves plain HTTP, also on a private address: T8's "relies on the network" residual stands (D076).
 - It opens its own journal connection, never takes the tick lock, and writes only through the functions the CLI uses.
   A server failure is logged and the server restarted with a backoff; it never ends the loop. Stopping the loop stops
   it.
@@ -2062,7 +2062,7 @@ Proposed, not in TRUST_MODEL. Each needs the operator's approval note in the PR 
   whoever wrote them. Residual: until workers are sandboxed (HOST_ISOLATION), a worker's bash runs as the operator and
   can run `canopy reply` or `canopy start`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID`
   is set, which stops a worker that follows injected text naively, not one that unsets them. This is the same class
-  as a worker writing the journal file directly, which sandboxing also removes.
+  as a worker writing the journal file directly, which sandboxing also removes. The operator accepted it (D076).
 - T1 (M19): mirrored comments are the overseer's claims and authorize nothing.
 - T5: unchanged. A private ticket hides the conversation, not authorship: commits keep their attribution trailer.
 - T6 (M18, M19): the journal holds tracker comment bodies and the operator's replies, under the operator-only state

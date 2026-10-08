@@ -1327,3 +1327,21 @@ Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, 
 change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
 stay.
 Revisit: if two kinds' reference forms ever collide, or a kind needs a verb with a meaning the others do not share.
+
+## D076. Private tickets and the web UI ship without sandboxing or TLS
+
+Context: review of DESIGN §22 found two residuals. Until workers are sandboxed (HOST_ISOLATION), a worker's bash runs
+as the operator and can forge `canopy reply` or `canopy start` by unsetting canopy's environment markers. And the web
+UI on a private address serves plain HTTP, so an observer on that network could capture the listener secret.
+Decision: the operator judged both risks low (2026-10-08).
+- M18 does not wait for sandboxing. The environment markers stay as a guard against a worker that follows injected
+  text naively, and T1 names the residual. It is the same class as a worker editing the journal file directly, which
+  canopy already accepts.
+- The web UI follows T8 as D055 settled it: loopback by default, a private address by the operator's choice, no TLS.
+Rejected:
+- Gating M18 on HOST_ISOLATION: it delays the requirement (R11) behind a milestone that has no date, for a risk that
+  needs a worker already steered by injected text.
+- Requiring TLS, or refusing a non-loopback bind without it: certificates for a single-operator tool on the
+  operator's own network, which D055 already declined to require.
+Revisit: with D055's revisit (more than one person per machine or listener, or a network the operator does not
+control), or after any incident where a run wrote to the journal outside its run.
