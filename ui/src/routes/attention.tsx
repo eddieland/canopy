@@ -4,6 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { attentionQuery, runsQuery, ticketQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
+import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
@@ -53,7 +54,7 @@ function AttentionPage() {
             {items !== undefined && items.length === 0 ? (
                 <>
                     <Panel>
-                        <Placeholder className="min-h-40">Nothing needs you.</Placeholder>
+                        <AllClear />
                     </Panel>
                     <Workers />
                 </>
@@ -70,7 +71,7 @@ function AttentionPage() {
                                     <Skeleton className="h-4 w-1/2" />
                                 </div>
                             ) : (
-                                <ul className="flex flex-col gap-0.5 p-1.5">
+                                <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                     {items.map((item) => (
                                         <Row key={item.id} item={item} selected={item.id === selected?.id} />
                                     ))}
@@ -197,7 +198,7 @@ function Workers() {
             ) : running.length === 0 ? (
                 <Placeholder className="min-h-16">no worker running</Placeholder>
             ) : (
-                <ul className="divide-y">
+                <ul className="stagger divide-y">
                     {running.map((run) => (
                         <li
                             key={run.id}

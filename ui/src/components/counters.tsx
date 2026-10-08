@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { attentionQuery, runsQuery, spendQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
+import { RollingNumber } from '@/components/rolling-number'
 import { Skeleton } from '@/components/ui/skeleton'
 import { severity, type Severity } from '@/lib/attention'
 import { cn } from '@/lib/utils'
@@ -80,7 +81,10 @@ function breakdown(counts: Partial<Record<Severity, number>>): string {
     return parts.length === 0 ? 'nothing' : parts.join(' · ')
 }
 
-/** One counter. Its value keeps a fixed width, and it shows a skeleton only until the first data arrives. */
+/**
+ * One counter. Its value keeps a fixed width and rolls when it changes, and it shows a skeleton only until the first
+ * data arrives.
+ */
 function Counter({
     label,
     value,
@@ -102,7 +106,7 @@ function Counter({
         >
             <span className="panel-label">{label}</span>
             <span className="readout h-8 text-3xl leading-8 font-medium">
-                {value === undefined ? <Skeleton className="h-7 w-12" /> : value}
+                {value === undefined ? <Skeleton className="h-7 w-12" /> : <RollingNumber value={String(value)} />}
             </span>
             <span className="truncate text-xs text-muted-foreground">{children}</span>
         </div>

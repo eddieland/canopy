@@ -68,6 +68,205 @@
     animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/*
+ * Motion (ui/DESIGN.md, "Motion"). Short, eased out, and only on something arriving or changing. Every rule below is
+ * inside no-preference, so under prefers-reduced-motion: reduce nothing moves and everything rests where it ends.
+ * Each animation's resting frame is its last (or, for a loop, its first): a screenshot sees the page at rest.
+ */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+}
+
+@keyframes pop {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.96);
+    }
+}
+
+@keyframes ripple {
+    from {
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(2.6);
+    }
+}
+
+@keyframes breathe {
+    50% {
+        opacity: 0.45;
+        transform: scale(0.7);
+    }
+}
+
+@keyframes sweep {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+@keyframes spin-in {
+    from {
+        opacity: 0;
+        transform: rotate(-90deg) scale(0.6);
+    }
+}
+
+@keyframes sway {
+    50% {
+        transform: rotate(2.5deg);
+    }
+}
+
+@keyframes drift {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) rotate(0deg);
+    }
+    15% {
+        opacity: 1;
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(7px, 15px) rotate(140deg);
+    }
+}
+
+@keyframes shimmer {
+    from {
+        background-position: 100% 0;
+    }
+    to {
+        background-position: -100% 0;
+    }
+}
+
+/* Children arrive one after another: a page's blocks, a list's rows. `[--enter:pop]` on a child pops it instead. */
+@utility stagger {
+    @media (prefers-reduced-motion: no-preference) {
+        & > * {
+            animation: var(--enter, rise) 320ms cubic-bezier(0.2, 0, 0, 1) both;
+        }
+        & > :nth-child(2) {
+            animation-delay: 40ms;
+        }
+        & > :nth-child(3) {
+            animation-delay: 80ms;
+        }
+        & > :nth-child(4) {
+            animation-delay: 120ms;
+        }
+        & > :nth-child(5) {
+            animation-delay: 160ms;
+        }
+        & > :nth-child(6) {
+            animation-delay: 200ms;
+        }
+        & > :nth-child(n + 7) {
+            animation-delay: 240ms;
+        }
+    }
+}
+
+/* One digit of a rolling readout (src/components/rolling-number.tsx): a strip of 0 to 9 behind a one-line window. */
+@utility roll-window {
+    display: inline-block;
+    width: calc(1ch - 0.01em);
+    height: 1lh;
+    overflow: hidden;
+    vertical-align: top;
+}
+
+@utility roll-strip {
+    display: block;
+    transform: translateY(calc(var(--digit) * -1lh));
+    &::before {
+        content: '0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9';
+        white-space: pre;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        transition: transform 700ms cubic-bezier(0.2, 0, 0, 1) calc(var(--place) * 60ms);
+        /* The first value rolls up from zero. */
+        @starting-style {
+            transform: translateY(0);
+        }
+    }
+}
+
+/* A glyph of a rolling readout that is not a digit, drawn by CSS so the text is only in the readable copy. */
+@utility roll-glyph {
+    display: inline-block;
+    &::before {
+        content: attr(data-glyph);
+    }
+}
+
+@utility animate-ripple {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ripple 900ms cubic-bezier(0.2, 0, 0, 1) both;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        display: none;
+    }
+}
+
+@utility animate-breathe {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: breathe 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-sweep {
+    transform-box: view-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: sweep 1.4s linear infinite;
+    }
+}
+
+@utility animate-spin-in {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: spin-in 420ms cubic-bezier(0.2, 0, 0, 1) both;
+    }
+}
+
+@utility animate-sway {
+    transform-box: view-box;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: sway 5s ease-in-out infinite;
+    }
+}
+
+@utility animate-drift {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: drift 4.5s ease-in 1s infinite backwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        display: none;
+    }
+}
+
+/* A skeleton's light passing over it, left to right. */
+@utility animate-shimmer {
+    background-size: 200% 100%;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: shimmer 1.6s ease-in-out infinite;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     ::view-transition-group(*),
     ::view-transition-old(*),
