@@ -19,10 +19,21 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.policy.max_fix_ci_attempts == 2
     assert cfg.trust.branch_prefix == "agent/"
     assert cfg.trust.authorized_repliers == ()
+    assert cfg.trust.trusted_reviewers == ()
+    assert cfg.trust.comment_prefix == "CANOPY:"
+    assert cfg.trust.comment_suffix == ""
     assert cfg.capacity.max_workers == 2
     assert cfg.loop.interval_minutes == 15
     assert cfg.paths.state_dir == canopy_env.state_dir
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
+
+
+def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(
+        canopy_env.user_file.read_text() + '\n[trust]\ntrusted_reviewers = ["octocat", "canopy:review", "ci[bot]"]\n'
+    )
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    assert cfg.trust.trusted_reviewers == ("octocat", "canopy:review", "ci[bot]")
 
 
 def test_user_file_wins_over_repository_for_shared_keys(canopy_env: CanopyEnv) -> None:
@@ -35,14 +46,26 @@ def test_user_file_wins_over_repository_for_shared_keys(canopy_env: CanopyEnv) -
     assert cfg.trust.pr_label == "mine"
 
 
+def test_needs_human_label_is_set_by_the_repository_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    assert load(canopy_env.repo, canopy_env.user_file).tracker.needs_human_label == "blocked-on-team"
+    canopy_env.write_user(
+        canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nneeds_human_label = "ask-me"\n', 1)
+    )
+    assert load(canopy_env.repo, canopy_env.user_file).tracker.needs_human_label == "ask-me"
+
+
 @pytest.mark.parametrize(
     "section_key",
     [
         ("tracker", 'labels = ["x"]'),
         ("trust", 'authorized_repliers = ["mallory"]'),
+        ("trust", 'trusted_reviewers = ["review-bot[bot]"]'),
+        ("trust", 'comment_prefix = "Please"'),
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
+        ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
         ("paths", "state_dir = '/tmp/x'"),
     ],
@@ -122,12 +145,26 @@ def test_repository_file_is_optional_but_required_keys_are_not(canopy_env: Canop
         ("[runtime]\nworker_timeout_minutes = 0\n", "greater than or equal to 1"),
         ("[trust]\nauthorized_repliers = [1]\n", r"trust\.authorized_repliers\[0\]: Input should be a valid string"),
         ("[trust]\nauthorized_repliers = ['  ']\n", "must not be empty"),
+        ("[trust]\ntrusted_reviewers = ['']\n", "or 'canopy:review'"),
+        ("[trust]\ntrusted_reviewers = ['two words']\n", "no spaces"),
+        ("[trust]\ntrusted_reviewers = ['`bot`']\n", "no spaces, colon, or backtick"),
+        ("[trust]\ntrusted_reviewers = ['canopy:reviewer']\n", "no spaces, colon, or backtick"),
         ("[trust]\nbranch_prefix = 'agent'\n", "end in '/'"),
         ("[trust]\nbranch_prefix = '-c/'\n", "end in '/'"),
         ("[trust]\nbranch_prefix = 'a/../'\n", "end in '/'"),
         ("[trust]\nbranch_prefix = 'a b/'\n", "end in '/'"),
         ("[trust]\nbranch_prefix = 'agent//'\n", "end in '/'"),
         ("[trust]\nbranch_prefix = '/'\n", "end in '/'"),
+        ("[trust]\ncomment_prefix = ''\n", "set trust.comment_prefix, trust.comment_suffix, or both"),
+        ("[trust]\ncomment_prefix = '`CANOPY`'\n", "no backtick"),
+        ("[trust]\ncomment_prefix = '>'\n", "with a letter or digit"),
+        ("[trust]\ncomment_prefix = 'CANOPY: '\n", "no surrounding spaces"),
+        ('[trust]\ncomment_suffix = "by\\ncanopy"\n', "one line"),
+        (f"[trust]\ncomment_suffix = '{'x' * 81}'\n", "at most 80 characters"),
+        ("[runtime]\npr_skill = 'Acme-PR'\n", "a skill name of at most 64"),
+        ("[runtime]\npr_skill = 'acme--pr'\n", "a skill name of at most 64"),
+        ("[runtime]\npr_skill = '-acme'\n", "a skill name of at most 64"),
+        (f"[runtime]\npr_skill = '{'a' * 65}'\n", "a skill name of at most 64"),
         ("[notify]\ncmd = 3\n", "Input should be a valid string"),
     ],
 )

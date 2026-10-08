@@ -147,6 +147,32 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     assert "stopped after 2 ticks: ok=2" in tick2
 
 
+def test_each_tick_block_shows_what_its_overseer_cost(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    overseer_does(monkeypatch)
+    # The second tick's overseer reports a cost that does not validate: it reports none, so there is none to show.
+    time = FakeTime(on_sleep=lambda: monkeypatch.setenv("FAKE_OVERSEER_STEP_COST", '"a lot"'))
+    term, out = console()
+
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
+    assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick at" in tick1
+    assert "cost" not in tick2
+
+
 def test_a_narrow_terminal_shortens_only_the_rationale(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -412,6 +438,75 @@ def test_a_tick_that_raises_ends_that_tick_not_the_loop(
     assert tick_statuses(canopy_env) == ["abandoned", "ok"]
     log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
     assert any(line["msg"] == "tick raised; the loop goes on" and "exc" in line for line in log_lines)
+
+
+@dataclass
+class FakeKeys:
+    """What the operator types: `pressed()` returns, and empties, what `type` queued, as `keys.listen`'s function."""
+
+    queued: list[str] = field(default_factory=list)
+    reads: int = 0
+
+    def type(self, text: str) -> None:
+        self.queued.append(text)
+
+    def pressed(self) -> str:
+        self.reads += 1
+        text = "".join(self.queued)
+        self.queued.clear()
+        return text
+
+
+def test_the_tick_now_key_ends_the_wait_at_once(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    keys = FakeKeys()
+    # Typed during the first tick: not meant for the wait that follows it, so it is dropped.
+    keys.type(repeat.TICK_NOW_KEY)
+    time = FakeTime()
+    # Another key first, then the tick-now key in capitals, as with Caps Lock on.
+    time.on_sleep = lambda: keys.type("x" if len(time.slept) == 1 else repeat.TICK_NOW_KEY.upper())
+    term, out = console()
+
+    statuses = repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        keys=keys.pressed,
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    assert statuses == {"ok": 2}
+    # Two steps of the wait, then the second tick: no one-minute floor, unlike an operator message.
+    assert time.slept == [0.5, 0.5]
+    assert f"Press {repeat.TICK_NOW_KEY} during the wait to tick now." in out.getvalue()
+    log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
+    assert any(line["msg"] == "the operator asked for a tick now" for line in log_lines)
+
+
+def test_without_keys_the_loop_does_not_offer_them(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    time = FakeTime()
+    term, out = console()
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+    assert sum(time.slept) == 60
+    assert "tick now" not in out.getvalue()
 
 
 @pytest.mark.parametrize(

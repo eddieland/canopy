@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,21 @@ def test_init_writes_both_configs_and_installs_nothing_else(
     assert cfg.paths.state_dir == canopy_env.home / ".canopy"
     assert "{definitions_dir}" in cfg.runtime.overseer_cmd
     assert "{definitions_dir}" in cfg.runtime.worker_cmd
+
+
+def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv) -> None:
+    # A default written into a file is pinned there: a later canopy's default never reaches it.
+    canopy_env.user_file.unlink()
+    canopy_env.repo_file.unlink()
+    assert main(["init", "--provider", "jira"]) == 0
+    user = tomllib.loads(canopy_env.user_file.read_text())
+    repo = tomllib.loads(canopy_env.repo_file.read_text())
+    assert user == {
+        "tracker": {"labels": ["agent-ready-tester"]},
+        "trust": {"authorized_repliers": [], "trusted_reviewers": []},
+    }
+    assert sorted(repo) == ["tracker"]
+    assert sorted(repo["tracker"]) == ["provider", "query"]
 
 
 def test_init_never_overwrites_configs(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

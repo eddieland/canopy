@@ -15,6 +15,7 @@ direction is stricter. `load` enforces scopes and the tighten rule per file, mer
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import shlex
@@ -50,6 +51,8 @@ PROMPT = "{prompt}"
 DEFINITIONS_DIR = "{definitions_dir}"
 DEFINITIONS_ENV_PREFIX = f"env OPENCODE_CONFIG_DIR={DEFINITIONS_DIR} "
 _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}")
+# A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
+REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
 CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MIN_CHORE_EVERY_MINUTES = 15
@@ -89,6 +92,48 @@ BRANCH_PREFIX_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
 def _branch_prefix(value: str) -> str:
     if not BRANCH_PREFIX_RE.fullmatch(value):
         raise ValueError("must be non-empty, end in '/', and use only letters, digits, '_', '-' and '/'")
+    return value
+
+
+MAX_COMMENT_MARK = 80
+
+
+def _comment_mark(value: str) -> str:
+    # What workers start or end every comment with; a comment that carries it is never feedback or an instruction
+    # (DESIGN §8, D069). Empty means not used. Prompts quote it in backticks, and one without a letter or digit (`-`,
+    # `>`) would match ordinary list items and quotes.
+    if value and (
+        len(value) > MAX_COMMENT_MARK
+        or value != value.strip()
+        or not value.isprintable()
+        or "`" in value
+        or not any(c.isalnum() for c in value)
+    ):
+        raise ValueError(
+            f"must be empty, or one line of at most {MAX_COMMENT_MARK} characters with a letter or digit, no backtick, "
+            "and no surrounding spaces"
+        )
+    return value
+
+
+MAX_REVIEWER = 100
+# The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no account
+# can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
+CANOPY_REVIEWER = "canopy:review"
+
+
+def _reviewer(value: str) -> str:
+    # A VCS host account whose review feedback a worker may address unasked (DESIGN §7). Prompts quote it in backticks.
+    if value != CANOPY_REVIEWER and (
+        not value
+        or len(value) > MAX_REVIEWER
+        or not value.isprintable()
+        or any(c.isspace() or c in "`:" for c in value)
+    ):
+        raise ValueError(
+            f"must be a login of at most {MAX_REVIEWER} characters with no spaces, colon, or backtick, or "
+            f"{CANOPY_REVIEWER!r} for canopy's own reviewer"
+        )
     return value
 
 
@@ -160,6 +205,79 @@ class Section(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
 
 
+# A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
+# rendered into the private worker's definition (DESIGN §22), so nothing else may reach it.
+TOOL_PART_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+
+
+def _tool_part(value: str) -> str:
+    if not TOOL_PART_RE.fullmatch(value):
+        raise ValueError(f"{value!r} must match {TOOL_PART_RE.pattern}")
+    return value
+
+
+def _server_name(value: str) -> str:
+    # Empty means the provider's default.
+    return _tool_part(value) if value else value
+
+
+ToolPart = Annotated[str, AfterValidator(_tool_part)]
+
+
+@dataclass(frozen=True)
+class TrackerTools:
+    """The tracker's MCP server, and the tools of it a private worker may call: every other one is denied."""
+
+    server: str
+    allowed: tuple[str, ...]
+
+
+# Each shipped provider's usual MCP server, as an operator's OpenCode config usually names it, and the tools of it a
+# private worker needs: reading tickets, and for GitHub, whose server is also the one PRs go through, the PR tools. None
+# of them writes to an issue (DESIGN §22). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's
+# MCP server v2.0.1); a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL
+# asks for `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
+DEFAULT_TRACKER_TOOLS: dict[str, TrackerTools] = {
+    "jira": TrackerTools(
+        "atlassian",
+        (
+            "atlassianUserInfo",
+            "getAccessibleAtlassianResources",
+            "getJiraIssue",
+            "getJiraIssueTypeMetaWithFields",
+            "listJiraIssueChangelogs",
+            "listJiraIssueComments",
+            "listJiraIssueLinkTypes",
+            "listJiraIssueRemoteIssueLinks",
+            "listJiraProjectIssueTypesMetadata",
+            "listJiraProjects",
+            "lookupJiraAccountId",
+            "searchJiraIssuesUsingJql",
+        ),
+    ),
+    "github": TrackerTools(
+        "github",
+        (
+            "get_me",
+            "issue_read",
+            "list_issues",
+            "search_issues",
+            "list_issue_types",
+            "get_label",
+            "pull_request_read",
+            "list_pull_requests",
+            "search_pull_requests",
+            "create_pull_request",
+            "update_pull_request",
+            "add_reply_to_pull_request_comment",
+            "actions_get",
+            "actions_list",
+            "get_job_logs",
+        ),
+    ),
+}
+
+
 class Tracker(Section):
     """The `[tracker]` table."""
 
@@ -167,6 +285,20 @@ class Tracker(Section):
     query: Annotated[NonBlank, Scope.SHARED]
     needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
+    # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
+    # write, which a repository must not (TRUST_MODEL T7).
+    mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
+    read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
+
+    def tools(self) -> TrackerTools | None:
+        """The server and tools a private worker gets, or None if neither config nor a default names any."""
+        default = DEFAULT_TRACKER_TOOLS.get(self.provider)
+        server = self.mcp_server or (default.server if default is not None else "")
+        allowed = self.read_tools if self.read_tools is not None else (default.allowed if default is not None else ())
+        if not server or not allowed:
+            return None
+        return TrackerTools(server, tuple(allowed))
 
 
 class Policy(Section):
@@ -190,6 +322,45 @@ class Trust(Section):
     branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
     pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
+    # Whose review feedback a worker may address without the operator's go-ahead (DESIGN §7, D089): VCS host logins,
+    # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. User-only: a
+    # repository that listed its own bots would decide what steers the operator's workers.
+    trusted_reviewers: Annotated[tuple[Annotated[StrictStr, AfterValidator(_reviewer)], ...], Scope.USER] = ()
+    # What every worker comment starts and ends with, when set (DESIGN §8, D069). They only take authority away, from
+    # the comments that carry them; user-only, so a repository cannot pick marks that silence people's comments.
+    comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
+    comment_suffix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = ""
+
+    @model_validator(mode="after")
+    def _one_comment_mark(self) -> Trust:
+        # With neither, a worker's comment reads as the operator's, and its PR replies as new review feedback.
+        if not self.comment_prefix and not self.comment_suffix:
+            raise ValueError("set trust.comment_prefix, trust.comment_suffix, or both: workers mark their comments")
+        return self
+
+
+# OpenCode's rule for a skill's name: lowercase letters and digits in words joined by single hyphens, at most 64.
+SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MAX_SKILL_NAME = 64
+
+
+def _skill_name(value: str) -> str:
+    # Empty means unset. The name is quoted in worker prompts, so it is checked as OpenCode would (DESIGN §8, D078).
+    if value and (len(value) > MAX_SKILL_NAME or not SKILL_NAME_RE.fullmatch(value)):
+        raise ValueError(
+            f"must be empty, or a skill name of at most {MAX_SKILL_NAME} lowercase letters and digits in words joined "
+            "by single hyphens"
+        )
+    return value
+
+
+def _repo_name(value: str) -> str:
+    if not REPO_NAME_RE.fullmatch(value):
+        raise ValueError(f"repository name {value!r} must match {REPO_NAME_RE.pattern}")
+    return value
+
+
+RepoName = Annotated[str, AfterValidator(_repo_name)]
 
 
 class Capacity(Section):
@@ -201,20 +372,34 @@ class Capacity(Section):
     # Review runs at once, within max_workers, and started in any 24 hours; 0 turns reviews off (DESIGN §21).
     max_reviews: Annotated[Count, Scope.USER] = 1
     max_reviews_per_day: Annotated[Count, Scope.USER] = 20
+    # Slots in each repository's pool, in a workspace: `canopy workspace sync` creates and removes slots to match, and
+    # no lease grows a pool past it. None leaves the pools unmanaged, as treehouse's own `max_trees` has them. Names in
+    # `repo_slots` need not be in this workspace's map: one user file serves every workspace (DESIGN §18).
+    slots_per_repo: Annotated[Count | None, Scope.USER] = None
+    repo_slots: Annotated[dict[RepoName, Count], Scope.USER] = {}
+
+    def slots_for(self, repo: str) -> int | None:
+        """The slots declared for repository `repo`'s pool, or None if its pool is not managed."""
+        return self.repo_slots.get(repo, self.slots_per_repo)
 
 
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
     overseer_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}"
     )
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}"
+    )
+    # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
+    # timeout.
+    private_worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json {prompt}"
     )
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
     split_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}"
     )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
@@ -227,6 +412,9 @@ class Runtime(Section):
     review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
+    # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8, D078). User-only: it
+    # chooses what workers are told to do, which a repository must not (TRUST_MODEL T7).
+    pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
 
 
 class Review(Section):
@@ -244,6 +432,51 @@ class Loop(Section):
     """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
 
     interval_minutes: Annotated[Minutes, Scope.USER] = 15
+
+
+# Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
+LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+# A path prefix the web UI is served under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no
+# escaping in a URL or an HTML attribute, since the server writes it into index.html's <base href>.
+_BASE_PATH_RE = re.compile(r"(/[A-Za-z0-9._~-]+)*")
+
+
+def listen_address(value: str) -> str:
+    """Refuse an address a listener may not bind (TRUST_MODEL T8): only loopback or a private address, as an IP.
+
+    Never a wildcard (`0.0.0.0`, `::`), a public address, or a host name other than `localhost`, whose address canopy
+    would not know.
+    """
+    if value in LOOPBACK_NAMES:
+        return value
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        raise ValueError(f"{value!r} must be a loopback or private IP address, or localhost") from None
+    if address.is_unspecified or address.is_multicast:
+        raise ValueError(f"{value!r} is a wildcard or multicast address; bind loopback or one private address")
+    if not (address.is_loopback or address.is_private):
+        raise ValueError(f"{value!r} is a public address; bind loopback or a private address")
+    return value
+
+
+def check_base_path(value: str) -> str:
+    """Refuse a path prefix that is not empty or like `/canopy`, with no trailing slash."""
+    if not _BASE_PATH_RE.fullmatch(value) or any(part in {".", ".."} for part in value.split("/")):
+        raise ValueError(f"base path {value!r} must be empty or like /canopy, with no trailing slash")
+    return value
+
+
+class Serve(Section):
+    """The `[serve]` table: the web UI `canopy loop` serves (DESIGN §22).
+
+    Every key is user-only: it opens a listener on the operator's machine (TRUST_MODEL T8).
+    """
+
+    enabled: Annotated[StrictBool, Scope.USER] = True
+    bind: Annotated[StrictStr, Scope.USER, AfterValidator(listen_address)] = "127.0.0.1"
+    port: Annotated[StrictInt, Scope.USER, Field(ge=1, le=65535)] = 8765
+    base_path: Annotated[StrictStr, Scope.USER, AfterValidator(check_base_path)] = ""
 
 
 class Paths(Section):
@@ -352,6 +585,7 @@ class Config(Section):
     review: Review
     paths: Paths
     notify: Notify
+    serve: Serve
     # Tables of tables, keyed by name; user-only as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.USER] = {}
 
@@ -371,6 +605,7 @@ SECTIONS: dict[str, type[Section]] = {
     "review": Review,
     "paths": Paths,
     "notify": Notify,
+    "serve": Serve,
 }
 
 

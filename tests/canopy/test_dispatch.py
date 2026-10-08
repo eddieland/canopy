@@ -83,6 +83,86 @@ def test_dispatch_leases_records_and_spawns(
     assert "Time limit: 45 minutes" in text
 
 
+def test_worker_is_told_the_configured_needs_human_label(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    in_tick(conn, monkeypatch)
+    args = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]
+    assert main(args, runner=InlineRunner()) == 0
+    text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
+    assert "Add the label `blocked-on-team` to the ticket" in text
+    assert "needs-human" not in text
+
+
+def test_worker_is_told_the_configured_comment_marks(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    canopy_env.write_user(
+        canopy_env.user_file.read_text()
+        + '\n[trust]\ncomment_prefix = "[bot]"\ncomment_suffix = "Posted by canopy for alice."\n'
+    )
+    in_tick(conn, monkeypatch)
+    args = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]
+    assert main(args, runner=InlineRunner()) == 0
+    text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
+    assert "start it with `[bot]` and a space, and end it with `Posted by canopy for alice.`" in text
+    assert "a comment that starts with `[bot]` and ends with `Posted by canopy for alice.` outside any quote" in text
+    assert "CANOPY:" not in text
+
+
+def test_worker_opens_prs_through_the_mcp_or_the_configured_skill(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    in_tick(conn, monkeypatch)
+    args = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]
+    assert main(args, runner=InlineRunner()) == 0
+    assert (
+        "Never target another branch. Open each PR through the GitHub MCP."
+        in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
+    )
+
+    # The operator's own skill replaces the MCP, with no fallback to it (D078).
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]\n", "[runtime]\npr_skill = 'acme-pr'\n"))
+    assert main(["dispatch", "PROJ-2", *args[2:]], runner=InlineRunner()) == 0
+    text = (canopy_env.state_dir / "runs" / "2.prompt").read_text()
+    assert "Never target another branch. Open each PR by following the skill `acme-pr`, and in no other way" in text
+    assert "Open each PR through the GitHub MCP" not in text
+
+
+def test_an_override_that_ignores_the_pr_skill_is_refused(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text("Work {{KEY}} for {{LABELS}}; open a PR through the GitHub MCP\n")
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]\n", "[runtime]\npr_skill = 'acme-pr'\n"))
+    tick_id = in_tick(conn, monkeypatch)
+    assert (
+        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 1
+    )
+    [(action, rationale)] = decisions(conn, tick_id)
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{OPEN_PR}}" in rationale
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
 def test_detached_run_finishes_on_its_own(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
