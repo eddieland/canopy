@@ -49,7 +49,10 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (D027, dev only), and `rich` for terminal output (D043).
+  validators (D027, dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
+  (D074, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only).
+- The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
+  and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
   systems is the agent runtime's MCP servers. The harness knows nothing about Jira or GitHub beyond strings in config
   and prompts.
@@ -108,7 +111,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- A web UI. `canopy status` and a markdown file are the UI.
+- A web UI beyond what ROADMAP M20 lists. `canopy status` and a markdown file stay the CLI's surface.
 - Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.

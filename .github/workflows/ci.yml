@@ -31,6 +31,13 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
       # --locked fails if uv.lock is out of date with pyproject.toml.
       - name: Install dependencies
         run: uv sync --locked
@@ -39,6 +46,51 @@ jobs:
       # It includes `ruff format --check`, so unformatted code still fails.
       - name: Lint, type check, and test
         run: make check
+
+  # The web UI end to end: Playwright against the build, served by FastAPI (ui/AGENTS.md).
+  ui-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked
+          npm --prefix ui ci --no-audit --no-fund
+
+      - name: Install Playwright's Chromium
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright
+        run: make ui-e2e
+
+      - name: Keep the report and any screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            ui/playwright-report
+            ui/test-results
+          retention-days: 7
 
   # README's install step, from this commit, into an empty HOME: the wheel's bundled files, its dependencies' wheels,
   # and the installed `canopy` running a dry tick against the fakes (ROADMAP M5).
@@ -62,5 +114,13 @@ jobs:
           python-version: "3.12"
           enable-cache: false
 
+      # The wheel's build hook builds the UI with npm; without it the install would quietly have no UI.
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "22"
+
       - name: Install with uv tool install and run a dry tick
+        env:
+          CANOPY_UI_REQUIRED: "1"
         run: make install-check

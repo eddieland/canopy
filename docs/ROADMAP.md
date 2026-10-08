@@ -546,19 +546,23 @@ Status: not started.
 
 ## M20. Web UI
 
-REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbox. Sketch only; the design comes first.
+REQUIREMENTS N1, DESIGN §22, D055, D073, D074, D079. Needs M18; M19 makes it one inbox. Sketch only; the design comes
+first.
 
 - `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
-  all user-only. FastAPI on uvicorn with Jinja2 templates (D074), imported nowhere else.
+  all user-only. FastAPI on uvicorn (D074), imported nowhere else, serving the app built from `ui/` (D079).
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
-- The release binary (D067) bundles the templates and builds on every platform it ships for.
+- The release binary (D067) bundles the built UI and builds on every platform it ships for.
 - Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: not started.
+Status: in progress. Taken in part on request (2026-10-08), ahead of M18: the foundation only (D079). `ui/` with its
+tokens, theme, shell, and placeholder pages; `canopy.serve` serving it and a mock sessions and leases API with SSE;
+the build bundled into the wheel; Playwright against the served build. Not yet: the listener secret, `canopy loop`
+running the server, `serve.*` config, real data, and every page and action above.
 
 ## Deferred, with the trigger that would unblock each
 
