@@ -13,7 +13,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { overSize, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
+import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/worktrees')({
@@ -107,10 +107,18 @@ function looked(dirty: number, broken: number, unread: number): string {
 function PoolPanel({ pool }: { pool: Pool }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
     const over = overSize(pool)
+    const root = slotsRoot(pool.worktrees)
     return (
         <Panel data-testid={`pool-${pool.repo}`}>
             <PanelHeader label={pool.repo}>
-                <SlotStrip worktrees={pool.worktrees} />
+                <span className="mr-auto ml-3 flex min-w-0 items-center gap-3">
+                    <SlotStrip worktrees={pool.worktrees} />
+                    {root !== null && (
+                        <span className="truncate font-mono text-xs text-muted-foreground" data-testid="pool-root">
+                            {root}/
+                        </span>
+                    )}
+                </span>
                 <span className="flex items-center gap-3 font-mono text-xs text-muted-foreground">
                     {counts
                         .filter(([, n]) => n > 0)
@@ -143,7 +151,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
             ) : (
                 <ul className="divide-y" data-testid="worktrees">
                     {pool.worktrees.map((w) => (
-                        <WorktreeRow key={w.path} worktree={w} />
+                        <WorktreeRow key={w.path} worktree={w} shared={root !== null} />
                     ))}
                 </ul>
             )}
@@ -155,7 +163,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
 function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
     if (worktrees.length === 0) return null
     return (
-        <span aria-hidden className="mr-auto ml-3 flex items-center gap-1" data-testid="slot-strip">
+        <span aria-hidden className="flex shrink-0 items-center gap-1" data-testid="slot-strip">
             {worktrees.map((w) => (
                 <span
                     key={w.path}
@@ -172,39 +180,61 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
     return <span aria-hidden className={cn('inline-flex size-2 shrink-0 rounded-full', WORKTREE_DOT[state])} />
 }
 
-/** One slot: its state, name, what holds it, its branch, and for how long; then its path, processes, and any note. */
-function WorktreeRow({ worktree: w }: { worktree: Worktree }) {
+/**
+ * One slot on one line: its state, number, what holds it, its branch, what runs in it, and for how long. Our state
+ * word, with treehouse's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
+ * line, since it is something to act on. An idle slot is the state and number alone, dimmed.
+ */
+function WorktreeRow({ worktree: w, shared }: { worktree: Worktree; shared: boolean }) {
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
+    const idle = w.state === 'idle'
     return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`worktree-${w.name}`} data-state={w.state}>
+        <li
+            className={cn('flex flex-col gap-1 px-3 py-2', idle && 'opacity-60')}
+            data-testid={`worktree-${w.name}`}
+            data-state={w.state}
+        >
             <div className="flex h-5 items-center gap-3">
-                <span className={cn('flex w-24 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}>
+                <span
+                    className={cn('flex w-20 shrink-0 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
+                    title={`treehouse: ${w.status}`}
+                >
                     <WorktreeDot state={w.state} />
-                    {w.status}
+                    {w.state === 'broken' ? w.status : w.state}
                 </span>
-                <span className="readout w-10 text-xs text-muted-foreground">#{w.name}</span>
-                <Holder worktree={w} />
-                <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
-                    {w.branch ?? (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
+                <span className="readout w-8 shrink-0 text-xs text-muted-foreground" title={w.path}>
+                    #{w.name}
                 </span>
-                <span className="ml-auto flex w-24 shrink-0 justify-end gap-1 text-xs text-muted-foreground">
-                    {since && (
-                        <>
-                            for <Age at={since} />
-                        </>
-                    )}
-                </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[10rem] font-mono text-xs">
-                <span className="text-muted-foreground">{w.path}</span>
-                {w.processes.length > 0 && (
-                    <span className="text-muted-foreground" title="processes treehouse found running in it">
-                        {w.processes.map((p) => `${p.name} ${p.pid}`).join(' · ')}
-                    </span>
+                {!idle && (
+                    <>
+                        <Holder worktree={w} />
+                        <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
+                            {w.branch ?? (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
+                        </span>
+                    </>
                 )}
-                {w.branch_error && <span className="text-status-failed">branch unreadable: {w.branch_error}</span>}
-                {w.note && <span className="text-status-blocked">{w.note}</span>}
+                {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
+                <span className="ml-auto flex shrink-0 items-center gap-4 text-xs text-muted-foreground">
+                    {w.processes.length > 0 && (
+                        <span className="font-mono" title="processes treehouse found running in it">
+                            {w.processes.map((p) => `${p.name} ${p.pid}`).join(' · ')}
+                        </span>
+                    )}
+                    <span className="flex w-20 justify-end gap-1">
+                        {since && (
+                            <>
+                                for <Age at={since} />
+                            </>
+                        )}
+                    </span>
+                </span>
             </div>
+            {(w.note || w.branch_error) && (
+                <div className="flex flex-wrap gap-x-4 pl-[7.5rem] font-mono text-xs">
+                    {w.branch_error && <span className="text-status-failed">branch unreadable: {w.branch_error}</span>}
+                    {w.note && <span className="text-status-blocked">{w.note}</span>}
+                </div>
+            )}
         </li>
     )
 }
