@@ -74,7 +74,10 @@ jobs:
         run: |
           uv sync --locked
           npm --prefix ui ci --no-audit --no-fund
-          npx --prefix ui playwright install --with-deps chromium
+
+      - name: Install Playwright's Chromium
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
 
       - name: Playwright
         run: make ui-e2e
