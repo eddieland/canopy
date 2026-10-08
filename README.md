@@ -48,6 +48,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      project. To upgrade, run the same command with `--reinstall`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
+   Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer, to comment on a PR.
+   Grant nothing more: canopy's definitions deny the dangerous ones by name, but names differ by server. On GitHub
+   the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D084).
 4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
    default `~/.config/canopy/config.toml`, with a queue label of your own), writes a shared `canopy.toml` if the
    repository has none, and installs nothing else: agent runs load canopy's agent definitions and skills from its own

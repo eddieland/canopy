@@ -172,7 +172,8 @@ def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
 
 
 @pytest.mark.parametrize(
-    ("kind", "before"), [("implement", "Never target another branch."), ("resume", "the label `agent`.")]
+    ("kind", "before"),
+    [("implement", "Never target another branch."), ("resume", "with the ticket key in the\ntitle.")],
 )
 def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str, before: str) -> None:
     text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, {**VALUES, "OPEN_PR": "<how>"})

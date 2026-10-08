@@ -95,7 +95,7 @@ def test_worker_is_told_the_configured_needs_human_label(
     args = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]
     assert main(args, runner=InlineRunner()) == 0
     text = (canopy_env.state_dir / "runs" / "1.prompt").read_text()
-    assert "Add the label `blocked-on-team` to the ticket." in text
+    assert "Add the label `blocked-on-team` to the ticket" in text
     assert "needs-human" not in text
 
 

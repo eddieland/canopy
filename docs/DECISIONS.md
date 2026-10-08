@@ -549,3 +549,15 @@ cheaper pre-check agent each tick (still an LLM call per tick, and a second prom
 quiet hours in config (a guess at when teammates work, wrong across time zones, where backoff learns it); pacing by
 cost alone (M13; a cheap tick that finds nothing is still not worth running); webhooks (deferred; a listener, T8).
 Revisit: if the cap's latency on teammates' comments or CI is felt; then quiet hours, or D003's own revisit.
+
+## D084. Workers set labels through the tracker's MCP edit tool, and deny dangerous MCP tools by name
+
+Labels landed only when a worker reached for `gh`, which is GitHub-only and not on every machine. Ticket labels are set
+with the tracker's issue edit tool, passing only labels; the PR label only where a GitHub tool sets labels, since
+GitHub's one such tool, `issue_write`, also creates and closes issues, and granting it is the operator's call.
+`canopy-worker` and `canopy-worker-private` deny merging, review submission, closing, transitions, ticket creation, API
+file and branch writes, deletes, forks, Copilot agents, and workflow runs by tool name; `test_definitions.py` checks.
+Label writes replace the whole set, so skills read it right before writing. Names differ by server: defense in depth.
+Rejected: `gh ... --add-label` (GitHub-only, a credential the runtime does not hold); allowing `issue_write` by default
+(permissions match names, not arguments); the harness setting labels (no tracker code, D003, D014).
+Revisit: when GitHub's server gains a label-only tool, or a deny is found not to apply to MCP tools.

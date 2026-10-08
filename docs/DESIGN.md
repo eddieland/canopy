@@ -882,8 +882,10 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
 
 - `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`. MCP: the tracker,
   GitHub.
-- `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, labels), GitHub (open/update
-  PR, read reviews and checks).
+- `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
+  edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
+  submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
+  workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
   tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
   and edits denied by name (§21).
@@ -2129,8 +2131,9 @@ separate `list`.
   in the tracker.
 - The worker prompt has a private variant: no label check, since the harness checked the start record; never comment
   on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
-  `canopy-worker-private`: `canopy-worker` with every tool of the tracker's MCP server denied by wildcard and only
-  its read tools allowed by name, and the tracker CLIs canopy knows (`gh`, `acli`, `jira`) denied in its bash rules.
+  `canopy-worker-private`: `canopy-worker`, its MCP tools denied by name included (D084), with every tool of the
+  tracker's MCP server denied by wildcard and only its read tools allowed by name, and the tracker CLIs canopy knows
+  (`gh`, `acli`, `jira`) denied in its bash rules.
   - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both user-only, with a default for each
     shipped provider's usual MCP server (`config.DEFAULT_TRACKER_TOOLS`): `atlassian` with Jira's read tools for
     `jira`, and `github` for `github`, whose server is also the one PRs go through, so its list adds the PR tools a
