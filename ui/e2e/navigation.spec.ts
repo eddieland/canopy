@@ -136,3 +136,10 @@ test('the worktrees page reads the pools again every 30 seconds, and only while 
     await page.clock.runFor(90_000)
     expect(reads).toBe(2)
 })
+
+test('the header names the latest tick and how long ago it ended', async ({ page }) => {
+    await page.goto('runs')
+    await settled(page)
+    await expect(page.getByTestId('last-tick')).toHaveText(/^tick 1 · \d+[a-z]+ ago$/)
+    await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
+})

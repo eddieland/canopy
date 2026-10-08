@@ -18,8 +18,10 @@ describe('applyStreamEvent', () => {
         applyStreamEvent(client, { type: 'tickets.updated', tickets: mockTickets })
         const spend = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
         applyStreamEvent(client, { type: 'spend.updated', spend })
+        applyStreamEvent(client, { type: 'tick.updated', tick: null })
 
         expect(client.getQueryData(keys.spend)).toEqual(spend)
+        expect(client.getQueryData(keys.tick)).toEqual({ tick: null })
         expect(client.getQueryData<Run[]>(keys.runs)).toHaveLength(1)
         expect(client.getQueryData<Run[]>(keys.runs)?.[0]?.state).toBe('stopped')
         expect(client.getQueryData(keys.attention)).toEqual(mockAttention)
@@ -79,6 +81,8 @@ describe('parseStreamEvent', () => {
         const spend = { type: 'spend.updated', spend: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 } }
         expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)
         expect(parseStreamEvent('{"type":"spend.updated","spend":null}')).toBeNull()
+        expect(parseStreamEvent('{"type":"tick.updated","tick":null}')).toEqual({ type: 'tick.updated', tick: null })
+        expect(parseStreamEvent('{"type":"tick.updated"}')).toBeNull()
         expect(parseStreamEvent('null')).toBeNull()
     })
 })

@@ -31,6 +31,9 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         case 'spend.updated':
             client.setQueryData(keys.spend, event.spend)
             break
+        case 'tick.updated':
+            client.setQueryData(keys.tick, { tick: event.tick })
+            break
     }
 }
 
@@ -65,6 +68,10 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         return Array.isArray((value as Record<string, unknown>)[list]) ? (value as StreamEvent) : null
     }
     if (type === 'ticket.changed' && typeof (value as { key?: unknown }).key === 'string') return value as StreamEvent
+    if (type === 'tick.updated') {
+        const tick = (value as { tick?: unknown }).tick
+        return tick === null || (typeof tick === 'object' && tick !== undefined) ? (value as StreamEvent) : null
+    }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend
         return typeof spend === 'object' && spend !== null ? (value as StreamEvent) : null

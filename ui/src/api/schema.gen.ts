@@ -106,6 +106,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Last Tick */
+        get: operations["getTick"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets": {
         parameters: {
             query?: never;
@@ -273,6 +290,13 @@ export type components = {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * LastTick
+         * @description The latest tick, or none before the first.
+         */
+        LastTick: {
+            tick: components["schemas"]["Tick"] | null;
         };
         /**
          * Message
@@ -545,7 +569,30 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["SpendUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"];
+        /**
+         * Tick
+         * @description The latest tick, as `canopy status`'s first line shows it (DESIGN §14).
+         */
+        Tick: {
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Ended At */
+            ended_at: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string | null;
+        };
         /**
          * TicketChanged
          * @description Something about one ticket changed: a page showing it reads it again.
@@ -612,6 +659,18 @@ export type components = {
              * @enum {string}
              */
             type: "tickets.updated";
+        };
+        /**
+         * TickUpdated
+         * @description A tick started or ended. The payload is the latest tick, as `GET /tick` returns it.
+         */
+        TickUpdated: {
+            tick: components["schemas"]["Tick"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tick.updated";
         };
         /**
          * Unit
@@ -860,6 +919,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Spend"];
+                };
+            };
+        };
+    };
+    getTick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LastTick"];
                 };
             };
         };
