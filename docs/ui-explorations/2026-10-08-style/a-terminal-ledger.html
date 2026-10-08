@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- Generated from Terminal.dc.html on the design canvas; see README.md. Lines are not wrapped. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#f0b35a;text-decoration:none}a:hover{color:#ffd08a;text-decoration:underline}
+</style>
+</head>
+<body>
+<div style="min-height: 900px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.6; color: #e6e1d3; background: #13120f">
+  <header style="display: flex; flex-wrap: wrap; align-items: stretch; justify-content: space-between; border-bottom: 1px solid #3a372e; background: #1b1a15">
+    <div style="display: flex; flex-wrap: wrap; align-items: stretch">
+      <span style="padding: 8px 16px; background: #f0b35a; color: #13120f; font-weight: 600">canopy</span>
+      <a href="#" style="padding: 8px 16px; color: #e6e1d3; background: #2a2820; border-right: 1px solid #3a372e">1 attention</a>
+      <a href="#" style="padding: 8px 16px; color: #8f8a7a; border-right: 1px solid #3a372e">2 runs</a>
+      <a href="#" style="padding: 8px 16px; color: #8f8a7a; border-right: 1px solid #3a372e">3 tickets</a>
+      <a href="#" style="padding: 8px 16px; color: #8f8a7a; border-right: 1px solid #3a372e">4 settings</a>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; padding: 8px 16px; color: #8f8a7a">
+      <span><span style="color: #8fcf7a">●</span> 2 running</span>
+      <span><span style="color: #f0b35a">●</span> 1 waiting</span>
+      <span>4 attention</span>
+      <span style="color: #8fcf7a">tick 1482 · next in 0:42</span>
+    </div>
+  </header>
+  <main style="max-width: 1180px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 32px">
+    <div>
+      <div style="color: #8f8a7a">$ canopy status</div>
+      <h1 style="margin: 4px 0 0; font-size: 22px; font-weight: 600; color: #e6e1d3">attention <span style="color: #f0b35a">(4)</span></h1>
+      <p style="margin: 4px 0 0; color: #8f8a7a"># what needs you. an item leaves when its cause is gone.</p>
+    </div>
+    
+      <section>
+        <div style="display: flex; gap: 12px; align-items: baseline; color: #8f8a7a; border-bottom: 1px dashed #3a372e; padding-bottom: 4px">
+          <span style="color: #f0b35a; font-weight: 600">[ASK]</span>
+          <span>question</span>
+          <span style="flex: 1"></span>
+          <span>1</span>
+        </div>
+        
+          <div style="display: grid; grid-template-columns: 8rem minmax(0, 1fr) 4rem; gap: 16px; padding: 6px 0; border-bottom: 1px dashed #26241d">
+            <a href="#">ABC-104</a>
+            <span>The worker asked whether the export button should use the accent or stay secondary.</span>
+            <span style="color: #8f8a7a; text-align: right">18m</span>
+          </div>
+        
+      </section>
+    
+
+      <section>
+        <div style="display: flex; gap: 12px; align-items: baseline; color: #8f8a7a; border-bottom: 1px dashed #3a372e; padding-bottom: 4px">
+          <span style="color: #7ac4cf; font-weight: 600">[PR ]</span>
+          <span>pr review</span>
+          <span style="flex: 1"></span>
+          <span>2</span>
+        </div>
+        
+          <div style="display: grid; grid-template-columns: 8rem minmax(0, 1fr) 4rem; gap: 16px; padding: 6px 0; border-bottom: 1px dashed #26241d">
+            <a href="#">ABC-101</a>
+            <span>Two review comments on PR #212 since the worker last pushed.</span>
+            <span style="color: #8f8a7a; text-align: right">1h</span>
+          </div>
+        
+
+          <div style="display: grid; grid-template-columns: 8rem minmax(0, 1fr) 4rem; gap: 16px; padding: 6px 0; border-bottom: 1px dashed #26241d">
+            <a href="#">ABC-097</a>
+            <span>A reviewer requested changes on PR #208.</span>
+            <span style="color: #8f8a7a; text-align: right">3h</span>
+          </div>
+        
+      </section>
+    
+
+      <section>
+        <div style="display: flex; gap: 12px; align-items: baseline; color: #8f8a7a; border-bottom: 1px dashed #3a372e; padding-bottom: 4px">
+          <span style="color: #ef7a5f; font-weight: 600">[ERR]</span>
+          <span>failed</span>
+          <span style="flex: 1"></span>
+          <span>1</span>
+        </div>
+        
+          <div style="display: grid; grid-template-columns: 8rem minmax(0, 1fr) 4rem; gap: 16px; padding: 6px 0; border-bottom: 1px dashed #26241d">
+            <a href="#">ABC-107</a>
+            <span>Run 31 exited without a result.</span>
+            <span style="color: #8f8a7a; text-align: right">42m</span>
+          </div>
+        
+      </section>
+    
+    <section>
+      <div style="color: #8f8a7a; border-bottom: 1px solid #3a372e; padding-bottom: 4px">runs</div>
+      <div style="overflow-x: auto">
+        <div style="display: grid; grid-template-columns: 8rem 7rem minmax(0, 1fr) 5rem 4rem; gap: 16px; padding: 6px 0; color: #6d695c; min-width: 640px">
+          <span>TICKET</span><span>STATE</span><span>LAST WORD</span><span style="text-align: right">COST</span><span style="text-align: right">AGE</span>
+        </div>
+        
+          <div style="display: grid; grid-template-columns: 8rem 7rem minmax(0, 1fr) 5rem 4rem; gap: 16px; padding: 6px 0; border-top: 1px dashed #26241d; min-width: 640px">
+            <a href="#">ABC-101</a>
+            <span style="color: #8fcf7a">▶ running</span>
+            <span style="color: #b9b3a2">addressing review on PR #212</span>
+            <span style="text-align: right">$0.84</span>
+            <span style="text-align: right; color: #8f8a7a">12m</span>
+          </div>
+        
+
+          <div style="display: grid; grid-template-columns: 8rem 7rem minmax(0, 1fr) 5rem 4rem; gap: 16px; padding: 6px 0; border-top: 1px dashed #26241d; min-width: 640px">
+            <a href="#">ABC-103</a>
+            <span style="color: #8fcf7a">▶ running</span>
+            <span style="color: #b9b3a2">started</span>
+            <span style="text-align: right">$0.12</span>
+            <span style="text-align: right; color: #8f8a7a">3m</span>
+          </div>
+        
+
+          <div style="display: grid; grid-template-columns: 8rem 7rem minmax(0, 1fr) 5rem 4rem; gap: 16px; padding: 6px 0; border-top: 1px dashed #26241d; min-width: 640px">
+            <a href="#">ABC-104</a>
+            <span style="color: #f0b35a">? blocked</span>
+            <span style="color: #b9b3a2">Added the export button and its CSV writer; its color waits on you.</span>
+            <span style="text-align: right">$0.51</span>
+            <span style="text-align: right; color: #8f8a7a">18m</span>
+          </div>
+        
+
+          <div style="display: grid; grid-template-columns: 8rem 7rem minmax(0, 1fr) 5rem 4rem; gap: 16px; padding: 6px 0; border-top: 1px dashed #26241d; min-width: 640px">
+            <a href="#">ABC-102</a>
+            <span style="color: #9d97c7">✓ done</span>
+            <span style="color: #b9b3a2">Search now debounces input and cancels stale requests.</span>
+            <span style="text-align: right">$1.07</span>
+            <span style="text-align: right; color: #8f8a7a">2h</span>
+          </div>
+        
+      </div>
+    </section>
+    <div style="color: #6d695c">-- press <span style="color: #e6e1d3">t</span> to tick now · <span style="color: #e6e1d3">/</span> to search · <span style="color: #e6e1d3">?</span> for keys</div>
+  </main>
+</div>
+</body>
+</html>
