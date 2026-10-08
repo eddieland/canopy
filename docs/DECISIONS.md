@@ -561,3 +561,13 @@ Label writes replace the whole set, so skills read it right before writing. Name
 Rejected: `gh ... --add-label` (GitHub-only, a credential the runtime does not hold); allowing `issue_write` by default
 (permissions match names, not arguments); the harness setting labels (no tracker code, D003, D014).
 Revisit: when GitHub's server gains a label-only tool, or a deny is found not to apply to MCP tools.
+
+## D085. canopy's version is built from the latest `v*` tag with uv-dynamic-versioning
+
+Pushing a `v*` tag is the whole release step (D067): no commit bumps a version first, so the tag and the version
+cannot disagree. Between tags a build names its distance and commit (`0.2.1.dev3+1a2b3c4`), so `canopy --version` says
+which build is running. `uv-dynamic-versioning` is a build-time dependency only, pinned in `build-system.requires`;
+stdlib cannot supply a hatchling version source. canopy-notify-slack keeps its static version for now.
+Rejected: a static version with a CI check that the tag matches it (a release takes a commit and a tag that must
+agree); hatch-vcs (pulls in setuptools-scm and setuptools for the same result).
+Revisit: if a build that matters runs without the repository's tags, as a shallow clone does.
