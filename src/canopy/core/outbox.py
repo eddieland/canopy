@@ -45,34 +45,43 @@ def run_started(
     return build
 
 
-def run_ended(config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> Event | None:
-    """Return the `run.ended` event for a run closing as `status` with `result_json`, or None if no sink takes runs.
+def run_ended(
+    config: Config, run: sqlite3.Row, status: str, result_json: str | None
+) -> Callable[[int | None], Event | None]:
+    """Return what builds the `run.ended` event for a run closing as `status` with `result_json`, for `db.finish_run`.
 
-    `question` is set only for a `blocked` run: a blocked worker waits on a label, not an attention item, so this is how
-    a sink hears that it asked something.
+    It is built from the id of the message the run recorded (`message`): its question for a `blocked` run and its
+    report otherwise, so a channel can say what a reply answers (DESIGN §22). It is None if no sink takes runs.
+    `question` is set only for a `blocked` run: a blocked worker waits on a label or a reply, not an attention item, so
+    this is how a sink hears that it asked something.
     """
-    if not config.notify.takes(RUNS):
-        return None
-    result = _object(result_json)
-    prs = result.get("prs")
-    pr = result.get("pr")
-    pr_urls: list[str] = [str(u) for u in prs.values() if u] if isinstance(prs, dict) else []
-    if not pr_urls and pr:
-        pr_urls = [str(pr)]
-    question = result.get("question") if status == "blocked" else None
-    summary = result.get("harness") or result.get("summary")
-    fields: dict[str, object] = {
-        "ticket": run["ticket_key"],
-        "run": run["id"],
-        "run_kind": run["kind"],
-        "status": status,
-        "branch": run["branch"],
-        "pr": cut(pr_urls[0], DETAIL_LIMIT) if pr_urls else None,
-        "prs": [cut(u, DETAIL_LIMIT) for u in pr_urls],
-        "summary": cut(summary, SUMMARY_LIMIT) if summary else None,
-        "question": cut(question, SUMMARY_LIMIT) if question else None,
-    }
-    return Event(RUNS, "run.ended", fields)
+
+    def build(message: int | None) -> Event | None:
+        if not config.notify.takes(RUNS):
+            return None
+        result = _object(result_json)
+        prs = result.get("prs")
+        pr = result.get("pr")
+        pr_urls: list[str] = [str(u) for u in prs.values() if u] if isinstance(prs, dict) else []
+        if not pr_urls and pr:
+            pr_urls = [str(pr)]
+        question = result.get("question") if status == "blocked" else None
+        summary = result.get("harness") or result.get("summary")
+        fields: dict[str, object] = {
+            "ticket": run["ticket_key"],
+            "run": run["id"],
+            "run_kind": run["kind"],
+            "status": status,
+            "branch": run["branch"],
+            "pr": cut(pr_urls[0], DETAIL_LIMIT) if pr_urls else None,
+            "prs": [cut(u, DETAIL_LIMIT) for u in pr_urls],
+            "summary": cut(summary, SUMMARY_LIMIT) if summary else None,
+            "question": cut(question, SUMMARY_LIMIT) if question else None,
+            "message": message,
+        }
+        return Event(RUNS, "run.ended", fields)
+
+    return build
 
 
 def chore_ended(config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> Event | None:

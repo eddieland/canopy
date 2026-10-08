@@ -1,4 +1,4 @@
-"""`canopy init`, and `canopy skill` for the operator's own agent sessions."""
+"""`canopy init`, `canopy skill` for the operator's own agent sessions, and `canopy secret` for the web UI."""
 
 from __future__ import annotations
 
@@ -7,9 +7,11 @@ from pathlib import Path
 
 import click
 
-from canopy.cli.common import Obj
-from canopy.core import config, definitions, workspace
+from canopy.cli import workspace as cli_workspace
+from canopy.cli.common import CliError, Obj
+from canopy.core import config, conversation, definitions, workspace
 from canopy.infra import resources
+from canopy.serve import secret
 from canopy.setup import init
 from canopy.setup import workspace as setup_workspace
 
@@ -22,14 +24,21 @@ from canopy.setup import workspace as setup_workspace
     is_flag=True,
     help="Set up this directory as a workspace of several repositories (canopy-workspace.toml). Implied inside one.",
 )
+@click.argument("repos", metavar="[[NAME=]URL]...", nargs=-1)
 @click.pass_context
-def cmd_init(click_ctx: click.Context, provider: str | None, *, as_workspace: bool) -> int:
-    """Set up canopy for this repository, or workspace, and this user."""
+def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, ...], *, as_workspace: bool) -> int:
+    """Set up canopy for this repository, or workspace, and this user.
+
+    In a workspace, clone URLs add those repositories to the map and sync: each is cloned, and its pool made the size
+    your user config declares. A repository is named after its URL, unless given as NAME=URL.
+    """
     workspace_root = workspace.find_root(Path.cwd())
     if as_workspace or workspace_root is not None:
         root = workspace_root or Path.cwd().resolve()
         provider = _provider(provider, root / config.WORKSPACE_FILE_NAME, "workspace")
-        return _init_workspace(root, provider)
+        return _init_workspace(click_ctx, root, provider, repos)
+    if repos:
+        raise click.UsageError("clone URLs set up a workspace of several repositories; pass --workspace")
     repo_root = config.find_repo_root(Path.cwd())
     provider = _provider(provider, repo_root / config.REPO_FILE_NAME, "repository")
 
@@ -55,27 +64,41 @@ def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:
     return provider
 
 
-def _init_workspace(root: Path, provider: str | None) -> int:
+def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, repos: tuple[str, ...]) -> int:
     user_file = config.user_config_path()
     report = setup_workspace.run_init(root, user_file, provider)
     _print_files(report)
     if report.label is not None:
         click.echo(f"\nYour queue label is {report.label!r}. Add it to a ticket to hand the ticket to canopy.")
-    if (root / config.WORKSPACE_FILE_NAME) in report.written:
+    map_file = root / config.WORKSPACE_FILE_NAME
+    if map_file in report.written and not repos:
         click.echo(
-            f"Edit tracker.query and add each repository under [repos.<name>] in {root / config.WORKSPACE_FILE_NAME}, "
-            f"describe them in {workspace.MAP_FILE_NAME}, then run `canopy workspace sync`."
+            f"Edit tracker.query and add each repository under [repos.<name>] in {map_file}, describe them in "
+            f"{workspace.MAP_FILE_NAME}, then run `canopy workspace sync`. Or pass clone URLs to "
+            f"`canopy workspace add`, which adds and syncs them."
         )
     try:
         ws = workspace.load(root)
         prefix = config.load(root, user_file).trust.branch_prefix
     except config.ConfigError as e:
         click.echo(f"\nThe config does not load yet; fix it before the first tick:\n{e}")
+        if repos:
+            raise CliError("nothing was added or synced; fix the config, then run `canopy workspace add`") from e
         return 0
+    synced: list[setup_workspace.Checked] = []
+    if repos:
+        click.echo()
+        synced = cli_workspace.sync(click_ctx, dry_run=False, add=repos)
+        ws = workspace.load(root)
+        click.echo(
+            f"\nWrite a one-line summary for each repository in {map_file}, and describe them in "
+            f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit tracker.query too."
+        )
     click.echo()
     click.echo(init.BRANCH_PROTECTION.format(prefix=prefix), nl=False)
     click.echo(setup_workspace.protection_targets(ws), nl=False)
     _print_shadowing(report)
+    cli_workspace.check_synced(synced)
     return 0
 
 
@@ -108,6 +131,30 @@ def cmd_skill() -> int:
         canopy skill > ~/.agents/skills/canopy/SKILL.md
     """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
     click.echo(resources.operator_skill().read_text(encoding="utf-8"), nl=False)
+    return 0
+
+
+@click.command("secret")
+@click.option("--rotate", is_flag=True, help="Replace the secret with a new one, signing every browser out.")
+def cmd_secret(*, rotate: bool) -> int:
+    """Print the listener secret the web UI's sign-in asks for, making one first if there is none.
+
+    It is kept in a file only you can read, next to your user config. `canopy loop` reads it when it starts serving;
+    restart the loop after --rotate.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"secret refused ({r.guard}): {r.reason}") from None
+    path = secret.path()
+    try:
+        value, written = secret.create(path, rotate=rotate)
+    except secret.SecretError as e:
+        raise CliError(str(e)) from None
+    click.echo(f"{'wrote' if written else 'kept '} {path}", err=True)
+    if written and rotate:
+        click.echo("Every browser is signed out once the loop restarts.", err=True)
+    click.echo(value)
     return 0
 
 

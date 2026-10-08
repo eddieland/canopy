@@ -15,6 +15,12 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.
   task: deny
+  # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
+  # (TRUST_MODEL T1, D077). Bash can still reach the network, for package installs and builds; this removes the tools
+  # a model reaches for on its own, not the capability.
+  webfetch: deny
+  websearch: deny
+  codesearch: deny
   bash:
     "*": allow
     # Pushes are plain ones: no force, no deletes, no mirrors or bulk ref updates. Patterns anchor on a space before
@@ -41,6 +47,37 @@ permission:
     "canopy *": deny
     "treehouse *": deny
     "sudo *": deny
+  # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
+  # in depth, whatever write tools the operator's runtime config grants (D084). The worker comments on its ticket,
+  # edits the ticket's labels, and opens and updates its PRs. Denied: merging, review submissions, closing,
+  # transitions, creating tickets, writing files or branches through the API instead of git, deleting, forking, and
+  # starting other agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them,
+  # and its PR update tool can close the PR; neither has a narrower name to deny, so the prompt keeps them to labels
+  # and the PR's title and body. tests/canopy/test_definitions.py checks these rules against real tool names.
+  "*merge*": deny
+  "*review_write*": deny
+  "*pending_review*": deny
+  "*create_pull_request_review*": deny
+  "*submit*": deny
+  "*approve*": deny
+  "*close*": deny
+  "*transition*": deny
+  "*create_issue*": deny
+  "*createJiraIssue*": deny
+  "*sub_issue*": deny
+  "*create_branch*": deny
+  "*create_or_update_file*": deny
+  "*push_files*": deny
+  "*delete*": deny
+  "*fork*": deny
+  "*create_repository*": deny
+  "*copilot*": deny
+  "*run_workflow*": deny
+  "*run_trigger*": deny
+  "*rerun*": deny
+  "*cancel*": deny
+  "*createConfluence*": deny
+  "*updateConfluence*": deny
 ---
 The system prompt is supplied by the harness at invocation time via the
 `{prompt}` argument to `opencode run`. Keep this body minimal so the agent does

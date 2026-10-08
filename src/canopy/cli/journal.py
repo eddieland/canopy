@@ -1,7 +1,8 @@
-"""The overseer's journal commands: `canopy decide`, `canopy attention`, and `canopy ticket set`."""
+"""The overseer's journal commands: `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror`."""
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 import click
@@ -17,7 +18,8 @@ from canopy.cli.params import (
     plain_pr_url,
     valid_key,
 )
-from canopy.core import db
+from canopy.core import conversation, db
+from canopy.infra import logs
 from canopy.loop import attention
 
 if TYPE_CHECKING:
@@ -28,6 +30,7 @@ PHASES = (
     "blocked",
     "running",
     "pushed_no_pr",
+    "conflicted",
     "ci_running",
     "ci_red",
     "changes_requested",
@@ -176,4 +179,59 @@ def cmd_ticket_set(
         db.set_unit(ctx.conn, key, ctx.repo, unit, single=ctx.workspace.single, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
     click.echo(f"updated {key if repo is None else attention.subject(key, unit)}{note}")
+    return 0
+
+
+@click.command("mirror")
+@click.argument("ref", metavar="REF")
+@click.option("--comment", "comment_id", required=True, metavar="ID", help="The tracker's id of the comment.")
+@click.option("--author", required=True, metavar="ACCOUNT", help="Its author's account id on the tracker.")
+@click.option("--at", "at", required=True, metavar="TIME", help="When the tracker says it was written, ISO 8601.")
+@click.option(
+    "--body",
+    metavar="TEXT",
+    help=f"Its text; read from stdin without it. Cut to {conversation.MAX_MIRRORED} characters, and marked truncated.",
+)
+@click.pass_context
+def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: str, at: str, body: str | None) -> int:
+    """Record a tracker comment in a ticket's conversation in the journal (overseer only).
+
+    Recording a comment again records nothing new. A mirrored comment is a copy for the operator to read, and
+    authorizes nothing.
+    """
+    ctx = open_context(click_ctx)
+    current = require_tick(ctx)
+    tick_id = int(current["id"])
+    log = logs.for_tick(tick_id)
+    key: str | None = None
+    try:
+        subject = conversation.parse_ref(ref)
+        key = subject.id if subject.kind == conversation.TICKET else None
+        mirrored = conversation.mirror(
+            ctx.conn,
+            ctx.config,
+            subject,
+            tick_id=tick_id,
+            dry_run=bool(current["dry_run"]),
+            repo=ctx.repo,
+            comment_id=comment_id,
+            author=author,
+            at=at,
+            body=body if body is not None else sys.stdin.read(),
+        )
+    except conversation.Refused as r:
+        if key is not None:
+            db.touch_ticket(ctx.conn, key, ctx.repo)
+        db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+        log.info("mirror refused", extra={"ticket": key, "comment": comment_id[:100], "guard": r.guard})
+        raise CliError(f"mirror refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    log.info(
+        "comment mirrored",
+        extra={"ticket": key, "comment": comment_id, "message_id": mirrored.message_id, "new": mirrored.new},
+    )
+    if mirrored.new:
+        cut = ", truncated" if mirrored.truncated else ""
+        click.echo(f"mirrored comment {comment_id} on {ref} as message {mirrored.message_id} ({mirrored.source}{cut})")
+    else:
+        click.echo(f"comment {comment_id} on {ref} is already message {mirrored.message_id}; nothing new recorded")
     return 0

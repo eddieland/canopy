@@ -322,6 +322,8 @@ def test_init_workspace_writes_the_skeleton(
     found = workspace.load(root)
     assert (found.name, found.repos) == ("acme", ())
     assert config.load(root, canopy_env.user_file).tracker.provider == "github"
+    # Defaults are not written, so a later canopy's reach the workspace.
+    assert "[trust]" not in (root / config.WORKSPACE_FILE_NAME).read_text()
 
     # Inside a workspace, plain `canopy init` sets up the workspace, and nothing is overwritten.
     (root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", "https://x.test/api.git")))

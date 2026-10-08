@@ -25,6 +25,9 @@ controls below keep the blast radius to "a branch nobody merged."
 - **Operator**: the developer running canopy. Fully trusted.
 - **Authorized repliers**: accounts listed in `trust.authorized_repliers` in the operator's user config.
   Their ticket comments may resume blocked work. Trusted to instruct workers.
+- **Trusted reviewers**: accounts listed in `trust.trusted_reviewers` in the operator's user config (D089). Their PR
+  review feedback may send a worker back to the PR without the operator's go-ahead. It is still data about what to
+  change, never instruction: being trusted decides whether a worker looks, not what it obeys.
 - **Org members**: anyone who can write ticket descriptions, comments, PR
   reviews. Their text is data. It is never treated as instruction.
 - **The overseer and worker agents**: LLM processes. Untrusted. Assumed to
@@ -66,8 +69,40 @@ Controls:
   Pushes are never forced and never go to a fork.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
-  MCP write scope limited to comments, labels, PR create/update).
+  MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
+  submission, closing, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever
+  the operator's runtime grants (D084). Names differ by server, so a server's own name for one of these gets past it.
+  GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and its PR update tool can close the
+  PR; neither has a narrower name to deny: where they are granted, keeping them to labels and the PR's own text is the
+  prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
+  tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- Review feedback from anyone not in `trust.trusted_reviewers` (user-only, empty by default) starts no run on its own
+  (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
+  canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
+  about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
+  cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
+  `canopy:review`, and is recognized by its journal, never by author, since it posts as the operator.
+- An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
+  `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
+  reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
+  it into the public `resume` prompt itself.
+- A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
+  written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
+  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks
+  the start record in code, in the transaction that inserts the run, so it needs no `--label`, and `_run` reads it
+  again before the worker starts. A stopped ticket is dispatched by nothing, whatever labels it carries. Tracker
+  comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
+  harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
+  journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
+  `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
+  canopy runs has.
+- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
+  and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
+  (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
+  worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's text on stdin
+  through a quoted heredoc, never in an argument, so the shell expands nothing in it, and the heredoc's delimiter is
+  random and fresh each tick, so no comment can be written to end it early and run what follows (D081).
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
 - The loop may create tickets, but never decides to, and never authorizes them. A split run (DESIGN §18) starts only
@@ -87,6 +122,10 @@ Controls:
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
+- No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
+  which a repository's config cannot loosen (D044). Fetched and searched pages are text anyone can shape, and an agent
+  that reaches for them on its own reads them with the operator's credentials in reach. The untrusted text an agent
+  reads is then what its task brings: the ticket, the PR and its comments, CI output, and the repository.
 
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
@@ -95,7 +134,17 @@ but not who added it, and the label-time check is the overseer's judgment: a ste
 dispatch a self-labeled child, as it could dispatch an unlabeled ticket. That child's work is still a PR a human
 reviews. Under the PR exception, a steered overseer and worker that both skip their checks can
 push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
-backstop, as it is for a coworker pushing there by hand.
+backstop, as it is for a coworker pushing there by hand. A worker's bash still reaches the network, for package
+installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
+removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
+worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
+unset, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one that
+works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted
+review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted reviewer's comments
+without a go-ahead; the worker's own check and human review of the PR remain, and those comments were never
+instructions to it. A steered overseer can mirror text that was never on the ticket, or
+name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
+stays its source.
 
 ### T2. Credential misuse or leakage
 
@@ -123,6 +172,7 @@ Controls in code, not prompts:
   `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
+- Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
 
 ### T4. Damage to the operator's machine
 
@@ -162,11 +212,18 @@ but must be distinguishable:
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>` or
   the runtime's own attribution. Never hidden.
-- PRs labeled `agent`.
+- PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
+  the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
 - Every review comment says what it is in its first line ("an automated adversarial review ... not a human review and
   not an approval") and carries a machine-readable `canopy-review` marker on its last.
+- Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
+  `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
+  them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
+  them gains nothing: they silence the comment that carries them, and a comment without them is judged as before. They
+  are user-only, so a repository cannot pick marks that silence people. They are a prompt obligation; a worker that
+  omits them leaves its comment reading as the operator's, which the attempt limits bound.
 
 ### T6. Data exfiltration by a compromised worker
 
@@ -178,9 +235,20 @@ Controls:
   run covers: one repository, or each repository of a joint run (DESIGN §18). Prompts name those repositories and forbid
   writing elsewhere; permissions should match where the runtime allows.
 - The splitter's write scope is creating tickets in the parent's project, linking them, and one comment on the parent.
-  It has no edit, shell, web fetch, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
+  It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
+- A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
+  config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
+  `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
+  knows (`gh`, `acli`, `jira`) are denied in its bash rules, and other MCP tools by name as for `canopy-worker`
+  (D084). A run is refused where the worktree's OpenCode config names any of that server's tools, since a repository
+  rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and its report and
+  question go to the journal, not the tracker. The journal holds the operator's replies and the workers' reports,
+  under the operator-only state directory (T2).
+- The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
+  the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
+  notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 - Notifications carry text written by agents and org members (attention details, worker summaries and questions,
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
@@ -198,6 +266,12 @@ and question, that a sink puts in front of whoever reads its destination. A stee
 a comment, and the GitHub MCP server cannot limit which PR it comments on, or how many times: the prompt asks for one
 comment, and nothing in code enforces it. Extra comments are noise, not authority, since the loop reads reviews from its
 journal. A repository that gates merges on the review marker trusts every agent the operator runs.
+A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
+named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
+`gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
+denied by name (D076's root cause: workers run as the operator until HOST_ISOLATION). A private ticket hides the
+conversation, not authorship or the work: commits keep their attribution trailer (T5), and its branch and PR title name
+the ticket key, which a tracker's VCS integration may link to the ticket.
 
 ### T7. Hostile repository config
 
@@ -213,6 +287,9 @@ for everything in this section, and the repositories' own `canopy.toml` files ar
 shared workspace repository, so it is exposed the same way. It also holds the map: repository names, one-line
 summaries, and clone URLs. Names and summaries are data, like ticket text. URLs are read only by `canopy workspace
 sync`, a command the operator runs, which prints each clone before making it; a tick never clones or changes a remote.
+Dropping a repository from the map makes the operator's next sync remove its clone under `repos/` and its slots, but
+only when nothing in them would be lost: a clean clone with no stash and no commit its remote lacks, and slots treehouse
+destroys unforced (D066). A pool's size is user-only (`capacity`), so the map cannot grow the operator's pools.
 
 Controls, in code:
 - Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A repository file
@@ -235,9 +312,12 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, and the branch
 prefix. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs, or agent branches under
-an unexpected prefix, which branch protection (§7) still governs. Through the runtime's own config it can also add
-skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the same
-exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
+an unexpected prefix, which branch protection (§7) still governs. The provider also picks the default tracker server and
+tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
+undenied in that definition. An operator who works private tickets in a repository they do not control sets
+`tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
+also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
+same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
 agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
 agents. Scalar rules canopy sets (the worker's `edit`, `external_directory`, and `task`) cannot be loosened that way,
@@ -263,9 +343,31 @@ Controls:
   worker prompted through it still cannot merge, approve, or push outside its branch, and capacity and attempt limits
   still hold.
 
+The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
+- The secret is `listener-secret` in the operator's config directory: at least 32 characters, in a regular file that
+  is not a symlink, owned by the operator, with no group or other permission bits. Anything else and the loop serves
+  nothing. `canopy secret` writes one and prints it to the operator's terminal; nothing else reads it but the loop.
+- The operator gives it to the sign-in page once. It is compared in constant time, a wrong one is answered after a
+  second, and a right one gets a session cookie (`HttpOnly`, `SameSite=Strict`, 30 days) signed with the secret, so a
+  new secret ends every session. The secret itself is never stored in the browser.
+- Every API route except signing in needs that session. A write also needs the session's own token in a header,
+  which a page from another origin cannot read or send without a CORS preflight the server never grants, and an
+  `Origin` header naming an allowed host.
+- The Host header must name a loopback host or the bind address (DNS rebinding), and an `Origin` header on the API
+  must name one of them (another site's page). Responses refuse framing and MIME sniffing and send no Referer;
+  `index.html` carries a CSP that allows scripts only from the server and the one inline theme script by hash.
+- Journal text, tracker comments and agent output included, is untrusted: it is rendered as text, never as HTML, and
+  no script is built from it.
+- The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
+  and reply to tickets, and end a stopped ticket's run, nothing else.
+
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
-shared machine can reach loopback, and is stopped only by the secret.
+shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
+on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
+read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
+cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
+the network (D076).
 
 ## 6. What canopy must never do
 
@@ -278,16 +380,19 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
-- Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, or authorized
-  repliers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only lower it.)
+- Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, authorized
+  repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only
+  lower it.)
 - Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
-- Listen on a wildcard or public address, or accept a connection without the operator's listener secret (T8).
+- Listen on a wildcard or public address, or serve journal data or take the operator's input without the operator's
+  listener secret (T8). The web UI's own files, which hold no data, are served to sign in.
 
 ## 7. Operator responsibilities
 
 - Configure branch protection: no direct pushes to protected branches, required
   reviews, no self-approval. In a workspace, in every repository in the map; `canopy init --workspace` lists them.
-- Keep `trust.authorized_repliers` short.
+- Keep `trust.authorized_repliers` short, and `trust.trusted_reviewers` to accounts whose review comments you would
+  have a worker act on unread: a listed bot steers your workers on every PR it reviews.
 - Check who can add your `tracker.labels` in your tracker. That permission is the authorization to start work, and it
   differs by tracker (Jira: edit issue; GitHub: triage or above on the repository). canopy inherits whatever the tracker
   allows.

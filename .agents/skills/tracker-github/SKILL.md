@@ -32,9 +32,12 @@ since GitHub logins are. Accounts ending in `[bot]` are never authorized replier
 
 ## Labels
 
-Setting labels through an issue update may replace the whole set: read the current labels, add or remove one, write the
-full set back. canopy does not create labels. If `needs_human_label` does not exist in the repository, report `blocked`
-and say so; the operator creates it.
+Set labels with the issue update tool (on GitHub's server, `issue_write` with method `update`, the issue number, and
+`labels`), never with a command-line client. The same tool creates, retitles, and closes issues; pass `labels` and
+nothing else, since closing a ticket is never a canopy agent's to do. An update replaces the whole set, and nothing
+makes it atomic: read the current labels immediately before the update, not earlier in the run, add or remove only the
+one you mean to, and write that set back. Never re-add a label someone else removed. canopy does not create labels.
+If `needs_human_label` does not exist in the repository, report `blocked` and say so; the operator creates it.
 
 When a label was added is in the issue timeline (`labeled` events). If the server cannot read the timeline, use the
 timestamp of the worker's question comment instead.
