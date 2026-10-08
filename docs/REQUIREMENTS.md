@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06, and where canopy stands on each. `DESIGN.md` is how
-canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
-[Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
-(AGENTS.md).
+The primary operator's requirements, written down 2026-10-06 (R11 and R12 on 2026-10-08), and where canopy stands on
+each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is
+listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until
+then (AGENTS.md).
 
 A bare § is a section of `DESIGN.md`. Status words:
 
@@ -147,9 +147,26 @@ Gaps:
 - Unverified: whether the worker's `external_directory: deny` refuses reads through `bazel-out/` and `bazel-bin/`,
   which are symlinks into the output base outside the worktree.
 
+### R11. Private tickets: deliver a ticket without the conversation appearing on it
+
+Gap; sketched as M18. When a client files the ticket, the operator wants canopy to deliver it without the agent's
+reports, its questions, or the operator's answers showing on the client's ticket. Today the ticket is the only channel
+for both (§7, §8), and the queue label is itself visible.
+
+Planned shape (§22, D072): the operator queues the ticket in canopy instead of labeling it; its workers never write to
+the tracker; questions reach the attention list and the operator answers with `canopy reply`, later from the web UI.
+The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
+
+### R12. One record of every ticket's conversation
+
+Gap; sketched as M19. Every ticket's conversation, public or private, in one place canopy owns, so the web UI (N1) can
+show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072). For a public
+ticket the tracker stays the authority and the journal holds the overseer's copy.
+
 ## Nice to have
 
-- **N1. Local web UI on localhost.** Deferred, and allowed under TRUST_MODEL T8 (C2, D055). OpenCode's own
+- **N1. Local web UI on localhost.** Planned as M20, after M18. Allowed under TRUST_MODEL T8 (C2, D055). The operator
+  expects it to become their main surface (C5), served by `canopy loop` with an off switch (D073). OpenCode's own
   attach (M15) covers sessions first.
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
   pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
@@ -173,7 +190,7 @@ Gaps:
 
 ## Conflicts
 
-Each was settled by the operator on 2026-10-06 and recorded in `DECISIONS.md`.
+Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, and recorded in `DECISIONS.md`.
 
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10, D045), so
   B starts before A lands. Settled by D054: stacking stays, controlled by `policy.stacking` (`"auto"` or `"never"`),
@@ -187,3 +204,7 @@ Each was settled by the operator on 2026-10-06 and recorded in `DECISIONS.md`.
 - **C4. Pushing to the operator's own PR branches vs `trust.branch_prefix` (R9).** Settled by D056: a worker may push
   to the head branch of an open, non-fork PR the operator authored and labeled with a queue label, never with force
   (TRUST_MODEL T1, §6; built in M14).
+- **C5. The web UI as the operator's main surface vs "daily surface is labels, ticket comments, PR review, and one
+  attention list" (DESIGN §4 principle 6, N1).** Settled by the operator on 2026-10-08 (D072, D073): the operator's
+  own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.
+  Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 changes when M20 is built.

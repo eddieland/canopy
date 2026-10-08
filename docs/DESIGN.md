@@ -21,6 +21,7 @@
 - [19. Chores](#19-chores)
 - [20. Notifications](#20-notifications)
 - [21. Reviews](#21-reviews)
+- [22. Conversations](#22-conversations)
 
 Normative. Code follows this document; changes to behavior change this document
 in the same PR. Rationale for choices lives in `DECISIONS.md`.
@@ -1598,7 +1599,8 @@ could fit T8 once something long-running holds the connection. What fits, in ord
    webhook, the sink reporting each thread on stdout for the harness to record and pass into the state block), Slack
    account ids among the authorized repliers, and a TRUST_MODEL T1 change.
 
-It attaches at the `json` format's `version` and the sink's stdout, ignored today.
+It attaches at the `json` format's `version` and the sink's stdout, ignored today. §22 plans the conversation these
+replies would join: the journal records it, and Slack becomes one channel into it.
 
 ### Trust model changes
 
@@ -1863,3 +1865,169 @@ runs the PR's code).
 - Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
   (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR
   only through MCP.
+
+## 22. Conversations
+
+Planned, not built: ROADMAP M18 to M20. Rationale in D072 and D073. Until M18 is done, this section is target shape;
+§7, §8, and §20 describe what runs.
+
+The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
+and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
+Slack later. Channels differ in how they reach the operator and how they prove who wrote a reply. The overseer and
+workers never see which channel a message came from, so adding a channel changes no prompt.
+
+A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator queues
+it in canopy instead (below). A private ticket's conversation never touches the tracker: the operator can deliver a
+ticket a client filed without the agent's reports, its questions, or the operator's answers appearing on it.
+
+### Messages
+
+A `messages` table, one row per message:
+
+- ticket, journal id (`AUTOINCREMENT`, so ids never repeat), and the time canopy recorded it.
+- `source`: `worker` (from a run's result line), `operator` (from a channel that authenticated the operator), or
+  `tracker` (a tracker comment the overseer mirrored, M19).
+- `kind`: `report` or `question` for a worker's, `reply` for the operator's, `comment` for a mirrored one.
+- `channel`: `run`, `cli`, `web`, `slack`, or `tracker`.
+- For a worker's message, its run. For a mirrored one, the tracker's comment id, author account id, and time, unique
+  per ticket and comment id.
+- The body, bounded: a worker's text as its result contract bounds it; the operator's at 4000 characters; a mirrored
+  comment's at 2000, marked truncated when cut.
+- `answers`: the id of the message a reply answers, when the channel knows it.
+
+Who writes:
+
+- `_run` records a run's `report` (its summary and PRs) and, for a `blocked` run, its `question`, in the transaction
+  that closes the run's row, for every ticket. The harness already has both from the result line (§8), so no agent
+  gains a write.
+- Operator input goes through one function in `core/conversation.py` that every channel calls, with the guards in one
+  place: the key is valid (§17), the ticket is queued, the body is within its bound.
+- Mirrored comments are recorded by the overseer (M19, below).
+
+Agents never write a message directly. No worker command records one, and the overseer records only mirrored tracker
+comments, which authorize nothing.
+
+### Authority stays with the source
+
+The journal is what the operator reads. Authority comes from where a message originated:
+
+- **Public ticket.** Authorization and replies are as §7 and §17 say: the overseer's live read of the tracker. A
+  mirrored comment is the overseer's claim, like `--label`; it never makes a ticket `human_replied`, authorizes a
+  split, or counts as "try again" after a failed run.
+- **Private ticket.** The journal is the source. Its queue row and the operator's messages are canopy's own facts,
+  written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
+  (D003). Tracker comments on a private ticket are data, whoever wrote them.
+
+This is principle 1's split applied to conversation: for a private ticket the journal owns the conversation, and for
+a public one the tracker does and the journal holds a copy.
+
+### Private tickets (M18)
+
+- `canopy queue add KEY`, `canopy queue remove KEY`, and `canopy queue list` replace the label for a private ticket.
+  The queue row is the authorization. Removing it stops new dispatches; a running run finishes, as when a label is
+  removed today.
+- The state block marks each private ticket and carries its operator messages newer than its comment cursor.
+- `canopy dispatch` for a queued key takes no `--label`. It checks the queue row in code, a guard where a public
+  ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
+  in the tracker.
+- The worker prompt has a private variant: no label check, since the harness checked the queue; never comment on,
+  label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
+  `canopy-worker-private`, `canopy-worker` with the tracker's write tools denied by name, as the splitter's and the
+  reviewer's are (§13).
+- Phases (§7) read the journal for the ticket's own phases: `needs_human` when the latest run ended `blocked` and no
+  operator message came after it; `human_replied` when an operator message is newer than the comment cursor, which
+  then holds a message id. The action is `resume` with `--cursor comment=<message id>`, its context pointing at the
+  message. The PR phases are unchanged.
+- The harness raises `awaiting_reply` every tick for a private ticket whose latest question has no operator message
+  after it, with the question as its detail (D028's pattern). A public ticket's question still reaches the operator as
+  `run.ended` (§20), which gains the question's message id so a channel can say what a reply answers.
+- After `crashed`, `worker_failed`, and the other run reasons (§14), "try again" on a private ticket is an operator
+  message after the run ended.
+- `canopy reply KEY [TEXT]` records an operator message, TEXT or stdin, and refuses a key that is not queued: a public
+  ticket's replies belong on the ticket. `canopy conversation KEY` prints the ticket's messages oldest first, with
+  control characters dropped.
+- `canopy queue` and `canopy reply` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`, and
+  `_review` set `CANOPY_RUN_ID` for their agents.
+
+### Tracker comments in the journal (M19)
+
+- Each tick, the overseer records every comment past a ticket's comment cursor with
+  `canopy ticket mirror KEY --comment ID --author ACCOUNT --at TIME --body TEXT`. It requires `CANOPY_TICK_ID` like
+  `dispatch` (D020), bounds the body at 2000 characters, and is idempotent on the ticket and comment id. Worker-marked
+  comments (D069) are skipped: the journal already has the run's report.
+- A dry run records the mirror too: it is a record of what the overseer saw, and changes no cursor or phase.
+- The mirror lags the tracker by up to one tick. A comment edited or deleted after it was mirrored is not updated.
+
+### Waking the loop
+
+During the wait (§6, the loop), each step checks the journal for an operator message recorded since the last tick
+began. One ends the wait and runs the next tick, at most once a minute. Every channel wakes it the same way, whether
+the message came from another process (`canopy reply`) or the loop's own server thread (D073). Capacity, attempt
+limits, and cooldowns hold as for any tick.
+
+### Channels
+
+| Channel | In | Out | Proves the operator by |
+|---|---|---|---|
+| tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
+| cli | `canopy reply`, `canopy queue` | `canopy conversation`, `canopy status` | the operator's shell (see T1 below) |
+| web (M20) | reply, take privately, release | pages | the listener secret (TRUST_MODEL T8) |
+| slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
+
+Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
+
+### The web UI (M20)
+
+Served by `canopy loop` from a thread (D073):
+
+- On unless `--no-serve` or `serve.enabled = false`. `serve.bind` (loopback by default, or a private address) and
+  `serve.port`. Every `serve.*` key is user-only (T7).
+- It requires the operator's listener secret (T8). Without the secret file, the loop says how to make one and serves
+  nothing.
+- It opens its own journal connection, never takes the tick lock, and writes only through the functions the CLI uses.
+  A server failure is logged and the server restarted with a backoff; it never ends the loop. Stopping the loop stops
+  it.
+- Pages: the attention list, running and recent runs, and tickets with their conversations. Actions: reply, take a
+  ticket privately, release it.
+- Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
+  the operator's session. No inline script built from data. Writes require a per-session token and a same-origin
+  request.
+- It lives in `src/canopy/serve/`, a features-layer package, the one place the network ban (§20) is lifted: M20 adds
+  `http.server` and `socketserver` to the banned modules, and `serve/` alone is exempt. It listens and calls out to
+  nothing, so T2's "no outbound call" stands.
+
+### Trust model changes
+
+Proposed, not in TRUST_MODEL. Each needs the operator's approval note in the PR of the milestone that builds it.
+
+- T1 (M18): a private ticket is authorized by its queue row, written only by `canopy queue add`, and its replies by
+  operator messages, written only through `core/conversation.py` by a channel that authenticated the operator;
+  `canopy dispatch` checks the queue row in code. Tracker comments on a private ticket are data, whoever wrote them.
+  Residual: until workers are sandboxed (HOST_ISOLATION), a worker's bash runs as the operator and can run
+  `canopy reply` or `canopy queue add`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which
+  stops a worker that follows injected text naively, not one that unsets them. This is the same class as a worker
+  writing the journal file directly, which sandboxing also removes.
+- T1 (M19): mirrored comments are the overseer's claims and authorize nothing.
+- T5: unchanged. A private ticket hides the conversation, not authorship: commits keep their attribution trailer.
+- T6 (M18, M19): the journal holds tracker comment bodies and the operator's replies, under the operator-only state
+  directory. A private worker posting to the tracker anyway is limited by its prompt and by name-denied write tools;
+  a tracker MCP server whose write tools canopy does not name is a residual.
+- T8 (M20): escaping and the per-session token above, in addition to T8's bind and secret rules.
+
+Overseer prompt changes, which need the same approval: private tickets' phases from the state block, and no
+`--label` for them (M18); mirroring each new comment (M19).
+
+### Open
+
+- Whether a private worker should have no tracker MCP server at all. It would then need the ticket's text from
+  elsewhere; the overseer's `--context` holds 2000 characters.
+- How `worker_cmd` names `canopy-worker-private`: an `{agent}` placeholder, or a template of its own as `split_cmd` is.
+- Whether a private ticket's PR body and branch should name the ticket key.
+- `canopy reply` on a public ticket: refused today. A journal note that authorizes nothing could come later.
+- Forgetting a ticket's conversation, for client data the operator must not keep.
+- Mirrored comments edited or deleted after the mirror.
+- PR review comments in the journal, alongside ticket comments.
+- Slack replies: a bridge holding a Socket Mode connection that runs `canopy reply` (a uv workspace member, like the
+  Slack sink, so the harness stays free of network code), or the overseer reading Slack through MCP (§20). Either
+  needs a T1 change naming Slack user ids.
+- How the operator's browser gets the listener secret, such as a one-time link the loop prints.

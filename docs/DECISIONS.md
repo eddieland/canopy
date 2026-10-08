@@ -1214,3 +1214,63 @@ Rejected:
 - Parsing the default format's text: it carries neither, and it is for people.
 Revisit: when OpenCode changes the event shape (the canary's `--format json` runs would show it), or when a second
 runtime reports sessions or cost differently (D009).
+
+## D072. The journal holds every ticket's conversation; authority stays with its source
+
+Context: the operator delivers tickets their clients file and does not want the agent's reports, its questions, or
+their own answers on the client's ticket (REQUIREMENTS R11). The ticket was the only channel for a worker's questions
+and the operator's replies (DESIGN §7), and the planned web UI (M20) and Slack replies would each have needed a
+conversation of their own. The operator wants one record of every ticket's conversation (R12).
+Decision (DESIGN §22):
+- A `messages` table records every ticket's conversation. The harness writes workers' reports and questions from their
+  result lines; the operator's input goes through one function every channel calls; the overseer mirrors tracker
+  comments (M19).
+- A ticket is private when the operator queues it in canopy (`canopy queue add`) instead of labeling it. Its queue row
+  and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never write to
+  the tracker: a private prompt variant, and the tracker's write tools denied by name.
+- Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
+  the overseer's claim and authorizes nothing. On a private ticket only operator messages authorize; tracker comments
+  are data.
+- Channels authenticate the operator. The overseer and workers never see which channel a message came from, so a new
+  channel changes no prompt.
+Rejected:
+- A shadow ticket in a tracker only the operator sees: works today with no code, but the operator copies each ticket
+  by hand and misses the client's later edits.
+- A shadow ticket linked to the client's: still a second ticket per ticket, and a split in the tracker contract (§17)
+  between where a task comes from and where its conversation happens, for what is one more channel.
+- Slack as the private channel first: adds a service, a bot token, and a T1 change for a conversation the operator can
+  have locally, and a Slack workspace may be shared with the client.
+- The journal as the source for public tickets too: the harness cannot read the tracker (D003), so the journal's copy
+  of a comment is an agent's claim, and authorizing from it would let a steered overseer forge a reply.
+- Agents writing messages directly: a steered worker could write the operator's reply to its own question.
+Consequences: the journal holds tracker comment bodies and client text, in the operator-only state directory. A private
+ticket's replies are typed into canopy, not the tracker. Until workers are sandboxed (HOST_ISOLATION), a worker's bash
+can run `canopy reply`; the command refuses inside canopy's runs, which stops a worker that follows injected text, not
+one that unsets the markers.
+Revisit: if mirroring costs a material share of each tick (M13's spend records will show it), or when sandboxing lands
+and the residual goes.
+
+## D073. The web UI is served by `canopy loop`, from a thread, behind an off switch
+
+Context: the operator expects a local web UI to become their main surface, hosted by canopy itself (REQUIREMENTS N1,
+C5). D042 kept the loop listening on nothing until a milestone gives it a listener; D055 allows one on loopback or a
+private network, behind the operator's secret. ruff's banned-api rule bans `socket`, `http.client`, and
+`urllib.request` everywhere in `src/canopy`, no exceptions (DESIGN §20).
+Decision (DESIGN §22; built in ROADMAP M20):
+- `canopy loop` serves the UI from a thread, on unless `--no-serve` or `serve.enabled = false`. The loop's process
+  mostly waits: a tick waits on the overseer's process, and workers run detached.
+- The server opens its own journal connection, never takes the tick lock, and writes only through the functions the
+  CLI uses. A server failure is logged and the server restarted; it never ends the loop.
+- It lives in `src/canopy/serve/`, the one package exempt from the network ban, which M20 extends to `http.server` and
+  `socketserver`. It listens and calls out to nothing.
+- The loop wakes early on an operator message by checking the journal during its wait, so a reply from another
+  process (`canopy reply`) and one through the server wake it the same way.
+Rejected:
+- A separate `canopy serve` process: workable, since the journal is shared in WAL mode, but two commands to keep
+  running for one operator. The seam (a context opener and the journal) keeps it a small change later.
+- A uv workspace member, like the Slack sink: it may not import canopy, so it could not read the journal or share the
+  write path.
+- Waking the loop with an in-process event: covers the server only, not `canopy reply` from a shell.
+Consequences: stopping the loop stops the UI. AGENTS.md's "do not build a web UI" is lifted by M20; DESIGN §3's
+listener line and principle 6's daily surface change when it is built.
+Revisit: when the operator wants the UI while the loop is stopped, or a server fault is seen to disturb ticks.
