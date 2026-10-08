@@ -1227,7 +1227,8 @@ Decision (DESIGN §22):
   comments (M19).
 - A ticket is private when the operator starts it in canopy (`canopy start`) instead of labeling it. Its start
   record and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never
-  write to the tracker: a private prompt variant, and the tracker's write tools denied by name.
+  write to the tracker: a private prompt variant, and a definition that allows only the tracker's read tools, by
+  name, and denies the rest of its server.
 - Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
   the overseer's claim and authorizes nothing. On a private ticket only operator messages authorize; tracker comments
   are data.
@@ -1326,3 +1327,27 @@ Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, 
 change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
 stay.
 Revisit: if two kinds' reference forms ever collide, or a kind needs a verb with a meaning the others do not share.
+
+## D076. Private tickets and the web UI ship without sandboxing or TLS
+
+Context: review of DESIGN §22 found residuals that share one root cause: until workers are sandboxed (HOST_ISOLATION),
+a worker's bash runs as the operator. It can forge `canopy reply` or `canopy start` by unsetting canopy's environment
+markers, and it can post to a private ticket through any tracker client or token the operator's shell holds, past the
+CLIs its bash rules deny by name. Separately, the web UI on a private address serves plain HTTP, so an observer on
+that network could capture the listener secret.
+Decision: the operator judged these risks low (2026-10-08). canopy's guards lower the chance that an agent acts outside
+its task; they cannot contain a capable agent running as the operator, and sandboxing would not fully either. What
+keeps an agent from labeling a ticket or posting where it was told not to is that it was not asked to, so the defense
+that matters is limiting the untrusted text agents read and act on (TRUST_MODEL T1).
+- M18 does not wait for sandboxing. The environment markers and the private worker's denied tools and CLIs stay, as
+  guards against an agent that follows injected text naively, and T1 and T6 name the residuals. They are the same
+  class as a worker editing the journal file directly, which canopy already accepts.
+- The web UI follows T8 as D055 settled it: loopback by default, a private address by the operator's choice, no TLS.
+Rejected:
+- Gating M18 on HOST_ISOLATION: it delays the requirement (R11) behind a milestone that has no date, for a risk that
+  needs a worker already steered by injected text.
+- Removing the private worker's shell: it could not build or test, which is the work.
+- Requiring TLS, or refusing a non-loopback bind without it: certificates for a single-operator tool on the
+  operator's own network, which D055 already declined to require.
+Revisit: with D055's revisit (more than one person per machine or listener, or a network the operator does not
+control), or after any incident where a run wrote to the journal outside its run or posted to a private ticket.
