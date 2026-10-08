@@ -390,7 +390,8 @@ the operator: whether each tick's block is legible over a working session.
 D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
 
 - Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run. Worker and split runs do (D071); the overseer, chores, and reviews read the same events but record nothing yet.
+  run. Worker and split runs (D071) and each tick's overseer do; chores and reviews read the same events but record
+  nothing yet.
 - A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
   to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
   within M21's gate deadlines.
@@ -401,8 +402,12 @@ D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design c
 Accept: written with the design, before work starts.
 
 Status: in progress. Taken in part on request (2026-10-07), with M15's session ids: worker and split runs record their
-cost in dollars and tokens, and `canopy status` shows it per recent run (D071). Not designed yet: the budget, the
-pacing rule, and spend in the loop's per-tick block.
+cost in dollars and tokens, and `canopy status` shows it per recent run (D071). Taken in part again on request
+(2026-10-08): each tick records its overseer's session and cost, the default `overseer_cmd` asks for events, and the
+loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
+alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
+`overseer_cmd` in a user file from before needs `--format json` added. Not designed yet: the budget and the pacing
+rule.
 
 ## M14. PR-scoped work
 
@@ -565,7 +570,7 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks, with the running run
-  or review holding each (D087). Taken on request (2026-10-08).
+  or review holding each (D088). Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
 - Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
   the UI once M15 runs workers against OpenCode's server.

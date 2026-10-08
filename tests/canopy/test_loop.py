@@ -147,6 +147,32 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     assert "stopped after 2 ticks: ok=2" in tick2
 
 
+def test_each_tick_block_shows_what_its_overseer_cost(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    overseer_does(monkeypatch)
+    # The second tick's overseer reports a cost that does not validate: it reports none, so there is none to show.
+    time = FakeTime(on_sleep=lambda: monkeypatch.setenv("FAKE_OVERSEER_STEP_COST", '"a lot"'))
+    term, out = console()
+
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
+    assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick at" in tick1
+    assert "cost" not in tick2
+
+
 def test_a_narrow_terminal_shortens_only_the_rationale(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

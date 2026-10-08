@@ -280,7 +280,8 @@ in order:
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
-   `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The run succeeded if it
+   `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The session id and cost
+   the runtime reported (§13) go on the `ticks` row, whether or not the run succeeded. The run succeeded if it
    exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
    `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
    closes the tick as `skipped`, which leaves the attention list standing (D037).
@@ -320,7 +321,8 @@ foreground until stopped:
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
 4. Print the tick's status, duration, and summary; each decision except `wait` and attention items, with its
-   rationale; attention items added (`+`) and resolved (`-`); running workers and the list's size.
+   rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, and what the tick's
+   overseer cost in dollars and tokens when the runtime reported it.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status.
    This pacing rule is `repeat.pace`; ROADMAP M21 lengthens it after idle ticks (Idle pacing, below) and M13 by tick
    cost. An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early, but no
@@ -670,9 +672,12 @@ The schema is `migrations/0001_init.sql`, the whole schema as of v0.1; a journal
 migrations is not upgraded (D068). Each later change is a new migration. Tables:
 
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `skipped`,
-  `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick (the latest by
-  default) and its decisions; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is
-  the way to read a dry run's plan. A tick that cannot take the lock writes no row.
+  `overseer_failed`, `reconcile_failed`, or `abandoned`. What the runtime reported about its overseer run (§13), in the
+  same columns as `runs`: `session_id`, `cost_usd`, and tokens by kind, all NULL when it reported nothing. A tick's cost
+  is its overseer's alone; each run it dispatched records its own. `canopy decisions [TICK]` prints a tick (the latest
+  by default), its overseer's session and cost, and its decisions; `--ticket KEY` filters decisions by exact ticket key
+  and reports when none match. This is the way to read a dry run's plan. A tick that cannot take the lock writes no
+  row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
@@ -788,7 +793,7 @@ mcp_server = ""         # optional; the tracker's MCP server as OpenCode names i
 max_workers = 2
 
 [runtime]
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
 split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
 overseer_timeout_minutes = 15
@@ -841,10 +846,13 @@ Rules:
 - `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
-- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]`, and prints the label.
-  It writes `canopy.toml` only if the repository has none. It never overwrites either file and installs nothing else
-  (§13). If the config does not load (for example, templates lacking `{definitions_dir}`), it prints the error. It
-  warns about copies of canopy's agent definitions in the repository's OpenCode config, which stop runs (§13).
+- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
+  `trust.authorized_repliers` to fill in, and prints the label. It writes `canopy.toml` only if the repository has
+  none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose default serves: a default
+  written into a file is pinned there, and a later canopy's never reaches it (D087). It never overwrites either file
+  and installs nothing else (§13). If the config does not load (for example, templates lacking `{definitions_dir}`),
+  it prints the error. It warns about copies of canopy's agent definitions in the repository's OpenCode config, which
+  stop runs (§13).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
@@ -922,9 +930,10 @@ From events the harness also reads, each validated (D026):
   killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
   session's, and not counted.
 
-The default `worker_cmd` and `split_cmd` ask for events, and `_run` records what they report on the run (§8, §11).
-Other templates may ask for them too; what the overseer, chores, and reviews report is not recorded yet (ROADMAP M13).
-A run log holds the events as printed.
+The default `overseer_cmd`, `worker_cmd`, and `split_cmd` ask for events. A tick records what its overseer reports on
+the tick (§6), and `_run` what a worker or split reports on the run (§8, §11). Other templates may ask for them too;
+what chores and reviews report is not recorded yet (ROADMAP M13). A tick's output file and a run log hold the events as
+printed.
 
 ### Where the runtime finds canopy's definitions
 
@@ -947,7 +956,7 @@ canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split
 `review_cmd`):
 
 ```toml
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
 ```
 
@@ -986,7 +995,9 @@ bash rules apply either way.
 
 After every tick the list is rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable
 only by the operator: grouped by reason, one line per item with ticket key, age, and detail (usually a link).
-`canopy status` prints it too. Items disappear when their cause is gone; there is no manual dismissal.
+`canopy status` prints it too, after a line for the last tick: its status, how long ago it started, its summary, and
+its overseer's cost when the runtime reported it. Items disappear when their cause is gone; there is no manual
+dismissal.
 
 `canopy status` also lists the tickets the operator started (§22), each with its status, phase, and the message it
 awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket, kind,
@@ -2361,7 +2372,7 @@ ticket whose summary changed. A new stream starts with all three lists. The UI w
 `setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
 once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
 
-The worktrees page (taken on request, 2026-10-08; D087): for each repository in the workspace, in map order, its pool's
+The worktrees page (taken on request, 2026-10-08; D088): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot shows treehouse's status, the
 branch it has checked out (or detached), its lease holder and since when, and the processes treehouse found running in
 it. A lease is matched to a running run or review by its lease id, as reconcile matches them, so a slot names the

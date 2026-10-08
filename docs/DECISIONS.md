@@ -583,7 +583,16 @@ Rejected: deleting the ticket's rows (loses the history `show` and the decisions
 clearing the comment cursor too (handled comments would read as new); a forget the overseer can call.
 Revisit: if operators routinely raise a limit just to start a forgotten ticket over; then count attempts per branch.
 
-## D087. The worktrees page reads treehouse when asked, not from the journal or the event stream
+## D087. `canopy init` writes only keys whose default does not serve
+
+A default written into a config file is pinned there: when canopy changes it (as the agent templates did for
+`{definitions_dir}`, D040, and for the overseer's `--format json`), every file init wrote keeps the old value. So the
+user file gets the queue label and an empty `trust.authorized_repliers` to fill in; `canopy.toml` and
+`canopy-workspace.toml` get the provider and a query. `examples/config.toml` documents every key.
+Rejected: writing every key the operator might tune, commented or not (they go stale, and read as choices to make).
+Revisit: if operators routinely miss a key they needed to change; then print it from init instead of writing it.
+
+## D088. The worktrees page reads treehouse when asked, not from the journal or the event stream
 
 The web UI's worktrees page shows each pool's slots: what holds each, its branch, and the processes in it. The server
 runs `treehouse status --json` once per pool on each `GET /api/worktrees`, through `procs` like every other process,
