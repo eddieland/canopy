@@ -11,8 +11,10 @@ requires-python = ">=3.12"
 dependencies = [
     "canopy-notify-slack",
     "click>=8.5.0",
+    "fastapi>=0.142.4",
     "pydantic>=2.13.5",
     "rich>=15.0.0",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
@@ -47,6 +49,7 @@ canopy-notify-slack = { workspace = true }
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.1",
     "hypothesis>=6.168.1",
     "pyrefly>=1.3.1",
     "pytest>=8",
