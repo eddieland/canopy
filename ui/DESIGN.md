@@ -117,9 +117,10 @@ inline script and checks it against the store's key.
   selection is `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation and
   the reply form; an item about no ticket shows its detail and nothing to answer. Under the list, Working lists the
   running runs: ticket, kind, cost so far, and for how long.
-- **A conversation** is a column of messages, each with a 2px left rule: `border` for a worker's report or a
-  tracker comment, `accent` on a faint accent tint for the operator's own words, `status-blocked` on its tint for a
-  question. Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.
+- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
+  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
+  accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
+  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.

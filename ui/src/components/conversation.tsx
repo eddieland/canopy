@@ -10,13 +10,13 @@ const WHO: Record<Message['source'], string> = {
     tracker: 'tracker',
 }
 
-// Written out so Tailwind finds them. The operator's own words are marked with the accent; a question with the color
-// of what waits on a person.
+// Written out so Tailwind finds them. Each message is a bubble: the operator's own words on the right in the accent's
+// tint, a question in the tint of what waits on a person, anything else on the raised surface.
 const TONE: Record<Message['kind'], string> = {
-    report: 'border-l-border',
-    question: 'border-l-status-blocked bg-status-blocked/8',
-    reply: 'border-l-accent bg-accent/6',
-    comment: 'border-l-border',
+    report: 'bg-surface-raised',
+    question: 'bg-status-blocked/12',
+    reply: 'bg-accent/12',
+    comment: 'bg-surface-raised',
 }
 
 /**
@@ -25,16 +25,24 @@ const TONE: Record<Message['kind'], string> = {
  */
 export function Conversation({ messages, waiting }: { messages: Message[]; waiting: number | null }) {
     return (
-        <ol className="flex flex-col gap-2 p-3" data-testid="conversation">
+        <ol className="flex flex-col gap-3 p-3" data-testid="conversation">
             {messages.map((message) => (
                 <li
                     key={message.id}
                     data-testid={`message-${message.id}`}
                     data-source={message.source}
-                    className={cn('flex flex-col gap-1 rounded-sm border-l-2 py-1.5 pr-2 pl-3', TONE[message.kind])}
+                    className={cn('flex w-full max-w-2xl flex-col gap-1', message.source === 'operator' && 'self-end')}
                 >
                     <Head message={message} waiting={message.id === waiting} />
-                    <p className="text-sm break-words whitespace-pre-wrap">{message.body}</p>
+                    <p
+                        className={cn(
+                            'rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap',
+                            message.source === 'operator' ? 'rounded-tr-xs' : 'rounded-tl-xs',
+                            TONE[message.kind],
+                        )}
+                    >
+                        {message.body}
+                    </p>
                 </li>
             ))}
         </ol>
