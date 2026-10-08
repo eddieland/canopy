@@ -226,3 +226,31 @@ def test_shipped_resume_prompts_gate_untrusted_reviewers(canopy_env: CanopyEnv) 
     assert "## Messages from the operator\n\nNo messages from the operator.\n" in public
     private = prompts.render_worker(cfg, "resume", {**VALUES, "CONVERSATION": "No messages yet."}, private=True)
     assert "Trusted reviewers: `octocat`." in private
+
+
+@pytest.mark.parametrize("kind", sorted(prompts.WORKER_PR))
+def test_shipped_pr_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: str) -> None:
+    # The operator's own PR (DESIGN §23): even with `runtime.pr_skill` set, its workers open no PR.
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]", '[runtime]\npr_skill = "open-pr"'))
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    text = prompts.render_worker(cfg, kind, {**VALUES, "PR": "repo#7", "BRANCH": "feature/x"}, pr=True)
+    assert "{{" not in text
+    assert "repo#7, a PR the operator wrote by hand" in text
+    assert '"branch":"feature/x","prs":{"repo":"<url or null>"}' in text
+    assert "`agent-ready-alice`" in text
+
+
+@pytest.mark.parametrize("kind", sorted(prompts.WORKER_PR))
+@pytest.mark.parametrize("missing", ["PR", "OPERATOR_MESSAGES", "LABELS"])
+def test_a_pr_worker_prompt_needs_the_pr_the_operator_and_the_labels(
+    canopy_env: CanopyEnv, kind: str, missing: str
+) -> None:
+    # The worker checks the PR's labels and author itself, and hears the operator only here: an override that drops
+    # any of them fails closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    kept = [f"{{{{{name}}}}}" for name in ("PR", "OPERATOR_MESSAGES", "LABELS") if name != missing]
+    (overrides / prompts.WORKER_PR[kind]).write_text(f"Work {' '.join(kept)}\n")
+    cfg = load(canopy_env.repo, canopy_env.user_file)
+    with pytest.raises(prompts.PromptError, match=rf"missing required placeholder \{{\{{{missing}\}}\}}"):
+        prompts.render_worker(cfg, kind, {**VALUES, "PR": "repo#7"}, pr=True)

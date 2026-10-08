@@ -83,6 +83,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     operator = {
         str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
     }
+    prs = {str(t["key"]): found for t in tickets if (found := conversation.pr_section(ctx.conn, t)) is not None}
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -105,6 +106,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
         private=private,
         operator=operator,
+        prs=prs,
         mirror_delimiter=conversation.body_delimiter(),
     )
     prompt = prompts.render_overseer(ctx.config, block)
@@ -128,7 +130,7 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
     """Record the attention items the harness raises itself, every tick their cause holds (DESIGN §14)."""
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
-    # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22).
+    # A private ticket's or a PR subject's question reaches the operator here, on no tracker or PR (DESIGN §22, §23).
     for waiting in conversation.awaiting(ctx.conn):
         db.record_decision(
             ctx.conn,

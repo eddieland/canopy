@@ -411,7 +411,7 @@ last 24 hours cost (2026-10-08, D095). Not designed yet: the budget and the paci
 
 ## M14. PR-scoped work
 
-REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first.
+REQUIREMENTS R9, DESIGN §23, D056, and D098. Needs M3's `fix-ci` and `resume`.
 
 - A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: `fix-ci` when its checks
   fail, `resume` when review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
@@ -426,10 +426,21 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
   needing the operator's approval as M18's does.
 - `canopy mirror` for a PR reference: the PR's review comments join the journal as its conversation (DESIGN §22, M19).
 - TRUST_MODEL T1 and §6 already allow it (D056).
+- Fakes-based tests (`tests/canopy/test_pr_subjects.py`): a PR's `fix-ci` and `resume` on its head branch, each guard
+  a PR adds, a head missing from origin, its unit's attempt limit, and its question answered with `canopy reply`.
 
-Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+Accept: the tests above pass with the fakes. Live, on the operator's own hand-written PR with a queue label: a red
+check gets one `fix-ci` whose commit lands on the PR's branch without force; a trusted reviewer's comment gets one
+`resume` that replies on the PR; a bot's comment waits as `untrusted_review` until `canopy reply REPO#N`; a question
+waits as `awaiting_reply` and is answered with `canopy reply`; removing the label stops the work; and the same label on
+a coworker's PR, or on a PR from a fork, starts nothing.
 
-Status: not started.
+Status: in progress. Taken on request (2026-10-08). The design (DESIGN §23, D098), `canopy dispatch REPO#N --branch`
+with its guards, `_run` on the PR's head, the PR worker prompts, the overseer's section for the operator's own PRs,
+`awaiting_reply` for a PR's question, `canopy show` and `reply` on a PR and the web UI's ticket page, and the tests
+above are in. The overseer and worker prompt changes and T1's wording wait on the operator's approval note in the PR.
+Not started: `canopy start`, `stop`, and `forget` for a PR (a T1 change needing approval), and `canopy mirror` for its
+review comments (M19). Waiting on the operator: the live run above.
 
 ## M15. Sessions and recent runs
 

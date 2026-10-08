@@ -123,9 +123,10 @@ or turns it off with `policy.stacking` (C1, D054).
 
 ### R9. PR-scoped workspaces for "address feedback" and "fix CI on my PR"
 
-Gap; sketched as M14. All of canopy's work is keyed by ticket. M11's `review.query` reviews the operator's own PRs
-without a ticket, but never pushes to them (§21). Fixing CI or addressing review on a hand-written PR needs a PR-keyed
-unit of work, and pushing to the PR's own branch, which D056 now allows (C4).
+Partial: built in M14, live acceptance pending (§23, D098). A PR the operator wrote, labeled with a queue label, is a
+subject of its own, `REPO#N`, worked by `fix-ci` and `resume` on the PR's own head branch, never with force, which D056
+allows (C4). Its workers' questions wait in canopy for `canopy reply`. Gaps: starting a PR privately without a label,
+and its review comments in the journal (M14).
 
 ### R10. Worktree setup hooks that cope with the Bazel monorepo
 

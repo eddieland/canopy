@@ -497,7 +497,14 @@ def finish_run(
         last: int | None = None
         for kind, body in messages:
             last = insert_message(
-                conn, SUBJECT_TICKET, str(key), source="worker", kind=kind, channel="run", body=body, run_id=run_id
+                conn,
+                subject_kind(str(key)),
+                str(key),
+                source="worker",
+                kind=kind,
+                channel="run",
+                body=body,
+                run_id=run_id,
             )
         built = event(last) if event is not None else None
         if built is not None:
@@ -794,8 +801,15 @@ def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.R
 
 # Conversations (DESIGN §22)
 
-# The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).
+# The kinds of subject the journal keeps a `tickets` row for: a ticket, and the operator's own PR, keyed `REPO#N`
+# (DESIGN §23, D098). Messages and start records are keyed by subject, so a new kind adds no table (D075).
 SUBJECT_TICKET = "ticket"
+SUBJECT_PR = "pr"
+
+
+def subject_kind(key: str) -> str:
+    """Return the kind of subject a `tickets` row's key names: a PR's has a `#`, which a ticket key never has (§17)."""
+    return SUBJECT_PR if "#" in key else SUBJECT_TICKET
 
 
 def insert_message(
@@ -954,13 +968,14 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
     return conn.execute(
         "SELECT t.*, max("
         "  t.last_seen_at,"
-        "  coalesce((SELECT max(m.at) FROM messages m WHERE m.subject_kind = ? AND m.subject_id = t.key), ''),"
+        # A ticket key and a PR's never collide, so a row's messages are those with its key under either kind.
+        "  coalesce((SELECT max(m.at) FROM messages m WHERE m.subject_kind IN (?, ?) AND m.subject_id = t.key), ''),"
         "  coalesce((SELECT max(coalesce(r.ended_at, r.started_at)) FROM runs r WHERE r.ticket_key = t.key), ''),"
         "  coalesce((SELECT coalesce(s.stopped_at, s.started_at) FROM starts s"
         "    WHERE s.subject_kind = ? AND s.subject_id = t.key), '')"
         ") AS active_at "
         "FROM tickets t WHERE ? IS NULL OR t.key = ? ORDER BY active_at DESC, t.key LIMIT ?",
-        (SUBJECT_TICKET, SUBJECT_TICKET, key, key, limit),
+        (SUBJECT_TICKET, SUBJECT_PR, SUBJECT_TICKET, key, key, limit),
     ).fetchall()
 
 
@@ -982,7 +997,7 @@ def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
         "forgotten_run_id = (SELECT max(id) FROM runs WHERE ticket_key = ?), "
         "forgotten_message_id = (SELECT max(id) FROM messages WHERE subject_kind = ? AND subject_id = ?) "
         "WHERE key = ?",
-        (now(), key, SUBJECT_TICKET, key, key),
+        (now(), key, subject_kind(key), key, key),
     )
     conn.execute("DELETE FROM ticket_units WHERE ticket_key = ?", (key,))
 

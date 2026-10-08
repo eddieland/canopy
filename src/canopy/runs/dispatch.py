@@ -33,6 +33,13 @@ SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
 # A stacked run's base is another ticket's branch, `<branch_prefix><KEY>-<slug>`: what follows the prefix is one plain
 # ref component, so it reaches git's argv as safely as a key.
 BASE_TAIL_RE = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
+# A PR subject's branch is the PR's head, named by whoever opened it (DESIGN §23): plain ref components, each starting
+# with a letter or digit, joined by `/`, with `.` only inside one. It reaches git's argv as a ticket's branch does.
+PR_BRANCH_RE = re.compile(
+    r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*(?:/[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)*)*"
+)
+# The kinds a PR subject takes: its branch and PR are the operator's, so nothing implements or splits one.
+PR_KINDS = ("fix-ci", "resume")
 DEFAULT_SLUG = "work"
 JOINT_PR_NOTE = "one per repository, listed under Repositories"
 # A prompt carries at most this much of `MAP.md`.
@@ -80,6 +87,7 @@ class Plan:
     repositories are the names of the units it covers, in the order the dispatch named them. A run over several is a
     joint run (DESIGN §18). A split has no branch (""): it reads the repositories it names and changes none of them. A
     private run works a ticket the operator started; its start record authorizes it, and it has no label (DESIGN §22).
+    A `pr` run works a PR subject, the operator's own PR, on the PR's head branch (DESIGN §23).
     """
 
     branch: str
@@ -87,6 +95,7 @@ class Plan:
     label: str
     repos: tuple[str, ...]
     private: bool = False
+    pr: bool = False
 
     @property
     def joint(self) -> bool:
@@ -97,6 +106,16 @@ class Plan:
 def valid_slug(value: str) -> bool:
     """Slugs reach branch names and argv, like keys."""
     return SLUG_RE.fullmatch(value) is not None
+
+
+def valid_pr_branch(value: str) -> bool:
+    """A PR's head branch canopy may name: plain components git accepts as a ref, none ending `.lock`, never `HEAD`.
+
+    `HEAD` would name origin's default branch through its symbolic ref (DESIGN §23).
+    """
+    if value == "HEAD" or PR_BRANCH_RE.fullmatch(value) is None:
+        return False
+    return not any(part.endswith(".lock") for part in value.split("/"))
 
 
 def branch_name(prefix: str, key: str, slug: str) -> str:
@@ -133,6 +152,7 @@ def start(
     context: str | None,
     repos: Sequence[str] = (),
     request: str | None = None,
+    branch: str | None = None,
 ) -> Started:
     """Check the guards, lease a slot in each repository, record the run, and spawn `canopy _run` for it.
 
@@ -140,7 +160,8 @@ def start(
     ticket's first implement named, in every repository. `base` stacks the run on another ticket's branch (DESIGN §10);
     without it the run starts from each pool's base branch. `repos` names the units the run covers, one repository each;
     it may be left out only in a workspace of one. A run over several repositories is a joint run (DESIGN §18). A
-    `split` names the authorized replier's comment that asked for it with `request`, and works no unit.
+    `split` names the authorized replier's comment that asked for it with `request`, and works no unit. A PR subject's
+    `fix-ci` or `resume` names the PR's head branch with `branch` (DESIGN §23).
 
     Raises:
         Refusal: a guard refused, or a slot could not be leased or the worker started. Nothing is left running and
@@ -149,7 +170,7 @@ def start(
     # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
+        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request, branch=branch)
         attempt = _guard(ctx, key, kind, plan.repos)
         leases = _lease_all(ctx, key, plan.repos)
         try:
@@ -180,12 +201,14 @@ def check(
     base: str | None,
     repos: Sequence[str] = (),
     request: str | None = None,
+    branch: str | None = None,
 ) -> Plan:
     """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
     Nothing is leased, recorded, or spawned. The dry-run dispatches this tick already recorded stand in for the runs
     they would have started, so the `running` and `capacity` guards refuse what a live tick would. The leases, prompt,
-    and spawn are not tried, so `no_slot`, `bad_prompt`, and `spawn_failed` never appear in a dry run.
+    and spawn are not tried, so `no_slot`, `bad_prompt`, and `spawn_failed` never appear in a dry run, nor a PR
+    subject's `bad_branch` for its pool's base branch, which only a lease names.
 
     Raises:
         Refusal: a guard refused.
@@ -198,7 +221,7 @@ def check(
         if str(d["action"]).startswith("dispatch:") and (d["ticket_key"] is not None or d["pr"] is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
+        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request, branch=branch)
         _guard(ctx, key, kind, plan.repos, planned=planned)
     return plan
 
@@ -213,7 +236,12 @@ def _plan(
     slug: str | None,
     base: str | None,
     request: str | None = None,
+    branch: str | None = None,
 ) -> Plan:
+    if conversation.is_pr_key(key):
+        return _plan_pr(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request, branch=branch)
+    if branch is not None:
+        raise Refusal("bad_branch", f"--branch names a PR's head branch; {key} is a ticket, whose branch canopy names")
     private = _check_start(ctx, key, kind)
     # A started ticket's start record authorizes it, checked in code; a public ticket's `--label` is a claim (D051).
     configured = "" if private else _check_label(ctx.config.tracker.labels, key, label)
@@ -237,6 +265,66 @@ def _plan(
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
     return Plan(branch=branch, base=base, label=configured, repos=names, private=private)
+
+
+def _plan_pr(
+    ctx: Context,
+    key: str,
+    kind: str,
+    *,
+    label: str | None,
+    repos: Sequence[str],
+    slug: str | None,
+    base: str | None,
+    request: str | None,
+    branch: str | None,
+) -> Plan:
+    """Refuse a dispatch a PR subject cannot take, and return its plan (DESIGN §23, D056).
+
+    A PR subject is the operator's own open PR, authorized by a queue label on it: `--label` is the same claim as a
+    ticket's, and the worker reads the PR's author, labels, and head again before it changes anything (D051). Its one
+    unit is the repository its key names, and its branch is the PR's head, named on every dispatch: never the loop's
+    own branch prefix, and never the pool's base branch (checked once a lease names it, in `_spawn`).
+    """
+    configured = _check_label(ctx.config.tracker.labels, key, label)
+    if kind not in PR_KINDS:
+        raise Refusal("bad_kind", f"{key} is a PR, which takes only {' or '.join(PR_KINDS)}: it is never implemented")
+    if request is not None:
+        raise Refusal("bad_request", "--request names the comment asking for a split; it is for split only")
+    if slug is not None:
+        raise Refusal("bad_slug", f"{key}'s branch is its PR's head; leave out --slug")
+    if base is not None:
+        raise Refusal("bad_base", f"{key} targets its PR's own base; leave out --base")
+    repo, _ = conversation.pr_of(key)
+    ws = ctx.workspace
+    found = ws.repo(repo)
+    if found is None:
+        names = ", ".join(r.name for r in ws.repos) or "none yet"
+        raise Refusal("unknown_repo", f"{repo!r}, {key}'s repository, is not a repository in this workspace ({names})")
+    if not found.cloned:
+        raise Refusal("unknown_repo", f"{repo} has no clone at {found.path}; the operator runs `canopy workspace sync`")
+    if any(r != repo for r in repos):
+        raise Refusal("unknown_repo", f"{key} is a PR in {repo}; leave out --repo, or name {repo}")
+    return Plan(branch=_pr_branch(ctx, key, branch), base=None, label=configured, repos=(repo,), pr=True)
+
+
+def _pr_branch(ctx: Context, key: str, branch: str | None) -> str:
+    """Return a PR subject's branch: `--branch`, checked (DESIGN §23).
+
+    It is not bound to what an earlier dispatch named, unlike a ticket's: the worker checks it against the PR's head,
+    and a wrong one, such as a fork's, must not keep the PR from being worked once the overseer reads it right.
+    """
+    if branch is None:
+        raise Refusal("bad_branch", f"--branch is required for {key}: name its PR's head branch, read just now")
+    if not valid_pr_branch(branch):
+        raise Refusal("bad_branch", f"{branch[:200]!r} is not a branch canopy can name: {PR_BRANCH_RE.pattern}")
+    prefix = ctx.config.trust.branch_prefix
+    if branch.startswith(prefix):
+        raise Refusal(
+            "bad_branch",
+            f"{branch} is under {prefix}, the loop's own branches: it is a ticket's, so dispatch the ticket",
+        )
+    return branch
 
 
 def _check_start(ctx: Context, key: str, kind: str) -> bool:
@@ -408,10 +496,11 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
     for repo in repos:
         unit = policy.unit(key, repo, single=single)
         unit_counts = counts.get(unit, dict.fromkeys(policy.KINDS, 0))
-        name = key if single else f"{key} in {repo}"
+        name = key if single or conversation.is_pr_key(key) else f"{key} in {repo}"
         refused = policy.blocked(name, kind, counts=unit_counts, limit=limit, cooldown_until=cooldowns.get(unit))
         if refused is not None:
-            raise Refusal(*refused, repo=None if single else repo)
+            # A PR subject's key names its one repository already.
+            raise Refusal(*refused, repo=None if single or conversation.is_pr_key(key) else repo)
         attempt = max(attempt, unit_counts[kind] + 1)
     _check_capacity(ctx, running, planned)
     return attempt
@@ -477,6 +566,9 @@ def _spawn(
         )
         for repo, lease in leases
     )
+    if plan.pr and any(s.base_branch == branch for s in slots):
+        # The pool's base branch is what every PR merges into: never a PR subject's head (TRUST_MODEL T1).
+        raise Refusal("bad_branch", f"{branch} is {key}'s repository's base branch; a worker never pushes to it")
     desk = desk_path(ctx, key) if plan.joint else None
     split = kind == policy.SPLIT
     prs = _unit_prs(ctx, key)
@@ -509,23 +601,14 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
+        "PR": key,
     }
-    # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
-    # splitter's own check of who asked for the split needs the request (D061).
-    if split:
-        required: tuple[str, ...] = prompts.REQUIRED_SPLIT
-    else:
-        required = prompts.REQUIRED_JOINT if plan.joint else ()
-    if plan.private:
-        values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
-    else:
-        values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
-        if not split and conversation.has_operator_messages(ctx.conn, key):
-            required = (*required, *prompts.REQUIRED_OPERATOR)
-    try:
-        prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
-    except (OSError, prompts.PromptError) as e:
-        raise Refusal("bad_prompt", str(e)) from e
+    if plan.pr:
+        repo, number = conversation.pr_of(key)
+        values["PR_URL"] = (
+            prs.get(repo) or f"not recorded yet: it is #{number} in the repository your worktree's origin is"
+        )
+    prompt = _render(ctx, key, kind, plan, values)
 
     def check_start() -> None:
         # Again inside the run's insert: `canopy stop` marks the record in a transaction of its own, so whichever
@@ -564,6 +647,27 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk)
+
+
+def _render(ctx: Context, key: str, kind: str, plan: Plan, values: dict[str, str]) -> str:
+    """Render the run's worker prompt, adding to `values` the conversation it carries (DESIGN §8, §22)."""
+    # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
+    # splitter's own check of who asked for the split needs the request (D061).
+    split = kind == policy.SPLIT
+    if split:
+        required: tuple[str, ...] = prompts.REQUIRED_SPLIT
+    else:
+        required = prompts.REQUIRED_JOINT if plan.joint else ()
+    if plan.private:
+        values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
+    else:
+        values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        if not split and conversation.has_operator_messages(ctx.conn, key):
+            required = (*required, *prompts.REQUIRED_OPERATOR)
+    try:
+        return prompts.render_worker(ctx.config, kind, values, required=required, private=plan.private, pr=plan.pr)
+    except (OSError, prompts.PromptError) as e:
+        raise Refusal("bad_prompt", str(e)) from e
 
 
 def _unit_prs(ctx: Context, key: str) -> dict[str, str]:

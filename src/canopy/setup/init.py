@@ -39,7 +39,8 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Protect the default branch and every release branch: no direct pushes, no force pushes.
   - Require pull request reviews before merging, and do not let authors approve their own PRs.
   - Require status checks to pass before merging.
-  - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
+  - Workers push only to branches under {prefix}, and to the head branch of a PR you wrote and gave your queue label
+    (DESIGN §23); nothing else should be pushable by the loop.
 """
 
 SSH_REMOTE_WARNING = """\

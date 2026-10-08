@@ -18,6 +18,8 @@ from canopy.cli.params import (
     REASON,
     REASON_RE,
     SLUG,
+    SUBJECT_KEY,
+    SUBJECT_KEY_RE,
     TICKET_KEY,
     CursorType,
     TextType,
@@ -46,16 +48,40 @@ def _concat(before: str, value: str, after: str) -> str:
 
 @given(st.text() | near(KEY_RE))
 def test_accepted_keys_are_inert(value: str) -> None:
-    if valid_key(value):
+    if accepts_ticket_key(value):
         assert value
         assert not value.startswith("-")
         assert not set(value) & UNSAFE
         assert value.isascii()
 
 
-@given(st.from_regex(KEY_RE, fullmatch=True))
+@given(st.text() | near(SUBJECT_KEY_RE))
+def test_accepted_subject_keys_are_a_ticket_key_or_one_pr(value: str) -> None:
+    # A PR subject's key is REPO#N: the one `#` and nothing else a ticket key would refuse (DESIGN §23).
+    if valid_key(value):
+        assert value
+        assert not value.startswith("-")
+        assert not set(value) & (UNSAFE - {"#"})
+        assert value.count("#") <= 1
+        assert value.isascii()
+
+
+@given(st.from_regex(SUBJECT_KEY_RE, fullmatch=True))
 def test_every_key_the_pattern_describes_is_accepted(value: str) -> None:
     assert valid_key(value)
+
+
+@given(st.text() | near(dispatch.PR_BRANCH_RE))
+def test_accepted_pr_branches_are_plain_refs(value: str) -> None:
+    # A PR's head branch reaches git's argv (DESIGN §23): never an option, a range, a reflog, or a lock file.
+    if dispatch.valid_pr_branch(value):
+        assert not value.startswith(("-", ".", "/"))
+        assert not value.endswith(("/", "."))
+        assert ".." not in value
+        assert "//" not in value
+        assert not set(value) & (UNSAFE - {"/", "."})
+        assert value.isascii()
+        assert not any(part.endswith(".lock") for part in value.split("/"))
 
 
 def _converts(param: click.ParamType[object, object], value: str) -> bool:
@@ -68,6 +94,10 @@ def _converts(param: click.ParamType[object, object], value: str) -> bool:
 
 def accepts_ticket_key(value: str) -> bool:
     return _converts(TICKET_KEY, value)
+
+
+def accepts_subject_key(value: str) -> bool:
+    return _converts(SUBJECT_KEY, value)
 
 
 def accepts_reason(value: str) -> bool:
@@ -93,7 +123,8 @@ def accepts_branch_prefix(value: str) -> bool:
 # Each validator the CLI and init actually call, with the pattern it is meant to enforce on the whole string.
 VALIDATORS = [
     pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
-    pytest.param(KEY_RE, valid_key, id="decide-key"),
+    pytest.param(SUBJECT_KEY_RE, valid_key, id="decide-key"),
+    pytest.param(SUBJECT_KEY_RE, accepts_subject_key, id="subject-key-type"),
     pytest.param(REASON_RE, accepts_reason, id="reason-type"),
     pytest.param(CURSOR_VALUE_RE, accepts_cursor_id, id="cursor-type"),
     pytest.param(init.PROVIDER_RE, init.valid_provider, id="provider"),

@@ -62,18 +62,23 @@ PROMPT_MESSAGES = 20
 PROMPT_CHARS = 30_000
 
 TICKET = db.SUBJECT_TICKET
-PR = "pr"
+PR = db.SUBJECT_PR
 CHORE = "chore"
 RUN = "run"
-# The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
-# `mirror` is the overseer's, not the operator's (DESIGN §22).
+# The verbs each kind of subject takes. A PR, the operator's own (DESIGN §23), takes `reply` and `show`; starting one
+# privately and mirroring its review comments are ROADMAP M14's still to build. `mirror` is the overseer's, not the
+# operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "show", MIRROR_ACTION),
-    PR: (),
+    PR: ("reply", "show"),
     CHORE: ("show",),
     RUN: ("show",),
 }
-_PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
+# A PR subject's key, `REPO#N`: the repository's name in the workspace and the PR's number (DESIGN §23). It reaches
+# lease holders, argv, and prompts as a ticket key does, and has a `#`, which no ticket key has.
+PR_KEY_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
+# Any key a `tickets` row may have: a ticket's, or a PR subject's.
+SUBJECT_KEY_RE = re.compile(rf"{KEY_RE.pattern}|{PR_KEY_RE.pattern}")
 _PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
 
 
@@ -117,7 +122,7 @@ def parse_ref(text: str) -> Ref:
         if contract.plain_url(text, MAX_PR_URL) and _PR_URL_RE.fullmatch(text):
             return Ref(PR, text)
     elif "#" in text:
-        if _PR_SHORT_RE.fullmatch(text):
+        if PR_KEY_RE.fullmatch(text):
             return Ref(PR, text)
     elif len(text) <= MAX_KEY and KEY_RE.fullmatch(text):
         return Ref(TICKET, text)
@@ -133,8 +138,49 @@ def check_verb(ref: Ref, verb: str) -> None:
     if verb in verbs:
         return
     if ref.kind == PR:
-        raise Refused("unsupported", f"{ref} is a PR; canopy works PRs only once PR-scoped work exists (ROADMAP M14)")
+        raise Refused(
+            "unsupported",
+            f"{ref} is a PR, which takes only {', '.join(verbs)}: a PR is worked when it carries a queue label, and "
+            "starting one privately is not built yet (ROADMAP M14)",
+        )
     raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(verbs)}")
+
+
+def is_pr_key(key: str) -> bool:
+    """Whether a `tickets` row's key names a PR subject, `REPO#N`, rather than a ticket (DESIGN §23)."""
+    return db.subject_kind(key) == PR
+
+
+def pr_of(key: str) -> tuple[str, int]:
+    """Return a PR subject's repository name and PR number.
+
+    Raises:
+        ValueError: `key` is not a PR subject's key.
+    """
+    found = PR_KEY_RE.fullmatch(key)
+    if found is None:
+        raise ValueError(f"{key!r} is not a PR subject's key, REPO#N")
+    return found.group(1), int(found.group(2))
+
+
+def subject_key(conn: sqlite3.Connection, ref: Ref) -> str:
+    """Return the `tickets` key a ticket or PR reference names.
+
+    A PR's URL names the PR subject whose unit recorded that URL, which its first run's result does (DESIGN §23).
+
+    Raises:
+        Refused: (`unknown`) a URL no PR subject recorded.
+    """
+    if ref.kind != PR or not ref.id.startswith("https://"):
+        return ref.id
+    url = ref.id.rstrip("/")
+    for row in conn.execute("SELECT ticket_key, pr_url FROM ticket_units WHERE pr_url IS NOT NULL"):
+        key = str(row["ticket_key"])
+        if is_pr_key(key) and str(row["pr_url"]).rstrip("/") == url:
+            return key
+    raise Refused(
+        "unknown", f"no PR canopy works is recorded at {ref.id}; name it as REPO#N, the way `canopy status` does"
+    )
 
 
 def check_operator(environ: Mapping[str, str] | None = None) -> None:
@@ -150,8 +196,8 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
 
 
 def start_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
-    """Return a ticket's start record, or None if it is public: the operator never started it."""
-    return db.get_start(conn, TICKET, key)
+    """Return a ticket's start record, or None if it is public: the operator never started it. A PR has none."""
+    return db.get_start(conn, db.subject_kind(key), key)
 
 
 def is_started(record: sqlite3.Row | None) -> bool:
@@ -234,18 +280,20 @@ class Replied:
 
 
 def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submission: str | None = None) -> Replied:
-    """Record the operator's reply to a ticket canopy knows (DESIGN §22).
+    """Record the operator's reply to a ticket or PR canopy knows (DESIGN §22, §23).
 
     A started ticket's reply is its conversation. A public ticket's is the operator's word to the loop, beside its
     authorized repliers' comments on the ticket, and how the operator answers an untrusted reviewer's feedback (DESIGN
-    §7, D089). It answers the ticket's latest question when there is one. A channel whose form draws a submission id
-    passes it, and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it
-    answers, and the body. Either way the same reply sent again after an uncertain result records nothing new.
+    §7, D089). A PR subject's answers its workers' questions, which wait in canopy rather than on the PR (DESIGN §23).
+    It answers the subject's latest question when there is one. A channel whose form draws a submission id passes it,
+    and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it answers, and
+    the body. Either way the same reply sent again after an uncertain result records nothing new.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket that was neither started nor
-            seen by a tick, `bad_body` for an empty body or one over 4000 characters, `bad_submission` for a submission
-            id that is not 8 to 64 letters, digits, `-`, or `_`.
+        Refused: `unsupported` for a subject that is neither a ticket nor a PR, `unknown` for one that was neither
+            started nor seen by a tick, `bad_body` for an empty body or one over 4000 characters, `bad_submission` for
+            a submission id that is not 8 to 64 letters, digits, `-`, or `_`, and from a PR's URL, `unknown` for one no
+            PR subject recorded.
     """
     check_verb(ref, "reply")
     if submission is not None and not SUBMISSION_RE.fullmatch(submission):
@@ -255,23 +303,25 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submis
         raise Refused("bad_body", "the reply is empty")
     if len(text) > MAX_OPERATOR:
         raise Refused("bad_body", f"the reply is {len(text)} characters; the most is {MAX_OPERATOR}")
+    key = subject_key(conn, ref)
+    kind = db.subject_kind(key)
     with db.transaction(conn):
-        if db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
+        if db.get_start(conn, kind, key) is None and db.get_ticket(conn, key) is None:
             raise Refused(
                 "unknown",
                 f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
             )
-        question = latest_question(conn, ref.id)
+        question = latest_question(conn, key)
         answers = int(question["id"]) if question is not None else None
         if submission is None:
-            stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
+            stored = hashlib.sha256(f"{kind}\0{key}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
         else:
             stored = f"{channel}:{submission}"
         before = db.latest_message_id(conn)
         message_id = db.insert_message(
             conn,
-            TICKET,
-            ref.id,
+            kind,
+            key,
             source="operator",
             kind="reply",
             channel=channel,
@@ -460,7 +510,7 @@ def latest_question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     row: sqlite3.Row | None = conn.execute(
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' AND id > ? "
         "ORDER BY id DESC LIMIT 1",
-        (TICKET, key, db.forgotten_message_id(conn, key)),
+        (db.subject_kind(key), key, db.forgotten_message_id(conn, key)),
     ).fetchone()
     if row is None or operator_messages_after(conn, key, int(row["id"])):
         return None
@@ -469,7 +519,7 @@ def latest_question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
 
 @dataclass(frozen=True)
 class Awaiting:
-    """A started ticket waiting on the operator: its latest question, which no operator message came after."""
+    """A started ticket or a PR subject waiting on the operator: its latest question, with no operator message after."""
 
     key: str
     message_id: int
@@ -477,15 +527,19 @@ class Awaiting:
 
 
 def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
-    """Return every started, open ticket whose latest question has no operator message after it, by key."""
+    """Return every started, open ticket and open PR subject whose latest question has no operator message after it.
+
+    By key. Neither's question is anywhere else the operator looks: a private ticket's is on no tracker, and a PR
+    subject's worker asks in canopy, not on the PR (DESIGN §22, §23).
+    """
     found: list[Awaiting] = []
-    rows = conn.execute(
+    started = conn.execute(
         "SELECT s.subject_id FROM starts s LEFT JOIN tickets t ON t.key = s.subject_id "
-        "WHERE s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0 ORDER BY s.subject_id",
+        "WHERE s.subject_kind = ? AND s.status = 'started' AND coalesce(t.done, 0) = 0",
         (TICKET,),
     ).fetchall()
-    for row in rows:
-        key = str(row[0])
+    keys = [str(r[0]) for r in started] + [str(t["key"]) for t in db.open_tickets(conn) if is_pr_key(str(t["key"]))]
+    for key in sorted(keys):
         question = latest_question(conn, key)
         if question is not None:
             found.append(Awaiting(key, int(question["id"]), str(question["body"])))
@@ -497,7 +551,7 @@ def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> l
     return conn.execute(
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ? "
         "ORDER BY id",
-        (TICKET, key, after),
+        (db.subject_kind(key), key, after),
     ).fetchall()
 
 
@@ -551,6 +605,26 @@ def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str,
     }
 
 
+def pr_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, object] | None:
+    """Return a PR subject's part of the overseer's state block, or None for a ticket (DESIGN §23).
+
+    Its repository and number, and its worker's question that waits on the operator, if one does: its `needs_human`,
+    read from the journal as a private ticket's is, since the question is not on the PR.
+    """
+    key = str(ticket["key"])
+    if not is_pr_key(key):
+        return None
+    repo, number = pr_of(key)
+    question = latest_question(conn, key)
+    return {
+        "repo": repo,
+        "number": number,
+        "awaiting_reply": None
+        if question is None
+        else {"message_id": question["id"], "run_id": question["run_id"], "at": question["at"]},
+    }
+
+
 def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
     """Whether the operator has written to a ticket in canopy since any forget: what its worker must hear (D093)."""
     return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
@@ -568,7 +642,7 @@ def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
     rows = conn.execute(
         "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
         "AND (source = 'operator' OR kind = 'question') ORDER BY id DESC LIMIT ?",
-        (TICKET, key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
+        (db.subject_kind(key), key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
     ).fetchall()
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")
 
@@ -578,7 +652,7 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
 
     Messages from before the operator forgot the ticket's work are left out: they are about work that is gone.
     """
-    rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES, after=db.forgotten_message_id(conn, key))
+    rows = db.messages_of(conn, db.subject_kind(key), key, PROMPT_MESSAGES, after=db.forgotten_message_id(conn, key))
     return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
 
 

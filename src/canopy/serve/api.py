@@ -55,14 +55,17 @@ def refusal(r: conversation.Refused) -> HTTPException:
 
 
 def ticket_ref(key: str, verb: str) -> Ref:
-    """The ticket `key` names, refused as the CLI refuses it: `bad_ref`, or `unsupported` for another kind."""
+    """The ticket or PR subject `key` names, refused as the CLI refuses it: `bad_ref`, or `unsupported`.
+
+    A PR subject is named by its key, `REPO#N`, as the tickets list names it (DESIGN §23); never by a URL here.
+    """
     try:
         ref = conversation.parse_ref(key)
         conversation.check_verb(ref, verb)
     except conversation.Refused as r:
         raise refusal(r) from None
-    if ref.kind != conversation.TICKET:
-        raise refusal(conversation.Refused("unsupported", f"{ref} is not a ticket"))
+    if ref.kind not in (conversation.TICKET, conversation.PR) or ref.id.startswith("https://"):
+        raise refusal(conversation.Refused("unsupported", f"{ref} is not a ticket or REPO#N"))
     return ref
 
 

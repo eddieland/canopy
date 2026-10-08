@@ -1,4 +1,4 @@
-"""Validated click parameter types for what the overseer passes in: ticket keys, reasons, slugs, cursors, and text.
+"""Validated click parameter types for what the overseer passes in: subject keys, reasons, slugs, cursors, and text.
 
 Keys, slugs, and cursor ids reach branch names, paths, argv, and prompts, so they are checked before any command runs.
 """
@@ -10,10 +10,12 @@ from typing import override
 
 import click
 
-from canopy.core import config, contract, db
+from canopy.core import config, contract, conversation, db
 from canopy.runs import dispatch
 
 KEY_RE = dispatch.KEY_RE
+# A ticket key, or a PR subject's `REPO#N` (DESIGN §23): every key a `tickets` row has.
+SUBJECT_KEY_RE = conversation.SUBJECT_KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 # A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7, D096).
@@ -23,8 +25,8 @@ MAX_PR_URL = 300
 
 
 def valid_key(value: str) -> bool:
-    """Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
-    return KEY_RE.fullmatch(value) is not None
+    """Keys reach branch names, lease holders, paths, and argv (DESIGN §17). A PR subject's is one too (DESIGN §23)."""
+    return SUBJECT_KEY_RE.fullmatch(value) is not None
 
 
 def valid_review_cursor(value: str) -> bool:
@@ -102,6 +104,7 @@ class TextType(click.ParamType[str, object]):
 
 
 TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
+SUBJECT_KEY = PatternType("KEY", SUBJECT_KEY_RE, "ticket key or REPO#N")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name")

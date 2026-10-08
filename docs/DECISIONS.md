@@ -482,3 +482,11 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Rejected: comparing `messages.at` with `ticks.started_at` (a tick reads messages after reconcile, not at its start);
   dropping an answered `awaiting_reply` from the served list at once (the UI and `canopy status` would disagree).
 - Revisit: when M21's idle pacing needs "a message the previous tick could not have seen"; it is this column.
+
+## D098. A PR subject is a `tickets` row keyed `<repo>#<N>`, worked only by `fix-ci` and `resume`
+
+- One unit, in the key's repository; its branch is the PR's head, from `--branch`, never under `trust.branch_prefix`
+  or the pool's base. Its worker's questions wait in canopy (`awaiting_reply`), not on the PR.
+- Why: runs, units, cursors, attempt limits, the cooldown, attention, and the state block all key on a ticket row.
+- Rejected: a `prs` table (every guard and query twice); the URL as key (no repository the harness can check).
+- Revisit: if a PR subject needs state a ticket row cannot hold, or PRs must be matched to repositories by URL.
