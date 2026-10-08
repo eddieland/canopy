@@ -10,6 +10,7 @@ from rich.console import Console
 
 from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
+from canopy.cli.params import TICKET_KEY
 from canopy.core import contract, conversation, db
 from canopy.infra import lock
 from canopy.loop import attention, repeat, tick
@@ -237,9 +238,10 @@ def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
 
 @click.command("decisions")
 @click.argument("tick_id", required=False, type=click.IntRange(min=1))
+@click.option("--ticket", "ticket_key", type=TICKET_KEY, help="Show decisions for this ticket key only.")
 @click.pass_context
-def cmd_decisions(click_ctx: click.Context, tick_id: int | None) -> int:
-    """Print a tick's decisions: what the overseer did, or in a dry run would have done. Default: the latest tick."""
+def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str | None) -> int:
+    """Print a tick's decisions, optionally filtered by ticket. Default: the latest tick."""
     ctx = open_context(click_ctx)
     row = db.last_tick(ctx.conn) if tick_id is None else db.get_tick(ctx.conn, tick_id)
     if row is None:
@@ -256,6 +258,8 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None) -> int:
     if output.exists():
         click.echo(f"  overseer output: {output}")
     rows = db.decisions_for_tick(ctx.conn, int(row["id"]))
+    if ticket_key is not None:
+        rows = [decision for decision in rows if decision["ticket_key"] == ticket_key]
     click.echo(f"\nDecisions ({len(rows)}):")
     keys = [attention.decided_about(d) for d in rows]
     key_width = max((len(k) for k in keys), default=0)
@@ -264,5 +268,5 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None) -> int:
         rationale = " ".join(str(d["rationale"]).split())
         click.echo(f"  {key:<{key_width}}  {d['action']:<{action_width}}  {rationale}")
     if not rows:
-        click.echo("  none")
+        click.echo(f"  none for ticket {ticket_key}" if ticket_key is not None else "  none")
     return 0
