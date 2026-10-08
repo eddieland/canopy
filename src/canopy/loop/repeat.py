@@ -45,7 +45,7 @@ LOCK_FILE_NAME = "loop.lock"
 _WAIT_STEP_SECONDS = 0.5
 # An operator message starts the next tick early, but no sooner than this after the last one began.
 WAKE_MIN_SECONDS = 60.0
-# A second stop signal this soon after the first is the same Ctrl-C, not a second one (D049). `uv run` forwards the
+# A second stop signal this soon after the first is the same Ctrl-C, not a second one. `uv run` forwards the
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
@@ -82,7 +82,7 @@ def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Gener
 
     A second signal raises KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process
     group, and the next tick closes the tick row as `abandoned`. Workers already dispatched are detached and keep going.
-    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second (D049).
+    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
     """
 
     def handle(_signum: int, _frame: FrameType | None) -> None:

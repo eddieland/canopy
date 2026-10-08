@@ -9,7 +9,7 @@ Instructions for any agent working in this repository. Humans should read it too
 3. `docs/DESIGN.md`: target shape. Normative.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
-6. `docs/DECISIONS.md`: why things are the way they are. Append, never rewrite.
+6. `docs/DECISIONS.md`: why things are the way they are. Short bullets; a changed choice edits its entry.
 
 If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entry says otherwise.
 
@@ -22,12 +22,13 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
   `docs/DESIGN.md` is incomplete.
-- Every new dependency gets a `docs/DECISIONS.md` entry explaining why stdlib was insufficient.
+- Every new dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient.
 - Record a decision only when it will shape how a future developer changes or reasons about the code: a choice between
-  real alternatives, a constraint, a dependency. Do not use `docs/DECISIONS.md` to track progress or state. A
-  milestone's status goes on its `Status:` line in `docs/ROADMAP.md`, and what it taught on the `Learned:` and `Next:`
-  lines that follow; how things work goes in `docs/DESIGN.md`; context for one change goes in its PR description. If an
-  entry would stop mattering once its milestone is done, it is not a decision.
+  real alternatives, a constraint, a dependency. Not progress or state (that is the milestone's `Status:`, `Learned:`,
+  and `Next:` lines in `docs/ROADMAP.md`), not how things work (`docs/DESIGN.md`), not the story of a change (its PR).
+- Write decision entries short: a title that states the decision and two to four one-line bullets for what, why,
+  rejected alternatives, and what would make us revisit. No paragraphs, no history, no list of files touched. The
+  format is at the top of `docs/DECISIONS.md`; when in doubt, cut.
 - Changes to `docs/TRUST_MODEL.md`, `prompts/overseer.md`, or anything under `agents/` require an explicit human
   approval note in the PR description. These files define what the loop is allowed to do.
 - When unsure, prefer the smaller change and leave a note in the PR. Do not invent requirements.
