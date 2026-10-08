@@ -183,6 +183,79 @@ class Section(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
 
 
+# A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
+# rendered into the private worker's definition (DESIGN §22), so nothing else may reach it.
+TOOL_PART_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
+
+
+def _tool_part(value: str) -> str:
+    if not TOOL_PART_RE.fullmatch(value):
+        raise ValueError(f"{value!r} must match {TOOL_PART_RE.pattern}")
+    return value
+
+
+def _server_name(value: str) -> str:
+    # Empty means the provider's default.
+    return _tool_part(value) if value else value
+
+
+ToolPart = Annotated[str, AfterValidator(_tool_part)]
+
+
+@dataclass(frozen=True)
+class TrackerTools:
+    """The tracker's MCP server, and the tools of it a private worker may call: every other one is denied."""
+
+    server: str
+    allowed: tuple[str, ...]
+
+
+# Each shipped provider's usual MCP server, as an operator's OpenCode config usually names it, and the tools of it a
+# private worker needs: reading tickets, and for GitHub, whose server is also the one PRs go through, the PR tools. None
+# of them writes to an issue (DESIGN §22). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's
+# MCP server v2.0.1); a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL
+# asks for `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
+DEFAULT_TRACKER_TOOLS: dict[str, TrackerTools] = {
+    "jira": TrackerTools(
+        "atlassian",
+        (
+            "atlassianUserInfo",
+            "getAccessibleAtlassianResources",
+            "getJiraIssue",
+            "getJiraIssueTypeMetaWithFields",
+            "listJiraIssueChangelogs",
+            "listJiraIssueComments",
+            "listJiraIssueLinkTypes",
+            "listJiraIssueRemoteIssueLinks",
+            "listJiraProjectIssueTypesMetadata",
+            "listJiraProjects",
+            "lookupJiraAccountId",
+            "searchJiraIssuesUsingJql",
+        ),
+    ),
+    "github": TrackerTools(
+        "github",
+        (
+            "get_me",
+            "issue_read",
+            "list_issues",
+            "search_issues",
+            "list_issue_types",
+            "get_label",
+            "pull_request_read",
+            "list_pull_requests",
+            "search_pull_requests",
+            "create_pull_request",
+            "update_pull_request",
+            "add_reply_to_pull_request_comment",
+            "actions_get",
+            "actions_list",
+            "get_job_logs",
+        ),
+    ),
+}
+
+
 class Tracker(Section):
     """The `[tracker]` table."""
 
@@ -190,6 +263,20 @@ class Tracker(Section):
     query: Annotated[NonBlank, Scope.SHARED]
     needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
+    # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
+    # write, which a repository must not (TRUST_MODEL T7).
+    mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
+    read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
+
+    def tools(self) -> TrackerTools | None:
+        """The server and tools a private worker gets, or None if neither config nor a default names any."""
+        default = DEFAULT_TRACKER_TOOLS.get(self.provider)
+        server = self.mcp_server or (default.server if default is not None else "")
+        allowed = self.read_tools if self.read_tools is not None else (default.allowed if default is not None else ())
+        if not server or not allowed:
+            return None
+        return TrackerTools(server, tuple(allowed))
 
 
 class Policy(Section):
@@ -278,6 +365,11 @@ class Runtime(Section):
     )
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}"
+    )
+    # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
+    # timeout.
+    private_worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json {prompt}"
     )
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
     split_cmd: Annotated[AgentTemplate, Scope.USER] = (

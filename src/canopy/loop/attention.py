@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.chores import view as chore_view
-from canopy.core import db
+from canopy.core import conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.infra import logs
 from canopy.notify import deliver
@@ -36,7 +36,8 @@ ACTION_PREFIX = "attention:"
 CHORE_PREFIX = "chore:"
 PR_PREFIX = "pr:"
 # Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
-# worker left no usable result line.
+# worker left no usable result line. `blocked` and `stopped` raise none: a blocked worker asked a question, which
+# reaches the operator on the ticket or as `awaiting_reply`, and the operator stopped a stopped one (DESIGN §22).
 RUN_REASONS = {
     "crashed": "crashed",
     "unpushed": "unpushed",
@@ -176,6 +177,12 @@ def _detail(run: sqlite3.Row) -> str:
     if note:
         text += f": {note}"
     return f"{text}; log {run['log_path']}"[:2000]
+
+
+def awaiting_detail(waiting: conversation.Awaiting) -> str:
+    """The `awaiting_reply` item's detail: the question, and how to answer it (DESIGN §22)."""
+    text = f"message {waiting.message_id}: {one_line(waiting.question)}"
+    return f"{text[:1800]}; answer with `canopy reply {waiting.key}`"
 
 
 def render(items: list[Item], now: datetime) -> str:

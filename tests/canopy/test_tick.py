@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, definitions
+from canopy.core import config, db, definitions
 from canopy.infra import lock, procs
 from tests.conftest import CanopyEnv
 
@@ -58,7 +58,8 @@ def test_dry_run_tick_records_the_overseer_plan(
     assert '"dry_run": true' in prompt
     assert '"labels": [\n      "agent-ready-tester"\n    ]' in prompt
     assert run["cwd"] == str(canopy_env.repo)
-    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(definitions.ensure(canopy_env.state_dir))}
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
 
     conn = journal(canopy_env)
     [tick] = conn.execute("SELECT * FROM ticks").fetchall()

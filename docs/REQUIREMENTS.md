@@ -150,13 +150,14 @@ Gaps:
 
 ### R11. Private tickets: deliver a ticket without the conversation appearing on it
 
-Gap; sketched as M18. When a client files the ticket, the operator wants canopy to deliver it without the agent's
-reports, its questions, or the operator's answers showing on the client's ticket. Today the ticket is the only channel
-for both (§7, §8), and the queue label is itself visible.
+Built in M18; its live check is the operator's. When a client files the ticket, the operator wants canopy to deliver it
+without the agent's reports, its questions, or the operator's answers showing on the client's ticket. Today the ticket
+is the only channel for both (§7, §8), and the queue label is itself visible.
 
-Planned shape (§22, D072): the operator starts the ticket in canopy (`canopy start`) instead of labeling it; its
-workers never write to the tracker; questions reach the attention list and the operator answers with
-`canopy reply`, later from the web UI.
+Shape (§22, D072, D080): the operator starts the ticket in canopy (`canopy start`) instead of labeling it; its
+workers can only read the tracker; questions reach the attention list (`awaiting_reply`) and `canopy show`, and the
+operator answers with `canopy reply`, later from the web UI. Its branch and PR title still name the ticket key, which a
+tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
 
 ### R12. One record of every ticket's conversation

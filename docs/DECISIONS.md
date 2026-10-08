@@ -502,3 +502,16 @@ operators never need Node; contributors do (`make check` runs the UI's checks). 
 Rejected: Jinja2 with htmx (per-page script is where agent-built features drift); committing the build (minified
 diffs); building at install (Node for every operator); server rendering (a second runtime).
 Revisit: if the UI shrinks to pages a template would serve, or Node costs the toolchain more than it saves.
+
+## D080. The private worker is a template and a definition of its own, rendered with the tracker's server and tools
+
+`runtime.private_worker_cmd` runs `canopy-worker-private`, as `split_cmd` runs the splitter: no new placeholder, and an
+operator can point it at a different runtime. The definition is rendered into the snapshot from `tracker.mcp_server`
+and `tracker.read_tools` (user-only, with defaults per shipped provider): `"<server>_*": deny`, then each tool allowed
+by name, so an unlisted write tool fails closed. The server name is a key of its own because OpenCode prefixes tools
+with the name the operator's config gives the server, which canopy cannot read.
+Rejected: an `{agent}` placeholder in `worker_cmd` (every existing template would need it); denying write tools by
+name pattern, as the splitter does (a write tool with an unexpected name stays open); no tracker server at all (the
+worker could not read the ticket, and `--context` holds 2000 characters).
+Revisit: if a tracker's server multiplexes reads and writes through one tool, as Atlassian's `execute` does, and its
+read-only tools stop covering what workers need.
