@@ -69,6 +69,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   and every ticket's conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the
   secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so
   does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
+- To preview the same pages without a running loop, `uv run python -m canopy.serve --mock` serves them over the sample
+  journal in `canopy/serve/mock.py`, with `mock` shown in the header.
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
   canopy's copy of its comments.
