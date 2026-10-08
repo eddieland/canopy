@@ -15,6 +15,12 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.
   task: deny
+  # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
+  # (TRUST_MODEL T1, D077). Bash can still reach the network, for package installs and builds; this removes the tools
+  # a model reaches for on its own, not the capability.
+  webfetch: deny
+  websearch: deny
+  codesearch: deny
   bash:
     "*": allow
     # Pushes are plain ones: no force, no deletes, no mirrors or bulk ref updates. Patterns anchor on a space before

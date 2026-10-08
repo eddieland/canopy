@@ -472,3 +472,12 @@ through the operator's own tools, and the UI on a private address serves plain H
 agent running as the operator; what matters is limiting the untrusted text agents act on (T1). M18 does not wait for
 sandboxing.
 Revisit: with D055's revisit, or after an incident where a run wrote outside its run or posted to a private ticket.
+
+## D077. No agent has web tools
+
+Every canopy definition (overseer, worker, reviewer, splitter, chore) denies `webfetch`, `websearch`, and
+`codesearch`, as scalars a repository's config cannot loosen (D044); `tests/canopy/test_definitions.py` checks each.
+Web pages and search results are untrusted text an agent picks up on its own, and keeping that text out is the defense
+that matters (D076). A worker's bash still reaches the network, a residual T1 names.
+Rejected: denying them for the overseer only (workers read the same client-written tickets and look things up most).
+Revisit: when workers are sandboxed with egress controls (HOST_ISOLATION), or if missing lookups measurably hurt runs.
