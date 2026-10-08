@@ -136,8 +136,11 @@ def _guard(ctx: Context, name: str, *, planned: list[str] | None = None) -> Chor
     return chore
 
 
-def render(body: str, state: view.ChoreState, run_id: int, context: str | None) -> str:
-    """Return the chore's prompt: the operator's file, then a `## Run` section the harness writes (DESIGN §19)."""
+def render(body: str, state: view.ChoreState, run_id: int | None, context: str | None) -> str:
+    """Return the chore's prompt: the operator's file, then a `## Run` section the harness writes (DESIGN §19).
+
+    `run_id` is None for `canopy chore try`, which has no run row.
+    """
     previous = state.latest_ended
     previous_summary = None
     if previous is not None:

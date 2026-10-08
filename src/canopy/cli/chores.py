@@ -1,23 +1,24 @@
-"""`canopy chore run` and `canopy chore wait` for the overseer, and the detached `canopy _chore` (DESIGN §19)."""
+"""`canopy chore run` and `wait` for the overseer, `try` for the operator, and the detached `_chore` (DESIGN §19)."""
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 
 import click
 
-from canopy.chores import execute, start, view
+from canopy.chores import execute, start, trial, view
 from canopy.cli.common import CliError, open_context, require_tick
 from canopy.cli.params import CHORE, TextType, truncate
-from canopy.core import db
-from canopy.infra import logs
+from canopy.core import conversation, db
+from canopy.infra import logs, procs
 from canopy.loop import attention, tick
 
 
 @click.group("chore")
 def chore_group() -> None:
-    """Run or wait on the operator's chores (overseer only)."""
+    """Run or wait on the operator's chores (the overseer), or try one by hand (the operator)."""
 
 
 @chore_group.command("run")
@@ -70,6 +71,44 @@ def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
     db.record_decision(ctx.conn, int(current["id"]), None, "wait", rationale, chore=name)
     click.echo(f"recorded wait for {attention.CHORE_PREFIX}{name}")
     return 0
+
+
+@chore_group.command("try")
+@click.argument("name", type=CHORE)
+@click.option("--context", type=TextType(), help="What the chore should look at, as the overseer would say it.")
+@click.pass_context
+def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None) -> int:
+    """Run chore NAME now, in the foreground, and print its result. Records nothing; no guard applies.
+
+    For writing a chore: the agent gets the prompt a run starting now would get, and its result line is checked as a
+    real run's is. Works with `capacity.max_chores = 0`, so you can write one before the loop runs any. Exits 0 only
+    when the chore reports `ok`.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"chore try refused ({r.guard}): {r.reason}") from None
+    ctx = open_context(click_ctx)
+    try:
+        prepared = trial.prepare(ctx, name, context)
+    except trial.TrialError as e:
+        raise CliError(f"chore try refused: {e}") from None
+    timeout = prepared.chore.timeout_minutes
+    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes); nothing is recorded", err=True)
+    try:
+        tried = trial.run(ctx, prepared)
+    except procs.ProcError as e:
+        raise CliError(f"chore try: {e}") from None
+    logs.for_tick(None).info("chore tried", extra={"chore": name, "status": tried.outcome.status})
+    click.echo(f"--- agent text ---\n{tried.text.rstrip()}")
+    if tried.stderr.strip():
+        click.echo(f"--- agent stderr ---\n{tried.stderr.rstrip()}")
+    click.echo(f"--- agent exit {tried.returncode} ---")
+    outcome = tried.outcome
+    if outcome.result is not None:
+        click.echo(json.dumps(outcome.result.model_dump(exclude_none=True), indent=2))
+    click.echo(f"chore try {name}: {outcome.status}{f' ({outcome.note})' if outcome.note else ''}")
+    return 0 if outcome.status == "ok" else 1
 
 
 @click.command("_chore", hidden=True)

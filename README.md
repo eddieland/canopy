@@ -91,7 +91,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
-  overseer runs when due and that report findings to the attention list (DESIGN §19).
+  overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
+  one now and prints its result, for writing its prompt.
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.

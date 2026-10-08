@@ -284,7 +284,8 @@ clears its items at the next tick.
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_chores.py` holds the harness's half of the acceptance:
 the guards, findings listed and notified once and resolved when no longer reported, a killed chore run crashed with
 `chore_failed`, a deleted chore's items cleared, and no `chores` key without chores), docs, and D063 are in. D063
-settles §19's open question on workspaces: a chore may list the workspaces it runs in. The overseer prompt, the
+settles §19's open question on workspaces: a chore may list the workspaces it runs in. `canopy chore try` (D098)
+runs a chore by hand, recording nothing, for writing the build-health prompt. The overseer prompt, the
 `canopy-chore` definition, and the TRUST_MODEL T1, T3, T6, T7, §6, and §7 changes need human approval in their PR.
 Waiting on the operator: a real build-health chore over several working days. Started on request while M2 to M8 wait
 on their live runs.

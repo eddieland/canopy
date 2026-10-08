@@ -28,13 +28,18 @@ _HISTORY_RUNS = 200
 
 
 def configured(config: Config, workspace: Workspace) -> dict[str, Chore]:
-    """Return the chores this loop runs, by name: none when `capacity.max_chores` is 0 (DESIGN §19, D063).
+    """Return the chores this loop runs, by name: none when `capacity.max_chores` is 0 (DESIGN §19, D063)."""
+    if config.capacity.max_chores == 0:
+        return {}
+    return defined(config, workspace)
+
+
+def defined(config: Config, workspace: Workspace) -> dict[str, Chore]:
+    """Return the chores the user config defines for this workspace, by name, even when `max_chores` is 0.
 
     A chore that lists `workspaces` runs only in those, named as the workspace is (its map's name, or a workspace of
     one's repository name).
     """
-    if config.capacity.max_chores == 0:
-        return {}
     return {
         name: chore
         for name, chore in sorted(config.chores.items())
@@ -113,10 +118,12 @@ def _oks(runs: list[sqlite3.Row]) -> list[tuple[sqlite3.Row, result.ChoreResult]
 
 def states(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[ChoreState]:
     """Return every configured chore's state, by name."""
-    return [_state(conn, name, chore) for name, chore in configured(config, workspace).items()]
+    return [state_of(conn, name, chore) for name, chore in configured(config, workspace).items()]
 
 
-def _state(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
+def state_of(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
+    """Return chore `name`'s state as the journal sees it."""
+
     def older(before: int) -> list[sqlite3.Row]:
         return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
