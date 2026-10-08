@@ -26,6 +26,7 @@ VALUES = {
     "MAP": "/ws/MAP.md",
     "WORKER_COMMENT": "starts with `CANOPY:` outside any quote",
     "MARK_COMMENTS": "In every comment and reply you post, start it with `CANOPY:` and a space.",
+    "OPEN_PR": "Open each PR through the GitHub MCP.",
 }
 UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
 
@@ -155,6 +156,48 @@ def test_shipped_worker_prompts_mark_and_recognize_worker_comments(canopy_env: C
     # A fix-ci worker reads checks, never a comment that could instruct it, so only the others need to recognize one.
     if kind != "fix-ci":
         assert "a comment that <is marked>" in text
+
+
+def with_pr_skill(env: CanopyEnv, skill: str) -> None:
+    env.write_user(env.user_file.read_text().replace("[runtime]\n", f"[runtime]\npr_skill = '{skill}'\n", 1))
+
+
+def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
+    assert prompts.open_pr("") == "Open each PR through the GitHub MCP."
+    text = prompts.open_pr("acme-pr")
+    assert "by following the skill `acme-pr`, and in no other way" in text
+    # A missing skill fails the run rather than falling back to the MCP the operator set it to avoid (D078).
+    assert "report `failed` with a summary that starts `no PR skill:`" in text
+    assert "MCP" not in text
+
+
+@pytest.mark.parametrize(
+    ("kind", "before"), [("implement", "Never target another branch."), ("resume", "the label `agent`.")]
+)
+def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str, before: str) -> None:
+    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, {**VALUES, "OPEN_PR": "<how>"})
+    assert f"{before} <how>" in text
+
+
+@pytest.mark.parametrize("kind", prompts.OPENS_PRS)
+def test_with_a_pr_skill_an_override_must_say_how_to_open_prs(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override that still names the GitHub MCP would open the PRs the skill is set to avoid: fail closed (D078).
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; open a PR through the GitHub MCP\n")
+    assert prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    with_pr_skill(canopy_env, "acme-pr")
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{OPEN_PR\}\}"):
+        prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES)
+
+
+def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-fix-ci.md").write_text("Fix CI on {{KEY}} for {{LABELS}}\n")
+    with_pr_skill(canopy_env, "acme-pr")
+    text = prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), "fix-ci", VALUES)
+    assert text == "Fix CI on PROJ-1 for `agent-ready-alice`\n"
 
 
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:

@@ -36,7 +36,8 @@ still ask the operator to keep code or text of their own in step with canopy:
 - A notification destination other than the shipped ones is "a small program of the operator's" (§20). The desktop
   and Slack destinations the operator wants (N2) ship with canopy (M10).
 - Prompt overrides (§12) are copies the operator maintains, and an override must keep what canopy's guards rely on
-  (D051). Prefer a skill; treat an override as a last resort.
+  (D051). Prefer a skill; treat an override as a last resort. Opening PRs, which an operator's employer may need done
+  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8, D078).
 
 ## Must have
 
