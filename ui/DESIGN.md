@@ -115,7 +115,8 @@ inline script and checks it against the store's key.
   (`awaiting_reply`, `untrusted_review`), then every other reason, then chores' findings; within each, the item open
   longest first. A reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The
   selection is `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation and
-  the reply form; an item about no ticket shows its detail and nothing to answer.
+  the reply form; an item about no ticket shows its detail and nothing to answer. Under the list, Working lists the
+  running runs: ticket, kind, cost so far, and for how long.
 - **A conversation** is a column of messages, each with a 2px left rule: `border` for a worker's report or a
   tracker comment, `accent` on a faint accent tint for the operator's own words, `status-blocked` on its tint for a
   question. Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.

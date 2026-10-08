@@ -2,14 +2,14 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, ticketQuery } from '@/api/queries'
+import { attentionQuery, runsQuery, ticketQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
-import { Chip } from '@/components/status'
+import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
@@ -50,28 +50,34 @@ function AttentionPage() {
             </PageHeader>
             <Counters />
             {items !== undefined && items.length === 0 ? (
-                <Panel>
-                    <Placeholder className="min-h-40">Nothing needs you.</Placeholder>
-                </Panel>
+                <>
+                    <Panel>
+                        <Placeholder className="min-h-40">Nothing needs you.</Placeholder>
+                    </Panel>
+                    <Workers />
+                </>
             ) : (
                 <div className="flex flex-wrap items-start gap-6">
-                    <Panel className="max-w-md min-w-0 flex-[1_1_22rem]" data-testid="attention-list">
-                        <PanelHeader label="Needs you">
-                            <span className="readout text-xs text-muted-foreground">{items?.length}</span>
-                        </PanelHeader>
-                        {items === undefined ? (
-                            <div className="flex flex-col gap-2 p-3">
-                                <Skeleton className="h-4 w-2/3" />
-                                <Skeleton className="h-4 w-1/2" />
-                            </div>
-                        ) : (
-                            <ul className="flex flex-col gap-0.5 p-1.5">
-                                {items.map((item) => (
-                                    <Row key={item.id} item={item} selected={item.id === selected?.id} />
-                                ))}
-                            </ul>
-                        )}
-                    </Panel>
+                    <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6">
+                        <Panel data-testid="attention-list">
+                            <PanelHeader label="Needs you">
+                                <span className="readout text-xs text-muted-foreground">{items?.length}</span>
+                            </PanelHeader>
+                            {items === undefined ? (
+                                <div className="flex flex-col gap-2 p-3">
+                                    <Skeleton className="h-4 w-2/3" />
+                                    <Skeleton className="h-4 w-1/2" />
+                                </div>
+                            ) : (
+                                <ul className="flex flex-col gap-0.5 p-1.5">
+                                    {items.map((item) => (
+                                        <Row key={item.id} item={item} selected={item.id === selected?.id} />
+                                    ))}
+                                </ul>
+                            )}
+                        </Panel>
+                        <Workers />
+                    </div>
                     <div className="flex min-w-0 flex-[999_1_28rem] flex-col gap-6">
                         {selected === undefined ? (
                             <Panel className="min-h-72 p-3">
@@ -168,5 +174,45 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             )}
             <ReplyForm key={ticket.key} ticketKey={ticket.key} waiting={ticket.awaiting} isPublic={!ticket.private} />
         </>
+    )
+}
+
+/** The runs working now, under the list: which ticket, what kind of run, for how long, and what it has cost so far. */
+function Workers() {
+    const { data } = useQuery(runsQuery)
+    const running = data?.filter((r) => r.state === 'running')
+    return (
+        <Panel data-testid="workers">
+            <PanelHeader label="Working">
+                <span className="readout text-xs text-muted-foreground">{running?.length}</span>
+            </PanelHeader>
+            {running === undefined ? (
+                <div className="p-3">
+                    <Skeleton className="h-4 w-1/2" />
+                </div>
+            ) : running.length === 0 ? (
+                <Placeholder className="min-h-16">no worker running</Placeholder>
+            ) : (
+                <ul className="divide-y">
+                    {running.map((run) => (
+                        <li
+                            key={run.id}
+                            className="flex items-center gap-2.5 px-3 py-2"
+                            data-testid={`worker-${run.id}`}
+                        >
+                            <RunDot state={run.state} />
+                            <TicketLink ticketKey={run.ticket_key} className="w-20 truncate" />
+                            <Chip>{run.kind}</Chip>
+                            <span className="ml-auto flex items-center gap-3">
+                                <span className="readout text-xs text-muted-foreground">
+                                    {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
+                                </span>
+                                <Age at={run.started_at} className="w-8 text-right" />
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </Panel>
     )
 }
