@@ -46,6 +46,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
+| `canopy chore try NAME` | Runs a chore now, in the foreground, and prints its result. Records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
 | `canopy init --workspace [[NAME=]URL...]` | Sets up a workspace: map, `MAP.md`, `.gitignore`; adds and syncs URLs. |

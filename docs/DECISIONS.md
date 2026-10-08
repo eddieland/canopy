@@ -482,3 +482,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Rejected: comparing `messages.at` with `ticks.started_at` (a tick reads messages after reconcile, not at its start);
   dropping an answered `awaiting_reply` from the served list at once (the UI and `canopy status` would disagree).
 - Revisit: when M21's idle pacing needs "a message the previous tick could not have seen"; it is this column.
+
+## D098. `canopy chore try` runs outside every guard and records nothing
+
+- The operator's, for writing a chore: the same as running its command by hand, with canopy's prompt and result check.
+- Rejected: recording it as a chore run (a test result would clear real findings and reset `not_due`); applying the
+  guards (a chore being written would wait out `every_minutes`).
+- Revisit: if the loop gets a way to call it, or operators want a try's findings kept.
