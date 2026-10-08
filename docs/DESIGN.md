@@ -2430,18 +2430,22 @@ no notifications, so a once-a-second read of one pragma is the cheapest way to l
 polls.
 
 The worktrees page (taken on request, 2026-10-08; D090): for each repository in the workspace, in map order, its pool's
-slots as `treehouse status --json` reports them, read when the page asks. Each slot shows treehouse's status, the
-branch it has checked out (or detached), its lease holder and since when, and the processes treehouse found running in
-it. A lease is matched to a running run or review by its lease id, as reconcile matches them, so a slot names the
-ticket, run kind, and run that hold it. The page groups slots in five states it colors: `working` (held by a run or
-review the journal shows running), `held` (leased or in use by anything else: the operator's own shell, `canopy-sync`,
-or a `canopy:` lease no running run holds, which it notes the next reconcile returns), `dirty` (unleased with
-uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A pool
-with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process names
-are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace is
-shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees; a workspace of one's
-pool, outside its repository, is shown whole. The pool's declared size (`capacity`, §18) is shown with its slot count,
-and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones.
+slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
+treehouse's own status on hover), its number (its path on hover), its lease holder, the branch it has checked out (or
+detached), the processes treehouse found running in it, and since when; an idle slot is its state and number alone, and
+a note gets a second line. A lease is matched to a running run or review by its lease id, as reconcile matches them, so
+a slot names the ticket, run kind, and run that hold it. The page groups slots in five states it colors: `working` (held
+by a run or review the journal shows running), `held` (leased or in use by anything else: the operator's own shell,
+`canopy-sync`, or a `canopy:` lease no running run holds, which it notes the next reconcile returns), `dirty` (unleased
+with uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A
+pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
+names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
+is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees; a workspace of one's
+pool, outside its repository, is shown whole. When a pool's slots share a directory, the pool's header names it once.
+The pool's declared size (`capacity`, §18) is shown with its slot count, and a pool holding more slots than that says
+how many, and that `canopy workspace sync` removes idle ones. Above the pools, counters of every pool's slots working,
+held, needing a look (dirty or broken, and any pool it could not read), and free; each pool's header has a square per
+slot in its state's color.
 
 The pools are read at once, a thread each and at most 8, so a workspace of many repositories waits on its slowest pool
 rather than on all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may

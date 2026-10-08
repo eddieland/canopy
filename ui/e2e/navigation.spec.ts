@@ -93,10 +93,15 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     const working = web.getByTestId('worktree-1')
     await expect(working).toHaveAttribute('data-state', 'working')
     await expect(working).toContainText('agent/ABC-101-login')
-    await expect(working).toContainText('.treehouse/web-3f9c2a1b/1/web')
+    // The slots' shared directory is said once, in the header; each slot's path is on its number.
+    await expect(web.getByTestId('pool-root')).toHaveText('.treehouse/web-3f9c2a1b/')
+    await expect(working.getByText('#1')).toHaveAttribute('title', '.treehouse/web-3f9c2a1b/1/web')
+    await expect(working).not.toContainText('.treehouse/web-3f9c2a1b/1/web')
     await expect(working).toContainText('opencode 48211')
     await expect(web.getByTestId('worktree-3')).toHaveAttribute('data-state', 'held')
-    await expect(web.getByTestId('worktree-4')).toContainText('detached')
+    await expect(web.getByTestId('worktree-3')).toContainText('detached')
+    // An idle slot is its state and number alone.
+    await expect(web.getByTestId('worktree-4')).toHaveText('idle#4')
     await expect(web.getByTestId('worktree-5')).toHaveAttribute('data-state', 'dirty')
 
     // Run 43 holds a slot in two pools; each names it.
@@ -142,4 +147,18 @@ test('the header names the latest tick and how long ago it ended', async ({ page
     await settled(page)
     await expect(page.getByTestId('last-tick')).toHaveText(/^tick 1 · \d+[a-z]+ ago$/)
     await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
+})
+
+test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {
+    await page.goto('worktrees')
+    await settled(page)
+    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and an idle one; api has
+    // no clone.
+    await expect(page.getByTestId('counter-working')).toContainText('3')
+    await expect(page.getByTestId('counter-held')).toContainText('1')
+    await expect(page.getByTestId('counter-needs')).toContainText('1 dirty · 0 broken · 1 pool unread')
+    await expect(page.getByTestId('counter-free')).toContainText('of 7 slots')
+    const strip = page.getByTestId('pool-web').getByTestId('slot-strip').locator('[data-state]')
+    await expect(strip).toHaveCount(5)
+    await expect(strip.nth(4)).toHaveAttribute('data-state', 'dirty')
 })

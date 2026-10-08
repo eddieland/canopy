@@ -126,10 +126,16 @@ inline script and checks it against the store's key.
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
-- **Counters** (`src/components/counters.tsx`) head the attention page: running, waiting on you, attention, and
-  spent in the last 24 hours (`GET /api/spend`, on the stream). Each is a label, the value, and one line under it,
-  with a 2px top rule in the state color it counts: `status-running`, `status-blocked`, `status-failed` while
-  something is broken, the accent for spend.
+- **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
+  attention, and spent in the last 24 hours from `GET /api/spend`, on the stream) and the worktrees page (working,
+  held, needs a look, free, across every pool). Each is a label, the value, and one line under it, with a 2px top
+  rule in the state color it counts: `status-running`, `status-stopped` for held, `status-blocked`, `status-failed`
+  while something is broken, the accent for spend.
+- **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
+  idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
+- **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
+  number). Columns keep their width on every row, the age's included. An idle slot shows its state and number
+  alone, dimmed; only a note or an unreadable branch takes a second line.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
