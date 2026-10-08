@@ -72,3 +72,12 @@ test('the runs working now are listed under the attention list', async ({ page }
     await expect(workers.getByTestId('worker-41')).toContainText('implement')
     await expect(workers.getByTestId('worker-43')).toContainText('ABC-104')
 })
+
+test("a started ticket's item offers the ticket's own actions beside its thread", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting_reply' }).click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
+    await expect(detail.getByText('Private: workers read the ticket and write nothing to it.')).toBeVisible()
+})

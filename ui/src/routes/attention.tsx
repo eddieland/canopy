@@ -10,6 +10,7 @@ import { Counters } from '@/components/counters'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { Chip, RunDot } from '@/components/status'
+import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
@@ -173,6 +174,9 @@ function Thread({ ticketKey }: { ticketKey: string }) {
                 <Conversation messages={messages} waiting={ticket.awaiting} />
             )}
             <ReplyForm key={ticket.key} ticketKey={ticket.key} waiting={ticket.awaiting} isPublic={!ticket.private} />
+            <div className="border-t">
+                <TicketActions key={ticket.key} ticket={ticket} />
+            </div>
         </>
     )
 }
