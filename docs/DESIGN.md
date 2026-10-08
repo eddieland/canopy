@@ -351,31 +351,39 @@ A tick is **idle** when all of these hold, each read from the journal by the loo
   tracker comment), or other refusal makes it not idle.
 - The attention list after it is the list before it, compared as the loop's per-tick block already compares them.
 - No ticket or unit changed its phase, branch, a cursor, or `done`, and no ticket was seen for the first time.
-- No run, chore run, or review run started or ended, and no operator message was recorded, between the end of the
-  previous tick and the end of this one.
+- No run, chore run, or review run started or ended, and no operator message was recorded, after the previous tick
+  rendered the overseer's state (§6 step 4). Something the previous tick could not have seen keeps this one from
+  counting as idle, even when it happened while the previous tick was still running.
 
 The wait after a tick is then:
 
 - `base` (`--every`, else `loop.interval_minutes`) after a tick that is not idle;
-- after the n-th idle tick in a row, `min(base * 2^n, loop.idle_max_minutes)`. With the defaults, 30, 60, 120, then
-  120 for as long as nothing changes;
-- never past the earliest time a `fix-ci` cooldown in the state block ends (§8), so a gate the harness opens is acted
-  on when it opens.
+- after the n-th idle tick in a row, `max(base, min(base * 2^n, loop.idle_max_minutes))`. With the defaults, 30, 60,
+  120, then 120 for as long as nothing changes. It is never shorter than `base`, so idle pacing is off whenever the
+  cap is not above `base`: set `loop.idle_max_minutes` to `loop.interval_minutes`, or pass an `--every` at or above
+  it.
 
-`loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes`; setting them equal turns idle
-pacing off. The count lives in the loop, not the journal: a restarted loop starts at `base`, and a hand-run
-`canopy tick` between the loop's ticks counts like any other.
+`loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes`. The count lives in the loop, not
+the journal: a restarted loop starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any
+other. When M13's cost pacing is built, the wait is the longer of the two rules' waits, and what follows bounds that
+combined wait.
 
-Besides an operator message, the wait ends early when a run, chore run, or review run ends, with the same one-minute
-floor (`repeat.WAKE_MIN_SECONDS`). The tick that follows is not idle, so the wait after it is `base` again, and the
-tick after that looks for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits
-on canopy's own work. When M13's cost pacing is built, the wait is the longer of the two rules' waits.
+Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both read
+from the state block: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
+on when it opens. One already open, such as a chore the overseer passed over because its `when` says not now, sets no
+deadline, so it cannot make the loop spin.
+
+Besides an operator message, the wait ends early, with the same one-minute floor (`repeat.WAKE_MIN_SECONDS`), when a
+run, chore run, or review run ended after the tick rendered the overseer's state (§6 step 4): after anything that tick
+could have seen. A run that ends while the overseer is running is picked up a minute after the tick began, not a full
+interval later. The tick that follows is not idle, so the wait after it is `base` again, and the tick after that looks
+for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits on canopy's own work.
 
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
-tick, up to `loop.idle_max_minutes` late. That cap is the trade, and the operator's knob. A sink's digest (§20) is due
-at a delivery, so it can lag by as much. The per-tick block shows the count with the wait, as `idle 3, next tick in
-60m at 03:41`, and the `loop started` log line records `idle_max_minutes`; each tick's log line records whether it was
-idle and the wait chosen.
+tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
+trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The per-tick
+block shows the count with the wait, as `idle 3, next tick in 60m at 03:41`, and the `loop started` log line records
+`idle_max_minutes`; each tick's log line records whether it was idle and the wait chosen.
 
 ## 7. Ticket phases and next actions
 
