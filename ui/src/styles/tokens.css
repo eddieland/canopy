@@ -12,46 +12,44 @@
 :root {
     color-scheme: light;
 
-    --background: oklch(0.968 0.004 247);
-    --surface: oklch(0.985 0.003 247);
-    --surface-raised: oklch(1 0 0);
-    --border: oklch(0.885 0.006 247);
-    --foreground: oklch(0.235 0.017 255);
-    --muted-foreground: oklch(0.5 0.016 255);
-    --accent: oklch(0.56 0.115 210);
-    --accent-foreground: oklch(0.985 0.005 210);
-    --ring: oklch(0.56 0.115 210 / 0.55);
-    --grid-line: oklch(0.235 0.017 255 / 0.045);
+    --background: oklch(0.954 0.005 258);
+    --surface: oklch(1 0 0);
+    --surface-raised: oklch(0.967 0.004 271);
+    --border: oklch(0.906 0.009 265);
+    --foreground: oklch(0.232 0.01 277);
+    --muted-foreground: oklch(0.492 0.026 277);
+    --accent: oklch(0.486 0.189 269);
+    --accent-foreground: oklch(1 0 0);
+    --ring: oklch(0.486 0.189 269 / 0.55);
 
     /* Runs */
-    --status-running: oklch(0.58 0.13 155);
-    --status-blocked: oklch(0.64 0.14 70);
-    --status-stopped: oklch(0.6 0.02 255);
-    --status-done: oklch(0.55 0.08 265);
-    --status-failed: oklch(0.56 0.18 27);
+    --status-running: oklch(0.52 0.11 159);
+    --status-blocked: oklch(0.535 0.12 65);
+    --status-stopped: oklch(0.492 0.026 277);
+    --status-done: oklch(0.515 0.088 211);
+    --status-failed: oklch(0.543 0.174 30);
 
-    --radius: 0.375rem;
+    --radius: 0.5rem;
 }
 
 .dark {
     color-scheme: dark;
 
-    --background: oklch(0.165 0.011 252);
-    --surface: oklch(0.195 0.012 252);
-    --surface-raised: oklch(0.23 0.013 252);
-    --border: oklch(0.31 0.013 252);
-    --foreground: oklch(0.93 0.008 250);
-    --muted-foreground: oklch(0.69 0.013 252);
-    --accent: oklch(0.8 0.115 200);
-    --accent-foreground: oklch(0.2 0.03 220);
-    --ring: oklch(0.8 0.115 200 / 0.5);
-    --grid-line: oklch(0.93 0.008 250 / 0.035);
+    --background: oklch(0.163 0.012 261);
+    --surface: oklch(0.195 0.016 262);
+    --surface-raised: oklch(0.242 0.021 261);
+    --border: oklch(0.287 0.026 260);
+    --foreground: oklch(0.945 0.012 260);
+    --muted-foreground: oklch(0.624 0.029 259);
+    --accent: oklch(0.735 0.137 273);
+    --accent-foreground: oklch(0.163 0.012 261);
+    --ring: oklch(0.735 0.137 273 / 0.5);
 
-    --status-running: oklch(0.78 0.15 155);
-    --status-blocked: oklch(0.82 0.14 78);
-    --status-stopped: oklch(0.7 0.02 255);
-    --status-done: oklch(0.74 0.08 265);
-    --status-failed: oklch(0.7 0.17 25);
+    --status-running: oklch(0.797 0.164 160);
+    --status-blocked: oklch(0.824 0.149 73);
+    --status-stopped: oklch(0.624 0.029 259);
+    --status-done: oklch(0.796 0.114 206);
+    --status-failed: oklch(0.712 0.181 23);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -92,6 +90,6 @@
     --radius-md: var(--radius);
     --radius-lg: calc(var(--radius) + 2px);
 
-    --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+    --font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }

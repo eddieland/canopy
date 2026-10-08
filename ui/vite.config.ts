@@ -9,7 +9,7 @@ import { defineConfig, type Plugin } from 'vite'
 const api = process.env.CANOPY_API ?? 'http://127.0.0.1:8765'
 
 // Fonts to preload: the latin subset of each self-hosted family. Others load on demand by unicode-range.
-const PRELOAD_FONTS = /^(inter|jetbrains-mono)-latin-wght-normal-.*\.woff2$/
+const PRELOAD_FONTS = /^ibm-plex-(sans-latin-wght|mono-latin-(400|500|600))-normal-.*\.woff2$/
 
 /** Adds a <link rel="preload"> for each font PRELOAD_FONTS matches, so text never paints in a fallback face. */
 function preloadFonts(): Plugin {

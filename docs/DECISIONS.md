@@ -665,3 +665,13 @@ Rejected: requiring the placeholder in every public prompt (breaks every older o
 never use); the whole conversation, mirrored comments included (the worker reads the tracker itself, and a mirrored
 authorized reply would read as data beside the live one).
 Revisit: if overrides are rare enough that requiring the placeholder outright costs nothing.
+
+## D094. The web UI looks like an operations inbox, in IBM Plex
+
+Supersedes the instrument panel `ui/DESIGN.md` described at D079, which did not connect for the operator. Seven
+directions were drawn on the same screen (`docs/ui-explorations/2026-10-08-style/`); the terminal ledger, the control
+room, and the calm inbox spoke to the operator, and of the two combinations of them, the ops inbox was chosen: the
+control room's counters and severity, the calm inbox's list beside its thread. The palette changes token values only;
+IBM Plex Sans and Mono replace Inter and JetBrains Mono. Keyboard shortcuts are not a priority and need not match the
+terminal's.
+Revisit: when the layout half of the ops inbox lands, if it reads worse than the panels it replaces.
