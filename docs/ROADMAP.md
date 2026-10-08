@@ -392,7 +392,8 @@ D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design c
 - Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
   run. Worker and split runs do (D071); the overseer, chores, and reviews read the same events but record nothing yet.
 - A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
-  to `loop.interval_minutes` when they cost less.
+  to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
+  within M21's gate deadlines.
 - Spend in the loop's per-tick block and in `canopy status`.
 - Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
   dispatched it. How the runtime reports cost is settled by D071: OpenCode's JSON events on stdout.
@@ -578,6 +579,31 @@ pages for the attention list, runs, and tickets with their conversations, with r
 a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
 UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. Waiting on the operator: a real run, the loop
 serving a real journal to a browser on loopback and on a private address.
+
+## M21. Idle-paced loop
+
+DESIGN §6 (Idle pacing), D083. Needs M12. Independent of M13: cost bounds spend, idleness says whether a tick was worth
+running, and the loop waits the longer of the two.
+
+- `repeat.pace` decides whether the tick was idle from the journal and doubles the wait per idle tick in a row, from
+  `--every` or `loop.interval_minutes` up to `loop.idle_max_minutes` (user-only, default 120) and never below `base`,
+  ending no later than the earliest `fix-ci` cooldown end or chore `due_at` still ahead.
+- The wait also ends early when a run, chore run, or review run ends after the tick rendered its state, with the
+  operator message's one-minute floor.
+- The idle count and the chosen wait in the loop's per-tick block and in its log lines.
+- Config validation: `loop.idle_max_minutes` at least `loop.interval_minutes`; a cap not above `base` turns idle
+  pacing off.
+- Fakes-based tests: idle ticks lengthen the wait to the cap; each condition that is not idle resets it; a cooldown end
+  and a chore's `due_at` shorten it, and one already past does not; a run ending during or after the tick, and an
+  operator message, end it early; a cap not above `base`, from config or `--every`, keeps today's pacing.
+- Open: whether `--every` should turn idle pacing off for a watched session, or keep it from a shorter base.
+
+Accept: the tests above pass with the fakes. The operator leaves `canopy loop` running overnight against the real
+queue and finds, in the loop's output and log, waits reaching the cap after a quiet evening and back at
+`loop.interval_minutes` within one tick of the first morning activity, and each run's end followed by a tick within
+a couple of minutes.
+
+Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 

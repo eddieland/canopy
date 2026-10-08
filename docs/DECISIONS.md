@@ -537,7 +537,20 @@ kept by the page and sent on every request (any script on the page could read it
 headers); server-side sessions (lost on every restart, with nothing gained over a signed cookie for one operator).
 Revisit: with D055's revisit, when more than one person signs in, or if sessions must be ended one at a time.
 
-## D083. Workers set labels through the tracker's MCP edit tool, and deny dangerous MCP tools by name
+## D083. The loop paces idle ticks from the journal, not by checking the world for changes first
+
+A tick whose overseer run finds nothing new is waste however little it cost, so `canopy loop` doubles its wait after
+each idle tick in a row, up to `loop.idle_max_minutes`, and wakes early on the events it can see itself: an operator
+message, or a run, chore run, or review run ending (DESIGN §6). Idleness is read from what the tick recorded: its
+status, decisions, attention list, tickets and units, and runs. The harness still cannot see the world between ticks
+(D003), so a teammate's comment waits for the next tick, up to the cap.
+Rejected: polling GitHub or the tracker in Python to skip unchanged ticks (a VCS client in the harness, D003); a
+cheaper pre-check agent each tick (still an LLM call per tick, and a second prompt's judgment gating the first's);
+quiet hours in config (a guess at when teammates work, wrong across time zones, where backoff learns it); pacing by
+cost alone (M13; a cheap tick that finds nothing is still not worth running); webhooks (deferred; a listener, T8).
+Revisit: if the cap's latency on teammates' comments or CI is felt; then quiet hours, or D003's own revisit.
+
+## D084. Workers set labels through the tracker's MCP edit tool, and deny dangerous MCP tools by name
 
 Labels landed only when a worker reached for `gh`, which is GitHub-only and not on every machine. Ticket labels are set
 with the tracker's issue edit tool, passing only labels; the PR label only where a GitHub tool sets labels, since

@@ -68,7 +68,7 @@ Controls:
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
   submission, closing, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever
-  the operator's runtime grants (D083). Names differ by server, so a server's own name for one of these gets past it.
+  the operator's runtime grants (D084). Names differ by server, so a server's own name for one of these gets past it.
   GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and its PR update tool can close the
   PR; neither has a narrower name to deny: where they are granted, keeping them to labels and the PR's own text is the
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
@@ -193,7 +193,7 @@ but must be distinguishable:
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>` or
   the runtime's own attribution. Never hidden.
-- PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D083); every PR title carries
+- PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
