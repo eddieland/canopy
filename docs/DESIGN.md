@@ -741,14 +741,16 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, labels), GitHub (open/update
   PR, read reviews and checks).
-- `canopy-reviewer`: no edits, shell, web fetch, or subagents; reads only through the link to its checkout. MCP: read
+- `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
   tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
   and edits denied by name (§21).
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19). A chore that runs the operator's
   own tools uses the operator's own copy of it.
-- `canopy-splitter`: read-only file tools in its desk; no edit, shell, web fetch, or subagents. MCP: the tracker
+- `canopy-splitter`: read-only file tools in its desk; no edit, shell, or subagents. MCP: the tracker
   (create and link tickets, comment), with tools for labels, assignees, edits, PRs, branches, and files denied by name
   (§18).
+
+None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
 the command templates. No interface.

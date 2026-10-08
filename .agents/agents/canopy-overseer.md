@@ -8,6 +8,11 @@ mode: primary
 temperature: 0.1
 permission:
   edit: deny
+  # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
+  # (TRUST_MODEL T1, D077).
+  webfetch: deny
+  websearch: deny
+  codesearch: deny
   # Subagents run with their own, wider permissions; the overseer must not reach them.
   task: deny
   bash:

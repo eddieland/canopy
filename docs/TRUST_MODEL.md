@@ -87,6 +87,10 @@ Controls:
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
+- No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
+  which a repository's config cannot loosen (D044). Fetched and searched pages are text anyone can shape, and an agent
+  that reaches for them on its own reads them with the operator's credentials in reach. The untrusted text an agent
+  reads is then what its task brings: the ticket, the PR and its comments, CI output, and the repository.
 
 Residual: a worker can still be talked into writing bad code on its own
 branch. That is what human review is for, and it is not weaker than the same
@@ -95,7 +99,9 @@ but not who added it, and the label-time check is the overseer's judgment: a ste
 dispatch a self-labeled child, as it could dispatch an unlabeled ticket. That child's work is still a PR a human
 reviews. Under the PR exception, a steered overseer and worker that both skip their checks can
 push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
-backstop, as it is for a coworker pushing there by hand.
+backstop, as it is for a coworker pushing there by hand. A worker's bash still reaches the network, for package
+installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
+removes what a model reaches for unprompted, not the capability.
 
 ### T2. Credential misuse or leakage
 
@@ -184,7 +190,7 @@ Controls:
   run covers: one repository, or each repository of a joint run (DESIGN §18). Prompts name those repositories and forbid
   writing elsewhere; permissions should match where the runtime allows.
 - The splitter's write scope is creating tickets in the parent's project, linking them, and one comment on the parent.
-  It has no edit, shell, web fetch, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
+  It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
