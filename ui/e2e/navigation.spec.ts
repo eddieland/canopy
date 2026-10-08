@@ -113,3 +113,26 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     await page.getByTestId('worktrees-refresh').click()
     expect((await reads).status()).toBe(200)
 })
+
+test('the worktrees page reads the pools again every 30 seconds, and only while it is open', async ({ page }) => {
+    await page.clock.install()
+    let reads = 0
+    page.on('request', (r) => {
+        if (r.url().endsWith('/api/worktrees')) reads += 1
+    })
+    await page.goto('worktrees')
+    await settled(page)
+    expect(reads).toBe(1)
+
+    await page.clock.runFor(29_000)
+    expect(reads).toBe(1)
+    const next = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
+    await page.clock.runFor(1_000)
+    expect((await next).status()).toBe(200)
+    expect(reads).toBe(2)
+
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.clock.runFor(90_000)
+    expect(reads).toBe(2)
+})

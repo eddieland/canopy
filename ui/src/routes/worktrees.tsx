@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { ExternalLink, RotateCw } from 'lucide-react'
+import { useState } from 'react'
 
 import { worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES, type Pool, type Worktree, type WorktreeState } from '@/api/types'
@@ -19,7 +20,17 @@ export const Route = createFileRoute('/worktrees')({
 })
 
 function WorktreesPage() {
-    const { data, error, isFetching, refetch } = useQuery(worktreesQuery)
+    const { data, error, refetch } = useQuery(worktreesQuery)
+    // Only a read the operator asked for shows on the button: the 30-second one would make it flicker.
+    const [reading, setReading] = useState(false)
+    const readAgain = async () => {
+        setReading(true)
+        try {
+            await refetch()
+        } finally {
+            setReading(false)
+        }
+    }
     return (
         <>
             <PageHeader label="Pools" title="Worktrees">
@@ -33,12 +44,13 @@ function WorktreesPage() {
                     variant="outline"
                     size="sm"
                     className="ml-auto"
-                    onClick={() => void refetch()}
-                    disabled={isFetching}
+                    onClick={() => void readAgain()}
+                    disabled={reading}
+                    title="Read every 30 seconds while this page is open"
                     data-testid="worktrees-refresh"
                 >
                     <RotateCw />
-                    {isFetching ? 'Reading' : 'Read again'}
+                    {reading ? 'Reading' : 'Read again'}
                 </Button>
             </div>
             {data === undefined ? (
