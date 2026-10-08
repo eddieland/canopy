@@ -1,0 +1,43 @@
+import { describe, expect, it } from 'vitest'
+
+import type { AttentionItem } from '@/api/types'
+
+import { bySeverity, severity } from './attention'
+
+const item = (id: string, reason: string, since: string, finding = false): AttentionItem => ({
+    id,
+    subject: id,
+    ticket_key: finding ? null : id,
+    chore: finding ? 'deps' : null,
+    repo: null,
+    reason,
+    detail: '',
+    since,
+    finding,
+})
+
+describe('severity', () => {
+    it('ranks broken work, then what waits on the operator, then the rest, then findings', () => {
+        expect(severity(item('a', 'worker_failed', '2026-10-08T12:00:00Z'))).toBe('failed')
+        expect(severity(item('a', 'review_limit', '2026-10-08T12:00:00Z'))).toBe('failed')
+        expect(severity(item('a', 'awaiting_reply', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'untrusted_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe('other')
+        expect(severity(item('a', 'repo_missing', '2026-10-08T12:00:00Z'))).toBe('other')
+        // A finding's reason is the chore's own id, which may collide with a ticket reason: it is a finding first.
+        expect(severity(item('a', 'worker_failed', '2026-10-08T12:00:00Z', true))).toBe('finding')
+    })
+})
+
+describe('bySeverity', () => {
+    it('puts the most severe first, and within a severity the one open longest', () => {
+        const sorted = bySeverity([
+            item('finding', 'lodash-advisory', '2026-10-08T08:00:00Z', true),
+            item('review', 'needs_reviewer', '2026-10-08T11:00:00Z'),
+            item('question', 'awaiting_reply', '2026-10-08T11:56:00Z'),
+            item('newer-failure', 'crashed', '2026-10-08T11:50:00Z'),
+            item('older-failure', 'worker_failed', '2026-10-08T10:50:00Z'),
+        ])
+        expect(sorted.map((i) => i.id)).toEqual(['older-failure', 'newer-failure', 'question', 'review', 'finding'])
+    })
+})
