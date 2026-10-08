@@ -14,9 +14,11 @@ on:
       - migrations/**
       - packages/**
       - pyproject.toml
+      - hatch_build.py
       - scripts/build-binary.sh
       - src/**
       - tests/install-check.sh
+      - ui/**
       - uv.lock
   workflow_dispatch:
 
@@ -55,6 +57,12 @@ jobs:
         with:
           enable-cache: false
 
+      # The wheel's build hook builds the web UI into the executable (D076).
+      - name: Set up Node
+        uses: actions/setup-node@v7.0.0
+        with:
+          node-version: "22"
+
       # The executable is built for the runner it runs on; a runner label that moves to another architecture must not
       # ship under this platform's name.
       - name: Check the runner's architecture
@@ -73,6 +81,7 @@ jobs:
       - name: Build the executable
         env:
           SCIENCE_AUTH_API_GITHUB_COM_BEARER: ${{ github.token }}
+          CANOPY_UI_REQUIRED: "1"
         run: make binary
 
       - name: Install it as README says and run a dry tick
