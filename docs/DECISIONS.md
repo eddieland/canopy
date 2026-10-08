@@ -1326,3 +1326,21 @@ Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, 
 change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
 stay.
 Revisit: if two kinds' reference forms ever collide, or a kind needs a verb with a meaning the others do not share.
+
+## D077. No agent has web tools
+
+Context: OpenCode gives agents `webfetch`, `websearch`, and `codesearch` unless a definition denies them. Only the
+reviewer and the splitter denied `webfetch`; none denied search. The operator's view (2026-10-08): canopy's guards
+cannot contain an agent that runs as the operator, and what keeps it on task is mostly that nothing it reads asks it
+to stray (D076). Web pages and search results are the untrusted text an agent picks up on its own, from anyone.
+Decision (TRUST_MODEL T1, DESIGN §13): every canopy definition (overseer, worker, reviewer, splitter, chore) denies
+all three, as scalars a repository's config cannot loosen (D044). `tests/canopy/test_definitions.py` checks each.
+Rejected:
+- Recommending it in the docs and leaving the definitions open: the operator cannot change canopy's definitions
+  without a prompt override, and a default that reads the web is the one most operators would keep.
+- Denying them for the overseer only: workers read the same tickets, often client-written, and look things up most.
+- A per-operator opt-in for workers: nobody has asked; add it when a worker's missing docs lookups show up in the
+  decisions corpus.
+Consequences: a worker cannot look up library documentation with a tool. Its bash still reaches the network, which
+installs and builds need, so a worker steered into `curl` still fetches a page; T1 names that residual.
+Revisit: when workers are sandboxed with egress controls (HOST_ISOLATION), or if missing lookups measurably hurt runs.
