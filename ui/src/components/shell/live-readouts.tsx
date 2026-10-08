@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { leasesQuery, metaQuery, sessionsQuery } from '@/api/queries'
-import { LeaseDot, SessionDot } from '@/components/status'
+import { attentionQuery, metaQuery, runsQuery, ticketsQuery } from '@/api/queries'
+import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { cn } from '@/lib/utils'
@@ -20,22 +20,23 @@ function count<T>(items: T[] | undefined, test: (item: T) => boolean): number | 
     return items?.filter(test).length
 }
 
-/** The header's counters: running and blocked sessions, held leases, and the event stream's state. */
+/** The header's counters: running runs, tickets waiting on a reply, the attention list, and the stream's state. */
 export function LiveReadouts({ stream }: { stream: StreamStatus }) {
-    const sessions = useQuery(sessionsQuery)
-    const leases = useQuery(leasesQuery)
+    const runs = useQuery(runsQuery)
+    const tickets = useQuery(ticketsQuery)
+    const attention = useQuery(attentionQuery)
     const meta = useQuery(metaQuery)
 
     return (
         <div className="flex items-center gap-5" data-testid="live-readouts">
-            <Readout label="running" value={count(sessions.data, (s) => s.state === 'running')}>
-                <SessionDot state="running" />
+            <Readout label="running" value={count(runs.data, (r) => r.state === 'running')}>
+                <RunDot state="running" />
             </Readout>
-            <Readout label="blocked" value={count(sessions.data, (s) => s.state === 'blocked')}>
-                <SessionDot state="blocked" />
+            <Readout label="waiting" value={count(tickets.data, (t) => t.awaiting !== null)}>
+                <RunDot state="blocked" />
             </Readout>
-            <Readout label="leases" value={count(leases.data, (l) => l.state !== 'released')}>
-                <LeaseDot state="held" />
+            <Readout label="attention" value={attention.data?.length}>
+                <span aria-hidden className="size-2 rounded-full border border-accent" />
             </Readout>
             <span
                 className={cn(

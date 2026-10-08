@@ -1,4 +1,4 @@
-"""`canopy init`, and `canopy skill` for the operator's own agent sessions."""
+"""`canopy init`, `canopy skill` for the operator's own agent sessions, and `canopy secret` for the web UI."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ import click
 
 from canopy.cli import workspace as cli_workspace
 from canopy.cli.common import CliError, Obj
-from canopy.core import config, definitions, workspace
+from canopy.core import config, conversation, definitions, workspace
 from canopy.infra import resources
+from canopy.serve import secret
 from canopy.setup import init
 from canopy.setup import workspace as setup_workspace
 
@@ -130,6 +131,30 @@ def cmd_skill() -> int:
         canopy skill > ~/.agents/skills/canopy/SKILL.md
     """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
     click.echo(resources.operator_skill().read_text(encoding="utf-8"), nl=False)
+    return 0
+
+
+@click.command("secret")
+@click.option("--rotate", is_flag=True, help="Replace the secret with a new one, signing every browser out.")
+def cmd_secret(*, rotate: bool) -> int:
+    """Print the listener secret the web UI's sign-in asks for, making one first if there is none.
+
+    It is kept in a file only you can read, next to your user config. `canopy loop` reads it when it starts serving;
+    restart the loop after --rotate.
+    """
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"secret refused ({r.guard}): {r.reason}") from None
+    path = secret.path()
+    try:
+        value, written = secret.create(path, rotate=rotate)
+    except secret.SecretError as e:
+        raise CliError(str(e)) from None
+    click.echo(f"{'wrote' if written else 'kept '} {path}", err=True)
+    if written and rotate:
+        click.echo("Every browser is signed out once the loop restarts.", err=True)
+    click.echo(value)
     return 0
 
 

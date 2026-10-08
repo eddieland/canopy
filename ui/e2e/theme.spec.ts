@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { settled, STORAGE_KEY, storeTheme } from './helpers.ts'
+import { settled, signIn, STORAGE_KEY, storeTheme } from './helpers.ts'
 
 declare global {
     interface Window {
@@ -27,7 +27,7 @@ test.describe('no flash of the wrong theme', () => {
                 seen.scheme = document.documentElement.style.colorScheme
             })
         })
-        await page.goto('sessions')
+        await page.goto('runs')
         await page.reload()
         const seen = await page.evaluate(() => window.canopyThemeProbe)
         expect(seen?.atBody).toMatch(/\bdark\b/)
@@ -37,7 +37,7 @@ test.describe('no flash of the wrong theme', () => {
 
     test('with nothing stored it follows the system theme', async ({ page }) => {
         await page.emulateMedia({ colorScheme: 'dark' })
-        await page.goto('sessions')
+        await page.goto('runs')
         await expect(page.locator('html')).toHaveClass(/\bdark\b/)
         await page.emulateMedia({ colorScheme: 'light' })
         await expect(page.locator('html')).not.toHaveClass(/\bdark\b/)
@@ -46,6 +46,7 @@ test.describe('no flash of the wrong theme', () => {
 
 test.describe('the toggle', () => {
     test.beforeEach(async ({ page }) => {
+        await signIn(page)
         // Counts view transitions, to tell the animated switch from the instant one.
         await page.addInitScript(() => {
             window.canopyViewTransitions = 0
@@ -61,7 +62,7 @@ test.describe('the toggle', () => {
 
     test('switches with a view transition, persists, and survives a reload', async ({ page }) => {
         await storeTheme(page, 'light')
-        await page.goto('sessions')
+        await page.goto('runs')
         await settled(page)
         const toggle = page.getByTestId('theme-toggle')
         await expect(toggle).toHaveAccessibleName('Switch to dark theme')
@@ -79,7 +80,7 @@ test.describe('the toggle', () => {
     test('swaps instantly when reduced motion is preferred', async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await storeTheme(page, 'light')
-        await page.goto('sessions')
+        await page.goto('runs')
         await settled(page)
         await page.getByTestId('theme-toggle').click()
         await expect(page.locator('html')).toHaveClass(/\bdark\b/)
@@ -89,8 +90,9 @@ test.describe('the toggle', () => {
     test('a change in one tab reaches the others', async ({ context }) => {
         const first = await context.newPage()
         const second = await context.newPage()
+        await signIn(first)
         await first.goto('settings')
-        await second.goto('sessions')
+        await second.goto('runs')
         await settled(second)
 
         await first.getByTestId('theme-dark').click()

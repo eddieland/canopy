@@ -6,6 +6,9 @@ that does not validate is no result: each caller decides what that run's status 
 
 from __future__ import annotations
 
+import json
+from typing import cast
+
 from pydantic import AfterValidator, BaseModel, ValidationError
 
 
@@ -54,3 +57,21 @@ def stored[M: BaseModel](model: type[M], result_json: object) -> M | None:
         return model.model_validate_json(result_json)
     except ValidationError:
         return None
+
+
+def stored_object(result_json: str | None) -> dict[str, object]:
+    """A run's stored result as an object; {} when it has none or it does not parse. Its values are still untrusted."""
+    if not result_json:
+        return {}
+    try:
+        parsed: object = json.loads(result_json)
+    except json.JSONDecodeError:
+        return {}
+    return {str(k): v for k, v in cast("dict[object, object]", parsed).items()} if isinstance(parsed, dict) else {}
+
+
+def stored_prs(result: dict[str, object]) -> list[str]:
+    """The PRs a stored result names, each a plain printable https:// URL; anything else is left out."""
+    prs = result.get("prs")
+    urls = list(cast("dict[str, object]", prs).values()) if isinstance(prs, dict) else [result.get("pr")]
+    return [u for u in urls if isinstance(u, str) and u.startswith("https://") and u.isprintable() and " " not in u]

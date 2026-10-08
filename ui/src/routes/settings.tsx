@@ -1,5 +1,11 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
+import { LogOut, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
+
+import { signOut } from '@/api/mutations'
+import { keys, sessionQuery } from '@/api/queries'
+import { Notice } from '@/components/notice'
+import { Button } from '@/components/ui/button'
 
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { cn } from '@/lib/utils'
@@ -53,6 +59,40 @@ function SettingsPage() {
                     </fieldset>
                 </div>
             </Panel>
+            <SessionPanel />
         </>
+    )
+}
+
+/** Signs this browser out. Every browser is signed out by a new secret: `canopy secret --rotate`, then a restart. */
+function SessionPanel() {
+    const client = useQueryClient()
+    const { data } = useQuery(sessionQuery)
+    const mutation = useMutation({
+        mutationFn: signOut,
+        onSuccess: (session) => {
+            client.setQueryData(keys.session, session)
+            client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' })
+        },
+    })
+    // Mock data served without a secret has no session to end.
+    if (data?.token === 'open') return null
+    return (
+        <Panel>
+            <PanelHeader label="Session" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <div className="flex flex-col gap-1">
+                    <p className="text-sm text-muted-foreground">
+                        Signed in with the listener secret for 30 days. To sign every browser out, run{' '}
+                        <code className="font-mono text-xs">canopy secret --rotate</code> and restart the loop.
+                    </p>
+                    <Notice error={mutation.error} />
+                </div>
+                <Button variant="outline" onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+                    <LogOut />
+                    Sign out
+                </Button>
+            </div>
+        </Panel>
     )
 }

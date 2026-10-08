@@ -19,8 +19,8 @@ function NotFound() {
             <PageHeader label="404" title="Nothing here" />
             <Panel>
                 <Placeholder>
-                    <Link to="/sessions" className="text-accent underline-offset-4 hover:underline">
-                        Go to sessions
+                    <Link to="/attention" className="text-accent underline-offset-4 hover:underline">
+                        Go to the attention list
                     </Link>
                 </Placeholder>
             </Panel>

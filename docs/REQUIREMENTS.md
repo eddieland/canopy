@@ -156,7 +156,7 @@ is the only channel for both (§7, §8), and the queue label is itself visible.
 
 Shape (§22, D072, D080): the operator starts the ticket in canopy (`canopy start`) instead of labeling it; its
 workers can only read the tracker; questions reach the attention list (`awaiting_reply`) and `canopy show`, and the
-operator answers with `canopy reply`, later from the web UI. Its branch and PR title still name the ticket key, which a
+operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
 
@@ -170,9 +170,9 @@ operator's replies. Gap: PR review comments, which join with PR subjects (M14).
 
 ## Nice to have
 
-- **N1. Local web UI on localhost.** Planned as M20, after M18. Allowed under TRUST_MODEL T8 (C2, D055). The operator
-  expects it to become their main surface (C5), served by `canopy loop` with an off switch (D073). OpenCode's own
-  attach (M15) covers sessions first.
+- **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
+  behind the listener secret the operator signs in with (D082). The operator expects it to become their main surface
+  (C5), served by `canopy loop` with an off switch (D073). OpenCode's own attach (M15) covers sessions first.
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
   pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
   D064). No wrapper script of the operator's is needed.
@@ -212,4 +212,4 @@ Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, a
 - **C5. The web UI as the operator's main surface vs "daily surface is labels, ticket comments, PR review, and one
   attention list" (DESIGN §4 principle 6, N1).** Settled by the operator on 2026-10-08 (D072, D073): the operator's
   own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.
-  Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 changes when M20 is built.
+  Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 says so since M20.

@@ -5,12 +5,17 @@ import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { api, writeToken } from '@/api/client'
+import { keys } from '@/api/queries'
+import type { Session } from '@/api/types'
 import { basePath } from '@/lib/base'
 import { createQueryClient } from '@/lib/query-client'
 
 import { routeTree } from './routeTree.gen'
 
 const queryClient = createQueryClient()
+// Every write carries the session's token (DESIGN §22, D082).
+api.use(writeToken(() => queryClient.getQueryData<Session>(keys.session)?.token))
 
 const router = createRouter({
     routeTree,

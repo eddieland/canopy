@@ -55,12 +55,17 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    sandboxing is not expected to support (D038).
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
    plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
-   repeats until you press Ctrl-C.
+   repeats until you press Ctrl-C. It also serves the web UI at `http://127.0.0.1:8765/`; `canopy secret` prints the
+   listener secret its sign-in page asks for.
 
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list.
+- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, and every ticket's
+  conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the secret
+  `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so does
+  `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
   canopy's copy of its comments.

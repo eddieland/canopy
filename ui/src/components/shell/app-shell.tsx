@@ -1,21 +1,33 @@
+import { useQuery } from '@tanstack/react-query'
 import { Outlet } from '@tanstack/react-router'
 import { ViewTransition } from 'react'
 
+import { sessionQuery } from '@/api/queries'
+import { SignIn } from '@/components/sign-in'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/theme/use-theme'
 
 import { LiveReadouts } from './live-readouts'
+import { Mark } from './mark'
 import { Nav } from './nav'
 import { ThemeToggle } from './theme-toggle'
 
 /**
- * The frame every page renders in: header, side navigation, and the routed page.
+ * The frame every page renders in: header, side navigation, and the routed page. Signed out, the sign-in page instead,
+ * whatever the route: every API route but the session's needs a session (DESIGN §22).
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them.
  */
 export function AppShell() {
-    const stream = useLiveUpdates()
+    // Follows the system theme and other tabs on every page, the sign-in page included.
+    useTheme()
+    const session = useQuery(sessionQuery)
+    const signedIn = session.data?.signed_in === true
+    const stream = useLiveUpdates(signedIn)
+    if (session.data === undefined) return <div className="min-h-dvh" />
+    if (!signedIn) return <SignIn />
     return (
         <div className="grid min-h-dvh grid-cols-[13rem_minmax(0,1fr)] grid-rows-[3rem_minmax(0,1fr)]">
             <header
@@ -46,15 +58,5 @@ export function AppShell() {
                 </ViewTransition>
             </main>
         </div>
-    )
-}
-
-/** The logo: a ring and a dot, in the accent color. */
-function Mark() {
-    return (
-        <svg viewBox="0 0 16 16" className="size-4 text-accent" aria-hidden>
-            <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <circle cx="8" cy="8" r="2" fill="currentColor" />
-        </svg>
     )
 }

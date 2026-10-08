@@ -525,3 +525,14 @@ code to record a comment's source, and bounds a tick to 100 mirrors, counted fro
 Rejected: the body as a quoted argument (one missed escape runs the text); a fixed delimiter (a comment can contain
 it); the overseer saying which comments are workers' (a judgment code can make).
 Revisit: if the agent runtime gains a way to pass a tool's text to a command without a shell.
+
+## D082. The browser signs in once with the listener secret and keeps a cookie signed with it
+
+The web UI's sign-in page takes the listener secret from the operator, who pastes it or lets a password manager fill
+it, and sets an `HttpOnly`, `SameSite=Strict` cookie: an issue time and a nonce, HMAC-signed with the secret, good for
+30 days. Writes add a per-session token derived the same way. The server keeps no sessions, so a loop restart signs
+no one out, and `canopy secret --rotate` signs everyone out.
+Rejected: a one-time link the loop prints (good once, for one browser, and only while that loop runs); the secret
+kept by the page and sent on every request (any script on the page could read it, and `EventSource` sends no
+headers); server-side sessions (lost on every restart, with nothing gained over a signed cookie for one operator).
+Revisit: with D055's revisit, when more than one person signs in, or if sessions must be ended one at a time.

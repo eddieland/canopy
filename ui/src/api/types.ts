@@ -5,17 +5,18 @@ type Schemas = components['schemas']
 
 export type Meta = Schemas['Meta']
 export type Session = Schemas['Session']
-export type SessionState = Schemas['SessionState']
-export type Lease = Schemas['Lease']
-export type LeaseState = Schemas['LeaseState']
+export type AttentionItem = Schemas['AttentionItem']
+export type Run = Schemas['Run']
+export type RunState = Schemas['RunState']
+export type TicketSummary = Schemas['TicketSummary']
+export type TicketDetail = Schemas['TicketDetail']
+export type Message = Schemas['Message']
+export type Unit = Schemas['Unit']
+export type Refusal = Schemas['Refusal']
+export type Started = Schemas['Started']
+export type Stopped = Schemas['Stopped']
+export type Replied = Schemas['Replied']
 export type StreamEvent = Schemas['StreamEvent']
 
 // Every state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss.
-export const SESSION_STATES = [
-    'running',
-    'blocked',
-    'idle',
-    'done',
-    'failed',
-] as const satisfies readonly SessionState[]
-export const LEASE_STATES = ['held', 'expiring', 'released'] as const satisfies readonly LeaseState[]
+export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

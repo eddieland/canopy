@@ -7,10 +7,20 @@ import { api, unwrap } from './client'
  * here and there must come from `keys`.
  */
 export const keys = {
+    session: ['session'] as const,
     meta: ['meta'] as const,
-    sessions: ['sessions'] as const,
-    leases: ['leases'] as const,
+    attention: ['attention'] as const,
+    runs: ['runs'] as const,
+    tickets: ['tickets'] as const,
+    ticket: (key: string) => ['ticket', key] as const,
 }
+
+/** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
+export const sessionQuery = queryOptions({
+    queryKey: keys.session,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/session', { signal })),
+    staleTime: Number.POSITIVE_INFINITY,
+})
 
 export const metaQuery = queryOptions({
     queryKey: keys.meta,
@@ -18,12 +28,27 @@ export const metaQuery = queryOptions({
     staleTime: Number.POSITIVE_INFINITY,
 })
 
-export const sessionsQuery = queryOptions({
-    queryKey: keys.sessions,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/api/sessions', { signal })),
+export const attentionQuery = queryOptions({
+    queryKey: keys.attention,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/attention', { signal })),
 })
 
-export const leasesQuery = queryOptions({
-    queryKey: keys.leases,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/api/leases', { signal })),
+export const runsQuery = queryOptions({
+    queryKey: keys.runs,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
 })
+
+export const ticketsQuery = queryOptions({
+    queryKey: keys.tickets,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/tickets', { signal })),
+})
+
+export function ticketQuery(key: string) {
+    return queryOptions({
+        queryKey: keys.ticket(key),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/tickets/{key}', { params: { path: { key } }, signal })),
+        // A ticket from another page's data is a different ticket: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}

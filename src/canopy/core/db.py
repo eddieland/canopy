@@ -891,3 +891,30 @@ def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
 def runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
     """Return a ticket's latest `limit` runs, newest first."""
     return conn.execute("SELECT * FROM runs WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)).fetchall()
+
+
+def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
+    """Return the `limit` tickets with the most recent activity, newest first: each ticket row with `active_at`.
+
+    Activity is a message, a run starting or ending, a start or stop, or a tick seeing the ticket. Every one of those
+    times is the journal's own format, so the newest is the greatest string. With `key`, only that ticket.
+    """
+    return conn.execute(
+        "SELECT t.*, max("
+        "  t.last_seen_at,"
+        "  coalesce((SELECT max(m.at) FROM messages m WHERE m.subject_kind = ? AND m.subject_id = t.key), ''),"
+        "  coalesce((SELECT max(coalesce(r.ended_at, r.started_at)) FROM runs r WHERE r.ticket_key = t.key), ''),"
+        "  coalesce((SELECT coalesce(s.stopped_at, s.started_at) FROM starts s"
+        "    WHERE s.subject_kind = ? AND s.subject_id = t.key), '')"
+        ") AS active_at "
+        "FROM tickets t WHERE ? IS NULL OR t.key = ? ORDER BY active_at DESC, t.key LIMIT ?",
+        (SUBJECT_TICKET, SUBJECT_TICKET, key, key, limit),
+    ).fetchall()
+
+
+def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> int | None:
+    """Return the id of a subject's newest message, or None if it has none."""
+    row = conn.execute(
+        "SELECT max(id) FROM messages WHERE subject_kind = ? AND subject_id = ?", (subject_kind, subject_id)
+    ).fetchone()
+    return None if row[0] is None else int(row[0])

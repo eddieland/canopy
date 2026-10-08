@@ -564,14 +564,20 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
-- Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
+- Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
+  the UI once M15 runs workers against OpenCode's server.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: in progress. Taken in part on request (2026-10-08), ahead of M18: the foundation only (D079). `ui/` with its
-tokens, theme, shell, and placeholder pages; `canopy.serve` serving it and a mock sessions and leases API with SSE;
-the build bundled into the wheel; Playwright against the served build. Not yet: the listener secret, `canopy loop`
-running the server, `serve.*` config, real data, and every page and action above.
+Status: in progress. Built (2026-10-08): the design (DESIGN §22) settles both open questions: the browser signs in
+once with the listener secret and keeps a cookie signed with it (D082), and M15's session attach waits on M15's server,
+with session ids on the runs page meanwhile. `canopy loop` serves from a thread unless `--no-serve` or
+`serve.enabled = false`, `serve.*` user-only, nothing served without a safe secret file (`canopy secret` makes one);
+pages for the attention list, runs, and tickets with their conversations, with reply, start, stop, and stop now through
+`core.conversation` and `runs.halt`; an event stream over SQLite's `data_version`; `python -m canopy.serve --mock` over
+a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
+UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. Waiting on the operator: a real run, the loop
+serving a real journal to a browser on loopback and on a private address.
 
 ## Deferred, with the trigger that would unblock each
 
