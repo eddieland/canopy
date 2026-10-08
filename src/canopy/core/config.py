@@ -404,7 +404,7 @@ class Runtime(Section):
     )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"
     )
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
     review_cmd: Annotated[AgentTemplate, Scope.USER] = (

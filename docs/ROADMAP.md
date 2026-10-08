@@ -393,7 +393,7 @@ the operator: whether each tick's block is legible over a working session.
 D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
 
 - Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run. Worker and split runs (D071) and each tick's overseer do; chores and reviews read the same events but record
+  run. Worker, split, and chore runs (D071) and each tick's overseer do; reviews read the same events but record
   nothing yet.
 - A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
   to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
@@ -410,7 +410,9 @@ cost in dollars and tokens, and `canopy status` shows it per recent run (D071). 
 loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
 alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
 `overseer_cmd` in a user file from before needs `--format json` added. The web UI's attention page shows what the
-last 24 hours cost (2026-10-08, D095). Not designed yet: the budget and the pacing rule.
+last 24 hours cost (2026-10-08, D095). Chore runs record theirs, the default `chore_cmd` asks for events, and the
+spend counts them (2026-10-08); a chore `cmd` of the operator's needs `--format json` added. Not designed yet: the
+budget and the pacing rule.
 
 ## M14. PR-scoped work
 

@@ -283,7 +283,7 @@ class LastTick(_Model):
 class Spend(_Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 
-    Worker and split runs and each tick's overseer, by when they started. Chores and reviews record nothing yet.
+    Worker, split, and chore runs and each tick's overseer, by when they started. Reviews record nothing yet.
     """
 
     since: datetime
