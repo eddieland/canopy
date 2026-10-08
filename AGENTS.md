@@ -43,10 +43,16 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
+- `make binary` builds `dist/canopy`, the single executable a release ships (D067), and
+  `make install-check INSTALL_SOURCE=dist/canopy` checks it. The release workflow runs both on every platform it ships
+  for, on a version tag and on pull requests that touch packaging.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (D027, dev only), and `rich` for terminal output (D043).
+  validators (D027, dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
+  (D074, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only).
+- The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
+  and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
   systems is the agent runtime's MCP servers. The harness knows nothing about Jira or GitHub beyond strings in config
   and prompts.
@@ -76,7 +82,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
   there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
-  startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one.
+  startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
+  squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `~/.canopy/canopy.log`. Every tick has an id that appears in every log line it
@@ -104,7 +111,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- A web UI. `canopy status` and a markdown file are the UI.
+- A web UI beyond what ROADMAP M20 lists. `canopy status` and a markdown file stay the CLI's surface.
 - Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.

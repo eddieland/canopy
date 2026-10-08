@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="light dark" />
+        <!--
+      Blocking on purpose: sets the theme class and color-scheme before the first paint, so a reload never flashes the
+      other theme. Keep it in sync with src/theme/store.ts (STORAGE_KEY, the values, the resolution); a test in
+      src/theme/theme-script.test.ts runs this exact script. FastAPI allows it by hash in its CSP (serve/spa.py).
+    -->
+        <script>
+            ;(function () {
+                var d = document.documentElement
+                var p = 'system'
+                try {
+                    var s = localStorage.getItem('canopy-theme')
+                    if (s === 'light' || s === 'dark') p = s
+                } catch (e) {}
+                var dark = p === 'dark' || (p === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+                d.classList.toggle('dark', dark)
+                d.style.colorScheme = dark ? 'dark' : 'light'
+                d.dataset.theme = p
+            })()
+        </script>
+        <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+        <title>canopy</title>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+    </body>
+</html>
