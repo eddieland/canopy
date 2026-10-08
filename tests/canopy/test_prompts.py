@@ -40,8 +40,10 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
     assert "}}" not in text
     assert '"branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"}' in text
     assert "attempt 1 of 2" in text
-    # A joint run's worker learns its repositories from these, so the shipped prompts have them.
+    # A joint run's worker learns its repositories from these, so the shipped prompts have them, and every public
+    # worker hears the operator's messages (D093).
     prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_JOINT)
+    prompts.render_worker(load(canopy_env.repo, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_OPERATOR)
 
 
 def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> None:

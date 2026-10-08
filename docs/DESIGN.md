@@ -553,7 +553,9 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
      repository. For older overrides, `{{SLOT}}` is the worker's working directory and `{{BASE}}` and `{{PR_URL}}` the
      one repository's base and PR. With `runtime.pr_skill` set, an `implement` or `resume` prompt without
-     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D078).
+     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D078). A public
+     ticket's prompt without `{{OPERATOR_MESSAGES}}` is `bad_prompt` once the operator has written to the ticket in
+     canopy (§22, D093), and still renders for a ticket the operator never wrote to.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
@@ -1053,7 +1055,8 @@ run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`,
 `unknown_result`, `failed` to `worker_failed`. The detail names the run, its kind and branch, the harness note or the
 worker's summary, and the run log. The cause is gone when a newer run starts for the ticket or the ticket is marked
 done. The overseer does not dispatch such a ticket again until an authorized replier comments after the run ended;
-that is how a human says "try again". On a private ticket, an operator message after the run ended says it (§22).
+that is how a human says "try again". An operator message after the run ended says it too (§22, D093), the only way
+on a private ticket.
 `blocked` and `stopped` raise nothing here.
 
 The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
@@ -2219,10 +2222,14 @@ separate `list`.
   message after the run ended.
 - `canopy reply` takes a started ticket, or a public one a tick has seen (it has a journal row); any other is refused
   `unknown`. On a public ticket the state block carries its operator messages newer than its message cursor under
-  `operator`, and a public `resume` prompt carries the latest 20 (`{{OPERATOR_MESSAGES}}`, at most 30,000 characters),
-  each labeled the operator's: an instruction. The overseer's `--context` points at a message by id, never quotes it.
-  Its authorized repliers' comments on the ticket still work as before (§7). `show` drops control characters from every
-  message.
+  `operator`, and every public `implement`, `fix-ci`, and `resume` prompt carries the latest 20
+  (`{{OPERATOR_MESSAGES}}`, at most 30,000 characters), each labeled the operator's: an instruction. The workers'
+  questions come with them, labeled data, so a reply to message N names something the worker can read; the rest of the
+  conversation is on the tracker (D093). The overseer's `--context` points at a message by id, never quotes it. A reply
+  on a ticket with no branch yet rides its `implement`, and one after a failed run is "try again". Its authorized
+  repliers' comments on the ticket still work as before (§7). `show` drops control characters from every message.
+- A public worker can write to the ticket and its PRs, so keeping the operator's messages off them is its prompt's
+  rule, not a guard (TRUST_MODEL T6). Text the ticket's readers must never see belongs on a private ticket.
 - `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`,
   and `_review` set `CANOPY_RUN_ID` for their agents.
 - The private worker runs with `runtime.private_worker_cmd`, a template of its own as `split_cmd` is (D080). Its prompt

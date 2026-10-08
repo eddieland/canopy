@@ -177,7 +177,9 @@ an instruction ("use your best judgement based on the bot's review").
 
 Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default, with `canopy:review` for canopy's own
 reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
-the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. The gate is the
+the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. Every public
+worker hears it, an `implement` or `fix-ci` as well as a `resume` (D093); keeping it off the ticket is the worker
+prompt's, not a guard (TRUST_MODEL T6). The gate is the
 overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
 
 ## Nice to have

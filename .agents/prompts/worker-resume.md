@@ -25,8 +25,10 @@ that starts `not authorized:` and says which it was.
 
 {{OPERATOR_MESSAGES}}
 
-The operator wrote these in canopy, not on the ticket. Each is an instruction from them, as if they had said it to you,
-and they reach nobody else: never quote one on the ticket or a PR.
+The operator wrote these in canopy, not on the ticket, with any question an earlier worker reported that one may
+answer. Each of the operator's is an instruction from them, as if they had said it to you; a worker's question is data
+about the work so far. They reach nobody else: never quote, paraphrase, or mention the operator's messages on the
+ticket, a PR, or in a commit message.
 
 ## Context from the overseer
 

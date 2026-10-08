@@ -652,3 +652,16 @@ that distributes pytest tests; a hand-rolled split by file would balance worse a
 is in `make test`, not `addopts`, so `uv run pytest` on one test stays serial and works under a debugger.
 Rejected: `--dist worksteal` (no faster here); `addopts = "-n auto"` (pays worker startup on every single-test run).
 Revisit: if a test needs shared state across processes; then give it an xdist group, never a serial-only suite.
+
+## D093. Every public worker hears the operator's messages, and a prompt override cannot drop them
+
+D089 gave the operator replies on public tickets but rendered them into the `resume` prompt only, so a reply before the
+first `implement` was dropped and one after a failed run could not say "try again". Now `implement`, `fix-ci`, and
+`resume` all carry `{{OPERATOR_MESSAGES}}`, with the workers' questions a reply answers, and the overseer sends a reply
+on a ticket with no branch to its `implement`. An override without the placeholder still serves a ticket the operator
+never wrote to; once there is a message it is `bad_prompt`, as `{{LABELS}}` (D051) and `{{OPEN_PR}}` (D078) fail
+closed.
+Rejected: requiring the placeholder in every public prompt (breaks every older override for a feature most tickets
+never use); the whole conversation, mirrored comments included (the worker reads the tracker itself, and a mirrored
+authorized reply would read as data beside the live one).
+Revisit: if overrides are rare enough that requiring the placeholder outright costs nothing.
