@@ -1,6 +1,7 @@
 [project]
 name = "canopy"
-version = "0.0.1"
+# From the latest v* tag (D085): a tag is the only place a release's version is written.
+dynamic = ["version"]
 description = "Unattended, local agent loop driven by your issue tracker."
 readme = "README.md"
 # Proprietary for now (D046). The classifier makes PyPI refuse an upload, where `canopy` is another project's name.
@@ -25,8 +26,19 @@ canopy-notify-desktop = "canopy.notify.desktop:main"
 canopy-notify-slack = "canopy_notify_slack:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+# 0.2.0 on the commit tagged v0.2.0; 0.2.1.dev3+1a2b3c4 three commits after it. A checkout with no tags in it (a
+# shallow clone) counts from 0.0.0, and one with no git at all builds as the fallback.
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/canopy"]
@@ -51,6 +63,10 @@ exclude = ["ui/node_modules", "ui/dist", "ui/test-results", "ui/playwright-repor
 # The repository is a uv workspace: canopy at the root, separate programs it ships under packages/ (D041).
 [tool.uv.workspace]
 members = ["packages/*"]
+
+# The version is built from git, so a new commit or tag rebuilds canopy's metadata, not only a changed pyproject.toml.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.uv.sources]
 canopy-notify-slack = { workspace = true }
