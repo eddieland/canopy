@@ -80,11 +80,31 @@ Rules:
 
 ## Motion
 
+Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
+(at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
+a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.css`.
+
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
-- The theme toggle reveals the new theme as a circle growing from the button, in 420ms.
+- A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
+  Working rows, and a conversation's bubbles. A row or bubble the stream adds later rises in on its own. A bubble pops
+  (`[--enter:pop]`) from the corner nearest its side.
+- Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
+  zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
+  drawn by CSS.
+- The nav's highlight (its tint and accent hairline) is one element that slides to the active item.
+- The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
+  a ripple leaves it when a new tick appears.
+- The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
+- Skeletons shimmer: a light passes over them.
+- With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
+  the one drawing made for its own sake, in the accent.
 - Only `running` runs pulse.
-- Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly and pulses are hidden.
+- Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
+  animations frozen is the page at rest.
+- Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
+  in place, and pulses, ripples, and the drifting leaf are hidden. New motion goes inside a
+  `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 

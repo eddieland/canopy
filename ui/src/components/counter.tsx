@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { RollingNumber } from '@/components/rolling-number'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -15,7 +16,10 @@ const RULE: Record<Tone, string> = {
     plain: 'border-t-border',
 }
 
-/** One counter. Its value keeps a fixed width, and it shows a skeleton only until the first data arrives. */
+/**
+ * One counter. Its value keeps a fixed width and rolls when it changes, and it shows a skeleton only until the first
+ * data arrives.
+ */
 export function Counter({
     label,
     value,
@@ -37,7 +41,7 @@ export function Counter({
         >
             <span className="panel-label">{label}</span>
             <span className="readout h-8 text-3xl leading-8 font-medium">
-                {value === undefined ? <Skeleton className="h-7 w-12" /> : value}
+                {value === undefined ? <Skeleton className="h-7 w-12" /> : <RollingNumber value={String(value)} />}
             </span>
             <span className="truncate text-xs text-muted-foreground">{children}</span>
         </div>
