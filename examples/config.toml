@@ -89,7 +89,10 @@ cmd = ""
 # [chores.build-health]
 # prompt = "~/.config/canopy/chores/build-health.md"
 # every_minutes = 120
-# when = "Weekdays, 08:00 to 18:00 America/New_York. Skip it when the last run found nothing."
+# days = ["mon", "tue", "wed", "thu", "fri"]   # when a run may start, checked in code; default every day, all day
+# hours = "08:00-18:00"
+# timezone = "America/New_York"                # default this machine's local time
+# when = "Skip it when the last run found nothing."
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
 

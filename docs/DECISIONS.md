@@ -489,3 +489,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Rejected: recording it as a chore run (a test result would clear real findings and reset `not_due`); applying the
   guards (a chore being written would wait out `every_minutes`).
 - Revisit: if the loop gets a way to call it, or operators want a try's findings kept.
+
+## D099. A chore's days and hours are a guard in code; `when` keeps the judgment
+
+- `days`, `hours`, and `timezone` move `due_at` to the window's next opening and refuse `outside_hours`.
+- Why: clock times need no model, and outside them `due` is false, so the overseer records no `wait` every tick.
+- Rejected: an overnight window (`22:00-06:00`), until someone needs one; cron syntax (a schedule, where
+  `every_minutes` is a floor).

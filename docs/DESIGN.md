@@ -123,6 +123,7 @@ canopy (harness, Python)
     start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
     execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
     trial.py       canopy chore try: one foreground run outside any tick that records nothing
+    window.py      a chore's days and hours: whether a run may start now, and when it next may
     result.py      the result contract, validated with pydantic
     reconcile.py   chore runs whose _chore is gone marked crashed
 
@@ -1466,7 +1467,7 @@ TRUST_MODEL items this section relies on, each approved with the milestone that 
 
 ## 19. Chores
 
-Rationale in D034 and D063.
+Rationale in D034, D063, and D099.
 
 A chore is recurring work the operator defines and the overseer delegates: an agent run about no queue ticket, with no
 worktree and no push, that reports findings to the attention list (for example, a build-health check over CI, other
@@ -1488,8 +1489,10 @@ max_chores = 1            # chore runs at once; separate from max_workers
 prompt = "~/.config/canopy/chores/build-health.md"
 cmd = 'opencode run --agent build-health {prompt}'
 every_minutes = 120
-when = """Weekdays, 08:00 to 18:00 America/New_York.
-Skip it when the last run found nothing and nothing has merged to main since."""
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-18:00"
+timezone = "America/New_York"
+when = "Skip it when the last run found nothing and nothing has merged to main since."
 timeout_minutes = 20
 cwd = "~/src/build-tools"
 workspaces = ["acme"]     # optional; default every workspace
@@ -1500,8 +1503,13 @@ workspaces = ["acme"]     # optional; default every workspace
 - `cmd` follows §12 (`{prompt}` exactly once, no shell); default `runtime.chore_cmd`. A chore using the operator's own
   tools needs its own agent definition (below), so `cmd` is usually set.
 - `every_minutes`, at least 15, is the shortest time between two run starts. A guard, not a schedule.
+- `days`, `hours`, and `timezone` (optional) say when a run may start, checked in code (D099). `days` lists `mon` to
+  `sun`, empty for every day; `hours` is `HH:MM-HH:MM`, ending after it starts on the same day (`24:00` is the end
+  of the day); `timezone` is an IANA name, by default the machine's local time. They bound only a run's start: one
+  running when the window closes runs to its end or timeout.
 - `when` (optional) is plain language for the overseer: when a run is worth it, pointless, or urgent. Without it the
-  overseer runs a chore whenever due. Being operator-written, it is an instruction; nothing a chore reads is.
+  overseer runs a chore whenever due. Being operator-written, it is an instruction; nothing a chore reads is. Clock
+  times belong in `days` and `hours`, which cost no judgment and no `wait` decision every tick.
 - `timeout_minutes` defaults to 15. `cwd`, absolute or starting with `~`, defaults to `<state_dir>/chores/<name>/`,
   created readable only by the operator. The shadowing check (§13) covers `cwd` and every directory above it before
   the agent starts: OpenCode config there that defines one of canopy's agents makes the run `crashed`.
@@ -1543,7 +1551,8 @@ CI system.
 ### Delegation
 
 - The state block's `chores` lists per configured chore: name, `every_minutes`, `when`, `due_at` (earliest time the
-  guard allows a run), whether running, latest run (id, status, start, end, summary), and open findings (id, title,
+  `not_due` and `outside_hours` guards allow a run: `every_minutes` after the latest start, moved to when the window
+  next opens), whether running, latest run (id, status, start, end, summary), and open findings (id, title,
   link) from its latest `ok` run, which a later non-`ok` run does not replace.
 - Each tick the overseer decides each chore past `due_at` and not running. It runs it with
   `canopy chore run <NAME> [--context '<text>']`, or records `canopy chore wait <NAME> --rationale "<text>"` when
@@ -1558,6 +1567,7 @@ first of:
 - `unknown_chore`: no such chore in the user config, not for this workspace, or `max_chores` is 0.
 - `running`: a run of this chore is running.
 - `not_due`: less than `every_minutes` since this chore's latest run started, however it ended.
+- `outside_hours`: now is outside the chore's `days` and `hours`, in its `timezone`.
 - `chore_capacity`: `capacity.max_chores` chore runs are running.
 
 A dry run checks the same guards, counting chores it already ran as running, records `dispatch:chore` with rationale
