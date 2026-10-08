@@ -2013,11 +2013,11 @@ Proposed, not in TRUST_MODEL. Each needs the operator's approval note in the PR 
 
 - T1 (M18): a private ticket is authorized by its take record and its replies by operator messages, both written only
   through `core/conversation.py` by a channel that authenticated the operator (`canopy ticket take` and `reply`, later
-  the web UI); `canopy dispatch` checks the take record in code. Tracker comments on a private ticket are data, whoever wrote them.
-  Residual: until workers are sandboxed (HOST_ISOLATION), a worker's bash runs as the operator and can run
-  `canopy ticket reply` or `canopy ticket take`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
-  which stops a worker that follows injected text naively, not one that unsets them. This is the same class as a worker
-  writing the journal file directly, which sandboxing also removes.
+  the web UI); `canopy dispatch` checks the take record in code. Tracker comments on a private ticket are data,
+  whoever wrote them. Residual: until workers are sandboxed (HOST_ISOLATION), a worker's bash runs as the operator and
+  can run `canopy ticket reply` or `canopy ticket take`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID`
+  is set, which stops a worker that follows injected text naively, not one that unsets them. This is the same class
+  as a worker writing the journal file directly, which sandboxing also removes.
 - T1 (M19): mirrored comments are the overseer's claims and authorize nothing.
 - T5: unchanged. A private ticket hides the conversation, not authorship: commits keep their attribution trailer.
 - T6 (M18, M19): the journal holds tracker comment bodies and the operator's replies, under the operator-only state
