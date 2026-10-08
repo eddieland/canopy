@@ -1,11 +1,14 @@
 import { Link } from '@tanstack/react-router'
-import { Activity, Inbox, MessagesSquare, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import { Activity, FolderTree, Inbox, MessagesSquare, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-const ITEMS: { to: '/attention' | '/runs' | '/tickets' | '/settings'; label: string; icon: LucideIcon }[] = [
+type To = '/attention' | '/runs' | '/worktrees' | '/tickets' | '/settings'
+
+const ITEMS: { to: To; label: string; icon: LucideIcon }[] = [
     { to: '/attention', label: 'Attention', icon: Inbox },
     { to: '/runs', label: 'Runs', icon: Activity },
+    { to: '/worktrees', label: 'Worktrees', icon: FolderTree },
     { to: '/tickets', label: 'Tickets', icon: MessagesSquare },
     { to: '/settings', label: 'Settings', icon: SlidersHorizontal },
 ]

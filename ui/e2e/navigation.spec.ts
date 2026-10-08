@@ -25,6 +25,10 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
     await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
 
+    await nav.getByRole('link', { name: 'Worktrees' }).click()
+    await expect(page).toHaveURL(/\/worktrees$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
+
     await nav.getByRole('link', { name: 'Tickets' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets')
     await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
@@ -75,4 +79,60 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     await page.goto('tickets/ZZZ-9')
     await expect(page.getByText('canopy has no record of it')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Start privately' })).toBeVisible()
+})
+
+test('the worktrees page shows each pool of the workspace and what holds each slot', async ({ page }) => {
+    await page.goto('worktrees')
+    await settled(page)
+    await expect(page.getByTestId('pool-api')).toContainText('no clone; run `canopy workspace sync`')
+
+    const web = page.getByTestId('pool-web')
+    await expect(web.getByTestId('worktrees').locator('li')).toHaveCount(5)
+    await expect(web.getByTestId('pool-size')).toHaveText('5 of size 4')
+    await expect(web.getByTestId('pool-over')).toContainText('1 slot past the declared size')
+    const working = web.getByTestId('worktree-1')
+    await expect(working).toHaveAttribute('data-state', 'working')
+    await expect(working).toContainText('agent/ABC-101-login')
+    await expect(working).toContainText('.treehouse/web-3f9c2a1b/1/web')
+    await expect(working).toContainText('opencode 48211')
+    await expect(web.getByTestId('worktree-3')).toHaveAttribute('data-state', 'held')
+    await expect(web.getByTestId('worktree-4')).toContainText('detached')
+    await expect(web.getByTestId('worktree-5')).toHaveAttribute('data-state', 'dirty')
+
+    // Run 43 holds a slot in two pools; each names it.
+    const mobile = page.getByTestId('pool-mobile')
+    await expect(mobile.getByTestId('pool-over')).toHaveCount(0)
+    await expect(mobile.getByTestId('worktree-1')).toContainText('run:43')
+    await expect(web.getByTestId('worktree-2')).toContainText('run:43')
+
+    await working.getByRole('link', { name: 'ABC-101' }).click()
+    await expect(page).toHaveURL(/\/tickets\/ABC-101$/)
+    await page.goBack()
+
+    const reads = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
+    await page.getByTestId('worktrees-refresh').click()
+    expect((await reads).status()).toBe(200)
+})
+
+test('the worktrees page reads the pools again every 30 seconds, and only while it is open', async ({ page }) => {
+    await page.clock.install()
+    let reads = 0
+    page.on('request', (r) => {
+        if (r.url().endsWith('/api/worktrees')) reads += 1
+    })
+    await page.goto('worktrees')
+    await settled(page)
+    expect(reads).toBe(1)
+
+    await page.clock.runFor(29_000)
+    expect(reads).toBe(1)
+    const next = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
+    await page.clock.runFor(1_000)
+    expect((await next).status()).toBe(200)
+    expect(reads).toBe(2)
+
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.clock.runFor(90_000)
+    expect(reads).toBe(2)
 })

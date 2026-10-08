@@ -17,6 +17,18 @@ export type Started = Schemas['Started']
 export type Stopped = Schemas['Stopped']
 export type Replied = Schemas['Replied']
 export type StreamEvent = Schemas['StreamEvent']
+export type Pool = Schemas['Pool']
+export type Worktree = Schemas['Worktree']
+export type WorktreeState = Schemas['WorktreeState']
 
 // Every state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss.
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]
+
+// Every worktree state, in display order.
+export const WORKTREE_STATES = [
+    'working',
+    'held',
+    'dirty',
+    'idle',
+    'broken',
+] as const satisfies readonly WorktreeState[]

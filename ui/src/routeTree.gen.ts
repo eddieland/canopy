@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AttentionRouteImport } from './routes/attention'
 import { Route as RunsRouteImport } from './routes/runs'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
 import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
 
@@ -36,6 +37,11 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorktreesRoute = WorktreesRouteImport.update({
+  id: '/worktrees',
+  path: '/worktrees',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TicketsIndexRoute = TicketsIndexRouteImport.update({
   id: '/tickets/',
   path: '/tickets/',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/attention': typeof AttentionRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
+  '/worktrees': typeof WorktreesRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/tickets/': typeof TicketsIndexRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/attention': typeof AttentionRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
+  '/worktrees': typeof WorktreesRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/tickets': typeof TicketsIndexRoute
 }
@@ -69,21 +77,36 @@ export interface FileRoutesById {
   '/attention': typeof AttentionRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
+  '/worktrees': typeof WorktreesRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/tickets/': typeof TicketsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/attention' | '/runs' | '/settings' | '/tickets/$key' | '/tickets/'
+    | '/'
+    | '/attention'
+    | '/runs'
+    | '/settings'
+    | '/worktrees'
+    | '/tickets/$key'
+    | '/tickets/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/attention' | '/runs' | '/settings' | '/tickets/$key' | '/tickets'
+  to:
+    | '/'
+    | '/attention'
+    | '/runs'
+    | '/settings'
+    | '/worktrees'
+    | '/tickets/$key'
+    | '/tickets'
   id:
     | '__root__'
     | '/'
     | '/attention'
     | '/runs'
     | '/settings'
+    | '/worktrees'
     | '/tickets/$key'
     | '/tickets/'
   fileRoutesById: FileRoutesById
@@ -93,6 +116,7 @@ export interface RootRouteChildren {
   AttentionRoute: typeof AttentionRoute
   RunsRoute: typeof RunsRoute
   SettingsRoute: typeof SettingsRoute
+  WorktreesRoute: typeof WorktreesRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicketsIndexRoute: typeof TicketsIndexRoute
 }
@@ -127,6 +151,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/worktrees': {
+      id: '/worktrees'
+      path: '/worktrees'
+      fullPath: '/worktrees'
+      preLoaderRoute: typeof WorktreesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tickets/': {
       id: '/tickets/'
       path: '/tickets'
@@ -149,6 +180,7 @@ const rootRouteChildren: RootRouteChildren = {
   AttentionRoute: AttentionRoute,
   RunsRoute: RunsRoute,
   SettingsRoute: SettingsRoute,
+  WorktreesRoute: WorktreesRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicketsIndexRoute: TicketsIndexRoute,
 }

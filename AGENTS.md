@@ -49,7 +49,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (D027, dev only), `pytest-xdist` to run the tests in parallel (D090, dev only), `rich` for terminal output
+  validators (D027, dev only), `pytest-xdist` to run the tests in parallel (D092, dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
   client (D079, dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+

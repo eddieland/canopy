@@ -617,7 +617,33 @@ guard on resume (it cannot see whose comments a run addresses).
 Revisit: if the overseer is found dispatching for untrusted feedback without a go-ahead; then a `--review-from` claim
 on `canopy dispatch` checked against the list, as `--label` is (D051).
 
-## D090. `make test` runs the suite in parallel with pytest-xdist
+## D090. The worktrees page reads treehouse when asked, not from the journal or the event stream
+
+The web UI's worktrees page shows each pool's slots: what holds each, its branch, and the processes in it. The server
+runs `treehouse status --json` once per pool on each `GET /api/worktrees`, through `procs` like every other process,
+and matches leases to running runs and reviews by lease id (DESIGN §22). The UI reads it again when a `runs.updated`
+event changes which running runs hold which worktrees, and when the operator asks; nothing polls. The pools are read
+at once, a thread each. A read takes the pool's state lock, as reconcile's do, so a slow one briefly holds up a lease.
+Rejected: a snapshot the tick writes to the journal (a new table and migration, and as stale as the last tick, which
+idle pacing stretches to two hours, D083); `treehouse status` on the event stream (once a second per pool per open
+page, and a slow pool would stall every stream); only the journal's `run_slots` (no branch, no processes, nothing about
+slots canopy does not hold).
+Revisit: if `treehouse status` turns out slow enough on a large pool that opening the page is felt, or if treehouse
+gains a way to be told of changes.
+
+## D091. The worktrees page also reads the pools every 30 seconds while it is open
+
+D090's triggers miss what never reaches the journal: processes starting and stopping in a slot, a slot going dirty, a
+shell opened in one, a review starting or ending, and the slots `canopy workspace sync` adds or removes. They also fire
+too early for a new run, whose refresh comes as it is recorded, before its worker has checked out its branch. So the
+worktrees query refetches every 30 seconds while a page shows it and its tab is visible; it is the UI's one
+`refetchInterval`. Each refetch is one `treehouse status` per pool, which takes each pool's lock (D090).
+Rejected: the event stream reading treehouse on a slower cadence (every open stream, any page, pays for it, and a slow
+pool stalls the stream); a shorter interval (more lock time for a page that is read, not watched); manual reads only
+(the operator asked for it).
+Revisit: if the lock time shows up in leases, or if treehouse gains a way to be told of changes.
+
+## D092. `make test` runs the suite in parallel with pytest-xdist
 
 The suite took about 200s serially on four cores, most of it waiting on fake agent and treehouse processes rather than
 on the CPU; `-n auto` brings it to about 60s with the same results. The fixtures were already hermetic (every state

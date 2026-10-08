@@ -4,7 +4,7 @@ import { E2E_SECRET } from './secret.ts'
 
 export const STORAGE_KEY = 'canopy-theme'
 // Every page, by its path; a screenshot each per theme.
-export const ROUTES = ['attention', 'runs', 'tickets', 'tickets/ABC-102', 'settings'] as const
+export const ROUTES = ['attention', 'runs', 'worktrees', 'tickets', 'tickets/ABC-102', 'settings'] as const
 export const THEMES = ['light', 'dark'] as const
 // Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run.
 export const NOW = new Date('2026-10-08T12:30:00Z')
