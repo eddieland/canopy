@@ -63,6 +63,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   attention list.
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket.
+- Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
+  reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
+  KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
 - Review PRs. Humans approve and merge; the agent never does.
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack

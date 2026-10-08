@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox, prompts, treehouse
+from canopy.core import conversation, db, outbox, prompts, treehouse
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+KEY_RE = conversation.KEY_RE
 # The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
 # characters: lowercase words joined by single hyphens.
 SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
@@ -78,13 +78,15 @@ class Plan:
 
     `base` is the branch it stacks on if `--base` named one, the label is in its configured spelling, and the
     repositories are the names of the units it covers, in the order the dispatch named them. A run over several is a
-    joint run (DESIGN §18). A split has no branch (""): it reads the repositories it names and changes none of them.
+    joint run (DESIGN §18). A split has no branch (""): it reads the repositories it names and changes none of them. A
+    private run works a ticket the operator started; its start record authorizes it, and it has no label (DESIGN §22).
     """
 
     branch: str
     base: str | None
     label: str
     repos: tuple[str, ...]
+    private: bool = False
 
     @property
     def joint(self) -> bool:
@@ -212,7 +214,9 @@ def _plan(
     base: str | None,
     request: str | None = None,
 ) -> Plan:
-    configured = _check_label(ctx.config.tracker.labels, key, label)
+    private = _check_start(ctx, key, kind)
+    # A started ticket's start record authorizes it, checked in code; a public ticket's `--label` is a claim (D051).
+    configured = "" if private else _check_label(ctx.config.tracker.labels, key, label)
     if kind == policy.SPLIT and request is None:
         raise Refusal(
             "unauthorized",
@@ -232,7 +236,29 @@ def _plan(
     branch = _branch(ctx, key, kind, slug, names)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
-    return Plan(branch=branch, base=base, label=configured, repos=names)
+    return Plan(branch=branch, base=base, label=configured, repos=names, private=private)
+
+
+def _check_start(ctx: Context, key: str, kind: str) -> bool:
+    """Return whether `key` is a private ticket, refusing a dispatch its start record forbids (DESIGN §22).
+
+    A started ticket is private whatever labels it carries. A stopped one is dispatched by nothing until the operator
+    starts it again, and a split, which creates tickets in the tracker, is never run for a private one.
+    """
+    record = conversation.start_of(ctx.conn, key)
+    if record is None:
+        return False
+    if not conversation.is_started(record):
+        raise Refusal("stopped", f"{key} was stopped with `canopy stop`; nothing dispatches it until `canopy start`")
+    if kind == policy.SPLIT:
+        raise Refusal(
+            "private", f"{key} is private: a split creates tickets in the tracker, which a private ticket never"
+        )
+    if ctx.config.tracker.tools() is None:
+        raise Refusal(
+            "no_read_tools", "no tracker tools are known for a private worker; set tracker.mcp_server and read_tools"
+        )
+    return True
 
 
 def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | None, base: str | None) -> None:
@@ -489,10 +515,19 @@ def _spawn(
         required: tuple[str, ...] = prompts.REQUIRED_SPLIT
     else:
         required = prompts.REQUIRED_JOINT if plan.joint else ()
+    if plan.private:
+        values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     try:
-        prompt = prompts.render_worker(cfg, kind, values, required=required)
+        prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
+
+    def check_start() -> None:
+        # Again inside the run's insert: `canopy stop` marks the record in a transaction of its own, so whichever
+        # commits first wins (DESIGN §22).
+        if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
+            what = "was stopped" if plan.private else "was started privately"
+            raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")
 
     run_id = db.insert_run(
         ctx.conn,
@@ -507,6 +542,8 @@ def _spawn(
         started=outbox.run_started(
             cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=policy.limits(cfg)[kind]
         ),
+        private=plan.private,
+        check=check_start,
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -518,7 +555,7 @@ def _spawn(
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the worker: {e}"})
-        db.finish_run(ctx.conn, run_id, "crashed", note, event=outbox.run_ended(cfg, run, "crashed", note))
+        conversation.close_run(ctx.conn, cfg, run, "crashed", note)
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk)

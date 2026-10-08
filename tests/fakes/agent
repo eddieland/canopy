@@ -23,7 +23,7 @@ events and two model calls as `step_finish` events. Otherwise it prints its text
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_EXIT, FAKE_WORKER_SLEEP,
 FAKE_WORKER_COMMANDS, FAKE_WORKER_SESSION, and FAKE_WORKER_STEP_COST first, falling back to the FAKE_AGENT_* ones, so
 one test can script an overseer and the workers it dispatches. `--agent canopy-overseer` reads FAKE_OVERSEER_* the
-same way, and `--agent canopy-splitter` FAKE_SPLITTER_*.
+same way, `--agent canopy-splitter` FAKE_SPLITTER_*, and `--agent canopy-worker-private` FAKE_WORKER_PRIVATE_*.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -46,7 +46,7 @@ STEP_TOKENS = {"input": 1000, "output": 200, "reasoning": 30, "cache": {"read": 
 
 def role(argv: list[str]) -> str:
     if "--agent" in argv[:-1]:
-        return argv[argv.index("--agent") + 1].removeprefix("canopy-").upper()
+        return argv[argv.index("--agent") + 1].removeprefix("canopy-").upper().replace("-", "_")
     return "AGENT"
 
 

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, definitions
+from canopy.core import config, db, definitions
 from canopy.runs import worker
 from tests.canopy.helpers import (
     InlineRunner,
@@ -86,7 +86,9 @@ def test_worker_that_pushes_is_done(
     [w] = agent_runs(agent_log)
     assert w["cwd"] == slot_of(conn, run["id"])["slot_path"]
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
-    assert w["env"] == {"OPENCODE_CONFIG_DIR": str(definitions.ensure(canopy_env.state_dir))}
+    # CANOPY_RUN_ID: the operator's commands refuse inside the run (DESIGN §22).
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    assert w["env"] == {"CANOPY_RUN_ID": str(run["id"]), "OPENCODE_CONFIG_DIR": str(snapshot)}
     argv = w["argv"]
     assert isinstance(argv, list)
     assert argv[:3] == ["run", "--agent", "canopy-worker"]
