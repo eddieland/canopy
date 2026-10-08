@@ -10,6 +10,13 @@ labels = ["agent-ready-yourname"]
 # query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
 # Optional: your own needs-human label, if it differs from the repository's.
 # needs_human_label = "needs-human"
+# For tickets you work privately with `canopy start` (DESIGN §22): the tracker's MCP server, as your OpenCode config
+# names it, and the only tools of it a private worker may call. Every other tool of that server is denied. Unset, the
+# defaults for "jira" (Atlassian's server, named "atlassian") and "github" (GitHub's, named "github") apply. With
+# Atlassian's server, use its `?tools=all` URL: without it, most Jira tools hide behind `execute*` tools, which are
+# denied.
+# mcp_server = "atlassian"
+# read_tools = ["getJiraIssue", "searchJiraIssuesUsingJql", "listJiraIssueComments"]
 
 [capacity]
 max_workers = 2
@@ -26,6 +33,8 @@ max_chores = 1
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
+# A ticket you started with `canopy start` runs `private_worker_cmd`: worker_cmd's default with
+# `--agent canopy-worker-private`, an agent that cannot write to the tracker (DESIGN §22).
 # Chores run this unless they set their own `cmd` (DESIGN §19).
 chore_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}'
 # The splitter creates one ticket per repository when an authorized replier asks for a split (DESIGN §18).

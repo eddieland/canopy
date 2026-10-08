@@ -63,6 +63,9 @@ class CursorType(click.ParamType[tuple[str, str], object]):
             self.fail(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}", param, ctx)
         if not CURSOR_VALUE_RE.fullmatch(cursor_id):
             self.fail(f"invalid cursor id {cursor_id!r}", param, ctx)
+        # A message cursor is a journal message id (DESIGN §22).
+        if cursor_name == "message" and not (cursor_id.isascii() and cursor_id.isdigit()):
+            self.fail(f"a message cursor is a message id, a number; got {cursor_id!r}", param, ctx)
         return cursor_name, cursor_id
 
 

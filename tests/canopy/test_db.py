@@ -15,10 +15,10 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
-    assert rows == [(1, "init"), (2, "run_sessions")]
+    assert rows == [(1, "init"), (2, "run_sessions"), (3, "conversations")]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
@@ -160,7 +160,7 @@ def test_a_v01_journal_gains_run_sessions_with_nothing_reported(tmp_path: Path) 
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status) "
         "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'done')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [2]
+    assert db.migrate(conn, resources.migrations_dir()) == [2, 3]
     run = db.get_run(conn, 1)
     assert run is not None
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)

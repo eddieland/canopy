@@ -248,7 +248,11 @@ def test_the_state_block_shows_each_unit(
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
     state = json.loads(overseer["argv"][3].split("```json\n", 1)[1].split("\n```", 1)[0])
     [ticket] = state["tickets"]
-    assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == ("running", BRANCH, {"comment": "c-1"})
+    assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
+        "running",
+        BRANCH,
+        {"comment": "c-1", "message": None},
+    )
     no_limit = {"implement": 1, "fix-ci": 0, "resume": 0}
     assert ticket["units"] == [
         {

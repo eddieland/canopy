@@ -526,7 +526,11 @@ worker ends `blocked`, the question is on the attention list and in `canopy show
 the loop's wait, and the `resume` prompt carries the reply. Live, the operator starts a real ticket privately, answers a
 question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_private.py` holds the harness's half of the
+acceptance), docs, and D080 are in; TRUST_MODEL T1 and T6 and the overseer prompt wait on the operator's approval note
+in the PR. OpenCode's wildcard deny with named allows was confirmed by reading its source (1.18.35), not yet in a live
+run. Waiting on the operator: the live run Accept describes. With Atlassian's server, `?tools=all` in its URL lets a
+private worker read comments; without it only the primary read tools are reachable.
 
 ## M19. Tracker comments in the journal
 

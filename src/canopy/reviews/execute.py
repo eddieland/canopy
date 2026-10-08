@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, db, definitions, outbox, treehouse
+from canopy.core import agent_output, conversation, db, definitions, outbox, treehouse
 from canopy.core.config import render_command
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import result, start
@@ -112,7 +112,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    argv = render_command(ctx.config.runtime.review_cmd, prompt, definitions.ensure(ctx.state_dir))
+    argv = render_command(ctx.config.runtime.review_cmd, prompt, definitions.ensure(ctx.state_dir, ctx.config))
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
@@ -122,6 +122,8 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     done = ctx.runner.run(
         argv,
         cwd=cwd,
+        # The operator's commands refuse inside canopy's own runs (DESIGN §22).
+        env={conversation.RUN_ID_ENV: f"review-{run_id}"},
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_review_agent_pid(ctx.conn, run_id, pid),
     )

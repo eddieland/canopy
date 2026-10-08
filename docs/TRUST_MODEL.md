@@ -68,6 +68,14 @@ Controls:
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update).
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
+  written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
+  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks
+  the start record in code, in the transaction that inserts the run, so it needs no `--label`, and `_run` reads it
+  again before the worker starts. A stopped ticket is dispatched by nothing, whatever labels it carries. Tracker
+  comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
+  harness renders them into the worker's prompt itself. `start`, `stop`, and `reply` refuse when `CANOPY_TICK_ID` or
+  `CANOPY_RUN_ID` is set, which every agent canopy runs has.
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
 - The loop may create tickets, but never decides to, and never authorizes them. A split run (DESIGN §18) starts only
@@ -101,7 +109,10 @@ reviews. Under the PR exception, a steered overseer and worker that both skip th
 push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
 backstop, as it is for a coworker pushing there by hand. A worker's bash still reaches the network, for package
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
-removes what a model reaches for unprompted, not the capability.
+removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
+worker's bash runs as the operator and can run `canopy reply` or `canopy start` with the variables unset, or write the
+journal file directly: the refusal stops a worker that follows injected text naively, not one that works around it. The
+operator accepted this (D076).
 
 ### T2. Credential misuse or leakage
 
@@ -193,6 +204,13 @@ Controls:
   It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
+- A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
+  config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
+  `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
+  knows (`gh`, `acli`, `jira`) are denied in its bash rules. A run is refused where the worktree's OpenCode config
+  names any of that server's tools, since a repository rule merged after canopy's could reopen one. Its prompt says to
+  write nothing to the ticket, and its report and question go to the journal, not the tracker. The journal holds the
+  operator's replies and the workers' reports, under the operator-only state directory (T2).
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 - Notifications carry text written by agents and org members (attention details, worker summaries and questions,
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
@@ -210,6 +228,12 @@ and question, that a sink puts in front of whoever reads its destination. A stee
 a comment, and the GitHub MCP server cannot limit which PR it comments on, or how many times: the prompt asks for one
 comment, and nothing in code enforces it. Extra comments are noise, not authority, since the loop reads reviews from its
 journal. A repository that gates merges on the review marker trusts every agent the operator runs.
+A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
+named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
+`gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
+denied by name (D076's root cause: workers run as the operator until HOST_ISOLATION). A private ticket hides the
+conversation, not authorship or the work: commits keep their attribution trailer (T5), and its branch and PR title name
+the ticket key, which a tracker's VCS integration may link to the ticket.
 
 ### T7. Hostile repository config
 
@@ -250,9 +274,12 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, and the branch
 prefix. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs, or agent branches under
-an unexpected prefix, which branch protection (§7) still governs. Through the runtime's own config it can also add
-skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the same
-exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
+an unexpected prefix, which branch protection (§7) still governs. The provider also picks the default tracker server and
+tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
+undenied in that definition. An operator who works private tickets in a repository they do not control sets
+`tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
+also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
+same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
 agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
 agents. Scalar rules canopy sets (the worker's `edit`, `external_directory`, and `task`) cannot be loosened that way,

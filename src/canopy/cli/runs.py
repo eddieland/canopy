@@ -21,8 +21,8 @@ from canopy.runs import dispatch, policy, worker
 @click.option(
     "--label",
     metavar="LABEL",
-    help="The configured queue label you read on the ticket just now. Required: without one of tracker.labels the "
-    "dispatch is refused as unauthorized.",
+    help="The configured queue label you read on the ticket just now. Required for a public ticket: without one of "
+    "tracker.labels the dispatch is refused as unauthorized. A ticket the operator started needs none.",
 )
 @click.option(
     "--repo",
@@ -128,7 +128,9 @@ def cmd_dispatch(
             db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}attempt_limit", r.reason, repo=r.repo)
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
-    # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling.
+    # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling, or
+    # empty for a private ticket, which its start record authorizes (DESIGN §22).
+    authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
     on_base = f" on {base}" if base is not None else ""
     # A workspace of one has one repository, so naming it would say nothing.
     in_repo = "" if ctx.workspace.single else f" in {', '.join(repo_names)}"
@@ -149,7 +151,7 @@ def cmd_dispatch(
                         if kind == policy.SPLIT
                         else f"dry run: not dispatched; would work on {work}{in_repo}"
                     ),
-                    f"label {queue_label}",
+                    authorized,
                     f"request {request}" if request is not None else "",
                     *extras,
                 ]
@@ -171,7 +173,7 @@ def cmd_dispatch(
         where += f"; desk {started.desk}" if started.desk is not None else ""
     else:
         where = f" in {started.slots[0].slot_path}"
-    rationale = f"run {started.run_id}: {work}{where}; label {queue_label}{requested}"
+    rationale = f"run {started.run_id}: {work}{where}; {authorized}{requested}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")

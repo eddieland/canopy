@@ -5,7 +5,8 @@ by hand still fits in between. The loop also holds its own lock, `<state_dir>/lo
 loops on one state dir would run the overseer twice as often.
 
 How long to wait after a tick is `pace`'s decision. Today that is the configured interval; it is where pacing by what a
-tick cost will go (ROADMAP M13).
+tick cost will go (ROADMAP M13). An operator message recorded since the last tick began, such as a `canopy reply`, ends
+the wait early, at most once a minute (DESIGN §22).
 
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
 terminal; with output sent to a file, the loop prints one block per tick and nothing in between.
@@ -39,8 +40,10 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 LOCK_FILE_NAME = "loop.lock"
-# How often the wait wakes to redraw the countdown and to notice a stop.
+# How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
 _WAIT_STEP_SECONDS = 0.5
+# An operator message starts the next tick early, but no sooner than this after the last one began.
+WAKE_MIN_SECONDS = 60.0
 # A second stop signal this soon after the first is the same Ctrl-C, not a second one (D049). `uv run` forwards the
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
@@ -119,6 +122,8 @@ def run(
         _header(console, ctx, dry_run=dry_run, interval_minutes=interval_minutes, max_ticks=max_ticks)
         while not stop.requested:
             before = attention.listed(ctx)
+            # Operator messages newer than this wake the wait after this tick: every channel records one the same way.
+            seen = db.latest_message_id(ctx.conn, source="operator")
             started = clock()
             with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
                 outcome = _tick(ctx, dry_run=dry_run, log=log)
@@ -131,7 +136,17 @@ def run(
             _report(console, ctx, outcome, before, elapsed=ended - started, next_at=next_at)
             if wait is None:
                 break
-            _wait(console, stop, ended + wait, sleep=sleep, clock=clock)
+            woken = _wait(
+                console,
+                stop,
+                ended + wait,
+                sleep=sleep,
+                clock=clock,
+                wake=lambda seen=seen: db.latest_message_id(ctx.conn, source="operator") > seen,
+                earliest=started + WAKE_MIN_SECONDS,
+            )
+            if woken:
+                log.info("an operator message ended the wait", extra={"after_message": seen})
         log.info("loop stopped", extra={"ticks": statuses.total(), "statuses": dict(statuses)})
     counts = ", ".join(f"{status}={n}" for status, n in sorted(statuses.items())) or "none"
     ticks = statuses.total()
@@ -173,19 +188,32 @@ def _wait(
     *,
     sleep: Callable[[float], None],
     clock: Callable[[], float],
-) -> None:
-    """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested."""
+    wake: Callable[[], bool] = lambda: False,
+    earliest: float = 0.0,
+) -> bool:
+    """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
+
+    Once `wake()` is true, the wait ends at `earliest` instead, or at once if that has passed: an operator message
+    runs the next tick sooner. Returns whether it did.
+    """
+    woken = False
     with Live(console=console, transient=True, auto_refresh=False) as live:
         while not stop.requested and (remaining := deadline - clock()) > 0:
+            if not woken and wake():
+                woken = True
+                deadline = min(deadline, max(earliest, clock()))
+                continue
+            note = "operator message; next tick in " if woken else "next tick in "
             live.update(
                 Text.assemble(
-                    ("next tick in ", "dim"),
+                    (note, "dim"),
                     (duration(remaining), "bold"),
                     (f" at {_clock_time(remaining)}  ·  Ctrl-C to stop", "dim"),
                 ),
                 refresh=True,
             )
             sleep(min(_WAIT_STEP_SECONDS, remaining))
+    return woken
 
 
 def _header(console: Console, ctx: Context, *, dry_run: bool, interval_minutes: int, max_ticks: int | None) -> None:

@@ -25,8 +25,9 @@ DB_FILE_NAME = "canopy.db"
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
-# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18).
-TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id"}
+# review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
+# ticket's, over journal message ids (DESIGN §22).
+TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id", "message": "last_message_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 # The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
@@ -360,18 +361,25 @@ def insert_run(
     single: bool = True,
     works_units: bool = True,
     started: Callable[[int], Event | None] | None = None,
+    private: bool = False,
+    check: Callable[[], None] | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
     Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
     run's branch. `single` says the workspace is a workspace of one (see `set_unit`). A run that does not work in units,
     a split, leaves the ticket's branch and units as they are: it pushes nothing (DESIGN §18). `started` builds the
-    `run.started` event from the run's id, recorded in the same transaction, or None when no sink takes it.
+    `run.started` event from the run's id, recorded in the same transaction, or None when no sink takes it. `private`
+    marks a run on a private ticket (DESIGN §22). `check` runs first in the transaction and refuses the run by raising:
+    what it reads cannot change before the row is written.
     """
     with transaction(conn):
+        if check is not None:
+            check()
         cur = conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path) VALUES (?, ?, ?, ?, ?, '')",
-            (tick_id, key, kind, branch, now()),
+            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, private) "
+            "VALUES (?, ?, ?, ?, ?, '', ?)",
+            (tick_id, key, kind, branch, now(), int(private)),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
@@ -440,17 +448,38 @@ def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
 
 
 def finish_run(
-    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
+    conn: sqlite3.Connection,
+    run_id: int,
+    status: str,
+    result_json: str | None,
+    *,
+    messages: Sequence[tuple[str, str]] = (),
+    event: Callable[[int | None], Event | None] | None = None,
 ) -> bool:
-    """Close a running run, recording `event` with it. Returns False if it was already closed: nothing changes."""
+    """Close a running run, with the messages it reports and its event. Returns False if it was already closed.
+
+    `messages` are the run's `(kind, body)` messages about its ticket (DESIGN §22), recorded in order. `event` builds
+    the `run.ended` event from the id of the last of them, or None if there are none. Nothing changes for a run already
+    closed.
+    """
     with transaction(conn):
+        ended = now()
         cur = conn.execute(
             "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (now(), status, result_json, run_id),
+            (ended, status, result_json, run_id),
         )
         closed = cur.rowcount == 1
-        if closed and event is not None:
-            record_event(conn, event)
+        if not closed:
+            return False
+        key = conn.execute("SELECT ticket_key FROM runs WHERE id = ?", (run_id,)).fetchone()[0]
+        last: int | None = None
+        for kind, body in messages:
+            last = insert_message(
+                conn, SUBJECT_TICKET, str(key), source="worker", kind=kind, channel="run", body=body, run_id=run_id
+            )
+        built = event(last) if event is not None else None
+        if built is not None:
+            record_event(conn, built)
     return closed
 
 
@@ -701,3 +730,114 @@ def has_runs(conn: sqlite3.Connection, key: str) -> bool:
 def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.Row]:
     """Return a tick's decisions in the order they were recorded."""
     return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
+
+
+# Conversations (DESIGN §22)
+
+# The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).
+SUBJECT_TICKET = "ticket"
+
+
+def insert_message(
+    conn: sqlite3.Connection,
+    subject_kind: str,
+    subject_id: str,
+    *,
+    source: str,
+    kind: str,
+    channel: str,
+    body: str,
+    run_id: int | None = None,
+    answers: int | None = None,
+    submission: str | None = None,
+) -> int:
+    """Record a message and return its id.
+
+    A submission already recorded for the subject records nothing new: its message's id is returned instead.
+    """
+    if submission is not None:
+        found = conn.execute(
+            "SELECT id FROM messages WHERE subject_kind = ? AND subject_id = ? AND submission = ?",
+            (subject_kind, subject_id, submission),
+        ).fetchone()
+        if found is not None:
+            return int(found[0])
+    cur = conn.execute(
+        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, run_id, body, answers, submission) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (subject_kind, subject_id, now(), source, kind, channel, run_id, body, answers, submission),
+    )
+    return _rowid(cur)
+
+
+def get_message(conn: sqlite3.Connection, message_id: int) -> sqlite3.Row | None:
+    """Return the message with `message_id`, or None."""
+    row: sqlite3.Row | None = conn.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+    return row
+
+
+def messages_of(conn: sqlite3.Connection, subject_kind: str, subject_id: str, limit: int) -> list[sqlite3.Row]:
+    """Return a subject's latest `limit` messages, oldest first."""
+    rows = conn.execute(
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? ORDER BY id DESC LIMIT ?",
+        (subject_kind, subject_id, limit),
+    ).fetchall()
+    return rows[::-1]
+
+
+def run_messages(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
+    """Return the messages a run reported, in order."""
+    return conn.execute("SELECT * FROM messages WHERE run_id = ? ORDER BY id", (run_id,)).fetchall()
+
+
+def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None) -> int:
+    """Return the id of the newest message, or of the newest from `source`; 0 if there is none."""
+    if source is None:
+        row = conn.execute("SELECT max(id) FROM messages").fetchone()
+    else:
+        row = conn.execute("SELECT max(id) FROM messages WHERE source = ?", (source,)).fetchone()
+    return int(row[0] or 0)
+
+
+def get_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> sqlite3.Row | None:
+    """Return a subject's start record, or None if the operator never started it."""
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT * FROM starts WHERE subject_kind = ? AND subject_id = ?", (subject_kind, subject_id)
+    ).fetchone()
+    return row
+
+
+def starts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return every start record, by subject."""
+    return conn.execute("SELECT * FROM starts ORDER BY subject_kind, subject_id").fetchall()
+
+
+def set_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str, *, status: str, channel: str) -> None:
+    """Mark a subject started or stopped, creating its record on its first start. Call inside a transaction."""
+    ts = now()
+    if status == "started":
+        conn.execute(
+            "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) "
+            "VALUES (?, ?, 'started', ?, ?) ON CONFLICT (subject_kind, subject_id) DO UPDATE SET status = 'started', "
+            "started_at = excluded.started_at, stopped_at = NULL, channel = excluded.channel",
+            (subject_kind, subject_id, ts, channel),
+        )
+    else:
+        conn.execute(
+            "UPDATE starts SET status = 'stopped', stopped_at = ?, channel = ? "
+            "WHERE subject_kind = ? AND subject_id = ?",
+            (ts, channel, subject_kind, subject_id),
+        )
+
+
+def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    """Return the run working `key` now, if one is."""
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT * FROM runs WHERE ticket_key = ? AND status = 'running' ORDER BY id DESC LIMIT 1", (key,)
+    ).fetchone()
+    return row
+
+
+def runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+    """Return a ticket's latest `limit` runs, newest first."""
+    return conn.execute("SELECT * FROM runs WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)).fetchall()

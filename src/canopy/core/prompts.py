@@ -23,6 +23,15 @@ WORKER = {
     "resume": "worker-resume.md",
     "split": "worker-split.md",
 }
+# A private ticket's worker prompts (DESIGN §22): no label check, since the harness checked the start record, and
+# nothing written to the ticket. Each must carry the conversation, the only way the worker hears the operator's replies;
+# an override without it would run without them.
+WORKER_PRIVATE = {
+    "implement": "worker-implement-private.md",
+    "fix-ci": "worker-fix-ci-private.md",
+    "resume": "worker-resume-private.md",
+}
+REQUIRED_PRIVATE = ("CONVERSATION",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
@@ -94,15 +103,20 @@ def render_overseer(config: Config, block: str) -> str:
     return f"{body}\n\n{block}"
 
 
-def render_worker(config: Config, kind: str, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
+def render_worker(
+    config: Config, kind: str, values: Mapping[str, str], *, required: Sequence[str] = (), private: bool = False
+) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
     Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
     `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
-    `REQUIRED_PR_SKILL`.
+    `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry `REQUIRED_PRIVATE` in place of
+    `REQUIRED_WORKER`: it checks no label.
     """
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
+    if private:
+        return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *pr_skill, *required))
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *pr_skill, *required))
 
 

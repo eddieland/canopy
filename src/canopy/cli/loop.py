@@ -11,7 +11,7 @@ from rich.console import Console
 
 from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
-from canopy.core import db
+from canopy.core import conversation, db
 from canopy.infra import lock
 from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
@@ -70,7 +70,7 @@ def cmd_tick(click_ctx: click.Context, *, dry_run: bool) -> int:
 @click.command("status")
 @click.pass_context
 def cmd_status(click_ctx: click.Context) -> int:
-    """Print the attention list and running workers."""
+    """Print the attention list, started tickets, running workers, and recent runs."""
     ctx = open_context(click_ctx)
     last = db.last_tick(ctx.conn)
     if last is None:
@@ -82,6 +82,7 @@ def cmd_status(click_ctx: click.Context) -> int:
             click.echo(f"  {last['summary']}")
 
     _print_attention(attention.listed(ctx))
+    _print_started(ctx)
     _print_workers(ctx)
     _print_recent_runs(ctx)
     _print_chores(ctx)
@@ -117,6 +118,23 @@ def _print_attention(items: list[attention.Item]) -> None:
         click.echo("  nothing needs you")
 
 
+def _print_started(ctx: Context) -> None:
+    """A line per ticket the operator started (DESIGN §22): its state, its phase, and whether it waits on a reply."""
+    records = [r for r in db.starts(ctx.conn) if r["subject_kind"] == conversation.TICKET]
+    if not records:
+        return
+    click.echo(f"\nStarted ({len(records)}):")
+    for r in records:
+        key = str(r["subject_id"])
+        ticket = db.get_ticket(ctx.conn, key)
+        phase = (ticket["phase"] if ticket is not None else None) or "not seen by a tick yet"
+        done = ", done" if ticket is not None and ticket["done"] else ""
+        since = r["started_at"] if r["status"] == "started" else r["stopped_at"]
+        waiting = conversation.latest_question(ctx.conn, key) if r["status"] == "started" else None
+        note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
+        click.echo(f"  {key}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+
+
 def _print_workers(ctx: Context) -> None:
     running = db.running_runs(ctx.conn)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
@@ -141,20 +159,21 @@ def _print_recent_runs(ctx: Context) -> None:
     runs = db.recent_runs(ctx.conn, RECENT_RUNS)
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:
-        result = _result(r)
+        result = result_of(r)
         ended = f"{attention.age(str(r['ended_at']))} ago"
-        prs = "".join(f"  {pr}" for pr in _prs(result))
+        prs = "".join(f"  {pr}" for pr in prs_of(result))
         click.echo(f"  {r['ticket_key']}  {r['kind']}  {r['status']}  {ended}{prs}")
-        said = _one_line(str(result.get("harness") or result.get("summary") or ""))
+        said = one_line(str(result.get("harness") or result.get("summary") or ""))
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
-        click.echo(f"    {session}{_spent(r)}  log {r['log_path']}")
+        click.echo(f"    {session}{spent(r)}  log {r['log_path']}")
     if not runs:
         click.echo("  none")
 
 
-def _result(run: sqlite3.Row) -> dict[str, object]:
+def result_of(run: sqlite3.Row) -> dict[str, object]:
+    """A run's stored result as an object; {} when it has none or it does not parse."""
     try:
         parsed: object = json.loads(str(run["result_json"] or "{}"))
     except json.JSONDecodeError:
@@ -162,20 +181,21 @@ def _result(run: sqlite3.Row) -> dict[str, object]:
     return cast("dict[str, object]", parsed) if isinstance(parsed, dict) else {}
 
 
-def _prs(result: dict[str, object]) -> list[str]:
+def prs_of(result: dict[str, object]) -> list[str]:
     """The PRs a run's result named, each a plain https:// URL; anything else is not printed."""
     prs = result.get("prs")
     urls = list(cast("dict[str, object]", prs).values()) if isinstance(prs, dict) else [result.get("pr")]
     return [u for u in urls if isinstance(u, str) and u.startswith("https://") and u.isprintable() and " " not in u]
 
 
-def _one_line(text: str) -> str:
+def one_line(text: str) -> str:
     """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut."""
     flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
     return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
 
 
-def _spent(run: sqlite3.Row) -> str:
+def spent(run: sqlite3.Row) -> str:
+    """What a run cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing."""
     if run["cost_usd"] is None:
         return ""
     tokens = sum(
@@ -200,10 +220,11 @@ def _print_chores(ctx: Context) -> None:
     click.echo(f"\nChores ({len(db.running_chore_runs(ctx.conn))}/{ctx.config.capacity.max_chores} running):")
     now = datetime.now(UTC)
     for state in states:
-        click.echo(f"  {state.name}  {_chore_line(state, now)}")
+        click.echo(f"  {state.name}  {chore_line(state, now)}")
 
 
-def _chore_line(state: chore_view.ChoreState, now: datetime) -> str:
+def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
+    """A chore's state on one line: running, or its last run and when it is due."""
     if state.running is not None:
         return f"running for {attention.age(str(state.running['started_at']), now)}"
     latest = state.latest
