@@ -1,6 +1,8 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/ibm-plex-sans';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
 @import './styles/tokens.css';
 
 /* Defined so shadcn output compiles; `npm run lint` refuses it in our code. Themes change tokens, not components. */
@@ -16,14 +18,8 @@
     html {
         /* No layout shift when a page grows a scrollbar. */
         scrollbar-gutter: stable;
-        /* On the root, so it paints the whole canvas, the reserved gutter included. The instrument grid: hairlines
-       every 24px, fixed so content scrolls over it. */
+        /* On the root, so it paints the whole canvas, the reserved gutter included. */
         background-color: var(--background);
-        background-image:
-            linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-        background-size: 24px 24px;
-        background-attachment: fixed;
         -webkit-font-smoothing: antialiased;
     }
 
@@ -31,7 +27,6 @@
         min-height: 100dvh;
         color: var(--foreground);
         font-family: var(--font-sans);
-        font-feature-settings: 'cv11', 'ss01';
     }
 
     :focus-visible {

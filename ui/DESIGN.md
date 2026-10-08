@@ -5,9 +5,11 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 
 ## Direction
 
-A scientific instrument panel that stays legible: dense but calm. Data sits in monospace readouts on quiet surfaces,
-separated by hairlines, over a faint measurement grid. One accent color marks what is live or selected. Status color
-is reserved for state; nothing is colored for decoration.
+An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
+them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
+marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
+decoration. Dark is a cool slate, light is grey and white; neither is the lesser theme (D094). The directions weighed
+are recorded in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
 
@@ -17,7 +19,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 
 | Token | Role |
 |---|---|
-| `background` | The page canvas, under the grid. |
+| `background` | The page canvas. |
 | `surface` | Panels and the header: the first layer above the canvas. |
 | `surface-raised` | Hover, selected items, inputs, and anything on top of a surface. |
 | `border` | Every hairline. Applied by default to `border`, so `border-b` needs no color. |
@@ -25,7 +27,6 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
 | `accent`, `accent-foreground` | The one accent: active nav hairline, live indicator, links, primary buttons, focus. |
 | `ring` | Focus outlines (the accent, translucent). |
-| `grid-line` | The background grid only. |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
@@ -55,8 +56,10 @@ Rules:
 
 ## Type
 
-- **Inter** (variable) for interface text, **JetBrains Mono** (variable) for data. Both self-hosted from
-  `@fontsource-variable`; the latin subsets are preloaded, so text never paints in a fallback face.
+- **IBM Plex Sans** (variable) for interface text, **IBM Plex Mono** (400, 500, 600) for data: one family, so the
+  two sit together on a line. Self-hosted from `@fontsource-variable/ibm-plex-sans` and `@fontsource/ibm-plex-mono`
+  (Plex Mono has no variable build); the latin subsets are preloaded, so text never paints in a fallback face. A
+  heavier mono weight needs its own import in `src/index.css` and a place in `PRELOAD_FONTS` in `vite.config.ts`.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
@@ -65,7 +68,7 @@ Rules:
 ## Shape and space
 
 - Hairlines: 1px `border` everywhere. No shadows except `shadow-xs` on a pressed segment.
-- Radius: `rounded-md` for panels and buttons, `rounded-sm` for chips and nav items.
+- Radius: `rounded-md` (8px) for panels and buttons, `rounded-sm` (6px) for chips and nav items.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-6xl` with `p-6` and `gap-6` between blocks.
   The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
@@ -105,4 +108,4 @@ inline script and checks it against the store's key.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.
-- **Signed out**, the whole page is the sign-in card, centered on the grid: no shell, nothing from the journal.
+- **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
