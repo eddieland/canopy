@@ -201,11 +201,11 @@ def test_start_refuses_without_tracker_tools_for_a_private_worker(
     assert main(["start", KEY]) == 0
 
 
-def test_reply_and_stop_refuse_a_public_ticket_and_reply_is_bounded_and_idempotent(
+def test_reply_refuses_an_unknown_ticket_stop_a_public_one_and_reply_is_bounded_and_idempotent(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["reply", KEY, "hello"]) == 1
-    assert "reply refused (not_started)" in capsys.readouterr().err
+    assert "reply refused (unknown)" in capsys.readouterr().err
     assert main(["stop", KEY]) == 1
     assert "stop refused (not_started)" in capsys.readouterr().err
     assert main(["start", KEY]) == 0

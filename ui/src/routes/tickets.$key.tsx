@@ -98,13 +98,12 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 ) : (
                     <Conversation messages={messages} waiting={ticket.awaiting} />
                 )}
-                {ticket.private ? (
-                    <ReplyForm key={ticket.key} ticketKey={ticket.key} waiting={ticket.awaiting} />
-                ) : (
-                    <p className="border-t p-3 text-xs text-muted-foreground">
-                        A public ticket's replies go on the ticket, where its authorized repliers are read.
-                    </p>
-                )}
+                <ReplyForm
+                    key={ticket.key}
+                    ticketKey={ticket.key}
+                    waiting={ticket.awaiting}
+                    isPublic={!ticket.private}
+                />
             </Panel>
         </>
     )

@@ -78,6 +78,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     single = ctx.workspace.single
     tickets = db.open_tickets(ctx.conn)
     private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
+    operator = {
+        str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
+    }
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -99,6 +102,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
         private=private,
+        operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
     )
     prompt = prompts.render_overseer(ctx.config, block)
