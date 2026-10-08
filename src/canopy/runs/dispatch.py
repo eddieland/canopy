@@ -502,6 +502,7 @@ def _spawn(
         "PR_URL": JOINT_PR_NOTE if plan.joint else _pr_note(prs.get(first.repo or ""), branch),
         "CONTEXT": context or "None.",
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
+        "TRUSTED_REVIEWERS": prompts.trusted_reviewers(cfg.trust.trusted_reviewers),
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
         "REQUEST": request or "",
         "MAP": map_note(ctx),
@@ -517,6 +518,8 @@ def _spawn(
         required = prompts.REQUIRED_JOINT if plan.joint else ()
     if plan.private:
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
+    else:
+        values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
     try:
         prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
     except (OSError, prompts.PromptError) as e:

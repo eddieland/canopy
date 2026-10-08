@@ -41,6 +41,7 @@ def state_block(
     chores: list[dict[str, object]],
     reviews: dict[str, object] | None,
     private: Mapping[str, dict[str, object]] | None = None,
+    operator: Mapping[str, dict[str, object]] | None = None,
     mirror_delimiter: str,
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
@@ -49,10 +50,13 @@ def state_block(
     `fix_ci_cooldowns` are per unit (`policy.unit`). `split_attempts` are per ticket, and `split_children` are the
     children of splits not yet done, with their split run's end (DESIGN §18). `chores` are the configured chores
     (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed. `private` holds each
-    private ticket's conversation state, by key (DESIGN §22); a public ticket has no `private` key. `mirror_delimiter`
-    ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
+    private ticket's conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a
+    public ticket's operator messages newer than its message cursor, by key; a ticket without any has no `operator`
+    key (DESIGN §7, D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the
+    tick's own, so no comment can predict it.
     """
     private = private or {}
+    operator = operator or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def repo_name(repo: str | None) -> str:
@@ -104,8 +108,10 @@ def state_block(
             "last_seen_at": t["last_seen_at"],
             "last_run": run_summary(last_runs.get(key)),
         }
-        if key in private:
-            summary["private"] = private[key]
+        # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
+        summary.update(
+            {name: found[key] for name, found in (("private", private), ("operator", operator)) if key in found}
+        )
         return summary
 
     state: dict[str, object] = {
@@ -141,6 +147,7 @@ def state_block(
         },
         "trust": {
             "authorized_repliers": list(config.trust.authorized_repliers),
+            "trusted_reviewers": list(config.trust.trusted_reviewers),
             "comment_prefix": config.trust.comment_prefix,
             "comment_suffix": config.trust.comment_suffix,
             "branch_prefix": config.trust.branch_prefix,

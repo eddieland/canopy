@@ -12,10 +12,19 @@ import { repliedText } from '@/lib/outcomes'
 const MAX_REPLY = 4000
 
 /**
- * Answers a started ticket, as `canopy reply` does. The submission id is drawn when the form is rendered and kept
- * until a reply is recorded, so sending again after an uncertain result records nothing new (DESIGN §22).
+ * Answers a ticket, as `canopy reply` does. The submission id is drawn when the form is rendered and kept until a
+ * reply is recorded, so sending again after an uncertain result records nothing new (DESIGN §22). On a public ticket
+ * the reply stays in canopy: it is how the operator says what to do about an untrusted reviewer's comments (D089).
  */
-export function ReplyForm({ ticketKey, waiting }: { ticketKey: string; waiting: number | null }) {
+export function ReplyForm({
+    ticketKey,
+    waiting,
+    isPublic = false,
+}: {
+    ticketKey: string
+    waiting: number | null
+    isPublic?: boolean
+}) {
     const client = useQueryClient()
     const [body, setBody] = useState('')
     const [submission, setSubmission] = useState(newSubmission)
@@ -46,7 +55,11 @@ export function ReplyForm({ ticketKey, waiting }: { ticketKey: string; waiting: 
                     value={body}
                     maxLength={MAX_REPLY}
                     onChange={(event) => setBody(event.target.value)}
-                    placeholder="The next worker reads it as an instruction."
+                    placeholder={
+                        isPublic
+                            ? 'Stays in canopy, never on the ticket. Say what to do about an untrusted review.'
+                            : 'The next worker reads it as an instruction.'
+                    }
                 />
             </label>
             <div className="flex items-center justify-between gap-3">

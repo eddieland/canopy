@@ -77,7 +77,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
 - To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY`: its next
   implement starts on a new branch. Its earlier runs still count toward the attempt limits (DESIGN §22).
-- Review PRs. Humans approve and merge; the agent never does.
+- Review PRs. Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a
+  worker back to a PR on their own; anyone else's comments, a review bot's included, wait on the attention list as
+  `untrusted_review` until you say what to do with `canopy reply KEY 'use your judgement on the bot's review'` or the
+  web UI. The reply stays in canopy, never on the ticket (DESIGN §7).
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).

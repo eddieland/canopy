@@ -51,9 +51,18 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     await expect(page.getByText('waits on your answer')).toHaveCount(0)
 })
 
-test('a public ticket offers no reply, and its tracker comment is shown as text', async ({ page }) => {
+test('a public ticket takes a reply that stays in canopy, and its tracker comment is shown as text', async ({
+    page,
+}) => {
     await page.goto('tickets/ABC-101')
-    await expect(page.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    const form = page.getByRole('form', { name: 'Reply' })
+    await expect(form.getByRole('textbox')).toHaveAttribute('placeholder', /never on the ticket/)
+    await form.getByRole('textbox').fill('Use your judgement on the review bot.')
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(page.getByTestId('conversation').locator('[data-source=operator]').last()).toContainText(
+        'Use your judgement on the review bot.',
+    )
     const comment = page.getByTestId('message-6')
     // The fixture's comment holds markup: it must arrive as the characters, never as an element.
     await expect(comment).toContainText('<b>Thanks!</b>')
