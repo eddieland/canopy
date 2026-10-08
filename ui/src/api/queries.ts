@@ -13,6 +13,7 @@ export const keys = {
     runs: ['runs'] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
+    worktrees: ['worktrees'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -52,3 +53,12 @@ export function ticketQuery(key: string) {
         placeholderData: undefined,
     })
 }
+
+/**
+ * Each pool's worktrees, read from treehouse by the server on every fetch. Not on the event stream: the stream marks it
+ * stale when a run starts or ends (live.ts), and the page reads it again on demand.
+ */
+export const worktreesQuery = queryOptions({
+    queryKey: keys.worktrees,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/worktrees', { signal })),
+})

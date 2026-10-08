@@ -18,6 +18,10 @@ type RunState = Literal["running", "blocked", "done", "failed", "stopped"]
 type MessageSource = Literal["worker", "operator", "tracker"]
 type MessageKind = Literal["report", "question", "reply", "comment"]
 type StartStatus = Literal["started", "stopped"]
+# A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run or review the journal shows
+# running; `held` is leased or in use by anything else; `dirty` is unleased with uncommitted changes; `broken` is
+# damaged, unverified, or a status canopy does not know.
+type WorktreeState = Literal["working", "held", "dirty", "idle", "broken"]
 
 
 class _Model(BaseModel):
@@ -98,7 +102,7 @@ class Run(_Model):
     session_id: str | None = None
     cost_usd: float | None = None
     tokens: int | None = None
-    # The worktrees a running run holds.
+    # The worktrees a running run holds, from the workspace root when under it.
     worktrees: list[str] = []
     log_path: str
 
@@ -202,6 +206,55 @@ class Replied(_Model):
     message_id: int
     answers: int | None = None
     new: bool
+
+
+class Process(_Model):
+    """A process treehouse found running in a worktree."""
+
+    pid: int
+    name: str
+
+
+class ReviewHold(_Model):
+    """A running review that holds a worktree (DESIGN §21)."""
+
+    id: int
+    pr_url: str
+    started_at: datetime
+
+
+class Worktree(_Model):
+    """One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it."""
+
+    name: str
+    # From the workspace root when under it, as a workspace's pools are; else whole.
+    path: str
+    # treehouse's own word: available, leased, in-use, dirty, damaged, unverified, or "you're here".
+    status: str
+    state: WorktreeState
+    branch: str | None = None
+    detached: bool = False
+    # Why treehouse could not read the branch.
+    branch_error: str | None = None
+    holder: str | None = None
+    leased_at: datetime | None = None
+    # The running run or review holding this lease, matched by lease id.
+    run: Run | None = None
+    review: ReviewHold | None = None
+    # Something the operator should know about this slot, in the CLI's words: a stale canopy lease, say.
+    note: str | None = None
+    processes: list[Process] = []
+
+
+class Pool(_Model):
+    """One repository's treehouse pool, read when asked for."""
+
+    repo: str
+    # The size `capacity` declares for it; None leaves it to treehouse's `max_trees` (DESIGN §18).
+    size: int | None = None
+    # Why its worktrees could not be read: no clone, or treehouse failed.
+    error: str | None = None
+    worktrees: list[Worktree] = []
 
 
 class AttentionUpdated(_Model):

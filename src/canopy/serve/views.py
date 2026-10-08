@@ -6,6 +6,7 @@ message bodies as `canopy show` drops them, run summaries are cut to one line, a
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db
@@ -72,10 +73,21 @@ def runs(ctx: Context) -> list[Run]:
     """Running runs, oldest first, then the ones that ended most recently, newest first."""
     running = db.running_runs(ctx.conn)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
+    root = ctx.workspace.root
     return [
-        *(run(r, [str(s["slot_path"]) for s in slots[int(r["id"])]]) for r in running),
+        *(run(r, [shown_path(str(s["slot_path"]), root) for s in slots[int(r["id"])]]) for r in running),
         *(run(r) for r in db.recent_runs(ctx.conn, RECENT_RUNS)),
     ]
+
+
+def shown_path(path: str, root: Path) -> str:
+    """A worktree's path as a page shows it: from the workspace root when under it, else whole.
+
+    A workspace's pool paths then read as `.treehouse/web-3f9c2a1b/1/web`; a workspace of one's pool, under
+    `~/.treehouse` by default, is shown whole.
+    """
+    found = Path(path)
+    return str(found.relative_to(root)) if found.is_relative_to(root) else path
 
 
 def run(row: sqlite3.Row, worktrees: list[str] | None = None) -> Run:

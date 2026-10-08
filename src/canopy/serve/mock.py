@@ -1,9 +1,11 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
-The server reads and writes it through the same code as the loop's journal: only the attention list and ending a run
-are stand-ins, since those belong to the loop (backend.py). Times are fixed around 2026-10-08 12:00 UTC, so a test that
-freezes the browser's clock gets the same page every time. `changes` moves the running run's cost now and then, which
-the event stream then shows.
+The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, and
+the pools' slots are stand-ins, since the first two belong to the loop and there is no treehouse to ask (backend.py).
+It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
+slot past its declared size, and run 43 holds a slot in both. Times are fixed around 2026-10-08 12:00 UTC, so a test
+that freezes the browser's clock gets the same page every time. `changes` moves the running run's cost now and then,
+which the event stream then shows.
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import config, conversation, db
+from canopy.core import config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
 from canopy.infra import resources
 from canopy.serve.backend import Backend
@@ -28,7 +30,22 @@ T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 # The run whose cost `changes` moves.
 LIVE_RUN = 41
 
-_REPO_TOML = """\
+_MAP_TOML = """\
+[workspace]
+name = "acme"
+
+[repos.api]
+url = "https://github.com/acme/api"
+summary = "The public API."
+
+[repos.mobile]
+url = "https://github.com/acme/mobile"
+summary = "The mobile app."
+
+[repos.web]
+url = "https://github.com/acme/web"
+summary = "The web app."
+
 [tracker]
 provider = "jira"
 query = "project = ABC"
@@ -38,9 +55,14 @@ _USER_TOML = """\
 [tracker]
 labels = ["agent-ready-mock"]
 
-[paths]
-state_dir = {state_dir}
+[capacity]
+slots_per_repo = 2
+
+[capacity.repo_slots]
+web = 4
 """
+# Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
+_POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 
 
 def at(minutes: int) -> str:
@@ -81,27 +103,91 @@ ATTENTION: tuple[Item, ...] = (
 )
 
 
+def slot_path(root: Path, repo: str, slot: int) -> str:
+    """Where a slot of `repo`'s pool is in the workspace at `root`, in canopy's pinned layout."""
+    return str(root / ".treehouse" / _POOLS[repo] / str(slot) / repo)
+
+
+def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
+    """What `treehouse status --json` would show for each cloned repository's pool.
+
+    web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
+    size of four. mobile: run 43's other slot, and one idle.
+    """
+    found: dict[str, list[dict[str, object]]] = {
+        "web": [
+            {
+                "status": "leased",
+                "branch": "agent/ABC-101-login",
+                "lease_id": "lease-1",
+                "lease_holder": "canopy:ABC-101",
+                "leased_at": at(0),
+                "processes": [{"pid": 48211, "name": "opencode"}, {"pid": 48390, "name": "node"}],
+            },
+            {
+                "status": "leased",
+                "branch": "agent/ABC-104-retry-queue",
+                "lease_id": "lease-2",
+                "lease_holder": "canopy:ABC-104",
+                "leased_at": at(5),
+                "processes": [{"pid": 48502, "name": "opencode"}],
+            },
+            {"status": "in-use", "detached": True, "processes": [{"pid": 2210, "name": "zsh"}]},
+            {"status": "available", "detached": True},
+            {"status": "dirty", "detached": True},
+        ],
+        "mobile": [
+            {
+                "status": "leased",
+                "branch": "agent/ABC-104-retry-queue",
+                "lease_id": "lease-3",
+                "lease_holder": "canopy:ABC-104",
+                "leased_at": at(5),
+                "processes": [{"pid": 48530, "name": "node"}],
+            },
+            {"status": "available", "detached": True},
+        ],
+    }
+    return {
+        repo: [
+            treehouse.Slot.model_validate({"name": str(n), "path": slot_path(root, repo, n), **slot})
+            for n, slot in enumerate(slots, start=1)
+        ]
+        for repo, slots in found.items()
+    }
+
+
 def seed(directory: Path) -> Backend:
-    """Write a repository, a user config, and a seeded journal under `directory`, and return a Backend over them."""
-    repo = directory / "repo"
-    (repo / ".git").mkdir(parents=True)
-    (repo / config.REPO_FILE_NAME).write_text(_REPO_TOML)
+    """Write a workspace, a user config, and a seeded journal under `directory`, and return a Backend over them."""
+    root = directory / "acme"
+    root.mkdir(parents=True)
+    (root / config.WORKSPACE_FILE_NAME).write_text(_MAP_TOML)
+    for repo in _POOLS:
+        (root / workspace.REPOS_DIR / repo / ".git").mkdir(parents=True)
     user_file = directory / "config" / "config.toml"
     user_file.parent.mkdir()
-    user_file.write_text(_USER_TOML.format(state_dir=json.dumps(str(directory / "state"))))
-    cfg = config.load(repo, user_file)
+    user_file.write_text(_USER_TOML)
+    ws = workspace.load(root)
+    cfg = config.load(root, user_file)
+    workspace.ensure_state_dir(ws, cfg.paths.state_dir)
+    pools = _pools(root)
+
+    def slots(_ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
+        return list(pools.get(pool.cwd.name, [])) if pool.cwd is not None else []
+
     backend = Backend(
         config=cfg,
-        repo_root=repo,
-        workspace=None,
+        repo_root=root,
+        workspace=ws,
         attention=lambda _ctx: list(ATTENTION),
         end_run=_end_run,
         mock=True,
+        slots=slots,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
-            _fixtures(ctx.conn, str(repo))
+            _fixtures(ctx.conn, root)
     return backend
 
 
@@ -125,7 +211,8 @@ async def changes(backend: Backend, seconds: float | None) -> None:
             )
 
 
-def _fixtures(conn: sqlite3.Connection, repo: str) -> None:
+def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
+    repo = str(root)
     conn.execute(
         "INSERT INTO ticks (id, started_at, ended_at, status, summary) VALUES (1, ?, ?, 'ok', 'mock tick')",
         (at(-60), at(-59)),
@@ -145,11 +232,11 @@ def _fixtures(conn: sqlite3.Connection, repo: str) -> None:
             (key, repo, at(-300), at(seen), phase, branch),
         )
     conn.execute(
-        "INSERT INTO ticket_units (ticket_key, branch, pr_url, phase) VALUES (?, ?, ?, ?)",
+        "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
         ("ABC-099", "agent/ABC-099-search", "https://github.com/acme/web/pull/88", "in_review"),
     )
     conn.execute(
-        "INSERT INTO ticket_units (ticket_key, branch, pr_url, phase) VALUES (?, ?, ?, ?)",
+        "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
         ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91", "in_review"),
     )
     runs = (
@@ -238,14 +325,18 @@ def _fixtures(conn: sqlite3.Connection, repo: str) -> None:
                 int(cost * 6_000),
             ),
         )
-    conn.execute(
-        "INSERT INTO run_slots (run_id, slot_path, lease_id, lease_holder, base_branch) VALUES (?, ?, ?, ?, ?)",
-        (LIVE_RUN, "/home/op/.treehouse/web-1", "lease-1", "canopy:ABC-101", "main"),
+    run_slots = (
+        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile
+        (LIVE_RUN, "web", 1, "lease-1", "canopy:ABC-101"),
+        (43, "web", 2, "lease-2", "canopy:ABC-104"),
+        (43, "mobile", 1, "lease-3", "canopy:ABC-104"),
     )
-    conn.execute(
-        "INSERT INTO run_slots (run_id, slot_path, lease_id, lease_holder, base_branch) VALUES (?, ?, ?, ?, ?)",
-        (43, "/home/op/.treehouse/web-2", "lease-2", "canopy:ABC-104", "main"),
-    )
+    for run_id, name, slot, lease, holder in run_slots:
+        conn.execute(
+            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch) "
+            "VALUES (?, ?, ?, ?, ?, 'main')",
+            (run_id, name, slot_path(root, name, slot), lease, holder),
+        )
     for key, started in (("ABC-102", -35), ("ABC-104", -20)):
         conn.execute(
             "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) VALUES ('ticket', ?, ?, ?, ?)",

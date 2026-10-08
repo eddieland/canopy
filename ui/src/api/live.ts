@@ -1,20 +1,27 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { keys } from './queries'
-import type { StreamEvent } from './types'
+import type { Run, StreamEvent } from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
- * read again, only if a page shows it. Unknown event types are ignored, so the server can add some.
+ * read again, only if a page shows it. The worktrees are not on the stream: a run starting or ending, or changing the
+ * worktrees it holds, marks them stale, and they are read again only if a page shows them. Unknown event types are
+ * ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
         case 'attention.updated':
             client.setQueryData(keys.attention, event.items)
             break
-        case 'runs.updated':
+        case 'runs.updated': {
+            const before = client.getQueryData<Run[]>(keys.runs)
             client.setQueryData(keys.runs, event.runs)
+            if (before !== undefined && holding(before) !== holding(event.runs)) {
+                void client.invalidateQueries({ queryKey: keys.worktrees, refetchType: 'active' })
+            }
             break
+        }
         case 'tickets.updated':
             client.setQueryData(keys.tickets, event.tickets)
             break
@@ -22,6 +29,15 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             break
     }
+}
+
+/** Which running runs hold which worktrees, as one comparable string: a cost going up leaves it alone. */
+export function holding(runs: Run[]): string {
+    return runs
+        .filter((r) => r.state === 'running')
+        .map((r) => `${r.id}:${r.worktrees.join(',')}`)
+        .toSorted()
+        .join(' ')
 }
 
 const LISTS: Record<string, string> = {

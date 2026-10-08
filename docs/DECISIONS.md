@@ -616,3 +616,17 @@ replier (public on the ticket, a Jira account where the reviewer is a GitHub log
 guard on resume (it cannot see whose comments a run addresses).
 Revisit: if the overseer is found dispatching for untrusted feedback without a go-ahead; then a `--review-from` claim
 on `canopy dispatch` checked against the list, as `--label` is (D051).
+
+## D090. The worktrees page reads treehouse when asked, not from the journal or the event stream
+
+The web UI's worktrees page shows each pool's slots: what holds each, its branch, and the processes in it. The server
+runs `treehouse status --json` once per pool on each `GET /api/worktrees`, through `procs` like every other process,
+and matches leases to running runs and reviews by lease id (DESIGN §22). The UI reads it again when a `runs.updated`
+event changes which running runs hold which worktrees, and when the operator asks; nothing polls. The pools are read
+at once, a thread each. A read takes the pool's state lock, as reconcile's do, so a slow one briefly holds up a lease.
+Rejected: a snapshot the tick writes to the journal (a new table and migration, and as stale as the last tick, which
+idle pacing stretches to two hours, D083); `treehouse status` on the event stream (once a second per pool per open
+page, and a slow pool would stall every stream); only the journal's `run_slots` (no branch, no processes, nothing about
+slots canopy does not hold).
+Revisit: if `treehouse status` turns out slow enough on a large pool that opening the page is felt, or if treehouse
+gains a way to be told of changes.

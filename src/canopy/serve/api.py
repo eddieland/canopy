@@ -17,11 +17,12 @@ from fastapi.sse import EventSourceResponse
 
 from canopy.core import conversation
 from canopy.infra import logs
-from canopy.serve import live, views
+from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
     Meta,
+    Pool,
     RefusalResponse,
     Replied,
     ReplyRequest,
@@ -141,6 +142,12 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
         if found is None:
             raise HTTPException(status_code=404, detail=f"canopy has no record of {ref}")
         return found
+
+    # Not on the event stream: each read runs `treehouse status` once per pool (worktrees.py).
+    @api.get("/worktrees", operation_id="listWorktrees")
+    def pools() -> list[Pool]:
+        with backend.open() as ctx:
+            return worktrees.pools(backend, ctx)
 
     # FastAPI's SSE support sends `Cache-Control: no-cache` and `X-Accel-Buffering: no`, so a proxy or an SSH forward
     # streams it, and a keepalive comment after 15 idle seconds. Nothing may compress this route: gzip buffers.

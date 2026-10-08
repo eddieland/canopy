@@ -399,7 +399,7 @@ def test_the_development_server_serves_mock_data_only(capsys: pytest.CaptureFixt
 def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFixture[str]) -> None:
     main(["openapi"])
     schema = json.loads(capsys.readouterr().out)
-    names = {"Run", "RunState", "TicketSummary", "TicketDetail", "Message", "AttentionItem", "StreamEvent"}
+    names = {"Run", "RunState", "TicketSummary", "TicketDetail", "Message", "AttentionItem", "StreamEvent", "Pool"}
     assert names <= set(schema["components"]["schemas"])
     paths = {
         "/api/session",
@@ -411,6 +411,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/tickets/{key}/start",
         "/api/tickets/{key}/stop",
         "/api/tickets/{key}/replies",
+        "/api/worktrees",
         "/api/events",
     }
     assert set(schema["paths"]) == paths
