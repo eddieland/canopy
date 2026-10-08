@@ -675,3 +675,17 @@ control room's counters and severity, the calm inbox's list beside its thread. T
 IBM Plex Sans and Mono replace Inter and JetBrains Mono. Keyboard shortcuts are not a priority and need not match the
 terminal's.
 Revisit: when the layout half of the ops inbox lands, if it reads worse than the panels it replaces.
+
+## D095. The `review` cursor is a time, not an id
+
+One `review` cursor covers reviews, inline review comments, and canopy's review runs (`run:<id>`). GitHub numbers
+reviews and review comments in separate sequences, so "newer than the cursor" had no answer across them, and the
+overseer guessed. Replaying one frozen tick 29 times on this repository's own PRs, a PR whose cursor held a review id
+and whose bot left an inline comment came out `untrusted_review` in 12 runs and `needs_reviewer` in 17: the attention
+list would flap every tick. Every kind of feedback has a time on GitHub, so the cursor holds the newest handled item's,
+in one UTC form that compares as text, and `--cursor review=` refuses anything else. The column keeps its name; a
+rename is a migration for no behavior. Ids an earlier canopy wrote are converted by the overseer on its next tick.
+Rejected: a cursor per kind (more columns and prompt rules, and review runs would still need one of their own);
+anchoring on the review id with comments grouped under theirs (review runs stay a third sequence); a mix of `kind:id`
+values (still no order across kinds).
+Revisit: if two reviewers' items landing in the same second is seen to hide one; then a time plus id.
