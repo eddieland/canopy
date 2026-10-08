@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from canopy.core import definitions
-from canopy.core.config import REPO_FILE_NAME
+from canopy.core.config import REPO_FILE_NAME, Runtime
 from canopy.infra import procs
 
 # A provider name becomes a directory name; keep it to one plain path component.
@@ -100,6 +100,7 @@ def default_label() -> str:
 
 def user_config_text(label: str) -> str:
     """Return the text of a new user config file with queue label `label`."""
+    runtime = Runtime()  # the default templates, written as TOML literal strings: none has a single quote
     return f"""\
 # canopy user config: personal, never committed. Overrides the repository's canopy.toml key by key.
 # Keys marked user-only in DESIGN.md §12 may be set only here. Every key, with comments:
@@ -115,8 +116,8 @@ max_workers = 2
 
 [runtime]
 # {{definitions_dir}} is the directory canopy's agent definitions and skills are in (D040). Keep it.
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-overseer {{prompt}}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-worker --format json {{prompt}}'
+overseer_cmd = '{runtime.overseer_cmd}'
+worker_cmd   = '{runtime.worker_cmd}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
