@@ -490,3 +490,15 @@ nothing else; a missing skill fails the run rather than falling back to the MCP.
 `{{OPEN_PR}}` is `bad_prompt`, as D051 does for `{{LABELS}}`.
 Rejected: a skill alone (prompt and skill disagree); a harness command that opens PRs (VCS knowledge in code, D014).
 Revisit: if other single steps need the operator's own tooling; then generalize rather than add keys one by one.
+
+## D079. The web UI is a single-page app built from `ui/`; FastAPI serves it and its API
+
+Supersedes D074's templates: a richer surface (live SSE updates without polling, route transitions, two themes) built
+by agents one feature at a time needs a client framework and a base that keeps them consistent. `ui/` is Vite, React
+with the React Compiler, TypeScript, Tailwind, shadcn/ui, TanStack Router and Query, pinned exactly; its types are
+generated from FastAPI's OpenAPI schema. FastAPI and uvicorn stay; `jinja2` and `python-multipart` are not added, and
+`httpx2` replaces the deprecated `httpx` for tests. The wheel's build hook builds the app when npm is on PATH, so
+operators never need Node; contributors do (`make check` runs the UI's checks). Rules: `ui/AGENTS.md`, `ui/DESIGN.md`.
+Rejected: Jinja2 with htmx (per-page script is where agent-built features drift); committing the build (minified
+diffs); building at install (Node for every operator); server rendering (a second runtime).
+Revisit: if the UI shrinks to pages a template would serve, or Node costs the toolchain more than it saves.
