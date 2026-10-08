@@ -263,6 +263,8 @@ in order:
      reconcile, and a running review's lease is never returned as stale.
    - `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop; the overseer does not run.
+   - Record on the tick the newest message in the journal: every message up to it was there for this tick to read
+     (`ticks.message_id`). The latest `ok` tick's is what the web UI calls acknowledged (§22).
    - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
      ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
@@ -1070,7 +1072,7 @@ on a private ticket.
 
 The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
 message after it (§22). Its detail is the question's message id and text, one line, and how to answer it. Its cause is
-gone once the operator replies.
+gone once the operator replies, and the item with it at the next `ok` tick; until then the web UI marks it answered.
 
 The harness also raises `repo_missing` every tick for each repository in the workspace map with no clone at
 `repos/<name>`. It has no ticket key, carries the repository's name, and is shown under that name. Its cause is gone
@@ -2415,7 +2417,7 @@ The API, under `{base}/api`:
 | `GET /meta` | canopy's version, and whether the data is mock |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
-| `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none before the first |
+| `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
 | `GET /spend` | what the last 24 hours cost: worker and split runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
@@ -2424,6 +2426,12 @@ The API, under `{base}/api`:
 | `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /events` | the event stream, below |
+
+A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message
+the latest `ok` tick read (§6 step 3), or none before the first. The attention list is that tick's, so until then a
+reply has not reached the loop's decisions or the list: the conversation marks each of the operator's messages after it
+as waiting for the next tick, and an `awaiting_reply` item whose ticket waits on no question now as answered. A tick
+that read a message but did not close `ok` acknowledges nothing, as it leaves the attention list standing.
 
 A guard's refusal is a 409 whose `detail` names the guard and gives its reason, as the CLI prints them. A reply carries
 a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as

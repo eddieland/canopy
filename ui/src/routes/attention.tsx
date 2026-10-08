@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, runsQuery, ticketQuery } from '@/api/queries'
+import { attentionQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
@@ -14,6 +14,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
 import { cn } from '@/lib/utils'
 
@@ -41,6 +42,7 @@ const TONE: Record<Severity, string> = {
 function AttentionPage() {
     const { item: wanted } = Route.useSearch()
     const { data } = useQuery(attentionQuery)
+    const tickets = useQuery(ticketsQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
     // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
     const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
@@ -73,7 +75,12 @@ function AttentionPage() {
                             ) : (
                                 <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                     {items.map((item) => (
-                                        <Row key={item.id} item={item} selected={item.id === selected?.id} />
+                                        <Row
+                                            key={item.id}
+                                            item={item}
+                                            selected={item.id === selected?.id}
+                                            done={answered(item, tickets)}
+                                        />
                                     ))}
                                 </ul>
                             )}
@@ -86,7 +93,7 @@ function AttentionPage() {
                                 <Skeleton className="h-4 w-1/2" />
                             </Panel>
                         ) : (
-                            <Detail key={selected.id} item={selected} />
+                            <Detail key={selected.id} item={selected} done={answered(selected, tickets)} />
                         )}
                     </div>
                 </div>
@@ -95,7 +102,7 @@ function AttentionPage() {
     )
 }
 
-function Row({ item, selected }: { item: AttentionItem; selected: boolean }) {
+function Row({ item, selected, done }: { item: AttentionItem; selected: boolean; done: boolean }) {
     return (
         <li>
             <Link
@@ -110,6 +117,7 @@ function Row({ item, selected }: { item: AttentionItem; selected: boolean }) {
             >
                 <span className="flex items-center gap-2">
                     <ReasonChip item={item} />
+                    {done && <Answered />}
                     <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{item.subject}</span>
                     <Age at={item.since} className="ml-auto" />
                 </span>
@@ -123,13 +131,19 @@ function ReasonChip({ item }: { item: AttentionItem }) {
     return <Chip className={TONE[severity(item)]}>{item.reason}</Chip>
 }
 
+/** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
+function Answered() {
+    return <Chip className="border-status-running/40 text-status-running">answered</Chip>
+}
+
 /** The selected item: its ticket's conversation and the reply form, or for an item about no ticket, what it says. */
-function Detail({ item }: { item: AttentionItem }) {
+function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <Panel data-testid="attention-detail">
             <div className="flex flex-col gap-2 border-b p-3">
                 <div className="flex flex-wrap items-center gap-2">
                     <ReasonChip item={item} />
+                    {done && <Answered />}
                     {item.ticket_key !== null ? (
                         <TicketLink ticketKey={item.ticket_key} />
                     ) : (
@@ -138,6 +152,11 @@ function Detail({ item }: { item: AttentionItem }) {
                     <Age at={item.since} className="ml-auto" />
                 </div>
                 <p className="text-sm break-words whitespace-pre-wrap">{item.detail}</p>
+                {done && (
+                    <p className="text-sm text-muted-foreground" data-testid="answered-note">
+                        You answered it. The item leaves at the next tick, when the loop reads your reply.
+                    </p>
+                )}
             </div>
             {item.ticket_key !== null ? (
                 <Thread ticketKey={item.ticket_key} />
