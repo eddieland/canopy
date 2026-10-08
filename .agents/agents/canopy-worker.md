@@ -15,6 +15,12 @@ permission:
   external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.
   task: deny
+  # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
+  # (TRUST_MODEL T1, D077). Bash can still reach the network, for package installs and builds; this removes the tools
+  # a model reaches for on its own, not the capability.
+  webfetch: deny
+  websearch: deny
+  codesearch: deny
   bash:
     "*": allow
     # Pushes are plain ones: no force, no deletes, no mirrors or bulk ref updates. Patterns anchor on a space before
@@ -42,7 +48,7 @@ permission:
     "treehouse *": deny
     "sudo *": deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
-  # in depth, whatever write tools the operator's runtime config grants (D069). The worker comments on its ticket,
+  # in depth, whatever write tools the operator's runtime config grants (D083). The worker comments on its ticket,
   # edits the ticket's labels, and opens and updates its PRs. Denied: merging, review submissions, closing,
   # transitions, creating tickets, writing files or branches through the API instead of git, deleting, forking, and
   # starting other agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them,

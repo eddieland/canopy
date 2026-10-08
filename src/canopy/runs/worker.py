@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import db, definitions, outbox, treehouse
+from canopy.core import agent_output, contract, conversation, db, definitions, treehouse
 from canopy.core.config import render_command
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 MAX_TEXT = 2000
 # A child key is a ticket key, and bounded like every other value an agent reports.
 MAX_CHILD_KEY = 100
+MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # Never let git wait for credentials on a terminal nobody is watching.
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
@@ -47,11 +48,7 @@ class _SetupError(Exception):
     """A git step before or after the worker failed."""
 
 
-def _bounded(value: str) -> str:
-    return value if len(value) <= MAX_TEXT else value[: MAX_TEXT - 3] + "..."
-
-
-Text = Annotated[StrictStr, AfterValidator(_bounded)]
+Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 
 
 class WorkerResult(BaseModel):
@@ -82,6 +79,8 @@ class SplitResult(BaseModel):
     """A split's result contract (DESIGN §18): the tickets it created, each with the repository it covers.
 
     Untrusted, so bounded; `_run` checks the children against the journal before recording any (`check_children`).
+    `children` is bounded by that check, not here: a valid split names one child per repository it was dispatched with,
+    and a refused one is stored without its children.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
@@ -93,13 +92,7 @@ class SplitResult(BaseModel):
 
 def parse_split(stdout: str) -> SplitResult | None:
     """Parse the last non-empty line of `stdout` as a split's result. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return SplitResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(SplitResult, stdout)
 
 
 def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], result: SplitResult) -> str:
@@ -144,7 +137,7 @@ class Outcome:
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
-        data: dict[str, object] = self.result.model_dump() if self.result is not None else {}
+        data: dict[str, object] = self.result.model_dump(mode="json") if self.result is not None else {}
         if self.note:
             data["harness"] = self.note
         return json.dumps(data)
@@ -152,13 +145,7 @@ class Outcome:
 
 def parse_result(stdout: str) -> WorkerResult | None:
     """Parse the last non-empty line of `stdout` as the result contract. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return WorkerResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(WorkerResult, stdout)
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
@@ -202,8 +189,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 _return_slot(ctx, run, slot, log)
             _record_prs(ctx, run, outcome)
             stored = outcome.result_json()
-            ended = outbox.run_ended(ctx.config, run, outcome.status, stored)
-            if not db.finish_run(ctx.conn, run_id, outcome.status, stored, event=ended):
+            if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             log.info("run finished", extra={**fields, "status": outcome.status})
     return outcome
@@ -239,8 +225,14 @@ class _Slot:
 
 def _run_agent(
     ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter, *, template: str
-) -> procs.Result:
-    """Check the places the agent reads config from, make a joint run's desk, and run `template` in it."""
+) -> tuple[procs.Result, str]:
+    """Check the places the agent reads config from, make a joint run's desk, and run `template` in it.
+
+    A private run's places must also name none of the tracker server's tools (DESIGN §22).
+
+    Returns the agent's process and the text its result line is read from. The session and cost the runtime reported
+    are recorded on the run at once, so a git step after the agent that fails does not lose them (DESIGN §13).
+    """
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044). A joint run's
     # worker starts in a desk, not a repository, so OpenCode may look above it: the directories above it are checked.
@@ -249,7 +241,12 @@ def _run_agent(
     shadowing = [found for place in places for found in definitions.shadowing(place)]
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
-    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir))
+    tools = ctx.config.tracker.tools()
+    if run["private"] and tools is not None:
+        naming = [found for place in places for found in definitions.naming_tools(place, tools.server)]
+        if naming:
+            raise _SetupError(definitions.naming_tools_message(tools.server, naming))
+    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
     if len(slots) > 1:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
     else:
@@ -263,22 +260,30 @@ def _run_agent(
     result = ctx.runner.run(
         argv,
         cwd=cwd,
+        # The operator's commands refuse inside canopy's own runs (DESIGN §22).
+        env={conversation.RUN_ID_ENV: str(run_id)},
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
     )
     out.write(f"--- worker stdout ---\n{result.stdout}\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
-    return result
+    # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
+    output = agent_output.read(result.stdout)
+    if output.session_id is not None or output.usage is not None:
+        db.set_run_report(ctx.conn, run_id, output.session_id, output.usage)
+        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
+    return result, output.text
 
 
 def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid."""
     for slot in slots:
         _check_out_base(slot)
-    result = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
+    result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
-    parsed = parse_split(result.stdout)
+    parsed = parse_split(text)
     if parsed is None:
         if result.timed_out:
             # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
@@ -289,7 +294,8 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     if invalid:
         log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
         status = "timeout" if result.timed_out else "unknown"
-        return Outcome(status, parsed, f"children not recorded: {invalid}")
+        # Stored without its children: a refused map is unbounded, and its note says what was wrong with it.
+        return Outcome(status, parsed.model_copy(update={"children": {}}), f"children not recorded: {invalid}")
     if parsed.children:
         # Also after a timeout: the children it reported exist in the tracker, and a retry must not make them again.
         db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)
@@ -309,12 +315,18 @@ def _check_out_base(slot: _Slot) -> None:
 
 
 def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+    stopped = _stopped(ctx, run)
+    if stopped:
+        log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
+        return Outcome("stopped", None, stopped)
     branch = str(run["branch"])
     starts = [_set_up_branch(slot, branch) for slot in slots]
-    result = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.worker_cmd)
+    runtime = ctx.config.runtime
+    template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
+    result, text = _run_agent(ctx, run, slots, out, log, template=template)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
-    parsed = parse_result(result.stdout)
+    parsed = parse_result(text)
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -331,6 +343,20 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     if unpushed:
         status, note = "unpushed", "; ".join(unpushed)
     return Outcome(status, parsed, note)
+
+
+def _stopped(ctx: Context, run: sqlite3.Row) -> str:
+    """Return why the run must not start its worker, read again from the ticket's start record, or "" (DESIGN §22).
+
+    A private run's ticket may have been stopped since the dispatch. A public run's may have been started privately
+    since: its worker would write to the tracker, which a started ticket never has.
+    """
+    record = conversation.start_of(ctx.conn, str(run["ticket_key"]))
+    if run["private"] and not conversation.is_started(record):
+        return "the operator stopped the ticket before its worker started"
+    if not run["private"] and record is not None:
+        return "the operator started the ticket privately after this public run was dispatched"
+    return ""
 
 
 def _set_up_branch(slot: _Slot, branch: str) -> str:
@@ -409,12 +435,8 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     if not isinstance(outcome.result, WorkerResult) or not outcome.result.prs:
         return
     for repo, url in outcome.result.prs.items():
-        if url and _plain_url(url):
+        if url and contract.plain_url(url, MAX_PR_URL):
             db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, single=ctx.workspace.single, pr_url=url)
-
-
-def _plain_url(value: str) -> bool:
-    return value.startswith("https://") and len(value) <= 500 and not any(c.isspace() for c in value)  # noqa: PLR2004
 
 
 class _Git:

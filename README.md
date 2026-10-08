@@ -50,7 +50,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
    Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer, to comment on a PR.
    Grant nothing more: canopy's definitions deny the dangerous ones by name, but names differ by server. On GitHub
-   the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D069).
+   the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D083).
 4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
    default `~/.config/canopy/config.toml`, with a queue label of your own), writes a shared `canopy.toml` if the
    repository has none, and installs nothing else: agent runs load canopy's agent definitions and skills from its own
@@ -58,19 +58,30 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    sandboxing is not expected to support (D038).
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
    plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
-   repeats until you press Ctrl-C.
+   repeats until you press Ctrl-C. It also serves the web UI at `http://127.0.0.1:8765/`; `canopy secret` prints the
+   listener secret its sign-in page asks for.
 
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list.
+- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, and every ticket's
+  conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the secret
+  `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so does
+  `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
-- Answer the agent's questions as comments on the ticket.
+- Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
+  canopy's copy of its comments.
+- Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
+  reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
+  KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
 - Review PRs. Humans approve and merge; the agent never does.
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
-- Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`; add `--ticket KEY` to filter.
+- See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
+  `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the

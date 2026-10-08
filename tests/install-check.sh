@@ -76,15 +76,33 @@ decisions=$(canopy decisions)
 echo "$decisions" | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
 
+# The web UI (DESIGN §22): the listener secret, then the loop serving the UI this install bundles. The wheel bundles it
+# when npm was on PATH at build time; a release always has it.
+secret=$(canopy secret 2>/dev/null)
+[ "${#secret}" -ge 32 ] || fail "canopy secret printed no secret"
+printf '\n[serve]\nport = 18765\n' >>"$config"
+loop=$(canopy loop --dry-run --ticks 1)
+echo "$loop" | grep -q 'web UI .*http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
+if [ "$binary" = 1 ] || command -v npm >/dev/null; then
+    if echo "$loop" | grep -q 'not built'; then fail "the web UI is not built into this install"; fi
+fi
+
 # The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
 state="$HOME/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
 if [ "$binary" = 1 ]; then
     # The executable cannot run a script of ours, and has no path to this checkout. What it snapshotted must be what
     # this checkout ships.
+    # The private worker's definition is rendered with the tracker's server and tools (DESIGN §22): with those lines,
+    # the only ones a two-space quoted key starts, taken out, it is the shipped file.
+    private=agents/canopy-worker-private.md
     for dir in agents skills; do
-        diff -r "$repo/.agents/$dir" "$state"/runtime/*/"$dir" >/dev/null || fail "the snapshot's $dir are not .agents/"
+        diff -r -x "${private#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" >/dev/null ||
+            fail "the snapshot's $dir are not .agents/"
     done
+    grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" || fail "the snapshot's $private names no tracker tools"
+    grep -v '^  "' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
+        fail "the snapshot's $private is not .agents/ with the tracker's tools"
     echo "install-check: ok"
     exit 0
 fi

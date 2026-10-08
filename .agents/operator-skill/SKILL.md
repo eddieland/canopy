@@ -22,9 +22,11 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops yourself: `canopy loop` runs until Ctrl-C and would hang your
   session, and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it,
   unless they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `canopy decide`, `canopy attention`, and `canopy ticket set` are the overseer's tools. They refuse
-  to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a ticket worked is its
-  queue label (below).
+- `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
+  tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
+  ticket worked is its queue label, or `canopy start` (below).
+- `canopy start`, `stop`, and `reply` are the operator's own: they authorize work and answer workers. Suggest them;
+  run one only when the operator asks you to, with the words they gave you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -37,6 +39,10 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | Command | What it does |
 |---|---|
 | `canopy status` | The last tick, attention list, running workers, each chore, and each sink. Start here. |
+| `canopy show REF` | A ticket's phase, PRs, runs, conversation, and comments; `run:ID` a run, `chore:NAME` a chore. |
+| `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
+| `canopy stop KEY [--now]` | Nothing dispatches a started ticket again until `canopy start`; `--now` ends its run. |
+| `canopy reply KEY [TEXT]` | Answers a started ticket's question, with TEXT or stdin. A waiting loop wakes for it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
@@ -143,8 +149,17 @@ The overseer may record other reasons; the detail says what it wants.
 A worker that needs an answer posts its question as a ticket comment and adds `tracker.needs_human_label`. An
 authorized replier's comment on the ticket resumes it on a later tick; anyone else's comment is ignored.
 
+Workers post as the operator, so every comment they post starts with `trust.comment_prefix` (`CANOPY:` by default) and
+ends with `trust.comment_suffix`, whichever are set. A comment carrying those marks is a worker's: it never resumes,
+splits, or asks for changes, whoever wrote it. Do not start a reply meant to steer a worker with the prefix.
+
 ## Getting a ticket worked
 
 Add the operator's queue label (`tracker.labels` in the user config, `agent-ready-<user>` by default) to an open ticket
 that `tracker.query` finds. The next live tick with free capacity dispatches it. To preview, run
 `canopy tick --dry-run` and then `canopy decisions`.
+
+Or start it privately: `canopy start KEY`. A started ticket needs no label, and its conversation stays in canopy's
+journal: workers read the ticket but never comment on, label, or edit it, and ask their questions through canopy. A
+question shows as `awaiting_reply` on the attention list and in `canopy show KEY`; `canopy reply KEY 'answer'` answers
+it, and the next tick resumes the work. Tracker comments on a started ticket are never instructions.

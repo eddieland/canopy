@@ -21,6 +21,7 @@
 - [19. Chores](#19-chores)
 - [20. Notifications](#20-notifications)
 - [21. Reviews](#21-reviews)
+- [22. Conversations](#22-conversations)
 
 Normative. Code follows this document; changes to behavior change this document
 in the same PR. Rationale for choices lives in `DECISIONS.md`.
@@ -72,15 +73,16 @@ cannot reach internal systems and require handing a vendor write access.
 5. **Connectivity through the agent runtime.** The tracker (Jira, GitHub Issues, Linear, anything with an MCP server)
    and GitHub are reached via the runtime's MCP servers. The harness contains no tracker or VCS host code and never
    handles their credentials. It knows the tracker only as the strings in `[tracker]`.
-6. **Smallest surface that works.** Five install steps. Daily surface is
-   labels, ticket comments, PR review, and one attention list.
+6. **Smallest surface that works.** Five install steps. Coworkers' daily surface is labels, ticket comments, and PR
+   review. The operator's is the web UI `canopy loop` serves (§22): one attention list, the runs, and every ticket's
+   conversation, with the CLI's verbs for the same.
 
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs` and `setup`; `core`; `infra`. A module imports from its own package and lower layers only.
-Features never import each other; what two share moves down a layer. `tests/canopy/test_layers.py` enforces this and
-fails on a module outside the packages it lists.
+the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `serve`; `core`; `infra`. A module imports from its
+own package and lower layers only. Features never import each other; what two share moves down a layer.
+`tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
 ```
 canopy (harness, Python)
@@ -90,9 +92,10 @@ canopy (harness, Python)
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
-    setup.py       init, init --workspace, skill
-    loop.py        loop, tick, tick --dry-run, status, decisions
+    setup.py       init, init --workspace, skill, secret (the web UI's listener secret, §22)
+    loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
+    conversation.py start, stop, reply, show: the operator's verbs on a subject (§22)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, _chore
@@ -102,6 +105,7 @@ canopy (harness, Python)
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
     repeat.py      canopy loop: ticks one after another with a wait between them, its own lock, rich output
+    web.py         the web UI for canopy loop: the listener secret checked, the server's backend wired, started
     state.py       the overseer's state block
     attention.py   the attention list from the journal; render attention.md, diff, notify
 
@@ -112,6 +116,7 @@ canopy (harness, Python)
                    a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
+    halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
   chores/          the operator's recurring chores (§19)
     view.py        each configured chore: due time, runs, open findings; chore_failed items; its state block part
@@ -133,17 +138,39 @@ canopy (harness, Python)
     view.py        the state block's reviews
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
 
+  serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
+    app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
+    api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, and the operator's verbs
+    auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
+    secret.py      the listener secret's file: read with its checks, written by `canopy secret`
+    backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
+                   request
+    views.py       journal rows as the API's models: attention items, runs, tickets, messages
+    live.py        the event stream: data_version read once a second, changed lists sent whole
+    schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
+    spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
+    guard.py       Host and Origin checks, and security headers on every response
+    options.py     ServeOptions: loopback or private host, port, base path, mock data
+    server.py      the server's thread for canopy loop: uvicorn without signal handlers, restarted with a backoff
+    mock.py        a journal seeded from fixtures, and the changes its stream shows
+    __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
+
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
     workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
+    agent_output.py an agent's stdout: its text, and OpenCode's JSON events' session id and cost (§13)
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
+    contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
+    conversation.py references, start records, the operator's messages, runs' reports and questions, with the guards
+                   every channel shares (§22)
     db.py          SQLite journal, migrations
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
-    definitions.py the snapshot of agents/ and skills/ that agent runs load (§13); the guard against shadowing them
+    definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
+                   config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts
     treehouse.py   status, get --lease, return, destroy; a Pool per repository, with its declared size (§18)
     workspace.py   the workspace: its map, repositories, their pools, the private state directory (§18)
@@ -155,19 +182,23 @@ canopy (harness, Python)
     stopping.py    SIGTERM, SIGHUP, and SIGINT become an exception the cleanup of _run and _chore catches
     logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files and
                    directories
-    resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
+    resources.py   finds migrations/, .agents/, and the built UI in a source checkout or bundled in the wheel
 ```
 
 ```
-prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md, reviewer.md
-agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-splitter, canopy-chore,
-                 canopy-reviewer
+prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md, reviewer.md,
+                 and the private variants worker-implement-private.md, worker-fix-ci-private.md,
+                 worker-resume-private.md
+agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-worker-private, canopy-splitter,
+                 canopy-chore, canopy-reviewer
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
 scripts/         build-binary.sh: the single executable a release ships (D067)
+ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
+hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```
 
 `prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
@@ -196,10 +227,11 @@ Roles:
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world through MCP and the state summary, decides one next
   action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy chore run`,
-  `canopy chore wait` (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else.
+  `canopy chore wait` (§19), `canopy review run`, `canopy review wait` (§21), and `canopy mirror` (§22). Read-only
+  everywhere else.
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
-  to Done.
+  to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).
 
 ## 6. Tick
 
@@ -229,31 +261,34 @@ in order:
      reconcile, and a running review's lease is never returned as stale.
    - `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop; the overseer does not run.
-   - Record as this tick's decisions the harness's attention items for runs (§14), `chore_failed` for each configured
-     chore whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
+   - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
+     ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
+     whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated `## State` section holding
    one JSON object: tick id, current time, whether it is a dry run, repository root; the workspace (name, whether it is
    a single repository, the path of `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its
    pool's leased slots, §18); tracker config (provider, query, labels, needs-human label); trust config (authorized
    repliers, branch prefix, PR label); capacity; policy (limits and stacking); running workers and their repositories;
-   and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment cursor; its units (§18), each
-   with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and when fix-ci may next run if
-   still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
-   start and end). `chores` (§19) is present only when chores are configured.
+   and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment, message, and mirror cursors
+   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and
+   when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
+   start and end). A ticket the operator started has a `private` object (§22): its start record's status, its message
+   cursor, the operator's messages newer than it, and the question awaiting a reply, if any. `chores` (§19) is present
+   only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
-   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, and `attention`
-   refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
+   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
+   `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The run succeeded if it
-   exited 0 and the last non-empty stdout line is `tick complete`; otherwise the tick closes as `overseer_failed`. A
-   successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as
-   `skipped`, which leaves the attention list standing (D037).
+   exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
+   `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
+   closes the tick as `skipped`, which leaves the attention list standing (D037).
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
    starts nothing and is recorded as `dispatch:<kind>` with its cursors, context, and rationale
    `dry run: not dispatched; would work on <branch>` (plus `in <repositories>` in a workspace). `canopy ticket set`
    records phases, but neither it nor `canopy dispatch --cursor` advances cursors, and `--done` does not mark the
-   ticket done. The rest of the tick is live: reconcile closes dead runs and returns stale leases, and the tick's
+   ticket done. `canopy mirror` records the comment and moves no mirror cursor. The rest of the tick is live: reconcile closes dead runs and returns stale leases, and the tick's
    attention items become the attention list and are notified.
 
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
@@ -271,26 +306,30 @@ Workers dispatched during a tick outlive it, as detached processes owned by `can
 
 ### The loop
 
-`canopy loop [--dry-run] [--every MINUTES] [--ticks N]` is how ticks are meant to run (D042), in the foreground until
-stopped:
+`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--no-serve]` is how ticks are meant to run (D042), in the
+foreground until stopped:
 
 1. Take `<state_dir>/loop.lock`; if another loop holds it, refuse and exit 1. Each tick still takes the separate tick
    lock (step 1 above), so a hand-run `canopy tick` runs between the loop's ticks or finds the lock busy.
-2. Apply pending migrations before the first tick.
+2. Apply pending migrations before the first tick. Start the web UI's server in a thread, unless `--no-serve` or
+   `serve.enabled = false`; without a usable listener secret, say why and serve nothing (§22). The header names its
+   URL.
 3. Run a tick exactly as `canopy tick` does, passing `--dry-run` through. An error the tick code does not handle ends
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
 4. Print the tick's status, duration, and summary; each decision except `wait` and attention items, with its
    rationale; attention items added (`+`) and resolved (`-`); running workers and the list's size.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status.
-   This pacing rule is `repeat.pace`; ROADMAP M13 replaces it with pacing by tick cost.
+   This pacing rule is `repeat.pace`; ROADMAP M13 replaces it with pacing by tick cost. An operator message recorded
+   since the tick began, such as a `canopy reply`, ends the wait early, but no sooner than a minute after the tick
+   began (`repeat.WAKE_MIN_SECONDS`; §22).
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first lets the tick
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
 as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Dispatched workers are
 unaffected. A signal less than one second (`repeat.SAME_SIGNAL_SECONDS`, monotonic clock) after the first is the same
-keypress (D049).
+keypress (D049). The web UI's server stops with the loop.
 
 Config is read once at loop start; restart to apply a change. Prompt files are read every tick.
 
@@ -310,6 +349,7 @@ read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§1
 | `blocked` | as `ready`, but a blocker ticket is open | dispatch `implement` stacked on the blocker's branch if its PR is open and green (§10), else wait |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
+| `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to merge the base in |
 | `ci_running` | PR open, checks pending | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
@@ -322,17 +362,34 @@ read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§1
 | `human_replied` | authorized reply newer than the label | dispatch `resume` pointing at the reply; the worker removes the label |
 | `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
 
-"Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
-identifier, never a display name. If the tracker cannot say when a label was added, the worker's question comment is the
-reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+A unit is `conflicted` when GitHub reports that its PR does not merge cleanly into its base (`mergeable` false,
+`mergeable_state` `dirty`); a mergeability GitHub has not computed yet is not a conflict. GitHub runs no
+`pull_request` checks on a PR it cannot merge, so a conflicting PR's checks are pending with nothing running, or are the
+results of an earlier head. `conflicted` therefore comes before every CI and review phase: before `ci_running`,
+`ci_red`, `review_pending`, `green_unreviewed`, and `approved`. Its `resume` points at the conflict and the base, and
+carries `--base` for a stacked PR (§10); the worker merges the base into the branch and pushes without force. Review
+comments or findings newer than the `review` cursor ride the same `resume`, with their cursor. A conflict has no cursor:
+it is a state of the PR, not an item, so it is new for as long as it lasts. A `resume` that pushes a merge ends it; one
+that is still there after that push means the base moved again, and the `resume` attempt limit bounds the repeats
+(D030, D070).
 
-Cursors (`comment`, `review`, `ci`) hold the newest item of each kind the loop has handled, in the tracker's and
-GitHub's own ids; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci
-cursors are each unit's, since each unit has its own PR. In a workspace of several, `canopy ticket set` names the unit
-with `--repo`, and a dispatch that carries one names exactly one repository; in a workspace of one the unit is implied.
-A dispatch that handles new items carries their cursors (`--cursor`, §8), so they advance only if the worker starts.
-Items handled by a wait, a done, or an attention item advance with `canopy ticket set`. A review comment waiting on a
-human is not advanced past, so its attention item is recorded every tick until a human answers it.
+"Authorized reply" means a comment by an account in `trust.authorized_repliers`, matched on the tracker's stable account
+identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's
+comment is never review feedback either. If the tracker cannot say when a label was added, the worker's question comment
+is the reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+
+A private ticket (§22), one the operator started with `canopy start`, needs no label, and its own phases come from the
+journal: `needs_human` when its latest run ended `blocked` and no operator message came after it, `human_replied` when
+an operator message is newer than its message cursor. Its PR phases are as above.
+
+Cursors (`comment`, `review`, `ci`, and a private ticket's `message`, a journal message id) hold the newest item of each
+kind the loop has handled, in the tracker's and GitHub's own ids; "newer than cursor" means not handled yet. The comment
+cursor is the ticket's; the review and ci cursors are each unit's, since each unit has its own PR. In a workspace of
+several, `canopy ticket set` names the unit with `--repo`, and a dispatch that carries one names exactly one repository;
+in a workspace of one the unit is implied. A dispatch that handles new items carries their cursors (`--cursor`, §8), so
+they advance only if the worker starts. Items handled by a wait, a done, or an attention item advance with `canopy
+ticket set`. A review comment waiting on a human is not advanced past, so its attention item is recorded every tick
+until a human answers it.
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
@@ -352,7 +409,11 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    - `unauthorized`: no `--label`, or one not in `tracker.labels`, compared case-insensitively. The decision records
      the label in its configured spelling; the refusal does not list the configured labels. This does not prove the
      label is on the ticket; the worker's own read is the independent check (step 3, D051). A `split` without
-     `--request` is refused here too (§18).
+     `--request` is refused here too (§18). A started ticket (§22) needs no `--label`: its start record is checked
+     instead, in code, and a `--label` given for it is ignored.
+   - `stopped`: the ticket's start record is stopped (§22), whatever label is passed. `private`: a `split` of a
+     started ticket, since a split creates tickets in the tracker. `no_read_tools`: a started ticket when no tracker
+     tools are known for its worker (§22).
    - `bad_request`: `--request` on a kind other than `split`.
    - `unknown_repo`: in a workspace, no `--repo`, or one not in the map or with no primary clone; for a split's child,
      any repository but the one the split recorded for it. Naming a repository the ticket has no unit in yet adds that
@@ -386,13 +447,15 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    pairs are applied as `canopy ticket set` would, only once the worker has started, so what a refused dispatch was
    meant to handle stays new for the next tick.
 2. `treehouse get --lease --lease-holder canopy:<KEY> --json` in each named repository's pool (§18). Record the `runs`
-   row (kind, branch, started_at) and a `run_slots` row per slot (repository, slot path, lease id, holder, and base
-   branch: `--base` if given, else treehouse's). Each repository becomes a unit of the ticket, with the run's branch.
+   row (kind, branch, started_at, whether it is private) and a `run_slots` row per slot (repository, slot path, lease
+   id, holder, and base branch: `--base` if given, else treehouse's). Each repository becomes a unit of the ticket, with
+   the run's branch.
 3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
    the attempt number (one more than the most runs of the kind in any unit covered) and the kind's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
-   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), the context, and the result
-   contract below, whose `prs` skeleton (`{{PRS}}`) names each repository.
+   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), how to open a PR
+   (`{{OPEN_PR}}`, below), the context, and the result contract below, whose `prs` skeleton (`{{PRS}}`) names each
+   repository.
    - Every worker reads the ticket first and, if it is closed or carries none of the queue labels, reports `failed`
      with a summary starting `not authorized:` and changes nothing. That run counts toward the attempt limit.
    - The branch is `<trust.branch_prefix><KEY>-<slug>`, named by the first `implement`. The overseer picks the slug
@@ -404,7 +467,12 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
      `{{LABELS}}`, so an older override fails closed (D051). A joint run's prompt also needs `{{REPOSITORIES}}` and
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
      repository. For older overrides, `{{SLOT}}` is the worker's working directory and `{{BASE}}` and `{{PR_URL}}` the
-     one repository's base and PR.
+     one repository's base and PR. With `runtime.pr_skill` set, an `implement` or `resume` prompt without
+     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D078).
+   - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
+     tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
+     The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
+     refuses the dispatch (`stopped`) and its leases are returned.
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
    stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository or workspace root). Record its
@@ -414,17 +482,22 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
 
 1. Claim the run: set its pid to this process's, only if the run is `running` and its pid is unset or already this
    pid; refuse otherwise, so the overseer cannot start a second worker on a run. Drop `CANOPY_TICK_ID` from the
-   environment so the worker cannot act as the dispatching tick's overseer.
+   environment so the worker cannot act as the dispatching tick's overseer. Read the ticket's start record again
+   (§22): a private run whose ticket was stopped since, or a public run whose ticket was started privately since, ends
+   `stopped` before any git step, and its slots are returned.
 2. In each slot: `git fetch --prune origin`; if `origin/<branch>` exists, `git checkout -B <branch> origin/<branch>`,
    else `git checkout --no-track -B <branch> origin/<base>`. `-B` because a branch an earlier run left in the pool's
    repository would make `-b` fail; `--no-track` so a bare `git push` never targets the base. Note the branch's
    commit. A base missing from origin (such as a stacked-on branch deleted when its PR merged) fails the run as
    `crashed` before the worker starts, with a note, whether the branch is new or continued.
-3. Run `worker_cmd`, timeout `worker_timeout_minutes`, with cwd = the slot, or for a joint run the desk (§18), which
+3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), timeout `worker_timeout_minutes`, with
+   `CANOPY_RUN_ID` set to the run's id and cwd = the slot, or for a joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
    process group. Its stdout and stderr go to the run log.
-4. Parse the last non-empty stdout line as the result contract. Missing or invalid means `status='unknown'`; a timeout
-   means `status='timeout'`.
+4. Parse the last non-empty line of the worker's text as the result contract: its stdout, or the text of OpenCode's
+   JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`. Record the
+   session id and cost the events reported on the run at once, also after a timeout, so a git failure after this step
+   does not lose them.
 
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch; step 3 runs `split_cmd`
    in the desk; step 4 parses and validates the split's result; step 5 is skipped, since a split pushes nothing.
@@ -434,12 +507,14 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
 6. Always: remove a joint run's desk, and `treehouse return --force --if-lease-id <id> --if-lease-holder <holder>
    <slot>` for every slot, in its repository's pool. A trap runs this on any exit path: normal exit, exception, and
    SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). SIGKILL cannot be trapped; reconcile handles it.
-7. Update the `runs` row: ended_at, status, result_json. A git failure before or after the worker is `crashed`.
+7. Update the `runs` row: ended_at, status, result_json, and in the same transaction record the run's messages about
+   its ticket (§22): a `report`, its summary (else the harness's note, else the status) with each PR on a line, and
+   for a `blocked` run its `question`. A git failure before or after the worker is `crashed`.
    `result_json` holds the validated result, text fields cut at 2000 characters, plus a `harness` note saying why the
    status differs from what the worker reported. `prs` is kept to the run's repositories, or filled from `pr` for a
    run in one; each plain `https://` URL is copied to its unit's `pr_url`, for display and the next run's prompt.
 
-Worker result contract, one JSON line, last line of stdout:
+Worker result contract, one JSON line, last line of the worker's text (§13):
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},
@@ -454,13 +529,47 @@ Worker obligations, stated in every worker prompt:
 - Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
   repository.
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
+- Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
+  default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
+- Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
 - On `blocked`: post the question as a ticket comment, add `needs_human_label`, and push nothing half-finished or
-  speculative beyond a WIP commit.
+  speculative beyond a WIP commit. A private ticket's worker posts nothing on the ticket: its result line's `summary`
+  and `question` are its report and question (§22).
 - Never approve, merge, close PRs, or transition the ticket to Done, including indirectly: no closing keywords
   (`Fixes #12`) or tracker commands (Jira smart commits) in commit messages, PR titles, or PR bodies.
 - Push once. Do not poll CI. Do not retry.
+
+Everything posts as the operator (D010), who is usually an authorized replier, so without a mark a worker's PR reply
+would read back as new review feedback and spend a `resume` attempt, and its ticket comment could pass for an
+authorized reply. A comment that carries every mark set, starting with the prefix if there is one and ending with the
+suffix if there is one, outside any quote, is a worker's, whoever its author. The overseer, which reads the marks from
+the state block's `trust`, and workers never read one as an authorized reply, a split request, or review feedback: it
+makes no ticket `human_replied` or `changes_requested`, is not a new comment for `green_unreviewed`, and needs no
+handling, so a cursor may advance past it (§7). The marks can only take authority away, so they need no protection:
+anyone who marks a comment of theirs only silences it, and a comment without them is judged as before. They are plain
+text, which every tracker's markup keeps as written (Jira's would show or drop an HTML comment), and they tell a person
+reading the PR or ticket what wrote the comment. The harness never reads comments; the marks are for the agents that
+do. Worker prompts get them as `{{MARK_COMMENTS}}`, the instruction to mark, and `{{WORKER_COMMENT}}`, how to recognize
+a marked comment. Changing the marks leaves earlier workers' comments reading as the operator's. A prompt override
+without the placeholders still renders, and its workers' comments read as the operator's, as they all did before D069.
+
+How a worker opens a PR is the one step an operator may need done their own way: an employer's tooling that adds
+metadata, a stacked-PR tool, or a host the GitHub MCP serves badly (D078). `runtime.pr_skill`, user-only, names a skill
+of the operator's, which `implement` and `resume` workers then open every PR with, and in no other way; with it unset
+they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run: the
+worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
+whose PRs the operator set the skill to avoid. The skill is ordinary customization (§13): it sits where the runtime
+reads skills, under a name no repository canopy works in uses, since OpenCode picks either of two same-named skills and
+a repository's could stand in for the operator's. Any program it runs must be on the `PATH` of the shell that runs
+canopy, which workers inherit. It changes only how the PR is opened; every other obligation above still holds. The
+branch is `{{BRANCH}}`, pushed without force, and `_run` still checks it is on origin (step 5). A program that pushes by
+itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL T1). The PR
+targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL goes in the
+result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one that server
+can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting a stacked
+one, stays with the MCP.
 
 ## 9. Aggressive release
 
@@ -512,16 +621,21 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
 
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `skipped`,
   `overseer_failed`, `reconcile_failed`, or `abandoned`. `canopy decisions [TICK]` prints a tick (the latest by
-  default) and its decisions: the way to read a dry run's plan. A tick that cannot take the lock writes no row.
+  default) and its decisions; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is
+  the way to read a dry run's plan. A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
-  branch (named by its first implement), the comment cursor (`last_comment_id`), done flag. Cursors make ticks
+  branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
+  (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag. Cursors make ticks
   incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not stored (D030).
 - `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository, branch, PR URL, the
   unit's phase, and its cursors (`last_review_id`, `last_ci_run_id`).
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
   _run`, pid of the worker agent (`worker_pid`), status, result_json. Status is `running`, `done`, `blocked`,
-  `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for capacity, crash
-  detection, attempt counts, and the fix-ci cooldown.
+  `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, `crashed`, or `stopped` (§22); `private`
+  marks a run on a started ticket. Source for capacity, crash
+  detection, attempt counts, and the fix-ci cooldown. What the runtime reported (§13): the session id (`session_id`),
+  the dollar cost (`cost_usd`), and tokens by kind (`tokens_input`, `tokens_output`, `tokens_reasoning`,
+  `tokens_cache_read`, `tokens_cache_write`), all NULL when it reported nothing.
 - `run_slots`: one row per slot a run leased; the repository whose pool it came from, slot path, lease id and holder,
   and the base branch the run started from there. A joint run has one per repository.
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
@@ -537,8 +651,15 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   §20).
 - `notify_events`: the outbox of point events for sinks, and `notify_sinks`: each sink's cursor, last delivery, last
   digest, and failures in a row (§20).
+- `messages`: one row per message of a subject's conversation (§22), keyed by subject kind and id; source, kind,
+  channel, the run of a worker's message, the body, the message a reply answers, and an operator message's submission
+  id; for a mirrored tracker comment, its comment id (unique per subject), author, time, and whether the body was cut.
+  Ids never repeat (`AUTOINCREMENT`). Migration 0003 backfilled every ended run's report and question.
+- `starts`: one row per subject the operator started privately (§22); `started` or `stopped`, with when and through
+  which channel. Never deleted: a stopped ticket stays private.
 
-Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
+Rules: the DB never stores credentials or raw CI logs (token counts are usage, not credentials). `result_json` is a
+summary.
 
 In a workspace of one, the ticket's one unit is renamed to the repository's current name the next time canopy writes
 it, and every lookup ignores the name, so renaming the checkout never strands a ticket (D052). `repo` in
@@ -565,9 +686,11 @@ run. Unknown keys are errors in both files.
 | `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
 | `tracker.labels` | user-only | defines this operator's queue |
+| `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
+| `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
@@ -575,6 +698,7 @@ run. Unknown keys are errors in both files.
 | `paths.*` | user-only | where prompts and state are read from |
 | `chores.*` | user-only | a chore runs a command and a prompt, and spends money (§19) |
 | `review.*` | user-only | `review.query` authorizes comments in the operator's name (§21) |
+| `serve.*` | user-only | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
 
 Whoever controls the repository file (anyone who can push, or any branch checked out) must not run commands, choose
 prompts, spend money, or authorize anyone; those keys are user-only (TRUST_MODEL T7).
@@ -605,22 +729,28 @@ User file, personal:
 ```toml
 [tracker]
 labels = ["agent-ready-yourname"]
+mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
+# read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
 
 [capacity]
 max_workers = 2
 
 [runtime]
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
-split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
+split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
+pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
+# private_worker_cmd: worker_cmd with `--agent canopy-worker-private`, for a ticket started with `canopy start` (§22)
 
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
+comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
+comment_suffix = ""          # and ends with this, if set
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -632,10 +762,19 @@ cmd = ""   # optional; receives the attention diff on stdin: the sink `default` 
 [notify.sinks.desktop]         # optional; any number up to 5 (§20)
 cmd = "canopy-notify-desktop"
 events = ["attention", "loop", "runs"]
+
+[serve]                 # the web UI `canopy loop` serves (§22)
+enabled = true
+bind = "127.0.0.1"      # loopback, or a private address; never a wildcard or public one
+port = 8765
+base_path = ""          # a path prefix such as "/canopy", for a proxy
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
 default and must be set; `trust.authorized_repliers` defaults to empty (nobody can resume blocked work).
+
+`trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter or
+digit, no backtick, and no surrounding spaces, and at least one is set.
 
 Rules:
 
@@ -698,25 +837,51 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
   edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
-  workflow runs denied by name (D069).
-- `canopy-reviewer`: no edits, shell, web fetch, or subagents; reads only through the link to its checkout. MCP: read
+  workflow runs denied by name (D083).
+- `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
   tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
   and edits denied by name (§21).
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19). A chore that runs the operator's
   own tools uses the operator's own copy of it.
-- `canopy-splitter`: read-only file tools in its desk; no edit, shell, web fetch, or subagents. MCP: the tracker
+- `canopy-splitter`: read-only file tools in its desk; no edit, shell, or subagents. MCP: the tracker
   (create and link tickets, comment), with tools for labels, assignees, edits, PRs, branches, and files denied by name
   (§18).
 
+None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
+
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
 the command templates. No interface.
+
+### What a run prints
+
+Every agent's output is read the same way (`core/agent_output.py`, D071). A template either prints the agent's text on
+stdout, or asks OpenCode for `--format json`, which prints one JSON event per line. If any line of stdout is an event
+(a JSON object with a string `type` and a `sessionID`), the agent's text is the `part.text` of each `text` event, one
+per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is the
+last non-empty line of that text, so a template may switch formats without changing a prompt.
+
+From events the harness also reads, each validated (D026):
+
+- the session id: the first `sessionID` of at most 100 letters, digits, `_`, and `-`. The operator opens the
+  transcript with OpenCode's own tools (`opencode export <id>`, or `opencode --session <id>` in the run's directory).
+- the cost: the sum over `step_finish` events, one per model call, of `part.cost` in dollars and `part.tokens` (input,
+  output, reasoning, cache read, cache write), each call's cost at most $1,000,000 and each count at most 10^12. If one
+  does not validate, the run reports no cost rather than too little. Events with no model call cost nothing. A run
+  killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
+  session's, and not counted.
+
+The default `worker_cmd` and `split_cmd` ask for events, and `_run` records what they report on the run (§8, §11).
+Other templates may ask for them too; what the overseer, chores, and reviews report is not recorded yet (ROADMAP M13).
+A run log holds the events as printed.
 
 ### Where the runtime finds canopy's definitions
 
 Rationale in D040 and D044.
 
 canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents (`definitions.py`). A snapshot is written to a temporary directory, renamed into place, and never changed, so
+contents (`definitions.py`). One definition is rendered from the user config first: `canopy-worker-private` gets the
+tracker's MCP server and the tools of it a private worker may call (§22), so a change to those keys makes a new snapshot
+rather than changing one. A snapshot is written to a temporary directory, renamed into place, and never changed, so
 overlapping runs never load a partial set. The overseer run and each `_run` use the installed canopy's snapshot,
 creating it if missing. A snapshot canopy made is readable only by the operator; one that is a symlink, someone else's,
 or open to others (for example from a checkout of a shared workspace, §18) is refused: the overseer's refusal fails the
@@ -726,11 +891,12 @@ over an hour old; a live run may be an earlier canopy's, still loading its snaps
 one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), required in every template that runs a
-canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `split_cmd`, §19's `chore_cmd`, §21's `review_cmd`):
+canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §19's `chore_cmd`, §21's
+`review_cmd`):
 
 ```toml
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
 ```
 
 Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
@@ -740,14 +906,17 @@ agent's start directory (the repository root for the overseer, the worktree on t
 refuses if it defines one of canopy's agents: a file named for one under `.opencode/{agent,agents,mode,modes}/`, or an
 `opencode.json` or `opencode.jsonc` at the root or in `.opencode/` whose text names one. The overseer's refusal fails
 the tick (`overseer_failed`, summary naming the files); a worker's is a `crashed` run whose note names them, and its
-slot is returned. `canopy init` warns about the same files.
+slot is returned. `canopy init` warns about the same files. A private run (§22) is also refused where that config
+names any tool of the tracker's MCP server (`<server>_`), since a rule merged after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks: the repository (`.agents/skills/`,
 `.claude/skills/`, `.opencode/skill/`) or the operator's home (`~/.agents/skills/`, `~/.claude/skills/`,
 `~/.config/opencode/skill/`). canopy turns none of these off. Give a custom skill its own name; same-named skills do not
 reliably override each other. A `$HOME` skill that workers use must be a single `SKILL.md`: the worker's
 `external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
-also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
+also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). A skill only adds to what
+a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
+names the skill and the prompt then says to use it (§8, D078). Prefer that to a prompt override.
 
 ### The operator's skill
 
@@ -767,18 +936,29 @@ After every tick the list is rendered to `<state_dir>/attention.md` (`~/.canopy/
 only by the operator: grouped by reason, one line per item with ticket key, age, and detail (usually a link).
 `canopy status` prints it too. Items disappear when their cause is gone; there is no manual dismissal.
 
-Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`,
-`worker_failed`, `attempt_limit`, and in a workspace `repo_missing` and the overseer's `multi_repo`,
-`split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their findings, listed by chore after
-the ticket items (§19). Reviews add `review_failed`, `review_unposted`, and `review_limit`, about a PR (§21). In a
-workspace of several, an item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
+`canopy status` also lists the tickets the operator started (§22), each with its status, phase, and the message it
+awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket, kind,
+status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line with control
+characters dropped and cut at 160 characters; and its session id, its cost and tokens when the runtime reported them
+(§13), and its run log.
+
+Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
+`attempt_limit`, a private ticket's `awaiting_reply` (§22), and in a workspace `repo_missing` and the overseer's
+`multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their findings, listed by
+chore after the ticket items (§19). Reviews add `review_failed`, `review_unposted`, and `review_limit`, about a PR
+(§21). In a workspace of several, an item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to
 `unknown_result`, `failed` to `worker_failed`. The detail names the run, its kind and branch, the harness note or the
 worker's summary, and the run log. The cause is gone when a newer run starts for the ticket or the ticket is marked
 done. The overseer does not dispatch such a ticket again until an authorized replier comments after the run ended;
-that is how a human says "try again".
+that is how a human says "try again". On a private ticket, an operator message after the run ended says it (§22).
+`blocked` and `stopped` raise nothing here.
+
+The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
+message after it (§22). Its detail is the question's message id and text, one line, and how to answer it. Its cause is
+gone once the operator replies.
 
 The harness also raises `repo_missing` every tick for each repository in the workspace map with no clone at
 `repos/<name>`. It has no ticket key, carries the repository's name, and is shown under that name. Its cause is gone
@@ -1116,8 +1296,9 @@ children start without a queue label, so a human authorizes each (TRUST_MODEL T1
   created even when `failed`. `_run` validates: each key a valid ticket key (§17) of at most 100 characters, new to the
   journal (never a split's child, never dispatched, never in `tickets`) and not the parent; each repository one the
   split was dispatched with, at most once; a `done` split names at least one child. `blocked` is not a split status.
-  Anything else makes the run `unknown` and records nothing. A valid result goes into `split_children`, also when the
-  run timed out after printing it, and is the source of a child's repository afterwards, in a workspace of one too.
+  Anything else makes the run `unknown` and records nothing; its stored result keeps the note but none of the children.
+  A valid result goes into `split_children`, also when the run timed out after printing it, and is the source of a
+  child's repository afterwards, in a workspace of one too.
 - The parent's phase becomes `split`: wait, with attention `split_unlabeled` naming each child still open and
   unlabeled. Any dispatch for it is `bad_split`. The overseer marks the parent `done` in the journal once every child
   is closed; canopy does not touch its tracker state.
@@ -1282,7 +1463,7 @@ run id, the overseer's context, the latest ended run (id, status, end time, summ
 findings (id, title, link), so ids can be reused, and the result contract. It is written to
 `<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
 
-Result contract, one JSON line, last line of stdout:
+Result contract, one JSON line, last line of the agent's text (§13):
 
 ```json
 {"status":"ok|failed","summary":"one paragraph",
@@ -1388,7 +1569,7 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `attention` | `attention.opened` | a listed item the sink was not told of | ticket, reason, detail (500), since |
 | `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, reason |
 | `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
-| `runs` | `run.ended` | a run's row was closed | ticket, run, kind, status, branch, pr, prs, summary, question |
+| `runs` | `run.ended` | a run's row closed | ticket, run, kind, status, branch, pr, prs, summary, question, message |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
 | `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, comment |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
@@ -1398,6 +1579,8 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 `summary` and `question` are cut at 300 characters, each PR URL at 500. `pr` is the run's first PR, `prs` every PR a
 joint run reported. In the `json` format a run's kind is `run_kind` (`kind` is the event's). `question` is set only for
 a `blocked` run; the needs-human label is not an attention item, so `run.ended` is how a sink hears of the question.
+`message` is the journal id of the message the run recorded (§22): its question for a `blocked` run, its report
+otherwise, so a channel can say what a reply answers.
 
 Attention is a diff of state per sink (D032): `notifications` has a `sink` column, so each sink hears of each open
 item once, and a sink that was down gets the net change. The other kinds are point events in an outbox table,
@@ -1530,7 +1713,8 @@ could fit T8 once something long-running holds the connection. What fits, in ord
    webhook, the sink reporting each thread on stdout for the harness to record and pass into the state block), Slack
    account ids among the authorized repliers, and a TRUST_MODEL T1 change.
 
-It attaches at the `json` format's `version` and the sink's stdout, ignored today.
+It attaches at the `json` format's `version` and the sink's stdout, ignored today. §22 plans the conversation these
+replies would join: the journal records it, and Slack becomes one channel into it.
 
 ### Trust model changes
 
@@ -1675,7 +1859,7 @@ Verdict: findings (1 blocking, 1 minor). Impact: normal.
 The first line identifies it to people, the last-line marker to programs. The comment is posted as the operator
 (D010), so anything running as the operator could forge the marker. The loop never trusts it, only its journal.
 
-Result contract, one JSON line, last line of stdout, validated with pydantic (D026):
+Result contract, one JSON line, last line of the reviewer's text (§13), validated with pydantic (D026):
 
 ```json
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","comment":"https://...",
@@ -1795,3 +1979,344 @@ runs the PR's code).
 - Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
   (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR
   only through MCP.
+
+## 22. Conversations
+
+Private tickets and the journal's conversation (ROADMAP M18), tracker comments in the journal (M19), and the web UI's
+pages and actions (M20) are built. Rationale in D072 to D076 and D080 to D082.
+
+The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
+and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
+Slack later. Channels differ in how they reach the operator and how they prove who wrote a reply. The overseer and
+workers never see which channel a message came from, so adding a channel changes no prompt.
+
+A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator starts
+it in canopy (below). A started ticket is private whatever labels it carries: the start record wins. A private
+ticket's conversation never touches the tracker: the operator can deliver a ticket a client filed without the agent's
+reports, its questions, or the operator's answers appearing on it.
+
+### Messages
+
+A `messages` table, one row per message:
+
+- its subject (below): a ticket now, a PR with M14; the journal id (`AUTOINCREMENT`, so ids never repeat); and the
+  time canopy recorded it.
+- `source`: `worker` (from a run's result line), `operator` (from a channel that authenticated the operator), or
+  `tracker` (a tracker comment the overseer mirrored, M19).
+- `kind`: `report` or `question` for a worker's, `reply` for the operator's, `comment` for a mirrored one.
+- `channel`: `run`, `cli`, `web`, `slack`, or `tracker`.
+- For a worker's message, its run. For a mirrored one, the tracker's comment id, author account id, and time, unique
+  per subject and comment id.
+- The body, bounded: a worker's text as its result contract bounds it; the operator's at 4000 characters; a mirrored
+  comment's at 2000, marked truncated when cut.
+- `answers`: the id of the message a reply answers, when the channel knows it.
+- For an operator's message, a submission id, unique per subject, so a retried submission records nothing new. The
+  web form carries one generated when the form is rendered. The CLI derives it from the subject, the message being
+  answered, and the body, so rerunning the same `canopy reply` after an uncertain result is the same submission.
+
+Who writes:
+
+- `_run` records a run's `report` (its summary and PRs) and, for a `blocked` run, its `question`, in the transaction
+  that closes the run's row, for every ticket. The harness already has both from the result line (§8), so no agent
+  gains a write.
+- Operator input goes through one function in `core/conversation.py` that every channel calls, with the guards in one
+  place: the key is valid (§17), the ticket was started, the body is within its bound.
+- Mirrored comments are recorded by the overseer (M19, below), a worker's marked comments among them. Migration 0004
+  added their columns and the mirror cursor.
+- Migration 0003 backfilled a `report`, and a `question` for a `blocked` run, from every ended run's `result_json`,
+  so tickets worked before M18 have a conversation too.
+
+Agents never write a message directly. No worker command records one, and the overseer records only mirrored tracker
+comments, which authorize nothing.
+
+### Authority stays with the source
+
+The journal is what the operator reads. Authority comes from where a message originated:
+
+- **Public ticket.** Authorization and replies are as §7 and §17 say: the overseer's live read of the tracker. A
+  mirrored comment is the overseer's claim, like `--label`; it never makes a ticket `human_replied`, authorizes a
+  split, or counts as "try again" after a failed run.
+- **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
+  written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
+  (D003). Tracker comments on a private ticket are data, whoever wrote them.
+
+This is principle 1's split applied to conversation: for a private ticket the journal owns the conversation, and for
+a public one the tracker does and the journal holds a copy.
+
+### Private tickets (M18)
+
+The operator's commands are top-level verbs that take a reference to a subject, anything canopy works on or reports
+about, so the same verbs serve tickets now, PRs with M14, and what comes later (References, below; D075):
+
+| Command | Does |
+|---|---|
+| `canopy start REF` | work it privately, in place of a queue label |
+| `canopy stop REF [--now]` | no new dispatches; a running run finishes unless `--now` ends it |
+| `canopy reply REF [TEXT]` | answer it, with TEXT or stdin |
+| `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
+
+`canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
+separate `list`.
+
+- `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
+  conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
+  later `--public` could start a ticket whose conversation stays on the tracker; none is planned.
+- `stop` without `--now` is graceful: it says which run is still going and that it will finish. With `--now` it also
+  ends that run: its process group is killed and its slots returned and desk removed as reconcile does for a
+  crashed run (§6), and the run is marked `stopped`, a status that raises no attention item and counts toward attempt
+  limits like any ended run. `stop` refuses a ticket that was not started: a public ticket stops when its queue label
+  is removed.
+- `stop` does not delete the start record; it marks it stopped. A stopped ticket stays private and is dispatched
+  by nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it
+  public.
+- The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
+- A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
+  worker in code: `canopy dispatch` for a started ticket always renders the private prompt and runs the private
+  definition, whatever the overseer passed.
+- `stop` and `dispatch` cannot interleave. `dispatch` checks the start record and inserts the run's row in one
+  write transaction, and `stop` marks the record stopped in one: whichever commits first wins, and `stop` reports any
+  run the other committed. `_run` reads the record again before it starts the worker and ends the run `stopped` if the
+  record is stopped.
+- The state block marks each private ticket and carries its operator messages newer than its message cursor.
+- `canopy dispatch` needs no `--label` for a started ticket. It checks the start record in code, a guard where a public
+  ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
+  in the tracker.
+- The worker prompt has a private variant: no label check, since the harness checked the start record; never comment
+  on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
+  `canopy-worker-private`: `canopy-worker` with every tool of the tracker's MCP server denied by wildcard and only
+  its read tools allowed by name, and the tracker CLIs canopy knows (`gh`, `acli`, `jira`) denied in its bash rules.
+  - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both user-only, with a default for each
+    shipped provider's usual MCP server (`config.DEFAULT_TRACKER_TOOLS`): `atlassian` with Jira's read tools for
+    `jira`, and `github` for `github`, whose server is also the one PRs go through, so its list adds the PR tools a
+    worker needs and leaves out every tool that writes to an issue. Both are rendered into the definition's
+    permission block as `"<server>_*": deny` and then `"<server>_<tool>": allow` for each (D080). OpenCode names an
+    MCP tool `<server>_<tool>`, matches permission keys as wildcards on that name, lets the last matching rule win, and
+    hides a tool whose last rule denies it outright (read in its source, 1.18.35); a live check of a private run is
+    the operator's half of M18's acceptance.
+  - Atlassian's Rovo MCP server lists only its primary tools unless its URL asks for `?tools=all`, and runs the rest
+    through `execute*` tools that read or write by argument. OpenCode cannot see the argument, so those are denied:
+    with the default URL a private worker reads the ticket with `getJiraIssue` and `searchJiraIssuesUsingJql` only.
+  - With no read tools for the provider, `canopy start` refuses (`no_read_tools`) rather than run a worker that
+    cannot read the ticket. A wrong list fails closed: the worker cannot read, ends `failed`, and posts nothing.
+  - D044's guard grows for private runs: the harness refuses one when the worktree's OpenCode config has any
+    `permission` or `tools` entry naming the tracker server's tools, since a repository rule merged after canopy's
+    could reopen a write tool. The operator's own global config is the operator's to keep consistent (§13).
+- Phases (§7) read the journal for the ticket's own phases: `needs_human` when the latest run ended `blocked` and no
+  operator message came after it; `human_replied` when an operator message is newer than the ticket's message cursor
+  (`last_message_id`), a cursor of its own over journal ids, never the comment cursor, which stays the tracker's. The
+  action is `resume` with `--cursor message=<message id>`, its context pointing at the message. The PR phases are
+  unchanged.
+- The harness raises `awaiting_reply` every tick for a private ticket whose latest question has no operator message
+  after it, with the question as its detail (D028's pattern). A public ticket's question still reaches the operator as
+  `run.ended` (§20), whose `message` field is the id of the message the run recorded, its `question` for a `blocked`
+  run and its `report` otherwise, so a channel can say what a reply answers.
+- After `crashed`, `worker_failed`, and the other run reasons (§14), "try again" on a private ticket is an operator
+  message after the run ended.
+- `canopy reply` refuses a subject that was not started: a public ticket's replies belong on the ticket. `show`
+  drops control characters from every message.
+- `start`, `stop`, and `reply` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`, and `_review`
+  set `CANOPY_RUN_ID` for their agents.
+- The private worker runs with `runtime.private_worker_cmd`, a template of its own as `split_cmd` is (D080). Its prompt
+  carries `{{CONVERSATION}}`: the ticket's latest 20 messages, oldest first, at most 30,000 characters, each labeled
+  the operator's (an instruction) or an earlier worker's (data). That is how a resumed worker reads the operator's
+  reply; the overseer's `--context` points at the message id and never quotes it.
+- A `canopy reply` answers the ticket's latest question, if any, and is idempotent on its submission id. Its body is
+  stripped, and refused empty or over 4000 characters (`bad_body`) rather than cut.
+- `canopy start` on a ticket the overseer marked done clears the done flag: the operator asked for it again. On a
+  ticket with a public run still going, it says so: that run may still write to the ticket, and `_run` ends any public
+  run that had not started its worker yet `stopped`.
+
+### References
+
+A reference names a subject by its shape, so no kind needs a flag and no form can be read as another's: a ticket key
+(§17) has no `:`, `#`, or `/`.
+
+| Reference | Subject | Verbs |
+|---|---|---|
+| `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
+| `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
+| `chore:NAME` | a chore (§19) | `show`, until a chore has a conversation |
+| `run:ID` | a run | `show` |
+
+A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
+by subject (its kind and id), not by ticket key, so a new kind adds a row here, not a table. Every form is parsed and
+validated in code, as ticket keys are (§17).
+
+### Tracker comments in the journal (M19)
+
+The journal holds a copy of each ticket's tracker comments, so the operator reads every ticket's conversation in one
+place, public or private (D081).
+
+- Each tick, for every candidate, the overseer records each comment past the ticket's mirror cursor, oldest first:
+  `canopy mirror REF --comment ID --author ACCOUNT --at TIME`, with the text on stdin, or `--body TEXT`. It requires
+  `CANOPY_TICK_ID` like `dispatch` (D020) and takes a ticket reference; any other kind is refused `unsupported`.
+- The text goes through a quoted heredoc, never an argument: the shell expands nothing in it. Its delimiter is the
+  state block's `mirror.body_delimiter`, `CANOPY_BODY_` and 16 random hex digits drawn fresh each tick, so no comment
+  can be written to end the heredoc early and run what follows. OpenCode checks a heredoc command's permission against
+  its whole text, so the overseer's `canopy *` rule admits it (read in its source, 1.18.35); a body the shell parser
+  reads as a command substitution is refused by the rule, failing closed, and the overseer then mirrors the comment
+  as `(text not mirrored)`.
+- Bounds, checked in code: a comment id as plain as a cursor id (`bad_comment`); the author an account id of at most
+  200 printable characters without whitespace (`bad_author`); the time ISO 8601, read as UTC without an offset, and
+  stored in the journal's own format (`bad_time`); the text stripped and not empty (`bad_body`; the prompt mirrors a
+  comment without text as `(no text)`), cut at 2000 characters and marked truncated. At most 100 `mirror` calls a tick
+  (`mirror_limit`), counted from the tick's `mirror` decisions, so a long history spreads over several ticks. Every
+  refusal is recorded as a `refused:<guard>` decision.
+- Idempotent on the subject and comment id (a unique index): a comment recorded again records nothing new, whatever
+  text is passed the second time. Each call records a `mirror` decision in the same transaction, naming the message,
+  or the message it already was, so the decisions show each comment mirrored once. The loop's tick block leaves
+  `mirror` decisions out, as it does `wait`, and the tick's summary counts them.
+- The harness reads the workers' marks (D069) itself: a comment that starts with `trust.comment_prefix` and ends with
+  `trust.comment_suffix`, whichever are set, and whose last line is not a quote, is recorded with `source` `worker`;
+  any other with `source` `tracker`. A worker's comment is recorded because its text can differ from the result line
+  or come from a run whose result line never parsed. Either way it authorizes nothing: phases, `awaiting_reply`, and
+  the loop's wake read operator messages only, and a private worker's prompt labels a mirrored comment as data, with
+  its author's account id.
+- The mirror cursor (`last_mirrored_id`) is its own, apart from the comment cursor the phases use, and only
+  `canopy mirror` moves it, to the comment it records; `--cursor` cannot name it. It starts empty, so the first mirror
+  of a ticket, including one worked before M19, covers its whole comment history once; worker comments the comment
+  cursor had passed are recorded then. The state block carries it in each ticket's `cursors`.
+- A dry run records the mirror too, as a record of what the overseer saw, but moves no cursor and changes no phase.
+- `canopy show` lists a mirrored comment with its source, comment id, author, and time, and whether it was cut.
+- The mirror lags the tracker by up to one tick. A comment edited or deleted after it was mirrored is not updated.
+  PR review comments are not mirrored; they join the journal with PR subjects (M14).
+
+### Waking the loop
+
+During the wait (§6, the loop), each step checks the journal for an operator message recorded since the last tick
+began. One ends the wait and runs the next tick, at most once a minute. Every channel wakes it the same way, whether
+the message came from another process (`canopy reply`) or the loop's own server thread (D073). Capacity, attempt
+limits, and cooldowns hold as for any tick.
+
+### Channels
+
+| Channel | In | Out | Proves the operator by |
+|---|---|---|---|
+| tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
+| cli | `canopy start`, `stop`, `reply` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| web (M20) | reply, start, stop | pages | the listener secret (TRUST_MODEL T8) |
+| slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
+
+Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
+
+### The web UI (M20)
+
+Served by `canopy loop` from a thread (D073):
+
+- On unless `--no-serve` or `serve.enabled = false`. `serve.bind` (loopback by default, or a private address) and
+  `serve.port`. Every `serve.*` key is user-only (T7).
+- It requires the operator's listener secret (T8, below). Without one the loop says why and how to make one, logs it,
+  and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
+  residual stands (D076).
+- Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
+  CLI uses: `conversation.start`, `stop`, and `reply` with channel `web`, and for a stop with `now`, the same
+  `runs.halt.end` as `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
+  that function and the attention list's (`loop.attention.listed`) when it starts the server (`serve.backend`).
+- A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
+  Stopping the loop stops it, waiting at most 2 seconds for open streams.
+- Pages: the attention list (the home page), runs (running, then the 50 that ended last), and tickets, each with its
+  conversation. Actions: the CLI's verbs, reply, start, and stop (with or without `now`). OpenCode's session attach
+  (M15) is not in the UI: the runs page shows each run's session id, and attach joins once M15 runs workers against
+  OpenCode's server.
+- FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
+  uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
+  nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
+  validated with pydantic models and `conversation.parse_ref`, as everything else parsed from outside is (D026).
+- Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
+  the operator's session. React escapes text it renders, and nothing renders journal text as HTML
+  (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Message bodies are sent with control
+  characters dropped, as `canopy show` prints them.
+- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
+  `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
+  `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
+  and calls out to nothing, so T2's "no outbound call" stands.
+
+Signing in (D082):
+
+- The listener secret is `listener-secret` in the user config directory (`~/.config/canopy/`): one line of at least 32
+  characters, in a regular file, not a symlink, owned by the operator, with no group or other permission bits.
+  `canopy secret` writes one, 32 random bytes in URL-safe base64, and prints it; it never replaces one without
+  `--rotate`. The loop reads it once, when it starts serving.
+- The browser gets it from the operator: the sign-in page asks for it once, in a password field a password manager
+  can keep. `POST {base}/api/session` compares it in constant time; a wrong one is answered after a second and logged.
+- A right one sets a session cookie, `canopy_session_<port>`: `HttpOnly`, `SameSite=Strict`, path `{base}/`, for 30
+  days. Its value is its issue time and a random nonce, signed with the secret (HMAC-SHA256). The server keeps no
+  session state, so a session outlives a loop restart, and a new secret signs every browser out. Signing out clears
+  the cookie in that browser.
+- The per-session token is a second HMAC over the same issue time and nonce. `GET {base}/api/session` gives it to a
+  signed-in page, which sends it as `X-Canopy-Token` on every write.
+- Every API route but `{base}/api/session` answers 401 without a valid session. A write (any method but GET and HEAD)
+  also needs the token and an `Origin` header naming an allowed host: a same-origin request. The custom header makes
+  a cross-origin write need a CORS preflight, which the server never grants.
+- The app's own files (`index.html` and its assets) are served without a session: they hold no journal data, and the
+  sign-in page is one of them.
+
+The API, under `{base}/api`:
+
+| Route | Does |
+|---|---|
+| `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
+| `GET /meta` | canopy's version, and whether the data is mock |
+| `GET /attention` | the attention list, as `canopy status` shows it |
+| `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
+| `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
+| `POST /tickets/{key}/start` | `canopy start` |
+| `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
+| `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
+| `GET /events` | the event stream, below |
+
+A guard's refusal is a 409 whose `detail` names the guard and gives its reason, as the CLI prints them. A reply carries
+a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
+`web:<id>`, so a retried submission records nothing new.
+
+The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
+When another connection has committed since, it reads the attention list, the runs, and the tickets again, and sends
+each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, and `ticket.changed` naming each
+ticket whose summary changed. A new stream starts with all three lists. The UI writes a list into its query with
+`setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
+once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
+
+How it serves, built in M20's foundation and true of every page:
+
+- Under one path prefix (`serve.base_path`; `--base-path` for `python -m canopy.serve`; empty by default), so a proxy
+  can mount it anywhere: the API at `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for
+  every other GET or HEAD. The prefix is written into `index.html` as `<base href>`; the build uses relative URLs and
+  the router reads its basepath from it, so one build serves under any prefix. The prefix comes from config, never
+  from a request header.
+- The fallback to `index.html` never answers under `{base}/api` (an unknown API path is a JSON 404) or for a path
+  with a file extension (a missing asset is a 404, not a page). `index.html` is sent `no-cache`, so an upgrade never
+  shows a stale UI; hashed assets are cached as immutable.
+- Every response refuses framing and MIME sniffing and sends no Referer. `index.html` carries a CSP that allows only
+  this origin, plus the inline theme script by its hash, computed from the file served.
+- The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`
+  header on an API route must name one of those too: that stops another site's page from calling the API or opening
+  the stream. Ports are not compared, so an SSH forward to another local port works.
+- The event stream is FastAPI's SSE: `Cache-Control: no-cache`, `X-Accel-Buffering: no` so a proxy or forward does not
+  buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
+- The page makes no request to another origin: fonts and icons are bundled.
+- `python -m canopy.serve --mock` serves the same API over a journal it seeds from fixtures in a temporary directory,
+  for the UI's development server and its end-to-end tests. Writes go to that journal. Without `--secret-file` it
+  signs nobody in and asks for no session; only mock mode allows that, and it binds loopback only.
+
+### Trust model changes
+
+M18's and M19's are in TRUST_MODEL T1 and T6, with the operator's approval note in each milestone's PR. M20's are in
+T8: the listener secret's file and sign-in, the session cookie and its token on writes, the allowed hosts, escaping,
+and the residuals they leave, needing the operator's approval note in M20's PR.
+
+The overseer prompt's changes, private tickets' phases from the state block and no `--label` for them (M18), and
+mirroring each new comment (M19), are in the prompt.
+
+### Open
+
+- Whether a private worker should have no tracker MCP server at all. It would then need the ticket's text from
+  elsewhere; the overseer's `--context` holds 2000 characters.
+- Whether a private ticket's PR body and branch should name the ticket key.
+- `canopy reply` on a public ticket: refused today. A journal note that authorizes nothing could come later.
+- Forgetting a ticket's conversation, for client data the operator must not keep.
+- Mirrored comments edited or deleted after the mirror.
+- PR review comments in the journal, alongside ticket comments, once PRs are subjects (M14).
+- Slack replies: a bridge holding a Socket Mode connection that runs `canopy reply` (a uv workspace member, like
+  the Slack sink, so the harness stays free of network code), or the overseer reading Slack through MCP (§20). Either
+  needs a T1 change naming Slack user ids.
