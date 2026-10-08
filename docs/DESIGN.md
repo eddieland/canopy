@@ -218,7 +218,8 @@ Roles:
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world through MCP and the state summary, decides one next
   action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy chore run`,
-  `canopy chore wait` (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else.
+  `canopy chore wait` (§19), `canopy review run`, `canopy review wait` (§21), and `canopy mirror` (§22). Read-only
+  everywhere else.
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).
@@ -259,15 +260,15 @@ in order:
    a single repository, the path of `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its
    pool's leased slots, §18); tracker config (provider, query, labels, needs-human label); trust config (authorized
    repliers, branch prefix, PR label); capacity; policy (limits and stacking); running workers and their repositories;
-   and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment cursor; its units (§18), each
-   with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and when fix-ci may next run if
-   still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
+   and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment, message, and mirror cursors
+   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and
+   when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
    start and end). A ticket the operator started has a `private` object (§22): its start record's status, its message
    cursor, the operator's messages newer than it, and the question awaiting a reply, if any. `chores` (§19) is present
-   only when chores are configured.
+   only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
-   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, and `attention`
-   refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
+   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
+   `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The run succeeded if it
    exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
    `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
@@ -278,7 +279,7 @@ in order:
    starts nothing and is recorded as `dispatch:<kind>` with its cursors, context, and rationale
    `dry run: not dispatched; would work on <branch>` (plus `in <repositories>` in a workspace). `canopy ticket set`
    records phases, but neither it nor `canopy dispatch --cursor` advances cursors, and `--done` does not mark the
-   ticket done. The rest of the tick is live: reconcile closes dead runs and returns stale leases, and the tick's
+   ticket done. `canopy mirror` records the comment and moves no mirror cursor. The rest of the tick is live: reconcile closes dead runs and returns stale leases, and the tick's
    attention items become the attention list and are notified.
 
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
@@ -612,7 +613,7 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   default) and its decisions: the way to read a dry run's plan. A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
-  (`last_message_id`, §22), done flag. Cursors make ticks
+  (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag. Cursors make ticks
   incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not stored (D030).
 - `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository, branch, PR URL, the
   unit's phase, and its cursors (`last_review_id`, `last_ci_run_id`).
@@ -640,7 +641,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   digest, and failures in a row (§20).
 - `messages`: one row per message of a subject's conversation (§22), keyed by subject kind and id; source, kind,
   channel, the run of a worker's message, the body, the message a reply answers, and an operator message's submission
-  id. Ids never repeat (`AUTOINCREMENT`). Migration 0003 backfilled every ended run's report and question.
+  id; for a mirrored tracker comment, its comment id (unique per subject), author, time, and whether the body was cut.
+  Ids never repeat (`AUTOINCREMENT`). Migration 0003 backfilled every ended run's report and question.
 - `starts`: one row per subject the operator started privately (§22); `started` or `stopped`, with when and through
   which channel. Never deleted: a stopped ticket stays private.
 
@@ -1959,9 +1961,9 @@ runs the PR's code).
 
 ## 22. Conversations
 
-Private tickets and the journal's conversation are built (ROADMAP M18); tracker comments in the journal (M19) and the
-web UI's pages and actions (M20) are planned, and their subsections are target shape. Rationale in D072 to D076 and
-D080.
+Private tickets and the journal's conversation (ROADMAP M18) and tracker comments in the journal (M19) are built; the
+web UI's pages and actions (M20) are planned, and their subsection is target shape. Rationale in D072 to D076, D080,
+and D081.
 
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
@@ -1999,7 +2001,8 @@ Who writes:
   gains a write.
 - Operator input goes through one function in `core/conversation.py` that every channel calls, with the guards in one
   place: the key is valid (§17), the ticket was started, the body is within its bound.
-- Mirrored comments are recorded by the overseer (M19, below), a worker's marked comments among them.
+- Mirrored comments are recorded by the overseer (M19, below), a worker's marked comments among them. Migration 0004
+  added their columns and the mirror cursor.
 - Migration 0003 backfilled a `report`, and a `question` for a `blocked` run, from every ended run's `result_json`,
   so tickets worked before M18 have a conversation too.
 
@@ -2110,7 +2113,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 
 | Reference | Subject | Verbs |
 |---|---|---|
-| `PROJ-123` | a ticket | all (M18) |
+| `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
 | `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
 | `chore:NAME` | a chore (§19) | `show`, until a chore has a conversation |
 | `run:ID` | a run | `show` |
@@ -2121,16 +2124,42 @@ validated in code, as ticket keys are (§17).
 
 ### Tracker comments in the journal (M19)
 
-- Each tick, the overseer records every comment past the subject's mirror cursor with
-  `canopy mirror REF --comment ID --author ACCOUNT --at TIME --body TEXT`. It requires `CANOPY_TICK_ID` like
-  `dispatch` (D020), bounds the body at 2000 characters, and is idempotent on the subject and comment id. A
-  worker-marked comment (D069) is recorded too, with `source` `worker`, since its text can differ from the result
-  line or come from a run whose result line never parsed. Like every mirrored comment it authorizes nothing.
-- The mirror cursor (`last_mirrored_id`) is its own, apart from the comment cursor the phases use. It starts empty,
-  so the first mirror of a subject, including one worked before M19, covers its whole comment history once; worker
-  comments the old cursor had passed are recorded then. Idempotence on the comment id makes any overlap harmless.
-- A dry run records the mirror too, as a record of what the overseer saw, but advances no cursor and changes no phase.
+The journal holds a copy of each ticket's tracker comments, so the operator reads every ticket's conversation in one
+place, public or private (D081).
+
+- Each tick, for every candidate, the overseer records each comment past the ticket's mirror cursor, oldest first:
+  `canopy mirror REF --comment ID --author ACCOUNT --at TIME`, with the text on stdin, or `--body TEXT`. It requires
+  `CANOPY_TICK_ID` like `dispatch` (D020) and takes a ticket reference; any other kind is refused `unsupported`.
+- The text goes through a quoted heredoc, never an argument: the shell expands nothing in it. Its delimiter is the
+  state block's `mirror.body_delimiter`, `CANOPY_BODY_` and 16 random hex digits drawn fresh each tick, so no comment
+  can be written to end the heredoc early and run what follows. OpenCode checks a heredoc command's permission against
+  its whole text, so the overseer's `canopy *` rule admits it (read in its source, 1.18.35); a body the shell parser
+  reads as a command substitution is refused by the rule, failing closed, and the overseer then mirrors the comment
+  as `(text not mirrored)`.
+- Bounds, checked in code: a comment id as plain as a cursor id (`bad_comment`); the author an account id of at most
+  200 printable characters without whitespace (`bad_author`); the time ISO 8601, read as UTC without an offset, and
+  stored in the journal's own format (`bad_time`); the text stripped and not empty (`bad_body`; the prompt mirrors a
+  comment without text as `(no text)`), cut at 2000 characters and marked truncated. At most 100 `mirror` calls a tick
+  (`mirror_limit`), counted from the tick's `mirror` decisions, so a long history spreads over several ticks. Every
+  refusal is recorded as a `refused:<guard>` decision.
+- Idempotent on the subject and comment id (a unique index): a comment recorded again records nothing new, whatever
+  text is passed the second time. Each call records a `mirror` decision in the same transaction, naming the message,
+  or the message it already was, so the decisions show each comment mirrored once. The loop's tick block leaves
+  `mirror` decisions out, as it does `wait`, and the tick's summary counts them.
+- The harness reads the workers' marks (D069) itself: a comment that starts with `trust.comment_prefix` and ends with
+  `trust.comment_suffix`, whichever are set, and whose last line is not a quote, is recorded with `source` `worker`;
+  any other with `source` `tracker`. A worker's comment is recorded because its text can differ from the result line
+  or come from a run whose result line never parsed. Either way it authorizes nothing: phases, `awaiting_reply`, and
+  the loop's wake read operator messages only, and a private worker's prompt labels a mirrored comment as data, with
+  its author's account id.
+- The mirror cursor (`last_mirrored_id`) is its own, apart from the comment cursor the phases use, and only
+  `canopy mirror` moves it, to the comment it records; `--cursor` cannot name it. It starts empty, so the first mirror
+  of a ticket, including one worked before M19, covers its whole comment history once; worker comments the comment
+  cursor had passed are recorded then. The state block carries it in each ticket's `cursors`.
+- A dry run records the mirror too, as a record of what the overseer saw, but moves no cursor and changes no phase.
+- `canopy show` lists a mirrored comment with its source, comment id, author, and time, and whether it was cut.
 - The mirror lags the tracker by up to one tick. A comment edited or deleted after it was mirrored is not updated.
+  PR review comments are not mirrored; they join the journal with PR subjects (M14).
 
 ### Waking the loop
 
@@ -2200,15 +2229,12 @@ How it serves, built in M20's foundation and true of every page that follows:
 
 ### Trust model changes
 
-M18's are in TRUST_MODEL T1 and T6, with the operator's approval note in M18's PR. Still proposed, each needing the
-operator's approval note in the PR of the milestone that builds it:
+M18's and M19's are in TRUST_MODEL T1 and T6, with the operator's approval note in each milestone's PR. Still
+proposed, needing the operator's approval note in M20's PR: T8's escaping and the per-session token above, in addition
+to T8's bind and secret rules.
 
-- T1 (M19): mirrored comments are the overseer's claims and authorize nothing.
-- T6 (M19): the journal holds tracker comment bodies, under the operator-only state directory.
-- T8 (M20): escaping and the per-session token above, in addition to T8's bind and secret rules.
-
-Overseer prompt changes, which need the same approval: mirroring each new comment (M19). M18's, private tickets'
-phases from the state block and no `--label` for them, are in the prompt.
+The overseer prompt's changes, private tickets' phases from the state block and no `--label` for them (M18), and
+mirroring each new comment (M19), are in the prompt.
 
 ### Open
 
@@ -2218,7 +2244,7 @@ phases from the state block and no `--label` for them, are in the prompt.
 - `canopy reply` on a public ticket: refused today. A journal note that authorizes nothing could come later.
 - Forgetting a ticket's conversation, for client data the operator must not keep.
 - Mirrored comments edited or deleted after the mirror.
-- PR review comments in the journal, alongside ticket comments.
+- PR review comments in the journal, alongside ticket comments, once PRs are subjects (M14).
 - Slack replies: a bridge holding a Socket Mode connection that runs `canopy reply` (a uv workspace member, like
   the Slack sink, so the harness stays free of network code), or the overseer reading Slack through MCP (§20). Either
   needs a T1 change naming Slack user ids.

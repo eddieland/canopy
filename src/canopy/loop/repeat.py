@@ -48,8 +48,9 @@ WAKE_MIN_SECONDS = 60.0
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
-# Decisions every tick repeats. The tick's summary counts them; `canopy decisions` lists them.
-_QUIET_ACTIONS = ("wait",)
+# Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
+# them.
+_QUIET_ACTIONS = ("wait", "mirror")
 _STATUS_STYLES = {
     "ok": "bold green",
     "skipped": "bold yellow",

@@ -418,6 +418,7 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
 - PR references (`repo#N` or the PR's URL) in `canopy start`, `stop`, `reply`, and `show` (DESIGN §22, D075), so
   the operator can also start one of their own PRs privately instead of labeling it. That is a T1 change beside D056's,
   needing the operator's approval as M18's does.
+- `canopy mirror` for a PR reference: the PR's review comments join the journal as its conversation (DESIGN §22, M19).
 - TRUST_MODEL T1 and §6 already allow it (D056).
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
@@ -546,7 +547,11 @@ REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes fi
 Accept: fakes-based tests of the command's bounds, refusals, and idempotence. Live, a working session's decisions show
 each new comment mirrored once, and M13's spend records show what mirroring adds to a tick.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_mirror.py` holds the harness's half of the acceptance),
+docs, and D081 are in; TRUST_MODEL T1, T3, and T6 and the overseer prompt wait on the operator's approval note in the
+PR. The open question is settled: PR review comments join the journal with PR subjects, in M14. That OpenCode's
+`canopy *` rule admits a heredoc command was read in its source (1.18.35), not yet seen in a live run. Waiting on the
+operator: the live run Accept describes.
 
 ## M20. Web UI
 

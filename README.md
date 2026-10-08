@@ -62,7 +62,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list.
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
-- Answer the agent's questions as comments on the ticket.
+- Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
+  canopy's copy of its comments.
 - Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
   reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
   KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
