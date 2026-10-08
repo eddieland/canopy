@@ -37,6 +37,21 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-marker', 'kept')
 })
 
+test('the side rail runs the full height of the page and its nav stays in view when scrolled', async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const rail = page.locator('aside')
+    const height = await page.evaluate(() => document.documentElement.scrollHeight)
+    expect(height).toBeGreaterThan(page.viewportSize()?.height ?? 0)
+    // From under the header to the page's foot, not just one viewport.
+    expect(await rail.evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY)).toBe(height)
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    await expect(
+        page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Attention' }),
+    ).toBeInViewport()
+})
+
 test('search params are typed: a known state filters, an unknown one is dropped', async ({ page }) => {
     await page.goto('runs?state=blocked')
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
