@@ -33,6 +33,14 @@ WORKER_PRIVATE = {
     "resume": "worker-resume-private.md",
 }
 REQUIRED_PRIVATE = ("CONVERSATION",)
+# A PR subject's worker prompts (DESIGN §23): the operator's own PR, authorized by a queue label on the PR, which the
+# worker reads again with the PR's author and head before it changes anything. Its questions wait in canopy, so the
+# operator's messages are the only way it hears an answer, and an override must carry them and the PR it checks.
+WORKER_PR = {
+    "fix-ci": "worker-fix-ci-pr.md",
+    "resume": "worker-resume-pr.md",
+}
+REQUIRED_PR = ("PR", "OPERATOR_MESSAGES")
 # A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
 # still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping it.
 REQUIRED_OPERATOR = ("OPERATOR_MESSAGES",)
@@ -117,7 +125,13 @@ def render_overseer(config: Config, block: str) -> str:
 
 
 def render_worker(
-    config: Config, kind: str, values: Mapping[str, str], *, required: Sequence[str] = (), private: bool = False
+    config: Config,
+    kind: str,
+    values: Mapping[str, str],
+    *,
+    required: Sequence[str] = (),
+    private: bool = False,
+    pr: bool = False,
 ) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
@@ -125,8 +139,11 @@ def render_worker(
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
     `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
     `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry `REQUIRED_PRIVATE` in place of
-    `REQUIRED_WORKER`: it checks no label.
+    `REQUIRED_WORKER`: it checks no label. A `pr` prompt is a PR subject's, which must carry `REQUIRED_PR` too; it opens
+    no PR, so `runtime.pr_skill` asks nothing of it.
     """
+    if pr:
+        return render(config, WORKER_PR[kind], values, required=(*REQUIRED_WORKER, *REQUIRED_PR, *required))
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *pr_skill, *required))

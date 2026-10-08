@@ -114,10 +114,11 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a ticket, with TEXT or, without it, stdin. The next tick reads it; a waiting loop wakes.
+    """Answer a ticket or your PR (REPO#N), with TEXT or else stdin. The next tick reads it; a waiting loop wakes.
 
     On a public ticket it is your word to the loop, read as an authorized reply is, and how you say what to do about an
-    untrusted reviewer's comments (`untrusted_review`). It never reaches the ticket.
+    untrusted reviewer's comments (`untrusted_review`). It never reaches the ticket. On your PR it answers its worker's
+    question, and says what to do about review comments, the same way; it never reaches the PR.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
@@ -178,7 +179,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 @click.argument("ref", metavar="REF")
 @click.pass_context
 def cmd_show(click_ctx: click.Context, ref: str) -> int:
-    """Show a ticket's phase, PRs, recent runs, and conversation, a run (`run:ID`), or a chore (`chore:NAME`)."""
+    """Show a ticket's or your PR's phase, PRs, recent runs, and conversation, a run (`run:ID`), or a chore."""
     subject = _ref(ref, "show")
     ctx = open_context(click_ctx)
     if subject.kind == conversation.RUN:
@@ -186,16 +187,26 @@ def cmd_show(click_ctx: click.Context, ref: str) -> int:
     elif subject.kind == conversation.CHORE:
         _show_chore(ctx, subject.id)
     else:
-        _show_ticket(ctx, subject.id)
+        try:
+            key = conversation.subject_key(ctx.conn, subject)
+        except conversation.Refused as r:
+            raise CliError(f"show refused ({r.guard}): {r.reason}") from None
+        _show_ticket(ctx, key)
     return 0
 
 
 def _show_ticket(ctx: Context, key: str) -> None:
     ticket = db.get_ticket(ctx.conn, key)
     record = conversation.start_of(ctx.conn, key)
+    pr = conversation.is_pr_key(key)
     if ticket is None and record is None:
         raise CliError(f"canopy has no record of {key}")
-    if record is None:
+    if pr:
+        how = (
+            "your PR: its queue label authorizes it; its review is on the PR, and its workers' questions wait here for "
+            "your reply"
+        )
+    elif record is None:
         how = "public: its queue label authorizes it; its conversation is on the ticket, and copied here"
     else:
         since = record["started_at"] if record["status"] == "started" else record["stopped_at"]
@@ -213,7 +224,8 @@ def _show_ticket(ctx: Context, key: str) -> None:
             name = "" if ctx.workspace.single else f"{unit['repo']}  "
             click.echo(f"  {name}PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
     _show_runs(ctx, key)
-    _show_conversation(ctx, key, waits=conversation.is_started(record))
+    # A private ticket's and a PR subject's questions wait on the operator here, on no tracker or PR (DESIGN §22, §23).
+    _show_conversation(ctx, key, waits=pr or conversation.is_started(record))
 
 
 def _show_runs(ctx: Context, key: str) -> None:
@@ -229,7 +241,7 @@ def _show_runs(ctx: Context, key: str) -> None:
 
 
 def _show_conversation(ctx: Context, key: str, *, waits: bool) -> None:
-    messages = db.messages_of(ctx.conn, conversation.TICKET, key, SHOW_MESSAGES)
+    messages = db.messages_of(ctx.conn, db.subject_kind(key), key, SHOW_MESSAGES)
     click.echo(f"\nConversation ({len(messages)}):")
     for m in messages:
         _echo_message(m)

@@ -42,6 +42,7 @@ def state_block(
     reviews: dict[str, object] | None,
     private: Mapping[str, dict[str, object]] | None = None,
     operator: Mapping[str, dict[str, object]] | None = None,
+    prs: Mapping[str, dict[str, object]] | None = None,
     mirror_delimiter: str,
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
@@ -52,11 +53,13 @@ def state_block(
     (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed. `private` holds each
     private ticket's conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a
     public ticket's operator messages newer than its message cursor, by key; a ticket without any has no `operator`
-    key (DESIGN §7, D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the
-    tick's own, so no comment can predict it.
+    key (DESIGN §7, D089). `prs` holds each PR subject's repository, number, and waiting question, by key; a ticket has
+    no `pr` key (DESIGN §23). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in:
+    the tick's own, so no comment can predict it.
     """
     private = private or {}
     operator = operator or {}
+    prs = prs or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def repo_name(repo: str | None) -> str:
@@ -108,9 +111,14 @@ def state_block(
             "last_seen_at": t["last_seen_at"],
             "last_run": run_summary(last_runs.get(key)),
         }
-        # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
+        # A private ticket's conversation state, a public one's new operator messages, and a PR subject's PR, each only
+        # when it has one.
         summary.update(
-            {name: found[key] for name, found in (("private", private), ("operator", operator)) if key in found}
+            {
+                name: found[key]
+                for name, found in (("private", private), ("operator", operator), ("pr", prs))
+                if key in found
+            }
         )
         return summary
 

@@ -62,11 +62,12 @@ Controls:
   changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
   judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
-  operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
-  worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
-  required protection rules. For the exception, the label and authorship are read by the overseer and read again by
-  the worker before it changes anything, as for ticket labels (D051); the harness refuses the repository's base branch.
-  Pushes are never forced and never go to a fork.
+  operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the worker
+  prompt and by repository branch protection, which the operator must configure. canopy `init` prints the required
+  protection rules. For the exception, the label and authorship are read by the overseer and read again by the worker
+  before it changes anything, as for ticket labels (D051); the harness refuses the repository's base branch and any
+  branch under `trust.branch_prefix`, and never creates the PR's branch (DESIGN §23). Pushes are never forced and never
+  go to a fork.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
@@ -83,11 +84,12 @@ Controls:
   about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
   cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
   `canopy:review`, and is recognized by its journal, never by author, since it posts as the operator.
-- An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
-  `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
-  reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
-  it into every public worker prompt itself (`implement`, `fix-ci`, `resume`), and refuses a prompt override that
-  would drop it (D093).
+- An operator message on a public ticket (DESIGN §22), or on one of the operator's own PRs (DESIGN §23), is an
+  instruction, like an authorized reply: written only through `core/conversation.py` by a channel that authenticated
+  the operator, for a ticket or PR the journal already has. It never reaches the tracker or the PR. The overseer reads
+  it from the state block and points a worker at it by id; the harness renders it into every public and PR worker
+  prompt itself (`implement`, `fix-ci`, `resume`), and refuses a prompt override that would drop it (D093). A PR
+  worker's question waits for one in canopy, never on the PR.
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks

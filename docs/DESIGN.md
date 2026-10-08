@@ -22,6 +22,7 @@
 - [20. Notifications](#20-notifications)
 - [21. Reviews](#21-reviews)
 - [22. Conversations](#22-conversations)
+- [23. PR-scoped work](#23-pr-scoped-work)
 
 Normative. Code follows this document; changes to behavior change this document
 in the same PR. Rationale for choices lives in `DECISIONS.md`.
@@ -187,8 +188,8 @@ canopy (harness, Python)
 
 ```
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md, reviewer.md,
-                 and the private variants worker-implement-private.md, worker-fix-ci-private.md,
-                 worker-resume-private.md
+                 the private variants worker-implement-private.md, worker-fix-ci-private.md,
+                 worker-resume-private.md, and a PR subject's worker-fix-ci-pr.md and worker-resume-pr.md (§23)
 agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, canopy-worker-private, canopy-splitter,
                  canopy-chore, canopy-reviewer
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
@@ -277,7 +278,8 @@ in order:
    (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and
    when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
    start and end). A ticket the operator started has a `private` object (§22): its start record's status, its message
-   cursor, the operator's messages newer than it, and the question awaiting a reply, if any. `chores` (§19) is present
+   cursor, the operator's messages newer than it, and the question awaiting a reply, if any. A PR subject (§23) has a
+   `pr` object: its repository, number, and the question awaiting a reply, if any. `chores` (§19) is present
    only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
@@ -469,6 +471,8 @@ A private ticket (§22), one the operator started with `canopy start`, needs no 
 journal: `needs_human` when its latest run ended `blocked` and no operator message came after it, `human_replied` when
 an operator message is newer than its message cursor. Its PR phases are as above.
 
+The operator's own PR, labeled and with no ticket, is a subject of its own with one unit, whose phases §23 lists.
+
 Cursors (`comment`, `review`, `ci`, and a private ticket's `message`, a journal message id) hold the newest item of each
 kind the loop has handled, in the tracker's and GitHub's own ids, except `review`, which holds a time (below); "newer
 than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are each unit's, since
@@ -493,7 +497,8 @@ provider skill says which.
 ## 8. Dispatch and the worker contract
 
 `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG] [--base BRANCH]
-[--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
+[--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`, or for the operator's own PR, `<repo>#<N>` with
+`--branch` (§23):
 
 Each `--repo` names a unit of the ticket, its work in one repository (§18); naming several makes a joint run. In a
 workspace of one, the ticket has one unit and `--repo` may be left out.
@@ -511,6 +516,7 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
      started ticket, since a split creates tickets in the tracker. `no_read_tools`: a started ticket when no tracker
      tools are known for its worker (§22).
    - `bad_request`: `--request` on a kind other than `split`.
+   - `bad_kind` and `bad_branch`: a PR subject's (§23); `--branch` on a ticket is `bad_branch`.
    - `unknown_repo`: in a workspace, no `--repo`, or one not in the map or with no primary clone; for a split's child,
      any repository but the one the split recorded for it. Naming a repository the ticket has no unit in yet adds that
      unit (§18, D058). In a workspace of one, a given `--repo` must be the repository's name. A repository named twice
@@ -724,12 +730,12 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   by default), its overseer's session and cost, and its decisions; `--ticket KEY` filters decisions by exact ticket key
   and reports when none match. This is the way to read a dry run's plan. A tick that cannot take the lock writes no
   row.
-- `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
-  branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
-  (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
-  work, when, with its newest run and message then (`forgotten_at`, `forgotten_run_id`, `forgotten_message_id`, §22).
-  Cursors make ticks incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not
-  stored (D030).
+- `tickets`: one row per ticket key seen, and per PR subject, keyed `<repo>#<N>` (§23, D098); the workspace root
+  (`repo`), the ticket's own last derived phase, its branch (named by its first implement), the comment cursor
+  (`last_comment_id`), a private ticket's message cursor (`last_message_id`, §22), the mirror cursor
+  (`last_mirrored_id`, §22), done flag, and, once the operator forgot its work, when, with its newest run and message
+  then (`forgotten_at`, `forgotten_run_id`, `forgotten_message_id`, §22). Cursors make ticks incremental. Attempt counts
+  and the fix-ci cooldown are derived from `runs` and `run_slots`, not stored (D030).
 - `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository, branch, PR URL, the
   unit's phase, and its cursors (`last_review_id`, which holds a time despite its name (§7), and `last_ci_run_id`).
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
@@ -1056,10 +1062,11 @@ characters dropped and cut at 160 characters; and its session id, its cost and t
 (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-`attempt_limit`, a private ticket's `awaiting_reply` (§22), and in a workspace `repo_missing` and the overseer's
-`multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their findings, listed by
-chore after the ticket items (§19). Reviews add `review_failed`, `review_unposted`, and `review_limit`, about a PR
-(§21). In a workspace of several, an item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
+`attempt_limit`, a private ticket's or PR subject's `awaiting_reply` (§22, §23), and in a workspace `repo_missing` and
+the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their
+findings, listed by chore after the ticket items (§19). Reviews add `review_failed`, `review_unposted`, and
+`review_limit`, about a PR (§21). In a workspace of several, an item about one unit of a ticket names its repository and
+is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile (D028). For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to
@@ -1070,9 +1077,10 @@ that is how a human says "try again". An operator message after the run ended sa
 on a private ticket.
 `blocked` and `stopped` raise nothing here.
 
-The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
-message after it (§22). Its detail is the question's message id and text, one line, and how to answer it. Its cause is
-gone once the operator replies, and the item with it at the next `ok` tick; until then the web UI marks it answered.
+The harness raises `awaiting_reply` every tick for each started ticket and each PR subject, not done, whose latest
+question has no operator message after it (§22, §23). Its detail is the question's message id and text, one line, and
+how to answer it. Its cause is gone once the operator replies, and the item with it at the next `ok` tick; until then
+the web UI marks it answered.
 
 The harness also raises `repo_missing` every tick for each repository in the workspace map with no clone at
 `repos/<name>`. It has no ticket key, carries the repository's name, and is shown under that name. Its cause is gone
@@ -2114,7 +2122,7 @@ reports, its questions, or the operator's answers appearing on it.
 
 A `messages` table, one row per message:
 
-- its subject (below): a ticket now, a PR with M14; the journal id (`AUTOINCREMENT`, so ids never repeat); and the
+- its subject (below): a ticket, or a PR subject (§23); the journal id (`AUTOINCREMENT`, so ids never repeat); and the
   time canopy recorded it.
 - `source`: `worker` (from a run's result line), `operator` (from a channel that authenticated the operator), or
   `tracker` (a tracker comment the overseer mirrored, M19).
@@ -2163,7 +2171,7 @@ a public one the tracker does and the journal holds a copy.
 ### Private tickets (M18)
 
 The operator's commands are top-level verbs that take a reference to a subject, anything canopy works on or reports
-about, so the same verbs serve tickets now, PRs with M14, and what comes later (References, below; D075):
+about, so the same verbs serve tickets, PRs (§23), and what comes later (References, below; D075):
 
 | Command | Does |
 |---|---|
@@ -2288,7 +2296,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | Reference | Subject | Verbs |
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
-| `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
+| `api#42`, or the PR's URL | a PR subject (§23) | `reply`, `show`; the URL once a run reported it |
 | `chore:NAME` | a chore (§19) | `show`, until a chore has a conversation |
 | `run:ID` | a run | `show` |
 
@@ -2523,7 +2531,115 @@ the operator's approval note.
 - A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a
   limit from the `attempt_limit` refusal rather than before dispatching.
 - Mirrored comments edited or deleted after the mirror.
-- PR review comments in the journal, alongside ticket comments, once PRs are subjects (M14).
+- PR review comments in the journal, alongside ticket comments: PRs are subjects (§23), but `mirror` takes none yet.
 - Slack replies: a bridge holding a Socket Mode connection that runs `canopy reply` (a uv workspace member, like
   the Slack sink, so the harness stays free of network code), or the overseer reading Slack through MCP (§20). Either
   needs a T1 change naming Slack user ids.
+
+## 23. PR-scoped work
+
+ROADMAP M14; rationale in D056 and D098. The loop's `fix-ci` and `resume` for a PR the operator wrote by hand, with no
+ticket: CI fixed and review addressed on the operator's own PR, as on the loop's (REQUIREMENTS R9).
+
+### The subject
+
+A **PR subject** is one of the operator's open PRs in one of the workspace's repositories, named `<repo>#<N>`: the
+repository's name in the workspace (§18) and the PR's number, such as `api#42`. The journal keeps it as a `tickets` row
+with that key and one unit, in that repository (D098), so runs, units, cursors, attempt limits, the fix-ci cooldown,
+decisions, attention items, and the state block treat it as a ticket. A ticket key has no `#` (§17), so neither key can
+be read as the other. Its messages are keyed by subject kind `pr` (§22).
+
+### Authorization
+
+One of `tracker.labels` on the PR, as on a ticket, and only on a PR that is open, was authored by the operator, has
+its head branch in the same repository as its base (not a fork), and whose head is neither its base branch nor under
+`trust.branch_prefix`, whose branches are tickets' (TRUST_MODEL T1, §6, D056). The operator is the account the GitHub
+MCP is authenticated as. The overseer reads all of it, and every PR worker reads it again before it changes anything,
+and reports `failed` with a summary starting `not authorized:` otherwise (D051). What the harness can check, it does:
+the label is configured, the repository is in the workspace with a clone, the branch's shape, and that it is not under
+the branch prefix or the pool's base branch.
+
+### Finding them
+
+Each tick the overseer searches for open PRs the operator authored carrying a configured label (on GitHub,
+`is:pr is:open author:@me label:"<label>"` per label), keeps those in the workspace's repositories, and unions them
+with the PR subjects in the state block not marked done. A PR is in the repository whose name is its VCS repository's
+name reduced as `canopy workspace add` reduces one (§18): no tick reads clone URLs, so the name is the overseer's
+claim, and the worker checks it, comparing the PR's repository with its worktree's `origin`. A PR subject that is no
+longer a candidate is skipped (`not_labeled`, `not_mine`, `fork`), or marked done once merged or closed.
+
+### Dispatch
+
+`canopy dispatch <repo>#<N> --label LABEL --kind fix-ci|resume --branch BRANCH [--context TEXT] [--cursor NAME=ID]...`:
+
+- `--branch` is the PR's head branch, read on the PR that tick, and required. It is refused `bad_branch` when missing,
+  not plain ref components joined by `/` (letters, digits, `_`, `-`, each starting with a letter or digit, `.` only
+  inside one, none ending `.lock`, not `HEAD`, at most 200 characters), under `trust.branch_prefix`, or, once a slot
+  is leased, the pool's base branch; that lease is returned. A dry run leases nothing, so it cannot refuse the base
+  branch. Unlike a ticket's, the branch is not bound to what an earlier dispatch named: the worker checks it against
+  the PR's head, and a misread one, such as a fork's, fails that run without stranding the PR. The run records it on
+  the subject and its unit, as any run does. `--branch` on a ticket is `bad_branch` too.
+- `implement` and `split` are `bad_kind`: the PR and its branch are the operator's. `--slug` is `bad_slug`, `--base`
+  `bad_base`, and `--request` `bad_request`.
+- The repository is the key's; a `--repo` naming another, or a key whose repository is not in the workspace or has no
+  clone, is `unknown_repo`.
+- Every other guard is a ticket's (§8): `unauthorized`, `running`, `attempt_limit` and `cooldown` for its one unit,
+  `capacity`, `no_slot`, `bad_prompt`, `spawn_failed`. An `attempt_limit` item names the subject alone, whose key names
+  its repository.
+- The worker prompt is `worker-fix-ci-pr.md` or `worker-resume-pr.md`, overridable like any other. Besides
+  `{{LABELS}}`, an override must keep `{{PR}}`, the subject's key, and `{{OPERATOR_MESSAGES}}`, the only way its worker
+  hears the operator; one without them is `bad_prompt`. `{{PR_URL}}` is the PR's URL once a run reported it. A PR
+  worker opens no PR, so `runtime.pr_skill` asks nothing of its prompt. The worker runs `worker_cmd`, as a ticket's.
+
+`_run` is §8's, except that the branch must already be on origin: a PR subject's run never creates its branch, and a
+head missing from origin (a fork's PR, or a deleted branch) fails the run as `crashed` before the worker starts. The
+worker's pushes are verified, and pushed once if needed, as §8 step 5 says.
+
+### The worker
+
+The worker pushes only to the PR's head branch, once, never with force, and never rebases, amends, or squashes a
+pushed commit, since the operator and reviewers may have the branch checked out. It comments on the PR describing a
+fix and replies to each review comment it addressed, marked as every worker's comment is (§8). It never changes the
+PR's title, body, base, labels, reviewers, or draft state, and writes nothing to any ticket. It addresses review
+feedback as §7 says: a trusted reviewer's as the context says, anyone else's only as an operator message says. A
+review comment it disagrees with is a question for the operator, not an argument on the PR, since it speaks there in
+the operator's name.
+
+On `blocked` it posts nothing about it on the PR: its result line's `question` is the question, recorded as a message
+(§22). The harness raises `awaiting_reply` for it every tick, as for a private ticket's (§14), and the operator answers
+with `canopy reply <repo>#<N>` or the web UI. A PR subject's operator messages are in the state block under `operator`
+and in its worker's prompt, as a public ticket's are; they never reach the PR.
+
+### Phases
+
+The PR's own phases are a unit's from §7's table, derived from the PR: `conflicted`, `ci_running`, `ci_red`,
+`changes_requested`, `untrusted_review`, and `review_findings`, with the same cursors and dispatches. The operator
+takes their own PR through review and merge, so `green_unreviewed` and `approved` are `wait`, with no attention, and a
+PR merged or closed is `merged`: the subject is marked done. Its own phases come from the journal: `needs_human` while
+its latest question waits on the operator (the state block's `pr.awaiting_reply`), `human_replied` when an operator
+message is newer than its message cursor. "Try again" after a failed run is an operator message. A PR subject has no
+`ready`, `blocked`, `pushed_no_pr`, or `split`, and no `review_pending`: canopy reviews the operator's own PRs only as
+`review.query` matches them (§21), and the overseer recognizes those reviews' comments by their URL as it does any.
+
+### The operator's verbs
+
+`canopy show` and `canopy reply` take `<repo>#<N>`, or the PR's URL once a run has reported it as the subject's PR;
+the web UI's ticket page and reply take the key. `canopy status` and the attention list name the subject by its key.
+`start`, `stop`, `forget`, and `mirror` refuse a PR (`unsupported`): starting a PR privately is a T1 change the
+operator has not approved, and its review comments join the journal with `mirror` later (ROADMAP M14).
+
+The state block marks a PR subject with `pr`: its `repo`, `number`, and `awaiting_reply`, the question waiting on the
+operator, if any.
+
+### Trust model changes
+
+None beyond D056's, already in TRUST_MODEL T1 and §6: a worker may push to the head branch of an open, non-fork PR the
+operator authored and labeled. T1's operator messages now cover a PR subject as a public ticket. The overseer and
+worker prompt changes need the operator's approval note in M14's PR.
+
+### Open
+
+- The PR's repository is matched by name. A workspace repository named otherwise than its VCS repository, or a
+  workspace of one renamed, has its PRs skipped or keyed anew; the worker's `origin` check stops one matched wrongly.
+- Starting a PR privately (`canopy start <repo>#<N>`), mirroring its review comments (§22), and `forget` for a PR.
+- Whether the operator's own comments on their PR should be instructions without a trusted-reviewer entry.

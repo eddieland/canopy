@@ -164,7 +164,9 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     status: StartStatus | None = None
     if record is not None:
         status = "started" if record["status"] == "started" else "stopped"
-    waiting = conversation.latest_question(conn, key) if status == "started" else None
+    # A PR subject's question waits on the operator too: its worker asks in canopy, not on the PR (DESIGN §23).
+    waits = status == "started" or conversation.is_pr_key(key)
+    waiting = conversation.latest_question(conn, key) if waits else None
     running = db.running_run_of(conn, key)
     return TicketSummary(
         key=key,
@@ -174,7 +176,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         done=bool(row["done"]),
         branch=str(row["branch"]) if row["branch"] else None,
         active_at=db.parse_time(str(row["active_at"])),
-        latest_message_id=db.latest_message_of(conn, conversation.TICKET, key),
+        latest_message_id=db.latest_message_of(conn, db.subject_kind(key), key),
         awaiting=int(waiting["id"]) if waiting is not None else None,
         running_run=int(running["id"]) if running is not None else None,
     )
@@ -197,7 +199,7 @@ def ticket(ctx: Context, key: str) -> TicketDetail | None:
             for u in db.units(ctx.conn, key)
         ],
         runs=[run(r) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
-        messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
+        messages=[message(m) for m in db.messages_of(ctx.conn, db.subject_kind(key), key, TICKET_MESSAGES)],
     )
 
 

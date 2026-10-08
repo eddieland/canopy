@@ -9,10 +9,10 @@ import click
 
 from canopy.cli.common import CliError, open_context, optional_tick, require_tick
 from canopy.cli.params import (
-    KEY_RE,
     REASON_RE,
     REPO,
-    TICKET_KEY,
+    SUBJECT_KEY,
+    SUBJECT_KEY_RE,
     CursorType,
     TextType,
     plain_pr_url,
@@ -62,7 +62,7 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
     if action not in DECIDE_ACTIONS:
         raise click.UsageError(f"invalid action {action!r}: choose from {', '.join(DECIDE_ACTIONS)}", click_ctx)
     if key is not None and not valid_key(key):
-        raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
+        raise click.UsageError(f"invalid ticket key or REPO#N {key!r}: must match {SUBJECT_KEY_RE.pattern}", click_ctx)
     if key is None and action != "skip":
         raise click.UsageError(f"{action!r} needs a ticket key; only a tick-wide 'skip' may omit it", click_ctx)
     ctx = open_context(click_ctx)
@@ -74,12 +74,18 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
     return 0
 
 
-def _unit(ctx: Context, repo: str | None) -> str | None:
+def _unit(ctx: Context, repo: str | None, key: str | None = None) -> str | None:
     """Return the repository `--repo` names, checked against the map, or None if it names none.
 
     In a workspace of one, the only repository is implied and naming it is allowed, so its name is returned either way.
+    A PR subject's key implies its one repository (DESIGN §23), and `--repo` may only repeat it.
     """
     ws = ctx.workspace
+    if key is not None and conversation.is_pr_key(key):
+        implied, _ = conversation.pr_of(key)
+        if repo is not None and repo != implied:
+            raise CliError(f"{key} is a PR in {implied}; leave out --repo, or name {implied}")
+        repo = implied
     if repo is None:
         return ws.repos[0].name if ws.single else None
     found = ws.repo(repo)
@@ -104,7 +110,7 @@ def cmd_attention(
         raise click.UsageError("expected KEY REASON, or REASON with --pr", click_ctx)
     key, reason = (None, words[0]) if len(words) == 1 else words
     if key is not None and not valid_key(key):
-        raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
+        raise click.UsageError(f"invalid ticket key or REPO#N {key!r}: must match {SUBJECT_KEY_RE.pattern}", click_ctx)
     if not REASON_RE.fullmatch(reason):
         raise click.UsageError(f"invalid reason {reason!r}: must match {REASON_RE.pattern}", click_ctx)
     if pr is not None and not plain_pr_url(pr):
@@ -112,7 +118,10 @@ def cmd_attention(
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
     # A workspace of one's item names no repository: there is only one, and naming it would make the item new (D032).
-    unit = None if ctx.workspace.single else _unit(ctx, repo)
+    # Nor does a PR subject's, whose key names its one repository (DESIGN §23).
+    unit = None if ctx.workspace.single else _unit(ctx, repo, key)
+    if key is not None and conversation.is_pr_key(key):
+        unit = None
     if key is not None:
         db.touch_ticket(ctx.conn, key, ctx.repo)
     db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
@@ -126,7 +135,7 @@ def ticket_group() -> None:
 
 
 @ticket_group.command("set")
-@click.argument("key", type=TICKET_KEY)
+@click.argument("key", type=SUBJECT_KEY)
 @click.option(
     "--repo",
     type=REPO,
@@ -148,12 +157,13 @@ def cmd_ticket_set(
     """Record a ticket's phase, cursors, or done flag, or a unit's phase and cursors.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
-    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in.
+    phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in. KEY may be a
+    PR, REPO#N, whose one unit is in REPO.
     """
     ctx = open_context(click_ctx)
     unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
     unit_phase = phase if phase in db.UNIT_PHASES else None
-    unit = _unit(ctx, repo)
+    unit = _unit(ctx, repo, key)
     if unit is None and (unit_pairs or unit_phase is not None):
         what = f"a {unit_pairs[0][0]} cursor" if unit_pairs else f"the {unit_phase} phase"
         raise click.UsageError(f"{what} belongs to one unit: name its repository with --repo")

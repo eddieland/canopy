@@ -42,7 +42,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy show REF` | A ticket's phase, PRs, runs, conversation, and comments; `run:ID` a run, `chore:NAME` a chore. |
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | Nothing dispatches a started ticket again until `canopy start`; `--now` ends its run. |
-| `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
+| `canopy reply KEY [TEXT]` | Answers a ticket or your PR (`REPO#N`), with TEXT or stdin; never posted. Wakes a loop. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
@@ -171,3 +171,12 @@ Or start it privately: `canopy start KEY`. A started ticket needs no label, and 
 journal: workers read the ticket but never comment on, label, or edit it, and ask their questions through canopy. A
 question shows as `awaiting_reply` on the attention list and in `canopy show KEY`; `canopy reply KEY 'answer'` answers
 it, and the next tick resumes the work. Tracker comments on a started ticket are never instructions.
+
+## Getting the operator's own PR worked
+
+Add the operator's queue label to a PR the operator wrote by hand, open and not from a fork, in a repository of the
+workspace. canopy fixes its CI (`fix-ci`) and addresses its trusted reviewers' comments (`resume`) on the PR's own head
+branch, pushed without force; it never implements, retitles, or merges it. The PR is keyed `REPO#N`, such as `api#42`,
+in `canopy status`, the attention list, and `canopy decisions --ticket api#42`. Its workers ask the operator in canopy,
+never on the PR: a question shows as `awaiting_reply`, `canopy show api#42` reads it, and `canopy reply api#42 'answer'`
+answers it. A PR on a `trust.branch_prefix` branch is a ticket's, and is worked under its ticket (DESIGN §23).

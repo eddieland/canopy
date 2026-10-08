@@ -8,7 +8,7 @@ import sys
 import click
 
 from canopy.cli.common import CliError, open_context, require_tick
-from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
+from canopy.cli.params import COMMENT_ID, REPO, SLUG, SUBJECT_KEY, CursorType, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
@@ -16,7 +16,7 @@ from canopy.runs import dispatch, policy, worker
 
 
 @click.command("dispatch")
-@click.argument("key", type=TICKET_KEY)
+@click.argument("key", type=SUBJECT_KEY)
 @click.option("--kind", required=True, type=click.Choice(policy.DISPATCH_KINDS))
 @click.option(
     "--label",
@@ -43,6 +43,12 @@ from canopy.runs import dispatch, policy, worker
     metavar="BRANCH",
     help="Stack on another ticket's branch, <prefix><KEY>-<slug>, whose PR is open and green: start from it and target "
     "the PR at it. Default: the repository's base branch.",
+)
+@click.option(
+    "--branch",
+    metavar="BRANCH",
+    help="A PR only (KEY is REPO#N), and required for it: the PR's head branch, read on the PR just now. The worker "
+    "continues it and pushes only to it.",
 )
 @click.option(
     "--request",
@@ -73,11 +79,12 @@ def cmd_dispatch(
     repos: tuple[str, ...],
     slug: str | None,
     base: str | None,
+    branch: str | None,
     request: str | None,
     context: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
 ) -> int:
-    """Start a worker on a ticket (overseer only)."""
+    """Start a worker on a ticket, or on the operator's own PR, REPO#N (overseer only)."""
     ctx = open_context(click_ctx)
     unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
     if unit_cursors and len(set(repos)) > 1:
@@ -103,6 +110,7 @@ def cmd_dispatch(
                 base=base,
                 repos=repos,
                 request=request,
+                branch=branch,
             )
             branch, queue_label, repo_names = plan.branch, plan.label, plan.repos
             started = None
@@ -118,6 +126,7 @@ def cmd_dispatch(
                 context=context,
                 repos=repos,
                 request=request,
+                branch=branch,
             )
             branch, queue_label, repo_names = started.branch, started.label, started.repos
     except dispatch.Refusal as r:

@@ -11,7 +11,7 @@ from rich.console import Console
 
 from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
-from canopy.cli.params import TICKET_KEY
+from canopy.cli.params import SUBJECT_KEY
 from canopy.core import contract, conversation, db
 from canopy.infra import keys, lock
 from canopy.loop import attention, repeat, tick
@@ -232,7 +232,9 @@ def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
 
 @click.command("decisions")
 @click.argument("tick_id", required=False, type=click.IntRange(min=1))
-@click.option("--ticket", "ticket_key", type=TICKET_KEY, help="Show decisions for this ticket key only.")
+@click.option(
+    "--ticket", "ticket_key", type=SUBJECT_KEY, help="Show decisions for this ticket key, or PR as REPO#N, only."
+)
 @click.pass_context
 def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str | None) -> int:
     """Print a tick's decisions, optionally filtered by ticket. Default: the latest tick."""

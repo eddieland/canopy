@@ -320,7 +320,9 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
         return Outcome("stopped", None, stopped)
     branch = str(run["branch"])
-    starts = [_set_up_branch(slot, branch) for slot in slots]
+    # A PR subject's branch is its PR's head, which only its author makes (DESIGN §23).
+    pr = conversation.is_pr_key(str(run["ticket_key"]))
+    starts = [_set_up_branch(slot, branch, existing=pr) for slot in slots]
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
     result, text = _run_agent(ctx, run, slots, out, log, template=template)
@@ -359,8 +361,11 @@ def _stopped(ctx: Context, run: sqlite3.Row) -> str:
     return ""
 
 
-def _set_up_branch(slot: _Slot, branch: str) -> str:
-    """Check out `branch` in the slot: origin's if it is there, else new from the base. Returns its commit."""
+def _set_up_branch(slot: _Slot, branch: str, *, existing: bool = False) -> str:
+    """Check out `branch` in the slot: origin's if it is there, else new from the base. Returns its commit.
+
+    With `existing`, a branch not on origin fails the run instead: a PR subject's head is never made here (DESIGN §23).
+    """
     git = slot.git
     # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
     git.run("fetch", "--quiet", "--prune", "origin")
@@ -372,6 +377,11 @@ def _set_up_branch(slot: _Slot, branch: str) -> str:
         )
     if git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
         git.run("checkout", "--quiet", "-B", branch, f"refs/remotes/origin/{branch}")
+    elif existing:
+        raise _SetupError(
+            f"{git.where}the PR's head branch {branch} is not on origin: the PR may come from a fork, or its branch "
+            "was deleted"
+        )
     else:
         git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{slot.base}")
     return git.run("rev-parse", f"refs/heads/{branch}")

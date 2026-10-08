@@ -172,8 +172,12 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
     conversation.check_verb(conversation.parse_ref("run:7"), "show")
     with pytest.raises(conversation.Refused, match=r"unsupported.*takes only show"):
         conversation.check_verb(conversation.parse_ref("chore:build-health"), "start")
-    with pytest.raises(conversation.Refused, match=r"unsupported.*M14"):
-        conversation.check_verb(conversation.parse_ref("api#42"), "show")
+    # A PR, the operator's own (DESIGN §23), is answered and shown, never started privately yet.
+    conversation.check_verb(conversation.parse_ref("api#42"), "show")
+    conversation.check_verb(conversation.parse_ref("api#42"), "reply")
+    for verb in ("start", "stop", "forget", "mirror"):
+        with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, show.*M14"):
+            conversation.check_verb(conversation.parse_ref("api#42"), verb)
 
 
 @pytest.mark.parametrize("variable", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
