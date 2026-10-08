@@ -185,6 +185,20 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_cost(ctx:
     assert (spend.hours, spend.since, spend.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
 
 
+def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/tick").json() == {"tick": None}
+    db.start_tick(ctx.conn, dry_run=False)
+    later = db.start_tick(ctx.conn, dry_run=True)
+    db.finish_tick(ctx.conn, later, "ok", "nothing to do\x1b[2J")
+    ctx.conn.execute("UPDATE ticks SET cost_usd = 0.25 WHERE id = ?", (later,))
+
+    tick = c.get("/api/tick").json()["tick"]
+    assert (tick["id"], tick["status"], tick["dry_run"], tick["cost_usd"]) == (later, "ok", True, 0.25)
+    assert tick["summary"] == "nothing to do [2J"  # control characters dropped
+    assert tick["ended_at"] is not None
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

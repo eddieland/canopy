@@ -19,6 +19,8 @@ export type Replied = Schemas['Replied']
 export type StreamEvent = Schemas['StreamEvent']
 export type Pool = Schemas['Pool']
 export type Spend = Schemas['Spend']
+export type Tick = Schemas['Tick']
+export type LastTick = Schemas['LastTick']
 export type Worktree = Schemas['Worktree']
 export type WorktreeState = Schemas['WorktreeState']
 
