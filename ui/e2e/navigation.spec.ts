@@ -143,3 +143,17 @@ test('the header names the latest tick and how long ago it ended', async ({ page
     await expect(page.getByTestId('last-tick')).toHaveText(/^tick 1 · \d+[a-z]+ ago$/)
     await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
 })
+
+test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {
+    await page.goto('worktrees')
+    await settled(page)
+    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and an idle one; api has
+    // no clone.
+    await expect(page.getByTestId('counter-working')).toContainText('3')
+    await expect(page.getByTestId('counter-held')).toContainText('1')
+    await expect(page.getByTestId('counter-needs')).toContainText('1 dirty · 0 broken · 1 pool unread')
+    await expect(page.getByTestId('counter-free')).toContainText('of 7 slots')
+    const strip = page.getByTestId('pool-web').getByTestId('slot-strip').locator('[data-state]')
+    await expect(strip).toHaveCount(5)
+    await expect(strip.nth(4)).toHaveAttribute('data-state', 'dirty')
+})

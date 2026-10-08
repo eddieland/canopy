@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES, type Pool, type Worktree, type WorktreeState } from '@/api/types'
 import { Age } from '@/components/age'
+import { Counter, type Tone } from '@/components/counter'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip } from '@/components/status'
@@ -38,6 +39,7 @@ function WorktreesPage() {
                 Paths inside the workspace are shown from its root. Read from treehouse when the page opens and whenever
                 a run starts or ends.
             </PageHeader>
+            <PoolCounters pools={data} />
             <div className="flex items-center justify-between gap-4">
                 <Notice error={error} />
                 <Button
@@ -68,12 +70,47 @@ function WorktreesPage() {
     )
 }
 
+/** Every pool at a glance: slots working, held by something else, needing a look, and free. */
+function PoolCounters({ pools }: { pools: Pool[] | undefined }) {
+    const slots = pools?.flatMap((p) => p.worktrees)
+    const count = (state: WorktreeState) => slots?.filter((w) => w.state === state).length
+    const dirty = count('dirty')
+    const broken = count('broken')
+    const look = dirty === undefined || broken === undefined ? undefined : dirty + broken
+    // A pool treehouse could not read is a slot count nobody knows: it shows here, in the failure color.
+    const unread = pools?.filter((p) => p.error !== null).length ?? 0
+    const lookTone: Tone = (broken ?? 0) > 0 || unread > 0 ? 'failed' : (dirty ?? 0) > 0 ? 'blocked' : 'plain'
+    const repos = pools?.filter((p) => p.worktrees.some((w) => w.state === 'working')).length
+    return (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="pool-counters">
+            <Counter label="Working" value={count('working')} tone="running">
+                {repos === undefined ? null : `runs and reviews, in ${repos} ${repos === 1 ? 'pool' : 'pools'}`}
+            </Counter>
+            <Counter label="Held" value={count('held')} tone="stopped">
+                {slots === undefined ? null : 'by a shell, a sync, or another lease'}
+            </Counter>
+            <Counter label="Needs a look" value={look} tone={lookTone}>
+                {look === undefined ? null : looked(dirty ?? 0, broken ?? 0, unread)}
+            </Counter>
+            <Counter label="Free" value={count('idle')} tone="plain">
+                {slots === undefined ? null : `of ${slots.length} slots`}
+            </Counter>
+        </div>
+    )
+}
+
+function looked(dirty: number, broken: number, unread: number): string {
+    const pools = unread === 0 ? '' : ` · ${unread} ${unread === 1 ? 'pool' : 'pools'} unread`
+    return `${dirty} dirty · ${broken} broken${pools}`
+}
+
 function PoolPanel({ pool }: { pool: Pool }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
     const over = overSize(pool)
     return (
         <Panel data-testid={`pool-${pool.repo}`}>
             <PanelHeader label={pool.repo}>
+                <SlotStrip worktrees={pool.worktrees} />
                 <span className="flex items-center gap-3 font-mono text-xs text-muted-foreground">
                     {counts
                         .filter(([, n]) => n > 0)
@@ -111,6 +148,23 @@ function PoolPanel({ pool }: { pool: Pool }) {
                 </ul>
             )}
         </Panel>
+    )
+}
+
+/** One square per slot, in slot order, in its state's color: the pool's occupancy at a glance. */
+function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
+    if (worktrees.length === 0) return null
+    return (
+        <span aria-hidden className="mr-auto ml-3 flex items-center gap-1" data-testid="slot-strip">
+            {worktrees.map((w) => (
+                <span
+                    key={w.path}
+                    title={`#${w.name} ${w.status}`}
+                    data-state={w.state}
+                    className={cn('inline-flex size-2.5 rounded-[2px]', WORKTREE_DOT[w.state])}
+                />
+            ))}
+        </span>
     )
 }
 

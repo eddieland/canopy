@@ -2441,7 +2441,9 @@ with no clone, or whose treehouse fails, shows why in its place; the other pools
 are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace is
 shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees; a workspace of one's
 pool, outside its repository, is shown whole. The pool's declared size (`capacity`, §18) is shown with its slot count,
-and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones.
+and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above the
+pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not read),
+and free; each pool's header has a square per slot in its state's color.
 
 The pools are read at once, a thread each and at most 8, so a workspace of many repositories waits on its slowest pool
 rather than on all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may
