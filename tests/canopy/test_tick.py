@@ -168,6 +168,44 @@ def test_an_overseer_printing_json_events_is_read_by_their_text(
     assert journal(canopy_env).execute("SELECT status FROM ticks").fetchone()[0] == status
 
 
+@pytest.mark.parametrize("last_line", ["tick complete", "I got distracted"])
+def test_a_tick_records_and_prints_what_its_overseer_cost(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    last_line: str,
+) -> None:
+    """With events, the tick keeps the overseer's session and summed cost, whether or not the overseer succeeded."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    monkeypatch.setenv("FAKE_OVERSEER_SESSION", "ses_o1")
+    overseer_does(monkeypatch, last_line=last_line)
+    main(["tick", "--dry-run"])
+
+    tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()
+    assert (tick["session_id"], tick["cost_usd"]) == ("ses_o1", 0.25)  # two model calls, summed
+    tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
+    assert tuple(tick[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
+    assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 11.5k tokens)")
+
+
+def test_a_tick_whose_overseer_reports_nothing_records_no_cost(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Plain stdout, as from a template without `--format json`, reports no session and no cost."""
+    overseer_does(monkeypatch)
+    main(["tick", "--dry-run"])
+    tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()
+    assert (tick["status"], tick["session_id"], tick["cost_usd"]) == ("ok", None, None)
+    assert "cost" not in capsys.readouterr().out
+
+
 def test_overseer_refuses_to_start_when_the_repository_defines_its_agent(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:

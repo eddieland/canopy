@@ -31,7 +31,7 @@ max_chores = 1
 [runtime]
 # {definitions_dir} is the directory canopy's agent definitions and skills are in (D040). Every template that runs one
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}'
 worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
 # A ticket you started with `canopy start` runs `private_worker_cmd`: worker_cmd's default with
 # `--agent canopy-worker-private`, an agent that cannot write to the tracker (DESIGN §22).

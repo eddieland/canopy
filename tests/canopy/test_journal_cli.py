@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import agent_output, db
 from canopy.infra import resources
 from canopy.loop import attention
 from tests.conftest import CanopyEnv
@@ -178,6 +178,20 @@ def test_decisions_prints_a_ticks_plan(
 
     assert main(["decisions", "9"]) == 1
     assert "no tick 9" in capsys.readouterr().err
+
+
+def test_decisions_and_status_print_what_a_tick_cost(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tick_id = db.start_tick(conn, dry_run=False)
+    usage = agent_output.Usage(cost_usd=0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    db.set_tick_report(conn, tick_id, "ses_o1", usage)
+    db.finish_tick(conn, tick_id, "ok", "0 decisions: none")
+
+    assert main(["decisions"]) == 0
+    assert "\n  overseer session ses_o1  $0.50, 50.0k tokens\n" in capsys.readouterr().out
+    assert main(["status"]) == 0
+    assert "Last tick: 1 ok, started 0s ago  $0.50, 50.0k tokens\n" in capsys.readouterr().out
 
 
 def test_decisions_filters_by_ticket_and_reports_no_match(

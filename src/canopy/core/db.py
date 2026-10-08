@@ -14,8 +14,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
+from canopy.core import agent_output
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -495,15 +496,40 @@ def finish_run(
 
 def set_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
     """Record what the agent runtime reported about a run: its session, and what it cost (DESIGN §13)."""
+    _set_report(conn, "runs", run_id, session_id, usage)
+
+
+def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | None, usage: Usage | None) -> None:
+    """Record what the agent runtime reported about a tick's overseer run: its session, and what it cost (§6, §13)."""
+    _set_report(conn, "ticks", tick_id, session_id, usage)
+
+
+def usage_of(row: sqlite3.Row) -> Usage | None:
+    """What a run or tick row says its agent cost, or None when the runtime reported nothing."""
+    if row["cost_usd"] is None:
+        return None
+    return agent_output.Usage(
+        cost_usd=float(row["cost_usd"]),
+        input=int(row["tokens_input"] or 0),
+        output=int(row["tokens_output"] or 0),
+        reasoning=int(row["tokens_reasoning"] or 0),
+        cache_read=int(row["tokens_cache_read"] or 0),
+        cache_write=int(row["tokens_cache_write"] or 0),
+    )
+
+
+def _set_report(
+    conn: sqlite3.Connection, table: Literal["runs", "ticks"], row_id: int, session_id: str | None, usage: Usage | None
+) -> None:
     spent = (
         (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
         if usage is not None
         else (None,) * 6
     )
     conn.execute(
-        "UPDATE runs SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, "
-        "tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
-        (session_id, *spent, run_id),
+        f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
+        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
+        (session_id, *spent, row_id),
     )
 
 

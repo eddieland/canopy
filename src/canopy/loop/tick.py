@@ -31,6 +31,7 @@ class Outcome:
     tick_id: int | None
     status: str  # ok | skipped | overseer_failed | reconcile_failed | lock_busy
     summary: str
+    usage: agent_output.Usage | None = None  # what the overseer cost, when the runtime reported it
 
 
 def run(ctx: Context, *, dry_run: bool) -> Outcome:
@@ -55,10 +56,11 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     if abandoned:
         log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
 
-    def finish(status: str, summary: str) -> Outcome:
+    def finish(status: str, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
         db.finish_tick(ctx.conn, tick_id, status, summary)
-        log.info("tick finished", extra={"status": status, "summary": summary})
-        return Outcome(tick_id, status, summary)
+        spent = {"cost_usd": usage.cost_usd, "tokens": usage.tokens} if usage is not None else {}
+        log.info("tick finished", extra={"status": status, "summary": summary, **spent})
+        return Outcome(tick_id, status, summary, usage)
 
     try:
         # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
@@ -100,9 +102,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         mirror_delimiter=conversation.body_delimiter(),
     )
     prompt = prompts.render_overseer(ctx.config, block)
-    failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
+    failure, usage = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
     if failure is not None:
-        return finish("overseer_failed", failure)
+        return finish("overseer_failed", failure, usage)
 
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     prefix = "dry run; " if dry_run else ""
@@ -110,10 +112,10 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     # `ok` would make its empty list the attention list and notify every open item as resolved (D037).
     skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
     if skips:
-        return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}")
+        return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
     actions = Counter(str(d["action"]) for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
-    return finish("ok", f"{prefix}{actions.total()} decisions: {counts}")
+    return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
 def _record_harness_items(ctx: Context, tick_id: int) -> None:
@@ -141,19 +143,24 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             )
 
 
-def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter) -> str | None:
-    """Run `overseer_cmd`. Returns None on success, else why it failed. Output goes to `<state_dir>/ticks/<id>.log`."""
+def _run_overseer(
+    ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter
+) -> tuple[str | None, agent_output.Usage | None]:
+    """Run `overseer_cmd`. Returns why it failed, None on success, and what it cost if the runtime reported it.
+
+    Output goes to `<state_dir>/ticks/<id>.log`. The session and cost are recorded on the tick, failed or not.
+    """
     # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
     shadowing = definitions.shadowing(ctx.repo_root)
     if shadowing:
         failure = definitions.shadowing_message(shadowing)
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
-        return failure
+        return failure, None
     try:
         definitions_dir = definitions.ensure(ctx.state_dir, ctx.config)
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
-        return str(e)
+        return str(e), None
     argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions_dir)
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
@@ -166,15 +173,16 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
         )
     except procs.ProcError as e:
         log.exception("overseer could not start", extra={"error": str(e)})
-        return str(e)
+        return str(e), None
 
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{tick_id}.log"
     logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
-    text = agent_output.read(result.stdout).text
-    lines = [line.strip().strip("`").strip() for line in text.splitlines() if line.strip()]
+    output = agent_output.read(result.stdout)
+    db.set_tick_report(ctx.conn, tick_id, output.session_id, output.usage)
+    lines = [line.strip().strip("`").strip() for line in output.text.splitlines() if line.strip()]
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:
@@ -182,6 +190,6 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
     elif not lines or lines[-1].lower() != DONE_LINE:
         failure = f"overseer did not end with {DONE_LINE!r}"
     else:
-        return None
+        return None, output.usage
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
-    return failure
+    return failure, output.usage
