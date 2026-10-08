@@ -67,7 +67,8 @@ def cmd_tick(click_ctx: click.Context, *, dry_run: bool) -> int:
     ctx = open_context(click_ctx, migrate=False)
     outcome = tick.run(ctx, dry_run=dry_run)
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
-    click.echo(f"{label}: {outcome.status}: {outcome.summary}")
+    cost = f" (cost {outcome.usage.describe()})" if outcome.usage is not None else ""
+    click.echo(f"{label}: {outcome.status}: {outcome.summary}{cost}")
     return 0 if outcome.status in ("ok", "lock_busy") else 1
 
 
@@ -81,7 +82,8 @@ def cmd_status(click_ctx: click.Context) -> int:
         click.echo("No ticks yet.")
     else:
         dry = " (dry run)" if last["dry_run"] else ""
-        click.echo(f"Last tick: {last['id']} {last['status']}{dry}, started {attention.age(last['started_at'])} ago")
+        started = f"started {attention.age(last['started_at'])} ago"
+        click.echo(f"Last tick: {last['id']} {last['status']}{dry}, {started}{spent(last)}")
         if last["summary"]:
             click.echo(f"  {last['summary']}")
 
@@ -192,22 +194,10 @@ def one_line(text: str) -> str:
     return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
 
 
-def spent(run: sqlite3.Row) -> str:
-    """What a run cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing."""
-    if run["cost_usd"] is None:
-        return ""
-    tokens = sum(
-        int(run[c] or 0)
-        for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
-    )
-    return f"  ${float(run['cost_usd']):.2f}, {_count(tokens)} tokens"
-
-
-def _count(n: int) -> str:
-    for size, suffix in ((1_000_000, "M"), (1_000, "k")):
-        if n >= size:
-            return f"{n / size:.1f}{suffix}"
-    return str(n)
+def spent(row: sqlite3.Row) -> str:
+    """What a run or a tick cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing."""
+    usage = db.usage_of(row)
+    return f"  {usage.describe()}" if usage is not None else ""
 
 
 def _print_chores(ctx: Context) -> None:
@@ -254,6 +244,9 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str
     click.echo(f"Tick {row['id']}: {row['status']}{dry}, {started}")
     if row["summary"]:
         click.echo(f"  {row['summary']}")
+    if row["session_id"] or row["cost_usd"] is not None:
+        session = f"session {row['session_id']}" if row["session_id"] else "no session reported"
+        click.echo(f"  overseer {session}{spent(row)}")
     output = ctx.state_dir / "ticks" / f"{row['id']}.log"
     if output.exists():
         click.echo(f"  overseer output: {output}")

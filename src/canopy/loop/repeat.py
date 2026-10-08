@@ -9,7 +9,8 @@ tick cost will go (ROADMAP M13). An operator message recorded since the last tic
 the wait early, at most once a minute (DESIGN §22).
 
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
-terminal; with output sent to a file, the loop prints one block per tick and nothing in between.
+terminal; with output sent to a file, the loop prints one block per tick and nothing in between. Each tick's block ends
+with what its overseer cost, when the runtime reported it.
 """
 
 from __future__ import annotations
@@ -330,6 +331,8 @@ def _report(
     footer.append(f"workers {running}/{ctx.config.capacity.max_workers}")
     footer.append("  ·  ")
     footer.append(f"attention {len(after)}", style="bold yellow" if after else "dim")
+    if outcome.usage is not None:
+        footer.append(f"  ·  cost {outcome.usage.describe()}")
     if next_at is not None:
         footer.append(f"  ·  next tick at {next_at}")
     console.print(footer)
