@@ -64,7 +64,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
-  attention list.
+  attention list. Press `t` while it waits to tick now.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
   and every ticket's conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the
   secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so

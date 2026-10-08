@@ -592,7 +592,15 @@ user file gets the queue label and an empty `trust.authorized_repliers` to fill 
 Rejected: writing every key the operator might tune, commented or not (they go stale, and read as choices to make).
 Revisit: if operators routinely miss a key they needed to change; then print it from init instead of writing it.
 
-## D088. The worktrees page reads treehouse when asked, not from the journal or the event stream
+## D088. A key at the loop's countdown ticks now, with no one-minute floor
+
+An operator who wants a tick sooner can press `t` during the wait rather than open a second terminal for `canopy tick`.
+It skips `repeat.WAKE_MIN_SECONDS`, which exists so messages arriving in a burst cannot make the loop spin; a keypress
+is a deliberate request for exactly one tick, as `canopy tick` by hand already is, and every hard guard still holds.
+Keys come from the terminal in cbreak mode through stdlib `termios`; keys typed during a tick are dropped.
+Rejected: a full-screen TUI library (a new dependency for one key); a key that also aborts or skips a running tick.
+
+## D089. The worktrees page reads treehouse when asked, not from the journal or the event stream
 
 The web UI's worktrees page shows each pool's slots: what holds each, its branch, and the processes in it. The server
 runs `treehouse status --json` once per pool on each `GET /api/worktrees`, through `procs` like every other process,

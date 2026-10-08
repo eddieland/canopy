@@ -326,7 +326,8 @@ foreground until stopped:
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status.
    This pacing rule is `repeat.pace`; ROADMAP M21 lengthens it after idle ticks (Idle pacing, below) and M13 by tick
    cost. An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early, but no
-   sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22).
+   sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22). On a terminal, pressing `t`
+   (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor (D088); keys pressed during the tick are dropped.
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first lets the tick
@@ -339,7 +340,11 @@ Config is read once at loop start; restart to apply a change. Prompt files are r
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
-gains `loop started` and `loop stopped` lines, with no tick id.
+gains `loop started` and `loop stopped` lines, with no tick id, and a line when a key or a message ends a wait.
+
+Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
+foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
+loop runs and restored when it stops. Otherwise no keys are read, and the header and countdown do not mention them.
 
 ### Idle pacing
 
@@ -2372,7 +2377,7 @@ ticket whose summary changed. A new stream starts with all three lists. The UI w
 `setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
 once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
 
-The worktrees page (taken on request, 2026-10-08; D088): for each repository in the workspace, in map order, its pool's
+The worktrees page (taken on request, 2026-10-08; D089): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot shows treehouse's status, the
 branch it has checked out (or detached), its lease holder and since when, and the processes treehouse found running in
 it. A lease is matched to a running run or review by its lease id, as reconcile matches them, so a slot names the
