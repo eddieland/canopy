@@ -47,8 +47,11 @@ export function AppShell() {
                     <ThemeToggle />
                 </div>
             </header>
-            <aside className="sticky top-12 h-[calc(100dvh-3rem)] border-r bg-surface/60">
-                <Nav />
+            {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav sticks. */}
+            <aside className="border-r bg-surface/60">
+                <div className="sticky top-12">
+                    <Nav />
+                </div>
             </aside>
             <main className="min-w-0 p-6">
                 <ViewTransition>
