@@ -1227,7 +1227,8 @@ Decision (DESIGN §22):
   comments (M19).
 - A ticket is private when the operator starts it in canopy (`canopy start`) instead of labeling it. Its start
   record and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never
-  write to the tracker: a private prompt variant, and the tracker's write tools denied by name.
+  write to the tracker: a private prompt variant, and a definition that allows only the tracker's read tools, by
+  name, and denies the rest of its server.
 - Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
   the overseer's claim and authorizes nothing. On a private ticket only operator messages authorize; tracker comments
   are data.

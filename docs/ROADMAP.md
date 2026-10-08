@@ -498,14 +498,18 @@ must be at least the largest declared size; canopy cannot set it.
 
 REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design comes first.
 
-- A `messages` table, in a new migration. `_run` records each run's report and question there, for every ticket.
+- A `messages` table, in a new migration that backfills ended runs' reports and questions. `_run` records each run's
+  report and question there, for every ticket.
 - `canopy start`, `stop` (with `--now`, and the `stopped` run status), `reply`, and `show` for ticket references, and
   started subjects in `canopy status`, writing through `core/conversation.py`, with `start`, `stop`, and `reply`
   refusing inside canopy's runs (`CANOPY_TICK_ID`,
   and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
 - `canopy dispatch` needs no `--label` for a started ticket, checking the start record in code, and refuses a private
   `split`.
-- The private worker prompt variant and `canopy-worker-private`, with the tracker's write tools denied by name.
+- The private worker prompt variant and `canopy-worker-private`, allowing only the tracker's read tools by name and
+  denying the rest of its server; verify OpenCode enforces that wildcard deny.
+- `dispatch` picks the private worker in code for a started ticket; `start`, `stop`, and `dispatch` serialize on the
+  start record, and `_run` re-reads it before the worker starts.
 - The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
   A prompt change, which needs the operator's approval.
 - `awaiting_reply` on the attention list, raised by the harness; `run.ended` carries the question's message id.
@@ -524,7 +528,7 @@ Status: not started.
 REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes first.
 
 - `canopy mirror`, overseer-only, bounded, idempotent on the subject and comment id.
-- The overseer prompt mirrors every comment past a ticket's comment cursor, skipping worker-marked ones (D069). A
+- The overseer prompt mirrors every comment past a ticket's comment cursor, worker-marked ones (D069) included. A
   prompt change, which needs the operator's approval.
 - `canopy show REF` shows mirrored comments with their source, for public tickets as for private ones.
 - Open: whether PR review comments join the journal here or later.

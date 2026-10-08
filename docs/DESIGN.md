@@ -1876,9 +1876,10 @@ and where each came from. A **channel** is a way into or out of that record: the
 Slack later. Channels differ in how they reach the operator and how they prove who wrote a reply. The overseer and
 workers never see which channel a message came from, so adding a channel changes no prompt.
 
-A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator queues
-it in canopy instead (below). A private ticket's conversation never touches the tracker: the operator can deliver a
-ticket a client filed without the agent's reports, its questions, or the operator's answers appearing on it.
+A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator starts
+it in canopy (below). A started ticket is private whatever labels it carries: the start record wins. A private
+ticket's conversation never touches the tracker: the operator can deliver a ticket a client filed without the agent's
+reports, its questions, or the operator's answers appearing on it.
 
 ### Messages
 
@@ -1895,6 +1896,8 @@ A `messages` table, one row per message:
 - The body, bounded: a worker's text as its result contract bounds it; the operator's at 4000 characters; a mirrored
   comment's at 2000, marked truncated when cut.
 - `answers`: the id of the message a reply answers, when the channel knows it.
+- For an operator's message, a submission id the channel generates once per reply (the web form carries it, the CLI
+  makes one per invocation), unique per subject, so a retried submission records nothing new.
 
 Who writes:
 
@@ -1903,7 +1906,9 @@ Who writes:
   gains a write.
 - Operator input goes through one function in `core/conversation.py` that every channel calls, with the guards in one
   place: the key is valid (§17), the ticket was started, the body is within its bound.
-- Mirrored comments are recorded by the overseer (M19, below).
+- Mirrored comments are recorded by the overseer (M19, below), a worker's marked comments among them.
+- M18's migration backfills a `report`, and a `question` for a `blocked` run, from every ended run's `result_json`,
+  so tickets worked before M18 have a conversation too.
 
 Agents never write a message directly. No worker command records one, and the overseer records only mirrored tracker
 comments, which authorize nothing.
@@ -1946,21 +1951,32 @@ separate `list`.
   limits like any ended run. `stop` refuses a ticket that was not started: a public ticket stops when its queue label
   is removed.
 - The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
-- The state block marks each private ticket and carries its operator messages newer than its comment cursor.
+- A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
+  worker in code: `canopy dispatch` for a started ticket always renders the private prompt and runs the private
+  definition, whatever the overseer passed.
+- `stop` and `dispatch` cannot interleave. `dispatch` checks the start record and inserts the run's row in one
+  write transaction, and `stop` removes the record in one: whichever commits first wins, and `stop` reports any run
+  the other committed. `_run` reads the record again before it starts the worker and ends the run `stopped` if it is
+  gone.
+- The state block marks each private ticket and carries its operator messages newer than its message cursor.
 - `canopy dispatch` needs no `--label` for a started ticket. It checks the start record in code, a guard where a public
   ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
   in the tracker.
 - The worker prompt has a private variant: no label check, since the harness checked the start record; never comment
   on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
-  `canopy-worker-private`, `canopy-worker` with the tracker's write tools denied by name, as the splitter's and the
-  reviewer's are (§13).
+  `canopy-worker-private`: `canopy-worker` with every tool of the tracker's MCP server denied by wildcard and only
+  its read tools allowed by name. A tracker whose read tools canopy does not name leaves the worker unable to read the
+  ticket, so it fails closed, ending `failed`, rather than posting through a write tool nobody listed. A provider
+  skill (§17) names a tracker's read tools; M18 verifies that OpenCode applies a wildcard deny with named allows.
 - Phases (§7) read the journal for the ticket's own phases: `needs_human` when the latest run ended `blocked` and no
-  operator message came after it; `human_replied` when an operator message is newer than the comment cursor, which
-  then holds a message id. The action is `resume` with `--cursor comment=<message id>`, its context pointing at the
-  message. The PR phases are unchanged.
+  operator message came after it; `human_replied` when an operator message is newer than the ticket's message cursor
+  (`last_message_id`), a cursor of its own over journal ids, never the comment cursor, which stays the tracker's. The
+  action is `resume` with `--cursor message=<message id>`, its context pointing at the message. The PR phases are
+  unchanged.
 - The harness raises `awaiting_reply` every tick for a private ticket whose latest question has no operator message
   after it, with the question as its detail (D028's pattern). A public ticket's question still reaches the operator as
-  `run.ended` (§20), which gains the question's message id so a channel can say what a reply answers.
+  `run.ended` (§20). M18 adds `message` to `run.ended`'s fields in §20's table: the id of the message the run
+  recorded, its `question` for a `blocked` run and its `report` otherwise, so a channel can say what a reply answers.
 - After `crashed`, `worker_failed`, and the other run reasons (§14), "try again" on a private ticket is an operator
   message after the run ended.
 - `canopy reply` refuses a subject that was not started: a public ticket's replies belong on the ticket. `show`
@@ -1988,8 +2004,9 @@ validated in code, as ticket keys are (§17).
 
 - Each tick, the overseer records every comment past a ticket's comment cursor with
   `canopy mirror REF --comment ID --author ACCOUNT --at TIME --body TEXT`. It requires `CANOPY_TICK_ID` like
-  `dispatch` (D020), bounds the body at 2000 characters, and is idempotent on the ticket and comment id. Worker-marked
-  comments (D069) are skipped: the journal already has the run's report.
+  `dispatch` (D020), bounds the body at 2000 characters, and is idempotent on the subject and comment id. A
+  worker-marked comment (D069) is recorded too, with `source` `worker`, since its text can differ from the result
+  line or come from a run whose result line never parsed. Like every mirrored comment it authorizes nothing.
 - A dry run records the mirror too: it is a record of what the overseer saw, and changes no cursor or phase.
 - The mirror lags the tracker by up to one tick. A comment edited or deleted after it was mirrored is not updated.
 
@@ -2049,8 +2066,9 @@ Proposed, not in TRUST_MODEL. Each needs the operator's approval note in the PR 
 - T1 (M19): mirrored comments are the overseer's claims and authorize nothing.
 - T5: unchanged. A private ticket hides the conversation, not authorship: commits keep their attribution trailer.
 - T6 (M18, M19): the journal holds tracker comment bodies and the operator's replies, under the operator-only state
-  directory. A private worker posting to the tracker anyway is limited by its prompt and by name-denied write tools;
-  a tracker MCP server whose write tools canopy does not name is a residual.
+  directory. A private worker can call only the tracker read tools its definition allows by name; every other tool of
+  the tracker's server is denied, so an unlisted write tool fails closed. Residual: a tool listed as read that writes,
+  and OpenCode's enforcement of the wildcard deny, which M18 verifies.
 - T8 (M20): escaping and the per-session token above, in addition to T8's bind and secret rules.
 
 Overseer prompt changes, which need the same approval: private tickets' phases from the state block, and no
