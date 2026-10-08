@@ -64,12 +64,16 @@ function onStorage(event: StorageEvent): void {
     if (event.key === STORAGE_KEY || event.key === null) refresh()
 }
 
-/** For useSyncExternalStore. Listens to other tabs and the system theme only while something is subscribed. */
+/**
+ * For useSyncExternalStore. Listens to other tabs and the system theme only while something is subscribed, and reads
+ * both again on the first subscription: a change between the module loading and React subscribing has no listener.
+ */
 export function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
         window.addEventListener('storage', onStorage)
         window.matchMedia(DARK_QUERY).addEventListener('change', refresh)
+        refresh()
     }
     return () => {
         listeners.delete(listener)
