@@ -33,6 +33,10 @@ REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 # Placeholders a split's prompt must also use: its repositories, and the comment that asked for the split, which the
 # splitter reads to check who asked (D061). An override without it would split on the overseer's word alone.
 REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
+# The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
+# override that still names the GitHub MCP would open the PRs the operator set the skill to avoid (D078).
+OPENS_PRS = ("implement", "resume")
+REQUIRED_PR_SKILL = ("OPEN_PR",)
 # The reviewer's prompt (DESIGN §21). An override must still name the commit, the checkout, and the run, which the
 # reviewer's comment marker carries, so the loop can tell its reviews from anything else.
 REVIEWER = "reviewer.md"
@@ -58,6 +62,20 @@ def mark_comments(prefix: str, suffix: str) -> str:
     return f"In every comment and reply you post, on the ticket or a PR, {', and '.join(marks)}, without the backticks."
 
 
+def open_pr(skill: str) -> str:
+    """Return how a worker opens a PR: through the GitHub MCP, or with the operator's skill and nothing else (D078).
+
+    A missing skill is a failed run, not a fallback to the MCP: the operator set the skill because the MCP's PRs do not
+    work for them.
+    """
+    if not skill:
+        return "Open each PR through the GitHub MCP."
+    return (
+        f"Open each PR by following the skill `{skill}`, and in no other way: load it before you open one. If no skill "
+        f"named `{skill}` is available, open no PR and report `failed` with a summary that starts `no PR skill:`."
+    )
+
+
 class PromptError(Exception):
     """A prompt file cannot be rendered."""
 
@@ -81,9 +99,11 @@ def render_worker(config: Config, kind: str, values: Mapping[str, str], *, requi
 
     Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
-    `REQUIRED_WORKER`, or of `required`.
+    `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
+    `REQUIRED_PR_SKILL`.
     """
-    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required))
+    pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
+    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *pr_skill, *required))
 
 
 def render(config: Config, name: str, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:

@@ -134,7 +134,7 @@ canopy (harness, Python)
     view.py        the state block's reviews
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
 
-  serve/           the web UI's server (§22, D076); the only package that imports fastapi, starlette, or uvicorn
+  serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
     api.py         the JSON and SSE routes; sessions and leases serve mock.py until the journal backs them
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
@@ -181,7 +181,7 @@ migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
 scripts/         build-binary.sh: the single executable a release ships (D067)
-ui/              the web UI (D076): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
+ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```
 
@@ -380,7 +380,8 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    - `unauthorized`: no `--label`, or one not in `tracker.labels`, compared case-insensitively. The decision records
      the label in its configured spelling; the refusal does not list the configured labels. This does not prove the
      label is on the ticket; the worker's own read is the independent check (step 3, D051). A `split` without
-     `--request` is refused here too (§18).
+     `--request` is refused here too (§18). Planned with M18 (§22): a started ticket needs no `--label`, its start
+     record is checked instead, and a stopped one is refused whatever label is passed.
    - `bad_request`: `--request` on a kind other than `split`.
    - `unknown_repo`: in a workspace, no `--repo`, or one not in the map or with no primary clone; for a split's child,
      any repository but the one the split recorded for it. Naming a repository the ticket has no unit in yet adds that
@@ -419,8 +420,9 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
 3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
    the attempt number (one more than the most runs of the kind in any unit covered) and the kind's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
-   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), the context, and the result
-   contract below, whose `prs` skeleton (`{{PRS}}`) names each repository.
+   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), how to open a PR
+   (`{{OPEN_PR}}`, below), the context, and the result contract below, whose `prs` skeleton (`{{PRS}}`) names each
+   repository.
    - Every worker reads the ticket first and, if it is closed or carries none of the queue labels, reports `failed`
      with a summary starting `not authorized:` and changes nothing. That run counts toward the attempt limit.
    - The branch is `<trust.branch_prefix><KEY>-<slug>`, named by the first `implement`. The overseer picks the slug
@@ -432,7 +434,8 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
      `{{LABELS}}`, so an older override fails closed (D051). A joint run's prompt also needs `{{REPOSITORIES}}` and
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
      repository. For older overrides, `{{SLOT}}` is the worker's working directory and `{{BASE}}` and `{{PR_URL}}` the
-     one repository's base and PR.
+     one repository's base and PR. With `runtime.pr_skill` set, an `implement` or `resume` prompt without
+     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D078).
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
    stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository or workspace root). Record its
@@ -486,6 +489,7 @@ Worker obligations, stated in every worker prompt:
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
   default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
+- Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
 - On `blocked`: post the question as a ticket comment, add `needs_human_label`, and push nothing half-finished or
@@ -507,6 +511,22 @@ reading the PR or ticket what wrote the comment. The harness never reads comment
 do. Worker prompts get them as `{{MARK_COMMENTS}}`, the instruction to mark, and `{{WORKER_COMMENT}}`, how to recognize
 a marked comment. Changing the marks leaves earlier workers' comments reading as the operator's. A prompt override
 without the placeholders still renders, and its workers' comments read as the operator's, as they all did before D069.
+
+How a worker opens a PR is the one step an operator may need done their own way: an employer's tooling that adds
+metadata, a stacked-PR tool, or a host the GitHub MCP serves badly (D078). `runtime.pr_skill`, user-only, names a skill
+of the operator's, which `implement` and `resume` workers then open every PR with, and in no other way; with it unset
+they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run: the
+worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
+whose PRs the operator set the skill to avoid. The skill is ordinary customization (§13): it sits where the runtime
+reads skills, under a name no repository canopy works in uses, since OpenCode picks either of two same-named skills and
+a repository's could stand in for the operator's. Any program it runs must be on the `PATH` of the shell that runs
+canopy, which workers inherit. It changes only how the PR is opened; every other obligation above still holds. The
+branch is `{{BRANCH}}`, pushed without force, and `_run` still checks it is on origin (step 5). A program that pushes by
+itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL T1). The PR
+targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL goes in the
+result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one that server
+can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting a stacked
+one, stays with the MCP.
 
 ## 9. Aggressive release
 
@@ -665,6 +685,7 @@ worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent c
 split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
+pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
 
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
@@ -752,14 +773,16 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, labels), GitHub (open/update
   PR, read reviews and checks).
-- `canopy-reviewer`: no edits, shell, web fetch, or subagents; reads only through the link to its checkout. MCP: read
+- `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
   tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
   and edits denied by name (§21).
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19). A chore that runs the operator's
   own tools uses the operator's own copy of it.
-- `canopy-splitter`: read-only file tools in its desk; no edit, shell, web fetch, or subagents. MCP: the tracker
+- `canopy-splitter`: read-only file tools in its desk; no edit, shell, or subagents. MCP: the tracker
   (create and link tickets, comment), with tools for labels, assignees, edits, PRs, branches, and files denied by name
   (§18).
+
+None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
 the command templates. No interface.
@@ -822,7 +845,9 @@ Customizing canopy is adding skills where the runtime already looks: the reposit
 `~/.config/opencode/skill/`). canopy turns none of these off. Give a custom skill its own name; same-named skills do not
 reliably override each other. A `$HOME` skill that workers use must be a single `SKILL.md`: the worker's
 `external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
-also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
+also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). A skill only adds to what
+a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
+names the skill and the prompt then says to use it (§8, D078). Prefer that to a prompt override.
 
 ### The operator's skill
 
@@ -1469,7 +1494,7 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `attention` | `attention.opened` | a listed item the sink was not told of | ticket, reason, detail (500), since |
 | `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, reason |
 | `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
-| `runs` | `run.ended` | a run's row was closed | ticket, run, kind, status, branch, pr, prs, summary, question |
+| `runs` | `run.ended` | a run's row closed | ticket, run, kind, status, branch, pr, prs, summary, question, message |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
 | `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, comment |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
@@ -1479,6 +1504,8 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 `summary` and `question` are cut at 300 characters, each PR URL at 500. `pr` is the run's first PR, `prs` every PR a
 joint run reported. In the `json` format a run's kind is `run_kind` (`kind` is the event's). `question` is set only for
 a `blocked` run; the needs-human label is not an attention item, so `run.ended` is how a sink hears of the question.
+`message`, planned with M18 (§22) and absent until then, is the journal id of the message the run recorded: its
+question for a `blocked` run, its report otherwise.
 
 Attention is a diff of state per sink (D032): `notifications` has a `sink` column, so each sink hears of each open
 item once, and a sink that was down gets the net change. The other kinds are point events in an outbox table,
@@ -1888,9 +1915,10 @@ and where each came from. A **channel** is a way into or out of that record: the
 Slack later. Channels differ in how they reach the operator and how they prove who wrote a reply. The overseer and
 workers never see which channel a message came from, so adding a channel changes no prompt.
 
-A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator queues
-it in canopy instead (below). A private ticket's conversation never touches the tracker: the operator can deliver a
-ticket a client filed without the agent's reports, its questions, or the operator's answers appearing on it.
+A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator starts
+it in canopy (below). A started ticket is private whatever labels it carries: the start record wins. A private
+ticket's conversation never touches the tracker: the operator can deliver a ticket a client filed without the agent's
+reports, its questions, or the operator's answers appearing on it.
 
 ### Messages
 
@@ -1907,6 +1935,9 @@ A `messages` table, one row per message:
 - The body, bounded: a worker's text as its result contract bounds it; the operator's at 4000 characters; a mirrored
   comment's at 2000, marked truncated when cut.
 - `answers`: the id of the message a reply answers, when the channel knows it.
+- For an operator's message, a submission id, unique per subject, so a retried submission records nothing new. The
+  web form carries one generated when the form is rendered. The CLI derives it from the subject, the message being
+  answered, and the body, so rerunning the same `canopy reply` after an uncertain result is the same submission.
 
 Who writes:
 
@@ -1915,7 +1946,9 @@ Who writes:
   gains a write.
 - Operator input goes through one function in `core/conversation.py` that every channel calls, with the guards in one
   place: the key is valid (§17), the ticket was started, the body is within its bound.
-- Mirrored comments are recorded by the overseer (M19, below).
+- Mirrored comments are recorded by the overseer (M19, below), a worker's marked comments among them.
+- M18's migration backfills a `report`, and a `question` for a `blocked` run, from every ended run's `result_json`,
+  so tickets worked before M18 have a conversation too.
 
 Agents never write a message directly. No worker command records one, and the overseer records only mirrored tracker
 comments, which authorize nothing.
@@ -1957,22 +1990,42 @@ separate `list`.
   crashed run (§6), and the run is marked `stopped`, a status that raises no attention item and counts toward attempt
   limits like any ended run. `stop` refuses a ticket that was not started: a public ticket stops when its queue label
   is removed.
+- `stop` does not delete the start record; it marks it stopped. A stopped ticket stays private and is dispatched
+  by nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it
+  public.
 - The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
-- The state block marks each private ticket and carries its operator messages newer than its comment cursor.
+- A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
+  worker in code: `canopy dispatch` for a started ticket always renders the private prompt and runs the private
+  definition, whatever the overseer passed.
+- `stop` and `dispatch` cannot interleave. `dispatch` checks the start record and inserts the run's row in one
+  write transaction, and `stop` marks the record stopped in one: whichever commits first wins, and `stop` reports any
+  run the other committed. `_run` reads the record again before it starts the worker and ends the run `stopped` if the
+  record is stopped.
+- The state block marks each private ticket and carries its operator messages newer than its message cursor.
 - `canopy dispatch` needs no `--label` for a started ticket. It checks the start record in code, a guard where a public
   ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
   in the tracker.
 - The worker prompt has a private variant: no label check, since the harness checked the start record; never comment
   on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
-  `canopy-worker-private`, `canopy-worker` with the tracker's write tools denied by name, as the splitter's and the
-  reviewer's are (§13).
+  `canopy-worker-private`: `canopy-worker` with every tool of the tracker's MCP server denied by wildcard and only
+  its read tools allowed by name, and the tracker CLIs canopy knows (`gh`, `acli`, `jira`) denied in its bash rules.
+  - The read tools are `tracker.read_tools`, user-only, with a default for each shipped provider's usual MCP server
+    (Atlassian's remote MCP for `jira`, GitHub's for `github`), rendered into the definition's allow rules. M18 names
+    those defaults from the servers' tool lists and verifies that OpenCode applies a wildcard deny with named allows.
+  - With no read tools for the provider, `canopy start` refuses (`no_read_tools`) rather than run a worker that
+    cannot read the ticket. A wrong list fails closed: the worker cannot read, ends `failed`, and posts nothing.
+  - D044's guard grows for private runs: the harness refuses one when the worktree's OpenCode config has any
+    `permission` or `tools` entry naming the tracker server's tools, since a repository rule merged after canopy's
+    could reopen a write tool. The operator's own global config is the operator's to keep consistent (§13).
 - Phases (§7) read the journal for the ticket's own phases: `needs_human` when the latest run ended `blocked` and no
-  operator message came after it; `human_replied` when an operator message is newer than the comment cursor, which
-  then holds a message id. The action is `resume` with `--cursor comment=<message id>`, its context pointing at the
-  message. The PR phases are unchanged.
+  operator message came after it; `human_replied` when an operator message is newer than the ticket's message cursor
+  (`last_message_id`), a cursor of its own over journal ids, never the comment cursor, which stays the tracker's. The
+  action is `resume` with `--cursor message=<message id>`, its context pointing at the message. The PR phases are
+  unchanged.
 - The harness raises `awaiting_reply` every tick for a private ticket whose latest question has no operator message
   after it, with the question as its detail (D028's pattern). A public ticket's question still reaches the operator as
-  `run.ended` (§20), which gains the question's message id so a channel can say what a reply answers.
+  `run.ended` (§20). M18 adds `message` to `run.ended`'s fields in §20's table: the id of the message the run
+  recorded, its `question` for a `blocked` run and its `report` otherwise, so a channel can say what a reply answers.
 - After `crashed`, `worker_failed`, and the other run reasons (§14), "try again" on a private ticket is an operator
   message after the run ended.
 - `canopy reply` refuses a subject that was not started: a public ticket's replies belong on the ticket. `show`
@@ -1998,11 +2051,15 @@ validated in code, as ticket keys are (§17).
 
 ### Tracker comments in the journal (M19)
 
-- Each tick, the overseer records every comment past a ticket's comment cursor with
+- Each tick, the overseer records every comment past the subject's mirror cursor with
   `canopy mirror REF --comment ID --author ACCOUNT --at TIME --body TEXT`. It requires `CANOPY_TICK_ID` like
-  `dispatch` (D020), bounds the body at 2000 characters, and is idempotent on the ticket and comment id. Worker-marked
-  comments (D069) are skipped: the journal already has the run's report.
-- A dry run records the mirror too: it is a record of what the overseer saw, and changes no cursor or phase.
+  `dispatch` (D020), bounds the body at 2000 characters, and is idempotent on the subject and comment id. A
+  worker-marked comment (D069) is recorded too, with `source` `worker`, since its text can differ from the result
+  line or come from a run whose result line never parsed. Like every mirrored comment it authorizes nothing.
+- The mirror cursor (`last_mirrored_id`) is its own, apart from the comment cursor the phases use. It starts empty,
+  so the first mirror of a subject, including one worked before M19, covers its whole comment history once; worker
+  comments the old cursor had passed are recorded then. Idempotence on the comment id makes any overlap harmless.
+- A dry run records the mirror too, as a record of what the overseer saw, but advances no cursor and changes no phase.
 - The mirror lags the tracker by up to one tick. A comment edited or deleted after it was mirrored is not updated.
 
 ### Waking the loop
@@ -2030,16 +2087,16 @@ Served by `canopy loop` from a thread (D073):
 - On unless `--no-serve` or `serve.enabled = false`. `serve.bind` (loopback by default, or a private address) and
   `serve.port`. Every `serve.*` key is user-only (T7).
 - It requires the operator's listener secret (T8). Without the secret file, the loop says how to make one and serves
-  nothing.
+  nothing. It serves plain HTTP, also on a private address: T8's "relies on the network" residual stands (D076).
 - It opens its own journal connection, never takes the tick lock, and writes only through the functions the CLI uses.
   A server failure is logged and the server restarted with a backoff; it never ends the loop. Stopping the loop stops
   it.
 - Pages: the attention list, running and recent runs, and tickets with their conversations. Actions: the CLI's
   verbs, reply, start, and stop.
-- FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D076) and the JSON and SSE API it reads.
-  uvicorn's `Server` runs in the thread, installs no signal
-  handlers there (the loop's own handle Ctrl-C, §6), and stops when the loop sets its `should_exit`. Form bodies and
-  query parameters are validated with pydantic models, as everything else parsed from outside is (D026).
+- FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
+  uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), and
+  stops when the loop sets its `should_exit`. Request bodies and query parameters are validated with pydantic models,
+  as everything else parsed from outside is (D026).
 - Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
   the operator's session. React escapes text it renders, and nothing renders journal text as HTML
   (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Writes require a per-session
@@ -2052,10 +2109,10 @@ Served by `canopy loop` from a thread (D073):
 How it serves, built in M20's foundation and true of every page that follows:
 
 - Under one path prefix (`--base-path` now, `serve.base_path` when config carries it; empty by default), so a proxy
-  can mount it anywhere: the API at
-  `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for every other GET or HEAD. The prefix is
-  written into `index.html` as `<base href>`; the build uses relative URLs and the router reads its basepath from it,
-  so one build serves under any prefix. The prefix comes from config, never from a request header.
+  can mount it anywhere: the API at `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for
+  every other GET or HEAD. The prefix is written into `index.html` as `<base href>`; the build uses relative URLs and
+  the router reads its basepath from it, so one build serves under any prefix. The prefix comes from config, never
+  from a request header.
 - The fallback to `index.html` never answers under `{base}/api` (an unknown API path is a JSON 404) or for a path
   with a file extension (a missing asset is a 404, not a page). `index.html` is sent `no-cache`, so an upgrade never
   shows a stale UI; hashed assets are cached as immutable.
@@ -2081,12 +2138,16 @@ Proposed, not in TRUST_MODEL. Each needs the operator's approval note in the PR 
   whoever wrote them. Residual: until workers are sandboxed (HOST_ISOLATION), a worker's bash runs as the operator and
   can run `canopy reply` or `canopy start`. The commands refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID`
   is set, which stops a worker that follows injected text naively, not one that unsets them. This is the same class
-  as a worker writing the journal file directly, which sandboxing also removes.
+  as a worker writing the journal file directly, which sandboxing also removes. The operator accepted it (D076).
 - T1 (M19): mirrored comments are the overseer's claims and authorize nothing.
 - T5: unchanged. A private ticket hides the conversation, not authorship: commits keep their attribution trailer.
 - T6 (M18, M19): the journal holds tracker comment bodies and the operator's replies, under the operator-only state
-  directory. A private worker posting to the tracker anyway is limited by its prompt and by name-denied write tools;
-  a tracker MCP server whose write tools canopy does not name is a residual.
+  directory. A private worker can call only the tracker read tools its definition allows by name; every other tool of
+  the tracker's server is denied, so an unlisted write tool fails closed, and a repository rule that names the
+  tracker's tools refuses the run. Residual: a tool listed as read that writes; OpenCode's enforcement of the
+  wildcard deny, which M18 verifies; and the worker's bash, which runs as the operator and can reach any tracker
+  client or token the operator's shell can, beyond the CLIs denied by name. That has D076's root cause: workers run
+  as the operator until HOST_ISOLATION.
 - T8 (M20): escaping and the per-session token above, in addition to T8's bind and secret rules.
 
 Overseer prompt changes, which need the same approval: private tickets' phases from the state block, and no

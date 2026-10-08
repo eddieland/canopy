@@ -50,8 +50,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
   validators (D027, dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
-  (D074, only in `canopy.serve`), and `httpx2` for its test client (D076, dev only).
-- The web UI lives in `ui/` (D076) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
+  (D074, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only).
+- The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
   systems is the agent runtime's MCP servers. The harness knows nothing about Jira or GitHub beyond strings in config

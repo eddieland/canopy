@@ -1,4 +1,4 @@
-"""Builds the web UI into canopy's wheel (D076), so an installed canopy never needs Node.
+"""Builds the web UI into canopy's wheel (D079), so an installed canopy never needs Node.
 
 The wheel carries ui/dist as `canopy/_data/ui`, where canopy.infra.resources finds it. When npm is on PATH, the hook
 builds it first (`npm ci` if ui/node_modules is missing, then `npm run build`). Without npm it bundles an existing

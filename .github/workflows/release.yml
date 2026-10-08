@@ -57,7 +57,7 @@ jobs:
         with:
           enable-cache: false
 
-      # The wheel's build hook builds the web UI into the executable (D076).
+      # The wheel's build hook builds the web UI into the executable (D079).
       - name: Set up Node
         uses: actions/setup-node@v7.0.0
         with:

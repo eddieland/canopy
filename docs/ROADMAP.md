@@ -498,19 +498,28 @@ must be at least the largest declared size; canopy cannot set it.
 
 REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design comes first.
 
-- A `messages` table, in a new migration. `_run` records each run's report and question there, for every ticket.
+- A `messages` table, in a new migration that backfills ended runs' reports and questions. `_run` records each run's
+  report and question there, for every ticket.
 - `canopy start`, `stop` (with `--now`, and the `stopped` run status), `reply`, and `show` for ticket references, and
   started subjects in `canopy status`, writing through `core/conversation.py`, with `start`, `stop`, and `reply`
   refusing inside canopy's runs (`CANOPY_TICK_ID`,
   and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
 - `canopy dispatch` needs no `--label` for a started ticket, checking the start record in code, and refuses a private
   `split`.
-- The private worker prompt variant and `canopy-worker-private`, with the tracker's write tools denied by name.
+- The private worker prompt variant and `canopy-worker-private`, allowing only the tracker's read tools by name and
+  denying the rest of its server and the known tracker CLIs in bash; verify OpenCode enforces that wildcard deny.
+- `tracker.read_tools`, with defaults for Atlassian's remote MCP and GitHub's MCP server named from their tool lists;
+  `canopy start` refuses `no_read_tools` without them. D044's guard refuses a private run whose worktree config names
+  the tracker's tools.
+- `dispatch` picks the private worker in code for a started ticket and refuses a stopped one; `stop` marks the
+  record stopped rather than deleting it; `start`, `stop`, and `dispatch` serialize on it, and `_run` re-reads it
+  before the worker starts.
 - The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
   A prompt change, which needs the operator's approval.
 - `awaiting_reply` on the attention list, raised by the harness; `run.ended` carries the question's message id.
 - The loop's wait ends early on an operator message (D073).
-- TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note.
+- TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note. Sandboxing
+  is not a prerequisite: the operator accepted T1's forged-reply residual (D076).
 
 Accept: a fakes-based test: a started ticket with no label is dispatched to the private worker definition, the fake
 worker ends `blocked`, the question is on the attention list and in `canopy show`, `canopy reply` ends
@@ -524,7 +533,8 @@ Status: not started.
 REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes first.
 
 - `canopy mirror`, overseer-only, bounded, idempotent on the subject and comment id.
-- The overseer prompt mirrors every comment past a ticket's comment cursor, skipping worker-marked ones (D069). A
+- The overseer prompt mirrors every comment past a subject's own mirror cursor, worker-marked ones (D069) included;
+  the cursor starts empty, so a subject's history is mirrored once. A
   prompt change, which needs the operator's approval.
 - `canopy show REF` shows mirrored comments with their source, for public tickets as for private ones.
 - Open: whether PR review comments join the journal here or later.
@@ -536,19 +546,20 @@ Status: not started.
 
 ## M20. Web UI
 
-REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbox. Sketch only; the design comes first.
+REQUIREMENTS N1, DESIGN §22, D055, D073, D074, D079. Needs M18; M19 makes it one inbox. Sketch only; the design comes
+first.
 
 - `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
-  all user-only. FastAPI on uvicorn with Jinja2 templates (D074), imported nowhere else.
+  all user-only. FastAPI on uvicorn (D074), imported nowhere else, serving the app built from `ui/` (D079).
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
-- The release binary (D067) bundles the templates and builds on every platform it ships for.
+- The release binary (D067) bundles the built UI and builds on every platform it ships for.
 - Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: in progress. Taken in part on request (2026-10-08), ahead of M18: the foundation only (D076). `ui/` with its
+Status: in progress. Taken in part on request (2026-10-08), ahead of M18: the foundation only (D079). `ui/` with its
 tokens, theme, shell, and placeholder pages; `canopy.serve` serving it and a mock sessions and leases API with SSE;
 the build bundled into the wheel; Playwright against the served build. Not yet: the listener secret, `canopy loop`
 running the server, `serve.*` config, real data, and every page and action above.

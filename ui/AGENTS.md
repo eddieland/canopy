@@ -1,6 +1,6 @@
 # ui/AGENTS.md
 
-Rules for any agent working in `ui/`, the web UI (D076). The repository's `AGENTS.md` still applies; this adds what is
+Rules for any agent working in `ui/`, the web UI (D079). The repository's `AGENTS.md` still applies; this adds what is
 specific here. Read `DESIGN.md` in this directory before changing anything visible.
 
 ## Stack

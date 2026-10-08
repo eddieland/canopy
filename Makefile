@@ -27,7 +27,7 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict)
 test: ## Run all tests
 	uv run pytest -q
 
-##@ Web UI (ui/; needs Node 22.12+, D076)
+##@ Web UI (ui/; needs Node 22.12+, D079)
 
 ui/node_modules: ui/package.json ui/package-lock.json
 	npm --prefix ui ci --no-audit --no-fund

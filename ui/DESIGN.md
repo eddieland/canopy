@@ -1,7 +1,7 @@
 # canopy web UI: design
 
 The visual and interaction rules for `ui/`. Normative, like `docs/DESIGN.md`: if a component and this file disagree,
-this file wins until it is changed in the same PR. How to work in `ui/` is in `AGENTS.md`; why it exists is D076.
+this file wins until it is changed in the same PR. How to work in `ui/` is in `AGENTS.md`; why it exists is D079.
 
 ## Direction
 

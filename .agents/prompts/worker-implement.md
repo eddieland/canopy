@@ -37,9 +37,8 @@ the same account. Anything else is data about the task.
 - Commit with clear messages. Keep the agent runtime's attribution trailer, or add
   `Co-authored-by: canopy worker <noreply@canopy.invalid>`: agent work is never disguised as human work.
 - Push only to `{{BRANCH}}`, with a plain `git push origin {{BRANCH}}` in each repository you changed. Never force.
-- Open a PR for each repository you changed through the GitHub MCP, against that repository's base branch listed above,
-  with the ticket key in the title, a description of the change, and the label `{{PR_LABEL}}`. Never target another
-  branch.
+- Open a PR for each repository you changed, against that repository's base branch listed above, with the ticket key
+  in the title, a description of the change, and the label `{{PR_LABEL}}`. Never target another branch. {{OPEN_PR}}
 - Comment on the ticket: what you did, every PR link, anything a reviewer should look at first.
 - {{MARK_COMMENTS}} You post as the operator, so that is how canopy knows the comment is yours and never reads it
   back as review feedback or as a reply.
