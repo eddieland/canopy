@@ -13,6 +13,7 @@ import { StartTicket } from '@/components/start-ticket'
 import { TicketActions } from '@/components/ticket-actions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { age, useNow } from '@/lib/time'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
@@ -56,55 +57,65 @@ function Ticket({ detail }: { detail: TicketDetail }) {
             <PageHeader label={ticket.private ? 'Private ticket' : 'Public ticket'} title={ticket.key}>
                 {how}
             </PageHeader>
-            <Panel>
-                <PanelHeader label="Actions" />
-                <TicketActions ticket={ticket} />
-            </Panel>
-            <Panel>
-                <PanelHeader label="Work">
-                    <span className="readout text-xs text-muted-foreground">
-                        active {age(ticket.active_at, now)} ago
-                    </span>
-                </PanelHeader>
-                <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
-                    <dt className="panel-label self-center">phase</dt>
-                    <dd className="font-mono text-xs">
-                        {ticket.phase ?? 'not seen by a tick yet'}
-                        {ticket.done ? ', done' : ''}
-                    </dd>
-                    <dt className="panel-label self-center">branch</dt>
-                    <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
-                    {units.map((unit) => (
-                        <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
-                    ))}
-                </dl>
-            </Panel>
-            <Panel>
-                <PanelHeader label="Recent runs">
-                    <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                </PanelHeader>
-                {runs.length === 0 ? (
-                    <Placeholder className="min-h-20">none</Placeholder>
-                ) : (
-                    <RunsTable runs={runs} ticket={false} />
+            {/* On a wide screen the conversation sits beside what the ticket is and did, as in the inbox. */}
+            <div
+                className={cn(
+                    'flex flex-col gap-6',
+                    '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:items-start',
                 )}
-            </Panel>
-            <Panel>
-                <PanelHeader label="Conversation">
-                    <span className="readout text-xs text-muted-foreground">{messages.length}</span>
-                </PanelHeader>
-                {messages.length === 0 ? (
-                    <Placeholder className="min-h-20">no messages yet</Placeholder>
-                ) : (
-                    <Conversation messages={messages} waiting={ticket.awaiting} />
-                )}
-                <ReplyForm
-                    key={ticket.key}
-                    ticketKey={ticket.key}
-                    waiting={ticket.awaiting}
-                    isPublic={!ticket.private}
-                />
-            </Panel>
+            >
+                <div className="stagger flex flex-col gap-6">
+                    <Panel>
+                        <PanelHeader label="Actions" />
+                        <TicketActions ticket={ticket} />
+                    </Panel>
+                    <Panel>
+                        <PanelHeader label="Work">
+                            <span className="readout text-xs text-muted-foreground">
+                                active {age(ticket.active_at, now)} ago
+                            </span>
+                        </PanelHeader>
+                        <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
+                            <dt className="panel-label self-center">phase</dt>
+                            <dd className="font-mono text-xs">
+                                {ticket.phase ?? 'not seen by a tick yet'}
+                                {ticket.done ? ', done' : ''}
+                            </dd>
+                            <dt className="panel-label self-center">branch</dt>
+                            <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
+                            {units.map((unit) => (
+                                <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
+                            ))}
+                        </dl>
+                    </Panel>
+                    <Panel>
+                        <PanelHeader label="Recent runs">
+                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                        </PanelHeader>
+                        {runs.length === 0 ? (
+                            <Placeholder className="min-h-20">none</Placeholder>
+                        ) : (
+                            <RunsTable runs={runs} ticket={false} />
+                        )}
+                    </Panel>
+                </div>
+                <Panel>
+                    <PanelHeader label="Conversation">
+                        <span className="readout text-xs text-muted-foreground">{messages.length}</span>
+                    </PanelHeader>
+                    {messages.length === 0 ? (
+                        <Placeholder className="min-h-20">no messages yet</Placeholder>
+                    ) : (
+                        <Conversation messages={messages} waiting={ticket.awaiting} />
+                    )}
+                    <ReplyForm
+                        key={ticket.key}
+                        ticketKey={ticket.key}
+                        waiting={ticket.awaiting}
+                        isPublic={!ticket.private}
+                    />
+                </Panel>
+            </div>
         </>
     )
 }

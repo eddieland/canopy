@@ -21,6 +21,12 @@
         /* On the root, so it paints the whole canvas, the reserved gutter included. */
         background-color: var(--background);
         -webkit-font-smoothing: antialiased;
+        /*
+         * Every size is in rem, so the whole interface grows with the window on a large screen: the browser's size up
+         * to a 1600px window, a quarter larger from 2560px. 100% and 100rem are the browser's size here, the
+         * operator's own setting included.
+         */
+        font-size: clamp(100%, calc(100% + (100vw - 100rem) / 240), 125%);
     }
 
     body {

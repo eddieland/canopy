@@ -62,7 +62,7 @@ function AttentionPage() {
                 </>
             ) : (
                 <div className="flex flex-wrap items-start gap-6">
-                    <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6">
+                    <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md">
                         <Panel data-testid="attention-list">
                             <PanelHeader label="Needs you">
                                 <span className="readout text-xs text-muted-foreground">{items?.length}</span>

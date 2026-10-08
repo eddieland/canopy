@@ -57,7 +57,7 @@ export function AppShell() {
             </aside>
             <main className="min-w-0 p-6">
                 <ViewTransition>
-                    <div className="stagger mx-auto flex max-w-6xl flex-col gap-6">
+                    <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
                         <Outlet />
                     </div>
                 </ViewTransition>
