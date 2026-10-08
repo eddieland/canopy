@@ -80,8 +80,10 @@ Controls:
   the start record in code, in the transaction that inserts the run, so it needs no `--label`, and `_run` reads it
   again before the worker starts. A stopped ticket is dispatched by nothing, whatever labels it carries. Tracker
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
-  harness renders them into the worker's prompt itself. `start`, `stop`, and `reply` refuse when `CANOPY_TICK_ID` or
-  `CANOPY_RUN_ID` is set, which every agent canopy runs has.
+  harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
+  journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
+  `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
+  canopy runs has.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -122,10 +124,11 @@ push non-forced commits, as the operator, to someone else's unprotected PR branc
 backstop, as it is for a coworker pushing there by hand. A worker's bash still reaches the network, for package
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
-worker's bash runs as the operator and can run `canopy reply` or `canopy start` with the variables unset, or write the
-journal file directly: the refusal stops a worker that follows injected text naively, not one that works around it. The
-operator accepted this (D076). A steered overseer can mirror text that was never on the ticket, or name the wrong
-author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker stays its source.
+worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
+unset, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one that
+works around it. The operator accepted this (D076). A steered overseer can mirror text that was never on the ticket, or
+name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
+stays its source.
 
 ### T2. Credential misuse or leakage
 

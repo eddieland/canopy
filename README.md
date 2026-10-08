@@ -75,6 +75,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
   reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
   KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
+- To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY`: its next
+  implement starts on a new branch. Its earlier runs still count toward the attempt limits (DESIGN §22).
 - Review PRs. Humans approve and merge; the agent never does.
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
