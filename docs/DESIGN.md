@@ -79,9 +79,9 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs` and `setup`; `core`; `infra`. A module imports from its own package and lower layers only.
-Features never import each other; what two share moves down a layer. `tests/canopy/test_layers.py` enforces this and
-fails on a module outside the packages it lists.
+the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `serve`; `core`; `infra`. A module imports from its
+own package and lower layers only. Features never import each other; what two share moves down a layer.
+`tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
 ```
 canopy (harness, Python)
@@ -134,6 +134,16 @@ canopy (harness, Python)
     view.py        the state block's reviews
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
 
+  serve/           the web UI's server (§22, D076); the only package that imports fastapi, starlette, or uvicorn
+    app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
+    api.py         the JSON and SSE routes; sessions and leases serve mock.py until the journal backs them
+    schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
+    spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
+    guard.py       Host and Origin checks, and security headers on every response
+    options.py     ServeOptions: loopback host, port, base path, mock data
+    mock.py        deterministic fixtures and a mock event stream
+    __main__.py    python -m canopy.serve: serve for development and tests, or print the OpenAPI schema
+
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
     workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: converge clones and pools (§18)
@@ -158,7 +168,7 @@ canopy (harness, Python)
     stopping.py    SIGTERM, SIGHUP, and SIGINT become an exception the cleanup of _run and _chore catches
     logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files and
                    directories
-    resources.py   finds migrations/ and .agents/ in a source checkout or bundled in the installed wheel
+    resources.py   finds migrations/, .agents/, and the built UI in a source checkout or bundled in the wheel
 ```
 
 ```
@@ -171,6 +181,8 @@ migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
 scripts/         build-binary.sh: the single executable a release ships (D067)
+ui/              the web UI (D076): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
+hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```
 
 `prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
@@ -2024,16 +2036,40 @@ Served by `canopy loop` from a thread (D073):
   it.
 - Pages: the attention list, running and recent runs, and tickets with their conversations. Actions: the CLI's
   verbs, reply, start, and stop.
-- FastAPI on uvicorn, with Jinja2 templates (D074). uvicorn's `Server` runs in the thread, installs no signal
+- FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D076) and the JSON and SSE API it reads.
+  uvicorn's `Server` runs in the thread, installs no signal
   handlers there (the loop's own handle Ctrl-C, §6), and stops when the loop sets its `should_exit`. Form bodies and
   query parameters are validated with pydantic models, as everything else parsed from outside is (D026).
 - Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
-  the operator's session. Templates are rendered with autoescaping on, and nothing marks journal text safe. No inline
-  script built from data. Writes require a per-session token and a same-origin request.
-- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`,
-  `uvicorn`, or `jinja2`; ruff's banned-api rule bans them everywhere else, and `tests/canopy/test_layers.py` checks it,
-  as for click in `cli/`. The ban on `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code
-  opens no socket itself. It listens and calls out to nothing, so T2's "no outbound call" stands.
+  the operator's session. React escapes text it renders, and nothing renders journal text as HTML
+  (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Writes require a per-session
+  token and a same-origin request.
+- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
+  `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
+  `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
+  and calls out to nothing, so T2's "no outbound call" stands.
+
+How it serves, built in M20's foundation and true of every page that follows:
+
+- Under one path prefix (`--base-path` now, `serve.base_path` when config carries it; empty by default), so a proxy
+  can mount it anywhere: the API at
+  `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for every other GET or HEAD. The prefix is
+  written into `index.html` as `<base href>`; the build uses relative URLs and the router reads its basepath from it,
+  so one build serves under any prefix. The prefix comes from config, never from a request header.
+- The fallback to `index.html` never answers under `{base}/api` (an unknown API path is a JSON 404) or for a path
+  with a file extension (a missing asset is a 404, not a page). `index.html` is sent `no-cache`, so an upgrade never
+  shows a stale UI; hashed assets are cached as immutable.
+- Every response refuses framing and MIME sniffing and sends no Referer. `index.html` carries a CSP that allows only
+  this origin, plus the inline theme script by its hash, computed from the file served.
+- The Host header must name a loopback host, on any route: that stops DNS rebinding. An `Origin` header on an API
+  route must name a loopback page: that stops another site's page from calling the API or opening the stream. Ports
+  are not compared, so an SSH forward to another local port works.
+- The event stream is FastAPI's SSE: `Cache-Control: no-cache`, `X-Accel-Buffering: no` so a proxy or forward does not
+  buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
+- The page makes no request to another origin: fonts and icons are bundled.
+- Not yet run by the loop: until T8's listener secret exists the server binds loopback only (`ServeOptions` refuses
+  anything else) and runs from `python -m canopy.serve`. Sessions and leases are served from typed fixtures
+  (`--mock`) until the journal backs them; without `--mock` those routes answer 501.
 
 ### Trust model changes
 

@@ -548,7 +548,10 @@ REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbo
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: not started.
+Status: in progress. Taken in part on request (2026-10-08), ahead of M18: the foundation only (D076). `ui/` with its
+tokens, theme, shell, and placeholder pages; `canopy.serve` serving it and a mock sessions and leases API with SSE;
+the build bundled into the wheel; Playwright against the served build. Not yet: the listener secret, `canopy loop`
+running the server, `serve.*` config, real data, and every page and action above.
 
 ## Deferred, with the trigger that would unblock each
 

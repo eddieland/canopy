@@ -1326,3 +1326,36 @@ Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, 
 change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
 stay.
 Revisit: if two kinds' reference forms ever collide, or a kind needs a verb with a meaning the others do not share.
+
+## D076. The web UI is a single-page app built from `ui/`; FastAPI serves it and its API
+
+Context: D074 chose Jinja2 templates and rejected "a JavaScript front end with a build step" for a few pages and
+forms. The operator then asked for a richer surface: live updates over SSE without polling, route transitions that
+keep the old page until the new one is ready, and an instrument-panel look in two themes, built by agents one feature
+at a time on a base that keeps them consistent. Server-rendered templates would need hand-written JavaScript for each
+of those.
+Decision (DESIGN §22, `ui/DESIGN.md`, `ui/AGENTS.md`; supersedes D074's templates only):
+- `ui/`: Vite, React with the React Compiler, TypeScript strict, Tailwind v4, shadcn/ui on Radix, TanStack Router and
+  Query, oxlint and oxfmt, Vitest, Playwright. Versions are pinned exactly in `ui/package.json`.
+- FastAPI on uvicorn stays (D074). The server is a JSON and SSE API under `{base}/api`, plus the built app with a
+  fallback to `index.html` for its routes. `jinja2` and `python-multipart` are not added; `httpx2`, dev only, replaces
+  `httpx`, which Starlette's test client has deprecated.
+- TypeScript types are generated from FastAPI's OpenAPI schema (`npm run gen:api`); `npm run check:api` fails when
+  they drift.
+- The wheel's build hook (`hatch_build.py`) builds the app when npm is on PATH and bundles it as `canopy/_data/ui`.
+  Operators never need Node: the release binary and a git install on a machine with Node carry the UI. Without npm
+  the wheel has no UI and the server says so; CI and the release set `CANOPY_UI_REQUIRED=1` to make that an error.
+- `make check` runs the UI's checks, so a contributor needs Node 22.12 or later.
+- The server is not run by `canopy loop` until TRUST_MODEL T8's listener secret is built; until then it binds loopback
+  only and runs from `python -m canopy.serve` for development and tests.
+Rejected:
+- Jinja2 with htmx: no build step, but live updates, transitions, and theming become hand-written script per page,
+  which is where agent-built features drift.
+- Committing the build output: git installs would never need Node, at the cost of minified diffs and hashed-name
+  conflicts in every UI pull request.
+- Building at install time: every operator would need Node.
+- Next.js or any server rendering: a second server runtime next to FastAPI, for one local user.
+Consequences: Node joins the contributor toolchain and CI (`lint-and-test`, `ui-e2e`, install-check, release). The
+`fastapi`, `starlette`, and `uvicorn` imports are confined to `canopy.serve` by `tests/canopy/test_layers.py`, as
+`click` is to `cli`. A git install without Node silently lacks the UI, which the server's "not built" page explains.
+Revisit: if the UI shrinks to pages a template would serve, or Node in the toolchain costs more than it saves.
