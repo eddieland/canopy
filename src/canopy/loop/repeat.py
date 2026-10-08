@@ -6,7 +6,7 @@ loops on one state dir would run the overseer twice as often.
 
 How long to wait after a tick is `pace`'s decision. Today that is the configured interval; it is where pacing by what a
 tick cost will go (ROADMAP M13). An operator message recorded since the last tick began, such as a `canopy reply`, ends
-the wait early, at most once a minute (DESIGN §22).
+the wait early, at most once a minute (DESIGN §22). On a terminal, pressing `TICK_NOW_KEY` ends it at once.
 
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
 terminal; with output sent to a file, the loop prints one block per tick and nothing in between. Each tick's block ends
@@ -22,7 +22,7 @@ from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from rich.live import Live
 from rich.spinner import Spinner
@@ -49,6 +49,8 @@ WAKE_MIN_SECONDS = 60.0
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
+# Pressed during the wait, this key runs the next tick now, as `canopy tick` by hand would (D088).
+TICK_NOW_KEY = "t"
 # Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
 # them.
 _QUIET_ACTIONS = ("wait", "mirror")
@@ -60,6 +62,10 @@ _STATUS_STYLES = {
     "reconcile_failed": "bold red",
     "error": "bold red",
 }
+
+
+# What ended a wait before its deadline: an operator message, or the operator pressing `TICK_NOW_KEY`.
+type Woken = Literal["message", "key"]
 
 
 @dataclass
@@ -108,12 +114,14 @@ def run(
     console: Console,
     stop: Stop,
     serve: bool = False,
+    keys: Callable[[], str] | None = None,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> Counter[str]:
     """Run ticks until `stop` is requested or `max_ticks` have run. Returns how many ticks ended in each status.
 
-    With `serve`, the web UI is served from a thread for as long as the loop runs (DESIGN §22).
+    With `serve`, the web UI is served from a thread for as long as the loop runs (DESIGN §22). `keys` returns the keys
+    pressed since it was last called (`infra.keys.listen`); with it, `TICK_NOW_KEY` during the wait ticks at once.
 
     Raises:
         lock.LockBusyError: another loop holds `<state_dir>/loop.lock`.
@@ -127,7 +135,13 @@ def run(
         serving = web.start(ctx, log) if serve else None
         try:
             _header(
-                console, ctx, dry_run=dry_run, interval_minutes=interval_minutes, max_ticks=max_ticks, serving=serving
+                console,
+                ctx,
+                dry_run=dry_run,
+                interval_minutes=interval_minutes,
+                max_ticks=max_ticks,
+                serving=serving,
+                keys=keys is not None,
             )
             _ticks(
                 ctx,
@@ -137,6 +151,7 @@ def run(
                 max_ticks=max_ticks,
                 console=console,
                 stop=stop,
+                keys=keys,
                 sleep=sleep,
                 clock=clock,
                 log=log,
@@ -160,6 +175,7 @@ def _ticks(
     max_ticks: int | None,
     console: Console,
     stop: Stop,
+    keys: Callable[[], str] | None,
     sleep: Callable[[float], None],
     clock: Callable[[], float],
     log: logs.TickAdapter,
@@ -189,9 +205,12 @@ def _ticks(
             clock=clock,
             wake=lambda seen=seen: db.latest_message_id(ctx.conn, source="operator") > seen,
             earliest=started + WAKE_MIN_SECONDS,
+            keys=keys,
         )
-        if woken:
+        if woken == "message":
             log.info("an operator message ended the wait", extra={"after_message": seen})
+        elif woken == "key":
+            log.info("the operator asked for a tick now")
 
 
 def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
@@ -230,17 +249,24 @@ def _wait(
     clock: Callable[[], float],
     wake: Callable[[], bool] = lambda: False,
     earliest: float = 0.0,
-) -> bool:
+    keys: Callable[[], str] | None = None,
+) -> Woken | None:
     """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
 
     Once `wake()` is true, the wait ends at `earliest` instead, or at once if that has passed: an operator message
-    runs the next tick sooner. Returns whether it did.
+    runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor: the operator asked for
+    this tick, as they could with `canopy tick`. Returns what ended the wait early, if anything did.
     """
-    woken = False
+    woken: Woken | None = None
+    hint = f"  ·  {TICK_NOW_KEY} to tick now  ·  Ctrl-C to stop" if keys is not None else "  ·  Ctrl-C to stop"
+    if keys is not None:
+        keys()  # keys pressed during the tick were not meant for this wait
     with Live(console=console, transient=True, auto_refresh=False) as live:
         while not stop.requested and (remaining := deadline - clock()) > 0:
-            if not woken and wake():
-                woken = True
+            if keys is not None and TICK_NOW_KEY in keys().lower():
+                return "key"
+            if woken is None and wake():
+                woken = "message"
                 deadline = min(deadline, max(earliest, clock()))
                 continue
             note = "operator message; next tick in " if woken else "next tick in "
@@ -248,7 +274,7 @@ def _wait(
                 Text.assemble(
                     (note, "dim"),
                     (duration(remaining), "bold"),
-                    (f" at {_clock_time(remaining)}  ·  Ctrl-C to stop", "dim"),
+                    (f" at {_clock_time(remaining)}{hint}", "dim"),
                 ),
                 refresh=True,
             )
@@ -264,6 +290,7 @@ def _header(
     interval_minutes: int,
     max_ticks: int | None,
     serving: web.Serving | None = None,
+    keys: bool = False,
 ) -> None:
     console.rule("[bold]canopy loop[/]", style="dim")
     grid = Table.grid(padding=(0, 2))
@@ -281,6 +308,8 @@ def _header(
         grid.add_row("web UI", Text(serving.note, style="" if serving.server is not None else "yellow"))
     console.print(grid)
     console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
+    if keys:
+        console.print(Text(f"Press {TICK_NOW_KEY} during the wait to tick now.", style="dim"))
     console.print()
 
 

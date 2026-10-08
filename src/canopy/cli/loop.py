@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -12,7 +13,7 @@ from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import contract, conversation, db
-from canopy.infra import lock
+from canopy.infra import keys, lock
 from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
 
@@ -43,16 +44,19 @@ def cmd_loop(
     """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to."""
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
     stop = repeat.Stop()
-    with repeat.signals(stop):
+    console = Console(highlight=False)
+    # Keys only when the countdown is drawn: with output to a file, there is no one at the terminal to tell about them.
+    with repeat.signals(stop), keys.listen(sys.stdin if console.is_terminal else None) as pressed:
         try:
             repeat.run(
                 ctx,
                 dry_run=dry_run,
                 interval_minutes=every or ctx.config.loop.interval_minutes,
                 max_ticks=max_ticks,
-                console=Console(highlight=False),
+                console=console,
                 stop=stop,
                 serve=ctx.config.serve.enabled and not no_serve,
+                keys=pressed,
             )
         except lock.LockBusyError:
             raise CliError(f"another canopy loop is running on {ctx.state_dir}; stop it first") from None
