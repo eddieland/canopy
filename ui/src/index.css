@@ -71,7 +71,8 @@
 /*
  * Motion (ui/DESIGN.md, "Motion"). Short, eased out, and only on something arriving or changing. Every rule below is
  * inside no-preference, so under prefers-reduced-motion: reduce nothing moves and everything rests where it ends.
- * Each animation's resting frame is its last (or, for a loop, its first): a screenshot sees the page at rest.
+ * Each animation's resting frame is its last (or, for a loop, its first): a screenshot sees the page at rest. A
+ * one-shot animation fills backwards, never forwards, so nothing is left applied once the page is at rest.
  */
 @keyframes rise {
     from {
@@ -154,7 +155,7 @@
 @utility stagger {
     @media (prefers-reduced-motion: no-preference) {
         & > * {
-            animation: var(--enter, rise) 320ms cubic-bezier(0.2, 0, 0, 1) both;
+            animation: var(--enter, rise) 320ms cubic-bezier(0.2, 0, 0, 1) backwards;
         }
         & > :nth-child(2) {
             animation-delay: 40ms;
@@ -210,9 +211,11 @@
     }
 }
 
+/* At rest a ripple is invisible, so the animation needs no fill after it ends. */
 @utility animate-ripple {
+    opacity: 0;
     @media (prefers-reduced-motion: no-preference) {
-        animation: ripple 900ms cubic-bezier(0.2, 0, 0, 1) both;
+        animation: ripple 900ms cubic-bezier(0.2, 0, 0, 1) backwards;
     }
     @media (prefers-reduced-motion: reduce) {
         display: none;
@@ -237,7 +240,7 @@
 
 @utility animate-spin-in {
     @media (prefers-reduced-motion: no-preference) {
-        animation: spin-in 420ms cubic-bezier(0.2, 0, 0, 1) both;
+        animation: spin-in 420ms cubic-bezier(0.2, 0, 0, 1) backwards;
     }
 }
 
