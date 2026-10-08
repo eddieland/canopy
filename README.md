@@ -76,7 +76,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
-- Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`; add `--ticket KEY` to filter.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
   `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own

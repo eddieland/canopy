@@ -180,6 +180,28 @@ def test_decisions_prints_a_ticks_plan(
     assert "no tick 9" in capsys.readouterr().err
 
 
+def test_decisions_filters_by_ticket_and_reports_no_match(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tick_id = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick_id, "GH-1", "wait", "checks pending")
+    db.record_decision(conn, tick_id, "GH-10", "done", "merged")
+    db.record_decision(conn, tick_id, None, "skip", "nothing to do")
+    db.finish_tick(conn, tick_id, "ok", "3 decisions")
+
+    assert main(["decisions", "--ticket", "GH-1"]) == 0
+    out = capsys.readouterr().out
+    assert "Decisions (1):" in out
+    assert "GH-1  wait  checks pending" in out
+    assert "GH-10" not in out
+    assert "nothing to do" not in out
+
+    assert main(["decisions", str(tick_id), "--ticket", "GH-2"]) == 0
+    out = capsys.readouterr().out
+    assert "Decisions (0):" in out
+    assert "none for ticket GH-2" in out
+
+
 def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     args = ["ticket", "set", "PROJ-1", "--cursor", "comment=10001", "--cursor", "review=PRR_kw1", "--done"]
     assert main(args) == 0
