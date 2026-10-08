@@ -66,7 +66,13 @@ Controls:
   Pushes are never forced and never go to a fork.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
-  MCP write scope limited to comments, labels, PR create/update).
+  MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
+  submission, closing, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever
+  the operator's runtime grants (D084). Names differ by server, so a server's own name for one of these gets past it.
+  GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and its PR update tool can close the
+  PR; neither has a narrower name to deny: where they are granted, keeping them to labels and the PR's own text is the
+  prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
+  tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
@@ -187,7 +193,8 @@ but must be distinguishable:
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>` or
   the runtime's own attribution. Never hidden.
-- PRs labeled `agent`.
+- PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
+  the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
 - Every review comment says what it is in its first line ("an automated adversarial review ... not a human review and
@@ -215,10 +222,11 @@ Controls:
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
-  knows (`gh`, `acli`, `jira`) are denied in its bash rules. A run is refused where the worktree's OpenCode config
-  names any of that server's tools, since a repository rule merged after canopy's could reopen one. Its prompt says to
-  write nothing to the ticket, and its report and question go to the journal, not the tracker. The journal holds the
-  operator's replies and the workers' reports, under the operator-only state directory (T2).
+  knows (`gh`, `acli`, `jira`) are denied in its bash rules, and other MCP tools by name as for `canopy-worker`
+  (D084). A run is refused where the worktree's OpenCode config names any of that server's tools, since a repository
+  rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and its report and
+  question go to the journal, not the tracker. The journal holds the operator's replies and the workers' reports,
+  under the operator-only state directory (T2).
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
