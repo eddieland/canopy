@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
     AfterValidator,
@@ -550,6 +551,46 @@ class Notify(Section):
         return any(group in sink.events for sink in self.all_sinks().values())
 
 
+CHORE_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
+ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+_HOURS_RE = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
+_DAY_MINUTES = 24 * 60
+
+
+def chore_hours(value: str) -> tuple[int, int]:
+    """Read a chore's `hours`, `HH:MM-HH:MM`, as minutes after midnight: the start, and the end, which may be 24:00.
+
+    Raises:
+        ValueError: not in that shape, not a time of day, or not ending after it starts.
+    """
+    found = _HOURS_RE.fullmatch(value)
+    start, end = (int(found[1]) * 60 + int(found[2]), int(found[3]) * 60 + int(found[4])) if found else (0, 0)
+    if found is None or end > _DAY_MINUTES:
+        raise ValueError(f"hours {value!r} must be two times of day, 00:00 to 24:00, like 08:00-18:00")
+    if end <= start:
+        raise ValueError(f"hours {value!r} must end after they start, on the same day")
+    return start, end
+
+
+def _chore_hours(value: str) -> str:
+    chore_hours(value)
+    return value
+
+
+def _days(value: tuple[str, ...]) -> tuple[str, ...]:
+    if len(set(value)) != len(value):
+        raise ValueError("days must not repeat")
+    return value
+
+
+def _time_zone(value: str) -> str:
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError(f"time zone {value!r} is not an IANA time zone this machine knows") from None
+    return value
+
+
 def _chore_name(value: str) -> str:
     if not CHORE_NAME_RE.fullmatch(value):
         raise ValueError(f"chore name {value!r} must match {CHORE_NAME_RE.pattern}")
@@ -564,6 +605,11 @@ class Chore(Section):
     cmd: CommandTemplate | None = None
     every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
     when: StrictStr = ""
+    # When a run may start, checked in code (D099): the days of the week, empty for every day; the hours of each, as
+    # `HH:MM-HH:MM`; and the zone they are in, an IANA name, by default this machine's local time.
+    days: Annotated[tuple[ChoreDay, ...], AfterValidator(_days)] = ()
+    hours: Annotated[StrictStr, AfterValidator(_chore_hours)] | None = None
+    timezone: Annotated[StrictStr, AfterValidator(_time_zone)] | None = None
     timeout_minutes: Minutes = 15
     cwd: UserPath | None = None
     # The workspaces it runs in, by name; empty means every workspace whose loop reads this file (D063).

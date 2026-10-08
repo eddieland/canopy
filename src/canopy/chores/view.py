@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.chores import result
+from canopy.chores import result, window
 from canopy.core import db
 
 if TYPE_CHECKING:
@@ -83,12 +83,24 @@ class ChoreState:
         """Its most recent run that has ended."""
         return next((r for r in self.runs if r["status"] != "running"), None)
 
-    def due_at(self) -> datetime | None:
+    def earliest(self) -> datetime | None:
         """The earliest time the `not_due` guard allows a new run: `every_minutes` after the latest start. None: now."""
         latest = self.latest
         if latest is None:
             return None
         return db.parse_time(str(latest["started_at"])) + timedelta(minutes=self.chore.every_minutes)
+
+    def due_at(self, now: datetime) -> datetime | None:
+        """The earliest time every guard on time allows a new run: `earliest`, moved to when its window next opens.
+
+        None, or a time not after `now`, means it may run now.
+        """
+        earliest = self.earliest()
+        if not window.limited(self.chore):
+            return earliest
+        after = now if earliest is None or earliest < now else earliest
+        opens = window.next_open(self.chore, after)
+        return earliest if opens <= after else opens
 
     def findings(self) -> list[OpenFinding]:
         """The findings of the latest `ok` run. A run that ended any other way leaves them standing."""
@@ -187,7 +199,7 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[dict[str, ob
                 "ended_at": latest["ended_at"],
                 "summary": harness or (stored.summary if stored is not None else None),
             }
-        due = state.due_at()
+        due = state.due_at(now)
         section.append(
             {
                 "name": state.name,
