@@ -67,6 +67,8 @@ Rules:
 - Hairlines: 1px `border` everywhere. No shadows except `shadow-xs` on a pressed segment.
 - Radius: `rounded-md` for panels and buttons, `rounded-sm` for chips and nav items.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-6xl` with `p-6` and `gap-6` between blocks.
+  The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
+  to the viewport, so a full-page capture (or print) shows it whole.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
 
 ## Motion
