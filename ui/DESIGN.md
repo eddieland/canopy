@@ -113,6 +113,9 @@ inline script and checks it against the store's key.
   while something is broken, the accent for spend.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
+- **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
+  number). Columns keep their width on every row, the age's included. An idle slot shows its state and number
+  alone, dimmed; only a note or an unreadable branch takes a second line.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,

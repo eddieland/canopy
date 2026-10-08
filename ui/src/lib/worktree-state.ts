@@ -1,4 +1,4 @@
-import type { Pool, WorktreeState } from '@/api/types'
+import type { Pool, Worktree, WorktreeState } from '@/api/types'
 
 // Full class names, written out, so Tailwind finds them. One entry per state; the types make a missing one an error.
 // An idle slot is a hollow ring: nothing holds it, and no status color claims it.
@@ -25,4 +25,19 @@ export const WORKTREE_TEXT: Record<WorktreeState, string> = {
  */
 export function overSize(pool: Pool): number {
     return pool.size === null ? 0 : Math.max(0, pool.worktrees.length - pool.size)
+}
+
+/**
+ * Where a pool's slots live, when every slot's path is the same but for its own directory: shown once, in the pool's
+ * header, instead of on every row. Null when they differ, and each row shows its own.
+ */
+export function slotsRoot(worktrees: Worktree[]): string | null {
+    const roots = new Set(
+        worktrees.map((w) => {
+            const at = w.path.lastIndexOf(`/${w.name}/`)
+            return at < 0 ? null : w.path.slice(0, at)
+        }),
+    )
+    const [root] = roots
+    return roots.size === 1 && root !== null && root !== undefined ? root : null
 }
