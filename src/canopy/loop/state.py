@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import conversation, db
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -40,18 +40,23 @@ def state_block(
     split_children: list[sqlite3.Row],
     chores: list[dict[str, object]],
     reviews: dict[str, object] | None,
+    private: Mapping[str, dict[str, object]] | None = None,
+    mirror_delimiter: str,
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
     `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts` and
     `fix_ci_cooldowns` are per unit (`policy.unit`). `split_attempts` are per ticket, and `split_children` are the
     children of splits not yet done, with their split run's end (DESIGN §18). `chores` are the configured chores
-    (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed.
+    (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed. `private` holds each
+    private ticket's conversation state, by key (DESIGN §22); a public ticket has no `private` key. `mirror_delimiter`
+    ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
     """
+    private = private or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def repo_name(repo: str | None) -> str:
-        # A workspace of one's rows may predate its repository's name (migration 0005); it has only the one.
+        # A workspace of one has only the one repository, whatever its rows call it (D052).
         return workspace.repos[0].name if workspace.single or repo is None else repo
 
     def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
@@ -81,6 +86,27 @@ def state_block(
             "started_at": run["started_at"],
             "ended_at": run["ended_at"],
         }
+
+    def ticket_summary(t: sqlite3.Row) -> dict[str, object]:
+        key = str(t["key"])
+        summary: dict[str, object] = {
+            "key": key,
+            "phase": t["phase"],
+            "branch": t["branch"],
+            # The mirror cursor is moved by `canopy mirror` itself, never by `--cursor` (DESIGN §22).
+            "cursors": {
+                **{name: t[column] for name, column in db.TICKET_CURSORS.items()},
+                "mirror": t["last_mirrored_id"],
+            },
+            "units": [unit_summary(key, u) for u in units.get(key, [])],
+            "split_attempts": split_attempts.get(key, 0),
+            "needs_human_since": t["needs_human_since"],
+            "last_seen_at": t["last_seen_at"],
+            "last_run": run_summary(last_runs.get(key)),
+        }
+        if key in private:
+            summary["private"] = private[key]
+        return summary
 
     state: dict[str, object] = {
         "tick_id": tick_id,
@@ -115,6 +141,8 @@ def state_block(
         },
         "trust": {
             "authorized_repliers": list(config.trust.authorized_repliers),
+            "comment_prefix": config.trust.comment_prefix,
+            "comment_suffix": config.trust.comment_suffix,
             "branch_prefix": config.trust.branch_prefix,
             "pr_label": config.trust.pr_label,
         },
@@ -142,20 +170,9 @@ def state_block(
             }
             for r in running
         ],
-        "tickets": [
-            {
-                "key": t["key"],
-                "phase": t["phase"],
-                "branch": t["branch"],
-                "cursors": {name: t[column] for name, column in db.TICKET_CURSORS.items()},
-                "units": [unit_summary(str(t["key"]), u) for u in units.get(str(t["key"]), [])],
-                "split_attempts": split_attempts.get(str(t["key"]), 0),
-                "needs_human_since": t["needs_human_since"],
-                "last_seen_at": t["last_seen_at"],
-                "last_run": run_summary(last_runs.get(str(t["key"]))),
-            }
-            for t in tickets
-        ],
+        "tickets": [ticket_summary(t) for t in tickets],
+        # Tracker comments the overseer copies into the journal (DESIGN §22).
+        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
         # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).
         "split_children": [
             {
@@ -177,7 +194,8 @@ def state_block(
         mode = (
             "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "
             "refusal, and starts nothing. `canopy ticket set` records phases but neither advances cursors nor marks "
-            "tickets done. Decide exactly as you would otherwise."
+            "tickets done. `canopy mirror` records comments but moves no mirror cursor. Decide exactly as you would "
+            "otherwise."
         )
     else:
         mode = "This is a live tick."

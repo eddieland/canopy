@@ -12,11 +12,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, definitions, outbox, treehouse
+from canopy.core import conversation, db, definitions, treehouse
 from canopy.infra import logs, procs
 from canopy.runs import desks
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core.context import Context
 
 
@@ -81,36 +83,47 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
         pid = run["pid"]
         if pid is not None and procs.alive(int(pid)):
             continue
-        slots = db.run_slots(ctx.conn, int(run["id"]))
-        fields = {
-            "run_id": run["id"],
-            "ticket": run["ticket_key"],
-            "pid": pid,
-            "slots": [s["slot_path"] for s in slots],
-            "repos": [s["repo"] for s in slots],
-        }
-        # `_run` is gone, but a worker it started may not be: it leads its own process group. Stop it before its
-        # slots go back to their pools.
-        if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
-            log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
-        note = json.dumps({"harness": "the worker process is gone"})
-        db.finish_run(
-            ctx.conn, int(run["id"]), "crashed", note, event=outbox.run_ended(ctx.config, run, "crashed", note)
+        returned |= end_run(ctx, run, "crashed", "the worker process is gone", log)
+    return returned
+
+
+def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.TickAdapter) -> set[str]:
+    """Close a run whose `_run` is gone, or was killed, as `status`: stop its worker, return its slots, remove its desk.
+
+    Reconcile closes a crashed run this way, and `canopy stop --now` a stopped one (DESIGN §22). Returns the lease ids
+    returned.
+
+    Raises:
+        treehouse.TreehouseError: a slot could not be returned.
+    """
+    returned: set[str] = set()
+    slots = db.run_slots(ctx.conn, int(run["id"]))
+    fields = {
+        "run_id": run["id"],
+        "ticket": run["ticket_key"],
+        "pid": run["pid"],
+        "slots": [s["slot_path"] for s in slots],
+        "repos": [s["repo"] for s in slots],
+    }
+    # `_run` is gone, but a worker it started may not be: it leads its own process group. Stop it before its slots go
+    # back to their pools.
+    if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
+        log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
+    conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"harness": note}))
+    outcomes: list[str] = []
+    for slot in slots:
+        outcome = treehouse.return_slot(
+            ctx.runner,
+            Path(slot["slot_path"]),
+            lease_id=str(slot["lease_id"]),
+            lease_holder=str(slot["lease_holder"]),
+            pool=ctx.workspace.pool(slot["repo"]),
         )
-        outcomes: list[str] = []
-        for slot in slots:
-            outcome = treehouse.return_slot(
-                ctx.runner,
-                Path(slot["slot_path"]),
-                lease_id=str(slot["lease_id"]),
-                lease_holder=str(slot["lease_holder"]),
-                pool=ctx.workspace.pool(slot["repo"]),
-            )
-            returned.add(str(slot["lease_id"]))
-            outcomes.append(outcome.value)
-        if len(slots) > 1:
-            desks.remove(desks.path(ctx.workspace.root, str(run["ticket_key"])))
-        log.warning("worker process is gone; run marked crashed", extra={**fields, "returned": outcomes})
+        returned.add(str(slot["lease_id"]))
+        outcomes.append(outcome.value)
+    if len(slots) > 1:
+        desks.remove(desks.path(ctx.workspace.root, str(run["ticket_key"])))
+    log.warning("run closed without its `_run`", extra={**fields, "status": status, "note": note, "returned": outcomes})
     return returned
 
 
@@ -147,7 +160,7 @@ def _return_stale(
 
 def _prune_definitions(ctx: Context, log: logs.TickAdapter) -> None:
     try:
-        current = definitions.ensure(ctx.state_dir)
+        current = definitions.ensure(ctx.state_dir, ctx.config)
     except definitions.DefinitionsError as e:
         # The overseer's run refuses it too and fails the tick with this message.
         log.error("definitions snapshot not usable", extra={"error": str(e)})  # noqa: TRY400

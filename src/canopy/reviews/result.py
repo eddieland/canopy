@@ -8,7 +8,10 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
+
+from canopy.core import contract
+from canopy.core.contract import bounded, one_line
 
 MAX_SUMMARY = 2000
 MAX_TITLE = 200
@@ -17,33 +20,14 @@ MAX_FINDINGS = 20
 MAX_URL = 500
 
 
-def _cut(limit: int) -> AfterValidator:
-    return AfterValidator(lambda v: v if len(v) <= limit else v[: limit - 3] + "...")
-
-
-def _one_line(value: str) -> str:
-    return " ".join(value.split())
-
-
-def plain_url(value: str) -> bool:
-    """Whether `value` is a plain `https://` URL: no whitespace, bounded."""
-    return value.startswith("https://") and len(value) <= MAX_URL and not any(c.isspace() for c in value)
-
-
-def _url(value: str) -> str:
-    if not plain_url(value):
-        raise ValueError(f"must be a plain https:// URL of at most {MAX_URL} characters")
-    return value
-
-
 class Finding(BaseModel):
     """One defect the reviewer verified against the code."""
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     severity: Literal["blocking", "major", "minor"]
-    title: Annotated[StrictStr, AfterValidator(_one_line), _cut(MAX_TITLE)]
-    location: Annotated[StrictStr, AfterValidator(_one_line), _cut(MAX_LOCATION)] = ""
+    title: Annotated[StrictStr, one_line, bounded(MAX_TITLE)]
+    location: Annotated[StrictStr, one_line, bounded(MAX_LOCATION)] = ""
 
 
 class ReviewResult(BaseModel):
@@ -54,8 +38,8 @@ class ReviewResult(BaseModel):
     status: Literal["done", "failed"]
     verdict: Literal["clean", "findings"] | None = None
     impact: Literal["low", "normal", "high"] | None = None
-    comment: Annotated[StrictStr, AfterValidator(_url)] | None = None
-    summary: Annotated[StrictStr, _cut(MAX_SUMMARY)] = ""
+    comment: Annotated[StrictStr, contract.url(MAX_URL)] | None = None
+    summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
     findings: Annotated[list[Finding], Field(max_length=MAX_FINDINGS)] = []
 
     @model_validator(mode="after")
@@ -69,23 +53,12 @@ class ReviewResult(BaseModel):
 
 def parse(stdout: str) -> ReviewResult | None:
     """Parse the last non-empty line of `stdout` as a review's result. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return ReviewResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(ReviewResult, stdout)
 
 
 def stored(result_json: object) -> ReviewResult | None:
     """Read a result the journal stored, or None if there is none."""
-    if not isinstance(result_json, str) or not result_json:
-        return None
-    try:
-        return ReviewResult.model_validate_json(result_json)
-    except ValidationError:
-        return None
+    return contract.stored(ReviewResult, result_json)
 
 
 CONTRACT = (

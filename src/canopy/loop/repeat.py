@@ -5,7 +5,8 @@ by hand still fits in between. The loop also holds its own lock, `<state_dir>/lo
 loops on one state dir would run the overseer twice as often.
 
 How long to wait after a tick is `pace`'s decision. Today that is the configured interval; it is where pacing by what a
-tick cost will go (ROADMAP M13).
+tick cost will go (ROADMAP M13). An operator message recorded since the last tick began, such as a `canopy reply`, ends
+the wait early, at most once a minute (DESIGN §22).
 
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
 terminal; with output sent to a file, the loop prints one block per tick and nothing in between.
@@ -29,7 +30,7 @@ from rich.text import Text
 
 from canopy.core import db
 from canopy.infra import lock, logs, resources
-from canopy.loop import attention, tick
+from canopy.loop import attention, tick, web
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -39,14 +40,17 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 LOCK_FILE_NAME = "loop.lock"
-# How often the wait wakes to redraw the countdown and to notice a stop.
+# How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
 _WAIT_STEP_SECONDS = 0.5
+# An operator message starts the next tick early, but no sooner than this after the last one began.
+WAKE_MIN_SECONDS = 60.0
 # A second stop signal this soon after the first is the same Ctrl-C, not a second one (D049). `uv run` forwards the
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
-# Decisions every tick repeats. The tick's summary counts them; `canopy decisions` lists them.
-_QUIET_ACTIONS = ("wait",)
+# Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
+# them.
+_QUIET_ACTIONS = ("wait", "mirror")
 _STATUS_STYLES = {
     "ok": "bold green",
     "skipped": "bold yellow",
@@ -102,10 +106,13 @@ def run(
     max_ticks: int | None,
     console: Console,
     stop: Stop,
+    serve: bool = False,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> Counter[str]:
     """Run ticks until `stop` is requested or `max_ticks` have run. Returns how many ticks ended in each status.
+
+    With `serve`, the web UI is served from a thread for as long as the loop runs (DESIGN §22).
 
     Raises:
         lock.LockBusyError: another loop holds `<state_dir>/loop.lock`.
@@ -116,27 +123,74 @@ def run(
         # The loop reads the journal before its first tick, which is what would otherwise migrate it.
         db.migrate(ctx.conn, resources.migrations_dir())
         log.info("loop started", extra={"dry_run": dry_run, "interval_minutes": interval_minutes, "repo": ctx.repo})
-        _header(console, ctx, dry_run=dry_run, interval_minutes=interval_minutes, max_ticks=max_ticks)
-        while not stop.requested:
-            before = attention.listed(ctx)
-            started = clock()
-            with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
-                outcome = _tick(ctx, dry_run=dry_run, log=log)
-            ended = clock()
-            statuses[outcome.status] += 1
-            last = max_ticks is not None and statuses.total() >= max_ticks
-            wait = None if last or stop.requested else pace(outcome, interval_minutes * 60)
-            # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
-            next_at = None if wait is None else _clock_time(wait)
-            _report(console, ctx, outcome, before, elapsed=ended - started, next_at=next_at)
-            if wait is None:
-                break
-            _wait(console, stop, ended + wait, sleep=sleep, clock=clock)
+        serving = web.start(ctx, log) if serve else None
+        try:
+            _header(
+                console, ctx, dry_run=dry_run, interval_minutes=interval_minutes, max_ticks=max_ticks, serving=serving
+            )
+            _ticks(
+                ctx,
+                statuses,
+                dry_run=dry_run,
+                interval_minutes=interval_minutes,
+                max_ticks=max_ticks,
+                console=console,
+                stop=stop,
+                sleep=sleep,
+                clock=clock,
+                log=log,
+            )
+        finally:
+            if serving is not None and serving.server is not None:
+                serving.server.stop()
         log.info("loop stopped", extra={"ticks": statuses.total(), "statuses": dict(statuses)})
     counts = ", ".join(f"{status}={n}" for status, n in sorted(statuses.items())) or "none"
     ticks = statuses.total()
     console.rule(f"[bold]canopy loop[/] stopped after {ticks} tick{'' if ticks == 1 else 's'}: {counts}", style="dim")
     return statuses
+
+
+def _ticks(
+    ctx: Context,
+    statuses: Counter[str],
+    *,
+    dry_run: bool,
+    interval_minutes: int,
+    max_ticks: int | None,
+    console: Console,
+    stop: Stop,
+    sleep: Callable[[float], None],
+    clock: Callable[[], float],
+    log: logs.TickAdapter,
+) -> None:
+    """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status."""
+    while not stop.requested:
+        before = attention.listed(ctx)
+        # Operator messages newer than this wake the wait after this tick: every channel records one the same way.
+        seen = db.latest_message_id(ctx.conn, source="operator")
+        started = clock()
+        with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
+            outcome = _tick(ctx, dry_run=dry_run, log=log)
+        ended = clock()
+        statuses[outcome.status] += 1
+        last = max_ticks is not None and statuses.total() >= max_ticks
+        wait = None if last or stop.requested else pace(outcome, interval_minutes * 60)
+        # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
+        next_at = None if wait is None else _clock_time(wait)
+        _report(console, ctx, outcome, before, elapsed=ended - started, next_at=next_at)
+        if wait is None:
+            break
+        woken = _wait(
+            console,
+            stop,
+            ended + wait,
+            sleep=sleep,
+            clock=clock,
+            wake=lambda seen=seen: db.latest_message_id(ctx.conn, source="operator") > seen,
+            earliest=started + WAKE_MIN_SECONDS,
+        )
+        if woken:
+            log.info("an operator message ended the wait", extra={"after_message": seen})
 
 
 def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
@@ -173,22 +227,43 @@ def _wait(
     *,
     sleep: Callable[[float], None],
     clock: Callable[[], float],
-) -> None:
-    """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested."""
+    wake: Callable[[], bool] = lambda: False,
+    earliest: float = 0.0,
+) -> bool:
+    """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
+
+    Once `wake()` is true, the wait ends at `earliest` instead, or at once if that has passed: an operator message
+    runs the next tick sooner. Returns whether it did.
+    """
+    woken = False
     with Live(console=console, transient=True, auto_refresh=False) as live:
         while not stop.requested and (remaining := deadline - clock()) > 0:
+            if not woken and wake():
+                woken = True
+                deadline = min(deadline, max(earliest, clock()))
+                continue
+            note = "operator message; next tick in " if woken else "next tick in "
             live.update(
                 Text.assemble(
-                    ("next tick in ", "dim"),
+                    (note, "dim"),
                     (duration(remaining), "bold"),
                     (f" at {_clock_time(remaining)}  ·  Ctrl-C to stop", "dim"),
                 ),
                 refresh=True,
             )
             sleep(min(_WAIT_STEP_SECONDS, remaining))
+    return woken
 
 
-def _header(console: Console, ctx: Context, *, dry_run: bool, interval_minutes: int, max_ticks: int | None) -> None:
+def _header(
+    console: Console,
+    ctx: Context,
+    *,
+    dry_run: bool,
+    interval_minutes: int,
+    max_ticks: int | None,
+    serving: web.Serving | None = None,
+) -> None:
     console.rule("[bold]canopy loop[/]", style="dim")
     grid = Table.grid(padding=(0, 2))
     grid.add_column(style="dim")
@@ -201,6 +276,8 @@ def _header(console: Console, ctx: Context, *, dry_run: bool, interval_minutes: 
     if max_ticks is not None:
         grid.add_row("stops", f"after {max_ticks} tick{'' if max_ticks == 1 else 's'}")
     grid.add_row("log", Text(str(ctx.state_dir / logs.LOG_FILE_NAME)))
+    if serving is not None:
+        grid.add_row("web UI", Text(serving.note, style="" if serving.server is not None else "yellow"))
     console.print(grid)
     console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
     console.print()

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import dataclasses
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import db, treehouse
 from canopy.core.workspace import Workspace, of_one
 from canopy.infra import lock, procs
 
@@ -36,6 +37,17 @@ class Context:
     def workspace(self) -> Workspace:
         """The workspace this command runs in."""
         return self.ws if self.ws is not None else of_one(self.repo_root)
+
+    def pool(self, repo: str | None) -> treehouse.Pool:
+        """Where treehouse runs for repository `repo`'s pool, with the size `capacity` declares for it.
+
+        Only a workspace's pools have a declared size: a workspace of one's pool is treehouse's own, which may be the
+        operator's interactive pool as well (DESIGN §18).
+        """
+        pool = self.workspace.pool(repo)
+        if self.workspace.single or repo is None:
+            return pool
+        return dataclasses.replace(pool, slots=self.config.capacity.slots_for(repo))
 
     @property
     def state_dir(self) -> Path:
