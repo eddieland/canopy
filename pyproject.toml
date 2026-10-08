@@ -40,6 +40,14 @@ packages = ["src/canopy"]
 ".agents/skills" = "canopy/_data/skills"
 ".agents/operator-skill" = "canopy/_data/operator-skill"
 
+# The built web UI goes in as canopy/_data/ui, built with npm first when it is on PATH (D076).
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
+
+# ui/ ships as source; its dependencies and build output are not part of it.
+[tool.hatch.build.targets.sdist]
+exclude = ["ui/node_modules", "ui/dist", "ui/test-results", "ui/playwright-report"]
+
 # The repository is a uv workspace: canopy at the root, separate programs it ships under packages/ (D041).
 [tool.uv.workspace]
 members = ["packages/*"]
@@ -104,6 +112,8 @@ ban-relative-imports = "all"
 ]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
+# The wheel's build hook runs npm (D076); it is part of packaging, not of canopy.
+"hatch_build.py" = ["S603", "TID251"]
 # The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
 "packages/canopy-notify-slack/**" = ["TID251"]
 
