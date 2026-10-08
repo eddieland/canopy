@@ -503,17 +503,18 @@ without the placeholders still renders, and its workers' comments read as the op
 How a worker opens a PR is the one step an operator may need done their own way: an employer's tooling that adds
 metadata, a stacked-PR tool, or a host the GitHub MCP serves badly (D077). `runtime.pr_skill`, user-only, names a skill
 of the operator's, which `implement` and `resume` workers then open every PR with, and in no other way; with it unset
-they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run:
-the worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
+they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run: the
+worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
 whose PRs the operator set the skill to avoid. The skill is ordinary customization (§13): it sits where the runtime
-reads skills, and any program it runs must be on the `PATH` of the shell that runs canopy, which workers inherit. It
-changes only how the PR is opened; every other obligation above still holds. The branch is `{{BRANCH}}`, pushed
-without force, and `_run` still checks it is on origin (step 5). A program that pushes by itself is past the bash
-rules, which match the command text, so branch protection governs (TRUST_MODEL T1). The PR targets the listed base,
-carries the ticket key and `trust.pr_label` with no closing keywords, and its URL goes in the result's `prs`. The
-overseer and later workers still read the PR through the GitHub MCP, so it must be one that server can read. `fix-ci`
-and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting a stacked one, stays with
-the MCP.
+reads skills, under a name no repository canopy works in uses, since OpenCode picks either of two same-named skills and
+a repository's could stand in for the operator's. Any program it runs must be on the `PATH` of the shell that runs
+canopy, which workers inherit. It changes only how the PR is opened; every other obligation above still holds. The
+branch is `{{BRANCH}}`, pushed without force, and `_run` still checks it is on origin (step 5). A program that pushes by
+itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL T1). The PR
+targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL goes in the
+result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one that server
+can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting a stacked
+one, stays with the MCP.
 
 ## 9. Aggressive release
 
