@@ -154,7 +154,7 @@ def _show_ticket(ctx: Context, key: str) -> None:
     if ticket is None and record is None:
         raise CliError(f"canopy has no record of {key}")
     if record is None:
-        how = "public: its queue label authorizes it, and its conversation is on the ticket"
+        how = "public: its queue label authorizes it; its conversation is on the ticket, and copied here"
     else:
         since = record["started_at"] if record["status"] == "started" else record["stopped_at"]
         how = f"private, {record['status']} {attention.age(str(since))} ago"
@@ -201,6 +201,13 @@ def _echo_message(m: sqlite3.Row) -> None:
 
 def _message_head(m: sqlite3.Row) -> str:
     who = {"worker": "worker", "operator": "you", "tracker": "tracker"}.get(str(m["source"]), str(m["source"]))
+    if m["comment_id"] is not None:
+        # A tracker comment the overseer mirrored: a copy, which authorizes nothing (DESIGN §22).
+        cut = ", truncated" if m["truncated"] else ""
+        return (
+            f"  #{m['id']}  {attention.age(str(m['at']))} ago  {who} comment {m['comment_id']} by {m['author']}, "
+            f"written {m['commented_at']}{cut}"
+        )
     about = f" (run:{m['run_id']})" if m["run_id"] else ""
     if m["answers"]:
         about += f" answering {m['answers']}"

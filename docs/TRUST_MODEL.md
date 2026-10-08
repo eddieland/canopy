@@ -76,6 +76,12 @@ Controls:
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
   harness renders them into the worker's prompt itself. `start`, `stop`, and `reply` refuse when `CANOPY_TICK_ID` or
   `CANOPY_RUN_ID` is set, which every agent canopy runs has.
+- Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
+  and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
+  (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
+  worker's prompt labels a mirrored comment as data, with its author. The overseer passes a comment's text on stdin
+  through a quoted heredoc, never in an argument, so the shell expands nothing in it, and the heredoc's delimiter is
+  random and fresh each tick, so no comment can be written to end it early and run what follows (D081).
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.
 - The loop may create tickets, but never decides to, and never authorizes them. A split run (DESIGN §18) starts only
@@ -112,7 +118,8 @@ installs and builds, so a worker steered into fetching a page with `curl` reads 
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply` or `canopy start` with the variables unset, or write the
 journal file directly: the refusal stops a worker that follows injected text naively, not one that works around it. The
-operator accepted this (D076).
+operator accepted this (D076). A steered overseer can mirror text that was never on the ticket, or name the wrong
+author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker stays its source.
 
 ### T2. Credential misuse or leakage
 
@@ -140,6 +147,7 @@ Controls in code, not prompts:
   `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
+- Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
 
 ### T4. Damage to the operator's machine
 
@@ -211,6 +219,9 @@ Controls:
   names any of that server's tools, since a repository rule merged after canopy's could reopen one. Its prompt says to
   write nothing to the ticket, and its report and question go to the journal, not the tracker. The journal holds the
   operator's replies and the workers' reports, under the operator-only state directory (T2).
+- The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
+  the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
+  notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
 - Secrets are not supposed to be in the worktree. Repository hygiene applies.
 - Notifications carry text written by agents and org members (attention details, worker summaries and questions,
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,

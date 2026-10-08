@@ -251,7 +251,7 @@ def test_the_state_block_shows_each_unit(
     assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
         "running",
         BRANCH,
-        {"comment": "c-1", "message": None},
+        {"comment": "c-1", "message": None, "mirror": None},
     )
     no_limit = {"implement": 1, "fix-ci": 0, "resume": 0}
     assert ticket["units"] == [

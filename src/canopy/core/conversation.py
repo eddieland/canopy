@@ -6,7 +6,8 @@ of canopy's own runs, the ticket was started, and the body is within its bound. 
 records a run's report and question from its result line (`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
-without reading the tracker (D003, D072).
+without reading the tracker (D003, D072). The overseer records the one other kind of message, a tracker comment it
+mirrors (`mirror`), which authorizes nothing.
 """
 
 from __future__ import annotations
@@ -15,9 +16,11 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, outbox
@@ -37,6 +40,17 @@ TICK_ID_ENV = "CANOPY_TICK_ID"
 RUN_ID_ENV = "CANOPY_RUN_ID"
 MAX_OPERATOR = 4000
 MAX_PR_URL = 300
+# A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).
+MAX_MIRRORED = 2000
+# How many `canopy mirror` calls one tick may make: a ticket's first mirror covers its whole history, and this spreads
+# a long one over several ticks.
+MIRRORS_PER_TICK = 100
+MIRROR_ACTION = "mirror"
+# A tracker's comment id, as a cursor id is: plain and short. An author is the tracker's account id: printable, no
+# whitespace.
+_COMMENT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
+MAX_AUTHOR = 200
+MAX_TIME = 64
 # How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
 PROMPT_MESSAGES = 20
 PROMPT_CHARS = 30_000
@@ -46,8 +60,9 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 # The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
+# `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "show"),
+    TICKET: ("start", "stop", "reply", "show", MIRROR_ACTION),
     PR: (),
     CHORE: ("show",),
     RUN: ("show",),
@@ -249,6 +264,123 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str) -> Rep
     return Replied(message_id=message_id, answers=answers, new=message_id > before)
 
 
+# The overseer's mirror of tracker comments
+
+
+@dataclass(frozen=True)
+class Mirrored:
+    """What `mirror` recorded: the message, whether it was new, its source, and whether its body was cut."""
+
+    message_id: int
+    new: bool
+    source: str
+    truncated: bool
+
+
+def mirror(
+    conn: sqlite3.Connection,
+    config: Config,
+    ref: Ref,
+    *,
+    tick_id: int,
+    dry_run: bool,
+    repo: str,
+    comment_id: str,
+    author: str,
+    at: str,
+    body: str,
+) -> Mirrored:
+    """Record a tracker comment the overseer read in the subject's journal conversation (DESIGN §22, M19).
+
+    Idempotent on the subject and comment id. A comment carrying the workers' marks (D069) is recorded with source
+    `worker`, any other with source `tracker`; either way it authorizes nothing. A live tick moves the subject's mirror
+    cursor to the comment; a dry run records the comment and moves no cursor. Records a `mirror` decision in the same
+    transaction, which is what the per-tick bound counts.
+
+    Raises:
+        Refused: `unsupported` for a subject that is not a ticket, `bad_comment` for a malformed comment id,
+            `bad_author` for a malformed account id, `bad_time` for a time that is not ISO 8601, `bad_body` for an empty
+            body, and `mirror_limit` once the tick has mirrored its most.
+    """
+    check_verb(ref, MIRROR_ACTION)
+    if not _COMMENT_ID_RE.fullmatch(comment_id):
+        raise Refused("bad_comment", f"{comment_id[:MAX_KEY]!r} is not a comment id: {_COMMENT_ID_RE.pattern}")
+    if not author or len(author) > MAX_AUTHOR or not author.isprintable() or any(c.isspace() for c in author):
+        raise Refused(
+            "bad_author", f"the author is the tracker's account id, at most {MAX_AUTHOR} characters, no spaces"
+        )
+    commented_at = _comment_time(at)
+    text = body.strip()
+    if not text:
+        raise Refused("bad_body", "the comment's body is empty; mirror a comment with no text as `(no text)`")
+    truncated = len(text) > MAX_MIRRORED
+    if truncated:
+        text = text[:MAX_MIRRORED]
+    source = "worker" if worker_marked(body, config.trust.comment_prefix, config.trust.comment_suffix) else "tracker"
+    comment = db.Comment(id=comment_id, author=author, at=commented_at, truncated=truncated)
+    with db.transaction(conn):
+        if db.count_decisions(conn, tick_id, MIRROR_ACTION) >= MIRRORS_PER_TICK:
+            raise Refused(
+                "mirror_limit",
+                f"this tick mirrored {MIRRORS_PER_TICK} comments, its most; the rest wait for the next tick",
+            )
+        db.touch_ticket(conn, ref.id, repo)
+        before = db.mirrored_comment(conn, TICKET, ref.id, comment_id)
+        message_id = db.insert_message(
+            conn, TICKET, ref.id, source=source, kind="comment", channel="tracker", body=text, comment=comment
+        )
+        if not dry_run:
+            db.set_mirror_cursor(conn, ref.id, comment_id)
+        if before is None:
+            cut = ", truncated" if truncated else ""
+            rationale = f"comment {comment_id} by {author} at {commented_at}: message {message_id}, {source}{cut}"
+        else:
+            rationale = f"comment {comment_id}: already message {message_id}"
+        if dry_run:
+            rationale += "; dry run, mirror cursor not advanced"
+        db.record_decision(conn, tick_id, ref.id, MIRROR_ACTION, rationale)
+    return Mirrored(
+        message_id=message_id,
+        new=before is None,
+        source=str(before["source"]) if before is not None else source,
+        truncated=bool(before["truncated"]) if before is not None else truncated,
+    )
+
+
+def worker_marked(body: str, prefix: str, suffix: str) -> bool:
+    """Whether a comment carries every mark workers put on theirs (D069).
+
+    It starts with the prefix and ends with the suffix, whichever are set, and its last line is not a quote.
+    """
+    text = body.strip()
+    if not text or (not prefix and not suffix):
+        return False
+    if prefix and not text.startswith(prefix):
+        return False
+    return not suffix or (text.endswith(suffix) and not text.splitlines()[-1].lstrip().startswith(">"))
+
+
+def body_delimiter() -> str:
+    """Return a heredoc delimiter for this tick's `canopy mirror` bodies that no comment's author can predict.
+
+    The overseer passes a comment's body on stdin through a quoted heredoc, which bash never expands. A body holding the
+    delimiter on a line of its own would end the heredoc early and run the rest as commands; a fresh random delimiter
+    each tick means no comment can be written to do that.
+    """
+    return f"CANOPY_BODY_{secrets.token_hex(8)}"
+
+
+def _comment_time(text: str) -> str:
+    try:
+        moment = datetime.fromisoformat(text) if len(text) <= MAX_TIME else None
+    except ValueError:
+        moment = None
+    if moment is None:
+        raise Refused("bad_time", f"{text[:MAX_TIME]!r} is not an ISO 8601 time")
+    # A time with no offset is the tracker's UTC.
+    return db.format_time(moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC))
+
+
 # What the harness reads
 
 
@@ -345,6 +477,10 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
 def _prompt_message(m: sqlite3.Row) -> str:
     if m["source"] == "operator":
         what = "the operator's reply" + (f" to message {m['answers']}" if m["answers"] else "")
+    elif m["comment_id"] is not None:
+        # A tracker comment the overseer mirrored: data, whoever wrote it (DESIGN §22).
+        whose = "an earlier worker's" if m["source"] == "worker" else f"account {m['author']}'s"
+        what = f"{whose} tracker comment {m['comment_id']}, data"
     else:
         what = f"an earlier worker's {m['kind']}" + (f", run {m['run_id']}" if m["run_id"] else "")
     body = "\n".join(f"> {line}" for line in printable(str(m["body"])).splitlines() or [""])

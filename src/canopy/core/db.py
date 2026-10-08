@@ -73,6 +73,16 @@ class Event:
 
 
 @dataclass(frozen=True)
+class Comment:
+    """A tracker comment as a mirrored message records it (DESIGN §22): its id, author's account id, and time."""
+
+    id: str
+    author: str
+    at: str
+    truncated: bool
+
+
+@dataclass(frozen=True)
 class Migration:
     """One migration file on disk."""
 
@@ -750,10 +760,12 @@ def insert_message(
     run_id: int | None = None,
     answers: int | None = None,
     submission: str | None = None,
+    comment: Comment | None = None,
 ) -> int:
     """Record a message and return its id.
 
-    A submission already recorded for the subject records nothing new: its message's id is returned instead.
+    A submission already recorded for the subject records nothing new: its message's id is returned instead. So does a
+    tracker comment already mirrored for the subject.
     """
     if submission is not None:
         found = conn.execute(
@@ -762,12 +774,50 @@ def insert_message(
         ).fetchone()
         if found is not None:
             return int(found[0])
+    if comment is not None:
+        mirrored = mirrored_comment(conn, subject_kind, subject_id, comment.id)
+        if mirrored is not None:
+            return int(mirrored["id"])
     cur = conn.execute(
-        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, run_id, body, answers, submission) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (subject_kind, subject_id, now(), source, kind, channel, run_id, body, answers, submission),
+        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, run_id, body, answers, submission, "
+        "comment_id, author, commented_at, truncated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            subject_kind,
+            subject_id,
+            now(),
+            source,
+            kind,
+            channel,
+            run_id,
+            body,
+            answers,
+            submission,
+            *((comment.id, comment.author, comment.at, int(comment.truncated)) if comment else (None, None, None, 0)),
+        ),
     )
     return _rowid(cur)
+
+
+def mirrored_comment(
+    conn: sqlite3.Connection, subject_kind: str, subject_id: str, comment_id: str
+) -> sqlite3.Row | None:
+    """Return the message a tracker comment was mirrored as, or None if it was not (DESIGN §22)."""
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND comment_id = ?",
+        (subject_kind, subject_id, comment_id),
+    ).fetchone()
+    return row
+
+
+def set_mirror_cursor(conn: sqlite3.Connection, key: str, comment_id: str) -> None:
+    """Move a ticket's mirror cursor to a tracker comment, the newest mirrored. Call inside a transaction."""
+    conn.execute("UPDATE tickets SET last_mirrored_id = ? WHERE key = ?", (comment_id, key))
+
+
+def count_decisions(conn: sqlite3.Connection, tick_id: int, action: str) -> int:
+    """Return how many decisions with `action` a tick recorded."""
+    row = conn.execute("SELECT count(*) FROM decisions WHERE tick_id = ? AND action = ?", (tick_id, action)).fetchone()
+    return int(row[0])
 
 
 def get_message(conn: sqlite3.Connection, message_id: int) -> sqlite3.Row | None:

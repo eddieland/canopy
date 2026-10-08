@@ -162,9 +162,11 @@ The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the con
 
 ### R12. One record of every ticket's conversation
 
-Gap; sketched as M19. Every ticket's conversation, public or private, in one place canopy owns, so the web UI (N1) can
-show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072). For a public
-ticket the tracker stays the authority and the journal holds the overseer's copy.
+Built in M19, live acceptance pending. Every ticket's conversation, public or private, in one place canopy owns, so the
+web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
+For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
+mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
+operator's replies. Gap: PR review comments, which join with PR subjects (M14).
 
 ## Nice to have
 
