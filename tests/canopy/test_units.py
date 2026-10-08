@@ -283,15 +283,18 @@ def test_journal_commands_name_a_unit(
     conn = ws.journal()
     tick_id = in_tick(conn, monkeypatch)
     # A review or ci cursor is a unit's: in a workspace of several it needs --repo, and one repository.
-    assert main(["ticket", "set", "PROJ-1", "--cursor", "review=r-1"]) == 2
+    reviewed = "2026-10-07T20:58:50Z"
+    assert main(["ticket", "set", "PROJ-1", "--cursor", f"review={reviewed}"]) == 2
     assert "a review cursor belongs to one unit: name its repository with --repo" in capsys.readouterr().err
     assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--cursor", "ci=9")) == 2
     assert main(["ticket", "set", "PROJ-1", "--repo", "nope", "--phase", "ci_red"]) == 1
     assert "'nope' is not a repository in this workspace (api, web)" in capsys.readouterr().err
-    assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--cursor", "review=r-1", "--phase", "ci_red"]) == 0
+    assert (
+        main(["ticket", "set", "PROJ-1", "--repo", "api", "--cursor", f"review={reviewed}", "--phase", "ci_red"]) == 0
+    )
     assert capsys.readouterr().out == "updated PROJ-1 (api)\n"
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["repo"], unit["phase"], unit["last_review_id"], unit["branch"]) == ("api", "ci_red", "r-1", None)
+    assert (unit["repo"], unit["phase"], unit["last_review_id"], unit["branch"]) == ("api", "ci_red", reviewed, None)
     ticket = db.get_ticket(conn, "PROJ-1")
     assert ticket is not None
     assert ticket["phase"] is None  # a phase about the PR is the unit's

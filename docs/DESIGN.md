@@ -468,13 +468,22 @@ journal: `needs_human` when its latest run ended `blocked` and no operator messa
 an operator message is newer than its message cursor. Its PR phases are as above.
 
 Cursors (`comment`, `review`, `ci`, and a private ticket's `message`, a journal message id) hold the newest item of each
-kind the loop has handled, in the tracker's and GitHub's own ids; "newer than cursor" means not handled yet. The comment
-cursor is the ticket's; the review and ci cursors are each unit's, since each unit has its own PR. In a workspace of
-several, `canopy ticket set` names the unit with `--repo`, and a dispatch that carries one names exactly one repository;
-in a workspace of one the unit is implied. A dispatch that handles new items carries their cursors (`--cursor`, §8), so
-they advance only if the worker starts. Items handled by a wait, a done, or an attention item advance with `canopy
-ticket set`. A review comment waiting on a human is not advanced past, so its attention item is recorded every tick
-until a human answers it.
+kind the loop has handled, in the tracker's and GitHub's own ids, except `review`, which holds a time (below); "newer
+than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are each unit's, since
+each unit has its own PR. In a workspace of several, `canopy ticket set` names the unit with `--repo`, and a dispatch
+that carries one names exactly one repository; in a workspace of one the unit is implied. A dispatch that handles new
+items carries their cursors (`--cursor`, §8), so they advance only if the worker starts. Items handled by a wait, a
+done, or an attention item advance with `canopy ticket set`. A review comment waiting on a human is not advanced past,
+so its attention item is recorded every tick until a human answers it.
+
+The `review` cursor is the time of the newest review feedback handled, in UTC as `YYYY-MM-DDTHH:MM:SSZ` (D096): a
+review's `submitted_at`, an inline review comment's `created_at`, or, for canopy's own review run (§21), the
+`created_at` of its comment. GitHub numbers reviews and review comments separately, and review runs are canopy's own,
+so no id orders all three. In that one form, times compare as strings; an item at the cursor's own second is handled, as
+a review's inline comments share its second. `--cursor review=` refuses any other form, so a cursor the overseer
+writes is always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the overseer is told to look up
+that item's time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review
+state is as ambiguous as before (D096).
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
@@ -720,7 +729,7 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   Cursors make ticks incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not
   stored (D030).
 - `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository, branch, PR URL, the
-  unit's phase, and its cursors (`last_review_id`, `last_ci_run_id`).
+  unit's phase, and its cursors (`last_review_id`, which holds a time despite its name (§7), and `last_ci_run_id`).
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
   _run`, pid of the worker agent (`worker_pid`), status, result_json. Status is `running`, `done`, `blocked`,
   `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, `crashed`, or `stopped` (§22); `private`
@@ -2058,7 +2067,7 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   from `runs`, which is keyed by ticket and branch.
 - `decisions.pr`: nullable.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
-  `--cursor review=run:<id>`.
+  `--cursor review=` with the time of the run's comment.
 
 ### Trust model changes
 

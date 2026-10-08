@@ -466,3 +466,11 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
   when the cost changes, not as the window moves.
 - Rejected: a calendar day (whose midnight); by end (a running run's cost would be missing until it ended).
 - Revisit: when M13 designs the budget; the counter then shows the budget's own unit and window.
+
+## D096. The `review` cursor is a time, not an id
+
+- It covers reviews, inline review comments, and canopy's review runs, which no one id sequence orders; the cursor
+  holds the newest handled item's time, `YYYY-MM-DDTHH:MM:SSZ`, and `--cursor review=` refuses anything else.
+- Why: with ids the overseer guessed which items were new, and replays flipped an attention item tick to tick.
+- Rejected: a cursor per kind (review runs still need their own); `kind:id` values (still no order across kinds).
+- Revisit: if two reviewers' items in the same second are seen to hide one; then a time plus id.
