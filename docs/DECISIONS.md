@@ -642,3 +642,13 @@ Rejected: the event stream reading treehouse on a slower cadence (every open str
 pool stalls the stream); a shorter interval (more lock time for a page that is read, not watched); manual reads only
 (the operator asked for it).
 Revisit: if the lock time shows up in leases, or if treehouse gains a way to be told of changes.
+
+## D092. `make test` runs the suite in parallel with pytest-xdist
+
+The suite took about 200s serially on four cores, most of it waiting on fake agent and treehouse processes rather than
+on the CPU; `-n auto` brings it to about 60s with the same results. The fixtures were already hermetic (every state
+file, HOME and git config under `tmp_path`, the one live server on port 0), so no test changed. stdlib has nothing
+that distributes pytest tests; a hand-rolled split by file would balance worse and need its own reporting. `-n auto`
+is in `make test`, not `addopts`, so `uv run pytest` on one test stays serial and works under a debugger.
+Rejected: `--dist worksteal` (no faster here); `addopts = "-n auto"` (pays worker startup on every single-test run).
+Revisit: if a test needs shared state across processes; then give it an xdist group, never a serial-only suite.
