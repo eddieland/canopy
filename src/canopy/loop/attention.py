@@ -148,7 +148,8 @@ class RunItem:
 def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     """Return an item for each open ticket whose latest run ended in a status listed in RUN_REASONS.
 
-    The cause holds until a newer run starts for the ticket or the ticket is marked done.
+    The cause holds until a newer run starts for the ticket, the ticket is marked done, or the operator forgets its
+    work.
     """
     done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
     items: list[RunItem] = []

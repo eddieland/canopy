@@ -116,6 +116,27 @@ def _comment_mark(value: str) -> str:
     return value
 
 
+MAX_REVIEWER = 100
+# The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no account
+# can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
+CANOPY_REVIEWER = "canopy:review"
+
+
+def _reviewer(value: str) -> str:
+    # A VCS host account whose review feedback a worker may address unasked (DESIGN §7). Prompts quote it in backticks.
+    if value != CANOPY_REVIEWER and (
+        not value
+        or len(value) > MAX_REVIEWER
+        or not value.isprintable()
+        or any(c.isspace() or c in "`:" for c in value)
+    ):
+        raise ValueError(
+            f"must be a login of at most {MAX_REVIEWER} characters with no spaces, colon, or backtick, or "
+            f"{CANOPY_REVIEWER!r} for canopy's own reviewer"
+        )
+    return value
+
+
 def command_words(template: str) -> list[str]:
     """Split a command template into words, as `render_command` does. It must mention `{prompt}` exactly once."""
     words = shlex.split(template)
@@ -301,6 +322,10 @@ class Trust(Section):
     branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
     pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
+    # Whose review feedback a worker may address without the operator's go-ahead (DESIGN §7, D089): VCS host logins,
+    # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. User-only: a
+    # repository that listed its own bots would decide what steers the operator's workers.
+    trusted_reviewers: Annotated[tuple[Annotated[StrictStr, AfterValidator(_reviewer)], ...], Scope.USER] = ()
     # What every worker comment starts and ends with, when set (DESIGN §8, D069). They only take authority away, from
     # the comments that carry them; user-only, so a repository cannot pick marks that silence people's comments.
     comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
@@ -362,7 +387,7 @@ class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
     overseer_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}"
     )
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}"

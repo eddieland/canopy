@@ -47,10 +47,12 @@ jobs:
             platform: macos-aarch64
             arch: arm64
     steps:
+      # Every tag and commit: the version is built from the latest tag and the distance to it (D085).
       - name: Check out repository
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.2.0
@@ -70,12 +72,6 @@ jobs:
           arch=$(uname -m)
           [ "$arch" = "${{ matrix.arch }}" ] || { echo "runner is $arch, not ${{ matrix.arch }}"; exit 1; }
 
-      - name: Check the tag names the version in pyproject.toml
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          version=$(uv version --short)
-          [ "${GITHUB_REF_NAME#v}" = "$version" ] || { echo "tag $GITHUB_REF_NAME is not v$version"; exit 1; }
-
       # pex's scie builder looks up the python-build-standalone release through the GitHub API; the job's token keeps
       # it clear of the unauthenticated rate limit shared by every job on the runner's address.
       - name: Build the executable
@@ -83,6 +79,14 @@ jobs:
           SCIENCE_AUTH_API_GITHUB_COM_BEARER: ${{ github.token }}
           CANOPY_UI_REQUIRED: "1"
         run: make binary
+
+      # The version comes from the tag, so this fails only when the build did not see it, or the tag is not in PEP 440's
+      # normal form (v0.2.0rc1, not v0.2.0-rc1).
+      - name: Check the executable names the tag's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(dist/canopy --version)
+          [ "$version" = "canopy ${GITHUB_REF_NAME#v}" ] || { echo "$version, not tag $GITHUB_REF_NAME"; exit 1; }
 
       - name: Install it as README says and run a dry tick
         run: make install-check INSTALL_SOURCE=dist/canopy

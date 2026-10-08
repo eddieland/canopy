@@ -1,9 +1,11 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, and later the web UI) calls the functions
-here, so the guards live in one place: the subject is valid and supports the verb, the command does not run inside one
-of canopy's own runs, the ticket was started, and the body is within its bound. Agents never write a message: `_run`
-records a run's report and question from its result line (`close_run`), and nothing else a worker can call does.
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, and the web UI) calls the
+functions here, so the guards live in one place: the subject is valid and supports the verb, the command does not run
+inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is within
+its bound. Agents never write a
+message: `_run` records a run's report and question from its result line (`close_run`), and nothing else a worker can
+call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). The overseer records the one other kind of message, a tracker comment it
@@ -24,8 +26,11 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, outbox
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
+from canopy.infra import lock
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from canopy.core.config import Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
@@ -63,7 +68,7 @@ RUN = "run"
 # The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
 # `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "show", MIRROR_ACTION),
+    TICKET: ("start", "stop", "reply", "forget", "show", MIRROR_ACTION),
     PR: (),
     CHORE: ("show",),
     RUN: ("show",),
@@ -140,7 +145,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, or replies",
+                "stops, replies, or forgets",
             )
 
 
@@ -229,16 +234,18 @@ class Replied:
 
 
 def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submission: str | None = None) -> Replied:
-    """Record the operator's reply to a started ticket (DESIGN §22).
+    """Record the operator's reply to a ticket canopy knows (DESIGN §22).
 
-    It answers the ticket's latest question when there is one. A channel whose form draws a submission id passes it,
-    and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it answers, and
-    the body. Either way the same reply sent again after an uncertain result records nothing new.
+    A started ticket's reply is its conversation. A public ticket's is the operator's word to the loop, beside its
+    authorized repliers' comments on the ticket, and how the operator answers an untrusted reviewer's feedback (DESIGN
+    §7, D089). It answers the ticket's latest question when there is one. A channel whose form draws a submission id
+    passes it, and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it
+    answers, and the body. Either way the same reply sent again after an uncertain result records nothing new.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a ticket, `not_started` for a public ticket, `bad_body` for an
-            empty body or one over 4000 characters, `bad_submission` for a submission id that is not 8 to 64 letters,
-            digits, `-`, or `_`.
+        Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket that was neither started nor
+            seen by a tick, `bad_body` for an empty body or one over 4000 characters, `bad_submission` for a submission
+            id that is not 8 to 64 letters, digits, `-`, or `_`.
     """
     check_verb(ref, "reply")
     if submission is not None and not SUBMISSION_RE.fullmatch(submission):
@@ -249,8 +256,11 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submis
     if len(text) > MAX_OPERATOR:
         raise Refused("bad_body", f"the reply is {len(text)} characters; the most is {MAX_OPERATOR}")
     with db.transaction(conn):
-        if db.get_start(conn, TICKET, ref.id) is None:
-            raise Refused("not_started", f"{ref} was not started in canopy; a public ticket's replies go on the ticket")
+        if db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
+            raise Refused(
+                "unknown",
+                f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
+            )
         question = latest_question(conn, ref.id)
         answers = int(question["id"]) if question is not None else None
         if submission is None:
@@ -275,6 +285,51 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submis
         recorded = db.get_message(conn, message_id)
         answers = int(recorded["answers"]) if recorded is not None and recorded["answers"] is not None else None
     return Replied(message_id=message_id, answers=answers, new=new)
+
+
+@dataclass(frozen=True)
+class Forgot:
+    """What `forget` cleared: the ticket's branch and its units' PRs, as the journal had them."""
+
+    branch: str | None
+    prs: list[str]
+
+
+def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot:
+    """Forget a ticket's work, so its next `implement` starts over on a new branch (DESIGN §22).
+
+    Clears its branch, units, phases, and done flag, and marks where the loop's view of it begins: the overseer's state
+    block and the attention list skip its earlier runs, and its waiting question, new operator messages, and a private
+    worker's conversation skip its earlier messages. The runs stay, so attempt limits still count them (D030), and the
+    cursors stay, so what was handled stays handled. It holds the dispatch lock, so a dispatch that read the old branch
+    cannot record it again afterwards.
+
+    Raises:
+        Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket canopy has no record of,
+            `running` while a run works it, `split` for a ticket a split made children of.
+    """
+    check_verb(ref, "forget")
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
+        ticket = db.get_ticket(conn, ref.id)
+        if ticket is None:
+            raise Refused("unknown", f"canopy has no record of {ref}, so there is nothing to forget")
+        running = db.running_run_of(conn, ref.id)
+        if running is not None:
+            raise Refused(
+                "running",
+                f"run {running['id']} ({running['kind']}) is working {ref}; wait for it to end, or on a started "
+                f"ticket end it with `canopy stop {ref} --now`",
+            )
+        children = db.children_of(conn, ref.id)
+        if children:
+            raise Refused(
+                "split",
+                f"a split made {', '.join(children)} from {ref}; they are tickets of their own, and forgetting {ref} "
+                "would not undo them",
+            )
+        prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
+        db.forget_ticket(conn, ref.id)
+    return Forgot(branch=ticket["branch"], prs=prs)
 
 
 # The overseer's mirror of tracker comments
@@ -398,11 +453,14 @@ def _comment_time(text: str) -> str:
 
 
 def latest_question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
-    """Return a ticket's latest question if no operator message came after it, else None."""
+    """Return a ticket's latest question if no operator message came after it, else None.
+
+    A question asked before the operator forgot the ticket's work waits on nothing.
+    """
     row: sqlite3.Row | None = conn.execute(
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' "
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND kind = 'question' AND id > ? "
         "ORDER BY id DESC LIMIT 1",
-        (TICKET, key),
+        (TICKET, key, db.forgotten_message_id(conn, key)),
     ).fetchone()
     if row is None or operator_messages_after(conn, key, int(row["id"])):
         return None
@@ -447,12 +505,14 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
     """Return a private ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
+    Messages from before the operator forgot the ticket's work are not new, whatever the cursor says.
     """
     key = str(ticket["key"])
     record = start_of(conn, key)
     if record is None:
         return None
     cursor = int(ticket["last_message_id"] or 0)
+    forgotten = int(ticket["forgotten_message_id"] or 0)
     question = latest_question(conn, key)
     return {
         "status": record["status"],
@@ -460,7 +520,7 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
         "message_cursor": cursor or None,
         "new_operator_messages": [
             {"id": m["id"], "at": m["at"], "answers": m["answers"], "body": m["body"]}
-            for m in operator_messages_after(conn, key, cursor)
+            for m in operator_messages_after(conn, key, max(cursor, forgotten))
         ],
         "awaiting_reply": None
         if question is None
@@ -468,10 +528,54 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
     }
 
 
+def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, object] | None:
+    """Return a public ticket's operator messages for the overseer's state block, or None when it has no new ones.
+
+    They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget. The
+    overseer reads them as instructions, as it reads an authorized reply on the ticket (DESIGN §7). A private ticket's
+    are in its own section (`state_section`).
+    """
+    key = str(ticket["key"])
+    if start_of(conn, key) is not None:
+        return None
+    cursor = int(ticket["last_message_id"] or 0)
+    forgotten = int(ticket["forgotten_message_id"] or 0)
+    messages = operator_messages_after(conn, key, max(cursor, forgotten))
+    if not messages:
+        return None
+    return {
+        "message_cursor": cursor or None,
+        "new_operator_messages": [
+            {"id": m["id"], "at": m["at"], "answers": m["answers"], "body": m["body"]} for m in messages
+        ],
+    }
+
+
+def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
+    """Return a public resume worker's `{{OPERATOR_MESSAGES}}`: the operator's latest replies, oldest first, bounded.
+
+    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089). Replies from before
+    the operator forgot the ticket's work are left out.
+    """
+    rows = conn.execute(
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ? "
+        "ORDER BY id DESC LIMIT ?",
+        (TICKET, key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
+    ).fetchall()
+    return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")
+
+
 def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
-    """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded."""
-    rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES)
-    blocks = [_prompt_message(m) for m in rows]
+    """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded.
+
+    Messages from before the operator forgot the ticket's work are left out: they are about work that is gone.
+    """
+    rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES, after=db.forgotten_message_id(conn, key))
+    return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
+
+
+def _bounded(blocks: list[str], empty: str) -> str:
+    # The newest blocks that fit in PROMPT_CHARS, oldest first, with a note of how many older ones were left out.
     total = 0
     kept: list[str] = []
     for block in reversed(blocks):
@@ -481,7 +585,7 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
         kept.append(block)
     kept.reverse()
     if not kept:
-        return "No messages yet."
+        return empty
     left_out = len(blocks) - len(kept)
     note = [f"[{left_out} older messages are left out.]"] if left_out else []
     return "\n\n".join([*note, *kept])

@@ -57,6 +57,33 @@ permission:
     "acli *": deny
     "jira": deny
     "jira *": deny
+  # MCP tools are permissioned by name, `<server>_<tool>`, as for canopy-worker (D084): the private worker opens and
+  # updates its PRs and replies on them, and nothing else. Its PR update tool can close the PR; the prompt keeps it to
+  # the PR's own text. tests/canopy/test_definitions.py checks these rules against real tool names.
+  "*merge*": deny
+  "*review_write*": deny
+  "*pending_review*": deny
+  "*create_pull_request_review*": deny
+  "*submit*": deny
+  "*approve*": deny
+  "*close*": deny
+  "*transition*": deny
+  "*create_issue*": deny
+  "*createJiraIssue*": deny
+  "*sub_issue*": deny
+  "*create_branch*": deny
+  "*create_or_update_file*": deny
+  "*push_files*": deny
+  "*delete*": deny
+  "*fork*": deny
+  "*create_repository*": deny
+  "*copilot*": deny
+  "*run_workflow*": deny
+  "*run_trigger*": deny
+  "*rerun*": deny
+  "*cancel*": deny
+  "*createConfluence*": deny
+  "*updateConfluence*": deny
   # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools are allowed by name: the
   # last matching rule wins (D021), so a write tool missing from both lists fails closed.
   # canopy: tracker tools

@@ -172,7 +172,7 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
 
 
 @pytest.mark.parametrize("variable", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
-@pytest.mark.parametrize("verb", [["start", KEY], ["stop", KEY], ["reply", KEY, "yes"]])
+@pytest.mark.parametrize("verb", [["start", KEY], ["stop", KEY], ["reply", KEY, "yes"], ["forget", KEY]])
 def test_the_operators_commands_refuse_inside_canopys_runs(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
@@ -201,11 +201,11 @@ def test_start_refuses_without_tracker_tools_for_a_private_worker(
     assert main(["start", KEY]) == 0
 
 
-def test_reply_and_stop_refuse_a_public_ticket_and_reply_is_bounded_and_idempotent(
+def test_reply_refuses_an_unknown_ticket_stop_a_public_one_and_reply_is_bounded_and_idempotent(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["reply", KEY, "hello"]) == 1
-    assert "reply refused (not_started)" in capsys.readouterr().err
+    assert "reply refused (unknown)" in capsys.readouterr().err
     assert main(["stop", KEY]) == 1
     assert "stop refused (not_started)" in capsys.readouterr().err
     assert main(["start", KEY]) == 0
@@ -435,7 +435,7 @@ def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path) 
             "VALUES (1, 'OLD-1', 'implement', 'b', 'x', ?, 'l', ?, ?)",
             (ended, status, result),
         )
-    assert db.migrate(conn, resources.migrations_dir()) == [3, 4]
+    assert db.migrate(conn, resources.migrations_dir()) == [3, 4, 5, 6]
     found = [(m["run_id"], m["kind"], m["body"], m["source"]) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
     assert found == [
         (2, "report", "ended blocked", "worker"),
