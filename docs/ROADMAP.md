@@ -564,6 +564,8 @@ first.
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
+- A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks, with the running run
+  or review holding each (D087). Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
 - Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
   the UI once M15 runs workers against OpenCode's server.
@@ -577,8 +579,9 @@ with session ids on the runs page meanwhile. `canopy loop` serves from a thread 
 pages for the attention list, runs, and tickets with their conversations, with reply, start, stop, and stop now through
 `core.conversation` and `runs.halt`; an event stream over SQLite's `data_version`; `python -m canopy.serve --mock` over
 a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
-UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. Waiting on the operator: a real run, the loop
-serving a real journal to a browser on loopback and on a private address.
+UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. The worktrees page is in too (2026-10-08),
+tested against the fake treehouse. Waiting on the operator: a real run, the loop serving a real journal to a browser on
+loopback and on a private address, with the worktrees page reading the real pools.
 
 ## M21. Idle-paced loop
 

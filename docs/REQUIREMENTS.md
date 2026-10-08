@@ -58,7 +58,8 @@ Built. treehouse is the pool (D002): canopy leases a slot per run, one in each r
 records it in `run_slots`, returns it on every exit path, and returns stale leases in reconcile (§6, §8). The capacity
 limit is `capacity.max_workers`; treehouse's `max_trees` bounds the pool. In a workspace the operator can declare each
 pool's size (`capacity.slots_per_repo`), which leases stay within and `canopy workspace sync` creates and trims slots
-to match, alongside cloning and removing repositories to match the map (§18, M17).
+to match, alongside cloning and removing repositories to match the map (§18, M17). The web UI's worktrees page shows
+every slot: what holds it, its branch, and what runs in it (§22, D087).
 
 The shape differs from "a worktree per ticket": a ticket holds a slot only while a run is working on it, and its pushed
 branch is its checkpoint between runs (§9). That is what makes R3 possible.

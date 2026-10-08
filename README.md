@@ -65,10 +65,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list.
-- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, and every ticket's
-  conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the secret
-  `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so does
-  `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
+- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
+  and every ticket's conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the
+  secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so
+  does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
   canopy's copy of its comments.

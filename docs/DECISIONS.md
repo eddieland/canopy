@@ -582,3 +582,16 @@ and deletes no branch: canopy reaches GitHub only through agents (D003), and nev
 Rejected: deleting the ticket's rows (loses the history `show` and the decisions corpus read, and resets attempts);
 clearing the comment cursor too (handled comments would read as new); a forget the overseer can call.
 Revisit: if operators routinely raise a limit just to start a forgotten ticket over; then count attempts per branch.
+
+## D087. The worktrees page reads treehouse when asked, not from the journal or the event stream
+
+The web UI's worktrees page shows each pool's slots: what holds each, its branch, and the processes in it. The server
+runs `treehouse status --json` once per pool on each `GET /api/worktrees`, through `procs` like every other process,
+and matches leases to running runs and reviews by lease id (DESIGN §22). The UI reads it again when a `runs.updated`
+event changes which running runs hold which worktrees, and when the operator asks; nothing polls.
+Rejected: a snapshot the tick writes to the journal (a new table and migration, and as stale as the last tick, which
+idle pacing stretches to two hours, D083); `treehouse status` on the event stream (once a second per pool per open
+page, and a slow pool would stall every stream); only the journal's `run_slots` (no branch, no processes, nothing about
+slots canopy does not hold).
+Revisit: if `treehouse status` turns out slow enough on a large pool that opening the page is felt, or if treehouse
+gains a way to be told of changes.

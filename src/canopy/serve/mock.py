@@ -13,7 +13,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import config, conversation, db
+from canopy.core import config, conversation, db, treehouse
 from canopy.core.items import Item
 from canopy.infra import resources
 from canopy.serve.backend import Backend
@@ -81,6 +81,54 @@ ATTENTION: tuple[Item, ...] = (
 )
 
 
+# The pool `treehouse status --json` would show: the two running runs' slots, a shell in a third, one idle, one dirty.
+SLOTS: tuple[treehouse.Slot, ...] = (
+    treehouse.Slot.model_validate(
+        {
+            "name": "1",
+            "path": "/home/op/.treehouse/web-1",
+            "status": "leased",
+            "branch": "agent/ABC-101-login",
+            "lease_id": "lease-1",
+            "lease_holder": "canopy:ABC-101",
+            "leased_at": at(0),
+            "processes": [{"pid": 48211, "name": "opencode"}, {"pid": 48390, "name": "node"}],
+        }
+    ),
+    treehouse.Slot.model_validate(
+        {
+            "name": "2",
+            "path": "/home/op/.treehouse/web-2",
+            "status": "leased",
+            "branch": "agent/ABC-104-retry-queue",
+            "lease_id": "lease-2",
+            "lease_holder": "canopy:ABC-104",
+            "leased_at": at(5),
+            "processes": [{"pid": 48502, "name": "opencode"}],
+        }
+    ),
+    treehouse.Slot.model_validate(
+        {
+            "name": "3",
+            "path": "/home/op/.treehouse/web-3",
+            "status": "in-use",
+            "branch": "op/try-vite-8",
+            "processes": [{"pid": 2210, "name": "zsh"}, {"pid": 2245, "name": "nvim"}],
+        }
+    ),
+    treehouse.Slot.model_validate(
+        {"name": "4", "path": "/home/op/.treehouse/web-4", "status": "available", "detached": True}
+    ),
+    treehouse.Slot.model_validate(
+        {"name": "5", "path": "/home/op/.treehouse/web-5", "status": "dirty", "detached": True}
+    ),
+)
+
+
+def _slots(_ctx: Context, _pool: treehouse.Pool) -> list[treehouse.Slot]:
+    return list(SLOTS)
+
+
 def seed(directory: Path) -> Backend:
     """Write a repository, a user config, and a seeded journal under `directory`, and return a Backend over them."""
     repo = directory / "repo"
@@ -97,6 +145,7 @@ def seed(directory: Path) -> Backend:
         attention=lambda _ctx: list(ATTENTION),
         end_run=_end_run,
         mock=True,
+        slots=_slots,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())

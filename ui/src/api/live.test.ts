@@ -34,6 +34,30 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.ticket('ABC-999'))?.isInvalidated).toBe(false)
     })
+
+    it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
+        const client = new QueryClient()
+        const [first] = mockRuns
+        if (!first) throw new Error('fixtures are empty')
+        client.setQueryData(keys.runs, mockRuns)
+        client.setQueryData(keys.worktrees, [])
+
+        applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns.map((r) => ({ ...r, cost_usd: 9 })) })
+        expect(client.getQueryState(keys.worktrees)?.isInvalidated).toBe(false)
+
+        const ended = { ...first, status: 'done', state: 'done', ended_at: '2026-10-08T12:20:00Z' } as const
+        applyStreamEvent(client, { type: 'runs.updated', runs: [ended, ...mockRuns.slice(1)] })
+        expect(client.getQueryState(keys.worktrees)?.isInvalidated).toBe(true)
+    })
+
+    it('leaves the worktrees alone on the first runs a stream sends', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.worktrees, [])
+
+        applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns })
+
+        expect(client.getQueryState(keys.worktrees)?.isInvalidated).toBe(false)
+    })
 })
 
 describe('parseStreamEvent', () => {

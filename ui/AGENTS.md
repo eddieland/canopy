@@ -46,7 +46,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
   `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in
-  `parseStreamEvent`.
+  `parseStreamEvent`. The worktrees are the one query not on the stream (D087): `runs.updated` marks them stale when
+  the running runs' worktrees change, and the page's Read again button refetches them.
 - **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, and the
   client adds the session's token (`writeToken` in `src/api/client.ts`). A refusal is an `ApiError` with its `guard`;
   show it with `Notice`, which names the guard as the CLI does. Say what an action did in the CLI's words
