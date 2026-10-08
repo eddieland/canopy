@@ -481,3 +481,12 @@ Web pages and search results are untrusted text an agent picks up on its own, an
 that matters (D076). A worker's bash still reaches the network, a residual T1 names.
 Rejected: denying them for the overseer only (workers read the same client-written tickets and look things up most).
 Revisit: when workers are sandboxed with egress controls (HOST_ISOLATION), or if missing lookups measurably hurt runs.
+
+## D078. Workers open PRs with the operator's skill when `runtime.pr_skill` names one
+
+Some operators must open PRs with their employer's tooling, and a skill alone cannot override the prompt's "through
+the GitHub MCP". `runtime.pr_skill` (user-only) names a skill that `implement` and `resume` workers open PRs with and
+nothing else; a missing skill fails the run rather than falling back to the MCP. With it set, an override without
+`{{OPEN_PR}}` is `bad_prompt`, as D051 does for `{{LABELS}}`.
+Rejected: a skill alone (prompt and skill disagree); a harness command that opens PRs (VCS knowledge in code, D014).
+Revisit: if other single steps need the operator's own tooling; then generalize rather than add keys one by one.

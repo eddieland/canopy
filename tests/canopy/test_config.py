@@ -55,6 +55,7 @@ def test_needs_human_label_is_set_by_the_repository_and_overridden_by_the_user(c
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
+        ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
         ("paths", "state_dir = '/tmp/x'"),
     ],
@@ -146,6 +147,10 @@ def test_repository_file_is_optional_but_required_keys_are_not(canopy_env: Canop
         ("[trust]\ncomment_prefix = 'CANOPY: '\n", "no surrounding spaces"),
         ('[trust]\ncomment_suffix = "by\\ncanopy"\n', "one line"),
         (f"[trust]\ncomment_suffix = '{'x' * 81}'\n", "at most 80 characters"),
+        ("[runtime]\npr_skill = 'Acme-PR'\n", "a skill name of at most 64"),
+        ("[runtime]\npr_skill = 'acme--pr'\n", "a skill name of at most 64"),
+        ("[runtime]\npr_skill = '-acme'\n", "a skill name of at most 64"),
+        (f"[runtime]\npr_skill = '{'a' * 65}'\n", "a skill name of at most 64"),
         ("[notify]\ncmd = 3\n", "Input should be a valid string"),
     ],
 )
