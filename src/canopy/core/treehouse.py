@@ -16,7 +16,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, StrictStr, TypeAdapter, ValidationError
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    TypeAdapter,
+    ValidationError,
+)
 
 from canopy.infra import procs
 
@@ -44,6 +53,10 @@ def _empty_is_null(value: object) -> object:
     return None if value == "" else value
 
 
+def _null_is_list(value: object) -> object:
+    return list[object]() if value is None else value
+
+
 # treehouse writes "" for an unleased slot's lease fields and null for its `leased_at`; accept either for both.
 MaybeStr = Annotated[StrictStr, BeforeValidator(_null_is_empty)]
 
@@ -53,15 +66,31 @@ class _Output(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
 
+class Process(_Output):
+    """A process treehouse found running in a slot."""
+
+    pid: StrictInt
+    name: StrictStr
+
+
 class Slot(_Output):
-    """One worktree in the pool, from `treehouse status --json`."""
+    """One worktree in the pool, from `treehouse status --json`.
+
+    `status` is treehouse's word: available, leased, in-use, dirty, damaged, unverified, or "you're here". `branch` is
+    empty for a detached or unreadable checkout; `branch_error` says why it could not be read. Only the web UI's
+    worktrees page reads `branch`, `detached`, `branch_error`, and `processes` (DESIGN §22).
+    """
 
     name: StrictStr
     path: Path
     status: StrictStr
+    branch: MaybeStr = ""
+    detached: StrictBool = False
+    branch_error: MaybeStr = ""
     lease_id: MaybeStr = ""
     lease_holder: MaybeStr = ""
     leased_at: Annotated[StrictStr | None, BeforeValidator(_empty_is_null)] = None
+    processes: Annotated[list[Process], BeforeValidator(_null_is_list)] = []
 
     @property
     def canopy_key(self) -> str | None:

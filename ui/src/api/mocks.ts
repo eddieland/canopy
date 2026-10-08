@@ -18,7 +18,7 @@ export const mockRuns: Run[] = [
         session_id: 'ses_mock41',
         cost_usd: 0.42,
         tokens: 19320,
-        worktrees: ['/home/op/.treehouse/web-1'],
+        worktrees: ['.treehouse/web-3f9c2a1b/1/web'],
         log_path: '/home/op/.canopy/runs/41.log',
     },
     {
