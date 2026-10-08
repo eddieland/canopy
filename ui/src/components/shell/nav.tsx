@@ -1,6 +1,8 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Activity, FolderTree, Inbox, MessagesSquare, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 
+import { attentionQuery } from '@/api/queries'
 import { cn } from '@/lib/utils'
 
 type To = '/attention' | '/runs' | '/worktrees' | '/tickets' | '/settings'
@@ -13,8 +15,13 @@ const ITEMS: { to: To; label: string; icon: LucideIcon }[] = [
     { to: '/settings', label: 'Settings', icon: SlidersHorizontal },
 ]
 
-/** The side navigation. The active item gets the accent hairline; a ticket's page keeps Tickets active. */
+/**
+ * The side navigation. The active item gets the accent hairline; a ticket's page keeps Tickets active. Attention
+ * shows how many items it lists, on every page.
+ */
 export function Nav() {
+    const attention = useQuery(attentionQuery)
+    const listed = attention.data?.length
     return (
         <nav aria-label="Main" className="flex flex-col gap-0.5 p-2">
             {ITEMS.map(({ to, label, icon: Icon }) => (
@@ -37,6 +44,11 @@ export function Nav() {
                     />
                     <Icon className="size-4" />
                     {label}
+                    {to === '/attention' && listed !== undefined && listed > 0 && (
+                        <span className="ml-auto readout text-xs text-accent" data-testid="nav-attention-count">
+                            {listed}
+                        </span>
+                    )}
                 </Link>
             ))}
         </nav>

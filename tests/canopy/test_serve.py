@@ -21,7 +21,14 @@ from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
 from canopy.serve.guard import host_name
 from canopy.serve.options import ServeOptions
-from canopy.serve.schema import AttentionUpdated, RunsUpdated, StreamEvent, TicketChanged, TicketsUpdated
+from canopy.serve.schema import (
+    AttentionUpdated,
+    RunsUpdated,
+    SpendUpdated,
+    StreamEvent,
+    TicketChanged,
+    TicketsUpdated,
+)
 from canopy.serve.spa import content_security_policy
 
 INDEX = """<!doctype html>
@@ -332,21 +339,26 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 4)
+    headers, events = read_events(served, 6)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, changed = (e.root for e in events)
+    first, runs, tickets, spend, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
-    # The mock journal moves the running run's cost: only the runs list is sent again.
+    assert isinstance(spend, SpendUpdated)
+    # The mock journal moves the running run's cost: only the runs list and the spend are sent again.
     assert isinstance(changed, RunsUpdated)
     before = next(r for r in runs.runs if r.id == mock.LIVE_RUN)
     after = next(r for r in changed.runs if r.id == mock.LIVE_RUN)
     assert after.cost_usd is not None
     assert before.cost_usd is not None
     assert after.cost_usd > before.cost_usd
+    assert isinstance(spent, SpendUpdated)
+    assert spent.spend.cost_usd is not None
+    assert spend.spend.cost_usd is not None
+    assert spent.spend.cost_usd == pytest.approx(spend.spend.cost_usd + after.cost_usd - before.cost_usd)
 
 
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:
@@ -399,13 +411,24 @@ def test_the_development_server_serves_mock_data_only(capsys: pytest.CaptureFixt
 def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFixture[str]) -> None:
     main(["openapi"])
     schema = json.loads(capsys.readouterr().out)
-    names = {"Run", "RunState", "TicketSummary", "TicketDetail", "Message", "AttentionItem", "StreamEvent", "Pool"}
+    names = {
+        "Run",
+        "RunState",
+        "TicketSummary",
+        "TicketDetail",
+        "Message",
+        "AttentionItem",
+        "StreamEvent",
+        "Pool",
+        "Spend",
+    }
     assert names <= set(schema["components"]["schemas"])
     paths = {
         "/api/session",
         "/api/meta",
         "/api/attention",
         "/api/runs",
+        "/api/spend",
         "/api/tickets",
         "/api/tickets/{key}",
         "/api/tickets/{key}/start",

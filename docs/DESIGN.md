@@ -2360,7 +2360,8 @@ Served by `canopy loop` from a thread (D073):
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected
-  item's conversation and reply form, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
+  item's conversation and reply form, under counters of running runs, questions waiting, the list, and the last 24
+  hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
   pool's slots, below), and tickets, each with its conversation. Actions: the CLI's verbs, reply, start, and stop
   (with or without `now`). OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session
   id, and attach joins once M15 runs workers against OpenCode's server.
@@ -2405,6 +2406,7 @@ The API, under `{base}/api`:
 | `GET /meta` | canopy's version, and whether the data is mock |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /spend` | what the last 24 hours cost: worker and split runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -2418,9 +2420,10 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 `web:<id>`, so a retried submission records nothing new.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
-When another connection has committed since, it reads the attention list, the runs, and the tickets again, and sends
-each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, and `ticket.changed` naming each
-ticket whose summary changed. A new stream starts with all three lists. The UI writes a list into its query with
+When another connection has committed since, it reads the attention list, the runs, the tickets, and the spend again,
+and sends each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, `spend.updated` (when the
+cost changed; its window moves with the clock), and `ticket.changed` naming each ticket whose summary changed. A new
+stream starts with all three lists and the spend. The UI writes a list into its query with
 `setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
 once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
 

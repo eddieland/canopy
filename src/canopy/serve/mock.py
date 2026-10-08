@@ -183,6 +183,7 @@ def seed(directory: Path) -> Backend:
         end_run=_end_run,
         mock=True,
         slots=slots,
+        clock=lambda: T0,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())

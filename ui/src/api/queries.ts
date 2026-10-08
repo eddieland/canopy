@@ -14,6 +14,7 @@ export const keys = {
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
     worktrees: ['worktrees'] as const,
+    spend: ['spend'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -37,6 +38,12 @@ export const attentionQuery = queryOptions({
 export const runsQuery = queryOptions({
     queryKey: keys.runs,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
+})
+
+/** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
+export const spendQuery = queryOptions({
+    queryKey: keys.spend,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
 })
 
 export const ticketsQuery = queryOptions({

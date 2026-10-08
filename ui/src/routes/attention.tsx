@@ -6,6 +6,7 @@ import { attentionQuery, ticketQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
+import { Counters } from '@/components/counters'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { Chip } from '@/components/status'
@@ -47,6 +48,7 @@ function AttentionPage() {
                 What needs you, as <code className="font-mono text-xs">canopy status</code> lists it, most severe first.
                 An item leaves when its cause is gone.
             </PageHeader>
+            <Counters />
             {items !== undefined && items.length === 0 ? (
                 <Panel>
                     <Placeholder className="min-h-40">Nothing needs you.</Placeholder>

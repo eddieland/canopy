@@ -406,8 +406,8 @@ cost in dollars and tokens, and `canopy status` shows it per recent run (D071). 
 (2026-10-08): each tick records its overseer's session and cost, the default `overseer_cmd` asks for events, and the
 loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
 alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
-`overseer_cmd` in a user file from before needs `--format json` added. Not designed yet: the budget and the pacing
-rule.
+`overseer_cmd` in a user file from before needs `--format json` added. The web UI's attention page shows what the
+last 24 hours cost (2026-10-08, D095). Not designed yet: the budget and the pacing rule.
 
 ## M14. PR-scoped work
 

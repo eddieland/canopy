@@ -533,6 +533,17 @@ def _set_report(
     )
 
 
+def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
+    """What the runs and ticks that started at or after `since` cost; None when none of them reported one (§13)."""
+    row = conn.execute(
+        "SELECT (SELECT SUM(cost_usd) FROM runs WHERE started_at >= ?), (SELECT SUM(cost_usd) FROM ticks WHERE "
+        "started_at >= ?)",
+        (since, since),
+    ).fetchone()
+    parts = [float(v) for v in row if v is not None]
+    return sum(parts) if parts else None
+
+
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     """Return the `limit` runs that ended most recently, newest first."""
     return conn.execute(

@@ -257,6 +257,18 @@ class Pool(_Model):
     worktrees: list[Worktree] = []
 
 
+class Spend(_Model):
+    """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
+
+    Worker and split runs and each tick's overseer, by when they started. Chores and reviews record nothing yet.
+    """
+
+    since: datetime
+    hours: int
+    # None when nothing in the window reported a cost.
+    cost_usd: float | None = None
+
+
 class AttentionUpdated(_Model):
     """The attention list changed. The payload is the whole list."""
 
@@ -285,8 +297,20 @@ class TicketChanged(_Model):
     key: str
 
 
+class SpendUpdated(_Model):
+    """What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it."""
+
+    type: Literal["spend.updated"] = "spend.updated"
+    spend: Spend
+
+
 class StreamEvent(
-    RootModel[Annotated[AttentionUpdated | RunsUpdated | TicketsUpdated | TicketChanged, Field(discriminator="type")]]
+    RootModel[
+        Annotated[
+            AttentionUpdated | RunsUpdated | TicketsUpdated | TicketChanged | SpendUpdated,
+            Field(discriminator="type"),
+        ]
+    ]
 ):
     """One message on the event stream, told apart by its `type`. A named model so the UI's types get its name."""
 

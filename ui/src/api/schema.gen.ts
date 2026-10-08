@@ -89,6 +89,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Spend */
+        get: operations["getSpend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets": {
         parameters: {
             query?: never;
@@ -456,6 +473,35 @@ export type components = {
             secret: string;
         };
         /**
+         * Spend
+         * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
+         *
+         *     Worker and split runs and each tick's overseer, by when they started. Chores and reviews record nothing yet.
+         */
+        Spend: {
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Hours */
+            hours: number;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+        };
+        /**
+         * SpendUpdated
+         * @description What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it.
+         */
+        SpendUpdated: {
+            spend: components["schemas"]["Spend"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "spend.updated";
+        };
+        /**
          * Started
          * @description What a start did: whether it was already started, and a run already working it.
          */
@@ -499,7 +545,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["SpendUpdated"];
         /**
          * TicketChanged
          * @description Something about one ticket changed: a page showing it reads it again.
@@ -794,6 +840,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    getSpend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Spend"];
                 };
             };
         };

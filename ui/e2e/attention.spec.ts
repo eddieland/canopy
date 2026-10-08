@@ -47,3 +47,18 @@ test('an item about no ticket says so, with nothing to answer', async ({ page })
     await expect(detail).toContainText('Nothing to answer here')
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
+
+test('the counters show the loop at a glance, and the nav counts the list on every page', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await expect(page.getByTestId('counter-running')).toContainText('2')
+    await expect(page.getByTestId('counter-waiting')).toContainText('1')
+    await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
+    await expect(page.getByTestId('counter-attention')).toContainText('5')
+    await expect(page.getByTestId('counter-attention')).toContainText('1 failed · 1 waiting · 3 more')
+    await expect(page.getByTestId('counter-spent')).toContainText(/\$\d+\.\d\d/)
+
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/ }).click()
+    await expect(page.getByTestId('nav-attention-count')).toHaveText('5')
+    await expect(page.getByTestId('counters')).toHaveCount(0)
+})
