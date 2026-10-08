@@ -1351,3 +1351,21 @@ Rejected:
   operator's own network, which D055 already declined to require.
 Revisit: with D055's revisit (more than one person per machine or listener, or a network the operator does not
 control), or after any incident where a run wrote to the journal outside its run or posted to a private ticket.
+
+## D077. No agent has web tools
+
+Context: OpenCode gives agents `webfetch`, `websearch`, and `codesearch` unless a definition denies them. Only the
+reviewer and the splitter denied `webfetch`; none denied search. The operator's view (2026-10-08): canopy's guards
+cannot contain an agent that runs as the operator, and what keeps it on task is mostly that nothing it reads asks it
+to stray (D076). Web pages and search results are the untrusted text an agent picks up on its own, from anyone.
+Decision (TRUST_MODEL T1, DESIGN §13): every canopy definition (overseer, worker, reviewer, splitter, chore) denies
+all three, as scalars a repository's config cannot loosen (D044). `tests/canopy/test_definitions.py` checks each.
+Rejected:
+- Recommending it in the docs and leaving the definitions open: the operator cannot change canopy's definitions
+  without a prompt override, and a default that reads the web is the one most operators would keep.
+- Denying them for the overseer only: workers read the same tickets, often client-written, and look things up most.
+- A per-operator opt-in for workers: nobody has asked; add it when a worker's missing docs lookups show up in the
+  decisions corpus.
+Consequences: a worker cannot look up library documentation with a tool. Its bash still reaches the network, which
+installs and builds need, so a worker steered into `curl` still fetches a page; T1 names that residual.
+Revisit: when workers are sandboxed with egress controls (HOST_ISOLATION), or if missing lookups measurably hurt runs.

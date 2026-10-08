@@ -23,6 +23,15 @@ def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> Non
     assert "canopy-overseer" in definitions.agent_names()
 
 
+@pytest.mark.parametrize("name", definitions.agent_names())
+def test_no_agent_has_web_tools(name: str) -> None:
+    # Fetched and searched pages are text anyone can shape (TRUST_MODEL T1, D077). Scalars, so a repository's config
+    # cannot loosen them (D044).
+    frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
+    for tool in ("webfetch", "websearch", "codesearch"):
+        assert f"\n  {tool}: deny\n" in frontmatter
+
+
 def test_the_operator_skill_is_not_in_the_snapshot(tmp_path: Path) -> None:
     # It is for the operator's own sessions; an operator's copy of it in $HOME would clash with a second one here.
     snapshot = definitions.ensure(tmp_path)
