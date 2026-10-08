@@ -1225,9 +1225,9 @@ Decision (DESIGN §22):
 - A `messages` table records every ticket's conversation. The harness writes workers' reports and questions from their
   result lines; the operator's input goes through one function every channel calls; the overseer mirrors tracker
   comments (M19).
-- A ticket is private when the operator queues it in canopy (`canopy queue add`) instead of labeling it. Its queue row
-  and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never write to
-  the tracker: a private prompt variant, and the tracker's write tools denied by name.
+- A ticket is private when the operator takes it in canopy (`canopy ticket take`) instead of labeling it. Its take
+  record and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never
+  write to the tracker: a private prompt variant, and the tracker's write tools denied by name.
 - Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
   the overseer's claim and authorizes nothing. On a private ticket only operator messages authorize; tracker comments
   are data.
@@ -1245,8 +1245,8 @@ Rejected:
 - Agents writing messages directly: a steered worker could write the operator's reply to its own question.
 Consequences: the journal holds tracker comment bodies and client text, in the operator-only state directory. A private
 ticket's replies are typed into canopy, not the tracker. Until workers are sandboxed (HOST_ISOLATION), a worker's bash
-can run `canopy reply`; the command refuses inside canopy's runs, which stops a worker that follows injected text, not
-one that unsets the markers.
+can run `canopy ticket reply`; the command refuses inside canopy's runs, which stops a worker that follows injected
+text, not one that unsets the markers.
 Revisit: if mirroring costs a material share of each tick (M13's spend records will show it), or when sandboxing lands
 and the residual goes.
 
@@ -1265,13 +1265,13 @@ Decision (DESIGN §22; built in ROADMAP M20):
   `http.client`, and `urllib.request` stays absolute: the stack opens the listening socket, not canopy's code. It
   listens and calls out to nothing.
 - The loop wakes early on an operator message by checking the journal during its wait, so a reply from another
-  process (`canopy reply`) and one through the server wake it the same way.
+  process (`canopy ticket reply`) and one through the server wake it the same way.
 Rejected:
 - A separate `canopy serve` process: workable, since the journal is shared in WAL mode, but two commands to keep
   running for one operator. The seam (a context opener and the journal) keeps it a small change later.
 - A uv workspace member, like the Slack sink: it may not import canopy, so it could not read the journal or share the
   write path.
-- Waking the loop with an in-process event: covers the server only, not `canopy reply` from a shell.
+- Waking the loop with an in-process event: covers the server only, not `canopy ticket reply` from a shell.
 Consequences: stopping the loop stops the UI. AGENTS.md's "do not build a web UI" is lifted by M20; DESIGN §3's
 listener line and principle 6's daily surface change when it is built.
 Revisit: when the operator wants the UI while the loop is stopped, or a server fault is seen to disturb ticks.

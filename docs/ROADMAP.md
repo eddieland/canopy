@@ -496,9 +496,9 @@ must be at least the largest declared size; canopy cannot set it.
 REQUIREMENTS R11, DESIGN §22, D072. Needs M3. Sketch only; the design comes first.
 
 - A `messages` table, in a new migration. `_run` records each run's report and question there, for every ticket.
-- `canopy queue add|remove|list`, `canopy reply`, and `canopy conversation`, writing through `core/conversation.py`
-  and refusing inside canopy's runs (`CANOPY_TICK_ID`, and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
-- `canopy dispatch` takes a queued key without `--label`, checking the queue row in code, and refuses a private
+- `canopy ticket take|drop|reply|show|list`, writing through `core/conversation.py`, with `take`, `drop`, and `reply`
+  refusing inside canopy's runs (`CANOPY_TICK_ID`, and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
+- `canopy dispatch` needs no `--label` for a taken ticket, checking the take record in code, and refuses a private
   `split`.
 - The private worker prompt variant and `canopy-worker-private`, with the tracker's write tools denied by name.
 - The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
@@ -507,9 +507,9 @@ REQUIREMENTS R11, DESIGN §22, D072. Needs M3. Sketch only; the design comes fir
 - The loop's wait ends early on an operator message (D073).
 - TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note.
 
-Accept: a fakes-based test: a queued ticket with no label is dispatched to the private worker definition, the fake
-worker ends `blocked`, the question is on the attention list and in `canopy conversation`, `canopy reply` ends the
-loop's wait, and the `resume` prompt carries the reply. Live, the operator takes a real ticket privately, answers a
+Accept: a fakes-based test: a taken ticket with no label is dispatched to the private worker definition, the fake
+worker ends `blocked`, the question is on the attention list and in `canopy ticket show`, `canopy ticket reply` ends
+the loop's wait, and the `resume` prompt carries the reply. Live, the operator takes a real ticket privately, answers a
 question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
 
 Status: not started.
@@ -521,7 +521,7 @@ REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes fi
 - `canopy ticket mirror`, overseer-only, bounded, idempotent on the ticket and comment id.
 - The overseer prompt mirrors every comment past a ticket's comment cursor, skipping worker-marked ones (D069). A
   prompt change, which needs the operator's approval.
-- `canopy conversation KEY` shows mirrored comments with their source, for public tickets as for private ones.
+- `canopy ticket show KEY` shows mirrored comments with their source, for public tickets as for private ones.
 - Open: whether PR review comments join the journal here or later.
 
 Accept: fakes-based tests of the command's bounds, refusals, and idempotence. Live, a working session's decisions show
@@ -536,8 +536,8 @@ REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbo
 - `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
   all user-only. FastAPI on uvicorn with Jinja2 templates (D074), imported nowhere else.
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
-- Pages for the attention list, running and recent runs, and tickets with their conversations; reply, take privately,
-  and release, through the same functions as the CLI.
+- Pages for the attention list, running and recent runs, and tickets with their conversations; reply, take, and
+  drop, through the same functions as the CLI.
 - The release binary (D067) bundles the templates and builds on every platform it ships for.
 - Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
 
@@ -554,4 +554,5 @@ Status: not started.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
 - Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
-  §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1 change.
+  §22): a Socket Mode bridge running `canopy ticket reply`, or the overseer reading Slack through MCP. Needs a T1
+  change.
