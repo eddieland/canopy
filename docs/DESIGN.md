@@ -2437,7 +2437,10 @@ that pool for as long as it takes.
 
 It is not on the event stream: the journal does not hold a slot's branch or processes, and a `treehouse status` per
 pool once a second per open page would cost more than the page is worth. The UI reads it again when a `runs.updated`
-event changes which running runs hold which worktrees (a run's cost moving does not), and when the operator asks.
+event changes which running runs hold which worktrees (a run's cost moving does not), when the operator asks, and
+every 30 seconds while a page shows it in a visible tab (D091): what runs in a slot, whether it is dirty, and the slots
+a sync adds or removes never reach the journal, and a run's own refresh comes as it is recorded, before its worker has
+checked out its branch. Only an operator's read shows on the Read again button.
 
 How it serves, built in M20's foundation and true of every page:
 
