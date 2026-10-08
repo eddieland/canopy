@@ -892,12 +892,12 @@ def run_messages(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM messages WHERE run_id = ? ORDER BY id", (run_id,)).fetchall()
 
 
-def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None) -> int:
-    """Return the id of the newest message, or of the newest from `source`; 0 if there is none."""
-    if source is None:
-        row = conn.execute("SELECT max(id) FROM messages").fetchone()
-    else:
-        row = conn.execute("SELECT max(id) FROM messages WHERE source = ?", (source,)).fetchone()
+def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, subject_kind: str | None = None) -> int:
+    """Return the id of the newest message, of the newest from `source`, or about a kind of subject; 0 if none."""
+    row = conn.execute(
+        "SELECT max(id) FROM messages WHERE (? IS NULL OR source = ?) AND (? IS NULL OR subject_kind = ?)",
+        (source, source, subject_kind, subject_kind),
+    ).fetchone()
     return int(row[0] or 0)
 
 

@@ -61,7 +61,8 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         body = chore.prompt.read_text(encoding="utf-8").rstrip("\n")
     except OSError as e:
         raise TrialError(f"cannot read {chore.prompt}: {e.strerror}") from e
-    prompt = start.render(body, view.state_of(ctx.conn, name, chore), None, context)
+    state = view.state_of(ctx.conn, name, chore)
+    prompt = start.render(body, state, None, context, conversation.chore_notes(ctx.conn, name))
     try:
         cwd, argv = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
