@@ -21,17 +21,21 @@ const TONE: Record<Message['kind'], string> = {
 
 /**
  * A ticket's conversation, oldest first (DESIGN §22). Every body is untrusted text, a tracker comment's or an agent's
- * included: it is rendered as React text, which escapes it, never as HTML.
+ * included: it is rendered as React text, which escapes it, never as HTML. Bubbles pop in from their own side, one
+ * after another, and a new one when it arrives.
  */
 export function Conversation({ messages, waiting }: { messages: Message[]; waiting: number | null }) {
     return (
-        <ol className="flex flex-col gap-3 p-3" data-testid="conversation">
+        <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
             {messages.map((message) => (
                 <li
                     key={message.id}
                     data-testid={`message-${message.id}`}
                     data-source={message.source}
-                    className={cn('flex w-full max-w-2xl flex-col gap-1', message.source === 'operator' && 'self-end')}
+                    className={cn(
+                        'flex w-full max-w-2xl flex-col gap-1 [--enter:pop]',
+                        message.source === 'operator' ? 'origin-top-right self-end' : 'origin-top-left',
+                    )}
                 >
                     <Head message={message} waiting={message.id === waiting} />
                     <p
