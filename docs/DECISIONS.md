@@ -474,3 +474,11 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: with ids the overseer guessed which items were new, and replays flipped an attention item tick to tick.
 - Rejected: a cursor per kind (review runs still need their own); `kind:id` values (still no order across kinds).
 - Revisit: if two reviewers' items in the same second are seen to hide one; then a time plus id.
+
+## D097. A tick records the newest message it read; the web UI shows what no `ok` tick has
+
+- `ticks.message_id`, set before the harness items: an operator message after the latest `ok` tick's waits for the
+  next tick, which is when the attention list catches up (§14). The list itself stays the latest `ok` tick's.
+- Rejected: comparing `messages.at` with `ticks.started_at` (a tick reads messages after reconcile, not at its start);
+  dropping an answered `awaiting_reply` from the served list at once (the UI and `canopy status` would disagree).
+- Revisit: when M21's idle pacing needs "a message the previous tick could not have seen"; it is this column.

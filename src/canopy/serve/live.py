@@ -19,11 +19,11 @@ from typing import TYPE_CHECKING
 from canopy.serve import views
 from canopy.serve.schema import (
     AttentionUpdated,
+    LastTick,
     RunsUpdated,
     Spend,
     SpendUpdated,
     StreamEvent,
-    Tick,
     TicketChanged,
     TicketSummary,
     TicketsUpdated,
@@ -64,8 +64,7 @@ class _Sent:
         self.runs: RunsUpdated | None = None
         self.tickets: dict[str, TicketSummary] | None = None
         self.spend: Spend | None = None
-        self.tick: Tick | None = None
-        self.tick_sent = False
+        self.tick: LastTick | None = None
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
         """Read the lists again and return an event for each that differs from what was sent, remembering it."""
@@ -91,8 +90,8 @@ class _Sent:
         if self.spend is None or spend.cost_usd != self.spend.cost_usd:
             self.spend = spend
             found.append(StreamEvent(SpendUpdated(spend=spend)))
-        tick = views.tick(ctx)
-        if not self.tick_sent or tick != self.tick:
-            self.tick, self.tick_sent = tick, True
-            found.append(StreamEvent(TickUpdated(tick=tick)))
+        last = views.last_tick(ctx)
+        if last != self.tick:
+            self.tick = last
+            found.append(StreamEvent(TickUpdated(tick=last.tick, acknowledged=last.acknowledged)))
         return found

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { attentionQuery, runsQuery, spendQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
+import { answered } from '@/lib/acknowledged'
 import { severity, type Severity } from '@/lib/attention'
 
 /** The loop at a glance, above the attention list: what runs, what waits on you, what needs you, what it cost. */
@@ -14,7 +15,10 @@ export function Counters() {
 
     const running = runs.data?.filter((r) => r.state === 'running').length
     const waiting = tickets.data?.filter((t) => t.awaiting !== null).length
-    const questions = attention.data?.filter((i) => i.reason === 'awaiting_reply').map((i) => i.since)
+    // An answered question stays on the list until the next tick; it waits on the loop now, not on you.
+    const questions = attention.data
+        ?.filter((i) => i.reason === 'awaiting_reply' && !answered(i, tickets.data))
+        .map((i) => i.since)
     const oldest = questions?.toSorted()[0]
     const counts = attention.data?.reduce<Partial<Record<Severity, number>>>((found, item) => {
         const s = severity(item)

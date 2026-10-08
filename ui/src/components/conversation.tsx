@@ -1,6 +1,10 @@
+import { useQuery } from '@tanstack/react-query'
+
+import { tickQuery } from '@/api/queries'
 import type { Message } from '@/api/types'
 import { Age } from '@/components/age'
 import { Chip } from '@/components/status'
+import { awaitsTick } from '@/lib/acknowledged'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -19,12 +23,16 @@ const TONE: Record<Message['kind'], string> = {
     comment: 'bg-surface-raised',
 }
 
+const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
+
 /**
  * A ticket's conversation, oldest first (DESIGN §22). Every body is untrusted text, a tracker comment's or an agent's
  * included: it is rendered as React text, which escapes it, never as HTML. Bubbles pop in from their own side, one
- * after another, and a new one when it arrives.
+ * after another, and a new one when it arrives. The operator's own messages that no `ok` tick has read yet say so: the
+ * loop acts on them, and the attention list catches up, at the next tick.
  */
 export function Conversation({ messages, waiting }: { messages: Message[]; waiting: number | null }) {
+    const acknowledged = useQuery(tickQuery).data?.acknowledged
     return (
         <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
             {messages.map((message) => (
@@ -37,7 +45,11 @@ export function Conversation({ messages, waiting }: { messages: Message[]; waiti
                         message.source === 'operator' ? 'origin-top-right self-end' : 'origin-top-left',
                     )}
                 >
-                    <Head message={message} waiting={message.id === waiting} />
+                    <Head
+                        message={message}
+                        waiting={message.id === waiting}
+                        unread={acknowledged !== undefined && awaitsTick(message, acknowledged)}
+                    />
                     <p
                         className={cn(
                             'rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap',
@@ -53,7 +65,7 @@ export function Conversation({ messages, waiting }: { messages: Message[]; waiti
     )
 }
 
-function Head({ message, waiting }: { message: Message; waiting: boolean }) {
+function Head({ message, waiting, unread }: { message: Message; waiting: boolean; unread: boolean }) {
     const comment = message.comment
     return (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
@@ -74,6 +86,11 @@ function Head({ message, waiting }: { message: Message; waiting: boolean }) {
             )}
             {comment && <Chip>data, authorizes nothing</Chip>}
             {waiting && <Chip className="border-status-blocked text-status-blocked">waits on your answer</Chip>}
+            {unread && (
+                <span title={UNREAD}>
+                    <Chip className="border-status-running/40 text-status-running">waiting for the next tick</Chip>
+                </span>
+            )}
             <Age at={message.at} className="ml-auto" />
             <span className="sr-only">{localTime(message.at)}</span>
         </div>

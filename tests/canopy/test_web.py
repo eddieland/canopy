@@ -187,7 +187,7 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_cost(ctx:
 
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
-    assert c.get("/api/tick").json() == {"tick": None}
+    assert c.get("/api/tick").json() == {"tick": None, "acknowledged": None}
     db.start_tick(ctx.conn, dry_run=False)
     later = db.start_tick(ctx.conn, dry_run=True)
     db.finish_tick(ctx.conn, later, "ok", "nothing to do\x1b[2J")
@@ -197,6 +197,30 @@ def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) 
     assert (tick["id"], tick["status"], tick["dry_run"], tick["cost_usd"]) == (later, "ok", True, 0.25)
     assert tick["summary"] == "nothing to do [2J"  # control characters dropped
     assert tick["ended_at"] is not None
+
+
+def test_a_message_is_acknowledged_by_the_latest_ok_tick_that_read_it(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
+    first = db.start_tick(ctx.conn, dry_run=False)
+    db.set_tick_messages(ctx.conn, first)
+    db.finish_tick(ctx.conn, first, "ok", "read nothing")
+    assert c.get("/api/tick").json()["acknowledged"] == 0
+
+    reply = {"body": "blue", "submission": "form-ack-1"}
+    replied = c.post(f"/api/tickets/{KEY}/replies", json=reply, headers=headers).json()["message_id"]
+    # A tick that read the reply but did not close `ok` acknowledges nothing: the attention list is still the last's.
+    failed = db.start_tick(ctx.conn, dry_run=False)
+    db.set_tick_messages(ctx.conn, failed)
+    db.finish_tick(ctx.conn, failed, "overseer_failed", "exit 1")
+    last = c.get("/api/tick").json()
+    assert (last["tick"]["id"], last["acknowledged"]) == (failed, 0)
+
+    read = db.start_tick(ctx.conn, dry_run=False)
+    db.set_tick_messages(ctx.conn, read)
+    assert c.get("/api/tick").json()["acknowledged"] == 0  # still running
+    db.finish_tick(ctx.conn, read, "ok", "resumed")
+    assert c.get("/api/tick").json()["acknowledged"] == replied
 
 
 def free_port() -> int:

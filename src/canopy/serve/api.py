@@ -135,7 +135,7 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
     @api.get("/tick", operation_id="getTick")
     def last_tick() -> LastTick:
         with backend.open() as ctx:
-            return LastTick(tick=views.tick(ctx))
+            return views.last_tick(ctx)
 
     @api.get("/spend", operation_id="getSpend")
     def spend() -> Spend:

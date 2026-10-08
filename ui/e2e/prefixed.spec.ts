@@ -49,6 +49,14 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     await expect(mine).toContainText('Blue, to match the toolbar.')
     await expect(mine).toContainText('via web')
     await expect(page.getByText('waits on your answer')).toHaveCount(0)
+
+    // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
+    await expect(mine).toContainText('waiting for the next tick')
+    await page.goto('attention')
+    const item = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting_reply' })
+    await expect(item).toContainText('answered')
+    await item.click()
+    await expect(page.getByTestId('answered-note')).toContainText('leaves at the next tick')
 })
 
 test('a public ticket takes a reply that stays in canopy, and its tracker comment is shown as text', async ({

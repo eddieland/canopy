@@ -215,7 +215,9 @@ async def changes(backend: Backend, seconds: float | None) -> None:
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     repo = str(root)
     conn.execute(
-        "INSERT INTO ticks (id, started_at, ended_at, status, summary) VALUES (1, ?, ?, 'ok', 'mock tick')",
+        # It read every seeded message: a reply the operator adds waits for the next tick.
+        "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id) "
+        "VALUES (1, ?, ?, 'ok', 'mock tick', 7)",
         (at(-60), at(-59)),
     )
     tickets = (

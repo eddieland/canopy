@@ -228,6 +228,17 @@ def finish_tick(conn: sqlite3.Connection, tick_id: int, status: str, summary: st
     )
 
 
+def set_tick_messages(conn: sqlite3.Connection, tick_id: int) -> None:
+    """Record the newest message as the one a tick has read up to: every message to it was there to see (§6, §22)."""
+    conn.execute("UPDATE ticks SET message_id = (SELECT coalesce(max(id), 0) FROM messages) WHERE id = ?", (tick_id,))
+
+
+def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:
+    """The newest message the latest `ok` tick read, or None before the first `ok` tick that recorded one (§22)."""
+    row = conn.execute("SELECT message_id FROM ticks WHERE status = 'ok' ORDER BY id DESC LIMIT 1").fetchone()
+    return None if row is None or row[0] is None else int(row[0])
+
+
 def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
     """Close ticks left `running` by a tick process that died. Call only while holding the tick lock."""
     ids = [int(r[0]) for r in conn.execute("SELECT id FROM ticks WHERE status = 'running'")]
