@@ -9,7 +9,10 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr
+
+from canopy.core import contract
+from canopy.core.contract import bounded, one_line
 
 MAX_SUMMARY = 2000
 MAX_DETAIL = 2000
@@ -21,23 +24,9 @@ MAX_FINDINGS = 20
 FINDING_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*")
 
 
-def _cut(limit: int) -> AfterValidator:
-    return AfterValidator(lambda v: v if len(v) <= limit else v[: limit - 3] + "...")
-
-
-def _one_line(value: str) -> str:
-    return " ".join(value.split())
-
-
 def _finding_id(value: str) -> str:
     if len(value) > MAX_ID or not FINDING_ID_RE.fullmatch(value):
         raise ValueError(f"must match {FINDING_ID_RE.pattern} and be at most {MAX_ID} characters")
-    return value
-
-
-def _link(value: str) -> str:
-    if not value.startswith("https://") or len(value) > MAX_LINK or any(c.isspace() for c in value):
-        raise ValueError(f"must be a plain https:// URL of at most {MAX_LINK} characters")
     return value
 
 
@@ -47,9 +36,9 @@ class Finding(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     id: Annotated[StrictStr, AfterValidator(_finding_id)]
-    title: Annotated[StrictStr, AfterValidator(_one_line), _cut(MAX_TITLE)]
-    detail: Annotated[StrictStr, _cut(MAX_DETAIL)] = ""
-    link: Annotated[StrictStr, AfterValidator(_link)] | None = None
+    title: Annotated[StrictStr, one_line, bounded(MAX_TITLE)]
+    detail: Annotated[StrictStr, bounded(MAX_DETAIL)] = ""
+    link: Annotated[StrictStr, contract.url(MAX_LINK)] | None = None
 
 
 def _unique_ids(findings: list[Finding]) -> list[Finding]:
@@ -65,29 +54,18 @@ class ChoreResult(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     status: Literal["ok", "failed"]
-    summary: Annotated[StrictStr, _cut(MAX_SUMMARY)] = ""
+    summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
     findings: Annotated[list[Finding], Field(max_length=MAX_FINDINGS), AfterValidator(_unique_ids)] = []
 
 
 def parse(stdout: str) -> ChoreResult | None:
     """Parse the last non-empty line of `stdout` as a chore's result. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    if not lines:
-        return None
-    try:
-        return ChoreResult.model_validate_json(lines[-1])
-    except ValidationError:
-        return None
+    return contract.last_line(ChoreResult, stdout)
 
 
 def stored(result_json: object) -> ChoreResult | None:
     """Read a result the journal stored, or None if there is none (a run that ended without a valid result)."""
-    if not isinstance(result_json, str) or not result_json:
-        return None
-    try:
-        return ChoreResult.model_validate_json(result_json)
-    except ValidationError:
-        return None
+    return contract.stored(ChoreResult, result_json)
 
 
 CONTRACT = (

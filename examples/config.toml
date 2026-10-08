@@ -1,6 +1,7 @@
 # ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
-# Written by `canopy init` if missing. Overrides the repository's canopy.toml key by key.
-# Keys marked user-only in DESIGN.md §12 may be set only here.
+# Overrides the repository's canopy.toml key by key. Keys marked user-only in DESIGN.md §12 may be set only here.
+# Every key, most at its default. `canopy init` writes only tracker.labels and trust.authorized_repliers: set the rest
+# only to change them (D087).
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a
@@ -8,23 +9,43 @@
 labels = ["agent-ready-yourname"]
 # Optional: narrow the repository's query to your labels to save the overseer reads.
 # query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
+# Optional: your own needs-human label, if it differs from the repository's.
+# needs_human_label = "needs-human"
+# For tickets you work privately with `canopy start` (DESIGN §22): the tracker's MCP server, as your OpenCode config
+# names it, and the only tools of it a private worker may call. Every other tool of that server is denied. Unset, the
+# defaults for "jira" (Atlassian's server, named "atlassian") and "github" (GitHub's, named "github") apply. With
+# Atlassian's server, use its `?tools=all` URL: without it, most Jira tools hide behind `execute*` tools, which are
+# denied.
+# mcp_server = "atlassian"
+# read_tools = ["getJiraIssue", "searchJiraIssuesUsingJql", "listJiraIssueComments"]
 
 [capacity]
 max_workers = 2
 # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
 max_chores = 1
+# In a workspace: slots in each repository's pool. `canopy workspace sync` makes and removes slots to match, and no
+# run grows a pool past it. Unset leaves the pools to treehouse's own max_trees (DESIGN §18).
+# slots_per_repo = 2
+# [capacity.repo_slots]   # per repository, by its name in the map; wins over slots_per_repo
+# api = 4
 
 [runtime]
 # {definitions_dir} is the directory canopy's agent definitions and skills are in (D040). Every template that runs one
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
+# A ticket you started with `canopy start` runs `private_worker_cmd`: worker_cmd's default with
+# `--agent canopy-worker-private`, an agent that cannot write to the tracker (DESIGN §22).
 # Chores run this unless they set their own `cmd` (DESIGN §19).
 chore_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}'
 # The splitter creates one ticket per repository when an authorized replier asks for a split (DESIGN §18).
-split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}'
+split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
+# Optional: a skill of yours that workers open PRs with, and in no other way, instead of the GitHub MCP (DESIGN §8).
+# Put it where your runtime reads skills (a $HOME skill must be a single SKILL.md), and any program it runs on the PATH
+# of the shell that runs canopy. If a worker cannot find it, the run fails rather than using the MCP.
+# pr_skill = "acme-open-pr"
 
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
@@ -34,6 +55,15 @@ interval_minutes = 15
 # Tracker account ids whose ticket comments may resume your blocked work. Use the
 # tracker's stable id, not a display name: Jira accountId, GitHub login.
 authorized_repliers = ["replace-with-your-account-id"]
+# GitHub logins whose PR review comments a worker may address without asking you, and "canopy:review" for canopy's own
+# reviewer ([review]). Anyone else's comments, a review bot's included, wait on the attention list as untrusted_review
+# until you answer with `canopy reply KEY '...'` or the web UI: what to do about them, or to leave them. Empty: all wait.
+trusted_reviewers = ["replace-with-your-github-login"]
+# Every comment a worker posts starts with the prefix and ends with the suffix, each if set; set at least one.
+# Workers post as you, so this is how canopy tells their comments from yours: a comment that carries every mark
+# set is never feedback or an instruction.
+comment_prefix = "CANOPY:"
+comment_suffix = ""
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
