@@ -13,7 +13,7 @@ export function PageHeader({ label, title, children }: { label: string; title: s
     )
 }
 
-/** A bordered instrument panel on the surface color. Give it a fixed or minimum height when its content is async. */
+/** A bordered panel on the surface color. Give it a fixed or minimum height when its content is async. */
 export function Panel({ className, ...props }: ComponentProps<'section'>) {
     return <section className={cn('rounded-md border bg-surface', className)} {...props} />
 }
