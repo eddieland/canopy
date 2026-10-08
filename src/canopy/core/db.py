@@ -515,8 +515,13 @@ def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | No
     _set_report(conn, "ticks", tick_id, session_id, usage)
 
 
+def set_chore_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
+    """Record what the agent runtime reported about a chore run: its session, and what it cost (§13, §19)."""
+    _set_report(conn, "chore_runs", run_id, session_id, usage)
+
+
 def usage_of(row: sqlite3.Row) -> Usage | None:
-    """What a run or tick row says its agent cost, or None when the runtime reported nothing."""
+    """What a run, chore run, or tick row says its agent cost, or None when the runtime reported nothing."""
     if row["cost_usd"] is None:
         return None
     return agent_output.Usage(
@@ -530,7 +535,11 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
 
 
 def _set_report(
-    conn: sqlite3.Connection, table: Literal["runs", "ticks"], row_id: int, session_id: str | None, usage: Usage | None
+    conn: sqlite3.Connection,
+    table: Literal["runs", "chore_runs", "ticks"],
+    row_id: int,
+    session_id: str | None,
+    usage: Usage | None,
 ) -> None:
     spent = (
         (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
@@ -545,11 +554,12 @@ def _set_report(
 
 
 def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
-    """What the runs and ticks that started at or after `since` cost; None when none of them reported one (§13)."""
+    """What the runs, chore runs, and ticks that started at or after `since` cost; None when none reported one (§13)."""
     row = conn.execute(
-        "SELECT (SELECT SUM(cost_usd) FROM runs WHERE started_at >= ?), (SELECT SUM(cost_usd) FROM ticks WHERE "
-        "started_at >= ?)",
-        (since, since),
+        "SELECT (SELECT SUM(cost_usd) FROM runs WHERE started_at >= ?), "
+        "(SELECT SUM(cost_usd) FROM chore_runs WHERE started_at >= ?), "
+        "(SELECT SUM(cost_usd) FROM ticks WHERE started_at >= ?)",
+        (since, since, since),
     ).fetchone()
     parts = [float(v) for v in row if v is not None]
     return sum(parts) if parts else None

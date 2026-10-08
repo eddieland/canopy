@@ -100,10 +100,11 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None) -> i
     except procs.ProcError as e:
         raise CliError(f"chore try: {e}") from None
     logs.for_tick(None).info("chore tried", extra={"chore": name, "status": tried.outcome.status})
-    click.echo(f"--- agent text ---\n{tried.text.rstrip()}")
+    click.echo(f"--- agent text ---\n{tried.output.text.rstrip()}")
     if tried.stderr.strip():
         click.echo(f"--- agent stderr ---\n{tried.stderr.rstrip()}")
-    click.echo(f"--- agent exit {tried.returncode} ---")
+    usage = tried.output.usage
+    click.echo(f"--- agent exit {tried.returncode}{f', cost {usage.describe()}' if usage is not None else ''} ---")
     outcome = tried.outcome
     if outcome.result is not None:
         click.echo(json.dumps(outcome.result.model_dump(exclude_none=True), indent=2))

@@ -40,10 +40,10 @@ class Prepared:
 
 @dataclass(frozen=True)
 class Trial:
-    """What a try did: the harness's outcome, the agent's text without runtime events, and its stderr and exit code."""
+    """What a try did: the harness's outcome, what the agent printed (text, session, cost), its stderr and exit code."""
 
     outcome: execute.Outcome
-    text: str
+    output: agent_output.AgentOutput
     stderr: str
     returncode: int
 
@@ -78,5 +78,5 @@ def run(ctx: Context, prepared: Prepared) -> Trial:
         env={conversation.RUN_ID_ENV: RUN_ID},
         timeout=prepared.chore.timeout_minutes * 60,
     )
-    outcome = execute.outcome_of(done, prepared.chore)
-    return Trial(outcome, agent_output.read(done.stdout).text, done.stderr, done.returncode)
+    output = agent_output.read(done.stdout)
+    return Trial(execute.outcome_of(done, output, prepared.chore), output, done.stderr, done.returncode)

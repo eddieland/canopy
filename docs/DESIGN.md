@@ -982,9 +982,10 @@ From events the harness also reads, each validated (D026):
   killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
   session's, and not counted.
 
-The default `overseer_cmd`, `worker_cmd`, and `split_cmd` ask for events. A tick records what its overseer reports on
-the tick (§6), and `_run` what a worker or split reports on the run (§8, §11). Other templates may ask for them too;
-what chores and reviews report is not recorded yet (ROADMAP M13). A tick's output file and a run log hold the events as
+The default `overseer_cmd`, `worker_cmd`, `split_cmd`, and `chore_cmd` ask for events. A tick records what its
+overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), and `_chore` what a
+chore reports on its chore run (§19). Other templates may ask for them too; what reviews report is not recorded yet
+(ROADMAP M13). A tick's output file and a run log hold the events as
 printed.
 
 ### Where the runtime finds canopy's definitions
@@ -1480,14 +1481,15 @@ Chores are user-only (§12); one in a repository file is a config error (TRUST_M
 
 ```toml
 [runtime]
-chore_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}'   # default
+# the default
+chore_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}'
 
 [capacity]
 max_chores = 1            # chore runs at once; separate from max_workers
 
 [chores.build-health]
 prompt = "~/.config/canopy/chores/build-health.md"
-cmd = 'opencode run --agent build-health {prompt}'
+cmd = 'opencode run --agent build-health --format json {prompt}'
 every_minutes = 120
 days = ["mon", "tue", "wed", "thu", "fri"]
 hours = "08:00-18:00"
@@ -1624,7 +1626,8 @@ editing the prompt file: "leave out flaky/checkout/test_retry until 2026-10-15, 
 `canopy chore try <NAME> [--context '<text>']` is the operator's, for writing a chore (D098). It renders the prompt a
 run starting now would get, with `run_id` null in its `## Run` section, runs the chore's command in its `cwd` with its
 timeout and the shadowing check, and validates the result line as `_chore` does. It prints the agent's text, its
-stderr and exit code, the validated result, and the status, and exits 0 only on `ok`.
+stderr and exit code, the validated result, what it cost when the runtime reported it, and the status, and exits 0
+only on `ok`.
 
 - It records nothing: no `chore_runs` row, no decision, no notification, nothing on the attention list. The next tick
   sees no change, and the `not_due` guard does not count it.
@@ -1649,8 +1652,10 @@ stderr and exit code, the validated result, and the status, and exits 0 only on 
 ### Journal
 
 - `chore_runs`: id, tick id, chore name, pid of `_chore`, pid of the agent, started and ended times, status,
-  `result_json` (validated result, text cut to limits), log path. Separate from `runs`, whose ticket, slot, lease, and
-  branch columns do not apply.
+  `result_json` (validated result, text cut to limits), log path, and what the runtime reported (§13): `session_id`,
+  `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported nothing. Separate from `runs`, whose
+  ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
+  cost, and the web UI's spend counts chore runs.
 - `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
 
 ### Trust model changes
@@ -2455,7 +2460,7 @@ The API, under `{base}/api`:
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
-| `GET /spend` | what the last 24 hours cost: worker and split runs and each tick's overseer, by start (§13) |
+| `GET /spend` | what the last 24 hours cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
 | `POST /tickets/{key}/start` | `canopy start` |
