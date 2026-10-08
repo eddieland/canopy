@@ -408,8 +408,9 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
 3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
    the attempt number (one more than the most runs of the kind in any unit covered) and the kind's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
-   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), the context, and the result
-   contract below, whose `prs` skeleton (`{{PRS}}`) names each repository.
+   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), how to open a PR
+   (`{{OPEN_PR}}`, below), the context, and the result contract below, whose `prs` skeleton (`{{PRS}}`) names each
+   repository.
    - Every worker reads the ticket first and, if it is closed or carries none of the queue labels, reports `failed`
      with a summary starting `not authorized:` and changes nothing. That run counts toward the attempt limit.
    - The branch is `<trust.branch_prefix><KEY>-<slug>`, named by the first `implement`. The overseer picks the slug
@@ -421,7 +422,8 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
      `{{LABELS}}`, so an older override fails closed (D051). A joint run's prompt also needs `{{REPOSITORIES}}` and
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
      repository. For older overrides, `{{SLOT}}` is the worker's working directory and `{{BASE}}` and `{{PR_URL}}` the
-     one repository's base and PR.
+     one repository's base and PR. With `runtime.pr_skill` set, an `implement` or `resume` prompt without
+     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D077).
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
    stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository or workspace root). Record its
@@ -475,6 +477,7 @@ Worker obligations, stated in every worker prompt:
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
   default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
+- Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
 - On `blocked`: post the question as a ticket comment, add `needs_human_label`, and push nothing half-finished or
@@ -496,6 +499,21 @@ reading the PR or ticket what wrote the comment. The harness never reads comment
 do. Worker prompts get them as `{{MARK_COMMENTS}}`, the instruction to mark, and `{{WORKER_COMMENT}}`, how to recognize
 a marked comment. Changing the marks leaves earlier workers' comments reading as the operator's. A prompt override
 without the placeholders still renders, and its workers' comments read as the operator's, as they all did before D069.
+
+How a worker opens a PR is the one step an operator may need done their own way: an employer's tooling that adds
+metadata, a stacked-PR tool, or a host the GitHub MCP serves badly (D077). `runtime.pr_skill`, user-only, names a skill
+of the operator's, which `implement` and `resume` workers then open every PR with, and in no other way; with it unset
+they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run:
+the worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
+whose PRs the operator set the skill to avoid. The skill is ordinary customization (§13): it sits where the runtime
+reads skills, and any program it runs must be on the `PATH` of the shell that runs canopy, which workers inherit. It
+changes only how the PR is opened; every other obligation above still holds. The branch is `{{BRANCH}}`, pushed
+without force, and `_run` still checks it is on origin (step 5). A program that pushes by itself is past the bash
+rules, which match the command text, so branch protection governs (TRUST_MODEL T1). The PR targets the listed base,
+carries the ticket key and `trust.pr_label` with no closing keywords, and its URL goes in the result's `prs`. The
+overseer and later workers still read the PR through the GitHub MCP, so it must be one that server can read. `fix-ci`
+and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting a stacked one, stays with
+the MCP.
 
 ## 9. Aggressive release
 
@@ -654,6 +672,7 @@ worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent c
 split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
+pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
 
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
@@ -811,7 +830,9 @@ Customizing canopy is adding skills where the runtime already looks: the reposit
 `~/.config/opencode/skill/`). canopy turns none of these off. Give a custom skill its own name; same-named skills do not
 reliably override each other. A `$HOME` skill that workers use must be a single `SKILL.md`: the worker's
 `external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
-also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
+also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). A skill only adds to what
+a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
+names the skill and the prompt then says to use it (§8, D077). Prefer that to a prompt override.
 
 ### The operator's skill
 

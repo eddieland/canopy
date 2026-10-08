@@ -226,6 +226,21 @@ class Trust(Section):
         return self
 
 
+# OpenCode's rule for a skill's name: lowercase letters and digits in words joined by single hyphens, at most 64.
+SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+MAX_SKILL_NAME = 64
+
+
+def _skill_name(value: str) -> str:
+    # Empty means unset. The name is quoted in worker prompts, so it is checked as OpenCode would (DESIGN §8, D077).
+    if value and (len(value) > MAX_SKILL_NAME or not SKILL_NAME_RE.fullmatch(value)):
+        raise ValueError(
+            f"must be empty, or a skill name of at most {MAX_SKILL_NAME} lowercase letters and digits in words joined "
+            "by single hyphens"
+        )
+    return value
+
+
 def _repo_name(value: str) -> str:
     if not REPO_NAME_RE.fullmatch(value):
         raise ValueError(f"repository name {value!r} must match {REPO_NAME_RE.pattern}")
@@ -279,6 +294,9 @@ class Runtime(Section):
     review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
+    # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8, D077). User-only: it
+    # chooses what workers are told to do, which a repository must not (TRUST_MODEL T7).
+    pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
 
 
 class Review(Section):
