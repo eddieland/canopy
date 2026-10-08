@@ -462,8 +462,8 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 
 ## D095. The web UI's spend is the last 24 hours, by start, of what the journal records
 
-- Runs and ticks that started in the 24 hours before now, each counted in full by its start; the stream resends it
-  when the cost changes, not as the window moves.
+- Runs, chore runs, and ticks that started in the 24 hours before now, each counted in full by its start; the stream
+  resends it when the cost changes, not as the window moves.
 - Rejected: a calendar day (whose midnight); by end (a running run's cost would be missing until it ended).
 - Revisit: when M13 designs the budget; the counter then shows the budget's own unit and window.
 

@@ -520,3 +520,38 @@ def test_a_note_to_a_chore_reaches_its_next_runs(
     shown = capsys.readouterr().out
     assert "Your notes its next run reads (1):" in shown
     assert note in shown
+
+
+def test_a_chore_run_records_what_it_cost(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """With OpenCode's JSON events, as the default `chore_cmd` asks for, a chore run records its session and cost."""
+    text = canopy_env.user_file.read_text()
+    canopy_env.write_user(text.replace("--agent canopy-chore {prompt}", "--agent canopy-chore --format json {prompt}"))
+    monkeypatch.setenv("FAKE_CHORE_SESSION", "ses_chore")
+    conn = journal(canopy_env)
+    run_id = run_inline(conn, monkeypatch, OK)
+    row = db.get_chore_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "ok"  # the result line is read from the text events
+    assert row["session_id"] == "ses_chore"
+    usage = db.usage_of(row)
+    assert usage is not None
+    assert usage.cost_usd == 0.25  # two model calls at 0.125
+    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+
+    capsys.readouterr()
+    assert main(["show", "chore:build-health"]) == 0
+    assert "session ses_chore  $0.25, " in capsys.readouterr().out
+    assert main(["chore", "try", "build-health"]) == 0
+    assert "--- agent exit 0, cost $0.25, " in capsys.readouterr().out
+    # A try records nothing, its cost included.
+    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+
+
+def test_the_default_chore_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
+    assert "--format json" in load(canopy_env.repo, canopy_env.user_file).runtime.chore_cmd
