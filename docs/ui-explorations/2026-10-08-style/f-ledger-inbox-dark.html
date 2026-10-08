@@ -1,0 +1,139 @@
+<!doctype html>
+<!-- Generated from Ledger.dc.html on the design canvas; see README.md. Lines are not wrapped. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</head>
+<body>
+<div style="min-height: 900px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; line-height: 1.6; color: #e6e1d3; background: #13120f; display: flex; flex-direction: column">
+  <header style="display: flex; flex-wrap: wrap; align-items: stretch; justify-content: space-between; border-bottom: 1px solid #3a372e; background: #1b1a15">
+    <div style="display: flex; flex-wrap: wrap; align-items: stretch">
+      <span style="padding: 8px 16px; background: #f0b35a; color: #13120f; font-weight: 600">canopy</span>
+      <nav aria-label="Main" style="display: flex; flex-wrap: wrap">
+        <a href="#" style="padding: 8px 16px; color: #e6e1d3; text-decoration: none; background: #24221b; border-right: 1px solid #3a372e">1 attention</a>
+        <a href="#" style="padding: 8px 16px; color: #8f8a7a; text-decoration: none; border-right: 1px solid #3a372e">2 runs</a>
+        <a href="#" style="padding: 8px 16px; color: #8f8a7a; text-decoration: none; border-right: 1px solid #3a372e">3 tickets</a>
+        <a href="#" style="padding: 8px 16px; color: #8f8a7a; text-decoration: none; border-right: 1px solid #3a372e">4 settings</a>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; padding: 8px 16px; color: #8fcf7a">tick 1482 · next in 0:42</div>
+  </header>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); border-bottom: 1px solid #3a372e">
+    
+      <div style="padding: 14px 20px; border-right: 1px solid #3a372e; display: flex; align-items: baseline; gap: 14px">
+        <span style="font-size: 32px; font-weight: 500; line-height: 1; color: #8fcf7a">2</span>
+        <span style="display: flex; flex-direction: column; line-height: 1.35"><span style="color: #e6e1d3">running</span><span style="color: #8f8a7a; font-size: 12px">of 3 slots</span></span>
+      </div>
+    
+
+      <div style="padding: 14px 20px; border-right: 1px solid #3a372e; display: flex; align-items: baseline; gap: 14px">
+        <span style="font-size: 32px; font-weight: 500; line-height: 1; color: #f0b35a">1</span>
+        <span style="display: flex; flex-direction: column; line-height: 1.35"><span style="color: #e6e1d3">waiting on you</span><span style="color: #8f8a7a; font-size: 12px">oldest 18m</span></span>
+      </div>
+    
+
+      <div style="padding: 14px 20px; border-right: 1px solid #3a372e; display: flex; align-items: baseline; gap: 14px">
+        <span style="font-size: 32px; font-weight: 500; line-height: 1; color: #ef7a5f">4</span>
+        <span style="display: flex; flex-direction: column; line-height: 1.35"><span style="color: #e6e1d3">attention</span><span style="color: #8f8a7a; font-size: 12px">1 err · 2 pr · 1 ask</span></span>
+      </div>
+    
+
+      <div style="padding: 14px 20px; border-right: 1px solid #3a372e; display: flex; align-items: baseline; gap: 14px">
+        <span style="font-size: 32px; font-weight: 500; line-height: 1; color: #b9a7e8">$2.54</span>
+        <span style="display: flex; flex-direction: column; line-height: 1.35"><span style="color: #e6e1d3">spend today</span><span style="color: #8f8a7a; font-size: 12px">overseer + workers</span></span>
+      </div>
+    
+  </div>
+  <main style="flex: 1; display: flex; flex-wrap: wrap">
+    <section style="flex: 1 1 360px; max-width: 460px; border-right: 1px solid #3a372e; padding: 16px 0">
+      <h1 style="margin: 0; padding: 0 20px 8px; font-size: 13px; font-weight: 500; color: #8f8a7a"># needs you, by severity</h1>
+      
+        <a href="#" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) 2.5rem; gap: 10px; padding: 8px 20px; text-decoration: none; color: #e6e1d3; background: transparent; box-shadow: none">
+          <span style="color: #ef7a5f; font-weight: 600">[ERR]</span>
+          <span style="display: flex; flex-direction: column; min-width: 0"><span><span style="color: #f0b35a">ABC-107</span> Retry webhooks</span><span style="color: #8f8a7a; font-size: 12px">run 31 exited without a result</span></span>
+          <span style="color: #8f8a7a; text-align: right">42m</span>
+        </a>
+      
+
+        <a href="#" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) 2.5rem; gap: 10px; padding: 8px 20px; text-decoration: none; color: #e6e1d3; background: #24221b; box-shadow: inset 3px 0 0 #f0b35a">
+          <span style="color: #f0b35a; font-weight: 600">[ASK]</span>
+          <span style="display: flex; flex-direction: column; min-width: 0"><span><span style="color: #f0b35a">ABC-104</span> Export to CSV</span><span style="color: #8f8a7a; font-size: 12px">accent or secondary for the export button?</span></span>
+          <span style="color: #8f8a7a; text-align: right">18m</span>
+        </a>
+      
+
+        <a href="#" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) 2.5rem; gap: 10px; padding: 8px 20px; text-decoration: none; color: #e6e1d3; background: transparent; box-shadow: none">
+          <span style="color: #7ac4cf; font-weight: 600">[PR ]</span>
+          <span style="display: flex; flex-direction: column; min-width: 0"><span><span style="color: #f0b35a">ABC-101</span> Billing on v2</span><span style="color: #8f8a7a; font-size: 12px">two review comments on PR #212</span></span>
+          <span style="color: #8f8a7a; text-align: right">1h</span>
+        </a>
+      
+
+        <a href="#" style="display: grid; grid-template-columns: 3.5rem minmax(0, 1fr) 2.5rem; gap: 10px; padding: 8px 20px; text-decoration: none; color: #e6e1d3; background: transparent; box-shadow: none">
+          <span style="color: #7ac4cf; font-weight: 600">[PR ]</span>
+          <span style="display: flex; flex-direction: column; min-width: 0"><span><span style="color: #f0b35a">ABC-097</span> Settings copy</span><span style="color: #8f8a7a; font-size: 12px">changes requested on PR #208</span></span>
+          <span style="color: #8f8a7a; text-align: right">3h</span>
+        </a>
+      
+      <h2 style="margin: 0; padding: 20px 20px 8px; font-size: 13px; font-weight: 500; color: #8f8a7a"># workers</h2>
+      
+        <div style="display: grid; grid-template-columns: 3.5rem 5rem minmax(0, 1fr) 3.5rem; gap: 10px; padding: 4px 20px; font-size: 12px">
+          <span style="color: #8fcf7a">▶ run</span>
+          <span style="color: #f0b35a">ABC-101</span>
+          <span style="color: #8f8a7a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">addressing review on PR #212</span>
+          <span style="text-align: right">$0.84</span>
+        </div>
+      
+
+        <div style="display: grid; grid-template-columns: 3.5rem 5rem minmax(0, 1fr) 3.5rem; gap: 10px; padding: 4px 20px; font-size: 12px">
+          <span style="color: #8fcf7a">▶ run</span>
+          <span style="color: #f0b35a">ABC-103</span>
+          <span style="color: #8f8a7a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">started</span>
+          <span style="text-align: right">$0.12</span>
+        </div>
+      
+
+        <div style="display: grid; grid-template-columns: 3.5rem 5rem minmax(0, 1fr) 3.5rem; gap: 10px; padding: 4px 20px; font-size: 12px">
+          <span style="color: #f0b35a">? ask</span>
+          <span style="color: #f0b35a">ABC-104</span>
+          <span style="color: #8f8a7a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">waiting on your answer</span>
+          <span style="text-align: right">$0.51</span>
+        </div>
+      
+    </section>
+    <article style="flex: 999 1 440px; min-width: 0; padding: 16px 28px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; border-bottom: 1px dashed #3a372e; padding-bottom: 12px">
+        <h2 style="margin: 0; font-size: 18px; font-weight: 600"><span style="color: #f0b35a">ABC-104</span> Export to CSV</h2>
+        <span style="color: #8f8a7a">implement · run 29 · <span style="color: #f0b35a">? blocked 18m</span> · $0.51</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 5.5rem 3rem minmax(0, 1fr); column-gap: 12px; row-gap: 10px">
+        <span style="color: #8f8a7a">worker</span><span style="color: #8f8a7a">11:31</span><span style="color: #6d695c">picked up ABC-104 in tree-3; branch abc-104-export-csv</span>
+        <span style="color: #8f8a7a">worker</span><span style="color: #8f8a7a">11:42</span><span>Added the export button and its CSV writer. Its color waits on you.</span>
+        <span style="color: #f0b35a; font-weight: 600">asks</span><span style="color: #8f8a7a">11:42</span><span style="padding: 8px 12px; background: #f0b35a1f; color: #e6e1d3">Should the export button use the accent, or stay secondary like the rest of that toolbar?</span>
+      </div>
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px">
+        <label for="ledger-reply" style="color: #8f8a7a">reply to ABC-104</label>
+        <div style="display: flex; gap: 10px; align-items: flex-start; border: 1px solid #3a372e; background: #24221b; padding: 10px 12px">
+          <span aria-hidden="true" style="color: #f0b35a; font-weight: 600">&gt;</span>
+          <textarea id="ledger-reply" rows="3" placeholder="secondary. keep the accent for the one primary action." style="flex: 1; font: inherit; border: 0; outline: none; resize: vertical; background: transparent; color: #e6e1d3"></textarea>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px">
+          <span style="color: #8f8a7a">j/k move · r reply · t tick now · ? keys</span>
+          <span style="display: flex; gap: 8px">
+            <button type="button" style="font: inherit; min-height: 44px; padding: 0 16px; border: 1px solid #3a372e; background: transparent; color: #e6e1d3; cursor: pointer">stop run</button>
+            <button type="button" style="font: inherit; font-weight: 600; min-height: 44px; padding: 0 18px; border: 0; background: #f0b35a; color: #13120f; cursor: pointer">send ⏎</button>
+          </span>
+        </div>
+      </div>
+    </article>
+  </main>
+</div>
+</body>
+</html>
