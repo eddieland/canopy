@@ -67,10 +67,12 @@ Controls:
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
-  submission, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever the
-  operator's runtime grants (D069). Names differ by server, so a server's own name for one of these gets past it.
-  GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and has no narrower name to deny:
-  where it is granted, keeping it to labels is the prompt's. Jira's issue edit cannot change status.
+  submission, closing, transition, ticket creation, delete, fork, and API file and branch writes by tool name, whatever
+  the operator's runtime grants (D069). Names differ by server, so a server's own name for one of these gets past it.
+  GitHub's tool for labels (`issue_write`) also creates and closes issues and PRs, and its PR update tool can close the
+  PR; neither has a narrower name to deny: where they are granted, keeping them to labels and the PR's own text is the
+  prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
+  tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
 - The overseer has no edit or write tools and can act only through the
   `canopy` CLI, whose guards are code.

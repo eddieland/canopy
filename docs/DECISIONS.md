@@ -1139,9 +1139,9 @@ Decision:
 - The PR label is set only if the worker has a GitHub tool that sets labels; otherwise the PR is opened without one and
   the summary says so. Nothing reads the PR label (it is attribution, TRUST_MODEL T5), and GitHub's only such tool,
   `issue_write`, also creates and closes issues and PRs. Granting it is the operator's call.
-- `canopy-worker` denies, by tool name, merging, review submission, transitions, ticket creation, API file and branch
-  writes, deletes, forks, Copilot agents, and workflow runs, as the reviewer and splitter already do. Deny rules in
-  canopy's definitions load after the operator's config, so they win over an operator's broader allow.
+- `canopy-worker` denies, by tool name, merging, review submission, closing, transitions, ticket creation, API file
+  and branch writes, deletes, forks, Copilot agents, and workflow runs, as the reviewer and splitter already do. Deny
+  rules in canopy's definitions load after the operator's config, so they win over an operator's broader allow.
 Rejected:
 - `gh issue edit --add-label` and `gh pr edit --add-label`: additive and narrow, but GitHub-only and dependent on a
   client and credential the runtime does not hold.

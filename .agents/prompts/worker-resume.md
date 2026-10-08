@@ -43,10 +43,10 @@ trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invali
 {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it before touching the ticket.
 If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in the
 title, then add the label `{{PR_LABEL}}` to it if you have a GitHub tool that sets labels, passing nothing but the
-labels; without one, leave it off and say so in your summary. Reply on the PR to each comment you addressed, briefly.
-If you were resumed from a human reply, remove the `{{NEEDS_HUMAN_LABEL}}` label from the ticket after reading it.
-Change labels with the tracker's MCP tool for editing the ticket, changing nothing but its labels. Time limit
-{{TIMEOUT_MINUTES}} minutes.
+labels, its existing ones kept; without one, leave it off and say so in your summary. Reply on the PR to each comment
+you addressed, briefly. If you were resumed from a human reply, remove the `{{NEEDS_HUMAN_LABEL}}` label from the
+ticket after reading it. Change labels with the tracker's MCP tool for editing the ticket, changing nothing but its
+labels. Time limit {{TIMEOUT_MINUTES}} minutes.
 
 If a review comment asks for a change you believe is wrong, make the case in a
 PR reply and do not make the change; report `blocked` with the disagreement as

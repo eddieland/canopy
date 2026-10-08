@@ -43,15 +43,18 @@ permission:
     "sudo *": deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
   # in depth, whatever write tools the operator's runtime config grants (D069). The worker comments on its ticket,
-  # edits the ticket's labels, and opens and updates its PRs. Denied: merging, review submissions, transitions,
-  # creating tickets, writing files or branches through the API instead of git, deleting, forking, and starting other
-  # agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them, and has no
-  # narrower name to deny; the prompt keeps it to labels.
+  # edits the ticket's labels, and opens and updates its PRs. Denied: merging, review submissions, closing,
+  # transitions, creating tickets, writing files or branches through the API instead of git, deleting, forking, and
+  # starting other agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them,
+  # and its PR update tool can close the PR; neither has a narrower name to deny, so the prompt keeps them to labels
+  # and the PR's title and body. tests/canopy/test_definitions.py checks these rules against real tool names.
   "*merge*": deny
   "*review_write*": deny
   "*pending_review*": deny
+  "*create_pull_request_review*": deny
   "*submit*": deny
   "*approve*": deny
+  "*close*": deny
   "*transition*": deny
   "*create_issue*": deny
   "*createJiraIssue*": deny

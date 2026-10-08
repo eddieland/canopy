@@ -1,5 +1,6 @@
 """The snapshot agent runs load canopy's agents and skills from, and the guard against shadowing them (D040, D044)."""
 
+import fnmatch
 import os
 import shutil
 import time
@@ -121,3 +122,64 @@ def test_the_shadowing_message_names_the_files(tmp_path: Path) -> None:
     message = definitions.shadowing_message([tmp_path / "opencode.json"])
     assert str(tmp_path / "opencode.json") in message
     assert "D044" in message
+
+
+def _mcp_rules(agent: str) -> list[tuple[str, str]]:
+    """The agent's top-level quoted permission rules, in order: OpenCode's patterns for MCP tool names."""
+    frontmatter = (resources.agents_dir() / f"{agent}.md").read_text().split("---")[1]
+    rules: list[tuple[str, str]] = []
+    for line in frontmatter.splitlines():
+        if line.startswith('  "'):
+            pattern, action = line.strip().rsplit(":", 1)
+            rules.append((pattern.strip('"'), action.strip()))
+    return rules
+
+
+def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
+    # The last matching rule wins (D021); a tool no rule names keeps what the operator's runtime grants.
+    verdicts = [action for pattern, action in rules if fnmatch.fnmatchcase(tool, pattern)]
+    return not verdicts or verdicts[-1] != "deny"
+
+
+@pytest.mark.parametrize(
+    "tool",
+    [
+        "github_merge_pull_request",
+        "github_pull_request_review_write",
+        "github_create_pull_request_review",
+        "github_create_and_submit_pull_request_review",
+        "github_submit_pending_pull_request_review",
+        "github_add_comment_to_pending_review",
+        "github_close_issue",
+        "github_close_pull_request",
+        "github_create_issue",
+        "github_create_branch",
+        "github_push_files",
+        "github_delete_file",
+        "github_fork_repository",
+        "atlassian_transitionJiraIssue",
+        "atlassian_createJiraIssue",
+    ],
+)
+def test_the_worker_denies_dangerous_mcp_tools(tool: str) -> None:
+    assert not _allowed(_mcp_rules("canopy-worker"), tool)
+
+
+@pytest.mark.parametrize(
+    "tool",
+    [
+        "github_create_pull_request",
+        "github_update_pull_request",
+        "github_pull_request_read",
+        "github_get_pull_request_reviews",
+        "github_add_issue_comment",
+        "github_add_reply_to_pull_request_comment",
+        "github_issue_read",
+        "github_issue_write",
+        "atlassian_getJiraIssue",
+        "atlassian_editJiraIssue",
+        "atlassian_addCommentToJiraIssue",
+    ],
+)
+def test_the_worker_keeps_the_mcp_tools_it_works_with(tool: str) -> None:
+    assert _allowed(_mcp_rules("canopy-worker"), tool)

@@ -697,8 +697,8 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
   edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
-  submission, transition, ticket creation, delete, fork, API file and branch writes, and other agents or workflow runs
-  denied by name (D069).
+  submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
+  workflow runs denied by name (D069).
 - `canopy-reviewer`: no edits, shell, web fetch, or subagents; reads only through the link to its checkout. MCP: read
   tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
   and edits denied by name (§21).
