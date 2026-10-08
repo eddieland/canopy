@@ -515,3 +515,13 @@ name pattern, as the splitter does (a write tool with an unexpected name stays o
 worker could not read the ticket, and `--context` holds 2000 characters).
 Revisit: if a tracker's server multiplexes reads and writes through one tool, as Atlassian's `execute` does, and its
 read-only tools stop covering what workers need.
+
+## D081. The overseer mirrors tracker comments through a quoted heredoc with a per-tick random delimiter
+
+`canopy mirror` is the first command that carries untrusted text, so the overseer passes a comment's body on stdin in
+a quoted heredoc, which the shell does not expand, and the state block gives a delimiter drawn fresh each tick, so no
+comment can be written to end the heredoc and run the lines after it. The harness reads the workers' marks (D069) in
+code to record a comment's source, and bounds a tick to 100 mirrors, counted from its `mirror` decisions.
+Rejected: the body as a quoted argument (one missed escape runs the text); a fixed delimiter (a comment can contain
+it); the overseer saying which comments are workers' (a judgment code can make).
+Revisit: if the agent runtime gains a way to pass a tool's text to a command without a shell.

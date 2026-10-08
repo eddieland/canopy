@@ -63,6 +63,7 @@ for command in (
     runs.cmd_run,
     journal.cmd_decide,
     journal.cmd_attention,
+    journal.cmd_mirror,
     journal.ticket_group,
     workspace.workspace_group,
     chores.chore_group,

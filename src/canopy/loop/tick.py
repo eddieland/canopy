@@ -97,6 +97,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
         private=private,
+        mirror_delimiter=conversation.body_delimiter(),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
