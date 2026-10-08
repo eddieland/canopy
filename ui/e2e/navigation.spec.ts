@@ -93,10 +93,15 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     const working = web.getByTestId('worktree-1')
     await expect(working).toHaveAttribute('data-state', 'working')
     await expect(working).toContainText('agent/ABC-101-login')
-    await expect(working).toContainText('.treehouse/web-3f9c2a1b/1/web')
+    // The slots' shared directory is said once, in the header; each slot's path is on its number.
+    await expect(web.getByTestId('pool-root')).toHaveText('.treehouse/web-3f9c2a1b/')
+    await expect(working.getByText('#1')).toHaveAttribute('title', '.treehouse/web-3f9c2a1b/1/web')
+    await expect(working).not.toContainText('.treehouse/web-3f9c2a1b/1/web')
     await expect(working).toContainText('opencode 48211')
     await expect(web.getByTestId('worktree-3')).toHaveAttribute('data-state', 'held')
-    await expect(web.getByTestId('worktree-4')).toContainText('detached')
+    await expect(web.getByTestId('worktree-3')).toContainText('detached')
+    // An idle slot is its state and number alone.
+    await expect(web.getByTestId('worktree-4')).toHaveText('idle#4')
     await expect(web.getByTestId('worktree-5')).toHaveAttribute('data-state', 'dirty')
 
     // Run 43 holds a slot in two pools; each names it.
