@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test'
 
+import { signIn } from './helpers.ts'
+
 // How FastAPI serves the build: these hold for every route the UI will ever have.
 
 test('a deep link gets index.html, uncached, with a CSP and no external origins', async ({ request }) => {
-    const response = await request.get('worktrees')
+    const response = await request.get('tickets/ABC-102')
     expect(response.status()).toBe(200)
     expect(response.headers()['content-type']).toContain('text/html')
     expect(response.headers()['cache-control']).toBe('no-cache')
@@ -13,7 +15,7 @@ test('a deep link gets index.html, uncached, with a CSP and no external origins'
 })
 
 test('hashed assets are immutable; a missing one is a 404, not the page', async ({ request, page }) => {
-    await page.goto('sessions')
+    await page.goto('runs')
     const script = await page.locator('script[type=module]').getAttribute('src')
     expect(script).toMatch(/^\.\/assets\//)
     const asset = await request.get(script ?? '')
@@ -40,7 +42,9 @@ test('a foreign Origin is refused on the API and the stream', async ({ request }
 test('the page makes no request to another origin', async ({ page, baseURL }) => {
     const origins = new Set<string>()
     page.on('request', (request) => origins.add(new URL(request.url()).origin))
-    await page.goto('sessions')
+    await signIn(page)
+    await page.goto('tickets/ABC-101')
+    await expect(page.getByTestId('conversation')).toBeVisible()
     await page.evaluate(async () => {
         await document.fonts.ready
     })

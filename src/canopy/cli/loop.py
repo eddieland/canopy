@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import click
 from rich.console import Console
 
 from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
-from canopy.core import conversation, db
+from canopy.core import contract, conversation, db
 from canopy.infra import lock
 from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
@@ -35,9 +34,12 @@ SUMMARY_WIDTH = 160
     help="Minutes to wait after each tick ends. Default: loop.interval_minutes.",
 )
 @click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
+@click.option("--no-serve", is_flag=True, help="Do not serve the web UI, whatever serve.enabled says.")
 @click.pass_context
-def cmd_loop(click_ctx: click.Context, *, dry_run: bool, every: int | None, max_ticks: int | None) -> int:
-    """Run ticks in the foreground, waiting between them, until stopped."""
+def cmd_loop(
+    click_ctx: click.Context, *, dry_run: bool, every: int | None, max_ticks: int | None, no_serve: bool
+) -> int:
+    """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to."""
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
     stop = repeat.Stop()
     with repeat.signals(stop):
@@ -49,6 +51,7 @@ def cmd_loop(click_ctx: click.Context, *, dry_run: bool, every: int | None, max_
                 max_ticks=max_ticks,
                 console=Console(highlight=False),
                 stop=stop,
+                serve=ctx.config.serve.enabled and not no_serve,
             )
         except lock.LockBusyError:
             raise CliError(f"another canopy loop is running on {ctx.state_dir}; stop it first") from None
@@ -174,18 +177,12 @@ def _print_recent_runs(ctx: Context) -> None:
 
 def result_of(run: sqlite3.Row) -> dict[str, object]:
     """A run's stored result as an object; {} when it has none or it does not parse."""
-    try:
-        parsed: object = json.loads(str(run["result_json"] or "{}"))
-    except json.JSONDecodeError:
-        return {}
-    return cast("dict[str, object]", parsed) if isinstance(parsed, dict) else {}
+    return contract.stored_object(run["result_json"])
 
 
 def prs_of(result: dict[str, object]) -> list[str]:
     """The PRs a run's result named, each a plain https:// URL; anything else is not printed."""
-    prs = result.get("prs")
-    urls = list(cast("dict[str, object]", prs).values()) if isinstance(prs, dict) else [result.get("pr")]
-    return [u for u in urls if isinstance(u, str) and u.startswith("https://") and u.isprintable() and " " not in u]
+    return contract.stored_prs(result)
 
 
 def one_line(text: str) -> str:

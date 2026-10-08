@@ -10,18 +10,25 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as AttentionRouteImport } from './routes/attention'
+import { Route as RunsRouteImport } from './routes/runs'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as WorktreesRouteImport } from './routes/worktrees'
+import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
+import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SessionsRoute = SessionsRouteImport.update({
-  id: '/sessions',
-  path: '/sessions',
+const AttentionRoute = AttentionRouteImport.update({
+  id: '/attention',
+  path: '/attention',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -29,44 +36,65 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WorktreesRoute = WorktreesRouteImport.update({
-  id: '/worktrees',
-  path: '/worktrees',
+const TicketsIndexRoute = TicketsIndexRouteImport.update({
+  id: '/tickets/',
+  path: '/tickets/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TicketsKeyRoute = TicketsKeyRouteImport.update({
+  id: '/tickets/$key',
+  path: '/tickets/$key',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/sessions': typeof SessionsRoute
+  '/attention': typeof AttentionRoute
+  '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
-  '/worktrees': typeof WorktreesRoute
+  '/tickets/$key': typeof TicketsKeyRoute
+  '/tickets/': typeof TicketsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/sessions': typeof SessionsRoute
+  '/attention': typeof AttentionRoute
+  '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
-  '/worktrees': typeof WorktreesRoute
+  '/tickets/$key': typeof TicketsKeyRoute
+  '/tickets': typeof TicketsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/sessions': typeof SessionsRoute
+  '/attention': typeof AttentionRoute
+  '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
-  '/worktrees': typeof WorktreesRoute
+  '/tickets/$key': typeof TicketsKeyRoute
+  '/tickets/': typeof TicketsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sessions' | '/settings' | '/worktrees'
+  fullPaths:
+    '/' | '/attention' | '/runs' | '/settings' | '/tickets/$key' | '/tickets/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sessions' | '/settings' | '/worktrees'
-  id: '__root__' | '/' | '/sessions' | '/settings' | '/worktrees'
+  to: '/' | '/attention' | '/runs' | '/settings' | '/tickets/$key' | '/tickets'
+  id:
+    | '__root__'
+    | '/'
+    | '/attention'
+    | '/runs'
+    | '/settings'
+    | '/tickets/$key'
+    | '/tickets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  SessionsRoute: typeof SessionsRoute
+  AttentionRoute: typeof AttentionRoute
+  RunsRoute: typeof RunsRoute
   SettingsRoute: typeof SettingsRoute
-  WorktreesRoute: typeof WorktreesRoute
+  TicketsKeyRoute: typeof TicketsKeyRoute
+  TicketsIndexRoute: typeof TicketsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,11 +106,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sessions': {
-      id: '/sessions'
-      path: '/sessions'
-      fullPath: '/sessions'
-      preLoaderRoute: typeof SessionsRouteImport
+    '/attention': {
+      id: '/attention'
+      path: '/attention'
+      fullPath: '/attention'
+      preLoaderRoute: typeof AttentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -92,11 +127,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/worktrees': {
-      id: '/worktrees'
-      path: '/worktrees'
-      fullPath: '/worktrees'
-      preLoaderRoute: typeof WorktreesRouteImport
+    '/tickets/': {
+      id: '/tickets/'
+      path: '/tickets'
+      fullPath: '/tickets/'
+      preLoaderRoute: typeof TicketsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tickets/$key': {
+      id: '/tickets/$key'
+      path: '/tickets/$key'
+      fullPath: '/tickets/$key'
+      preLoaderRoute: typeof TicketsKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -104,9 +146,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  SessionsRoute: SessionsRoute,
+  AttentionRoute: AttentionRoute,
+  RunsRoute: RunsRoute,
   SettingsRoute: SettingsRoute,
-  WorktreesRoute: WorktreesRoute,
+  TicketsKeyRoute: TicketsKeyRoute,
+  TicketsIndexRoute: TicketsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

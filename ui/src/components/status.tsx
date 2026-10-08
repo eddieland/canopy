@@ -1,46 +1,35 @@
-import type { LeaseState, SessionState } from '@/api/types'
+import type { ReactNode } from 'react'
+
+import type { RunState } from '@/api/types'
+import { RUN_DOT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
-// Full class names, written out, so Tailwind finds them. One entry per state; the types make a missing one an error.
-const SESSION_DOT: Record<SessionState, string> = {
-    running: 'bg-status-running',
-    blocked: 'bg-status-blocked',
-    idle: 'bg-status-idle',
-    done: 'bg-status-done',
-    failed: 'bg-status-failed',
-}
-
-const LEASE_DOT: Record<LeaseState, string> = {
-    held: 'bg-lease-held',
-    expiring: 'bg-lease-expiring',
-    released: 'bg-lease-released',
-}
-
-const PULSE: ReadonlySet<string> = new Set<SessionState | LeaseState>(['running', 'expiring'])
-
-interface DotProps {
-    className?: string
-}
-
-/** A small round marker in a session state's color. `running` pulses. */
-export function SessionDot({ state, className }: DotProps & { state: SessionState }) {
-    return <Dot tone={SESSION_DOT[state]} pulse={PULSE.has(state)} className={className} />
-}
-
-/** A small round marker in a lease state's color. `expiring` pulses. */
-export function LeaseDot({ state, className }: DotProps & { state: LeaseState }) {
-    return <Dot tone={LEASE_DOT[state]} pulse={PULSE.has(state)} className={className} />
-}
-
-function Dot({ tone, pulse, className }: { tone: string; pulse: boolean; className?: string | undefined }) {
+/** A small round marker in a run state's color. `running` pulses. */
+export function RunDot({ state, className }: { state: RunState; className?: string }) {
+    const tone = RUN_DOT[state]
     return (
         <span aria-hidden className={cn('relative inline-flex size-2 shrink-0', className)}>
-            {pulse && (
+            {state === 'running' && (
                 <span
                     className={cn('absolute inset-0 animate-ping rounded-full opacity-40 motion-reduce:hidden', tone)}
                 />
             )}
             <span className={cn('relative inline-flex size-2 rounded-full', tone)} />
+        </span>
+    )
+}
+
+/** A small bordered label: a reason, a kind, private or public. */
+export function Chip({ className, children }: { className?: string; children: ReactNode }) {
+    return (
+        <span
+            className={cn(
+                'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-[0.6875rem]',
+                'text-muted-foreground',
+                className,
+            )}
+        >
+            {children}
         </span>
     )
 }

@@ -1,27 +1,33 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { keys } from './queries'
-import type { Lease, Session, StreamEvent } from './types'
+import type { StreamEvent } from './types'
 
-/** Replaces the item with `item.id`, or appends it. Returns a new array; the cache is never mutated in place. */
-export function upsert<T extends { id: string }>(items: readonly T[] | undefined, item: T): T[] | undefined {
-    // No list cached yet: leave it for the first fetch rather than invent a partial list.
-    if (items === undefined) return undefined
-    const index = items.findIndex((existing) => existing.id === item.id)
-    if (index === -1) return [...items, item]
-    return items.with(index, item)
-}
-
-/** Writes one stream event into the Query cache. Unknown event types are ignored, so the server can add some. */
+/**
+ * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
+ * read again, only if a page shows it. Unknown event types are ignored, so the server can add some.
+ */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
-        case 'session.updated':
-            client.setQueryData<Session[]>(keys.sessions, (old) => upsert(old, event.session))
+        case 'attention.updated':
+            client.setQueryData(keys.attention, event.items)
             break
-        case 'lease.updated':
-            client.setQueryData<Lease[]>(keys.leases, (old) => upsert(old, event.lease))
+        case 'runs.updated':
+            client.setQueryData(keys.runs, event.runs)
+            break
+        case 'tickets.updated':
+            client.setQueryData(keys.tickets, event.tickets)
+            break
+        case 'ticket.changed':
+            void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             break
     }
+}
+
+const LISTS: Record<string, string> = {
+    'attention.updated': 'items',
+    'runs.updated': 'runs',
+    'tickets.updated': 'tickets',
 }
 
 /** Parses an SSE `data` payload into a StreamEvent, or null when it is not one this UI knows. */
@@ -34,7 +40,11 @@ export function parseStreamEvent(data: string): StreamEvent | null {
     }
     if (typeof value !== 'object' || value === null || !('type' in value)) return null
     const type = (value as { type: unknown }).type
-    if (type === 'session.updated' && 'session' in value) return value as StreamEvent
-    if (type === 'lease.updated' && 'lease' in value) return value as StreamEvent
+    if (typeof type !== 'string') return null
+    const list = LISTS[type]
+    if (list !== undefined) {
+        return Array.isArray((value as Record<string, unknown>)[list]) ? (value as StreamEvent) : null
+    }
+    if (type === 'ticket.changed' && typeof (value as { key?: unknown }).key === 'string') return value as StreamEvent
     return null
 }

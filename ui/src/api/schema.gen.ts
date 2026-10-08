@@ -2,6 +2,23 @@
 // src/canopy/serve/schema.py and regenerate.
 
 export type paths = {
+    "/api/attention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Attention */
+        get: operations["listAttention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -11,23 +28,6 @@ export type paths = {
         };
         /** Events */
         get: operations["streamEvents"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/leases": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Leases */
-        get: operations["listLeases"];
         put?: never;
         post?: never;
         delete?: never;
@@ -53,17 +53,121 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
-    "/api/sessions": {
+    "/api/runs": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Sessions */
-        get: operations["listSessions"];
+        /** Runs */
+        get: operations["listRuns"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Session */
+        get: operations["getSession"];
+        put?: never;
+        /** Sign In */
+        post: operations["signIn"];
+        /** Sign Out */
+        delete: operations["signOut"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tickets */
+        get: operations["listTickets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ticket */
+        get: operations["getTicket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reply */
+        post: operations["replyTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start */
+        post: operations["startTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop */
+        post: operations["stopTicket"];
         delete?: never;
         options?: never;
         head?: never;
@@ -75,38 +179,95 @@ export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
         /**
-         * Lease
-         * @description One worktree lease from the pool.
+         * AttentionItem
+         * @description One item on the attention list (DESIGN §14): what needs the operator, and since when.
          */
-        Lease: {
-            /** Acquired At */
-            acquired_at: string | null;
-            /** Expires At */
-            expires_at: string | null;
+        AttentionItem: {
+            /** Chore */
+            chore: string | null;
+            /** Detail */
+            detail: string;
+            /**
+             * Finding
+             * @default false
+             */
+            finding: boolean;
             /** Id */
             id: string;
-            /** Path */
-            path: string;
+            /** Reason */
+            reason: string;
             /** Repo */
-            repo: string;
-            /** Session Id */
-            session_id: string | null;
-            state: components["schemas"]["LeaseState"];
+            repo: string | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /** Subject */
+            subject: string;
+            /** Ticket Key */
+            ticket_key: string | null;
         };
-        /** @enum {string} */
-        LeaseState: "held" | "expiring" | "released";
         /**
-         * LeaseUpdated
-         * @description A lease was created or changed. The payload is the whole lease, not a patch.
+         * AttentionUpdated
+         * @description The attention list changed. The payload is the whole list.
          */
-        LeaseUpdated: {
-            lease: components["schemas"]["Lease"];
+        AttentionUpdated: {
+            /** Items */
+            items: components["schemas"]["AttentionItem"][];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "lease.updated";
+            type: "attention.updated";
         };
+        /**
+         * Comment
+         * @description Where a mirrored tracker comment came from (DESIGN §22, M19).
+         */
+        Comment: {
+            /** At */
+            at: string;
+            /** Author */
+            author: string;
+            /** Id */
+            id: string;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * Message
+         * @description One message in a ticket's conversation.
+         */
+        Message: {
+            /** Answers */
+            answers: number | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Body */
+            body: string;
+            /** Channel */
+            channel: string;
+            comment: components["schemas"]["Comment"] | null;
+            /** Id */
+            id: number;
+            kind: components["schemas"]["MessageKind"];
+            /** Run Id */
+            run_id: number | null;
+            source: components["schemas"]["MessageSource"];
+        };
+        /** @enum {string} */
+        MessageKind: "report" | "question" | "reply" | "comment";
+        /** @enum {string} */
+        MessageSource: "worker" | "operator" | "tracker";
         /**
          * Meta
          * @description The server itself: what it runs and whether its data is real.
@@ -118,54 +279,260 @@ export type components = {
             version: string;
         };
         /**
-         * Session
-         * @description One agent run.
+         * Refusal
+         * @description A guard refused the operator's action: which guard, and why, as the CLI says it.
          */
-        Session: {
+        Refusal: {
+            /** Guard */
+            guard: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * RefusalResponse
+         * @description A 409's body.
+         */
+        RefusalResponse: {
+            detail: components["schemas"]["Refusal"];
+        };
+        /**
+         * Replied
+         * @description What a reply recorded: the message, the message it answers, and whether it was new.
+         */
+        Replied: {
+            /** Answers */
+            answers: number | null;
+            /** Message Id */
+            message_id: number;
+            /** New */
+            new: boolean;
+        };
+        /**
+         * ReplyRequest
+         * @description A reply from the conversation's form, with the submission id the form drew when it was rendered.
+         */
+        ReplyRequest: {
+            /** Body */
+            body: string;
+            /** Submission */
+            submission: string;
+        };
+        /**
+         * Run
+         * @description One worker or split run (`run:ID`).
+         */
+        Run: {
+            /** Branch */
+            branch: string | null;
             /** Cost Usd */
             cost_usd: number | null;
             /** Ended At */
             ended_at: string | null;
             /** Id */
-            id: string;
-            kind: components["schemas"]["SessionKind"];
-            /** Lease Id */
-            lease_id: string | null;
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Log Path */
+            log_path: string;
+            /** Private */
+            private: boolean;
+            /**
+             * Prs
+             * @default []
+             */
+            prs: string[];
+            /** Session Id */
+            session_id: string | null;
             /**
              * Started At
              * Format: date-time
              */
             started_at: string;
-            state: components["schemas"]["SessionState"];
-            /** Subject */
-            subject: string;
+            state: components["schemas"]["RunState"];
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string | null;
+            /** Ticket Key */
+            ticket_key: string;
+            /** Tokens */
+            tokens: number | null;
             /**
-             * Updated At
-             * Format: date-time
+             * Worktrees
+             * @default []
              */
-            updated_at: string;
+            worktrees: string[];
         };
         /** @enum {string} */
-        SessionKind: "worker" | "split" | "review" | "chore";
-        /** @enum {string} */
-        SessionState: "running" | "blocked" | "idle" | "done" | "failed";
+        RunState: "running" | "blocked" | "done" | "failed" | "stopped";
         /**
-         * SessionUpdated
-         * @description A session was created or changed. The payload is the whole session, not a patch.
+         * RunsUpdated
+         * @description The runs changed. The payload is the whole list, as `GET /runs` returns it.
          */
-        SessionUpdated: {
-            session: components["schemas"]["Session"];
+        RunsUpdated: {
+            /** Runs */
+            runs: components["schemas"]["Run"][];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "session.updated";
+            type: "runs.updated";
+        };
+        /**
+         * Session
+         * @description Whether this browser is signed in, and if so the token its writes must carry (D082).
+         */
+        Session: {
+            /** Signed In */
+            signed_in: boolean;
+            /** Token */
+            token: string | null;
+        };
+        /**
+         * SignIn
+         * @description The listener secret, as the operator gave it to the sign-in page.
+         */
+        SignIn: {
+            /** Secret */
+            secret: string;
+        };
+        /**
+         * Started
+         * @description What a start did: whether it was already started, and a run already working it.
+         */
+        Started: {
+            /** Already */
+            already: boolean;
+            /** Running Private */
+            running_private: boolean | null;
+            /** Running Run */
+            running_run: number | null;
+        };
+        /** @enum {string} */
+        StartStatus: "started" | "stopped";
+        /**
+         * Stopped
+         * @description What a stop did: whether it was already stopped, the run still working it, and whether `now` ended that run.
+         */
+        Stopped: {
+            /** Already */
+            already: boolean;
+            /**
+             * Ended
+             * @default false
+             */
+            ended: boolean;
+            /** Running Run */
+            running_run: number | null;
+        };
+        /**
+         * StopRequest
+         * @description A stop, and whether to end the running run now, as `canopy stop --now` does.
+         */
+        StopRequest: {
+            /**
+             * Now
+             * @default false
+             */
+            now: boolean;
         };
         /**
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["SessionUpdated"] | components["schemas"]["LeaseUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"];
+        /**
+         * TicketChanged
+         * @description Something about one ticket changed: a page showing it reads it again.
+         */
+        TicketChanged: {
+            /** Key */
+            key: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "ticket.changed";
+        };
+        /**
+         * TicketDetail
+         * @description One ticket: what `canopy show` prints.
+         */
+        TicketDetail: {
+            /** Messages */
+            messages: components["schemas"]["Message"][];
+            /** Runs */
+            runs: components["schemas"]["Run"][];
+            ticket: components["schemas"]["TicketSummary"];
+            /** Units */
+            units: components["schemas"]["Unit"][];
+        };
+        /**
+         * TicketSummary
+         * @description A ticket as the tickets list shows it.
+         */
+        TicketSummary: {
+            /**
+             * Active At
+             * Format: date-time
+             */
+            active_at: string;
+            /** Awaiting */
+            awaiting: number | null;
+            /** Branch */
+            branch: string | null;
+            /** Done */
+            done: boolean;
+            /** Key */
+            key: string;
+            /** Latest Message Id */
+            latest_message_id: number | null;
+            /** Phase */
+            phase: string | null;
+            /** Private */
+            private: boolean;
+            /** Running Run */
+            running_run: number | null;
+            start: components["schemas"]["StartStatus"] | null;
+        };
+        /**
+         * TicketsUpdated
+         * @description The tickets list changed. The payload is the whole list, as `GET /tickets` returns it.
+         */
+        TicketsUpdated: {
+            /** Tickets */
+            tickets: components["schemas"]["TicketSummary"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tickets.updated";
+        };
+        /**
+         * Unit
+         * @description A ticket's work in one repository: its PR and phase (DESIGN §18).
+         */
+        Unit: {
+            /** Phase */
+            phase: string | null;
+            /** Pr Url */
+            pr_url: string | null;
+            /** Repo */
+            repo: string | null;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -175,6 +542,26 @@ export type components = {
 };
 export type $defs = Record<string, never>;
 export interface operations {
+    listAttention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AttentionItem"][];
+                };
+            };
+        };
+    };
     streamEvents: {
         parameters: {
             query?: never;
@@ -191,26 +578,6 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
-                };
-            };
-        };
-    };
-    listLeases: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Lease"][];
                 };
             };
         };
@@ -235,7 +602,7 @@ export interface operations {
             };
         };
     };
-    listSessions: {
+    listRuns: {
         parameters: {
             query?: never;
             header?: never;
@@ -250,7 +617,273 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Session"][];
+                    "application/json": components["schemas"]["Run"][];
+                };
+            };
+        };
+    };
+    getSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    signIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Not the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    signOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+        };
+    };
+    listTickets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketSummary"][];
+                };
+            };
+        };
+    };
+    getTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketDetail"];
+                };
+            };
+            /** @description No such ticket. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replyTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Replied"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    startTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Started"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stopTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StopRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Stopped"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
