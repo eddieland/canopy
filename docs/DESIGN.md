@@ -481,8 +481,9 @@ review's `submitted_at`, an inline review comment's `created_at`, or, for canopy
 `created_at` of its comment. GitHub numbers reviews and review comments separately, and review runs are canopy's own,
 so no id orders all three. In that one form, times compare as strings; an item at the cursor's own second is handled, as
 a review's inline comments share its second. `--cursor review=` refuses any other form, so a cursor the overseer
-writes is always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the overseer looks up that
-item's time and writes it the next tick, and treats a cursor that names nothing as empty.
+writes is always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the overseer is told to look up
+that item's time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review
+state is as ambiguous as before (D095).
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.

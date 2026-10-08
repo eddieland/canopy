@@ -684,7 +684,9 @@ overseer guessed. Replaying one frozen tick 29 times on this repository's own PR
 and whose bot left an inline comment came out `untrusted_review` in 12 runs and `needs_reviewer` in 17: the attention
 list would flap every tick. Every kind of feedback has a time on GitHub, so the cursor holds the newest handled item's,
 in one UTC form that compares as text, and `--cursor review=` refuses anything else. The column keeps its name; a
-rename is a migration for no behavior. Ids an earlier canopy wrote are converted by the overseer on its next tick.
+rename is a migration for no behavior. Ids an earlier canopy wrote stay until the overseer looks up their items'
+times and writes them; until then those units read as ambiguously as before, so an upgraded journal settles over a few
+ticks, not at once.
 Rejected: a cursor per kind (more columns and prompt rules, and review runs would still need one of their own);
 anchoring on the review id with comments grouped under theirs (review runs stay a third sequence); a mix of `kind:id`
 values (still no order across kinds).
