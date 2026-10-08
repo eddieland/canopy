@@ -5,12 +5,12 @@
  * ''. Read once: it cannot change without a reload.
  */
 export const basePath: string = (() => {
-  const href = document.querySelector('base')?.getAttribute('href')
-  if (!href) return ''
-  return new URL(href, window.location.origin).pathname.replace(/\/+$/, '')
+    const href = document.querySelector('base')?.getAttribute('href')
+    if (!href) return ''
+    return new URL(href, window.location.origin).pathname.replace(/\/+$/, '')
 })()
 
 /** The URL of an API path, `/events` → `{basePath}/api/events`. */
 export function apiUrl(path: `/${string}`): string {
-  return `${basePath}/api${path}`
+    return `${basePath}/api${path}`
 }

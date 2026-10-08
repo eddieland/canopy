@@ -8,16 +8,16 @@ import { keepPreviousData, QueryClient } from '@tanstack/react-query'
  * key loads, so a refetch never blanks content; components show a skeleton only when there is no data at all.
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 60_000,
-        gcTime: 10 * 60_000,
-        refetchOnWindowFocus: false,
-        refetchOnReconnect: false,
-        retry: 1,
-        placeholderData: keepPreviousData,
-      },
-    },
-  })
+    return new QueryClient({
+        defaultOptions: {
+            queries: {
+                staleTime: 60_000,
+                gcTime: 10 * 60_000,
+                refetchOnWindowFocus: false,
+                refetchOnReconnect: false,
+                retry: 1,
+                placeholderData: keepPreviousData,
+            },
+        },
+    })
 }
