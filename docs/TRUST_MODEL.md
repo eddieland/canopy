@@ -25,6 +25,9 @@ controls below keep the blast radius to "a branch nobody merged."
 - **Operator**: the developer running canopy. Fully trusted.
 - **Authorized repliers**: accounts listed in `trust.authorized_repliers` in the operator's user config.
   Their ticket comments may resume blocked work. Trusted to instruct workers.
+- **Trusted reviewers**: accounts listed in `trust.trusted_reviewers` in the operator's user config (D089). Their PR
+  review feedback may send a worker back to the PR without the operator's go-ahead. It is still data about what to
+  change, never instruction: being trusted decides whether a worker looks, not what it obeys.
 - **Org members**: anyone who can write ticket descriptions, comments, PR
   reviews. Their text is data. It is never treated as instruction.
 - **The overseer and worker agents**: LLM processes. Untrusted. Assumed to
@@ -74,6 +77,16 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- Review feedback from anyone not in `trust.trusted_reviewers` (user-only, empty by default) starts no run on its own
+  (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
+  canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
+  about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
+  cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
+  `canopy:review`, and is recognized by its journal, never by author, since it posts as the operator.
+- An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
+  `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
+  reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
+  it into the public `resume` prompt itself.
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks
@@ -126,7 +139,10 @@ installs and builds, so a worker steered into fetching a page with `curl` reads 
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
 unset, or write the journal file directly: the refusal stops a worker that follows injected text naively, not one that
-works around it. The operator accepted this (D076). A steered overseer can mirror text that was never on the ticket, or
+works around it. The operator accepted this (D076); a forged `canopy reply` on a public ticket, a go-ahead on untrusted
+review feedback, is the same exposure. A steered overseer can dispatch a `resume` for an untrusted reviewer's comments
+without a go-ahead; the worker's own check and human review of the PR remain, and those comments were never
+instructions to it. A steered overseer can mirror text that was never on the ticket, or
 name the wrong author: the journal's copy of a public ticket's conversation is the overseer's claim, and the tracker
 stays its source.
 
@@ -364,8 +380,9 @@ the network (D076).
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.
 - Retry a failed step without a new tick and a guard check.
-- Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, or authorized
-  repliers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only lower it.)
+- Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, authorized
+  repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only
+  lower it.)
 - Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
 - Listen on a wildcard or public address, or serve journal data or take the operator's input without the operator's
   listener secret (T8). The web UI's own files, which hold no data, are served to sign in.
@@ -374,7 +391,8 @@ the network (D076).
 
 - Configure branch protection: no direct pushes to protected branches, required
   reviews, no self-approval. In a workspace, in every repository in the map; `canopy init --workspace` lists them.
-- Keep `trust.authorized_repliers` short.
+- Keep `trust.authorized_repliers` short, and `trust.trusted_reviewers` to accounts whose review comments you would
+  have a worker act on unread: a listed bot steers your workers on every PR it reviews.
 - Check who can add your `tracker.labels` in your tracker. That permission is the authorization to start work, and it
   differs by tracker (Jira: edit issue; GitHub: triage or above on the repository). canopy inherits whatever the tracker
   allows.

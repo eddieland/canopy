@@ -115,6 +115,9 @@ labels = [{json.dumps(label)}]
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.
 # Empty means nobody can, you included: add your own.
 authorized_repliers = []
+# GitHub logins whose PR review comments a worker may address unasked; "canopy:review" for canopy's own reviewer.
+# Empty means everyone's wait on the attention list for your go-ahead: `canopy reply KEY 'what to do about them'`.
+trusted_reviewers = []
 """
 
 

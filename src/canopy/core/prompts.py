@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from canopy.core.config import CANOPY_REVIEWER
 from canopy.infra import resources
 
 if TYPE_CHECKING:
@@ -61,6 +62,15 @@ def worker_comment(prefix: str, suffix: str) -> str:
     if suffix:
         marks.append(f"ends with `{suffix}`")
     return f"{' and '.join(marks)} outside any quote"
+
+
+def trusted_reviewers(reviewers: Sequence[str]) -> str:
+    """Return the worker's list of trusted reviewers (DESIGN §7, D089), naming canopy's own reviewer in words."""
+    names = [
+        "canopy's own reviewer (a comment canopy's review run posted)" if r == CANOPY_REVIEWER else f"`{r}`"
+        for r in reviewers
+    ]
+    return ", ".join(names) if names else "none (every reviewer's feedback needs the operator's go-ahead)"
 
 
 def mark_comments(prefix: str, suffix: str) -> str:

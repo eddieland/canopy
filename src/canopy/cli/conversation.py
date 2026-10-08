@@ -114,7 +114,11 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a started ticket, with TEXT or, without it, stdin. The next tick reads it; a waiting loop wakes."""
+    """Answer a ticket, with TEXT or, without it, stdin. The next tick reads it; a waiting loop wakes.
+
+    On a public ticket it is your word to the loop, read as an authorized reply is, and how you say what to do about an
+    untrusted reviewer's comments (`untrusted_review`). It never reaches the ticket.
+    """
     _operator("reply")
     subject = _ref(ref, "reply")
     body = text if text is not None else sys.stdin.read()

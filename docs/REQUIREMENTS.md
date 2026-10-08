@@ -1,6 +1,6 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 and R12 on 2026-10-08), and where canopy stands on
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08), and where canopy stands on
 each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is
 listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until
 then (AGENTS.md).
@@ -167,6 +167,17 @@ web UI (N1) can show it as one inbox and later channels such as Slack join it ra
 For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
 mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
 operator's replies. Gap: PR review comments, which join with PR subjects (M14).
+
+### R13. Trusted and untrusted reviewers
+
+Built in M22, live acceptance pending. Written down 2026-10-08. Only reviewers the operator trusts send a worker back
+to a PR on their own. Anyone else's feedback, a review bot's included, waits for the operator's approval, ideally with
+an instruction ("use your best judgement based on the bot's review").
+
+Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default, with `canopy:review` for canopy's own
+reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
+the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. The gate is the
+overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
 
 ## Nice to have
 

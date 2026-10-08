@@ -410,13 +410,14 @@ read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§1
 | `ci_running` | PR open, checks pending | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
-| `review_findings` | with `review.agent_prs`: findings on the head's review, newer than the cursor | as comments (§7) |
-| `changes_requested` | review comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
+| `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
+| `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
+| `untrusted_review` | review feedback newer than cursor from a reviewer not in `trust.trusted_reviewers`, with no operator message about it | attention: the operator says what to do with `canopy reply` (below) |
 | `green_unreviewed` | checks pass, no approval | attention: needs a reviewer |
 | `approved` | approved, not merged | attention: ready to merge |
 | `merged` | every unit's PR merged, and no other repository left to change (§18) | mark ticket `done` in the journal; humans handle the tracker transition |
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
-| `human_replied` | authorized reply newer than the label | dispatch `resume` pointing at the reply; the worker removes the label |
+| `human_replied` | authorized reply newer than the label, or an operator message newer than the message cursor | dispatch `resume` pointing at the reply; the worker removes the label |
 | `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
 
 A unit is `conflicted` when GitHub reports that its PR does not merge cleanly into its base (`mergeable` false,
@@ -434,6 +435,33 @@ that is still there after that push means the base moved again, and the `resume`
 identifier, never a display name, that is not a worker's (§8: one carrying the configured comment marks). A worker's
 comment is never review feedback either. If the tracker cannot say when a label was added, the worker's question comment
 is the reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
+
+**Trusted reviewers** (D089). Review feedback is a PR's reviews, review comments, and requested changes, and canopy's
+own review findings (§21). `trust.trusted_reviewers`, user-only, lists whose feedback a worker may address without the
+operator's go-ahead: VCS host logins, matched in full and case-insensitively, and `canopy:review` for canopy's own
+review runs, which post as the operator and are recognized by their comment URL in the journal (§21), never by author.
+It is empty by default: nobody is trusted until listed, so a review bot's comment never starts a fixup on its own.
+
+- A trusted reviewer's feedback newer than the unit's `review` cursor is `changes_requested` (or `review_findings`), and
+  the overseer classifies it as before: concrete changes go to a `resume`, design questions to `needs_author`.
+- Anyone else's is `untrusted_review`: the overseer records the attention item every tick, naming the PR, the
+  reviewers, and the newest item, and does not move the `review` cursor past it. It never dispatches for it on its own
+  judgment. A trusted reviewer's feedback on the same unit still goes to a worker, with the cursor no further than the
+  item before the first untrusted one.
+- The operator answers in canopy, with `canopy reply KEY` or the web UI (§22), never on the ticket. An operator message
+  newer than the ticket's message cursor is an instruction, like an authorized reply. When it speaks to the untrusted
+  feedback, however loosely ("use your best judgement on the bot's review"), the ticket is `human_replied`: a `resume`
+  whose context names the message and the review items, carrying `--cursor message=` and `--cursor review=`. When it
+  says to leave the feedback, the overseer moves both cursors with `canopy ticket set`.
+- The resume worker's prompt names the trusted reviewers (`{{TRUSTED_REVIEWERS}}`) and carries the operator's messages
+  (`{{OPERATOR_MESSAGES}}` on a public ticket, `{{CONVERSATION}}` on a private one, §22). It addresses a review comment
+  by anyone else only as an operator message about it says, and otherwise leaves it alone and says so in its summary:
+  the overseer's classification is checked again by the worker, as labels are (D051). The review comment stays data
+  either way; the operator's message is the instruction.
+
+Which reviewer wrote a comment is read by agents through the VCS host's MCP server, so the gate is the overseer's
+judgment, checked again by the worker: the harness cannot tell a review comment's author (D003). What it can check, it
+does: only the operator's channels write operator messages, and the cursors advance only with a run that starts.
 
 A private ticket (§22), one the operator started with `canopy start`, needs no label, and its own phases come from the
 journal: `needs_human` when its latest run ended `blocked` and no operator message came after it, `human_replied` when
@@ -510,9 +538,9 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
 3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
    the attempt number (one more than the most runs of the kind in any unit covered) and the kind's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
-   repliers, the queue labels, whether the run is stacked on another ticket's branch (§10), how to open a PR
-   (`{{OPEN_PR}}`, below), the context, and the result contract below, whose `prs` skeleton (`{{PRS}}`) names each
-   repository.
+   repliers, the trusted reviewers and, on a public ticket, the operator's latest messages (§7), the queue labels,
+   whether the run is stacked on another ticket's branch (§10), how to open a PR (`{{OPEN_PR}}`, below), the context,
+   and the result contract below, whose `prs` skeleton (`{{PRS}}`) names each repository.
    - Every worker reads the ticket first and, if it is closed or carries none of the queue labels, reports `failed`
      with a summary starting `not authorized:` and changes nothing. That run counts toward the attempt limit.
    - The branch is `<trust.branch_prefix><KEY>-<slug>`, named by the first `implement`. The overseer picks the slug
@@ -752,6 +780,7 @@ run. Unknown keys are errors in both files.
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
+| `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
@@ -811,6 +840,7 @@ interval_minutes = 15   # `canopy loop` waits this long after each tick ends
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...
+trusted_reviewers = ["github-login", "canopy:review"]   # whose PR feedback a worker addresses unasked (§7)
 comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
 comment_suffix = ""          # and ends with this, if set
 
@@ -833,7 +863,9 @@ base_path = ""          # a path prefix such as "/canopy", for a proxy
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
-default and must be set; `trust.authorized_repliers` defaults to empty (nobody can resume blocked work).
+default and must be set; `trust.authorized_repliers` defaults to empty (nobody can resume blocked work), and so does
+`trust.trusted_reviewers` (every review waits for the operator). A trusted reviewer is `canopy:review` or a login of at
+most 100 characters with no whitespace, colon, or backtick.
 
 `trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter or
 digit, no backtick, and no surrounding spaces, and at least one is set.
@@ -852,7 +884,7 @@ Rules:
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
 - `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
-  `trust.authorized_repliers` to fill in, and prints the label. It writes `canopy.toml` only if the repository has
+  `trust.authorized_repliers` and `trust.trusted_reviewers` to fill in, and prints the label. It writes `canopy.toml` only if the repository has
   none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose default serves: a default
   written into a file is pinned there, and a later canopy's never reaches it (D087). It never overwrites either file
   and installs nothing else (§13). If the config does not load (for example, templates lacking `{definitions_dir}`),
@@ -1959,7 +1991,8 @@ and for each PR reviewed in the last 14 days (at most 50, newest first) its URL,
 latest run: id, commit, status, verdict, impact, comment URL, finding titles, start and end.
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
-`agent_prs` is on:
+`agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
+they are `untrusted_review` and wait for the operator's go-ahead like any untrusted reviewer's (§7, D089):
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -2103,7 +2136,9 @@ The journal is what the operator reads. Authority comes from where a message ori
 
 - **Public ticket.** Authorization and replies are as §7 and §17 say: the overseer's live read of the tracker. A
   mirrored comment is the overseer's claim, like `--label`; it never makes a ticket `human_replied`, authorizes a
-  split, or counts as "try again" after a failed run.
+  split, or counts as "try again" after a failed run. The operator may also reply in canopy (D089): an operator
+  message is canopy's own fact, as on a private ticket, and is how the operator answers an untrusted reviewer (§7). It
+  stays in the journal and never reaches the ticket.
 - **Private ticket.** The journal is the source. Its start record and the operator's messages are canopy's own facts,
   written after a channel authenticated the operator, so the harness checks them in code without reading the tracker
   (D003). Tracker comments on a private ticket are data, whoever wrote them.
@@ -2182,8 +2217,12 @@ separate `list`.
   run and its `report` otherwise, so a channel can say what a reply answers.
 - After `crashed`, `worker_failed`, and the other run reasons (§14), "try again" on a private ticket is an operator
   message after the run ended.
-- `canopy reply` refuses a subject that was not started: a public ticket's replies belong on the ticket. `show`
-  drops control characters from every message.
+- `canopy reply` takes a started ticket, or a public one a tick has seen (it has a journal row); any other is refused
+  `unknown`. On a public ticket the state block carries its operator messages newer than its message cursor under
+  `operator`, and a public `resume` prompt carries the latest 20 (`{{OPERATOR_MESSAGES}}`, at most 30,000 characters),
+  each labeled the operator's: an instruction. The overseer's `--context` points at a message by id, never quotes it.
+  Its authorized repliers' comments on the ticket still work as before (§7). `show` drops control characters from every
+  message.
 - `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`,
   and `_review` set `CANOPY_RUN_ID` for their agents.
 - The private worker runs with `runtime.private_worker_cmd`, a template of its own as `split_cmd` is (D080). Its prompt
@@ -2290,7 +2329,7 @@ limits, and cooldowns hold as for any tick.
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply`, `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
 | web (M20) | reply, start, stop | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
@@ -2405,12 +2444,15 @@ and the residuals they leave, needing the operator's approval note in M20's PR.
 The overseer prompt's changes, private tickets' phases from the state block and no `--label` for them (M18), and
 mirroring each new comment (M19), are in the prompt.
 
+Replies on public tickets and trusted reviewers (D089) changed T1: an operator message authorizes a public ticket's
+`resume`, as an authorized reply does, and an untrusted reviewer's feedback starts no run without one. Their PR carries
+the operator's approval note.
+
 ### Open
 
 - Whether a private worker should have no tracker MCP server at all. It would then need the ticket's text from
   elsewhere; the overseer's `--context` holds 2000 characters.
 - Whether a private ticket's PR body and branch should name the ticket key.
-- `canopy reply` on a public ticket: refused today. A journal note that authorizes nothing could come later.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
 - `forget` in the web UI. It is the CLI's only; the web channel would call the same function.
 - A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a

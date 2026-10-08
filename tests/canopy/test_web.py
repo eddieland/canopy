@@ -71,7 +71,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
 
     assert refused(
         c.post(f"/api/tickets/{KEY}/replies", json={"body": "hi", "submission": "form-0001"}, headers=headers)
-    ) == (f"not_started: {KEY} was not started in canopy; a public ticket's replies go on the ticket")
+    ) == (f"unknown: canopy has no record of {KEY}: start it, or label it and let a tick see it, before replying")
     assert refused(c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers)).startswith("not_started")
     assert refused(c.post("/api/tickets/run:4/start", headers=headers)).startswith("unsupported")
     assert refused(c.post("/api/tickets/a%20b/start", headers=headers)).startswith("bad_ref")

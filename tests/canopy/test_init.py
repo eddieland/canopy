@@ -40,7 +40,10 @@ def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv) -
     assert main(["init", "--provider", "jira"]) == 0
     user = tomllib.loads(canopy_env.user_file.read_text())
     repo = tomllib.loads(canopy_env.repo_file.read_text())
-    assert user == {"tracker": {"labels": ["agent-ready-tester"]}, "trust": {"authorized_repliers": []}}
+    assert user == {
+        "tracker": {"labels": ["agent-ready-tester"]},
+        "trust": {"authorized_repliers": [], "trusted_reviewers": []},
+    }
     assert sorted(repo) == ["tracker"]
     assert sorted(repo["tracker"]) == ["provider", "query"]
 
