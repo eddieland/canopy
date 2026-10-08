@@ -139,7 +139,9 @@ def test_dry_run_ticket_set_records_the_phase_only(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     in_tick(conn, monkeypatch)
-    assert main(["ticket", "set", "PROJ-1", "--phase", "merged", "--cursor", "review=9", "--done"]) == 0
+    assert (
+        main(["ticket", "set", "PROJ-1", "--phase", "merged", "--cursor", "review=2026-10-07T20:58:50Z", "--done"]) == 0
+    )
     assert capsys.readouterr().out == "updated PROJ-1; dry run, cursors not advanced and not marked done\n"
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert (row["phase"], row["done"]) == (None, 0)
@@ -217,18 +219,40 @@ def test_decisions_filters_by_ticket_and_reports_no_match(
 
 
 def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    args = ["ticket", "set", "PROJ-1", "--cursor", "comment=10001", "--cursor", "review=PRR_kw1", "--done"]
+    args = ["ticket", "set", "PROJ-1", "--cursor", "comment=10001", "--cursor", "review=2026-10-07T20:58:50Z", "--done"]
     assert main(args) == 0
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert (row["last_comment_id"], row["done"]) == ("10001", 1)
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
-    assert (unit["repo"], unit["last_review_id"]) == ("repo", "PRR_kw1")
+    assert (unit["repo"], unit["last_review_id"]) == ("repo", "2026-10-07T20:58:50Z")
 
 
-@pytest.mark.parametrize("value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)"])
+@pytest.mark.parametrize(
+    "value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)", "review=2026-10-07T20:58:50+00:00"]
+)
 def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
     assert main(["ticket", "set", "PROJ-1", "--cursor", value]) == 2
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "5448282907",  # a review's id: review comments and review runs are numbered apart from reviews
+        "run:12",
+        "PRR_kw1",
+        "2026-10-07T20:58:50.000Z",  # one form only, so cursors compare as strings
+        "2026-02-30T00:00:00Z",  # not a moment at all
+    ],
+)
+def test_a_review_cursor_is_a_time(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str], value: str
+) -> None:
+    assert main(["ticket", "set", "PROJ-1", "--cursor", f"review={value}"]) == 2
+    assert "a review cursor is the newest handled item's time in UTC" in capsys.readouterr().err
+    assert main(["ticket", "set", "PROJ-1", "--cursor", "review=2026-10-07T20:58:50Z"]) == 0
+    [unit] = db.units(conn, "PROJ-1")
+    assert unit["last_review_id"] == "2026-10-07T20:58:50Z"
 
 
 def test_status_and_attention_ages(

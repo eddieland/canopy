@@ -205,7 +205,7 @@ def test_cursors_advance_only_when_the_worker_starts(
         "--cursor",
         "comment=c2",
         "--cursor",
-        "review=r2",
+        "review=2026-10-07T20:58:50Z",
     ]
     assert main(args, runner=runner) == 1  # capacity
     rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
