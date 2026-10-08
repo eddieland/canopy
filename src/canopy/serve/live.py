@@ -2,9 +2,9 @@
 
 SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version`
 once a second: it changes whenever another connection commits. Only then does the stream read the attention list, the
-runs, the tickets, and the last 24 hours' spend again, and it sends each that differs from what it sent last, plus
-`ticket.changed` for each ticket whose summary changed. The stream never writes, so its own reads never move
-`data_version`.
+runs, the tickets, the last 24 hours' spend, and the latest tick again, and it sends each that differs from what it
+sent last, plus `ticket.changed` for each ticket whose summary changed. The stream never writes, so its own reads never
+move `data_version`.
 
 The connection is opened and used only by the stream's own coroutine, on the server's event loop: the reads are small
 and quick, and keeping them on one thread is what sqlite3 requires of a connection.
@@ -23,9 +23,11 @@ from canopy.serve.schema import (
     Spend,
     SpendUpdated,
     StreamEvent,
+    Tick,
     TicketChanged,
     TicketSummary,
     TicketsUpdated,
+    TickUpdated,
 )
 
 if TYPE_CHECKING:
@@ -36,7 +38,7 @@ POLL_SECONDS = 1.0
 
 
 async def events(backend: Backend, *, poll_seconds: float = POLL_SECONDS) -> AsyncIterator[StreamEvent]:
-    """Yield the three lists and the spend figure at once, then whatever changes, until the client goes away."""
+    """Yield the three lists, the spend, and the latest tick at once, then whatever changes, until the client leaves."""
     with backend.open() as ctx:
         state = _Sent()
         version: int | None = None
@@ -62,6 +64,8 @@ class _Sent:
         self.runs: RunsUpdated | None = None
         self.tickets: dict[str, TicketSummary] | None = None
         self.spend: Spend | None = None
+        self.tick: Tick | None = None
+        self.tick_sent = False
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
         """Read the lists again and return an event for each that differs from what was sent, remembering it."""
@@ -87,4 +91,8 @@ class _Sent:
         if self.spend is None or spend.cost_usd != self.spend.cost_usd:
             self.spend = spend
             found.append(StreamEvent(SpendUpdated(spend=spend)))
+        tick = views.tick(ctx)
+        if not self.tick_sent or tick != self.tick:
+            self.tick, self.tick_sent = tick, True
+            found.append(StreamEvent(TickUpdated(tick=tick)))
         return found

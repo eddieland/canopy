@@ -28,6 +28,7 @@ from canopy.serve.schema import (
     StreamEvent,
     TicketChanged,
     TicketsUpdated,
+    TickUpdated,
 )
 from canopy.serve.spa import content_security_policy
 
@@ -339,15 +340,18 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 6)
+    headers, events = read_events(served, 7)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, spend, changed, spent = (e.root for e in events)
+    first, runs, tickets, spend, tick, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
     assert isinstance(spend, SpendUpdated)
+    assert isinstance(tick, TickUpdated)
+    assert tick.tick is not None
+    assert (tick.tick.id, tick.tick.status) == (1, "ok")
     # The mock journal moves the running run's cost: only the runs list and the spend are sent again.
     assert isinstance(changed, RunsUpdated)
     before = next(r for r in runs.runs if r.id == mock.LIVE_RUN)
@@ -421,6 +425,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "StreamEvent",
         "Pool",
         "Spend",
+        "Tick",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -429,6 +434,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/attention",
         "/api/runs",
         "/api/spend",
+        "/api/tick",
         "/api/tickets",
         "/api/tickets/{key}",
         "/api/tickets/{key}/start",

@@ -257,6 +257,26 @@ class Pool(_Model):
     worktrees: list[Worktree] = []
 
 
+class Tick(_Model):
+    """The latest tick, as `canopy status`'s first line shows it (DESIGN §14)."""
+
+    id: int
+    # running | ok | skipped | overseer_failed | reconcile_failed | abandoned
+    status: str
+    dry_run: bool
+    started_at: datetime
+    ended_at: datetime | None = None
+    summary: str | None = None
+    # What its overseer cost, when the runtime reported it (§13).
+    cost_usd: float | None = None
+
+
+class LastTick(_Model):
+    """The latest tick, or none before the first."""
+
+    tick: Tick | None = None
+
+
 class Spend(_Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 
@@ -304,10 +324,17 @@ class SpendUpdated(_Model):
     spend: Spend
 
 
+class TickUpdated(_Model):
+    """A tick started or ended. The payload is the latest tick, as `GET /tick` returns it."""
+
+    type: Literal["tick.updated"] = "tick.updated"
+    tick: Tick | None = None
+
+
 class StreamEvent(
     RootModel[
         Annotated[
-            AttentionUpdated | RunsUpdated | TicketsUpdated | TicketChanged | SpendUpdated,
+            AttentionUpdated | RunsUpdated | TicketsUpdated | TicketChanged | SpendUpdated | TickUpdated,
             Field(discriminator="type"),
         ]
     ]

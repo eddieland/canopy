@@ -73,8 +73,9 @@ Rules:
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-6xl` with `p-6` and `gap-6` between blocks.
   The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
-- The header carries the stream's state (and `mock`) and the theme toggle; the counters are the attention page's,
-  and the nav's Attention item shows how many items it lists, on every page.
+- The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
+  was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
+  attention page's, and the nav's Attention item shows how many items it lists, on every page.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
 
 ## Motion

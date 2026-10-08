@@ -21,6 +21,7 @@ from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
+    LastTick,
     Meta,
     Pool,
     RefusalResponse,
@@ -130,6 +131,11 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
     def runs() -> list[Run]:
         with backend.open() as ctx:
             return views.runs(ctx)
+
+    @api.get("/tick", operation_id="getTick")
+    def last_tick() -> LastTick:
+        with backend.open() as ctx:
+            return LastTick(tick=views.tick(ctx))
 
     @api.get("/spend", operation_id="getSpend")
     def spend() -> Spend:

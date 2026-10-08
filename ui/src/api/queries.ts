@@ -15,6 +15,7 @@ export const keys = {
     ticket: (key: string) => ['ticket', key] as const,
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
+    tick: ['tick'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -44,6 +45,12 @@ export const runsQuery = queryOptions({
 export const spendQuery = queryOptions({
     queryKey: keys.spend,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
+})
+
+/** The latest tick. The stream sends it again whenever a tick starts or ends. */
+export const tickQuery = queryOptions({
+    queryKey: keys.tick,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/tick', { signal })),
 })
 
 export const ticketsQuery = queryOptions({

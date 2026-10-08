@@ -2406,6 +2406,7 @@ The API, under `{base}/api`:
 | `GET /meta` | canopy's version, and whether the data is mock |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none before the first |
 | `GET /spend` | what the last 24 hours cost: worker and split runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
@@ -2420,12 +2421,13 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 `web:<id>`, so a retried submission records nothing new.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
-When another connection has committed since, it reads the attention list, the runs, the tickets, and the spend again,
-and sends each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, `spend.updated` (when the
-cost changed; its window moves with the clock), and `ticket.changed` naming each ticket whose summary changed. A new
-stream starts with all three lists and the spend. The UI writes a list into its query with
-`setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
-once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
+When another connection has committed since, it reads the attention list, the runs, the tickets, the spend, and the
+latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`,
+`spend.updated` (when the cost changed; its window moves with the clock), `tick.updated`, and `ticket.changed` naming
+each ticket whose summary changed. A new stream starts with all three lists, the spend, and the latest tick. The UI
+writes a list into its query with `setQueryData` and refetches a changed ticket only if a page shows it. The journal has
+no notifications, so a once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser
+polls.
 
 The worktrees page (taken on request, 2026-10-08; D090): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot shows treehouse's status, the
