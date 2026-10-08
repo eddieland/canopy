@@ -66,23 +66,33 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     await expect(page.getByRole('button', { name: 'Start privately' })).toBeVisible()
 })
 
-test('the worktrees page shows what holds each slot and what runs in it', async ({ page }) => {
+test('the worktrees page shows each pool of the workspace and what holds each slot', async ({ page }) => {
     await page.goto('worktrees')
     await settled(page)
-    const rows = page.getByTestId('worktrees').locator('li')
-    await expect(rows).toHaveCount(5)
+    await expect(page.getByTestId('pool-api')).toContainText('no clone; run `canopy workspace sync`')
 
-    const working = page.getByTestId('worktree-1')
+    const web = page.getByTestId('pool-web')
+    await expect(web.getByTestId('worktrees').locator('li')).toHaveCount(5)
+    await expect(web.getByTestId('pool-size')).toHaveText('5 of size 4')
+    await expect(web.getByTestId('pool-over')).toContainText('1 slot past the declared size')
+    const working = web.getByTestId('worktree-1')
     await expect(working).toHaveAttribute('data-state', 'working')
     await expect(working).toContainText('agent/ABC-101-login')
+    await expect(working).toContainText('.treehouse/web-3f9c2a1b/1/web')
     await expect(working).toContainText('opencode 48211')
+    await expect(web.getByTestId('worktree-3')).toHaveAttribute('data-state', 'held')
+    await expect(web.getByTestId('worktree-4')).toContainText('detached')
+    await expect(web.getByTestId('worktree-5')).toHaveAttribute('data-state', 'dirty')
+
+    // Run 43 holds a slot in two pools; each names it.
+    const mobile = page.getByTestId('pool-mobile')
+    await expect(mobile.getByTestId('pool-over')).toHaveCount(0)
+    await expect(mobile.getByTestId('worktree-1')).toContainText('run:43')
+    await expect(web.getByTestId('worktree-2')).toContainText('run:43')
+
     await working.getByRole('link', { name: 'ABC-101' }).click()
     await expect(page).toHaveURL(/\/tickets\/ABC-101$/)
-
     await page.goBack()
-    await expect(page.getByTestId('worktree-3')).toHaveAttribute('data-state', 'held')
-    await expect(page.getByTestId('worktree-4')).toContainText('detached')
-    await expect(page.getByTestId('worktree-5')).toHaveAttribute('data-state', 'dirty')
 
     const reads = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
     await page.getByTestId('worktrees-refresh').click()

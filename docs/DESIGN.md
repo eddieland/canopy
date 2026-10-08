@@ -2293,7 +2293,8 @@ Served by `canopy loop` from a thread (D073):
   CLI uses: `conversation.start`, `stop`, and `reply` with channel `web`, and for a stop with `now`, the same
   `runs.halt.end` as `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
   that function and the attention list's (`loop.attention.listed`) when it starts the server (`serve.backend`). The one
-  process it runs is `treehouse status --json`, read-only, for the worktrees page (below).
+  process it runs is `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the
+  pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page), runs (running, then the 50 that ended last), worktrees (each pool's slots,
@@ -2369,8 +2370,15 @@ review the journal shows running), `held` (leased or in use by anything else: th
 or a `canopy:` lease no running run holds, which it notes the next reconcile returns), `dirty` (unleased with
 uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A pool
 with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process names
-are shown as text with control characters dropped, and at most 20 processes per slot. The pool's declared size
-(`capacity`, §18) is shown when there is one.
+are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace is
+shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees; a workspace of one's
+pool, outside its repository, is shown whole. The pool's declared size (`capacity`, §18) is shown with its slot count,
+and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones.
+
+The pools are read at once, a thread each and at most 8, so a workspace of many repositories waits on its slowest pool
+rather than on all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may
+rewrite the pool's state file as it heals it, as reconcile's reads do every tick, so a slow read holds up a lease in
+that pool for as long as it takes.
 
 It is not on the event stream: the journal does not hold a slot's branch or processes, and a `treehouse status` per
 pool once a second per open page would cost more than the page is worth. The UI reads it again when a `runs.updated`
@@ -2395,8 +2403,10 @@ How it serves, built in M20's foundation and true of every page:
   buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.
 - `python -m canopy.serve --mock` serves the same API over a journal it seeds from fixtures in a temporary directory,
-  for the UI's development server and its end-to-end tests. Writes go to that journal. Without `--secret-file` it
-  signs nobody in and asks for no session; only mock mode allows that, and it binds loopback only.
+  for the UI's development server and its end-to-end tests. The fixtures are a workspace of three repositories, one
+  not cloned, with a run holding slots in two pools and a pool past its declared size. Writes go to that journal.
+  Without `--secret-file` it signs nobody in and asks for no session; only mock mode allows that, and it binds loopback
+  only.
 
 ### Trust model changes
 

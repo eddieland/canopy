@@ -4,10 +4,16 @@ treehouse is read when the page asks, never by the event stream: the journal doe
 out or what runs in it, and a `treehouse status` a second per open page would cost more than the page is worth. A
 lease is matched to a running run or review by its lease id, as reconcile matches them. Branch names and process names
 are text from the machine and the workers, so the UI renders them as text, like everything from the journal.
+
+The pools are read at once, a thread each, so a workspace of many repositories waits on its slowest pool rather than on
+all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may rewrite the
+pool's state file as it heals it, as reconcile's reads do every tick: a slow read can hold up a lease in that pool for
+as long as it takes.
 """
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -17,10 +23,13 @@ from canopy.serve.schema import Pool, Process, ReviewHold, Worktree, WorktreeSta
 
 if TYPE_CHECKING:
     import sqlite3
+    from pathlib import Path
 
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
 
+# At most this many pools are read at once.
+READERS = 8
 # How many of a slot's processes the page lists; a build can start hundreds.
 PROCESSES = 20
 _STATES: dict[str, WorktreeState] = {
@@ -43,24 +52,32 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         row = next(r for r in running if int(r["id"]) == run_id)
         by_lease |= {str(s["lease_id"]): row for s in slots}
     reviews = {str(r["lease_id"]): r for r in db.running_review_runs(ctx.conn) if r["lease_id"]}
+    root = ctx.workspace.root
+    repos = [(repo, ctx.pool(repo.name)) for repo in ctx.workspace.repos]
+    cloned = [(repo, pool) for repo, pool in repos if repo.cloned]
+    # `backend.slots` runs on the pool's threads: it uses `ctx.runner`, never the journal connection.
+    with ThreadPoolExecutor(max_workers=max(1, min(READERS, len(cloned))), thread_name_prefix="canopy-pool") as ex:
+        reads = {repo.name: ex.submit(backend.slots, ctx, pool) for repo, pool in cloned}
     found: list[Pool] = []
-    for repo in ctx.workspace.repos:
-        pool = ctx.pool(repo.name)
+    for repo, pool in repos:
         if not repo.cloned:
             found.append(Pool(repo=repo.name, size=pool.slots, error=_NO_CLONE))
             continue
         try:
-            slots = backend.slots(ctx, pool)
+            slots = reads[repo.name].result()
         except treehouse.TreehouseError as e:
             found.append(Pool(repo=repo.name, size=pool.slots, error=str(e)))
             continue
-        worktrees = [worktree(s, by_lease.get(s.lease_id), reviews.get(s.lease_id)) for s in slots]
+        worktrees = [worktree(s, by_lease.get(s.lease_id), reviews.get(s.lease_id), root=root) for s in slots]
         found.append(Pool(repo=repo.name, size=pool.slots, worktrees=worktrees))
     return found
 
 
-def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row | None) -> Worktree:
-    """One slot, with the running run or review that holds its lease, if the journal has one."""
+def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *, root: Path) -> Worktree:
+    """One slot, with the running run or review that holds its lease, if the journal has one.
+
+    Its path is shown from workspace `root` when under it.
+    """
     leased = slot.lease_id != ""
     state: WorktreeState = _STATES.get(slot.status, "broken")
     note = None
@@ -72,7 +89,7 @@ def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row 
         note = _STALE
     return Worktree(
         name=slot.name,
-        path=str(slot.path),
+        path=views.shown_path(str(slot.path), root),
         status=slot.status,
         state=state,
         branch=_text(slot.branch),

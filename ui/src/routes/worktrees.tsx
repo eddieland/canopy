@@ -11,7 +11,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
+import { overSize, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/worktrees')({
@@ -24,7 +24,8 @@ function WorktreesPage() {
         <>
             <PageHeader label="Pools" title="Worktrees">
                 Every slot in canopy's treehouse pools: what holds it, what it has checked out, and what runs in it.
-                Read from treehouse when the page opens and whenever a run starts or ends.
+                Paths inside the workspace are shown from its root. Read from treehouse when the page opens and whenever
+                a run starts or ends.
             </PageHeader>
             <div className="flex items-center justify-between gap-4">
                 <Notice error={error} />
@@ -57,6 +58,7 @@ function WorktreesPage() {
 
 function PoolPanel({ pool }: { pool: Pool }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
+    const over = overSize(pool)
     return (
         <Panel data-testid={`pool-${pool.repo}`}>
             <PanelHeader label={pool.repo}>
@@ -69,9 +71,20 @@ function PoolPanel({ pool }: { pool: Pool }) {
                                 <span className="readout">{n}</span> {state}
                             </span>
                         ))}
-                    {pool.size !== null && <span className="readout">size {pool.size}</span>}
+                    {pool.size !== null && (
+                        <span className={cn('readout', over > 0 && 'text-status-blocked')} data-testid="pool-size">
+                            {pool.worktrees.length} of size {pool.size}
+                        </span>
+                    )}
                 </span>
             </PanelHeader>
+            {over > 0 && (
+                <p className="border-b px-3 py-2 text-xs text-status-blocked" data-testid="pool-over">
+                    {over === 1 ? '1 slot' : `${over} slots`} past the declared size.{' '}
+                    <code className="font-mono">canopy workspace sync</code> removes idle ones; one with work in it
+                    stays until it has none.
+                </p>
+            )}
             {pool.error !== null ? (
                 <Placeholder className="min-h-24">
                     <span className="text-status-failed">{pool.error}</span>

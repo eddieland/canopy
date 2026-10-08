@@ -43,7 +43,8 @@ class Backend:
     end_run: Callable[[Context, sqlite3.Row], bool]
     # Fixture data, shown as `mock` in the UI's header.
     mock: bool = False
-    # A pool's slots, for the worktrees page. Read-only: `treehouse status --json`, through `ctx.runner`.
+    # A pool's slots, for the worktrees page: `treehouse status --json`, through `ctx.runner`. Called on a thread per
+    # pool, so it must not use `ctx.conn`, which belongs to the request's own thread.
     slots: Callable[[Context, treehouse.Pool], list[treehouse.Slot]] = field(default=_status)
 
     @contextmanager

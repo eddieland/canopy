@@ -66,8 +66,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from
-  `canopy/serve/mock.py`; the header shows `mock`. Its times are fixed around 2026-10-08 12:00 UTC: a screenshot test
-  freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts` holds a few typed rows for unit tests.
+  `canopy/serve/mock.py`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
+  2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`
+  holds a few typed rows for unit tests.
 
 ## Python side
 

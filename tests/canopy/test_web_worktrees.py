@@ -2,14 +2,17 @@
 
 import dataclasses
 import json
+import threading
 from pathlib import Path
 
 import pytest
 
-from canopy.core import db, workspace
+from canopy.core import db, treehouse, workspace
 from canopy.core.context import Context
 from canopy.infra import resources
+from canopy.serve import mock
 from tests.canopy.test_loop import context
+from tests.canopy.test_serve import client
 from tests.canopy.test_web import running_run, signed_in_client
 from tests.conftest import CanopyEnv
 
@@ -119,3 +122,30 @@ def test_a_failing_treehouse_is_the_pool_s_error_not_the_page_s(ctx: Context, tr
     [pool] = response.json()
     assert pool["worktrees"] == []
     assert "treehouse status exited" in pool["error"]
+
+
+def test_the_mock_is_a_workspace_with_a_joint_run_and_a_pool_past_its_size(tmp_path: Path) -> None:
+    c = client(None, mock.seed(tmp_path / "mock"))
+
+    api, mobile, web = c.get("/api/worktrees").json()
+    assert (api["repo"], api["size"], api["worktrees"]) == ("api", 2, [])
+    assert "no clone" in api["error"]
+    assert (mobile["repo"], mobile["size"], len(mobile["worktrees"])) == ("mobile", 2, 2)
+    assert (web["repo"], web["size"], len(web["worktrees"])) == ("web", 4, 5)
+    joint = [w for pool in (mobile, web) for w in pool["worktrees"] if w["run"] and w["run"]["id"] == 43]
+    assert [w["path"] for w in joint] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
+    [running] = [r for r in c.get("/api/runs").json() if r["id"] == 43]
+    assert running["worktrees"] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
+
+
+def test_a_workspace_s_pools_are_read_at_once(tmp_path: Path) -> None:
+    backend = mock.seed(tmp_path / "mock")
+    # Both cloned pools must be inside treehouse together for either to get past the barrier.
+    both = threading.Barrier(2, timeout=5)
+
+    def slots(ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
+        both.wait()
+        return backend.slots(ctx, pool)
+
+    c = client(None, dataclasses.replace(backend, slots=slots))
+    assert [len(p["worktrees"]) for p in c.get("/api/worktrees").json()] == [0, 2, 5]

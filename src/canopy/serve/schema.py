@@ -102,7 +102,7 @@ class Run(_Model):
     session_id: str | None = None
     cost_usd: float | None = None
     tokens: int | None = None
-    # The worktrees a running run holds.
+    # The worktrees a running run holds, from the workspace root when under it.
     worktrees: list[str] = []
     log_path: str
 
@@ -227,6 +227,7 @@ class Worktree(_Model):
     """One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it."""
 
     name: str
+    # From the workspace root when under it, as a workspace's pools are; else whole.
     path: str
     # treehouse's own word: available, leased, in-use, dirty, damaged, unverified, or "you're here".
     status: str
