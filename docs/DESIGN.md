@@ -209,7 +209,9 @@ dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into 
 `resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch, chores, and reviews need to
 start `_run`, `_chore`, and `_review` via `python -m canopy`. Its run name picks the command: `canopy`, or a link named
 `canopy-notify-desktop` or `canopy-notify-slack`. `make binary` builds it for the current platform; the release
-workflow builds each platform's, runs the install check on each, and attaches them to the tag's release.
+workflow builds each platform's, runs the install check on each, and attaches them to the tag's release. The version
+is the tag's (D085): pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one
+and its commit.
 
 Where later work goes:
 
