@@ -610,6 +610,27 @@ a couple of minutes.
 
 Status: not started.
 
+## M22. Trusted reviewers
+
+REQUIREMENTS R13, DESIGN §7, D089. Needs M3's `resume` and M20's reply. Taken on the operator's request (2026-10-08).
+
+- `trust.trusted_reviewers`, user-only and empty by default, with `canopy:review` for canopy's own reviewer.
+- `untrusted_review` in the overseer's phase table and on the attention list; the `review` cursor waits on it.
+- `canopy reply` and the web UI's reply on a public ticket the journal has, as the operator's go-ahead: in the state
+  block under `operator`, and in the public `resume` prompt as `{{OPERATOR_MESSAGES}}`.
+- Resume workers told who is trusted (`{{TRUSTED_REVIEWERS}}`), addressing anyone else's comments only as an operator
+  message says.
+- Fakes-based tests: the config, the state block's trusted list and operator messages, the cursor, and the resume
+  prompt with and without a go-ahead.
+
+Accept: the tests above pass with the fakes. Live: a review bot's comment on a loop PR waits as `untrusted_review`
+without a dispatch; a reply from the web UI resumes it with the reply as the worker's instruction and nothing of it on
+the ticket; a listed reviewer's comment resumes as before.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_trusted_reviewers.py`), docs, and D089 are in. The
+operator approved the TRUST_MODEL and prompt changes in the PR (2026-10-08). Waiting on the operator: the live run
+above.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second

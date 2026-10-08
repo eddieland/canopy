@@ -599,3 +599,20 @@ It skips `repeat.WAKE_MIN_SECONDS`, which exists so messages arriving in a burst
 is a deliberate request for exactly one tick, as `canopy tick` by hand already is, and every hard guard still holds.
 Keys come from the terminal in cbreak mode through stdlib `termios`; keys typed during a tick are dropped.
 Rejected: a full-screen TUI library (a new dependency for one key); a key that also aborts or skips a running tick.
+
+## D089. Untrusted reviewers wait for the operator's go-ahead, given with `canopy reply` on any ticket
+
+A review bot's comment resumed a ticket as `changes_requested` (M3's live check), and the operator wants only reviewers
+they trust to start a fixup. `trust.trusted_reviewers` (user-only, empty by default) lists them by VCS host login, with
+`canopy:review` for canopy's own reviewer, which posts as the operator. Anyone else's feedback is `untrusted_review` on
+the attention list until the operator answers in canopy, with `canopy reply` or the web UI, which now take a public
+ticket the journal has. The answer is the worker's instruction ("use your best judgement on the bot's review"); the
+review stays data. The overseer gates it and the resume worker checks again, both by prompt: the harness cannot read a
+comment's author (D003). The operator chose the empty default, the reply channel, and the configurable entry for
+canopy's reviewer.
+Rejected: a list of untrusted reviewers (a new bot would be trusted until noticed); defaulting to everyone (today's
+behavior, but a bot's comments steer workers until the operator acts); the go-ahead as a ticket comment by an authorized
+replier (public on the ticket, a Jira account where the reviewer is a GitHub login, and no web UI path); a harness
+guard on resume (it cannot see whose comments a run addresses).
+Revisit: if the overseer is found dispatching for untrusted feedback without a go-ahead; then a `--review-from` claim
+on `canopy dispatch` checked against the list, as `--label` is (D051).
