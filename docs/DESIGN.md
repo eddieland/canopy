@@ -98,7 +98,7 @@ canopy (harness, Python)
     conversation.py start, stop, reply, forget, show: the operator's verbs on a subject (§22)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
-    chores.py      chore run, chore wait, _chore
+    chores.py      chore run, chore wait, chore try, _chore
     notify.py      notify test
     reviews.py     review run, review wait, _review
 
@@ -122,6 +122,7 @@ canopy (harness, Python)
     view.py        each configured chore: due time, runs, open findings; chore_failed items; its state block part
     start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
     execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
+    trial.py       canopy chore try: one foreground run outside any tick that records nothing
     result.py      the result contract, validated with pydantic
     reconcile.py   chore runs whose _chore is gone marked crashed
 
@@ -1594,6 +1595,20 @@ Result contract, one JSON line, last line of the agent's text (§13):
 them like worker runs: a dead `_chore` pid gets the agent's process group killed and the run `crashed`. Chore runs do
 not count against `max_workers`.
 
+### Trying a chore
+
+`canopy chore try <NAME> [--context '<text>']` is the operator's, for writing a chore (D098). It renders the prompt a
+run starting now would get, with `run_id` null in its `## Run` section, runs the chore's command in its `cwd` with its
+timeout and the shadowing check, and validates the result line as `_chore` does. It prints the agent's text, its
+stderr and exit code, the validated result, and the status, and exits 0 only on `ok`.
+
+- It records nothing: no `chore_runs` row, no decision, no notification, nothing on the attention list. The next tick
+  sees no change, and the `not_due` guard does not count it.
+- No guard applies, and it works with `capacity.max_chores = 0`, so a chore can be written before the loop runs any.
+  It still needs a chore defined for this workspace.
+- It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-try`. The
+  overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the loop cannot try a chore.
+
 ### Findings on the attention list
 
 - Open findings are those of the chore's latest `ok` run; one disappears when a later `ok` run omits its id (§14). A
@@ -1631,8 +1646,6 @@ Approved with M9:
 
 - Whether a chore should ever write (acting on others' work, which D010 kept out). Likely first: a ticket for a
   finding, without a queue label like a split child (§18), so a human decides.
-- `canopy chore try <NAME>`: a foreground run outside any tick that prints the result and records nothing. Until
-  then, run the chore's command by hand.
 - Whether findings should inform ticket decisions once chores have a track record (a flaky-check finding raising
   attention instead of dispatching `fix-ci`). Only to hold work back or raise attention, never to make a ticket a
   candidate, and opt-in per chore.
