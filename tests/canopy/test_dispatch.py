@@ -134,7 +134,7 @@ def test_worker_opens_prs_through_the_mcp_or_the_configured_skill(
         in (canopy_env.state_dir / "runs" / "1.prompt").read_text()
     )
 
-    # The operator's own skill replaces the MCP, with no fallback to it (D077).
+    # The operator's own skill replaces the MCP, with no fallback to it (D078).
     canopy_env.write_user(canopy_env.user_file.read_text().replace("[runtime]\n", "[runtime]\npr_skill = 'acme-pr'\n"))
     assert main(["dispatch", "PROJ-2", *args[2:]], runner=InlineRunner()) == 0
     text = (canopy_env.state_dir / "runs" / "2.prompt").read_text()

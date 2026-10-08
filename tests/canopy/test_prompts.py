@@ -166,7 +166,7 @@ def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
     assert prompts.open_pr("") == "Open each PR through the GitHub MCP."
     text = prompts.open_pr("acme-pr")
     assert "by following the skill `acme-pr`, and in no other way" in text
-    # A missing skill fails the run rather than falling back to the MCP the operator set it to avoid (D077).
+    # A missing skill fails the run rather than falling back to the MCP the operator set it to avoid (D078).
     assert "report `failed` with a summary that starts `no PR skill:`" in text
     assert "MCP" not in text
 
@@ -181,7 +181,7 @@ def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str,
 
 @pytest.mark.parametrize("kind", prompts.OPENS_PRS)
 def test_with_a_pr_skill_an_override_must_say_how_to_open_prs(canopy_env: CanopyEnv, kind: str) -> None:
-    # An override that still names the GitHub MCP would open the PRs the skill is set to avoid: fail closed (D077).
+    # An override that still names the GitHub MCP would open the PRs the skill is set to avoid: fail closed (D078).
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; open a PR through the GitHub MCP\n")

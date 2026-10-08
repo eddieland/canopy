@@ -34,7 +34,7 @@ REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 # splitter reads to check who asked (D061). An override without it would split on the overseer's word alone.
 REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
 # The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
-# override that still names the GitHub MCP would open the PRs the operator set the skill to avoid (D077).
+# override that still names the GitHub MCP would open the PRs the operator set the skill to avoid (D078).
 OPENS_PRS = ("implement", "resume")
 REQUIRED_PR_SKILL = ("OPEN_PR",)
 # The reviewer's prompt (DESIGN §21). An override must still name the commit, the checkout, and the run, which the
@@ -63,7 +63,7 @@ def mark_comments(prefix: str, suffix: str) -> str:
 
 
 def open_pr(skill: str) -> str:
-    """Return how a worker opens a PR: through the GitHub MCP, or with the operator's skill and nothing else (D077).
+    """Return how a worker opens a PR: through the GitHub MCP, or with the operator's skill and nothing else (D078).
 
     A missing skill is a failed run, not a fallback to the MCP: the operator set the skill because the MCP's PRs do not
     work for them.

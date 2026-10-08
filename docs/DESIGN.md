@@ -423,7 +423,7 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
      repository. For older overrides, `{{SLOT}}` is the worker's working directory and `{{BASE}}` and `{{PR_URL}}` the
      one repository's base and PR. With `runtime.pr_skill` set, an `implement` or `resume` prompt without
-     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D077).
+     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed (D078).
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
    stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the repository or workspace root). Record its
@@ -501,7 +501,7 @@ a marked comment. Changing the marks leaves earlier workers' comments reading as
 without the placeholders still renders, and its workers' comments read as the operator's, as they all did before D069.
 
 How a worker opens a PR is the one step an operator may need done their own way: an employer's tooling that adds
-metadata, a stacked-PR tool, or a host the GitHub MCP serves badly (D077). `runtime.pr_skill`, user-only, names a skill
+metadata, a stacked-PR tool, or a host the GitHub MCP serves badly (D078). `runtime.pr_skill`, user-only, names a skill
 of the operator's, which `implement` and `resume` workers then open every PR with, and in no other way; with it unset
 they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run: the
 worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
@@ -761,14 +761,16 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, labels), GitHub (open/update
   PR, read reviews and checks).
-- `canopy-reviewer`: no edits, shell, web fetch, or subagents; reads only through the link to its checkout. MCP: read
+- `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
   tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
   and edits denied by name (§21).
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19). A chore that runs the operator's
   own tools uses the operator's own copy of it.
-- `canopy-splitter`: read-only file tools in its desk; no edit, shell, web fetch, or subagents. MCP: the tracker
+- `canopy-splitter`: read-only file tools in its desk; no edit, shell, or subagents. MCP: the tracker
   (create and link tickets, comment), with tools for labels, assignees, edits, PRs, branches, and files denied by name
   (§18).
+
+None has web tools: every definition denies `webfetch`, `websearch`, and `codesearch` (TRUST_MODEL T1, D077).
 
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
 the command templates. No interface.
@@ -833,7 +835,7 @@ reliably override each other. A `$HOME` skill that workers use must be a single 
 `external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
 also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). A skill only adds to what
 a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
-names the skill and the prompt then says to use it (§8, D077). Prefer that to a prompt override.
+names the skill and the prompt then says to use it (§8, D078). Prefer that to a prompt override.
 
 ### The operator's skill
 
