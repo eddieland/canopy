@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import click
 from rich.console import Console
@@ -16,7 +17,13 @@ from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core.context import Context
+
+# `canopy status` lists this many runs that ended, and cuts each one's summary to this many characters.
+RECENT_RUNS = 10
+SUMMARY_WIDTH = 160
 
 
 @click.command("loop")
@@ -76,6 +83,7 @@ def cmd_status(click_ctx: click.Context) -> int:
 
     _print_attention(attention.listed(ctx))
     _print_workers(ctx)
+    _print_recent_runs(ctx)
     _print_chores(ctx)
     _print_sinks(ctx)
     return 0
@@ -126,6 +134,62 @@ def _print_workers(ctx: Context) -> None:
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
     if not running and not db.running_review_runs(ctx.conn):
         click.echo("  none")
+
+
+def _print_recent_runs(ctx: Context) -> None:
+    """Three lines per run that ended, newest first: what it was and its PRs, what it said, and where to look."""
+    runs = db.recent_runs(ctx.conn, RECENT_RUNS)
+    click.echo(f"\nRecent runs ({len(runs)}):")
+    for r in runs:
+        result = _result(r)
+        ended = f"{attention.age(str(r['ended_at']))} ago"
+        prs = "".join(f"  {pr}" for pr in _prs(result))
+        click.echo(f"  {r['ticket_key']}  {r['kind']}  {r['status']}  {ended}{prs}")
+        said = _one_line(str(result.get("harness") or result.get("summary") or ""))
+        if said:
+            click.echo(f"    {said}")
+        session = f"session {r['session_id']}" if r["session_id"] else "no session reported"
+        click.echo(f"    {session}{_spent(r)}  log {r['log_path']}")
+    if not runs:
+        click.echo("  none")
+
+
+def _result(run: sqlite3.Row) -> dict[str, object]:
+    try:
+        parsed: object = json.loads(str(run["result_json"] or "{}"))
+    except json.JSONDecodeError:
+        return {}
+    return cast("dict[str, object]", parsed) if isinstance(parsed, dict) else {}
+
+
+def _prs(result: dict[str, object]) -> list[str]:
+    """The PRs a run's result named, each a plain https:// URL; anything else is not printed."""
+    prs = result.get("prs")
+    urls = list(cast("dict[str, object]", prs).values()) if isinstance(prs, dict) else [result.get("pr")]
+    return [u for u in urls if isinstance(u, str) and u.startswith("https://") and u.isprintable() and " " not in u]
+
+
+def _one_line(text: str) -> str:
+    """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut."""
+    flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
+    return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
+
+
+def _spent(run: sqlite3.Row) -> str:
+    if run["cost_usd"] is None:
+        return ""
+    tokens = sum(
+        int(run[c] or 0)
+        for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
+    )
+    return f"  ${float(run['cost_usd']):.2f}, {_count(tokens)} tokens"
+
+
+def _count(n: int) -> str:
+    for size, suffix in ((1_000_000, "M"), (1_000, "k")):
+        if n >= size:
+            return f"{n / size:.1f}{suffix}"
+    return str(n)
 
 
 def _print_chores(ctx: Context) -> None:

@@ -92,10 +92,10 @@ Gap: DESIGN §15's attention item after three consecutive overseer failures is n
 
 Partial; the rest is M15.
 
-- See: `canopy status` shows the attention list, running workers, and the last tick; `canopy decisions` shows what a
-  tick decided; each run's log is under `<state_dir>/runs/`. Missing: a list of recent runs with their outcome, PR,
-  and summary, and the OpenCode session id of each run, which would let the operator open its transcript with
-  OpenCode's own tools.
+- See: built. `canopy status` shows the attention list, running workers, the last tick, and the ten runs that ended
+  most recently with their outcome, PR, summary, cost, run log, and OpenCode session id, which opens the run's
+  transcript with OpenCode's own tools (§13, D071); `canopy decisions` shows what a tick decided. A running worker's
+  session id is known only once it ends: it is read from what `opencode run` printed.
 - Prompt an idle ticket: built. An authorized reply on the ticket, or a review comment on the PR, is picked up by the
   next tick and resumes the work (§7). This keeps the operator's daily surface where coworkers' already is.
 - Prompt a running session: not possible today; M15 runs workers against OpenCode's server so the operator can

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.chores import view as chore_view
-from canopy.core import db, definitions, prompts, treehouse
+from canopy.core import agent_output, db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
@@ -155,7 +155,8 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
     out_path = out_dir / f"{tick_id}.log"
     logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
-    lines = [line.strip().strip("`").strip() for line in result.stdout.splitlines() if line.strip()]
+    text = agent_output.read(result.stdout).text
+    lines = [line.strip().strip("`").strip() for line in text.splitlines() if line.strip()]
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:

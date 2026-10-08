@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import db, definitions, outbox, treehouse
+from canopy.core import agent_output, db, definitions, outbox, treehouse
 from canopy.core.config import render_command
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import result, start
@@ -130,7 +130,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.flush()
     if done.timed_out:
         return Outcome("timeout", None, f"the reviewer timed out after {timeout_minutes} minutes")
-    parsed = result.parse(done.stdout)
+    parsed = result.parse(agent_output.read(done.stdout).text)
     if parsed is None:
         return Outcome("unknown", None, "the reviewer's last line was not a valid result")
     return judged(ctx, run, parsed)

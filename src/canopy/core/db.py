@@ -14,8 +14,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from canopy.infra import procs
+
+if TYPE_CHECKING:
+    from canopy.core.agent_output import Usage
 
 DB_FILE_NAME = "canopy.db"
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
@@ -448,6 +452,27 @@ def finish_run(
         if closed and event is not None:
             record_event(conn, event)
     return closed
+
+
+def set_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
+    """Record what the agent runtime reported about a run: its session, and what it cost (DESIGN §13)."""
+    spent = (
+        (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
+        if usage is not None
+        else (None,) * 6
+    )
+    conn.execute(
+        "UPDATE runs SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, "
+        "tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
+        (session_id, *spent, run_id),
+    )
+
+
+def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+    """Return the `limit` runs that ended most recently, newest first."""
+    return conn.execute(
+        "SELECT * FROM runs WHERE status != 'running' ORDER BY ended_at DESC, id DESC LIMIT ?", (limit,)
+    ).fetchall()
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:

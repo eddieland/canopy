@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import result, start, view
-from canopy.core import db, definitions, outbox
+from canopy.core import agent_output, db, definitions, outbox
 from canopy.core.config import render_command
 from canopy.infra import logs, stopping
 
@@ -117,7 +117,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.flush()
     if done.timed_out:
         return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes")
-    parsed = result.parse(done.stdout)
+    parsed = result.parse(agent_output.read(done.stdout).text)
     if parsed is None:
         return Outcome("unknown", None, "the chore's last line was not a valid result; its findings are not recorded")
     return Outcome(parsed.status, parsed)

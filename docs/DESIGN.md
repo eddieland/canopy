@@ -91,7 +91,7 @@ canopy (harness, Python)
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
     setup.py       init, init --workspace, skill
-    loop.py        loop, tick, tick --dry-run, status, decisions
+    loop.py        loop, tick, tick --dry-run, status (with recent runs), decisions
     runs.py        dispatch, _run
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
@@ -138,6 +138,7 @@ canopy (harness, Python)
     workspace.py   canopy init --workspace: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
+    agent_output.py an agent's stdout: its text, and OpenCode's JSON events' session id and cost (§13)
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
@@ -245,9 +246,9 @@ in order:
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, and `attention`
    refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The run succeeded if it
-   exited 0 and the last non-empty stdout line is `tick complete`; otherwise the tick closes as `overseer_failed`. A
-   successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as
-   `skipped`, which leaves the attention list standing (D037).
+   exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
+   `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
+   closes the tick as `skipped`, which leaves the attention list standing (D037).
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
@@ -437,8 +438,10 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
 3. Run `worker_cmd`, timeout `worker_timeout_minutes`, with cwd = the slot, or for a joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
    process group. Its stdout and stderr go to the run log.
-4. Parse the last non-empty stdout line as the result contract. Missing or invalid means `status='unknown'`; a timeout
-   means `status='timeout'`.
+4. Parse the last non-empty line of the worker's text as the result contract: its stdout, or the text of OpenCode's
+   JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`. Record the
+   session id and cost the events reported on the run at once, also after a timeout, so a git failure after this step
+   does not lose them.
 
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch; step 3 runs `split_cmd`
    in the desk; step 4 parses and validates the split's result; step 5 is skipped, since a split pushes nothing.
@@ -453,7 +456,7 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    status differs from what the worker reported. `prs` is kept to the run's repositories, or filled from `pr` for a
    run in one; each plain `https://` URL is copied to its unit's `pr_url`, for display and the next run's prompt.
 
-Worker result contract, one JSON line, last line of stdout:
+Worker result contract, one JSON line, last line of the worker's text (§13):
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},
@@ -551,7 +554,9 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
   _run`, pid of the worker agent (`worker_pid`), status, result_json. Status is `running`, `done`, `blocked`,
   `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, or `crashed`. Source for capacity, crash
-  detection, attempt counts, and the fix-ci cooldown.
+  detection, attempt counts, and the fix-ci cooldown. What the runtime reported (§13): the session id (`session_id`),
+  the dollar cost (`cost_usd`), and tokens by kind (`tokens_input`, `tokens_output`, `tokens_reasoning`,
+  `tokens_cache_read`, `tokens_cache_write`), all NULL when it reported nothing.
 - `run_slots`: one row per slot a run leased; the repository whose pool it came from, slot path, lease id and holder,
   and the base branch the run started from there. A joint run has one per repository.
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
@@ -568,7 +573,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
 - `notify_events`: the outbox of point events for sinks, and `notify_sinks`: each sink's cursor, last delivery, last
   digest, and failures in a row (§20).
 
-Rules: the DB never stores tokens or raw CI logs. `result_json` is a summary.
+Rules: the DB never stores credentials or raw CI logs (token counts are usage, not credentials). `result_json` is a
+summary.
 
 In a workspace of one, the ticket's one unit is renamed to the repository's current name the next time canopy writes
 it, and every lookup ignores the name, so renaming the checkout never strands a ticket (D052). `repo` in
@@ -642,8 +648,8 @@ max_workers = 2
 
 [runtime]
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
-split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
+split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
@@ -745,6 +751,28 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
 When the tracker is GitHub Issues, the tracker and GitHub are the same MCP server. The runtime is swappable by editing
 the command templates. No interface.
 
+### What a run prints
+
+Every agent's output is read the same way (`core/agent_output.py`, D071). A template either prints the agent's text on
+stdout, or asks OpenCode for `--format json`, which prints one JSON event per line. If any line of stdout is an event
+(a JSON object with a string `type` and a `sessionID`), the agent's text is the `part.text` of each `text` event, one
+per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is the
+last non-empty line of that text, so a template may switch formats without changing a prompt.
+
+From events the harness also reads, each validated (D026):
+
+- the session id: the first `sessionID` of at most 100 letters, digits, `_`, and `-`. The operator opens the
+  transcript with OpenCode's own tools (`opencode export <id>`, or `opencode --session <id>` in the run's directory).
+- the cost: the sum over `step_finish` events, one per model call, of `part.cost` in dollars and `part.tokens` (input,
+  output, reasoning, cache read, cache write), each call's cost at most $1,000,000 and each count at most 10^12. If one
+  does not validate, the run reports no cost rather than too little. Events with no model call cost nothing. A run
+  killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
+  session's, and not counted.
+
+The default `worker_cmd` and `split_cmd` ask for events, and `_run` records what they report on the run (§8, §11).
+Other templates may ask for them too; what the overseer, chores, and reviews report is not recorded yet (ROADMAP M13).
+A run log holds the events as printed.
+
 ### Where the runtime finds canopy's definitions
 
 Rationale in D040 and D044.
@@ -764,7 +792,7 @@ canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `split_cmd`, §19's `chore_c
 
 ```toml
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
 ```
 
 Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
@@ -800,6 +828,11 @@ bash rules apply either way.
 After every tick the list is rendered to `<state_dir>/attention.md` (`~/.canopy/attention.md` by default), readable
 only by the operator: grouped by reason, one line per item with ticket key, age, and detail (usually a link).
 `canopy status` prints it too. Items disappear when their cause is gone; there is no manual dismissal.
+
+`canopy status` also lists running workers and the ten runs that ended most recently, newest first: ticket, kind,
+status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line with control
+characters dropped and cut at 160 characters; and its session id, its cost and tokens when the runtime reported them
+(§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`,
 `worker_failed`, `attempt_limit`, and in a workspace `repo_missing` and the overseer's `multi_repo`,
@@ -1317,7 +1350,7 @@ run id, the overseer's context, the latest ended run (id, status, end time, summ
 findings (id, title, link), so ids can be reused, and the result contract. It is written to
 `<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
 
-Result contract, one JSON line, last line of stdout:
+Result contract, one JSON line, last line of the agent's text (§13):
 
 ```json
 {"status":"ok|failed","summary":"one paragraph",
@@ -1710,7 +1743,7 @@ Verdict: findings (1 blocking, 1 minor). Impact: normal.
 The first line identifies it to people, the last-line marker to programs. The comment is posted as the operator
 (D010), so anything running as the operator could forge the marker. The loop never trusts it, only its journal.
 
-Result contract, one JSON line, last line of stdout, validated with pydantic (D026):
+Result contract, one JSON line, last line of the reviewer's text (§13), validated with pydantic (D026):
 
 ```json
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","comment":"https://...",
