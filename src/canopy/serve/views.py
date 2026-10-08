@@ -15,6 +15,7 @@ from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
     Comment,
+    LastTick,
     Message,
     MessageKind,
     MessageSource,
@@ -78,6 +79,11 @@ def spend(backend: Backend, ctx: Context) -> Spend:
     """What the last SPEND_HOURS hours cost, by the backend's clock."""
     since = backend.clock() - timedelta(hours=SPEND_HOURS)
     return Spend(since=since, hours=SPEND_HOURS, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+
+
+def last_tick(ctx: Context) -> LastTick:
+    """The latest tick, and the newest message the latest `ok` tick read."""
+    return LastTick(tick=tick(ctx), acknowledged=db.acknowledged_message_id(ctx.conn))
 
 
 def tick(ctx: Context) -> Tick | None:

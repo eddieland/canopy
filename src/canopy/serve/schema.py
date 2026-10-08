@@ -272,9 +272,12 @@ class Tick(_Model):
 
 
 class LastTick(_Model):
-    """The latest tick, or none before the first."""
+    """The latest tick, or none before the first, and the newest message a tick has acknowledged."""
 
     tick: Tick | None = None
+    # The newest message the latest `ok` tick read, which may be an earlier tick than `tick`: an operator message after
+    # it waits for the next tick, and the attention list is still from before it (§14). None before the first.
+    acknowledged: int | None = None
 
 
 class Spend(_Model):
@@ -325,10 +328,11 @@ class SpendUpdated(_Model):
 
 
 class TickUpdated(_Model):
-    """A tick started or ended. The payload is the latest tick, as `GET /tick` returns it."""
+    """A tick started or ended. The payload is what `GET /tick` returns: the latest tick, and what was acknowledged."""
 
     type: Literal["tick.updated"] = "tick.updated"
     tick: Tick | None = None
+    acknowledged: int | None = None
 
 
 class StreamEvent(

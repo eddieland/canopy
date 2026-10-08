@@ -293,9 +293,11 @@ export type components = {
         };
         /**
          * LastTick
-         * @description The latest tick, or none before the first.
+         * @description The latest tick, or none before the first, and the newest message a tick has acknowledged.
          */
         LastTick: {
+            /** Acknowledged */
+            acknowledged: number | null;
             tick: components["schemas"]["Tick"] | null;
         };
         /**
@@ -662,9 +664,11 @@ export type components = {
         };
         /**
          * TickUpdated
-         * @description A tick started or ended. The payload is the latest tick, as `GET /tick` returns it.
+         * @description A tick started or ended. The payload is what `GET /tick` returns: the latest tick, and what was acknowledged.
          */
         TickUpdated: {
+            /** Acknowledged */
+            acknowledged: number | null;
             tick: components["schemas"]["Tick"] | null;
             /**
              * @description discriminator enum property added by openapi-typescript

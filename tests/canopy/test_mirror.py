@@ -294,7 +294,7 @@ def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path:
         "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
         "VALUES ('ticket', 'OLD-1', 'x', 'operator', 'reply', 'cli', 'Blue.')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [4, 5, 6]
+    assert db.migrate(conn, resources.migrations_dir()) == [4, 5, 6, 7]
     # Its whole comment history is mirrored once, worker comments the comment cursor had passed included.
     assert mirror_cursor(conn, "OLD-1") is None
     [message] = mirrored(conn, "OLD-1")
