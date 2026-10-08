@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.chores import result, view
+from canopy.chores import result, view, window
 from canopy.core import db, outbox
 from canopy.infra import lock, logs, procs
 
@@ -123,11 +123,15 @@ def _guard(ctx: Context, name: str, *, planned: list[str] | None = None) -> Chor
     if name in planned:
         raise Refusal("running", f"this dry run already ran {name}")
     [state] = [s for s in view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name]
-    due = state.due_at()
-    if due is not None and due > datetime.now(UTC):
+    now = datetime.now(UTC)
+    earliest = state.earliest()
+    if earliest is not None and earliest > now:
         raise Refusal(
-            "not_due", f"{name} runs at most every {chore.every_minutes} minutes; next after {db.format_time(due)}"
+            "not_due", f"{name} runs at most every {chore.every_minutes} minutes; next after {db.format_time(earliest)}"
         )
+    if not window.is_open(chore, now):
+        opens = window.next_open(chore, now)
+        raise Refusal("outside_hours", f"{name} starts only {window.describe(chore)}; next at {db.format_time(opens)}")
     limit = ctx.config.capacity.max_chores
     busy = len(running) + len(planned)
     if busy >= limit:

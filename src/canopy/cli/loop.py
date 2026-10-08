@@ -225,7 +225,7 @@ def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
         if latest is None
         else f"last {latest['status']} {attention.age(str(latest['started_at']), now)} ago"
     )
-    due = state.due_at()
+    due = state.due_at(now)
     when = "due now" if due is None or due <= now else f"due in {attention.age(db.format_time(now), due)}"
     return f"{last}, {when}"
 
