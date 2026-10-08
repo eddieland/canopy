@@ -569,8 +569,8 @@ first.
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
-- A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks, with the running run
-  or review holding each (D090). Taken on request (2026-10-08).
+- A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
+  while it is open, with the running run or review holding each (D090, D091). Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
 - Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
   the UI once M15 runs workers against OpenCode's server.
