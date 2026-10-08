@@ -170,8 +170,9 @@ def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
         "atlassian_createJiraIssue",
     ],
 )
-def test_the_worker_denies_dangerous_mcp_tools(tool: str) -> None:
-    assert not _allowed(_mcp_rules("canopy-worker"), tool)
+@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+def test_workers_deny_dangerous_mcp_tools(agent: str, tool: str) -> None:
+    assert not _allowed(_mcp_rules(agent), tool)
 
 
 @pytest.mark.parametrize(
@@ -181,8 +182,18 @@ def test_the_worker_denies_dangerous_mcp_tools(tool: str) -> None:
         "github_update_pull_request",
         "github_pull_request_read",
         "github_get_pull_request_reviews",
-        "github_add_issue_comment",
         "github_add_reply_to_pull_request_comment",
+    ],
+)
+@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None:
+    assert _allowed(_mcp_rules(agent), tool)
+
+
+@pytest.mark.parametrize(
+    "tool",
+    [
+        "github_add_issue_comment",
         "github_issue_read",
         "github_issue_write",
         "atlassian_getJiraIssue",
@@ -190,5 +201,5 @@ def test_the_worker_denies_dangerous_mcp_tools(tool: str) -> None:
         "atlassian_addCommentToJiraIssue",
     ],
 )
-def test_the_worker_keeps_the_mcp_tools_it_works_with(tool: str) -> None:
+def test_the_worker_keeps_the_ticket_tools_it_works_with(tool: str) -> None:
     assert _allowed(_mcp_rules("canopy-worker"), tool)

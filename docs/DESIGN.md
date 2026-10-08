@@ -2131,8 +2131,9 @@ separate `list`.
   in the tracker.
 - The worker prompt has a private variant: no label check, since the harness checked the start record; never comment
   on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
-  `canopy-worker-private`: `canopy-worker` with every tool of the tracker's MCP server denied by wildcard and only
-  its read tools allowed by name, and the tracker CLIs canopy knows (`gh`, `acli`, `jira`) denied in its bash rules.
+  `canopy-worker-private`: `canopy-worker`, its MCP tools denied by name included (D084), with every tool of the
+  tracker's MCP server denied by wildcard and only its read tools allowed by name, and the tracker CLIs canopy knows
+  (`gh`, `acli`, `jira`) denied in its bash rules.
   - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both user-only, with a default for each
     shipped provider's usual MCP server (`config.DEFAULT_TRACKER_TOOLS`): `atlassian` with Jira's read tools for
     `jira`, and `github` for `github`, whose server is also the one PRs go through, so its list adds the PR tools a
