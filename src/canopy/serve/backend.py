@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.core import db, treehouse
@@ -46,6 +47,8 @@ class Backend:
     # A pool's slots, for the worktrees page: `treehouse status --json`, through `ctx.runner`. Called on a thread per
     # pool, so it must not use `ctx.conn`, which belongs to the request's own thread.
     slots: Callable[[Context, treehouse.Pool], list[treehouse.Slot]] = field(default=_status)
+    # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
+    clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
 
     @contextmanager
     def open(self) -> Iterator[Context]:

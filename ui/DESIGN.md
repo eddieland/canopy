@@ -63,7 +63,8 @@ Rules:
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
-- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows. Nothing larger.
+- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows. Nothing larger, but a
+  counter's value (`text-3xl`).
 
 ## Shape and space
 
@@ -72,6 +73,8 @@ Rules:
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-6xl` with `p-6` and `gap-6` between blocks.
   The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
+- The header carries the stream's state (and `mock`) and the theme toggle; the counters are the attention page's,
+  and the nav's Attention item shows how many items it lists, on every page.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
 
 ## Motion
@@ -102,6 +105,10 @@ inline script and checks it against the store's key.
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
+- **Counters** (`src/components/counters.tsx`) head the attention page: running, waiting on you, attention, and
+  spent in the last 24 hours (`GET /api/spend`, on the stream). Each is a label, the value, and one line under it,
+  with a 2px top rule in the state color it counts: `status-running`, `status-blocked`, `status-failed` while
+  something is broken, the accent for spend.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer
