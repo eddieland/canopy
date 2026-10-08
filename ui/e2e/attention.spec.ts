@@ -47,3 +47,37 @@ test('an item about no ticket says so, with nothing to answer', async ({ page })
     await expect(detail).toContainText('Nothing to answer here')
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
+
+test('the counters show the loop at a glance, and the nav counts the list on every page', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await expect(page.getByTestId('counter-running')).toContainText('2')
+    await expect(page.getByTestId('counter-waiting')).toContainText('1')
+    await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
+    await expect(page.getByTestId('counter-attention')).toContainText('5')
+    await expect(page.getByTestId('counter-attention')).toContainText('1 failed · 1 waiting · 3 more')
+    await expect(page.getByTestId('counter-spent')).toContainText(/\$\d+\.\d\d/)
+
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/ }).click()
+    await expect(page.getByTestId('nav-attention-count')).toHaveText('5')
+    await expect(page.getByTestId('counters')).toHaveCount(0)
+})
+
+test('the runs working now are listed under the attention list', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const workers = page.getByTestId('workers')
+    await expect(workers.getByRole('listitem')).toHaveCount(2)
+    await expect(workers.getByTestId('worker-41')).toContainText('ABC-101')
+    await expect(workers.getByTestId('worker-41')).toContainText('implement')
+    await expect(workers.getByTestId('worker-43')).toContainText('ABC-104')
+})
+
+test("a started ticket's item offers the ticket's own actions beside its thread", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting_reply' }).click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
+    await expect(detail.getByText('Private: workers read the ticket and write nothing to it.')).toBeVisible()
+})

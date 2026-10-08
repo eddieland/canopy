@@ -21,6 +21,7 @@ from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
+    LastTick,
     Meta,
     Pool,
     RefusalResponse,
@@ -29,6 +30,7 @@ from canopy.serve.schema import (
     Run,
     Session,
     SignIn,
+    Spend,
     Started,
     Stopped,
     StopRequest,
@@ -70,6 +72,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     signed_in = APIRouter(dependencies=[Depends(sessions.require)])
     _session_routes(api, sessions)
     _read_routes(signed_in, backend)
+    _live_routes(signed_in, backend)
     _write_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
@@ -129,6 +132,16 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
         with backend.open() as ctx:
             return views.runs(ctx)
 
+    @api.get("/tick", operation_id="getTick")
+    def last_tick() -> LastTick:
+        with backend.open() as ctx:
+            return LastTick(tick=views.tick(ctx))
+
+    @api.get("/spend", operation_id="getSpend")
+    def spend() -> Spend:
+        with backend.open() as ctx:
+            return views.spend(backend, ctx)
+
     @api.get("/tickets", operation_id="listTickets")
     def tickets() -> list[TicketSummary]:
         with backend.open() as ctx:
@@ -142,6 +155,10 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
         if found is None:
             raise HTTPException(status_code=404, detail=f"canopy has no record of {ref}")
         return found
+
+
+def _live_routes(api: APIRouter, backend: Backend) -> None:
+    """What is read from beyond a single journal query: treehouse's pools, and the event stream."""
 
     # Not on the event stream: each read runs `treehouse status` once per pool (worktrees.py).
     @api.get("/worktrees", operation_id="listWorktrees")

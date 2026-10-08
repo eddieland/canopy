@@ -290,7 +290,7 @@ def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str, *, single: bool)
     """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction.
 
     A workspace of one has one repository, whose name follows its directory, so its ticket's one unit is renamed to
-    `unit` rather than a second one made: renaming the checkout never strands a ticket (D052).
+    `unit` rather than a second one made: renaming the checkout never strands a ticket (D033).
     """
     if single:
         conn.execute("UPDATE ticket_units SET repo = ? WHERE ticket_key = ?", (unit, key))
@@ -531,6 +531,17 @@ def _set_report(
         "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
         (session_id, *spent, row_id),
     )
+
+
+def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
+    """What the runs and ticks that started at or after `since` cost; None when none of them reported one (§13)."""
+    row = conn.execute(
+        "SELECT (SELECT SUM(cost_usd) FROM runs WHERE started_at >= ?), (SELECT SUM(cost_usd) FROM ticks WHERE "
+        "started_at >= ?)",
+        (since, since),
+    ).fetchone()
+    parts = [float(v) for v in row if v is not None]
+    return sum(parts) if parts else None
 
 
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:

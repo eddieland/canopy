@@ -6,6 +6,7 @@ message bodies as `canopy show` drops them, run summaries are cut to one line, a
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,7 +20,9 @@ from canopy.serve.schema import (
     MessageSource,
     Run,
     RunState,
+    Spend,
     StartStatus,
+    Tick,
     TicketDetail,
     TicketSummary,
     Unit,
@@ -39,6 +42,8 @@ TICKETS = 200
 TICKET_RUNS = 10
 TICKET_MESSAGES = 100
 SUMMARY_LENGTH = 300
+# The window the spend figure covers.
+SPEND_HOURS = 24
 _CHORE = "chore:"
 _PR = "pr:"
 _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
@@ -67,6 +72,28 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
             )
         )
     return found
+
+
+def spend(backend: Backend, ctx: Context) -> Spend:
+    """What the last SPEND_HOURS hours cost, by the backend's clock."""
+    since = backend.clock() - timedelta(hours=SPEND_HOURS)
+    return Spend(since=since, hours=SPEND_HOURS, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+
+
+def tick(ctx: Context) -> Tick | None:
+    """The latest tick, or None before the first."""
+    row = db.last_tick(ctx.conn)
+    if row is None:
+        return None
+    return Tick(
+        id=int(row["id"]),
+        status=str(row["status"]),
+        dry_run=bool(row["dry_run"]),
+        started_at=db.parse_time(row["started_at"]),
+        ended_at=db.parse_time(row["ended_at"]) if row["ended_at"] else None,
+        summary=conversation.printable(row["summary"]) if row["summary"] else None,
+        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+    )
 
 
 def runs(ctx: Context) -> list[Run]:

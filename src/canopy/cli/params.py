@@ -16,7 +16,7 @@ from canopy.runs import dispatch
 KEY_RE = dispatch.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
-# A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7, D095).
+# A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7, D096).
 REVIEW_CURSOR_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MAX_TEXT = 2000
 MAX_PR_URL = 300

@@ -334,7 +334,7 @@ Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. Duri
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
 as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Dispatched workers are
 unaffected. A signal less than one second (`repeat.SAME_SIGNAL_SECONDS`, monotonic clock) after the first is the same
-keypress (D049). The web UI's server stops with the loop.
+keypress. The web UI's server stops with the loop.
 
 Config is read once at loop start; restart to apply a change. Prompt files are read every tick.
 
@@ -476,14 +476,14 @@ items carries their cursors (`--cursor`, §8), so they advance only if the worke
 done, or an attention item advance with `canopy ticket set`. A review comment waiting on a human is not advanced past,
 so its attention item is recorded every tick until a human answers it.
 
-The `review` cursor is the time of the newest review feedback handled, in UTC as `YYYY-MM-DDTHH:MM:SSZ` (D095): a
+The `review` cursor is the time of the newest review feedback handled, in UTC as `YYYY-MM-DDTHH:MM:SSZ` (D096): a
 review's `submitted_at`, an inline review comment's `created_at`, or, for canopy's own review run (§21), the
 `created_at` of its comment. GitHub numbers reviews and review comments separately, and review runs are canopy's own,
 so no id orders all three. In that one form, times compare as strings; an item at the cursor's own second is handled, as
 a review's inline comments share its second. `--cursor review=` refuses any other form, so a cursor the overseer
 writes is always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the overseer is told to look up
 that item's time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review
-state is as ambiguous as before (D095).
+state is as ambiguous as before (D096).
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
@@ -763,7 +763,7 @@ Rules: the DB never stores credentials or raw CI logs (token counts are usage, n
 summary.
 
 In a workspace of one, the ticket's one unit is renamed to the repository's current name the next time canopy writes
-it, and every lookup ignores the name, so renaming the checkout never strands a ticket (D052). `repo` in
+it, and every lookup ignores the name, so renaming the checkout never strands a ticket (D033). `repo` in
 `ticket_units` and `run_slots` is nullable, a remnant of pre-workspace journals; canopy never writes null there.
 
 ## 12. Configuration
@@ -2368,11 +2368,12 @@ Served by `canopy loop` from a thread (D073):
   pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
-- Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected
-  item's conversation and reply form, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
-  pool's slots, below), and tickets, each with its conversation. Actions: the CLI's verbs, reply, start, and stop
-  (with or without `now`). OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session
-  id, and attach joins once M15 runs workers against OpenCode's server.
+- Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
+  conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
+  the list, and the last 24 hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
+  pool's slots, below), and tickets, each with its conversation. Actions: the CLI's verbs, reply, start, and stop (with
+  or without `now`). OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and
+  attach joins once M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -2414,6 +2415,8 @@ The API, under `{base}/api`:
 | `GET /meta` | canopy's version, and whether the data is mock |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none before the first |
+| `GET /spend` | what the last 24 hours cost: worker and split runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -2427,25 +2430,31 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 `web:<id>`, so a retried submission records nothing new.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
-When another connection has committed since, it reads the attention list, the runs, and the tickets again, and sends
-each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, and `ticket.changed` naming each
-ticket whose summary changed. A new stream starts with all three lists. The UI writes a list into its query with
-`setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
-once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
+When another connection has committed since, it reads the attention list, the runs, the tickets, the spend, and the
+latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`,
+`spend.updated` (when the cost changed; its window moves with the clock), `tick.updated`, and `ticket.changed` naming
+each ticket whose summary changed. A new stream starts with all three lists, the spend, and the latest tick. The UI
+writes a list into its query with `setQueryData` and refetches a changed ticket only if a page shows it. The journal has
+no notifications, so a once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser
+polls.
 
 The worktrees page (taken on request, 2026-10-08; D090): for each repository in the workspace, in map order, its pool's
-slots as `treehouse status --json` reports them, read when the page asks. Each slot shows treehouse's status, the
-branch it has checked out (or detached), its lease holder and since when, and the processes treehouse found running in
-it. A lease is matched to a running run or review by its lease id, as reconcile matches them, so a slot names the
-ticket, run kind, and run that hold it. The page groups slots in five states it colors: `working` (held by a run or
-review the journal shows running), `held` (leased or in use by anything else: the operator's own shell, `canopy-sync`,
-or a `canopy:` lease no running run holds, which it notes the next reconcile returns), `dirty` (unleased with
-uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A pool
-with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process names
-are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace is
-shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees; a workspace of one's
-pool, outside its repository, is shown whole. The pool's declared size (`capacity`, §18) is shown with its slot count,
-and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones.
+slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
+treehouse's own status on hover), its number (its path on hover), its lease holder, the branch it has checked out (or
+detached), the processes treehouse found running in it, and since when; an idle slot is its state and number alone, and
+a note gets a second line. A lease is matched to a running run or review by its lease id, as reconcile matches them, so
+a slot names the ticket, run kind, and run that hold it. The page groups slots in five states it colors: `working` (held
+by a run or review the journal shows running), `held` (leased or in use by anything else: the operator's own shell,
+`canopy-sync`, or a `canopy:` lease no running run holds, which it notes the next reconcile returns), `dirty` (unleased
+with uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A
+pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
+names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
+is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees; a workspace of one's
+pool, outside its repository, is shown whole. When a pool's slots share a directory, the pool's header names it once.
+The pool's declared size (`capacity`, §18) is shown with its slot count, and a pool holding more slots than that says
+how many, and that `canopy workspace sync` removes idle ones. Above the pools, counters of every pool's slots working,
+held, needing a look (dirty or broken, and any pool it could not read), and free; each pool's header has a square per
+slot in its state's color.
 
 The pools are read at once, a thread each and at most 8, so a workspace of many repositories waits on its slowest pool
 rather than on all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may
@@ -2455,7 +2464,7 @@ that pool for as long as it takes.
 It is not on the event stream: the journal does not hold a slot's branch or processes, and a `treehouse status` per
 pool once a second per open page would cost more than the page is worth. The UI reads it again when a `runs.updated`
 event changes which running runs hold which worktrees (a run's cost moving does not), when the operator asks, and
-every 30 seconds while a page shows it in a visible tab (D091): what runs in a slot, whether it is dirty, and the slots
+every 30 seconds while a page shows it in a visible tab (D090): what runs in a slot, whether it is dirty, and the slots
 a sync adds or removes never reach the journal, and a run's own refresh comes as it is recorded, before its worker has
 checked out its branch. Only an operator's read shows on the Read again button.
 

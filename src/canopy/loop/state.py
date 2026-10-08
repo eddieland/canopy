@@ -60,7 +60,7 @@ def state_block(
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def repo_name(repo: str | None) -> str:
-        # A workspace of one has only the one repository, whatever its rows call it (D052).
+        # A workspace of one has only the one repository, whatever its rows call it (D033).
         return workspace.repos[0].name if workspace.single or repo is None else repo
 
     def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:

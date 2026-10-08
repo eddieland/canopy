@@ -1,9 +1,11 @@
 """The web UI over the operator's own journal (DESIGN §22, ROADMAP M20): its channel writes through the CLI's guards,
 its pages read what `canopy show` and `canopy status` print, and `canopy loop` serves it from a thread."""
 
+import dataclasses
 import json
 import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx2
@@ -15,7 +17,7 @@ from canopy.core import config, conversation, db
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.loop import repeat, web
-from canopy.serve import secret
+from canopy.serve import secret, views
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
@@ -163,6 +165,38 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     reply = {"body": "Blue.", "submission": "form-0004"}
     assert c.post(f"/api/tickets/{KEY}/replies", json=reply, headers=headers).json()["answers"] == question["id"]
     assert c.get(f"/api/tickets/{KEY}").json()["ticket"]["awaiting"] is None
+
+
+def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_cost(ctx: Context) -> None:
+    now = datetime(2026, 10, 8, 12, tzinfo=UTC)
+    backend = dataclasses.replace(web.backend(ctx), clock=lambda: now)
+    assert views.spend(backend, ctx).cost_usd is None  # nothing reported yet
+
+    def started(table: str, row_id: int, hours_ago: float, cost: float | None) -> None:
+        at = db.format_time(now - timedelta(hours=hours_ago))
+        ctx.conn.execute(f"UPDATE {table} SET started_at = ?, cost_usd = ? WHERE id = ?", (at, cost, row_id))  # noqa: S608
+
+    started("runs", running_run(ctx, KEY), 2, 1.25)
+    started("runs", running_run(ctx, "PROJ-2"), 25, 9.0)  # before the window
+    started("runs", running_run(ctx, "PROJ-3"), 1, None)  # reported nothing
+    started("ticks", db.start_tick(ctx.conn, dry_run=False), 23.5, 0.5)
+
+    spend = views.spend(backend, ctx)
+    assert (spend.hours, spend.since, spend.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
+
+
+def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/tick").json() == {"tick": None}
+    db.start_tick(ctx.conn, dry_run=False)
+    later = db.start_tick(ctx.conn, dry_run=True)
+    db.finish_tick(ctx.conn, later, "ok", "nothing to do\x1b[2J")
+    ctx.conn.execute("UPDATE ticks SET cost_usd = 0.25 WHERE id = ?", (later,))
+
+    tick = c.get("/api/tick").json()["tick"]
+    assert (tick["id"], tick["status"], tick["dry_run"], tick["cost_usd"]) == (later, "ok", True, 0.25)
+    assert tick["summary"] == "nothing to do [2J"  # control characters dropped
+    assert tick["ended_at"] is not None
 
 
 def free_port() -> int:

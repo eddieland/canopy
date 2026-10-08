@@ -14,6 +14,8 @@ export const keys = {
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
     worktrees: ['worktrees'] as const,
+    spend: ['spend'] as const,
+    tick: ['tick'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -39,6 +41,18 @@ export const runsQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
 })
 
+/** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
+export const spendQuery = queryOptions({
+    queryKey: keys.spend,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
+})
+
+/** The latest tick. The stream sends it again whenever a tick starts or ends. */
+export const tickQuery = queryOptions({
+    queryKey: keys.tick,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/tick', { signal })),
+})
+
 export const ticketsQuery = queryOptions({
     queryKey: keys.tickets,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/tickets', { signal })),
@@ -60,7 +74,7 @@ export const WORKTREES_REFRESH_MS = 30_000
 /**
  * Each pool's worktrees, read from treehouse by the server on every fetch. Not on the event stream: the stream marks it
  * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 30 seconds while a page shows
- * it and its tab is visible. That timer is the UI's one refetch on an interval (D091): what runs in a slot,
+ * it and its tab is visible. That timer is the UI's one refetch on an interval (D090): what runs in a slot,
  * whether it is dirty, and a slot sync adds never reach the journal.
  */
 export const worktreesQuery = queryOptions({

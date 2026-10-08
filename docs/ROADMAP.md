@@ -205,8 +205,8 @@ Accept: a two-repository workspace; one real ticket in each repository goes from
 with every worktree under the workspace root.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_workspace.py` holds the harness's half of the
-acceptance: two tickets in two repositories, each run's worktree under the workspace root), docs, D052, and D053 are in.
-Until M7 a ticket stays in the repository of its first dispatch (D052), and the overseer records `multi_repo` for one
+acceptance: two tickets in two repositories, each run's worktree under the workspace root), docs, and D053 are in.
+Until M7 a ticket stays in the repository of its first dispatch, and the overseer records `multi_repo` for one
 that needs several. A workspace's `.canopy/` sits inside what may be a shared checkout, so it, and any definitions
 snapshot, must be private to the operator (D053). The workspace file is new repository-controlled config, so the
 TRUST_MODEL T7 and §7 changes moved here from M7. The overseer prompt and TRUST_MODEL changes need human approval in
@@ -219,9 +219,9 @@ runs.
 - Desks, per-repository branch setup and push verification, `prs` in the result contract, sibling PR links.
 - Per-unit phases, cursors, and attempt counts; attention items about a unit, and `canopy attention --repo`. M6 added
   the `repo` column and items about a repository (`repo_missing`); M7 gives ticket items one.
-- Lift D052's one repository per ticket: `implement` may add a unit. Decide DESIGN §18's open question on sequenced
-  PRs (a follow-up after the first merged, or the next repository once the first lands) before designing units, since
-  it decides whether a unit can start after the ticket's first PR has merged.
+- Lift the rule of one repository per ticket: `implement` may add a unit. Decide DESIGN §18's open question on
+  sequenced PRs (a follow-up after the first merged, or the next repository once the first lands) before designing
+  units, since it decides whether a unit can start after the ticket's first PR has merged.
 - The desk permission canary, and the TRUST_MODEL T4 and T6 changes with human approval (T7 and §7 changed in M6).
 
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
@@ -406,8 +406,8 @@ cost in dollars and tokens, and `canopy status` shows it per recent run (D071). 
 (2026-10-08): each tick records its overseer's session and cost, the default `overseer_cmd` asks for events, and the
 loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
 alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
-`overseer_cmd` in a user file from before needs `--format json` added. Not designed yet: the budget and the pacing
-rule.
+`overseer_cmd` in a user file from before needs `--format json` added. The web UI's attention page shows what the
+last 24 hours cost (2026-10-08, D095). Not designed yet: the budget and the pacing rule.
 
 ## M14. PR-scoped work
 
@@ -570,7 +570,7 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
-  while it is open, with the running run or review holding each (D090, D091). Taken on request (2026-10-08).
+  while it is open, with the running run or review holding each (D090). Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
 - Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
   the UI once M15 runs workers against OpenCode's server.

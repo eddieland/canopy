@@ -63,7 +63,8 @@ Rules:
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
-- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows. Nothing larger.
+- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows. Nothing larger, but a
+  counter's value (`text-3xl`).
 
 ## Shape and space
 
@@ -72,6 +73,9 @@ Rules:
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-6xl` with `p-6` and `gap-6` between blocks.
   The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
+- The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
+  was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
+  attention page's, and the nav's Attention item shows how many items it lists, on every page.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
 
 ## Motion
@@ -102,16 +106,28 @@ inline script and checks it against the store's key.
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
+- **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
+  attention, and spent in the last 24 hours from `GET /api/spend`, on the stream) and the worktrees page (working,
+  held, needs a look, free, across every pool). Each is a label, the value, and one line under it, with a 2px top
+  rule in the state color it counts: `status-running`, `status-stopped` for held, `status-blocked`, `status-failed`
+  while something is broken, the accent for spend.
+- **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
+  idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
+- **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
+  number). Columns keep their width on every row, the age's included. An idle slot shows its state and number
+  alone, dimmed; only a note or an unreadable branch takes a second line.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-  `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer
-  (`awaiting_reply`, `untrusted_review`), then every other reason, then chores' findings; within each, the item open
-  longest first. A reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The
-  selection is `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation and
-  the reply form; an item about no ticket shows its detail and nothing to answer.
-- **A conversation** is a column of messages, each with a 2px left rule: `border` for a worker's report or a
-  tracker comment, `accent` on a faint accent tint for the operator's own words, `status-blocked` on its tint for a
-  question. Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.
+  `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
+  `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
+  reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The selection is
+  `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation, the reply form,
+  and the ticket's actions; an item about no ticket shows its detail and nothing to answer. Under the list, Working
+  lists the running runs: ticket, kind, cost so far, and for how long.
+- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
+  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
+  accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
+  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.
