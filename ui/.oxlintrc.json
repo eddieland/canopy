@@ -1,0 +1,77 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc", "unicorn", "import", "jsx-a11y"],
+  "jsPlugins": [
+    {
+      "name": "react-compiler",
+      "specifier": "eslint-plugin-react-hooks"
+    }
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error"
+  },
+  "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/api/schema.gen.ts", "playwright-report", "test-results"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": [
+      "error",
+      {
+        "allowConstantExport": true,
+        "allowExportNames": ["Route"]
+      }
+    ],
+    "react/react-in-jsx-scope": "off",
+    "react-compiler/static-components": "error",
+    "react-compiler/use-memo": "error",
+    "react-compiler/void-use-memo": "error",
+    "react-compiler/preserve-manual-memoization": "error",
+    "react-compiler/incompatible-library": "error",
+    "react-compiler/immutability": "error",
+    "react-compiler/globals": "error",
+    "react-compiler/refs": "error",
+    "react-compiler/set-state-in-effect": "error",
+    "react-compiler/error-boundaries": "error",
+    "react-compiler/purity": "error",
+    "react-compiler/set-state-in-render": "error",
+    "react-compiler/unsupported-syntax": "error",
+    "react-compiler/config": "error",
+    "react-compiler/gating": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "react",
+            "importNames": ["useMemo", "useCallback", "memo"],
+            "message": "The React Compiler memoizes; do not hand-write useMemo, useCallback, or memo (ui/AGENTS.md)."
+          }
+        ]
+      }
+    ],
+    "import/no-cycle": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/no-explicit-any": "error",
+    "import/no-unassigned-import": [
+      "error",
+      {
+        "allow": ["**/*.css"]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["src/components/ui/**"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    },
+    {
+      "files": ["src/routes/**"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    }
+  ]
+}

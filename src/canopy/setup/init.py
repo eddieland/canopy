@@ -116,7 +116,7 @@ max_workers = 2
 [runtime]
 # {{definitions_dir}} is the directory canopy's agent definitions and skills are in (D040). Keep it.
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-overseer {{prompt}}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-worker {{prompt}}'
+worker_cmd   = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-worker --format json {{prompt}}'
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 
@@ -128,6 +128,10 @@ interval_minutes = 15
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.
 # Empty means nobody can.
 authorized_repliers = []
+# Every comment a worker posts starts with the prefix and ends with the suffix, each if set; set at least one.
+# A comment that carries every mark set is never feedback or an instruction.
+comment_prefix = "CANOPY:"
+comment_suffix = ""
 """
 
 
@@ -140,6 +144,8 @@ def repo_config_text(provider: str) -> str:
 
 [tracker]
 provider = {json.dumps(provider)}
+# Added by a worker that needs an answer, removed when it resumes. Any label your tracker accepts; it must
+# already exist, since canopy does not create labels.
 needs_human_label = "needs-human"
 # How to find candidate tickets: the tracker's own search syntax, or plain language. Edit this.
 # Finding is not authorizing: each operator's own labels are checked on every ticket.

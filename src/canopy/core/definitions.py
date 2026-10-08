@@ -4,9 +4,14 @@ canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<
 contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial one.
 Command templates name it with `{definitions_dir}`, and OpenCode reads it through `OPENCODE_CONFIG_DIR`.
 
+One definition is rendered from config: `canopy-worker-private` gets the tracker's MCP server and the tools of it a
+private worker may call (`render_private`, DESIGN §22). The digest covers the rendered text, so a config change makes a
+new snapshot rather than changing one a run may be loading.
+
 OpenCode merges a repository's definition of an agent into canopy's, and a repository that repeats one of canopy's
 permission patterns can put its own rules after it (D044). So a run refuses to start in a directory whose OpenCode
-config defines one of canopy's agents: `shadowing` finds those files.
+config defines one of canopy's agents: `shadowing` finds those files. A private run also refuses one whose config names
+the tracker server's tools (`naming_tools`): a rule merged after canopy's could reopen a write tool.
 """
 
 from __future__ import annotations
@@ -16,14 +21,23 @@ import os
 import shutil
 import tempfile
 import time
+from collections.abc import Mapping
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from canopy.infra import logs, resources
+
+if TYPE_CHECKING:
+    from canopy.core.config import Config, TrackerTools
 
 RUNTIME_DIR = "runtime"
 _TMP_PREFIX = ".tmp-"
 # A temporary directory this old belongs to a process that died mid-copy; a copy takes well under a second.
 _STALE_TMP_SECONDS = 3600
+PRIVATE_WORKER = "canopy-worker-private"
+_PRIVATE_FILE = f"agents/{PRIVATE_WORKER}.md"
+# The line of the shipped private worker definition the tracker's rules are rendered at.
+_TOOLS_MARKER = "  # canopy: tracker tools\n"
 
 
 class DefinitionsError(Exception):
@@ -34,15 +48,48 @@ def _files(root: Path) -> list[Path]:
     return sorted(p for p in root.rglob("*") if p.is_file())
 
 
-def digest() -> str:
-    """Return a digest of the bundled agent definitions and skills: their relative paths and contents."""
-    h = hashlib.sha256()
+def render_private(text: str, tools: TrackerTools | None) -> str:
+    """Return the private worker's definition with the tracker's rules at its marked line (DESIGN §22).
+
+    Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
+    (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run then (`no_read_tools`).
+    """
+    if _TOOLS_MARKER not in text:
+        raise DefinitionsError(
+            f"{_PRIVATE_FILE} has no line {_TOOLS_MARKER.strip()!r} to render the tracker's tools at"
+        )
+    if tools is None:
+        return text
+    rules = [f'  "{tools.server}_*": deny\n', *(f'  "{tools.server}_{tool}": allow\n' for tool in tools.allowed)]
+    return text.replace(_TOOLS_MARKER, _TOOLS_MARKER + "".join(rules), 1)
+
+
+def sources(config: Config | None = None) -> dict[str, bytes]:
+    """Return the snapshot's files by relative path.
+
+    They are the bundled agents and skills, with the private worker's definition rendered from `config` when it is
+    given.
+    """
+    found: dict[str, bytes] = {}
     for name, root in (("agents", resources.agents_dir()), ("skills", resources.skills_dir())):
         for path in _files(root):
-            rel = f"{name}/{path.relative_to(root).as_posix()}"
-            data = path.read_bytes()
-            h.update(f"{rel}\0{len(data)}\0".encode())
-            h.update(data)
+            found[f"{name}/{path.relative_to(root).as_posix()}"] = path.read_bytes()
+    if config is not None and _PRIVATE_FILE in found:
+        text = found[_PRIVATE_FILE].decode()
+        found[_PRIVATE_FILE] = render_private(text, config.tracker.tools()).encode()
+    return found
+
+
+def digest(config: Config | None = None) -> str:
+    """Return a digest of the snapshot's files: their relative paths and contents."""
+    return _digest(sources(config))
+
+
+def _digest(files: Mapping[str, bytes]) -> str:
+    h = hashlib.sha256()
+    for rel, data in sorted(files.items()):
+        h.update(f"{rel}\0{len(data)}\0".encode())
+        h.update(data)
     return h.hexdigest()[:16]
 
 
@@ -51,8 +98,10 @@ def agent_names() -> list[str]:
     return sorted(p.stem for p in resources.agents_dir().glob("*.md"))
 
 
-def ensure(state_dir: Path) -> Path:
-    """Return the snapshot for the installed canopy, creating it if missing. Safe to call from concurrent processes.
+def ensure(state_dir: Path, config: Config | None = None) -> Path:
+    """Return the snapshot for the installed canopy and `config`, creating it if missing.
+
+    Safe to call from concurrent processes.
 
     canopy creates a snapshot readable only by the operator. One that is not was put there by something else, such as a
     checkout of a shared workspace (DESIGN §18), and could loosen canopy's agents, so it is refused, never loaded.
@@ -60,15 +109,18 @@ def ensure(state_dir: Path) -> Path:
     Raises:
         DefinitionsError: the snapshot's directory exists and is not private to the operator.
     """
+    files = sources(config)
     runtime = state_dir / RUNTIME_DIR
-    final = runtime / digest()
+    final = runtime / _digest(files)
     if final.is_dir() or final.is_symlink():
         return _checked(final)
     runtime.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix=_TMP_PREFIX, dir=runtime))
     try:
-        shutil.copytree(resources.agents_dir(), tmp / "agents")
-        shutil.copytree(resources.skills_dir(), tmp / "skills")
+        for rel, data in files.items():
+            path = tmp / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
         os.rename(tmp, final)  # noqa: PTH104  (os.rename, unlike Path.replace, never replaces a non-empty directory)
     except OSError:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -136,4 +188,31 @@ def shadowing_message(found: list[Path]) -> str:
     return (
         f"OpenCode config here defines one of canopy's agents ({files}). canopy's agents come from its own definitions "
         "directory (D040), and a definition here could loosen their permissions (D044). Remove it, or rename the agent."
+    )
+
+
+def naming_tools(root: Path, server: str) -> list[Path]:
+    """Return the files in `root`'s OpenCode config that may name a tool of MCP server `server` (DESIGN §22, D044).
+
+    OpenCode names a server's tools `<server>_<tool>`, and a `permission` or `tools` entry for one, merged after
+    canopy's rules, could reopen a write tool a private worker is denied. Matched as text, like `shadowing`: a false
+    positive only asks the operator to reword it.
+    """
+    needle = f"{server}_"
+    config_dir = root / ".opencode"
+    candidates: list[Path] = []
+    if config_dir.is_dir():
+        for pattern in ("agent/**/*.md", "agents/**/*.md", "mode/*.md", "modes/*.md"):
+            candidates.extend(sorted(config_dir.glob(pattern)))
+    candidates.extend(d / f for d in (root, config_dir) for f in ("opencode.json", "opencode.jsonc"))
+    return [p for p in candidates if p.is_file() and needle in p.read_text(errors="replace")]
+
+
+def naming_tools_message(server: str, found: list[Path]) -> str:
+    """Explain what `naming_tools` found and what to do about it."""
+    files = ", ".join(str(p) for p in found)
+    return (
+        f"OpenCode config here names tools of the tracker's MCP server {server!r} ({files}). A private ticket's worker "
+        "may call only the tracker's read tools, and a rule here could reopen a write tool (DESIGN §22). Remove it, or "
+        "work this ticket publicly."
     )

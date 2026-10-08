@@ -34,9 +34,18 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    `CGO_ENABLED=0 go install github.com/kunchenguid/treehouse@1185dc6cc50e1b66ef5c74b8ac677a6251258abc` (in a canopy
    checkout, `make treehouse` does the same). No release has the lease output canopy reads yet, and `treehouse update`
    installs a release binary that needs glibc 2.34+.
-2. Install canopy: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
-   HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
-   project. To upgrade, run the same command with `--reinstall`.
+2. Install canopy. Either:
+   - From a release, with no credential, Python, or uv on the machine that runs canopy (D067). Where you are signed in
+     to GitHub, download `canopy-<platform>` from the
+     [latest release](https://github.com/eddieland/canopy/releases/latest) (or `gh release download --repo
+     eddieland/canopy --pattern 'canopy-linux-x86_64*'`), check it against its `.sha256`, and copy it to the machine
+     as `~/.local/bin/canopy` (`mkdir -p ~/.local/bin` first if it is missing, and put it on `PATH` if it is not).
+     Make it executable and link the sinks to it:
+     `cd ~/.local/bin && chmod +x canopy && ln -sf canopy canopy-notify-desktop && ln -sf canopy canopy-notify-slack`.
+     On macOS, a browser download needs `xattr -d com.apple.quarantine canopy` too. To upgrade, replace the file.
+   - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
+     HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
+     project. To upgrade, run the same command with `--reinstall`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
 4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
@@ -46,19 +55,30 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    sandboxing is not expected to support (D038).
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
    plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
-   repeats until you press Ctrl-C.
+   repeats until you press Ctrl-C. It also serves the web UI at `http://127.0.0.1:8765/`; `canopy secret` prints the
+   listener secret its sign-in page asks for.
 
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list.
+- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, and every ticket's
+  conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the secret
+  `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so does
+  `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
-- Answer the agent's questions as comments on the ticket.
+- Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
+  canopy's copy of its comments.
+- Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
+  reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
+  KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
 - Review PRs. Humans approve and merge; the agent never does.
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
 - Read what a tick decided, or what a dry run would have done: `canopy decisions [TICK]`.
+- See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
+  `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
@@ -70,13 +90,18 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 ## Several repositories
 
 When one queue's tickets land in several repositories, make a workspace instead of running canopy in each: in an empty
-directory, `canopy init --workspace`, list the repositories under `[repos.<name>]` in `canopy-workspace.toml` and
-describe them in `MAP.md`, then `canopy workspace sync` to clone them under `repos/`. Run `canopy loop` from the
-workspace. The overseer picks the repositories each ticket needs. Most tickets change one; a change that cannot land in
-parts is worked jointly, one worker opening a linked PR in each repository; and one that builds on another repository's
-merged PR is worked there next. To have a ticket split into one ticket per repository instead, comment on it asking for
-a split: a worker creates the children unlabeled, and you label each one you want worked. The pools, journal, and
-attention list live inside the workspace. See `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
+directory, `canopy init --workspace --provider jira https://github.com/acme/api.git https://github.com/acme/web.git`
+lists each repository in `canopy-workspace.toml` and clones it under `repos/`. Then write a one-line summary for each
+there and describe them in `MAP.md`, for the overseer. `canopy workspace add URL...` adds more later. To size each
+repository's worktree pool, set `capacity.slots_per_repo` (and per repository, `[capacity.repo_slots]`) in your user
+config, before init to have init make them. Sync makes the workspace match what is declared: it clones what the map
+lists, makes or removes idle slots, and removes a clone the map no longer lists when nothing in it would be lost;
+`--dry-run` shows what it would do. Run `canopy loop` from the workspace. The overseer picks the repositories each
+ticket needs. Most tickets change one; a change that cannot land in parts is worked jointly, one worker opening a linked
+PR in each repository; and one that builds on another repository's merged PR is worked there next. To have a ticket
+split into one ticket per repository instead, comment on it asking for a split: a worker creates the children unlabeled,
+and you label each one you want worked. The pools, journal, and attention list live inside the workspace. See
+`examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
 
 ## Troubleshooting
 

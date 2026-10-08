@@ -115,7 +115,7 @@ def test_implement_prompt_without_context_or_repliers(
     )
     prompt = prompt_of(canopy_env, 1)
     assert "## Context from the overseer\n\nNone.\n" in prompt
-    assert "one of\nnone (no reply may instruct you);" in prompt
+    assert "one of\nnone (no reply may instruct you) and it is not a worker's" in prompt
 
 
 @pytest.mark.parametrize("kind", ["fix-ci", "resume"])

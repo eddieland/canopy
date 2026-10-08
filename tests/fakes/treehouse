@@ -4,9 +4,11 @@
     treehouse status --json
     treehouse get --lease [--lease-holder H] [--json] [--base B] [--no-fetch] [--worktree-path TEMPLATE]
     treehouse return [--force] [--if-lease-id ID] [--if-lease-holder H] <path|name>
+    treehouse destroy [--yes] <path>
 
 Output shapes and exit codes follow treehouse's own (`status --json` array fields, `get --lease --json` allocation,
-`return` exits 0 returned, 1 failed or lease mismatch, 3 dirty and not forced).
+`return` exits 0 returned, 1 failed or lease mismatch, 3 dirty and not forced). `destroy` without an `--include-*`
+flag removes only an available slot, and exits 1 for anything it keeps.
 
 State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is an empty pool. Keys:
 
@@ -14,6 +16,9 @@ State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is a
     pool_dir    str, default "<state file dir>/pool". New slot directories are created under it.
     slots       list of {name, path, status, lease_id, lease_holder, leased_at, base_branch}.
                 Tests may set status to "dirty" or "in-use" to simulate those states.
+    skip_reuse  list of str, default []. Slot paths `get` never reuses though available, as treehouse declines a
+                slot it cannot prove is this clone's.
+    unmerged    list of str, default []. Slot paths `destroy` keeps as unmerged, though available.
     get_omit    list of str, default []. Fields left out of `get --lease --json` output, to simulate a treehouse whose
                 allocation canopy cannot parse. The slot is leased all the same.
     calls       list of argv lists, one per invocation, appended by the fake for assertions.
@@ -21,8 +26,9 @@ State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is a
     pools       with TREEHOUSE_ROOT set, the pools, by the path of the repository the command ran in (the nearest
                 directory at or above the working directory holding `.git`). Each is {slots, max_trees} as above. A
                 new slot goes where --worktree-path says (default {pool}/{slot}/{repo}), with {pool} the directory
-                `<TREEHOUSE_ROOT>/.treehouse/<repo>-fake`. `return` finds a slot by path in any pool, as treehouse does
-                from the slot's own path. Without TREEHOUSE_ROOT, the top-level `slots` and `max_trees` are the pool.
+                `<TREEHOUSE_ROOT>/.treehouse/<repo>-fake`. `return` and `destroy` find a slot by path in any pool, as
+                treehouse does from the slot's own path. Without TREEHOUSE_ROOT, the top-level `slots` and
+                `max_trees` are the pool.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -31,6 +37,7 @@ import argparse
 import fcntl
 import json
 import os
+import shutil
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -114,7 +121,8 @@ def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -
         print("treehouse: not in a git or jj repository", file=sys.stderr)
         return 1
     slots = pool.setdefault("slots", [])
-    slot = next((s for s in slots if s["status"] == "available"), None)
+    skip = state.get("skip_reuse", [])
+    slot = next((s for s in slots if s["status"] == "available" and s["path"] not in skip), None)
     if slot is None:
         if len(slots) >= pool.get("max_trees", 4):
             print("treehouse: no available worktree and max_trees reached", file=sys.stderr)
@@ -168,6 +176,31 @@ def cmd_return(state: dict[str, Any], args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_destroy(state: dict[str, Any], args: argparse.Namespace) -> int:
+    if not args.yes:
+        print("fake treehouse: only `destroy --yes` is supported", file=sys.stderr)
+        return 2
+    pools = [state]
+    if os.environ.get("TREEHOUSE_ROOT"):
+        pools = list(state.get("pools", {}).values())
+    for pool in pools:
+        slots = pool.get("slots", [])
+        slot = next((s for s in slots if s["path"] == args.target), None)
+        if slot is None:
+            continue
+        if slot["status"] != "available":
+            print(f"skipped {args.target}: {slot['status']} (pass --include-* to remove it)", file=sys.stderr)
+            return 1
+        if args.target in state.get("unmerged", []):
+            print(f"skipped {args.target}: unmerged (pass --include-unlanded to remove it)", file=sys.stderr)
+            return 1
+        slots.remove(slot)
+        shutil.rmtree(args.target, ignore_errors=True)
+        return 0
+    print(f"treehouse: no managed worktree {args.target!r}", file=sys.stderr)
+    return 1
+
+
 def parse(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="treehouse")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -188,6 +221,10 @@ def parse(argv: list[str]) -> argparse.Namespace:
     ret.add_argument("--if-lease-id")
     ret.add_argument("--if-lease-holder")
     ret.add_argument("target")
+
+    destroy = sub.add_parser("destroy")
+    destroy.add_argument("--yes", action="store_true")
+    destroy.add_argument("target")
 
     return parser.parse_args(argv)
 
@@ -210,6 +247,8 @@ def main(argv: list[str]) -> int:
             code = cmd_status(state, args)
         elif args.command == "get":
             code = cmd_get(state, args, state_path)
+        elif args.command == "destroy":
+            code = cmd_destroy(state, args)
         else:
             code = cmd_return(state, args)
         save(state_path, state)

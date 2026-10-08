@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.chores import view as chore_view
-from canopy.core import db, definitions, prompts, treehouse
+from canopy.core import agent_output, conversation, db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
@@ -20,7 +20,7 @@ from canopy.runs import policy, reconcile
 if TYPE_CHECKING:
     from canopy.core.context import Context
 
-TICK_ID_ENV = "CANOPY_TICK_ID"
+TICK_ID_ENV = conversation.TICK_ID_ENV
 DONE_LINE = "tick complete"
 
 
@@ -68,23 +68,14 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
     chore_reconcile.run(ctx, log)
-    for item in attention.from_runs(ctx.conn):
-        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
-    for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
-        action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
-        db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
-    for repo in ctx.workspace.repos:
-        # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
-        if not repo.cloned:
-            detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
-            db.record_decision(
-                ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
-            )
+    _record_harness_items(ctx, tick_id)
 
     now = datetime.now(UTC)
     running = db.running_runs(ctx.conn)
     last_runs = db.latest_runs(ctx.conn)
     single = ctx.workspace.single
+    tickets = db.open_tickets(ctx.conn)
+    private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -94,7 +85,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         workspace=ctx.workspace,
         leased=reconciled.leased,
         running=running,
-        tickets=db.open_tickets(ctx.conn),
+        tickets=tickets,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
@@ -105,6 +96,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         split_children=db.open_split_children(ctx.conn),
         chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
+        private=private,
+        mirror_delimiter=conversation.body_delimiter(),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
@@ -123,6 +116,31 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}")
 
 
+def _record_harness_items(ctx: Context, tick_id: int) -> None:
+    """Record the attention items the harness raises itself, every tick their cause holds (DESIGN §14)."""
+    for item in attention.from_runs(ctx.conn):
+        db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
+    # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22).
+    for waiting in conversation.awaiting(ctx.conn):
+        db.record_decision(
+            ctx.conn,
+            tick_id,
+            waiting.key,
+            f"{attention.ACTION_PREFIX}awaiting_reply",
+            attention.awaiting_detail(waiting),
+        )
+    for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
+        action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
+        db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
+    for repo in ctx.workspace.repos:
+        # A tick never clones: a repository in the map with no clone waits for the operator (DESIGN §18).
+        if not repo.cloned:
+            detail = f"{repo.path} has no clone; run `canopy workspace sync` in {ctx.repo_root}"
+            db.record_decision(
+                ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
+            )
+
+
 def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter) -> str | None:
     """Run `overseer_cmd`. Returns None on success, else why it failed. Output goes to `<state_dir>/ticks/<id>.log`."""
     # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
@@ -132,7 +150,7 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
         return failure
     try:
-        definitions_dir = definitions.ensure(ctx.state_dir)
+        definitions_dir = definitions.ensure(ctx.state_dir, ctx.config)
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e)
@@ -155,7 +173,8 @@ def _run_overseer(ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log
     out_path = out_dir / f"{tick_id}.log"
     logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
-    lines = [line.strip().strip("`").strip() for line in result.stdout.splitlines() if line.strip()]
+    text = agent_output.read(result.stdout).text
+    lines = [line.strip().strip("`").strip() for line in text.splitlines() if line.strip()]
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:

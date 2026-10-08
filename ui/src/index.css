@@ -1,0 +1,82 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import './styles/tokens.css';
+
+/* Defined so shadcn output compiles; `npm run lint` refuses it in our code. Themes change tokens, not components. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+    *,
+    ::before,
+    ::after {
+        border-color: var(--color-border);
+    }
+
+    html {
+        /* No layout shift when a page grows a scrollbar. */
+        scrollbar-gutter: stable;
+        /* On the root, so it paints the whole canvas, the reserved gutter included. The instrument grid: hairlines
+       every 24px, fixed so content scrolls over it. */
+        background-color: var(--background);
+        background-image:
+            linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+            linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+        background-size: 24px 24px;
+        background-attachment: fixed;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+        min-height: 100dvh;
+        color: var(--foreground);
+        font-family: var(--font-sans);
+        font-feature-settings: 'cv11', 'ss01';
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+    }
+}
+
+/* Numbers that change in place keep their width. Use on every counter, timer, cost, and id. */
+@utility readout {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums slashed-zero;
+    letter-spacing: -0.01em;
+}
+
+/* A small uppercase label above a value, as on a panel. */
+@utility panel-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+}
+
+/*
+ * The theme toggle's circular reveal (src/theme/transition.ts). The default cross-fade is off for the root, so
+ * only the clip-path animation that script runs is seen.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+}
+
+/* Route changes: the outlet's <ViewTransition> cross-fades, quickly. */
+::view-transition-group(*) {
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation: none !important;
+    }
+}

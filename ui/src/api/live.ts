@@ -1,0 +1,50 @@
+import type { QueryClient } from '@tanstack/react-query'
+
+import { keys } from './queries'
+import type { StreamEvent } from './types'
+
+/**
+ * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
+ * read again, only if a page shows it. Unknown event types are ignored, so the server can add some.
+ */
+export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
+    switch (event.type) {
+        case 'attention.updated':
+            client.setQueryData(keys.attention, event.items)
+            break
+        case 'runs.updated':
+            client.setQueryData(keys.runs, event.runs)
+            break
+        case 'tickets.updated':
+            client.setQueryData(keys.tickets, event.tickets)
+            break
+        case 'ticket.changed':
+            void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
+            break
+    }
+}
+
+const LISTS: Record<string, string> = {
+    'attention.updated': 'items',
+    'runs.updated': 'runs',
+    'tickets.updated': 'tickets',
+}
+
+/** Parses an SSE `data` payload into a StreamEvent, or null when it is not one this UI knows. */
+export function parseStreamEvent(data: string): StreamEvent | null {
+    let value: unknown
+    try {
+        value = JSON.parse(data)
+    } catch {
+        return null
+    }
+    if (typeof value !== 'object' || value === null || !('type' in value)) return null
+    const type = (value as { type: unknown }).type
+    if (typeof type !== 'string') return null
+    const list = LISTS[type]
+    if (list !== undefined) {
+        return Array.isArray((value as Record<string, unknown>)[list]) ? (value as StreamEvent) : null
+    }
+    if (type === 'ticket.changed' && typeof (value as { key?: unknown }).key === 'string') return value as StreamEvent
+    return null
+}

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, definitions
+from canopy.core import config, db, definitions
 from canopy.infra import lock, procs
 from tests.conftest import CanopyEnv
 
@@ -58,7 +58,8 @@ def test_dry_run_tick_records_the_overseer_plan(
     assert '"dry_run": true' in prompt
     assert '"labels": [\n      "agent-ready-tester"\n    ]' in prompt
     assert run["cwd"] == str(canopy_env.repo)
-    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(definitions.ensure(canopy_env.state_dir))}
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
 
     conn = journal(canopy_env)
     [tick] = conn.execute("SELECT * FROM ticks").fetchall()
@@ -84,6 +85,32 @@ def test_dry_run_tick_records_the_overseer_plan(
     assert output.read_text().startswith("fake agent: starting")
     assert output.stat().st_mode & 0o077 == 0
     assert canopy_env.state_dir.stat().st_mode & 0o077 == 0
+
+
+def test_overseer_state_names_the_configured_needs_human_label(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    overseer_does(monkeypatch)
+    assert main(["tick", "--dry-run"]) == 0
+    [run] = agent_runs(agent_log)
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert '"needs_human_label": "blocked-on-team"' in str(argv[3])
+
+
+def test_overseer_state_names_the_comment_marks(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The overseer recognizes workers' comments by these, since workers post as the operator (D069).
+    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\ncomment_suffix = "(canopy)"\n')
+    overseer_does(monkeypatch)
+    assert main(["tick", "--dry-run"]) == 0
+    [run] = agent_runs(agent_log)
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert '"comment_prefix": "CANOPY:"' in str(argv[3])
+    assert '"comment_suffix": "(canopy)"' in str(argv[3])
 
 
 def test_next_tick_sees_the_journal(
@@ -122,6 +149,23 @@ def test_overseer_failure_closes_the_tick(
     tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()
     assert tick["status"] == "overseer_failed"
     assert summary in tick["summary"]
+
+
+@pytest.mark.parametrize(("last_line", "status"), [("tick complete", "ok"), ("I got distracted", "overseer_failed")])
+def test_an_overseer_printing_json_events_is_read_by_their_text(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    last_line: str,
+    status: str,
+) -> None:
+    """With OpenCode's `--format json`, its last line of stdout is an event; the done line is in the events' text."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    overseer_does(monkeypatch, last_line=last_line)
+    main(["tick", "--dry-run"])
+    assert journal(canopy_env).execute("SELECT status FROM ticks").fetchone()[0] == status
 
 
 def test_overseer_refuses_to_start_when_the_repository_defines_its_agent(
