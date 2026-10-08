@@ -150,6 +150,23 @@ def test_overseer_failure_closes_the_tick(
     assert summary in tick["summary"]
 
 
+@pytest.mark.parametrize(("last_line", "status"), [("tick complete", "ok"), ("I got distracted", "overseer_failed")])
+def test_an_overseer_printing_json_events_is_read_by_their_text(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    last_line: str,
+    status: str,
+) -> None:
+    """With OpenCode's `--format json`, its last line of stdout is an event; the done line is in the events' text."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    overseer_does(monkeypatch, last_line=last_line)
+    main(["tick", "--dry-run"])
+    assert journal(canopy_env).execute("SELECT status FROM ticks").fetchone()[0] == status
+
+
 def test_overseer_refuses_to_start_when_the_repository_defines_its_agent(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
