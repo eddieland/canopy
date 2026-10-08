@@ -70,9 +70,15 @@ Rules:
 
 - Hairlines: 1px `border` everywhere. No shadows except `shadow-xs` on a pressed segment.
 - Radius: `rounded-md` (8px) for panels and buttons, `rounded-sm` (6px) for chips and nav items.
-- The shell: a 3rem header, a 13rem side nav, content capped at `max-w-6xl` with `p-6` and `gap-6` between blocks.
+- The shell: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
+  blocks.
   The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
+- **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
+  larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
+  screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
+- **Wide screens use the width** from `2xl`: the attention list widens, and a ticket's page puts its conversation
+  beside its actions, work, and runs.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page.
