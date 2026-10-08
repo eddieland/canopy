@@ -440,6 +440,75 @@ def test_a_tick_that_raises_ends_that_tick_not_the_loop(
     assert any(line["msg"] == "tick raised; the loop goes on" and "exc" in line for line in log_lines)
 
 
+@dataclass
+class FakeKeys:
+    """What the operator types: `pressed()` returns, and empties, what `type` queued, as `keys.listen`'s function."""
+
+    queued: list[str] = field(default_factory=list)
+    reads: int = 0
+
+    def type(self, text: str) -> None:
+        self.queued.append(text)
+
+    def pressed(self) -> str:
+        self.reads += 1
+        text = "".join(self.queued)
+        self.queued.clear()
+        return text
+
+
+def test_the_tick_now_key_ends_the_wait_at_once(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    keys = FakeKeys()
+    # Typed during the first tick: not meant for the wait that follows it, so it is dropped.
+    keys.type(repeat.TICK_NOW_KEY)
+    time = FakeTime()
+    # Another key first, then the tick-now key in capitals, as with Caps Lock on.
+    time.on_sleep = lambda: keys.type("x" if len(time.slept) == 1 else repeat.TICK_NOW_KEY.upper())
+    term, out = console()
+
+    statuses = repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        keys=keys.pressed,
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    assert statuses == {"ok": 2}
+    # Two steps of the wait, then the second tick: no one-minute floor, unlike an operator message.
+    assert time.slept == [0.5, 0.5]
+    assert f"Press {repeat.TICK_NOW_KEY} during the wait to tick now." in out.getvalue()
+    log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
+    assert any(line["msg"] == "the operator asked for a tick now" for line in log_lines)
+
+
+def test_without_keys_the_loop_does_not_offer_them(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    time = FakeTime()
+    term, out = console()
+    repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+    assert sum(time.slept) == 60
+    assert "tick now" not in out.getvalue()
+
+
 @pytest.mark.parametrize(
     ("seconds", "text"),
     [(0, "0s"), (44.6, "45s"), (60, "1m 00s"), (185, "3m 05s"), (7800, "2h 10m"), (-3, "0s")],
