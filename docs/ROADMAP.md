@@ -415,6 +415,9 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
   repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
   both (D051's pattern).
 - `canopy status` and the attention list name PR units by the PR, not a ticket key.
+- PR references (`repo#N` or the PR's URL) in `canopy start`, `stop`, `reply`, and `show` (DESIGN §22, D075), so
+  the operator can also start one of their own PRs privately instead of labeling it. That is a T1 change beside D056's,
+  needing the operator's approval as M18's does.
 - TRUST_MODEL T1 and §6 already allow it (D056).
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
@@ -491,6 +494,62 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_pools.py` holds
 docs, and D066 are in. Waiting on the operator: the real run Accept describes. treehouse's `max_trees` (16 by default)
 must be at least the largest declared size; canopy cannot set it.
 
+## M18. Private tickets
+
+REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design comes first.
+
+- A `messages` table, in a new migration. `_run` records each run's report and question there, for every ticket.
+- `canopy start`, `stop` (with `--now`, and the `stopped` run status), `reply`, and `show` for ticket references, and
+  started subjects in `canopy status`, writing through `core/conversation.py`, with `start`, `stop`, and `reply`
+  refusing inside canopy's runs (`CANOPY_TICK_ID`,
+  and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
+- `canopy dispatch` needs no `--label` for a started ticket, checking the start record in code, and refuses a private
+  `split`.
+- The private worker prompt variant and `canopy-worker-private`, with the tracker's write tools denied by name.
+- The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
+  A prompt change, which needs the operator's approval.
+- `awaiting_reply` on the attention list, raised by the harness; `run.ended` carries the question's message id.
+- The loop's wait ends early on an operator message (D073).
+- TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note.
+
+Accept: a fakes-based test: a started ticket with no label is dispatched to the private worker definition, the fake
+worker ends `blocked`, the question is on the attention list and in `canopy show`, `canopy reply` ends
+the loop's wait, and the `resume` prompt carries the reply. Live, the operator starts a real ticket privately, answers a
+question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
+
+Status: not started.
+
+## M19. Tracker comments in the journal
+
+REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes first.
+
+- `canopy mirror`, overseer-only, bounded, idempotent on the subject and comment id.
+- The overseer prompt mirrors every comment past a ticket's comment cursor, skipping worker-marked ones (D069). A
+  prompt change, which needs the operator's approval.
+- `canopy show REF` shows mirrored comments with their source, for public tickets as for private ones.
+- Open: whether PR review comments join the journal here or later.
+
+Accept: fakes-based tests of the command's bounds, refusals, and idempotence. Live, a working session's decisions show
+each new comment mirrored once, and M13's spend records show what mirroring adds to a tick.
+
+Status: not started.
+
+## M20. Web UI
+
+REQUIREMENTS N1, DESIGN §22, D055, D073, D074. Needs M18; M19 makes it one inbox. Sketch only; the design comes first.
+
+- `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
+  all user-only. FastAPI on uvicorn with Jinja2 templates (D074), imported nowhere else.
+- TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
+- Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
+  stop, through the same functions as the CLI.
+- The release binary (D067) bundles the templates and builds on every platform it ships for.
+- Open: how the browser gets the listener secret; whether M15's session attach belongs in the UI.
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
@@ -499,4 +558,6 @@ must be at least the largest declared size; canopy cannot set it.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
-- Web UI: when `canopy status` and `opencode attach` stop being enough. Allowed under TRUST_MODEL T8 (D055).
+- Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
+  §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
+  change.
