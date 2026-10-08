@@ -290,7 +290,7 @@ def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str, *, single: bool)
     """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction.
 
     A workspace of one has one repository, whose name follows its directory, so its ticket's one unit is renamed to
-    `unit` rather than a second one made: renaming the checkout never strands a ticket (D052).
+    `unit` rather than a second one made: renaming the checkout never strands a ticket (D033).
     """
     if single:
         conn.execute("UPDATE ticket_units SET repo = ? WHERE ticket_key = ?", (unit, key))
