@@ -316,9 +316,31 @@ Controls:
   worker prompted through it still cannot merge, approve, or push outside its branch, and capacity and attempt limits
   still hold.
 
+The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
+- The secret is `listener-secret` in the operator's config directory: at least 32 characters, in a regular file that
+  is not a symlink, owned by the operator, with no group or other permission bits. Anything else and the loop serves
+  nothing. `canopy secret` writes one and prints it to the operator's terminal; nothing else reads it but the loop.
+- The operator gives it to the sign-in page once. It is compared in constant time, a wrong one is answered after a
+  second, and a right one gets a session cookie (`HttpOnly`, `SameSite=Strict`, 30 days) signed with the secret, so a
+  new secret ends every session. The secret itself is never stored in the browser.
+- Every API route except signing in needs that session. A write also needs the session's own token in a header,
+  which a page from another origin cannot read or send without a CORS preflight the server never grants, and an
+  `Origin` header naming an allowed host.
+- The Host header must name a loopback host or the bind address (DNS rebinding), and an `Origin` header on the API
+  must name one of them (another site's page). Responses refuse framing and MIME sniffing and send no Referer;
+  `index.html` carries a CSP that allows scripts only from the server and the one inline theme script by hash.
+- Journal text, tracker comments and agent output included, is untrusted: it is rendered as text, never as HTML, and
+  no script is built from it.
+- The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
+  and reply to tickets, and end a stopped ticket's run, nothing else.
+
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
-shared machine can reach loopback, and is stopped only by the secret.
+shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
+on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
+read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
+cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
+the network (D076).
 
 ## 6. What canopy must never do
 
@@ -334,7 +356,8 @@ shared machine can reach loopback, and is stopped only by the secret.
 - Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, or authorized
   repliers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only lower it.)
 - Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
-- Listen on a wildcard or public address, or accept a connection without the operator's listener secret (T8).
+- Listen on a wildcard or public address, or serve journal data or take the operator's input without the operator's
+  listener secret (T8). The web UI's own files, which hold no data, are served to sign in.
 
 ## 7. Operator responsibilities
 

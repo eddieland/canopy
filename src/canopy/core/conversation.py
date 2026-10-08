@@ -13,7 +13,6 @@ mirrors (`mirror`), which authorizes nothing.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import re
 import secrets
@@ -40,6 +39,8 @@ TICK_ID_ENV = "CANOPY_TICK_ID"
 RUN_ID_ENV = "CANOPY_RUN_ID"
 MAX_OPERATOR = 4000
 MAX_PR_URL = 300
+# A submission id a channel's form draws when it is rendered (DESIGN §22).
+SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
 # A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).
 MAX_MIRRORED = 2000
 # How many `canopy mirror` calls one tick may make: a ticket's first mirror covers its whole history, and this spreads
@@ -227,17 +228,21 @@ class Replied:
     new: bool
 
 
-def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str) -> Replied:
+def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submission: str | None = None) -> Replied:
     """Record the operator's reply to a started ticket (DESIGN §22).
 
-    It answers the ticket's latest question when there is one. Its submission id is derived from the subject, the
-    message it answers, and the body, so the same reply sent again after an uncertain result records nothing new.
+    It answers the ticket's latest question when there is one. A channel whose form draws a submission id passes it,
+    and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it answers, and
+    the body. Either way the same reply sent again after an uncertain result records nothing new.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `not_started` for a public ticket, `bad_body` for an
-            empty body or one over 4000 characters.
+            empty body or one over 4000 characters, `bad_submission` for a submission id that is not 8 to 64 letters,
+            digits, `-`, or `_`.
     """
     check_verb(ref, "reply")
+    if submission is not None and not SUBMISSION_RE.fullmatch(submission):
+        raise Refused("bad_submission", f"a submission id is {SUBMISSION_RE.pattern}")
     text = body.strip()
     if not text:
         raise Refused("bad_body", "the reply is empty")
@@ -248,7 +253,10 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str) -> Rep
             raise Refused("not_started", f"{ref} was not started in canopy; a public ticket's replies go on the ticket")
         question = latest_question(conn, ref.id)
         answers = int(question["id"]) if question is not None else None
-        submission = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
+        if submission is None:
+            stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
+        else:
+            stored = f"{channel}:{submission}"
         before = db.latest_message_id(conn)
         message_id = db.insert_message(
             conn,
@@ -259,9 +267,14 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str) -> Rep
             channel=channel,
             body=text,
             answers=answers,
-            submission=submission,
+            submission=stored,
         )
-    return Replied(message_id=message_id, answers=answers, new=message_id > before)
+    new = message_id > before
+    if not new:
+        # The same submission again: what it answered then, whatever is waiting now.
+        recorded = db.get_message(conn, message_id)
+        answers = int(recorded["answers"]) if recorded is not None and recorded["answers"] is not None else None
+    return Replied(message_id=message_id, answers=answers, new=new)
 
 
 # The overseer's mirror of tracker comments
@@ -496,7 +509,7 @@ def run_messages(status: str, result_json: str | None) -> list[tuple[str, str]]:
     That is a report, and for a `blocked` run its question. The report is the worker's summary, or the harness's note,
     or the status, then each PR on a line of its own.
     """
-    result = _object(result_json)
+    result = contract.stored_object(result_json)
     summary = _text(result.get("summary")) or _text(result.get("harness")) or f"ended {status}"
     prs = result.get("prs")
     urls = [str(u) for u in prs.values() if isinstance(u, str) and u] if isinstance(prs, dict) else []
@@ -529,15 +542,3 @@ def printable(text: str) -> str:
 
 def _text(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
-
-
-def _object(result_json: str | None) -> dict[str, object]:
-    if not result_json:
-        return {}
-    try:
-        parsed: object = json.loads(result_json)
-    except json.JSONDecodeError:
-        return {}
-    if not isinstance(parsed, dict):
-        return {}
-    return {str(k): v for k, v in parsed.items()}

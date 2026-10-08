@@ -73,8 +73,9 @@ cannot reach internal systems and require handing a vendor write access.
 5. **Connectivity through the agent runtime.** The tracker (Jira, GitHub Issues, Linear, anything with an MCP server)
    and GitHub are reached via the runtime's MCP servers. The harness contains no tracker or VCS host code and never
    handles their credentials. It knows the tracker only as the strings in `[tracker]`.
-6. **Smallest surface that works.** Five install steps. Daily surface is
-   labels, ticket comments, PR review, and one attention list.
+6. **Smallest surface that works.** Five install steps. Coworkers' daily surface is labels, ticket comments, and PR
+   review. The operator's is the web UI `canopy loop` serves (§22): one attention list, the runs, and every ticket's
+   conversation, with the CLI's verbs for the same.
 
 ## 5. Components
 
@@ -91,8 +92,8 @@ canopy (harness, Python)
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
-    setup.py       init, init --workspace, skill
-    loop.py        loop, tick, tick --dry-run, status (with started tickets and recent runs), decisions
+    setup.py       init, init --workspace, skill, secret (the web UI's listener secret, §22)
+    loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
     conversation.py start, stop, reply, show: the operator's verbs on a subject (§22)
     journal.py     decide, attention, ticket set
@@ -104,6 +105,7 @@ canopy (harness, Python)
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
     repeat.py      canopy loop: ticks one after another with a wait between them, its own lock, rich output
+    web.py         the web UI for canopy loop: the listener secret checked, the server's backend wired, started
     state.py       the overseer's state block
     attention.py   the attention list from the journal; render attention.md, diff, notify
 
@@ -138,13 +140,20 @@ canopy (harness, Python)
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
-    api.py         the JSON and SSE routes; sessions and leases serve mock.py until the journal backs them
+    api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, and the operator's verbs
+    auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
+    secret.py      the listener secret's file: read with its checks, written by `canopy secret`
+    backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
+                   request
+    views.py       journal rows as the API's models: attention items, runs, tickets, messages
+    live.py        the event stream: data_version read once a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
     guard.py       Host and Origin checks, and security headers on every response
-    options.py     ServeOptions: loopback host, port, base path, mock data
-    mock.py        deterministic fixtures and a mock event stream
-    __main__.py    python -m canopy.serve: serve for development and tests, or print the OpenAPI schema
+    options.py     ServeOptions: loopback or private host, port, base path, mock data
+    server.py      the server's thread for canopy loop: uvicorn without signal handlers, restarted with a backoff
+    mock.py        a journal seeded from fixtures, and the changes its stream shows
+    __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
     init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
@@ -297,12 +306,14 @@ Workers dispatched during a tick outlive it, as detached processes owned by `can
 
 ### The loop
 
-`canopy loop [--dry-run] [--every MINUTES] [--ticks N]` is how ticks are meant to run (D042), in the foreground until
-stopped:
+`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--no-serve]` is how ticks are meant to run (D042), in the
+foreground until stopped:
 
 1. Take `<state_dir>/loop.lock`; if another loop holds it, refuse and exit 1. Each tick still takes the separate tick
    lock (step 1 above), so a hand-run `canopy tick` runs between the loop's ticks or finds the lock busy.
-2. Apply pending migrations before the first tick.
+2. Apply pending migrations before the first tick. Start the web UI's server in a thread, unless `--no-serve` or
+   `serve.enabled = false`; without a usable listener secret, say why and serve nothing (§22). The header names its
+   URL.
 3. Run a tick exactly as `canopy tick` does, passing `--dry-run` through. An error the tick code does not handle ends
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
@@ -318,7 +329,7 @@ Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. Duri
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
 as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Dispatched workers are
 unaffected. A signal less than one second (`repeat.SAME_SIGNAL_SECONDS`, monotonic clock) after the first is the same
-keypress (D049).
+keypress (D049). The web UI's server stops with the loop.
 
 Config is read once at loop start; restart to apply a change. Prompt files are read every tick.
 
@@ -686,6 +697,7 @@ run. Unknown keys are errors in both files.
 | `paths.*` | user-only | where prompts and state are read from |
 | `chores.*` | user-only | a chore runs a command and a prompt, and spends money (§19) |
 | `review.*` | user-only | `review.query` authorizes comments in the operator's name (§21) |
+| `serve.*` | user-only | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
 
 Whoever controls the repository file (anyone who can push, or any branch checked out) must not run commands, choose
 prompts, spend money, or authorize anyone; those keys are user-only (TRUST_MODEL T7).
@@ -749,6 +761,12 @@ cmd = ""   # optional; receives the attention diff on stdin: the sink `default` 
 [notify.sinks.desktop]         # optional; any number up to 5 (§20)
 cmd = "canopy-notify-desktop"
 events = ["attention", "loop", "runs"]
+
+[serve]                 # the web UI `canopy loop` serves (§22)
+enabled = true
+bind = "127.0.0.1"      # loopback, or a private address; never a wildcard or public one
+port = 8765
+base_path = ""          # a path prefix such as "/canopy", for a proxy
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
@@ -1961,9 +1979,8 @@ runs the PR's code).
 
 ## 22. Conversations
 
-Private tickets and the journal's conversation (ROADMAP M18) and tracker comments in the journal (M19) are built; the
-web UI's pages and actions (M20) are planned, and their subsection is target shape. Rationale in D072 to D076, D080,
-and D081.
+Private tickets and the journal's conversation (ROADMAP M18), tracker comments in the journal (M19), and the web UI's
+pages and actions (M20) are built. Rationale in D072 to D076 and D080 to D082.
 
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
@@ -2185,29 +2202,81 @@ Served by `canopy loop` from a thread (D073):
 
 - On unless `--no-serve` or `serve.enabled = false`. `serve.bind` (loopback by default, or a private address) and
   `serve.port`. Every `serve.*` key is user-only (T7).
-- It requires the operator's listener secret (T8). Without the secret file, the loop says how to make one and serves
-  nothing. It serves plain HTTP, also on a private address: T8's "relies on the network" residual stands (D076).
-- It opens its own journal connection, never takes the tick lock, and writes only through the functions the CLI uses.
-  A server failure is logged and the server restarted with a backoff; it never ends the loop. Stopping the loop stops
-  it.
-- Pages: the attention list, running and recent runs, and tickets with their conversations. Actions: the CLI's
-  verbs, reply, start, and stop.
+- It requires the operator's listener secret (T8, below). Without one the loop says why and how to make one, logs it,
+  and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
+  residual stands (D076).
+- Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
+  CLI uses: `conversation.start`, `stop`, and `reply` with channel `web`, and for a stop with `now`, the same
+  `runs.halt.end` as `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
+  that function and the attention list's (`loop.attention.listed`) when it starts the server (`serve.backend`).
+- A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
+  Stopping the loop stops it, waiting at most 2 seconds for open streams.
+- Pages: the attention list (the home page), runs (running, then the 50 that ended last), and tickets, each with its
+  conversation. Actions: the CLI's verbs, reply, start, and stop (with or without `now`). OpenCode's session attach
+  (M15) is not in the UI: the runs page shows each run's session id, and attach joins once M15 runs workers against
+  OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
-  uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), and
-  stops when the loop sets its `should_exit`. Request bodies and query parameters are validated with pydantic models,
-  as everything else parsed from outside is (D026).
+  uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
+  nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
+  validated with pydantic models and `conversation.parse_ref`, as everything else parsed from outside is (D026).
 - Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
   the operator's session. React escapes text it renders, and nothing renders journal text as HTML
-  (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Writes require a per-session
-  token and a same-origin request.
+  (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Message bodies are sent with control
+  characters dropped, as `canopy show` prints them.
 - It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
   `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
   `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
   and calls out to nothing, so T2's "no outbound call" stands.
 
-How it serves, built in M20's foundation and true of every page that follows:
+Signing in (D082):
 
-- Under one path prefix (`--base-path` now, `serve.base_path` when config carries it; empty by default), so a proxy
+- The listener secret is `listener-secret` in the user config directory (`~/.config/canopy/`): one line of at least 32
+  characters, in a regular file, not a symlink, owned by the operator, with no group or other permission bits.
+  `canopy secret` writes one, 32 random bytes in URL-safe base64, and prints it; it never replaces one without
+  `--rotate`. The loop reads it once, when it starts serving.
+- The browser gets it from the operator: the sign-in page asks for it once, in a password field a password manager
+  can keep. `POST {base}/api/session` compares it in constant time; a wrong one is answered after a second and logged.
+- A right one sets a session cookie, `canopy_session_<port>`: `HttpOnly`, `SameSite=Strict`, path `{base}/`, for 30
+  days. Its value is its issue time and a random nonce, signed with the secret (HMAC-SHA256). The server keeps no
+  session state, so a session outlives a loop restart, and a new secret signs every browser out. Signing out clears
+  the cookie in that browser.
+- The per-session token is a second HMAC over the same issue time and nonce. `GET {base}/api/session` gives it to a
+  signed-in page, which sends it as `X-Canopy-Token` on every write.
+- Every API route but `{base}/api/session` answers 401 without a valid session. A write (any method but GET and HEAD)
+  also needs the token and an `Origin` header naming an allowed host: a same-origin request. The custom header makes
+  a cross-origin write need a CORS preflight, which the server never grants.
+- The app's own files (`index.html` and its assets) are served without a session: they hold no journal data, and the
+  sign-in page is one of them.
+
+The API, under `{base}/api`:
+
+| Route | Does |
+|---|---|
+| `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
+| `GET /meta` | canopy's version, and whether the data is mock |
+| `GET /attention` | the attention list, as `canopy status` shows it |
+| `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
+| `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
+| `POST /tickets/{key}/start` | `canopy start` |
+| `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
+| `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
+| `GET /events` | the event stream, below |
+
+A guard's refusal is a 409 whose `detail` names the guard and gives its reason, as the CLI prints them. A reply carries
+a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
+`web:<id>`, so a retried submission records nothing new.
+
+The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
+When another connection has committed since, it reads the attention list, the runs, and the tickets again, and sends
+each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`, and `ticket.changed` naming each
+ticket whose summary changed. A new stream starts with all three lists. The UI writes a list into its query with
+`setQueryData` and refetches a changed ticket only if a page shows it. The journal has no notifications, so a
+once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser polls.
+
+How it serves, built in M20's foundation and true of every page:
+
+- Under one path prefix (`serve.base_path`; `--base-path` for `python -m canopy.serve`; empty by default), so a proxy
   can mount it anywhere: the API at `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for
   every other GET or HEAD. The prefix is written into `index.html` as `<base href>`; the build uses relative URLs and
   the router reads its basepath from it, so one build serves under any prefix. The prefix comes from config, never
@@ -2217,21 +2286,21 @@ How it serves, built in M20's foundation and true of every page that follows:
   shows a stale UI; hashed assets are cached as immutable.
 - Every response refuses framing and MIME sniffing and sends no Referer. `index.html` carries a CSP that allows only
   this origin, plus the inline theme script by its hash, computed from the file served.
-- The Host header must name a loopback host, on any route: that stops DNS rebinding. An `Origin` header on an API
-  route must name a loopback page: that stops another site's page from calling the API or opening the stream. Ports
-  are not compared, so an SSH forward to another local port works.
+- The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`
+  header on an API route must name one of those too: that stops another site's page from calling the API or opening
+  the stream. Ports are not compared, so an SSH forward to another local port works.
 - The event stream is FastAPI's SSE: `Cache-Control: no-cache`, `X-Accel-Buffering: no` so a proxy or forward does not
   buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.
-- Not yet run by the loop: until T8's listener secret exists the server binds loopback only (`ServeOptions` refuses
-  anything else) and runs from `python -m canopy.serve`. Sessions and leases are served from typed fixtures
-  (`--mock`) until the journal backs them; without `--mock` those routes answer 501.
+- `python -m canopy.serve --mock` serves the same API over a journal it seeds from fixtures in a temporary directory,
+  for the UI's development server and its end-to-end tests. Writes go to that journal. Without `--secret-file` it
+  signs nobody in and asks for no session; only mock mode allows that, and it binds loopback only.
 
 ### Trust model changes
 
-M18's and M19's are in TRUST_MODEL T1 and T6, with the operator's approval note in each milestone's PR. Still
-proposed, needing the operator's approval note in M20's PR: T8's escaping and the per-session token above, in addition
-to T8's bind and secret rules.
+M18's and M19's are in TRUST_MODEL T1 and T6, with the operator's approval note in each milestone's PR. M20's are in
+T8: the listener secret's file and sign-in, the session cookie and its token on writes, the allowed hosts, escaping,
+and the residuals they leave, needing the operator's approval note in M20's PR.
 
 The overseer prompt's changes, private tickets' phases from the state block and no `--label` for them (M18), and
 mirroring each new comment (M19), are in the prompt.
@@ -2248,4 +2317,3 @@ mirroring each new comment (M19), are in the prompt.
 - Slack replies: a bridge holding a Socket Mode connection that runs `canopy reply` (a uv workspace member, like
   the Slack sink, so the harness stays free of network code), or the overseer reading Slack through MCP (§20). Either
   needs a T1 change naming Slack user ids.
-- How the operator's browser gets the listener secret, such as a one-time link the loop prints.

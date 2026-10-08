@@ -15,6 +15,7 @@ direction is stricter. `load` enforces scopes and the tighten rule per file, mer
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import shlex
@@ -408,6 +409,51 @@ class Loop(Section):
     interval_minutes: Annotated[Minutes, Scope.USER] = 15
 
 
+# Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
+LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
+# A path prefix the web UI is served under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no
+# escaping in a URL or an HTML attribute, since the server writes it into index.html's <base href>.
+_BASE_PATH_RE = re.compile(r"(/[A-Za-z0-9._~-]+)*")
+
+
+def listen_address(value: str) -> str:
+    """Refuse an address a listener may not bind (TRUST_MODEL T8): only loopback or a private address, as an IP.
+
+    Never a wildcard (`0.0.0.0`, `::`), a public address, or a host name other than `localhost`, whose address canopy
+    would not know.
+    """
+    if value in LOOPBACK_NAMES:
+        return value
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        raise ValueError(f"{value!r} must be a loopback or private IP address, or localhost") from None
+    if address.is_unspecified or address.is_multicast:
+        raise ValueError(f"{value!r} is a wildcard or multicast address; bind loopback or one private address")
+    if not (address.is_loopback or address.is_private):
+        raise ValueError(f"{value!r} is a public address; bind loopback or a private address")
+    return value
+
+
+def check_base_path(value: str) -> str:
+    """Refuse a path prefix that is not empty or like `/canopy`, with no trailing slash."""
+    if not _BASE_PATH_RE.fullmatch(value) or any(part in {".", ".."} for part in value.split("/")):
+        raise ValueError(f"base path {value!r} must be empty or like /canopy, with no trailing slash")
+    return value
+
+
+class Serve(Section):
+    """The `[serve]` table: the web UI `canopy loop` serves (DESIGN §22).
+
+    Every key is user-only: it opens a listener on the operator's machine (TRUST_MODEL T8).
+    """
+
+    enabled: Annotated[StrictBool, Scope.USER] = True
+    bind: Annotated[StrictStr, Scope.USER, AfterValidator(listen_address)] = "127.0.0.1"
+    port: Annotated[StrictInt, Scope.USER, Field(ge=1, le=65535)] = 8765
+    base_path: Annotated[StrictStr, Scope.USER, AfterValidator(check_base_path)] = ""
+
+
 class Paths(Section):
     """The `[paths]` table."""
 
@@ -514,6 +560,7 @@ class Config(Section):
     review: Review
     paths: Paths
     notify: Notify
+    serve: Serve
     # Tables of tables, keyed by name; user-only as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.USER] = {}
 
@@ -533,6 +580,7 @@ SECTIONS: dict[str, type[Section]] = {
     "review": Review,
     "paths": Paths,
     "notify": Notify,
+    "serve": Serve,
 }
 
 

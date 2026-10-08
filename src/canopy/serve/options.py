@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 import ipaddress
-import re
 from pathlib import Path
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-# Host names that mean loopback. The Host and Origin checks (guard.py) accept these and nothing else.
-LOOPBACK_NAMES = frozenset({"localhost", "127.0.0.1", "::1"})
-
-# A prefix the UI is reached under through a proxy: `/canopy`, `/a/b`. Restricted to characters that need no escaping
-# in a URL or an HTML attribute, since spa.py writes it into index.html's <base href>.
-_BASE_PATH = re.compile(r"(/[A-Za-z0-9._~-]+)*")
+from canopy.core.config import LOOPBACK_NAMES, check_base_path, listen_address
 
 
 class ServeOptions(BaseModel):
@@ -21,34 +16,29 @@ class ServeOptions(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    host: str = "127.0.0.1"
+    # Loopback, or a private address (TRUST_MODEL T8): `serve.bind`.
+    host: Annotated[str, AfterValidator(listen_address)] = "127.0.0.1"
     port: int = Field(default=8765, ge=1, le=65535)
     # Empty for the root, otherwise starting with `/` and with no trailing `/`.
-    base_path: str = ""
-    # Serve the fixtures in mock.py instead of the journal. The sessions and leases endpoints have no real source yet.
+    base_path: Annotated[str, AfterValidator(check_base_path)] = ""
+    # Serve a journal seeded from fixtures (mock.py), shown as `mock` in the UI's header.
     mock: bool = False
-    # Seconds between mock events on the stream; None sends none, which keeps screenshots stable.
+    # Seconds between the mock journal's changes, which the stream then shows; None makes none, for stable screenshots.
     mock_event_seconds: float | None = Field(default=3.0, gt=0)
     # The built UI (index.html and assets/). None serves a page saying it is not built.
     ui_dir: Path | None = None
 
-    @field_validator("host")
-    @classmethod
-    def _loopback_only(cls, value: str) -> str:
-        # T8 also allows a private address, behind the listener secret. Until the secret exists, loopback only.
-        if value in LOOPBACK_NAMES:
-            return value
-        try:
-            address = ipaddress.ip_address(value)
-        except ValueError:
-            raise ValueError(f"host {value!r} is not a loopback address") from None
-        if not address.is_loopback:
-            raise ValueError(f"host {value!r} is not a loopback address")
-        return value
+    @property
+    def hosts(self) -> frozenset[str]:
+        """The names the Host and Origin checks allow: loopback, and the bind address."""
+        return LOOPBACK_NAMES | {self.host}
 
-    @field_validator("base_path")
-    @classmethod
-    def _valid_base_path(cls, value: str) -> str:
-        if not _BASE_PATH.fullmatch(value) or any(part in {".", ".."} for part in value.split("/")):
-            raise ValueError(f"base path {value!r} must be empty or like /canopy, with no trailing slash")
-        return value
+    @property
+    def loopback(self) -> bool:
+        """Whether the server binds a loopback address."""
+        return self.host in LOOPBACK_NAMES or ipaddress.ip_address(self.host).is_loopback
+
+    def url(self) -> str:
+        """The UI's address, for the operator to open."""
+        host = f"[{self.host}]" if ":" in self.host else self.host
+        return f"http://{host}:{self.port}{self.base_path}/"
