@@ -102,7 +102,8 @@ def user_config_text(label: str) -> str:
     """Return the text of a new user config file with queue label `label`."""
     return f"""\
 # canopy user config: personal, never committed. Overrides the repository's canopy.toml key by key.
-# Keys marked user-only in DESIGN.md §12 may be set only here. Every key, with comments:
+# Only what is yours to decide is here; every other key keeps its default, and gets new ones as canopy changes. Keys
+# marked user-only in DESIGN.md §12 may be set only here. Every key, with its default:
 # https://github.com/eddieland/canopy/blob/main/examples/config.toml
 
 [tracker]
@@ -110,24 +111,13 @@ def user_config_text(label: str) -> str:
 # both loops would work the same tickets.
 labels = [{json.dumps(label)}]
 
-[capacity]
-max_workers = 2
-
-[runtime]
-# {{definitions_dir}} is the directory canopy's agent definitions and skills are in (D040). Keep it.
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-overseer {{prompt}}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} opencode run --agent canopy-worker {{prompt}}'
-overseer_timeout_minutes = 15
-worker_timeout_minutes = 45
-
-[loop]
-# `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
-interval_minutes = 15
-
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.
-# Empty means nobody can.
+# Empty means nobody can, you included: add your own.
 authorized_repliers = []
+# GitHub logins whose PR review comments a worker may address unasked; "canopy:review" for canopy's own reviewer.
+# Empty means everyone's wait on the attention list for your go-ahead: `canopy reply KEY 'what to do about them'`.
+trusted_reviewers = []
 """
 
 
@@ -140,14 +130,11 @@ def repo_config_text(provider: str) -> str:
 
 [tracker]
 provider = {json.dumps(provider)}
-needs_human_label = "needs-human"
 # How to find candidate tickets: the tracker's own search syntax, or plain language. Edit this.
 # Finding is not authorizing: each operator's own labels are checked on every ticket.
 query = {json.dumps(query)}
-
-[trust]
-branch_prefix = "agent/"
-pr_label = "agent"
+# A worker that needs an answer adds the label `needs-human`, and removes it when it resumes. Create it in your tracker,
+# since canopy does not create labels, or set needs_human_label to one you have.
 """
 
 

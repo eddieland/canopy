@@ -5,7 +5,8 @@
 #
 # Usage: tests/install-check.sh [SOURCE]
 #   SOURCE is anything `uv tool install` accepts: this checkout by default, or git+https://github.com/eddieland/canopy
-#   to check what README tells people to run.
+#   to check what README tells people to run. Or it is the single executable `make binary` builds (D067), installed
+#   the way README says to install a release: copied onto PATH as `canopy`, with the sinks as links to it.
 set -eu
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -25,8 +26,18 @@ fail() {
     exit 1
 }
 
-echo "install-check: uv tool install $source"
-uv tool install --quiet "$source"
+if [ -f "$source" ] && [ -x "$source" ]; then
+    echo "install-check: single executable $source"
+    binary=1
+    mkdir -p "$UV_TOOL_BIN_DIR"
+    cp "$source" "$UV_TOOL_BIN_DIR/canopy"
+    ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-desktop"
+    ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-slack"
+else
+    echo "install-check: uv tool install $source"
+    binary=0
+    uv tool install --quiet "$source"
+fi
 
 # The installed canopy first, then the fake treehouse and agent. The fakes are stdlib-only scripts.
 export PATH="$UV_TOOL_BIN_DIR:$repo/tests/fakes:$PATH"
@@ -37,7 +48,9 @@ canopy --help >/dev/null
 # The sinks canopy ships come with the same install (DESIGN §20).
 for sink in canopy-notify-desktop canopy-notify-slack; do
     [ "$(command -v "$sink")" = "$UV_TOOL_BIN_DIR/$sink" ] || fail "$sink was not installed with canopy"
-    "$sink" --help </dev/null >/dev/null || fail "$sink --help failed"
+    # canopy's own --help succeeds too, so the usage line must name the sink: a link that runs canopy fails here.
+    usage=$("$sink" --help </dev/null) || fail "$sink --help failed"
+    echo "$usage" | grep -q "^usage: $sink " || fail "$sink --help did not print the sink's usage"
 done
 # Output is captured before grep, so a command that fails after printing the expected text still fails the check.
 skill=$(canopy skill)
@@ -50,10 +63,15 @@ git init --quiet
 git remote add origin https://example.test/team/project.git
 canopy init --provider github
 
-# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require.
+# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require. init writes no [runtime]:
+# the defaults run OpenCode.
 config="$XDG_CONFIG_HOME/canopy/config.toml"
-sed 's/opencode run --agent/agent --agent/' "$config" >"$config.new"
-mv "$config.new" "$config"
+cat >>"$config" <<'TOML'
+
+[runtime]
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-overseer --format json {prompt}'
+worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-worker --format json {prompt}'
+TOML
 
 export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
 export FAKE_AGENT_RESULT="tick complete"
@@ -63,9 +81,36 @@ decisions=$(canopy decisions)
 echo "$decisions" | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
 
+# The web UI (DESIGN §22): the listener secret, then the loop serving the UI this install bundles. The wheel bundles it
+# when npm was on PATH at build time; a release always has it.
+secret=$(canopy secret 2>/dev/null)
+[ "${#secret}" -ge 32 ] || fail "canopy secret printed no secret"
+printf '\n[serve]\nport = 18765\n' >>"$config"
+loop=$(canopy loop --dry-run --ticks 1)
+echo "$loop" | grep -q 'web UI .*http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
+if [ "$binary" = 1 ] || command -v npm >/dev/null; then
+    if echo "$loop" | grep -q 'not built'; then fail "the web UI is not built into this install"; fi
+fi
+
 # The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
 state="$HOME/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
+if [ "$binary" = 1 ]; then
+    # The executable cannot run a script of ours, and has no path to this checkout. What it snapshotted must be what
+    # this checkout ships.
+    # The private worker's definition is rendered with the tracker's server and tools (DESIGN §22): with those lines,
+    # the only ones a two-space quoted key on the github server starts, taken out, it is the shipped file.
+    private=agents/canopy-worker-private.md
+    for dir in agents skills; do
+        diff -r -x "${private#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" >/dev/null ||
+            fail "the snapshot's $dir are not .agents/"
+    done
+    grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" || fail "the snapshot's $private names no tracker tools"
+    grep -v '^  "github_' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
+        fail "the snapshot's $private is not .agents/ with the tracker's tools"
+    echo "install-check: ok"
+    exit 0
+fi
 "$UV_TOOL_DIR/canopy/bin/python" -c '
 import sys
 from pathlib import Path

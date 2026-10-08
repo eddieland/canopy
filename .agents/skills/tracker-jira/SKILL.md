@@ -31,8 +31,11 @@ names and email addresses are not identities; two people can share a display nam
 
 ## Labels
 
-Jira labels cannot contain spaces. Changing labels through an issue edit may replace the whole list: read the current
-labels, add or remove one, write the full list back. Never drop labels you did not mean to touch.
+Jira labels cannot contain spaces. Set them with the issue edit tool (on Atlassian's remote server, `editJiraIssue`
+with only `labels` in its fields), never with a command-line client. Editing fields cannot change an issue's status;
+that takes a transition, which canopy agents never make. An edit may replace the whole list: read the current labels
+immediately before the edit, not earlier in the run, add or remove only the one you mean to, and write the full list
+back. Never drop or re-add labels you did not mean to touch, and never pass other fields.
 
 When a label was added is in the issue changelog. If the server cannot read the changelog, use the timestamp of the
 worker's question comment instead.

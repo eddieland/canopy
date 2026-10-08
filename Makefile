@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test install-check treehouse
+.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check binary treehouse
 
 ##@ General
 
@@ -11,11 +11,11 @@ help: ## Show this help
 
 all: fmt check ## Everything to run before committing: fmt, then check
 
-check: lint test ## Verify without modifying files: lint, test (what CI runs)
+check: lint test ui-check ## Verify without modifying files: lint, test, the UI's checks (what CI runs)
 
 ##@ Development
 
-fmt: ## Run autoformatters (ruff import sorting, ruff format)
+fmt: ui-fmt ## Run autoformatters (ruff import sorting, ruff format, oxfmt for ui/)
 	uv run ruff check --select I --fix .
 	uv run ruff format .
 
@@ -27,9 +27,35 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict)
 test: ## Run all tests
 	uv run pytest -q
 
+##@ Web UI (ui/; needs Node 22.12+, D079)
+
+ui/node_modules: ui/package.json ui/package-lock.json
+	npm --prefix ui ci --no-audit --no-fund
+	@touch $@
+
+ui-fmt: ui/node_modules ## Format ui/ with oxfmt
+	npm --prefix ui run fmt
+
+ui-check: ui/node_modules ## Check ui/ without changing it: format, lint, types, generated API types, unit tests, build
+	npm --prefix ui run check
+
+ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout and bundles into its wheel
+	npm --prefix ui run build
+
+# Not part of check: it needs a browser. CI runs it as its own job. PLAYWRIGHT_CHROMIUM_EXECUTABLE points it at a
+# preinstalled Chromium instead of the one `npx playwright install chromium` downloads.
+ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by FastAPI
+	npm --prefix ui run test:e2e
+
 # Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
-install-check: ## Install canopy with uv tool install into an empty HOME and run it against the fakes
-	tests/install-check.sh
+# INSTALL_SOURCE is what to install: this checkout by default, or dist/canopy after `make binary`.
+install-check: ## Install canopy into an empty HOME and run it against the fakes (INSTALL_SOURCE: default this checkout)
+	tests/install-check.sh $(INSTALL_SOURCE)
+
+##@ Release
+
+binary: ## Build dist/canopy, one executable with Python and the locked dependencies, for this platform (D067)
+	scripts/build-binary.sh
 
 ##@ Setup
 

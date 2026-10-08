@@ -109,14 +109,16 @@ Accept: one real ticket goes from label to open PR unattended, with the slot
 returned and a correct `runs` row. A killed worker is detected on the next tick
 and its slot returned.
 
-Status: in progress. Code, fakes-based acceptance tests (`tests/canopy/test_reconcile.py`), docs, D028, D029, and
-D040's definitions directory with D044's guard are in; the worker definition and overseer prompt were approved in #10.
-The live OpenCode canary passed both tests, the precedence check included, on 2026-09-24 with OpenCode 1.18.32. Its
-first run found that OpenCode runs tools in `$PWD`, not its working directory, so a worker would have edited the
-directory canopy started in; `procs` now sets `PWD` for every child given a cwd. OpenCode also leaves a tool denied
-outright out of the model's toolset, so the canary no longer expects an attempted edit. Waiting on the operator: one
-real ticket from label to open PR, and a killed worker on a real run. It was started on request before M1 closed
-(2026-09-24).
+Status: done 2026-10-07.
+Learned:
+- Live, from an empty journal (after the migrations were squashed, #60 and D068), with OpenCode 1.18.32: GH-64 went from label
+  to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with SIGKILL,
+  were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to PR #70.
+- An empty journal rebuilds its view from the tracker, but every comment cursor starts empty, so an old authorized
+  comment reads as new: the overseer tried a `resume` that the `no_branch` guard refused.
+- The worker's write MCP tools (`create_pull_request`, `add_issue_comment`) cannot set labels. The `agent` label lands
+  only when the model happens to use `gh` (on #61 and #70, not on #62 and #69).
+Next: give the worker a reliable way to label, or have the harness do it; M3's `needs-human` label depends on the same.
 
 ## M3. Fix-CI and resume
 
@@ -133,12 +135,20 @@ Accept: a PR with a failing check gets exactly one fix attempt per cooldown
 window and stops at the limit. A blocked worker's question appears on the
 ticket; an authorized reply resumes it; an unauthorized reply does not.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py` holds the fix-ci half of the
-acceptance; `tests/canopy/test_attention.py`), docs, and D030 to D032 are in. Waiting on the operator: a real PR with a
-failing check taken through fix-ci to the limit, and a real blocked worker answered once by an authorized and once by an
-unauthorized account (prompt behavior the fakes cannot show). The overseer prompt change was approved in #11.
-M2's acceptance run is also still open; this milestone was started on request before M1 closed. Not done
-here, and not listed by any milestone: DESIGN §15's attention item after three consecutive overseer failures.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py`, `tests/canopy/test_attention.py`),
+docs, and D030 to D032 are in. Checked live on 2026-10-07:
+- A reply from an account not in `authorized_repliers` did not resume GH-65, and its comment cursor moved past it; with
+  the account added back, the same comment resumed it. The overseer checks a comment's author when it reads it, so
+  adding an account authorizes its earlier comments too.
+- GH-68's worker, told by the ticket to ask first, posted one concrete question, added `needs-human` with `gh` (its MCP
+  tools cannot label; see M2), and reported `blocked`. One tick earlier the overseer had raised `needs_author` itself
+  instead of dispatching; it dispatched on the next.
+- A review comment on PR #71 from a bot (Sourcery) was classified as a concrete change and resumed GH-66 as
+  `changes_requested`. Bot reviews drive `resume` though they never count as approval.
+
+Waiting on the operator: an authorized answer on GH-68 that resumes it, a real PR with a failing check taken
+through fix-ci to the limit, and a PR that conflicts with its base taken through `conflicted` (D070) to a clean merge.
+DESIGN §15's three-failure attention item is M10's `loop.failing`.
 
 ## M4. Dependencies and stacking
 
@@ -149,12 +159,15 @@ here, and not listed by any milestone: DESIGN §15's attention item after three 
 Accept: two linked tickets are worked in order; the second's PR targets the
 first's branch when the first is open and green.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_stacking.py` holds the harness's half of the
-acceptance), docs, and D045 are in: `--base` checked by the `bad_base` guard, the stacked base in the run and the worker
-prompts, a `blocked` phase, and the overseer prompt's blockers and stacking section. The overseer prompt change needs
-human approval in its PR. Waiting on the operator: two real linked tickets worked in order, the second stacked on the
-first's open, green PR. Started on request while M2 and M3 wait on their live runs. `policy.stacking` (D054) lets the
-operator turn stacking off; the overseer prompt follows it, with no harness guard.
+Status: done 2026-10-07.
+Learned:
+- Live: GH-67, blocked by GH-66 through GitHub's issue dependencies, waited while GH-66 was being implemented and
+  reviewed, and was dispatched with `--base` on GH-66's branch once PR #71 was open and green. Its PR #73 targets that
+  branch.
+- The overseer's rationale while waiting said the blocker's PR "has not merged", though it stacks on a green PR rather
+  than waiting for a merge; the decision was right and its wording was not.
+Next: nothing checks what happens to a stacked PR when its base merges (GitHub retargets it if the base branch is
+deleted); watch it on #73. The `agent` label was missing on #73 as on #69 (M2's Next).
 
 ## M5. Shareable
 
@@ -170,6 +183,8 @@ Status: in progress. The skill, the install check, and the license are in (D046,
 operator's own agent sessions: `canopy skill` prints it and agent runs do not load it. `uv tool install canopy` was
 wrong, since the PyPI name is another project's; README now installs from git, verified from an empty HOME on
 2026-09-25, and `tests/install-check.sh` repeats that in CI on Linux and macOS. The license is proprietary for now.
+For a machine without a credential for this repository, a version tag releases one executable per platform (D067),
+which the install check also covers.
 Waiting on the operator: a second person following README's install steps without help, with their friction filed as
 issues, and a coworker running canopy against their own ticket.
 
@@ -212,15 +227,12 @@ runs.
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py` holds the harness's half of the acceptance:
-one run over two repositories pushes both and records both PRs, and a joint run killed mid-way has every slot returned
-and its desk removed on the next tick), docs, D058, D059, and D060 are in. D058 answers §18's open question: a unit may
-start after another unit's PR merged, in a repository the ticket has no unit in; a follow-up PR in the same repository
-is a new ticket. The desk canary is written (`tests/canopy/test_opencode_canary.py`, opt-in) and unrun. The overseer
-prompt, the worker definition's comment, and the TRUST_MODEL T4 and T6 changes need human approval in their PR. Waiting
-on the operator: the desk canary against real OpenCode, before any real joint run (if it fails, D059 says what changes);
-then one real ticket touching two repositories taken to two linked PRs, and a real joint run killed mid-way. Started on
-request while M2 to M6 wait on their live runs.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py`), docs, and D058 to D060 are in. The desk
+canary ran against OpenCode 1.18.32 on 2026-10-07: it passes when the workspace root is not a git checkout, and fails
+when it is, because OpenCode takes the enclosing repository as its project and allowed a write by absolute path beside
+the desk. Per D059, no real joint run in a workspace that is a checkout until that is resolved (keep the workspace out
+of git, or fall back to the first unit's worktree as the working directory). Waiting on the operator: one real ticket
+touching two repositories taken to two linked PRs, and a real joint run killed mid-way.
 
 ## M8. Split tickets
 
@@ -347,13 +359,13 @@ identified comment and nothing else happens to the PR: no push, no ticket, no Gi
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py` holds the harness's half of the
-acceptance: a review at the commit in a slot it reads through a link and never works in, the guards, one review per
-commit, the per-PR limit with its attention item, a killed review crashed with its slot returned, and nothing about
-reviews without a `[review]` table), the reviewer canary (opt-in, unrun), docs, and D065 are in. The overseer prompt,
-the `canopy-reviewer` definition, and the TRUST_MODEL T1, T3 to T7, §6, and §7 changes need human approval in their
-PR. Waiting on the operator: the reviewer canary against real OpenCode, before any real review (if it fails, D065
-says what changes); then the live runs Accept lists. Started on request while M2 to M10 wait on their live runs.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), docs, and D065 are in. Checked live on
+2026-10-07 with OpenCode 1.18.32: the reviewer canary passes, and with `agent_prs` on, PR #69 got one identified
+`clean` comment at its commit and no GitHub review. The canary checks reads only; the reviewer also needs the runtime's
+write MCP `add_issue_comment` allowed for `canopy-reviewer`, which README step 3 does not say. Without it, three
+reviews ended `unknown` (the reviewer exited with no result line) and were retried on the same commit, with no
+`review_failed` item until the third. Waiting on the operator: a finding taken through `resume` and re-reviewed to
+`needs_reviewer`, `review.query` on the operator's own PR, a review killed mid-way, and a PR at its limit.
 
 ## M12. The loop
 
@@ -368,24 +380,34 @@ Accept: fakes-based tests of the wait, both kinds of stop, the lock, and a tick 
 (`tests/canopy/test_loop.py`). The operator runs `canopy loop --dry-run` against the real queue for a working session,
 finds each tick's block legible, and stops it with Ctrl-C both during a tick and during the wait.
 
-Status: in progress. Code, tests, and docs are in. Waiting on the operator's session against the real queue.
+Status: in progress. Code, tests, and docs are in. Checked live on 2026-10-07: `canopy loop --every 3` ran 6 ticks
+against the real queue, dispatching, reviewing, and resuming; Ctrl-C during a tick stopped it when that tick finished,
+and Ctrl-C during the wait stopped it at once (exit 0). The closing line does not say a signal stopped it. Waiting on
+the operator: whether each tick's block is legible over a working session.
 
 ## M13. Spend-paced loop
 
 D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
 
 - Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run.
+  run. Worker and split runs (D071) and each tick's overseer do; chores and reviews read the same events but record
+  nothing yet.
 - A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
-  to `loop.interval_minutes` when they cost less.
+  to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
+  within M21's gate deadlines.
 - Spend in the loop's per-tick block and in `canopy status`.
-- Open: how the runtime reports cost (OpenCode's JSON output, its session store, or a command of its own) without the
-  harness growing runtime-specific parsing (D009); what the budget's unit is (per day, per tick, or both); whether a
-  worker's cost counts against the tick that dispatched it.
+- Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
+  dispatched it. How the runtime reports cost is settled by D071: OpenCode's JSON events on stdout.
 
 Accept: written with the design, before work starts.
 
-Status: not started.
+Status: in progress. Taken in part on request (2026-10-07), with M15's session ids: worker and split runs record their
+cost in dollars and tokens, and `canopy status` shows it per recent run (D071). Taken in part again on request
+(2026-10-08): each tick records its overseer's session and cost, the default `overseer_cmd` asks for events, and the
+loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
+alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
+`overseer_cmd` in a user file from before needs `--format json` added. Not designed yet: the budget and the pacing
+rule.
 
 ## M14. PR-scoped work
 
@@ -399,6 +421,10 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
   repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
   both (D051's pattern).
 - `canopy status` and the attention list name PR units by the PR, not a ticket key.
+- PR references (`repo#N` or the PR's URL) in `canopy start`, `stop`, `reply`, and `show` (DESIGN §22, D075), so
+  the operator can also start one of their own PRs privately instead of labeling it. That is a T1 change beside D056's,
+  needing the operator's approval as M18's does.
+- `canopy mirror` for a PR reference: the PR's review comments join the journal as its conversation (DESIGN §22, M19).
 - TRUST_MODEL T1 and §6 already allow it (D056).
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
@@ -410,7 +436,8 @@ Status: not started.
 REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 
 - Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
-  runtime-specific output beyond one validated field (D009, D026).
+  runtime-specific output beyond one validated field (D009, D026). Done with `--format json` (D071), which also gives
+  M13 each run's cost.
 - `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
   session id, so the operator can open a transcript with OpenCode's own tools.
 - Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
@@ -427,7 +454,11 @@ REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: not started.
+Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
+`canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id (D071).
+Waiting on the operator: a real run under the pinned OpenCode with the default `worker_cmd`, whose session id opens its
+transcript (`opencode export <id>`); an operator's user file from before needs `--format json` added to `worker_cmd`.
+Not started: whether `fix-ci` and `resume` continue a session, and workers against OpenCode's server.
 
 ## M16. Worktree setup for large monorepos
 
@@ -445,6 +476,161 @@ Accept: written with the design, before work starts, and like every milestone's,
 
 Status: not started.
 
+## M17. Declared repositories and pools
+
+DESIGN §18 and D066. Needs M6. Taken on request (2026-10-07).
+
+- `capacity.slots_per_repo` and `[capacity.repo_slots]`, user-only; with neither, every pool behaves as before (the
+  existing tests pass unchanged).
+- Leases in a workspace stay within the declared size: dispatch and reviews refuse `no_slot` rather than grow a pool,
+  and a slot treehouse makes past the size anyway is returned and destroyed.
+- `canopy workspace sync` converges: fills each pool by leasing as `canopy-sync` and returning, trims idle slots with
+  treehouse's unforced `destroy`, and removes clones the map dropped when nothing in them would be lost. `--dry-run`.
+  It holds the tick lock.
+- `canopy workspace add [NAME=]URL...`, and the same URLs on `canopy init --workspace`: append them to the map,
+  then sync.
+- The fake treehouse gains `destroy`.
+
+Accept: `canopy init --workspace` with two real clone URLs, in an empty directory with sizes declared, clones both and
+makes each pool its size, and `post_create` runs
+in the new slots during sync, not during the first run. Lowering a size removes idle slots and never a leased one; a
+dispatch into a full pool is refused `no_slot`. Dropping a repository from the map removes its clone and slots, and a
+clone with an unpushed commit is kept and reported.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_pools.py` holds the harness's half of the acceptance),
+docs, and D066 are in. Waiting on the operator: the real run Accept describes. treehouse's `max_trees` (16 by default)
+must be at least the largest declared size; canopy cannot set it.
+
+## M18. Private tickets
+
+REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design comes first.
+
+- A `messages` table, in a new migration that backfills ended runs' reports and questions. `_run` records each run's
+  report and question there, for every ticket.
+- `canopy start`, `stop` (with `--now`, and the `stopped` run status), `reply`, and `show` for ticket references, and
+  started subjects in `canopy status`, writing through `core/conversation.py`, with `start`, `stop`, and `reply`
+  refusing inside canopy's runs (`CANOPY_TICK_ID`,
+  and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
+- `canopy dispatch` needs no `--label` for a started ticket, checking the start record in code, and refuses a private
+  `split`.
+- The private worker prompt variant and `canopy-worker-private`, allowing only the tracker's read tools by name and
+  denying the rest of its server and the known tracker CLIs in bash; verify OpenCode enforces that wildcard deny.
+- `tracker.read_tools`, with defaults for Atlassian's remote MCP and GitHub's MCP server named from their tool lists;
+  `canopy start` refuses `no_read_tools` without them. D044's guard refuses a private run whose worktree config names
+  the tracker's tools.
+- `dispatch` picks the private worker in code for a started ticket and refuses a stopped one; `stop` marks the
+  record stopped rather than deleting it; `start`, `stop`, and `dispatch` serialize on it, and `_run` re-reads it
+  before the worker starts.
+- The overseer: private tickets in the state block with their new operator messages, and their phases read from them.
+  A prompt change, which needs the operator's approval.
+- `awaiting_reply` on the attention list, raised by the harness; `run.ended` carries the question's message id.
+- The loop's wait ends early on an operator message (D073).
+- TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note. Sandboxing
+  is not a prerequisite: the operator accepted T1's forged-reply residual (D076).
+
+Accept: a fakes-based test: a started ticket with no label is dispatched to the private worker definition, the fake
+worker ends `blocked`, the question is on the attention list and in `canopy show`, `canopy reply` ends
+the loop's wait, and the `resume` prompt carries the reply. Live, the operator starts a real ticket privately, answers a
+question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_private.py` holds the harness's half of the
+acceptance), docs, and D080 are in; TRUST_MODEL T1 and T6 and the overseer prompt wait on the operator's approval note
+in the PR. OpenCode's wildcard deny with named allows was confirmed by reading its source (1.18.35), not yet in a live
+run. Waiting on the operator: the live run Accept describes. With Atlassian's server, `?tools=all` in its URL lets a
+private worker read comments; without it only the primary read tools are reachable.
+
+## M19. Tracker comments in the journal
+
+REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes first.
+
+- `canopy mirror`, overseer-only, bounded, idempotent on the subject and comment id.
+- The overseer prompt mirrors every comment past a subject's own mirror cursor, worker-marked ones (D069) included;
+  the cursor starts empty, so a subject's history is mirrored once. A
+  prompt change, which needs the operator's approval.
+- `canopy show REF` shows mirrored comments with their source, for public tickets as for private ones.
+- Open: whether PR review comments join the journal here or later.
+
+Accept: fakes-based tests of the command's bounds, refusals, and idempotence. Live, a working session's decisions show
+each new comment mirrored once, and M13's spend records show what mirroring adds to a tick.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_mirror.py` holds the harness's half of the acceptance),
+docs, and D081 are in; TRUST_MODEL T1, T3, and T6 and the overseer prompt wait on the operator's approval note in the
+PR. The open question is settled: PR review comments join the journal with PR subjects, in M14. That OpenCode's
+`canopy *` rule admits a heredoc command was read in its source (1.18.35), not yet seen in a live run. Waiting on the
+operator: the live run Accept describes.
+
+## M20. Web UI
+
+REQUIREMENTS N1, DESIGN §22, D055, D073, D074, D079. Needs M18; M19 makes it one inbox. Sketch only; the design comes
+first.
+
+- `src/canopy/serve/`, run by `canopy loop` from a thread; `--no-serve`; `serve.enabled`, `serve.bind`, `serve.port`,
+  all user-only. FastAPI on uvicorn (D074), imported nowhere else, serving the app built from `ui/` (D079).
+- TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
+- Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
+  stop, through the same functions as the CLI.
+- The release binary (D067) bundles the built UI and builds on every platform it ships for.
+- Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
+  the UI once M15 runs workers against OpenCode's server.
+
+Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+
+Status: in progress. Built (2026-10-08): the design (DESIGN §22) settles both open questions: the browser signs in
+once with the listener secret and keeps a cookie signed with it (D082), and M15's session attach waits on M15's server,
+with session ids on the runs page meanwhile. `canopy loop` serves from a thread unless `--no-serve` or
+`serve.enabled = false`, `serve.*` user-only, nothing served without a safe secret file (`canopy secret` makes one);
+pages for the attention list, runs, and tickets with their conversations, with reply, start, stop, and stop now through
+`core.conversation` and `runs.halt`; an event stream over SQLite's `data_version`; `python -m canopy.serve --mock` over
+a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
+UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. Waiting on the operator: a real run, the loop
+serving a real journal to a browser on loopback and on a private address.
+
+## M21. Idle-paced loop
+
+DESIGN §6 (Idle pacing), D083. Needs M12. Independent of M13: cost bounds spend, idleness says whether a tick was worth
+running, and the loop waits the longer of the two.
+
+- `repeat.pace` decides whether the tick was idle from the journal and doubles the wait per idle tick in a row, from
+  `--every` or `loop.interval_minutes` up to `loop.idle_max_minutes` (user-only, default 120) and never below `base`,
+  ending no later than the earliest `fix-ci` cooldown end or chore `due_at` still ahead.
+- The wait also ends early when a run, chore run, or review run ends after the tick rendered its state, with the
+  operator message's one-minute floor.
+- The idle count and the chosen wait in the loop's per-tick block and in its log lines.
+- Config validation: `loop.idle_max_minutes` at least `loop.interval_minutes`; a cap not above `base` turns idle
+  pacing off.
+- Fakes-based tests: idle ticks lengthen the wait to the cap; each condition that is not idle resets it; a cooldown end
+  and a chore's `due_at` shorten it, and one already past does not; a run ending during or after the tick, and an
+  operator message, end it early; a cap not above `base`, from config or `--every`, keeps today's pacing.
+- Open: whether `--every` should turn idle pacing off for a watched session, or keep it from a shorter base.
+
+Accept: the tests above pass with the fakes. The operator leaves `canopy loop` running overnight against the real
+queue and finds, in the loop's output and log, waits reaching the cap after a quiet evening and back at
+`loop.interval_minutes` within one tick of the first morning activity, and each run's end followed by a tick within
+a couple of minutes.
+
+Status: not started.
+
+## M22. Trusted reviewers
+
+REQUIREMENTS R13, DESIGN §7, D089. Needs M3's `resume` and M20's reply. Taken on the operator's request (2026-10-08).
+
+- `trust.trusted_reviewers`, user-only and empty by default, with `canopy:review` for canopy's own reviewer.
+- `untrusted_review` in the overseer's phase table and on the attention list; the `review` cursor waits on it.
+- `canopy reply` and the web UI's reply on a public ticket the journal has, as the operator's go-ahead: in the state
+  block under `operator`, and in the public `resume` prompt as `{{OPERATOR_MESSAGES}}`.
+- Resume workers told who is trusted (`{{TRUSTED_REVIEWERS}}`), addressing anyone else's comments only as an operator
+  message says.
+- Fakes-based tests: the config, the state block's trusted list and operator messages, the cursor, and the resume
+  prompt with and without a go-ahead.
+
+Accept: the tests above pass with the fakes. Live: a review bot's comment on a loop PR waits as `untrusted_review`
+without a dispatch; a reply from the web UI resumes it with the reply as the worker's instruction and nothing of it on
+the ticket; a listed reviewer's comment resumes as before.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_trusted_reviewers.py`), docs, and D089 are in. The
+operator approved the TRUST_MODEL and prompt changes in the PR (2026-10-08). Waiting on the operator: the live run
+above.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
@@ -453,4 +639,6 @@ Status: not started.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
-- Web UI: when `canopy status` and `opencode attach` stop being enough. Allowed under TRUST_MODEL T8 (D055).
+- Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
+  §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
+  change.

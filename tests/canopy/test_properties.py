@@ -185,6 +185,8 @@ def test_every_config_key_declares_a_scope() -> None:
         "capacity.max_workers",
         "tracker.labels",
         "trust.authorized_repliers",
+        "trust.trusted_reviewers",
+        "trust.comment_prefix",
         "runtime.split_cmd",
         "runtime.chore_cmd",
         "capacity.max_chores",

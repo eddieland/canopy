@@ -12,12 +12,12 @@ LAYERS: tuple[frozenset[str], ...] = (
     frozenset({"__main__"}),
     frozenset({"cli"}),
     frozenset({"loop"}),
-    frozenset({"runs", "setup", "chores", "notify", "reviews"}),
+    frozenset({"runs", "setup", "chores", "notify", "reviews", "serve"}),
     frozenset({"core"}),
     frozenset({"infra"}),
 )
 # Third-party packages only one canopy package may import.
-CONFINED = {"click": "cli"}
+CONFINED = {"click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
 # Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink holds a secret and
 # opens connections, which the harness never does (DESIGN §20).
 SEPARATE = frozenset({"canopy_notify_slack"})

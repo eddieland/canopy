@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import result, start, view
-from canopy.core import db, definitions, outbox
+from canopy.core import agent_output, conversation, db, definitions, outbox
 from canopy.core.config import render_command
 from canopy.infra import logs, stopping
 
@@ -100,7 +100,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir))
+    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
     log.info(
         "running chore",
         extra={"chore_run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
@@ -109,6 +109,8 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     done = ctx.runner.run(
         argv,
         cwd=cwd,
+        # The operator's commands refuse inside canopy's own runs (DESIGN §22).
+        env={conversation.RUN_ID_ENV: f"chore-{run_id}"},
         timeout=chore.timeout_minutes * 60,
         on_start=lambda pid: db.set_chore_agent_pid(ctx.conn, run_id, pid),
     )
@@ -117,7 +119,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.flush()
     if done.timed_out:
         return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes")
-    parsed = result.parse(done.stdout)
+    parsed = result.parse(agent_output.read(done.stdout).text)
     if parsed is None:
         return Outcome("unknown", None, "the chore's last line was not a valid result; its findings are not recorded")
     return Outcome(parsed.status, parsed)

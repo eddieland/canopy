@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06, and where canopy stands on each. `DESIGN.md` is how
-canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
-[Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
-(AGENTS.md).
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08), and where canopy stands on
+each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is
+listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until
+then (AGENTS.md).
 
 A bare § is a section of `DESIGN.md`. Status words:
 
@@ -36,7 +36,8 @@ still ask the operator to keep code or text of their own in step with canopy:
 - A notification destination other than the shipped ones is "a small program of the operator's" (§20). The desktop
   and Slack destinations the operator wants (N2) ship with canopy (M10).
 - Prompt overrides (§12) are copies the operator maintains, and an override must keep what canopy's guards rely on
-  (D051). Prefer a skill; treat an override as a last resort.
+  (D051). Prefer a skill; treat an override as a last resort. Opening PRs, which an operator's employer may need done
+  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8, D078).
 
 ## Must have
 
@@ -55,7 +56,9 @@ change, which needs human approval.
 
 Built. treehouse is the pool (D002): canopy leases a slot per run, one in each repository a joint run covers (§18),
 records it in `run_slots`, returns it on every exit path, and returns stale leases in reconcile (§6, §8). The capacity
-limit is `capacity.max_workers`; treehouse's `max_trees` bounds the pool.
+limit is `capacity.max_workers`; treehouse's `max_trees` bounds the pool. In a workspace the operator can declare each
+pool's size (`capacity.slots_per_repo`), which leases stay within and `canopy workspace sync` creates and trims slots
+to match, alongside cloning and removing repositories to match the map (§18, M17).
 
 The shape differs from "a worktree per ticket": a ticket holds a slot only while a run is working on it, and its pushed
 branch is its checkpoint between runs (§9). That is what makes R3 possible.
@@ -73,9 +76,10 @@ Partial on "the agent that owns the PR": each run is a fresh worker on the pushe
 before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate). Whether a feedback run should
 continue the earlier run's OpenCode session is a question for M15, answered against the decisions corpus.
 
-Known prompt gaps that make routing noisier than it should be (PRIOR_ART "In prompts"): the worker's own PR replies can
-read back as new feedback, CI newness is keyed on the check run id so a re-run counts as new, and a merge conflict has
-no phase.
+Known prompt gap that makes routing noisier than it should be (PRIOR_ART "In prompts"): CI newness is keyed on the
+check run id so a re-run counts as new. The worker's own PR replies no longer read back as new feedback: workers mark
+every comment with `trust.comment_prefix` and `trust.comment_suffix`, which only take authority away (§8, D069). A
+merge conflict now has a phase: `conflicted` sends a `resume` to merge the base in (§7, D070).
 
 ### R5. Needs-a-human queue: one view of what is blocked on the operator
 
@@ -89,10 +93,10 @@ Gap: DESIGN §15's attention item after three consecutive overseer failures is n
 
 Partial; the rest is M15.
 
-- See: `canopy status` shows the attention list, running workers, and the last tick; `canopy decisions` shows what a
-  tick decided; each run's log is under `<state_dir>/runs/`. Missing: a list of recent runs with their outcome, PR,
-  and summary, and the OpenCode session id of each run, which would let the operator open its transcript with
-  OpenCode's own tools.
+- See: built. `canopy status` shows the attention list, running workers, the last tick, and the ten runs that ended
+  most recently with their outcome, PR, summary, cost, run log, and OpenCode session id, which opens the run's
+  transcript with OpenCode's own tools (§13, D071); `canopy decisions` shows what a tick decided. A running worker's
+  session id is known only once it ends: it is read from what `opencode run` printed.
 - Prompt an idle ticket: built. An authorized reply on the ticket, or a review comment on the PR, is picked up by the
   next tick and resumes the work (§7). This keeps the operator's daily surface where coworkers' already is.
 - Prompt a running session: not possible today; M15 runs workers against OpenCode's server so the operator can
@@ -144,10 +148,42 @@ Gaps:
 - Unverified: whether the worker's `external_directory: deny` refuses reads through `bazel-out/` and `bazel-bin/`,
   which are symlinks into the output base outside the worktree.
 
+### R11. Private tickets: deliver a ticket without the conversation appearing on it
+
+Built in M18; its live check is the operator's. When a client files the ticket, the operator wants canopy to deliver it
+without the agent's reports, its questions, or the operator's answers showing on the client's ticket. Today the ticket
+is the only channel for both (§7, §8), and the queue label is itself visible.
+
+Shape (§22, D072, D080): the operator starts the ticket in canopy (`canopy start`) instead of labeling it; its
+workers can only read the tracker; questions reach the attention list (`awaiting_reply`) and `canopy show`, and the
+operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
+tracker's VCS integration may link to the ticket (DESIGN §22, Open).
+The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
+
+### R12. One record of every ticket's conversation
+
+Built in M19, live acceptance pending. Every ticket's conversation, public or private, in one place canopy owns, so the
+web UI (N1) can show it as one inbox and later channels such as Slack join it rather than keeping their own (§22, D072).
+For a public ticket the tracker stays the authority and the journal holds the overseer's copy: each tick the overseer
+mirrors new tracker comments with `canopy mirror` (D081), and `canopy show` lists them with workers' reports and the
+operator's replies. Gap: PR review comments, which join with PR subjects (M14).
+
+### R13. Trusted and untrusted reviewers
+
+Built in M22, live acceptance pending. Written down 2026-10-08. Only reviewers the operator trusts send a worker back
+to a PR on their own. Anyone else's feedback, a review bot's included, waits for the operator's approval, ideally with
+an instruction ("use your best judgement based on the bot's review").
+
+Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default, with `canopy:review` for canopy's own
+reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
+the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. The gate is the
+overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
+
 ## Nice to have
 
-- **N1. Local web UI on localhost.** Deferred, and allowed under TRUST_MODEL T8 (C2, D055). OpenCode's own
-  attach (M15) covers sessions first.
+- **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
+  behind the listener secret the operator signs in with (D082). The operator expects it to become their main surface
+  (C5), served by `canopy loop` with an off switch (D073). OpenCode's own attach (M15) covers sessions first.
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
   pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
   D064). No wrapper script of the operator's is needed.
@@ -170,7 +206,7 @@ Gaps:
 
 ## Conflicts
 
-Each was settled by the operator on 2026-10-06 and recorded in `DECISIONS.md`.
+Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, and recorded in `DECISIONS.md`.
 
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10, D045), so
   B starts before A lands. Settled by D054: stacking stays, controlled by `policy.stacking` (`"auto"` or `"never"`),
@@ -184,3 +220,7 @@ Each was settled by the operator on 2026-10-06 and recorded in `DECISIONS.md`.
 - **C4. Pushing to the operator's own PR branches vs `trust.branch_prefix` (R9).** Settled by D056: a worker may push
   to the head branch of an open, non-fork PR the operator authored and labeled with a queue label, never with force
   (TRUST_MODEL T1, §6; built in M14).
+- **C5. The web UI as the operator's main surface vs "daily surface is labels, ticket comments, PR review, and one
+  attention list" (DESIGN §4 principle 6, N1).** Settled by the operator on 2026-10-08 (D072, D073): the operator's
+  own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.
+  Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 says so since M20.
