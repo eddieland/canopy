@@ -153,9 +153,9 @@ Gap; sketched as M18. When a client files the ticket, the operator wants canopy 
 reports, its questions, or the operator's answers showing on the client's ticket. Today the ticket is the only channel
 for both (§7, §8), and the queue label is itself visible.
 
-Planned shape (§22, D072): the operator takes the ticket in canopy (`canopy ticket take`) instead of labeling it; its
+Planned shape (§22, D072): the operator takes the ticket in canopy (`canopy take`) instead of labeling it; its
 workers never write to the tracker; questions reach the attention list and the operator answers with
-`canopy ticket reply`, later from the web UI.
+`canopy reply`, later from the web UI.
 The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
 
 ### R12. One record of every ticket's conversation

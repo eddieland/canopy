@@ -415,6 +415,9 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
   repository's base branch. The worker prompt re-reads the PR's author and labels first and changes nothing without
   both (D051's pattern).
 - `canopy status` and the attention list name PR units by the PR, not a ticket key.
+- PR references (`repo#N` or the PR's URL) in `canopy take`, `drop`, `reply`, and `show` (DESIGN §22, D075), so the
+  operator can also take one of their own PRs privately instead of labeling it. That is a T1 change beside D056's,
+  needing the operator's approval as M18's does.
 - TRUST_MODEL T1 and §6 already allow it (D056).
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
@@ -493,11 +496,12 @@ must be at least the largest declared size; canopy cannot set it.
 
 ## M18. Private tickets
 
-REQUIREMENTS R11, DESIGN §22, D072. Needs M3. Sketch only; the design comes first.
+REQUIREMENTS R11, DESIGN §22, D072, D075. Needs M3. Sketch only; the design comes first.
 
 - A `messages` table, in a new migration. `_run` records each run's report and question there, for every ticket.
-- `canopy ticket take|drop|reply|show|list`, writing through `core/conversation.py`, with `take`, `drop`, and `reply`
-  refusing inside canopy's runs (`CANOPY_TICK_ID`, and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
+- `canopy take`, `drop`, `reply`, and `show` for ticket references, and taken subjects in `canopy status`, writing
+  through `core/conversation.py`, with `take`, `drop`, and `reply` refusing inside canopy's runs (`CANOPY_TICK_ID`,
+  and `CANOPY_RUN_ID`, which `_run`, `_chore`, and `_review` set).
 - `canopy dispatch` needs no `--label` for a taken ticket, checking the take record in code, and refuses a private
   `split`.
 - The private worker prompt variant and `canopy-worker-private`, with the tracker's write tools denied by name.
@@ -508,7 +512,7 @@ REQUIREMENTS R11, DESIGN §22, D072. Needs M3. Sketch only; the design comes fir
 - TRUST_MODEL T1, T6, and the overseer prompt as DESIGN §22 proposes, with the operator's approval note.
 
 Accept: a fakes-based test: a taken ticket with no label is dispatched to the private worker definition, the fake
-worker ends `blocked`, the question is on the attention list and in `canopy ticket show`, `canopy ticket reply` ends
+worker ends `blocked`, the question is on the attention list and in `canopy show`, `canopy reply` ends
 the loop's wait, and the `resume` prompt carries the reply. Live, the operator takes a real ticket privately, answers a
 question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
 
@@ -518,10 +522,10 @@ Status: not started.
 
 REQUIREMENTS R12, DESIGN §22, D072. Needs M18. Sketch only; the design comes first.
 
-- `canopy ticket mirror`, overseer-only, bounded, idempotent on the ticket and comment id.
+- `canopy mirror`, overseer-only, bounded, idempotent on the subject and comment id.
 - The overseer prompt mirrors every comment past a ticket's comment cursor, skipping worker-marked ones (D069). A
   prompt change, which needs the operator's approval.
-- `canopy ticket show KEY` shows mirrored comments with their source, for public tickets as for private ones.
+- `canopy show REF` shows mirrored comments with their source, for public tickets as for private ones.
 - Open: whether PR review comments join the journal here or later.
 
 Accept: fakes-based tests of the command's bounds, refusals, and idempotence. Live, a working session's decisions show
@@ -554,5 +558,5 @@ Status: not started.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
 - Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
-  §22): a Socket Mode bridge running `canopy ticket reply`, or the overseer reading Slack through MCP. Needs a T1
+  §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
   change.

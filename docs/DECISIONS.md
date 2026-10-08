@@ -1225,7 +1225,7 @@ Decision (DESIGN §22):
 - A `messages` table records every ticket's conversation. The harness writes workers' reports and questions from their
   result lines; the operator's input goes through one function every channel calls; the overseer mirrors tracker
   comments (M19).
-- A ticket is private when the operator takes it in canopy (`canopy ticket take`) instead of labeling it. Its take
+- A ticket is private when the operator takes it in canopy (`canopy take`) instead of labeling it. Its take
   record and the operator's messages are the journal's own facts, checked by the harness in code. Its workers never
   write to the tracker: a private prompt variant, and the tracker's write tools denied by name.
 - Authority stays with the source. A public ticket's replies are read live from the tracker, as before; the mirror is
@@ -1245,7 +1245,7 @@ Rejected:
 - Agents writing messages directly: a steered worker could write the operator's reply to its own question.
 Consequences: the journal holds tracker comment bodies and client text, in the operator-only state directory. A private
 ticket's replies are typed into canopy, not the tracker. Until workers are sandboxed (HOST_ISOLATION), a worker's bash
-can run `canopy ticket reply`; the command refuses inside canopy's runs, which stops a worker that follows injected
+can run `canopy reply`; the command refuses inside canopy's runs, which stops a worker that follows injected
 text, not one that unsets the markers.
 Revisit: if mirroring costs a material share of each tick (M13's spend records will show it), or when sandboxing lands
 and the residual goes.
@@ -1265,13 +1265,13 @@ Decision (DESIGN §22; built in ROADMAP M20):
   `http.client`, and `urllib.request` stays absolute: the stack opens the listening socket, not canopy's code. It
   listens and calls out to nothing.
 - The loop wakes early on an operator message by checking the journal during its wait, so a reply from another
-  process (`canopy ticket reply`) and one through the server wake it the same way.
+  process (`canopy reply`) and one through the server wake it the same way.
 Rejected:
 - A separate `canopy serve` process: workable, since the journal is shared in WAL mode, but two commands to keep
   running for one operator. The seam (a context opener and the journal) keeps it a small change later.
 - A uv workspace member, like the Slack sink: it may not import canopy, so it could not read the journal or share the
   write path.
-- Waking the loop with an in-process event: covers the server only, not `canopy ticket reply` from a shell.
+- Waking the loop with an in-process event: covers the server only, not `canopy reply` from a shell.
 Consequences: stopping the loop stops the UI. AGENTS.md's "do not build a web UI" is lifted by M20; DESIGN §3's
 listener line and principle 6's daily surface change when it is built.
 Revisit: when the operator wants the UI while the loop is stopped, or a server fault is seen to disturb ticks.
@@ -1300,3 +1300,25 @@ operator, including those who run `--no-serve`. AGENTS.md's list of adopted depe
 them.
 Revisit: if the dependencies cause install or binary-build friction on a platform the release ships for, or if the
 UI's needs shrink to a page or two that stdlib could serve.
+
+## D075. The operator's commands are top-level verbs that take a reference to any subject
+
+Context: the operator asked for intuitive verbs. Grouping them under `canopy ticket` tied every one to tickets, while
+canopy already works on and reports about more than tickets: PRs (reviews, and ROADMAP M14's PR-scoped work), chores,
+repositories, and runs, which the attention list names today (`core/items.py`).
+Decision (DESIGN §22):
+- `canopy take`, `drop`, `reply`, and `show` are top-level and take one reference, `REF`, whose shape names its kind:
+  a ticket key, `repo#N` or a PR URL, `chore:NAME`, `run:ID`. `canopy status` lists what was taken; there is no
+  `list`. The overseer's `canopy mirror REF` follows the same rule.
+- A kind that does not support a verb refuses it by name. A new kind adds a reference form and the verbs it supports,
+  not commands.
+- Messages and take records are keyed by subject, not ticket key, so M14's PRs and later kinds need no new table.
+Rejected:
+- Verbs under a noun per kind (`canopy ticket take`, `canopy pr take`): the same verb learned once per kind, and a new
+  kind is a new command group.
+- Verbs under one generic noun (`canopy work take`): a layer that says nothing the reference does not.
+- A `--kind` flag: the reference's shape already says it.
+Consequences: the existing overseer commands keep their shapes (`dispatch KEY`, `ticket set`); renaming them would
+change the overseer prompt, which needs approval. Operator-facing nouns that predate this (`status`, `decisions`)
+stay.
+Revisit: if two kinds' reference forms ever collide, or a kind needs a verb with a meaning the others do not share.
