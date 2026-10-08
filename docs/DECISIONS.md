@@ -1354,28 +1354,12 @@ control), or after any incident where a run wrote to the journal outside its run
 
 ## D077. Workers open PRs with the operator's skill when `runtime.pr_skill` names one
 
-Context: an operator whose employer needs PRs opened with its own tooling (a binary that adds metadata, or a host the
-GitHub MCP serves badly) gets a broken PR from the MCP. The worker prompts said to open PRs through the GitHub MCP, and
-a skill only adds to a prompt: one that says "use my tool instead" contradicts it, and the model follows either. The
-only reliable route was a prompt override, which D051 and REQUIREMENTS H2 call a last resort.
-Decision (DESIGN §8): `runtime.pr_skill` names a skill, and `implement` and `resume` prompts render `{{OPEN_PR}}` as
-"open each PR by following that skill, and in no other way", or "through the GitHub MCP" when it is unset. Like
-`tracker-<provider>` (D014), the prompt names the skill and the operator supplies it where the runtime reads skills.
-- A missing skill fails the run with a `no PR skill:` summary; it never falls back to the MCP, whose PRs are the ones
-  the operator set the skill to avoid.
-- With the key set, an `implement` or `resume` prompt without `{{OPEN_PR}}` is `bad_prompt`, so an older override
-  that names the MCP fails closed, as D051 does for `{{LABELS}}`. Unset, older overrides render as before.
-- User-only: it chooses what workers are told to do, which the repository file must not (TRUST_MODEL T7).
-- It covers opening a PR only. Reading PRs, and updating one, stay with the GitHub MCP, which the overseer also reads
-  through, so the PR must be one that server can read.
-- The skill's programs run under the worker's bash rules, which match the command text. A program that pushes or
-  force-pushes by itself is past them; branch protection governs (TRUST_MODEL T1), and `_run` still checks the branch
-  it expects is on origin.
+Context: some operators must open PRs with their employer's tooling; a PR from the GitHub MCP is broken for them. A
+skill cannot override the worker prompt's "through the GitHub MCP", and a prompt override is a last resort (D051).
+Decision (DESIGN §8): `runtime.pr_skill`, user-only, names a skill the `implement` and `resume` prompts tell workers to
+open PRs with, and in no other way. A missing skill fails the run instead of falling back to the MCP. With the key set,
+an override without `{{OPEN_PR}}` is `bad_prompt`, as D051 does for `{{LABELS}}`.
 Rejected:
-- A skill alone, with no prompt change: the prompt's "through the GitHub MCP" wins some runs and the skill others.
-- A command template for opening PRs, run by the harness after the worker exits: the harness would have to know PR
-  titles, bodies, and hosts, which D014 and AGENTS.md keep out of code.
-- Falling back to the MCP when the skill is missing: it opens the broken PR the key exists to prevent.
-- A shared key: a repository could steer the operator's workers to a skill it supplies.
-Revisit: if operators need other single steps done their own way (ticket comments, labels), generalize to a table of
-step skills rather than adding keys one by one; or if the `decisions` table shows workers ignoring the skill.
+- A skill alone: the prompt and the skill disagree, and either wins.
+- A harness command that opens the PR: puts VCS host knowledge in code (D014).
+Revisit: if other single steps need the operator's own tooling; then generalize rather than add keys one by one.
