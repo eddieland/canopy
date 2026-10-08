@@ -551,15 +551,23 @@ def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str,
     }
 
 
-def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
-    """Return a public resume worker's `{{OPERATOR_MESSAGES}}`: the operator's latest replies, oldest first, bounded.
+def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether the operator has written to a ticket in canopy since any forget: what its worker must hear (D093)."""
+    return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
 
-    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089). Replies from before
-    the operator forgot the ticket's work are left out.
+
+def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
+    """Return a public worker's `{{OPERATOR_MESSAGES}}`: the operator's latest replies, oldest first, bounded.
+
+    A public ticket's worker hears the operator here rather than on the ticket (DESIGN §22, D089). The questions
+    workers reported come with them, so a reply to message N names something the worker can read (D093); the rest of
+    the conversation is on the tracker. Messages from before the operator forgot the ticket's work are left out.
     """
+    if not has_operator_messages(conn, key):
+        return "No messages from the operator."
     rows = conn.execute(
-        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ? "
-        "ORDER BY id DESC LIMIT ?",
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
+        "AND (source = 'operator' OR kind = 'question') ORDER BY id DESC LIMIT ?",
         (TICKET, key, db.forgotten_message_id(conn, key), PROMPT_MESSAGES),
     ).fetchall()
     return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages from the operator.")

@@ -86,7 +86,8 @@ Controls:
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
-  it into the public `resume` prompt itself.
+  it into every public worker prompt itself (`implement`, `fix-ci`, `resume`), and refuses a prompt override that
+  would drop it (D093).
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks
@@ -272,6 +273,10 @@ named from the servers' published tool lists, and the private worker's `gh` deny
 denied by name (D076's root cause: workers run as the operator until HOST_ISOLATION). A private ticket hides the
 conversation, not authorship or the work: commits keep their attribution trailer (T5), and its branch and PR title name
 the ticket key, which a tracker's VCS integration may link to the ticket.
+An operator message on a public ticket (D089, D093) is kept off the ticket only by the worker's prompt: a public worker
+can comment on the ticket and its PRs, so one that disregards the prompt, or is steered by what it read, can repeat the
+message there, and its work shows what the message asked for. Text the ticket's readers must never see belongs on a
+private ticket, whose worker cannot write to it.
 
 ### T7. Hostile repository config
 

@@ -625,14 +625,18 @@ REQUIREMENTS R13, DESIGN §7, D089. Needs M3's `resume` and M20's reply. Taken o
   message says.
 - Fakes-based tests: the config, the state block's trusted list and operator messages, the cursor, and the resume
   prompt with and without a go-ahead.
+- Every public worker hears the operator (D093): `{{OPERATOR_MESSAGES}}` in the `implement` and `fix-ci` prompts too,
+  with the workers' questions a reply answers; an override without it refused once the ticket has a message; a reply
+  on a ticket with no branch rides its `implement`, and one after a failed run is "try again".
 
 Accept: the tests above pass with the fakes. Live: a review bot's comment on a loop PR waits as `untrusted_review`
 without a dispatch; a reply from the web UI resumes it with the reply as the worker's instruction and nothing of it on
 the ticket; a listed reviewer's comment resumes as before.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_trusted_reviewers.py`), docs, and D089 are in. The
-operator approved the TRUST_MODEL and prompt changes in the PR (2026-10-08). Waiting on the operator: the live run
-above.
+operator approved the TRUST_MODEL and prompt changes in the PR (2026-10-08). D093's follow-up is in, with its tests in
+the same file; its TRUST_MODEL and prompt changes wait on the operator's approval note in its PR. Waiting on the
+operator: the live run above.
 
 ## Deferred, with the trigger that would unblock each
 
