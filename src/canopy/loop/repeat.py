@@ -183,8 +183,9 @@ def _ticks(
     """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status."""
     while not stop.requested:
         before = attention.listed(ctx)
-        # Operator messages newer than this wake the wait after this tick: every channel records one the same way.
-        seen = db.latest_message_id(ctx.conn, source="operator")
+        # Operator messages to a ticket newer than this wake the wait after this tick: every channel records one the
+        # same way. A note to a chore waits for the chore's next run.
+        seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
         started = clock()
         with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
             outcome = _tick(ctx, dry_run=dry_run, log=log)
@@ -203,7 +204,9 @@ def _ticks(
             ended + wait,
             sleep=sleep,
             clock=clock,
-            wake=lambda seen=seen: db.latest_message_id(ctx.conn, source="operator") > seen,
+            wake=lambda seen=seen: (
+                db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen
+            ),
             earliest=started + WAKE_MIN_SECONDS,
             keys=keys,
         )

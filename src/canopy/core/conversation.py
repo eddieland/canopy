@@ -19,7 +19,7 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -60,6 +60,8 @@ MAX_TIME = 64
 # How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
 PROMPT_MESSAGES = 20
 PROMPT_CHARS = 30_000
+# How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
+CHORE_NOTES = 10
 
 TICKET = db.SUBJECT_TICKET
 PR = "pr"
@@ -70,7 +72,7 @@ RUN = "run"
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "show", MIRROR_ACTION),
     PR: (),
-    CHORE: ("show",),
+    CHORE: ("reply", "show"),
     RUN: ("show",),
 }
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
@@ -233,19 +235,28 @@ class Replied:
     new: bool
 
 
-def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submission: str | None = None) -> Replied:
-    """Record the operator's reply to a ticket canopy knows (DESIGN §22).
+def reply(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    body: str,
+    *,
+    channel: str,
+    submission: str | None = None,
+    chores: Collection[str] = (),
+) -> Replied:
+    """Record the operator's reply to a ticket canopy knows, or a note to a chore in `chores` (DESIGN §19, §22).
 
     A started ticket's reply is its conversation. A public ticket's is the operator's word to the loop, beside its
     authorized repliers' comments on the ticket, and how the operator answers an untrusted reviewer's feedback (DESIGN
-    §7, D089). It answers the ticket's latest question when there is one. A channel whose form draws a submission id
-    passes it, and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it
-    answers, and the body. Either way the same reply sent again after an uncertain result records nothing new.
+    §7, D089). It answers the ticket's latest question when there is one. A chore's is a note its next runs read. A
+    channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one the id is
+    derived from the subject, the message it answers, and the body. Either way the same reply sent again after an
+    uncertain result records nothing new.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket that was neither started nor
-            seen by a tick, `bad_body` for an empty body or one over 4000 characters, `bad_submission` for a submission
-            id that is not 8 to 64 letters, digits, `-`, or `_`.
+        Refused: `unsupported` for a subject that is not a ticket or a chore, `unknown` for a ticket that was neither
+            started nor seen by a tick or a chore not in `chores`, `bad_body` for an empty body or one over 4000
+            characters, `bad_submission` for a submission id that is not 8 to 64 letters, digits, `-`, or `_`.
     """
     check_verb(ref, "reply")
     if submission is not None and not SUBMISSION_RE.fullmatch(submission):
@@ -255,13 +266,15 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submis
         raise Refused("bad_body", "the reply is empty")
     if len(text) > MAX_OPERATOR:
         raise Refused("bad_body", f"the reply is {len(text)} characters; the most is {MAX_OPERATOR}")
+    if ref.kind == CHORE and ref.id not in chores:
+        raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
     with db.transaction(conn):
-        if db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
+        if ref.kind == TICKET and db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
             raise Refused(
                 "unknown",
                 f"canopy has no record of {ref}: start it, or label it and let a tick see it, before replying",
             )
-        question = latest_question(conn, ref.id)
+        question = latest_question(conn, ref.id) if ref.kind == TICKET else None
         answers = int(question["id"]) if question is not None else None
         if submission is None:
             stored = hashlib.sha256(f"{ref.kind}\0{ref.id}\0{answers or ''}\0{text}".encode()).hexdigest()[:32]
@@ -270,7 +283,7 @@ def reply(conn: sqlite3.Connection, ref: Ref, body: str, *, channel: str, submis
         before = db.latest_message_id(conn)
         message_id = db.insert_message(
             conn,
-            TICKET,
+            ref.kind,
             ref.id,
             source="operator",
             kind="reply",
@@ -580,6 +593,14 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     """
     rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES, after=db.forgotten_message_id(conn, key))
     return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
+
+
+def chore_notes(conn: sqlite3.Connection, name: str) -> list[dict[str, object]]:
+    """Return what a chore's prompt carries of the operator's notes to it: the latest, oldest first (DESIGN §19)."""
+    return [
+        {"id": m["id"], "at": m["at"], "note": printable(str(m["body"]))}
+        for m in db.messages_of(conn, CHORE, name, CHORE_NOTES)
+    ]
 
 
 def _bounded(blocks: list[str], empty: str) -> str:

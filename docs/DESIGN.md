@@ -1467,7 +1467,7 @@ TRUST_MODEL items this section relies on, each approved with the milestone that 
 
 ## 19. Chores
 
-Rationale in D034, D063, and D099.
+Rationale in D034, D063, D099, and D100.
 
 A chore is recurring work the operator defines and the overseer delegates: an agent run about no queue ticket, with no
 worktree and no push, that reports findings to the attention list (for example, a build-health check over CI, other
@@ -1584,7 +1584,7 @@ with the timeout, records the agent's pid, parses the result, and closes the row
 `<state_dir>/chores/<run_id>.log`. No lease, branch, or push, so nothing to return or verify.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
-run id, the overseer's context, the latest ended run (id, status, end time, summary), the latest `ok` run's open
+run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the latest `ok` run's open
 findings (id, title, link), so ids can be reused, and the result contract. It is written to
 `<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
 
@@ -1604,6 +1604,20 @@ Result contract, one JSON line, last line of the agent's text (§13):
 `chore_runs` status is `running`, `ok`, `failed`, `unknown`, `timeout`, or `crashed`. Reconcile (§6 step 3) treats
 them like worker runs: a dead `_chore` pid gets the agent's process group killed and the run `crashed`. Chore runs do
 not count against `max_workers`.
+
+### Notes from the operator
+
+`canopy reply chore:<NAME> '<text>'` records a note to a chore: a message on its subject (§22), from the operator,
+refused `unknown` for a chore not defined for this workspace (D100). It is how the operator answers a finding without
+editing the prompt file: "leave out flaky/checkout/test_retry until 2026-10-15, the fix is merging".
+
+- Every later run's `## Run` section, a try's included, carries the latest 10 notes as `operator_notes` (id, time,
+  text), oldest first. The prompt tells the agent to follow them as it follows the operator's file, a later note
+  winning over an earlier one. They are the operator's words, so they are instructions; the overseer's context is not.
+- Nothing clears a note; it falls out after 10 newer ones. A note saying "until" a date is the agent's to compare
+  against the run's `now`. To take one back, write a newer note.
+- Notes reach neither the overseer's state block nor the attention list, and do not wake the loop.
+- `canopy show chore:<NAME>` lists them after the open findings.
 
 ### Trying a chore
 
@@ -2312,7 +2326,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
 | `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
-| `chore:NAME` | a chore (§19) | `show`, until a chore has a conversation |
+| `chore:NAME` | a chore (§19) | `reply` (its notes), `show` |
 | `run:ID` | a run | `show` |
 
 A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
@@ -2360,8 +2374,8 @@ place, public or private (D081).
 
 ### Waking the loop
 
-During the wait (§6, the loop), each step checks the journal for an operator message recorded since the last tick
-began. One ends the wait and runs the next tick, at most once a minute. Every channel wakes it the same way, whether
+During the wait (§6, the loop), each step checks the journal for an operator message to a ticket recorded since the
+last tick began. A note to a chore (§19) does not wake it: the chore's next run reads it. One ends the wait and runs the next tick, at most once a minute. Every channel wakes it the same way, whether
 the message came from another process (`canopy reply`) or the loop's own server thread (D073). Capacity, attempt
 limits, and cooldowns hold as for any tick.
 

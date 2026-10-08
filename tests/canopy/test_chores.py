@@ -488,3 +488,35 @@ def test_try_refuses_an_unknown_chore_and_inside_canopy_runs(
     monkeypatch.setenv("CANOPY_RUN_ID", "chore-3")
     assert main(["chore", "try", "build-health"]) == 1
     assert "chore try refused (inside_run)" in capsys.readouterr().err
+
+
+def test_a_note_to_a_chore_reaches_its_next_runs(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    note = f"Leave out {FINDING['id']} until 2026-10-15: the fix is merging."
+    assert main(["reply", "chore:build-health", note]) == 0
+    assert "Recorded message 1 on chore:build-health." in capsys.readouterr().out
+    assert main(["reply", "chore:build-health", note]) == 0
+    assert "nothing new recorded" in capsys.readouterr().out
+    assert main(["reply", "chore:nope", "x"]) == 1
+    assert "no chore 'nope' is defined for this workspace" in capsys.readouterr().err
+
+    conn = journal(canopy_env)
+    # A note waits for the chore's next run: it does not wake a waiting loop, which wakes for tickets' messages.
+    assert db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) == 0
+    run_inline(conn, monkeypatch, OK)
+    run = run_section(json.loads(agent_log.read_text().splitlines()[-1])["argv"][3])
+    [carried] = run["operator_notes"]
+    assert (carried["id"], carried["note"]) == (1, note)
+    assert main(["chore", "try", "build-health"]) == 0
+    assert run_section(json.loads(agent_log.read_text().splitlines()[-1])["argv"][3])["operator_notes"] == [carried]
+
+    capsys.readouterr()
+    assert main(["show", "chore:build-health"]) == 0
+    shown = capsys.readouterr().out
+    assert "Your notes its next run reads (1):" in shown
+    assert note in shown

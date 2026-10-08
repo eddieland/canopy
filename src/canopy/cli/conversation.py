@@ -114,20 +114,23 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a ticket, with TEXT or, without it, stdin. The next tick reads it; a waiting loop wakes.
+    """Answer a ticket, or note something to a chore, with TEXT or, without it, stdin.
 
-    On a public ticket it is your word to the loop, read as an authorized reply is, and how you say what to do about an
-    untrusted reviewer's comments (`untrusted_review`). It never reaches the ticket.
+    On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
+    an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
+    never reaches the ticket. On `chore:NAME` it is a note the chore's next runs read, such as a finding to leave out
+    until a date; the loop does not wake for it.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
     body = text if text is not None else sys.stdin.read()
     ctx = open_context(click_ctx)
     try:
-        replied = conversation.reply(ctx.conn, subject, body, channel=CLI)
+        chores = chore_view.defined(ctx.config, ctx.workspace)
+        replied = conversation.reply(ctx.conn, subject, body, channel=CLI, chores=chores)
     except conversation.Refused as r:
         raise CliError(f"reply refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info("operator replied", extra={"ticket": subject.id, "message_id": replied.message_id})
+    logs.for_tick(None).info("operator replied", extra={"subject": str(subject), "message_id": replied.message_id})
     answered = f", answering message {replied.answers}" if replied.answers is not None else ""
     if replied.new:
         click.echo(f"Recorded message {replied.message_id} on {subject}{answered}.")
@@ -310,3 +313,8 @@ def _show_chore(ctx: Context, name: str) -> None:
         )
     if not findings:
         click.echo("  none")
+    notes = db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)
+    if notes:
+        click.echo(f"\nYour notes its next run reads ({len(notes)}):")
+    for m in notes:
+        _echo_message(m)

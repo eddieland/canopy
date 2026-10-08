@@ -496,3 +496,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: clock times need no model, and outside them `due` is false, so the overseer records no `wait` every tick.
 - Rejected: an overnight window (`22:00-06:00`), until someone needs one; cron syntax (a schedule, where
   `every_minutes` is a floor).
+
+## D100. The operator's notes to a chore are messages on its subject, carried into its next prompts
+
+- `canopy reply chore:NAME`; the latest 10 go into every run's `## Run` section, as instructions.
+- Rejected: editing the prompt file (a note is about this week's findings); clearing notes after a run (a note "until
+  the 15th" must outlast one); a dismiss per finding (the agent, not the harness, knows whether a finding is the same).
+- Revisit: if operators need a note to end without writing another.
