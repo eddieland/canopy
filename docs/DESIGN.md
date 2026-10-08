@@ -1502,6 +1502,8 @@ workspaces = ["acme"]     # optional; default every workspace
 
 - A chore name matches `[a-z][a-z0-9-]*`.
 - `prompt` (required) is the operator's file, absolute or starting with `~` like every `paths.*` value.
+  `examples/chores/build-health.md` is one to start from: it checks CI through the GitHub MCP server's read tools, so
+  it runs under the shipped `canopy-chore`.
 - `cmd` follows §12 (`{prompt}` exactly once, no shell); default `runtime.chore_cmd`. A chore using the operator's own
   tools needs its own agent definition (below), so `cmd` is usually set.
 - `every_minutes`, at least 15, is the shortest time between two run starts. A guard, not a schedule.
