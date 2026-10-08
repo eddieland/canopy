@@ -24,8 +24,9 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict)
 	uv run ruff check .
 	uv run pyrefly check
 
-test: ## Run all tests
-	uv run pytest -q
+# One worker per CPU (D090). For one test or a debugger, run `uv run pytest` without -n: it stays serial.
+test: ## Run all tests, in parallel
+	uv run pytest -q -n auto
 
 ##@ Web UI (ui/; needs Node 22.12+, D079)
 
