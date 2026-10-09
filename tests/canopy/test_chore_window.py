@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from canopy.chores import view, window
 from canopy.cli.main import main
+from canopy.core import chore_view as view
+from canopy.core import chore_window as window
 from canopy.core import db
 from canopy.core.config import CHORE_DAYS, Chore, load
 from canopy.core.workspace import of_one

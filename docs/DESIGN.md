@@ -120,13 +120,10 @@ canopy (harness, Python)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
-  chores/          the operator's recurring chores (§19)
-    view.py        each configured chore: due time, runs, open findings; chore_failed items; its state block part
+  chores/          the operator's recurring chores (§19); what the web UI reads of them is in core (chore_*.py)
     start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
     execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
     trial.py       canopy chore try: one foreground run outside any tick that records nothing
-    window.py      a chore's days and hours: whether a run may start now, and when it next may
-    result.py      the result contract, validated with pydantic
     reconcile.py   chore runs whose _chore is gone marked crashed
 
   notify/          notification sinks (§20)
@@ -165,6 +162,10 @@ canopy (harness, Python)
 
   core/            what every feature shares
     agent_output.py an agent's stdout: its text, and OpenCode's JSON events' session id and cost (§13)
+    chore_view.py  each configured chore: due time, runs, open findings; chore_failed items; its state block part
+                   (§19), read by the loop, the CLI, chores, and the web UI
+    chore_window.py a chore's days and hours: whether a run may start now, and when it next may
+    chore_result.py a chore's result contract, validated with pydantic
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line

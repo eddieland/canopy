@@ -21,8 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.chores import view as chore_view
-from canopy.core import conversation, db
+from canopy.core import chore_view, conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.infra import logs
 from canopy.notify import deliver
