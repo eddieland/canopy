@@ -693,6 +693,30 @@ why a ticket was or was not dispatched in a given tick, and it matches `canopy d
 
 Status: not started.
 
+## M25. Flaky CI triage
+
+REQUIREMENTS R14, DESIGN §23, D101, D102. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
+reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
+
+- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
+- Config: `policy.max_triage_ci_attempts` (default 0), `runtime.triage_cmd`, `runtime.triage_timeout_minutes`,
+  `runtime.triage_skill`.
+- `canopy dispatch --kind triage-ci`: `triage_off`, one unit, no slot. `_run` runs it in the unit's primary clone after
+  the shadowing check, validates the triage result, and records its report.
+- `agents/canopy-ci-triage.md`. Worker definitions deny `gh run rerun`, `gh run cancel`, `gh run delete`, and
+  `gh workflow`; `test_definitions.py` checks both.
+- `prompts/ci-triage.md` and its private variant; the overseer prompt's triage rows and the state block's fields.
+- §7, §8, §12, and §13 say what §23 changes in them, and §23 loses its "designed, not built" line.
+- Tests with the fakes: `triage_off` under the default config; a dry-run tick that triages a new failure; a triage
+  run's cwd is the primary clone and it leases nothing; a `flaky` result without reruns recorded `failed`; a `real`
+  verdict followed by `fix-ci`; the limit refusing the next triage; `fix-ci` attempts not counting triages.
+
+Accept: the tests above pass. Live: on a PR whose check fails for a reason the change did not cause, the loop reruns it
+once and the PR goes green with no `fix-ci` run; on a PR with a real failure, the triage reports `real` and the next
+tick's `fix-ci` fixes it; a repository skill that names a flaky test is followed.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
