@@ -354,7 +354,7 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert isinstance(spend, SpendUpdated)
     assert isinstance(tick, TickUpdated)
     assert tick.tick is not None
-    assert (tick.tick.id, tick.tick.status, tick.acknowledged) == (1, "ok", 8)
+    assert (tick.tick.id, tick.tick.status, tick.acknowledged) == (2, "ok", 8)
     # The mock journal moves the running run's cost: only the runs list and the spend are sent again.
     assert isinstance(changed, RunsUpdated)
     before = next(r for r in runs.runs if r.id == mock.LIVE_RUN)
@@ -431,6 +431,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "Tick",
         "ChoreSummary",
         "ChoreDetail",
+        "TickDetail",
+        "Decision",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -448,6 +450,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/chores",
         "/api/chores/{name}",
         "/api/chores/{name}/replies",
+        "/api/ticks",
+        "/api/ticks/{tick_id}",
         "/api/worktrees",
         "/api/events",
     }

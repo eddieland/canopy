@@ -181,8 +181,61 @@ test('the worktrees page reads the pools again every 30 seconds, and only while 
 test('the header names the latest tick and how long ago it ended', async ({ page }) => {
     await page.goto('runs')
     await settled(page)
-    await expect(page.getByTestId('last-tick')).toHaveText(/^tick 1 · \d+[a-z]+ ago$/)
+    await expect(page.getByTestId('last-tick')).toHaveText(/^tick 2 · \d+[a-z]+ ago$/)
     await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
+})
+
+test("the header's tick opens its decisions, each about its subject, the overseer's text shown as text", async ({
+    page,
+}) => {
+    await page.goto('runs')
+    await settled(page)
+    await page.getByTestId('last-tick').getByRole('link', { name: 'tick 2' }).click()
+    await expect(page).toHaveURL(/\/ticks\/2$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick 2')
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
+        'data-status',
+        'active',
+    )
+    const decisions = page.getByTestId('decisions').locator('li')
+    await expect(decisions).toHaveCount(5)
+    await expect(decisions.nth(0)).toContainText('awaiting the operator')
+    await expect(decisions.nth(1)).toContainText('refused:running')
+    // The rationale's markup arrives as the characters, on one line, as `canopy decisions` prints it.
+    await expect(decisions.nth(2)).toContainText('The ticket says <b>keep</b> the old route: left for the worker.')
+    await expect(decisions.nth(2).locator('b')).toHaveCount(0)
+    await expect(decisions.nth(3)).toContainText('ABC-099 (web)')
+    await expect(decisions.nth(4)).toContainText('github.com/acme/api/pull/12')
+
+    await decisions.nth(0).getByRole('link', { name: 'ABC-102' }).click()
+    await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
+})
+
+test('the ticks page lists the latest ticks, and a ticket page why the loop did or did not work it', async ({
+    page,
+}) => {
+    await page.goto('ticks')
+    await settled(page)
+    await expect(page.getByTestId('ticks').locator('li')).toHaveCount(2)
+    await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('5 decisions')
+    await expect(page.getByTestId('tick-1')).toContainText('dispatched 2, waiting on 1')
+
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const decisions = page.getByTestId('ticket-decisions').getByTestId('decisions').locator('li')
+    await expect(decisions).toHaveCount(2)
+    await expect(decisions.nth(0)).toContainText('tick 2')
+    await expect(decisions.nth(1)).toContainText('dispatch:implement')
+    await decisions.nth(1).getByRole('link', { name: 'tick 1' }).click()
+    await expect(page).toHaveURL(/\/ticks\/1$/)
+    await expect(page.getByTestId('decisions')).toContainText('chore:deps')
+})
+
+test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {
+    await page.goto('ticks/99')
+    await expect(page.getByText('no tick 99')).toBeVisible()
+    await page.goto('ticks/two')
+    await expect(page.getByText("not a tick: a tick's id is a positive number")).toBeVisible()
 })
 
 test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {

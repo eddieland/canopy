@@ -740,7 +740,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it dispatched records its
   own. `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its
   decisions; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a
-  dry run's plan. A tick that cannot take the lock writes no row.
+  dry run's plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a
+  ticket's page the latest decisions about it across ticks (§22). A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
@@ -2159,7 +2160,7 @@ runs the PR's code).
 ## 22. Conversations
 
 Private tickets and the journal's conversation (ROADMAP M18), tracker comments in the journal (M19), the web UI's
-pages and actions (M20), and its chores (M23) are built. Rationale in D072 to D076 and D080 to D082.
+pages and actions (M20), its chores (M23), and its ticks (M24) are built. Rationale in D072 to D076 and D080 to D082.
 
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
@@ -2435,9 +2436,10 @@ Served by `canopy loop` from a thread (D073):
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   the list, and the last 24 hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
-  pool's slots, below), tickets, each with its conversation, and chores (below). Actions: the CLI's verbs, reply,
-  start, and stop (with or without `now`), and a note to a chore. OpenCode's session attach (M15) is not in the UI:
-  the runs page shows each run's session id, and attach joins once M15 runs workers against OpenCode's server.
+  pool's slots, below), tickets, each with its conversation and the decisions about it, chores (below), and ticks
+  (below). Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a note to a chore.
+  OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and attach joins once
+  M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -2480,9 +2482,11 @@ The API, under `{base}/api`:
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
+| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
+| `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /spend` | what the last 24 hours cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
-| `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
+| `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
 | `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
@@ -2509,7 +2513,9 @@ spend, and the latest tick again, and sends each that changed, whole: `attention
 `tick.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with every list,
 the spend, and the latest tick. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
-newest note, so a note changes it. The journal has
+newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
+sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,
+each only if a page shows it. The journal has
 no notifications, so a once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser
 polls.
 
@@ -2533,6 +2539,23 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   `chore_failed`, opens the chore's notes and the note form beside the list, as a ticket's opens its conversation. A
   note no run of the chore has started since is marked as waiting for its next run: notes wake nothing and no tick
   reads them (§19), so a tick's acknowledgement says nothing about them.
+
+The ticks pages (M24): the `decisions` table is the overseer's reasons for what the loop did and the evaluation corpus
+for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
+
+- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's
+  session and cost and how many decisions it recorded. `GET /ticks/{id}` is one tick and its decisions in the order
+  they were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
+- A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
+  (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick; with its
+  ticket, repository, chore, and PR apart, and its action and rationale.
+- A rationale is the overseer's text: untrusted, rendered as text, its control characters dropped and its whitespace
+  collapsed to one line as `canopy decisions` prints it. It was cut at 2000 characters when recorded (§6).
+- A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
+- The tick's page names where the overseer's output is, `<state_dir>/ticks/<id>.log`, when the file exists, and does
+  not serve it (D104): it is agent output from a file, unbounded and unchecked, where everything the UI shows comes from
+  the journal.
+- The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
 
 The worktrees page (taken on request, 2026-10-08; D090): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
