@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import agent_output, contract, conversation, db, definitions, treehouse
+from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, treehouse
 from canopy.core.config import render_command, setup_words
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -37,8 +37,6 @@ MAX_TEXT = 2000
 MAX_CHILD_KEY = 100
 MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
-# Never let git wait for credentials on a terminal nobody is watching.
-_GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
 # The repository whose slot `setup_cmd` runs in, by its name in the map (DESIGN §8).
 SETUP_REPO_ENV = "CANOPY_REPO"
 
@@ -186,10 +184,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             # From here on a signal is ignored: returning the slots and closing the row must not be interrupted.
             stop.armed = False
-            if len(slots) > 1:
-                _remove_desk(ctx, str(run["ticket_key"]), log)
-            for slot in slots:
-                _return_slot(ctx, run, slot, log)
+            _release(ctx, run, slots, log)
             _record_prs(ctx, run, outcome)
             stored = outcome.result_json()
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored):
@@ -200,7 +195,11 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
 
 @dataclass(frozen=True)
 class _Slot:
-    """One of a run's slots: the repository it is in, the worktree, its lease, and git in it."""
+    """One of a run's slots: the repository it is in, the worktree, its lease, git in it, and its `.git` link.
+
+    `link` is what the worktree's `.git` file held when the run started, before any git step, or None if it is not a
+    file (DESIGN §8).
+    """
 
     repo: str
     path: Path
@@ -208,6 +207,11 @@ class _Slot:
     lease_holder: str
     base: str
     git: _Git
+    link: bytes | None
+
+    def link_moved(self) -> bool:
+        """Whether the `.git` file no longer holds what it did when the run started."""
+        return self.link is not None and hostgit.read_link(self.path) != self.link
 
     @classmethod
     def of(cls, ctx: Context, row: sqlite3.Row) -> _Slot:
@@ -223,6 +227,7 @@ class _Slot:
             str(row["lease_holder"]),
             str(row["base_branch"]),
             _Git(ctx.runner, path, name),
+            hostgit.read_link(path),
         )
 
 
@@ -341,6 +346,14 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     else:
         status, note = parsed.status, ""
 
+    moved = [slot for slot in slots if slot.link_moved()]
+    if moved:
+        # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
+        notes = [
+            f"{s.git.where}the worker rewrote {s.path / hostgit.LINK}; nothing was checked or pushed" for s in moved
+        ]
+        return Outcome("crashed", parsed, "; ".join(notes))
+
     # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
     unpushed = [
         found for slot, start in zip(slots, starts, strict=True) if (found := _ensure_pushed(slot, branch, start, log))
@@ -437,6 +450,33 @@ def _remote_head(git: _Git, branch: str) -> str:
     return listed.split()[0] if listed else ""
 
 
+def _release(ctx: Context, run: sqlite3.Row, slots: list[_Slot], log: logs.TickAdapter) -> None:
+    """Remove a joint run's desk, put back any `.git` link the run changed, and return the slots."""
+    if len(slots) > 1:
+        _remove_desk(ctx, str(run["ticket_key"]), log)
+    for slot in slots:
+        if _restore_link(slot, log):
+            _return_slot(ctx, run, slot, log)
+
+
+def _restore_link(slot: _Slot, log: logs.TickAdapter) -> bool:
+    """Put back the slot's `.git` file if anything in the run changed it. Returns whether the slot may be returned.
+
+    treehouse runs git in a slot it takes back, so a slot whose link cannot be put back is not returned: the next tick's
+    reconcile tries again.
+    """
+    if slot.link is None or not slot.link_moved():
+        return True
+    fields = {"slot": str(slot.path), "repo": slot.repo}
+    try:
+        hostgit.restore_link(slot.path, slot.link)
+    except OSError as e:
+        log.error("slot's .git link changed and could not be put back; not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
+        return False
+    log.warning("slot's .git link changed during the run; put back", extra=fields)
+    return True
+
+
 def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
     fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
     try:
@@ -485,7 +525,7 @@ class _Git:
 
     def result(self, *args: str) -> procs.Result:
         try:
-            result = self.runner.run(["git", *args], cwd=self.slot, env=_GIT_ENV, timeout=_GIT_TIMEOUT_SECONDS)
+            result = self.runner.run(hostgit.argv(*args), cwd=self.slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
         except procs.ProcError as e:
             raise _SetupError(f"{self.where}git {args[0]}: {e}") from e
         if result.timed_out:

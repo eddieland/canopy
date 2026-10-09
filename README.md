@@ -104,27 +104,11 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
 
-## Several repositories
+## Growing your setup
 
-When one queue's tickets land in several repositories, make a workspace instead of running canopy in each: in an empty
-directory, `canopy init --workspace --provider jira https://github.com/acme/api.git https://github.com/acme/web.git`
-lists each repository in `canopy-workspace.toml` and clones it under `repos/`. Then write a one-line summary for each
-there and describe them in `MAP.md`, for the overseer. `canopy workspace add URL...` adds more later. To size each
-repository's worktree pool, set `capacity.slots_per_repo` (and per repository, `[capacity.repo_slots]`) in your user
-config, before init to have init make them. Sync makes the workspace match what is declared: it clones what the map
-lists, makes or removes idle slots, and removes a clone the map no longer lists when nothing in it would be lost;
-`--dry-run` shows what it would do. Run `canopy loop` from the workspace. The overseer picks the repositories each
-ticket needs. Most tickets change one; a change that cannot land in parts is worked jointly, one worker opening a linked
-PR in each repository; and one that builds on another repository's merged PR is worked there next. To have a ticket
-split into one ticket per repository instead, comment on it asking for a split: a worker creates the children unlabeled,
-and you label each one you want worked. The pools, journal, and attention list live inside the workspace. See
-`examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
-
-## Bazel and other large repositories
-
-Each run works in a pooled worktree that keeps its path between runs, so build outputs stay warm. To share Bazel's
-caches between worktrees, copy your gitignored local files into each one, and run a setup command on the run's branch
-before the worker starts, follow [docs/BAZEL.md](docs/BAZEL.md). Most of it applies to any large repository.
+The install steps set canopy up for one repository. [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) goes on from
+there, one stage at a time: slots that need local files or an install, a workspace with a pool of its own, several
+repositories sharing one queue, and a large Bazel repository with a pool of warm slots.
 
 ## Troubleshooting
 
