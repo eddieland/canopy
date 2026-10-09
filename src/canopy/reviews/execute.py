@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, conversation, db, definitions, outbox, treehouse
+from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, treehouse
 from canopy.core.config import render_command
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import result, start
@@ -27,7 +27,6 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 _GIT_TIMEOUT_SECONDS = 300
-_GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
 
 
 class ReviewError(Exception):
@@ -186,7 +185,7 @@ def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
 
 def _git(runner: procs.Runner, slot: Path, *args: str) -> str:
     try:
-        done = runner.run(["git", *args], cwd=slot, env=_GIT_ENV, timeout=_GIT_TIMEOUT_SECONDS)
+        done = runner.run(hostgit.argv(*args), cwd=slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
     except procs.ProcError as e:
         raise _SetupError(f"git {args[0]}: {e}") from e
     if not done.ok:

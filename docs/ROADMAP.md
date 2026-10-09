@@ -749,7 +749,9 @@ Status: not started.
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
-  team adopts it. Proposal: `HOST_ISOLATION.md`.
+  team adopts it. Proposal: `HOST_ISOLATION.md`. Its §5 items 1 and 2, which hold without a sandbox, are in (D107,
+  D108), and its claims about `srt` were checked against the source. Left for the milestone: §5 item 5, the
+  `canopy-sandbox` example and policy template, the canary (§6), and the TRUST_MODEL T4 and T6 changes.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,

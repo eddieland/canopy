@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import definitions, treehouse, workspace
+from canopy.core import definitions, hostgit, treehouse, workspace
 from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
 from canopy.infra import procs
 from canopy.setup import init
@@ -30,9 +30,6 @@ GITIGNORE = ".gitignore"
 IGNORED = tuple(f"/{d}/" for d in (workspace.REPOS_DIR, workspace.POOLS_DIR, workspace.DESKS_DIR, WORKSPACE_STATE_DIR))
 _CLONE_TIMEOUT_SECONDS = 1800
 _GIT_TIMEOUT_SECONDS = 30
-# Never let git wait for credentials on a terminal it cannot show, and never run a remote helper command from a URL.
-_GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
-_NO_EXT = ("-c", "protocol.ext.allow=never")
 
 MAP_TEXT = """\
 # Workspace map
@@ -218,9 +215,9 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -
     if repo.path.is_symlink() or (repo.path.exists() and (not repo.path.is_dir() or any(repo.path.iterdir()))):
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
-    args = ["git", *_NO_EXT, "clone", "--quiet", "--", str(repo.url), str(repo.path)]
+    args = hostgit.argv("clone", "--quiet", "--", str(repo.url), str(repo.path))
     try:
-        result = runner.run(args, cwd=ws.root, env=_GIT_ENV, timeout=_CLONE_TIMEOUT_SECONDS)
+        result = runner.run(args, cwd=ws.root, env=hostgit.ENV, timeout=_CLONE_TIMEOUT_SECONDS)
     except procs.ProcError as e:
         return Checked(repo, "failed", str(e))
     if not result.ok:
@@ -234,7 +231,7 @@ def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
     """Report whether an existing clone's `origin` is the map's URL. Nothing is changed either way."""
     try:
         result = runner.run(
-            ["git", "remote", "get-url", "origin"], cwd=repo.path, env=_GIT_ENV, timeout=_GIT_TIMEOUT_SECONDS
+            hostgit.argv("remote", "get-url", "origin"), cwd=repo.path, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS
         )
     except procs.ProcError as e:
         return Checked(repo, "failed", str(e))
@@ -444,22 +441,22 @@ def _unsaved(runner: procs.Runner, path: Path) -> str | None:
     """Say what in the clone at `path` would be lost by removing it, or None if nothing would."""
     checks = (
         # Ignored files too: a primary clone holds local config that `.worktreeinclude` seeds into slots (DESIGN §9).
-        (["git", "status", "--porcelain", "--ignored"], "it has uncommitted, untracked, or ignored files"),
-        (["git", "stash", "list"], "it has stashed changes"),
+        (("status", "--porcelain", "--ignored"), "it has uncommitted, untracked, or ignored files"),
+        (("stash", "list"), "it has stashed changes"),
         # Commits that no remote-tracking ref has, on a branch, a tag, or a detached HEAD: never pushed, as far as this
         # clone knows.
         (
-            ["git", "rev-list", "--max-count=1", "HEAD", "--branches", "--tags", "--not", "--remotes"],
+            ("rev-list", "--max-count=1", "HEAD", "--branches", "--tags", "--not", "--remotes"),
             "it has commits no remote has",
         ),
     )
     for args, reason in checks:
         try:
-            result = runner.run(args, cwd=path, env=_GIT_ENV, timeout=_GIT_TIMEOUT_SECONDS)
+            result = runner.run(hostgit.argv(*args), cwd=path, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
         except procs.ProcError as e:
-            return f"{' '.join(args[:2])} failed: {e}"
+            return f"git {args[0]} failed: {e}"
         if not result.ok:
-            return f"{' '.join(args[:2])} exited {result.returncode}"
+            return f"git {args[0]} exited {result.returncode}"
         if result.stdout.strip():
             return reason
     return None
