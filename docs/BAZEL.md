@@ -2,7 +2,8 @@
 
 How to set canopy up for a large Bazel monorepo, so each run starts in a slot that builds fast and has what the worker
 needs. Everything here is your own config, outside the repository: canopy knows nothing about Bazel, and none of this
-is required to run it. For why it works this way, see DESIGN §9 and §18.
+is required to run it. For why it works this way, see DESIGN §9 and §18. To build up to a workspace from one
+repository first, see [GETTING_STARTED.md](GETTING_STARTED.md).
 
 ## What happens to a slot during a run
 

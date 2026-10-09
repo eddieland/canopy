@@ -60,6 +60,20 @@ def test_timeout_kills_and_keeps_partial_output(agent_log: Path, monkeypatch: py
     assert "nothing to do" not in result.stdout
 
 
+def test_timeout_leaves_no_descendant_behind(tmp_path: Path) -> None:
+    """A wrapper's children die with it: what a sandbox prefix starts is in the group a timeout kills."""
+    pidfile = tmp_path / "pid"
+    # The grandchild's output is not the pipe's, so a survivor would show up here rather than hang the run.
+    script = f"sleep 30 > /dev/null 2>&1 & echo $! > {pidfile}; wait"
+    result = SubprocessRunner().run(["sh", "-c", script], timeout=0.5)
+    assert result.timed_out
+    grandchild = int(pidfile.read_text())
+    deadline = time.monotonic() + 5
+    while procs.alive(grandchild) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not procs.alive(grandchild)
+
+
 def test_stdin_is_passed(fakes_on_path: Path, tmp_path: Path) -> None:
     script = tmp_path / "echo-stdin"
     script.write_text("#!/bin/sh\ncat\n")

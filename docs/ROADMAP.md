@@ -748,7 +748,7 @@ Status: not started.
 
 ## M26. Notifications on another machine
 
-REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D107. Needs M10, and M20 for HTTP. Asked for by the operator
+REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D109. Needs M10, and M20 for HTTP. Asked for by the operator
 (2026-10-09): canopy runs on a development machine, and the operator wants its desktop notifications on the Mac they
 sit at, over SSH or HTTP.
 
@@ -767,14 +767,16 @@ Accept: the tests above pass. Live: with `canopy loop` on the development machin
 over SSH and then over HTTP through an SSH forward, a real attention item and a blocked worker's question each show as
 one macOS notification; the Mac asleep for an hour shows what was kept while it slept when it wakes.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D107 are in. The TRUST_MODEL
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D109 are in. The TRUST_MODEL
 T2, T6, and T8 changes need human approval in their PR. Waiting on the operator: the live run on their Mac. Taken on
 request while earlier milestones wait on their live runs.
 
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
-  team adopts it. Proposal: `HOST_ISOLATION.md`.
+  team adopts it. Proposal: `HOST_ISOLATION.md`. Its §5 items 1 and 2, which hold without a sandbox, are in (D107,
+  D108), and its claims about `srt` were checked against the source. Left for the milestone: §5 item 5, the
+  `canopy-sandbox` example and policy template, the canary (§6), and the TRUST_MODEL T4 and T6 changes.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,

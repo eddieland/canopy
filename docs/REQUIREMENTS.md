@@ -198,7 +198,7 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
   pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
   D064). No wrapper script of the operator's is needed. On another machine, such as the Mac the operator sits at
-  while canopy runs on a development machine: a mailbox sink and `canopy-notify-relay`, over SSH or HTTP (M26, D107).
+  while canopy runs on a development machine: a mailbox sink and `canopy-notify-relay`, over SSH or HTTP (M26, D109).
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
   request: an authorized replier's comment asks for the split (D061). The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
