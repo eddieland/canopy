@@ -99,7 +99,7 @@ canopy (harness, Python)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
-    notify.py      notify test
+    notify.py      notify test, notify read (a mailbox sink's messages, for the relay)
     reviews.py     review run, review wait, _review
 
   loop/            the tick (§6), which drives the features below
@@ -143,7 +143,8 @@ canopy (harness, Python)
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
-    api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, and the operator's verbs
+    api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, the operator's verbs, and a
+                   mailbox sink's messages for the relay (§20)
     auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
     secret.py      the listener secret's file: read with its checks, written by `canopy secret`
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
@@ -172,6 +173,7 @@ canopy (harness, Python)
     db.py          SQLite journal, migrations
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
+    mailbox.py     mailbox sinks' kept messages: kept with the delivery, read by notify read and the web UI (§20)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts
@@ -197,8 +199,9 @@ agents/          OpenCode agent definitions: canopy-overseer, canopy-worker, can
 skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
-packages/        uv workspace members: separate programs canopy ships, run only as commands
+packages/        uv workspace members: separate programs canopy ships, which canopy itself never imports
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
+  canopy-notify-relay/  the relay (§20), run on the operator's other machine; stdlib only, imports nothing from canopy
 scripts/         build-binary.sh: the single executable a release ships (D067)
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
@@ -207,14 +210,14 @@ hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist
 `prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
 them, with `migrations/`, under `canopy/_data/` (D022).
 
-A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack, and the
-dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the operator's cache once, so
-`resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch, chores, and reviews need to
-start `_run`, `_chore`, and `_review` via `python -m canopy`. Its run name picks the command: `canopy`, or a link named
-`canopy-notify-desktop` or `canopy-notify-slack`. `make binary` builds it for the current platform; the release
-workflow builds each platform's, runs the install check on each, and attaches them to the tag's release. The version
-is the tag's (D085): pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one
-and its commit.
+A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack,
+canopy-notify-relay, and the dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the
+operator's cache once, so `resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch,
+chores, and reviews need to start `_run`, `_chore`, and `_review` via `python -m canopy`. Its run name picks the
+command: `canopy`, or a link named `canopy-notify-desktop`, `canopy-notify-slack`, or `canopy-notify-relay`.
+`make binary` builds it for the current platform; the release workflow builds each platform's, runs the install check on
+each, and attaches them to the tag's release. The version is the tag's (D085): pushing `v0.2.0` releases 0.2.0, and a
+build between tags names its distance from the last one and its commit.
 
 Where later work goes:
 
@@ -769,6 +772,7 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   §20).
 - `notify_events`: the outbox of point events for sinks, and `notify_sinks`: each sink's cursor, last delivery, last
   digest, and failures in a row (§20).
+- `notify_mailbox`: the messages a mailbox sink kept for the relay, by sink, with when; pruned after 7 days (§20).
 - `messages`: one row per message of a subject's conversation (§22), keyed by subject kind and id; source, kind,
   channel, the run of a worker's message, the body, the message a reply answers, and an operator message's submission
   id; for a mirrored tracker comment, its comment id (unique per subject), author, time, and whether the body was cut.
@@ -1702,7 +1706,8 @@ Approved with M9:
 Rationale in D035 and D064. This generalizes `notify.cmd` (§14, D032), which stays and behaves as it did.
 
 Notifications reach the operator away from the terminal (REQUIREMENTS N2). A destination is a **sink**, a command
-that reads one message on stdin. canopy ships a desktop sink and a Slack sink; others are the operator's programs.
+that reads one message on stdin, or a mailbox that keeps it for a relay on another machine. canopy ships a desktop
+sink, a Slack sink, and the relay; others are the operator's programs.
 
 ### Sinks
 
@@ -1715,10 +1720,15 @@ digest_every_minutes = 240
 [notify.sinks.phone]
 cmd = "curl -sS --fail --data-binary @- https://ntfy.sh/my-private-topic"
 format = "text"
+
+[notify.sinks.remote]
+mailbox = true                         # no command: canopy-notify-relay collects (Mailbox sinks and the relay)
+events = ["attention", "loop", "runs"]
 ```
 
 - Sinks are user-only (§12), like every `notify.*` key (TRUST_MODEL T7).
 - A sink name matches `[a-z][a-z0-9-]*`. At most 5 sinks, since each can hold the tick lock for its timeout.
+- A sink sets `cmd` or `mailbox = true`, not both.
 - `cmd` follows `notify.cmd`'s rules (§12): split into argv, no shell, no `{prompt}`. It runs in the repository root
   with the message on stdin and a 60-second timeout. Exit 0 means delivered; anything else, timeout included, means
   retry next tick. Stdout is ignored; the tail of stderr is logged.
@@ -1771,7 +1781,8 @@ its rows go at the first publish like any removed sink's, and each named sink he
 
 1. Gather the sink's attention diff if it takes `attention`, its events after its cursor in the groups it takes, and a
    digest if one is due. If there is nothing, skip the sink, moving its cursor past events of groups it does not take.
-2. Render one message in the sink's format and run the command.
+2. Render one message in the sink's format and run the command. A mailbox sink runs nothing: step 3 keeps the
+   message in `notify_mailbox`, in the transaction that records the delivery, and it always succeeds.
 3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, set the
    digest time, and reset the failure count. Otherwise change nothing else, log `notify command failed` with the
    sink's name, and count the failure; the third in a row records `loop.sink_failing` once, in the same transaction.
@@ -1783,9 +1794,10 @@ Bounds:
   `attention.md` and `canopy status`, and count as delivered.
 - Events over 24 hours old when a sink next succeeds are counted, not listed.
 - A new sink's cursor starts at the newest event (no backlog); its first delivery lists every open attention item.
-- A removed sink loses its `notify_sinks` and `notifications` rows at the next publish. Events every sink has passed
-  are deleted after 7 days, except the newest `loop.failing` or `loop.recovered`, kept to tell a week-long streak from
-  a new one. `loop.recovered` counts every failed tick of the streak.
+- A removed sink loses its `notify_sinks`, `notifications`, and `notify_mailbox` rows at the next publish. Kept messages
+  go after 7 days, read or not. Events every sink has passed are deleted after 7 days, except the newest `loop.failing`
+  or `loop.recovered`, kept to tell a week-long streak from a new one. `loop.recovered` counts every failed tick of the
+  streak.
 - Sinks run in turn under the tick lock: each hung sink delays the next tick by up to 60 seconds.
 
 ### Digest
@@ -1861,16 +1873,65 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`.
 
-Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api
-rule (`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
-`tests/canopy/test_layers.py` fails on any import of `canopy_notify_slack` from `src/canopy`. The harness runs the
-Slack sink only as a configured command.
+Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api rule
+(`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
+`tests/canopy/test_layers.py` fails on any import of `canopy_notify_slack` or `canopy_notify_relay` from `src/canopy`.
+The harness runs the Slack sink only as a configured command.
+
+### Mailbox sinks and the relay
+
+Rationale in D102. The operator sits at a laptop and canopy runs on a development machine they reach over SSH. The
+laptop is rarely reachable from that machine and sleeps, so it pulls: canopy keeps the messages, and a program on the
+laptop collects them and shows each with a sink there.
+
+- A sink with `mailbox = true` and no `cmd` is a **mailbox**. Delivering to it keeps the rendered message in the
+  journal's `notify_mailbox` (Delivery, step 2), so it is delivered once per tick like any sink, takes the same
+  `events`, `format`, and digest, and never fails. Its messages are read, never consumed: each reader keeps its place.
+- A read returns the messages after an id, oldest first, at most 50, as `{"sink": ..., "messages": [{"id", "at",
+  "message"}]}`. With no id, a reader that has never read, it returns the newest message alone: no backlog.
+- Over SSH: `canopy notify read SINK [--after ID]` prints that object. It runs in a repository like any command,
+  refuses when `CANOPY_TICK_ID` is set, and changes nothing.
+- Over HTTP: `GET {base}/api/mailbox/{sink}?after=ID` returns the same object from the web UI's listener, behind its
+  session (§22, TRUST_MODEL T8). It reads only, so it needs no write token. A sink that is not a mailbox is a 404.
+
+`canopy-notify-relay` is its own distribution, a uv workspace member like the Slack sink: `packages/canopy-notify-relay/`,
+module `canopy_notify_relay`, stdlib only (`urllib.request`, `subprocess`, `json`), importing nothing from `canopy`. It
+installs with canopy, and the release executable runs it under a link of that name, so the laptop installs canopy as
+README step 2 says and needs nothing else. The harness never runs it.
+
+```sh
+canopy-notify-relay --ssh devbox --remote-cmd 'cd ~/src/api && ~/.local/bin/canopy notify read'
+canopy-notify-relay --url http://127.0.0.1:8765 -- canopy-notify-desktop   # with ssh -L 8765:127.0.0.1:8765 devbox
+```
+
+- `--ssh HOST` runs `ssh -o BatchMode=yes -o ConnectTimeout=20 -- HOST '<remote-cmd> SINK --after ID'`: the
+  operator's SSH keys and config are the only credential. `--remote-cmd` defaults to `canopy notify read`; a
+  non-interactive shell may need the repository and canopy's full path, as above. The last line of output is read,
+  so a startup file that prints does not break it.
+- `--url URL` signs in at `POST /api/session` with the listener secret and sends the session cookie on each read,
+  signing in again on a 401. The secret comes from a file, `--secret-file`, by default
+  `$XDG_CONFIG_HOME/canopy/relay-secret`, with the listener secret's checks (§22): the operator's, a regular file,
+  mode 600, one line of 32 to 512 characters; otherwise it exits 2. Plain HTTP to a host other than loopback is
+  warned about once (D076).
+- `--sink` names the mailbox sink, `remote` by default; it must be a sink name, so the remote command line is fixed.
+- Every `--every` seconds (60; at least 5) it reads after its place and runs the local sink command, the arguments
+  after `--` (`canopy-notify-desktop` by default), with each message on stdin, in order. Exit 0 moves its place past
+  the message; anything else stops the poll there, to try again next poll. A message older than `--max-age-hours`
+  (24) is skipped, not shown: a laptop back from a weekend shows what is current.
+- Its place is a file of its own, `--state-file`, by default under `$XDG_STATE_HOME/canopy/relay/` (or
+  `~/.local/state/canopy/relay/`), named for the sink and the host, rewritten whole on each move.
+- `--once` polls once: exit 0 when every message was passed on, 1 when reading or the local command failed. Without
+  it, the relay runs until stopped, says on stderr when it starts and stops failing, and keeps polling. Bad arguments
+  or an unusable secret file exit 2 at once. To keep it running on macOS, a LaunchAgent in the operator's login
+  session runs it; `osascript` notifications need that session.
 
 ### Commands
 
 - `canopy notify test [SINK]` sends a `test` message to every sink, or one, now, outside any tick, and prints each
-  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` is set, so the overseer cannot page.
-- `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting.
+  result. It changes no cursor or table, except that a mailbox sink keeps the message for its relay to show, and refuses
+  when `CANOPY_TICK_ID` is set, so the overseer cannot page.
+- `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting, and a
+  mailbox sink's kept messages.
 
 ### Two-way, later
 

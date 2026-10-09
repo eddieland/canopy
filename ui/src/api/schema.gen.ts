@@ -36,6 +36,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/mailbox/{sink}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Mailbox */
+        get: operations["readMailbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meta": {
         parameters: {
             query?: never;
@@ -292,6 +309,18 @@ export type components = {
             detail?: components["schemas"]["ValidationError"][];
         };
         /**
+         * KeptMessage
+         * @description One message a mailbox sink kept (DESIGN §20), rendered in its sink's format. Untrusted, as journal text is.
+         */
+        KeptMessage: {
+            /** At */
+            at: string;
+            /** Id */
+            id: number;
+            /** Message */
+            message: string;
+        };
+        /**
          * LastTick
          * @description The latest tick, or none before the first, and the newest message a tick has acknowledged.
          */
@@ -299,6 +328,16 @@ export type components = {
             /** Acknowledged */
             acknowledged: number | null;
             tick: components["schemas"]["Tick"] | null;
+        };
+        /**
+         * Mailbox
+         * @description A mailbox sink's messages after the reader's place, oldest first: what `canopy-notify-relay --url` reads.
+         */
+        Mailbox: {
+            /** Messages */
+            messages: components["schemas"]["KeptMessage"][];
+            /** Sink */
+            sink: string;
         };
         /**
          * Message
@@ -783,6 +822,46 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+        };
+    };
+    readMailbox: {
+        parameters: {
+            query?: {
+                after?: number | null;
+            };
+            header?: never;
+            path: {
+                sink: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Mailbox"];
+                };
+            };
+            /** @description No such mailbox sink. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

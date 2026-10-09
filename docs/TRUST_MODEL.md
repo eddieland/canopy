@@ -158,9 +158,11 @@ Controls:
 - Listeners follow T8. No outbound calls from the harness except through the
   configured commands. canopy ships one program that makes them, the Slack sink (DESIGN §20): it runs only as a sink
   the operator configured, reads its webhook from an operator-only file of its own, and never from canopy's config,
-  argv, journal, or logs. Lint bans network modules in the harness (`urllib.request`, `http.client`, `socket`) and
-  any import of the sink, so the process that holds the journal and enforces the guards never opens a connection or
-  reads a sink's secret.
+  argv, journal, or logs. canopy also ships the relay, `canopy-notify-relay`, which the operator runs on another
+  machine and the harness never runs: it reads a mailbox sink's messages over the operator's own SSH, or over the web
+  UI's listener with the listener secret read from an operator-only file (T8). Lint bans network modules in the harness
+  (`urllib.request`, `http.client`, `socket`) and any import of the sink or the relay, so the process that holds the
+  journal and enforces the guards never opens a connection or reads a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 
@@ -258,7 +260,9 @@ Controls:
 - Notifications carry text written by agents and org members (attention details, worker summaries and questions,
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
-  The desktop sink passes text to its tool as arguments, never as a shell command or a script.
+  The desktop sink passes text to its tool as arguments, never as a shell command or a script. A mailbox sink's
+  messages are the same fields; they leave the machine only to a reader with the operator's SSH access or listener
+  secret, and the relay passes each to its local sink on stdin, never as a command line.
 - The reviewer can write one kind of thing, a comment on a PR's conversation. Its definition denies submitting a PR
   review, pushing, writing files, labels, and edits by name.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
@@ -373,6 +377,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   no script is built from it.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   and reply to tickets, and end a stopped ticket's run, nothing else.
+- The relay (DESIGN §20) is a non-browser client: it signs in with the secret, from an operator-only file on the
+  operator's other machine checked as the loop checks its own, and reads one route, a mailbox sink's messages. It
+  writes nothing; holding the secret, it could (residual below).
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
@@ -380,7 +387,9 @@ shared machine can reach loopback, and is stopped only by the secret. A browser 
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
 cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
-the network (D076).
+the network (D076). The relay over HTTP puts the listener secret on a second machine: it is the whole operator
+credential, not a read-only one, so whoever reads that file there can steer the operator's workers. The relay over SSH
+needs no secret.
 
 ## 6. What canopy must never do
 

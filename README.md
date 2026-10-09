@@ -41,7 +41,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      eddieland/canopy --pattern 'canopy-linux-x86_64*'`), check it against its `.sha256`, and copy it to the machine
      as `~/.local/bin/canopy` (`mkdir -p ~/.local/bin` first if it is missing, and put it on `PATH` if it is not).
      Make it executable and link the sinks to it:
-     `cd ~/.local/bin && chmod +x canopy && ln -sf canopy canopy-notify-desktop && ln -sf canopy canopy-notify-slack`.
+     `cd ~/.local/bin && chmod +x canopy && for c in desktop slack relay; do ln -sf canopy canopy-notify-$c; done`.
      On macOS, a browser download needs `xattr -d com.apple.quarantine canopy` too. To upgrade, replace the file.
    - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
      HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
@@ -84,6 +84,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
+- If canopy runs on a machine you reach over SSH, see its notifications on the laptop you sit at: give it a mailbox
+  sink (`mailbox = true` in place of `cmd`) and run `canopy-notify-relay --ssh HOST` on the laptop, which shows each
+  message with `canopy-notify-desktop` there. Or `--url` through the web UI, with the listener secret in a file
+  (DESIGN §20, Mailbox sinks and the relay).
 - Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
   add `--ticket KEY` to filter. `canopy loop` prints each tick's cost as it goes.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which

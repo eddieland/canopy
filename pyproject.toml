@@ -10,6 +10,7 @@ license-files = ["LICENSE"]
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 dependencies = [
+    "canopy-notify-relay",
     "canopy-notify-slack",
     "click>=8.5.0",
     "fastapi>=0.142.4",
@@ -24,6 +25,8 @@ canopy = "canopy.cli.main:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
+# Not a sink: it runs on the operator's other machine and passes a mailbox sink's messages to one there (DESIGN §20).
+canopy-notify-relay = "canopy_notify_relay:main"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
@@ -69,6 +72,7 @@ members = ["packages/*"]
 cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.uv.sources]
+canopy-notify-relay = { workspace = true }
 canopy-notify-slack = { workspace = true }
 
 [dependency-groups]
@@ -137,6 +141,8 @@ ban-relative-imports = "all"
 "hatch_build.py" = ["S603", "TID251"]
 # The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
 "packages/canopy-notify-slack/**" = ["TID251"]
+# So is the relay, which also runs ssh and the local sink command; it runs on the operator's other machine (DESIGN §20).
+"packages/canopy-notify-relay/**" = ["TID251"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -158,7 +164,12 @@ filterwarnings = [
 preset = "strict"
 project-includes = ["src", "packages", "tests", "tests/fakes/agent", "tests/fakes/treehouse"]
 # Tests are packages under the repository root (D019) and import shared helpers from `tests.conftest`.
-search-path = ["src", "packages/canopy-notify-slack/src", "."]
+search-path = [
+    "src",
+    "packages/canopy-notify-relay/src",
+    "packages/canopy-notify-slack/src",
+    ".",
+]
 
 # Markdown: every default rule. Tables and code blocks may run past the line length: neither can be wrapped.
 [tool.rumdl]

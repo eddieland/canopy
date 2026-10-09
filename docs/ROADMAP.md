@@ -704,6 +704,31 @@ why a ticket was or was not dispatched in a given tick, and it matches `canopy d
 
 Status: not started.
 
+## M25. Notifications on another machine
+
+REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D102. Needs M10, and M20 for HTTP. Asked for by the operator
+(2026-10-09): canopy runs on a development machine, and the operator wants its desktop notifications on the Mac they
+sit at, over SSH or HTTP.
+
+- `mailbox = true` on a sink instead of `cmd`; migration `notify_mailbox`; delivery keeps the message with the
+  delivery's own transaction; kept messages pruned after 7 days and forgotten with their sink.
+- `canopy notify read SINK [--after ID]`, and `GET {base}/api/mailbox/{sink}` behind the web UI's session, giving the
+  same object. `canopy notify test` keeps its message in a mailbox, so the relay shows it.
+- `canopy-notify-relay`, a uv workspace member like the Slack sink, in the same install and the release executable:
+  `--ssh HOST` or `--url URL` with a secret file, its place in a state file, messages over a day old skipped, each
+  message handed to a local sink command, `canopy-notify-desktop` by default.
+- The TRUST_MODEL T2, T6, and T8 changes, with human approval.
+- Tests: the mailbox through ticks, `canopy notify read`, the route, and the relay over a fake `ssh` that runs the
+  remote command and against a real listener.
+
+Accept: the tests above pass. Live: with `canopy loop` on the development machine and the relay on the operator's Mac,
+over SSH and then over HTTP through an SSH forward, a real attention item and a blocked worker's question each show as
+one macOS notification; the Mac asleep for an hour shows what was kept while it slept when it wakes.
+
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D102 are in. The TRUST_MODEL
+T2, T6, and T8 changes need human approval in their PR. Waiting on the operator: the live run on their Mac. Taken on
+request while earlier milestones wait on their live runs.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second

@@ -10,18 +10,20 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from importlib.metadata import version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import conversation
+from canopy.core import conversation, mailbox
 from canopy.infra import logs
 from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
+    KeptMessage,
     LastTick,
+    Mailbox,
     Meta,
     Pool,
     RefusalResponse,
@@ -72,6 +74,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     signed_in = APIRouter(dependencies=[Depends(sessions.require)])
     _session_routes(api, sessions)
     _read_routes(signed_in, backend)
+    _mailbox_routes(signed_in, backend)
     _live_routes(signed_in, backend)
     _write_routes(signed_in, backend)
     api.include_router(signed_in)
@@ -155,6 +158,19 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
         if found is None:
             raise HTTPException(status_code=404, detail=f"canopy has no record of {ref}")
         return found
+
+
+def _mailbox_routes(api: APIRouter, backend: Backend) -> None:
+    """For `canopy-notify-relay --url`, not the page: a mailbox sink's messages, as `canopy notify read` prints them."""
+
+    @api.get("/mailbox/{sink}", operation_id="readMailbox", responses={404: {"description": "No such mailbox sink."}})
+    def read_mailbox(sink: str, after: Annotated[int | None, Query(ge=0)] = None) -> Mailbox:
+        found = backend.config.notify.all_sinks().get(sink)
+        if found is None or not found.mailbox:
+            raise HTTPException(status_code=404, detail=f"no mailbox sink named {sink!r}")
+        with backend.open() as ctx:
+            kept = mailbox.after(ctx.conn, sink, after)
+        return Mailbox(sink=sink, messages=[KeptMessage(id=m.id, at=m.at, message=m.message) for m in kept])
 
 
 def _live_routes(api: APIRouter, backend: Backend) -> None:
