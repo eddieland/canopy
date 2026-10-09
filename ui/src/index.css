@@ -148,6 +148,12 @@
     }
 }
 
+@keyframes crawl {
+    to {
+        transform: translateX(-100%);
+    }
+}
+
 @keyframes shimmer {
     from {
         background-position: 100% 0;
@@ -265,6 +271,179 @@
     }
     @media (prefers-reduced-motion: reduce) {
         display: none;
+    }
+}
+
+/*
+ * The header ticker (src/components/shell/ticker.tsx). The window clips the line and fades it out at both ends; the
+ * mask's gradient is alpha only, so its color is irrelevant. The line is padded by the window's width before its text
+ * and the gap's distance after it (`--ticker-gap` seconds at `--ticker-rate` a second), and crawls its own width, so
+ * one pass is the headline entering, leaving, and the empty gap. The component sets the duration from the line's
+ * width. It holds still under the pointer. Under reduced motion there is no padding: the headline stands in place.
+ */
+@utility ticker-window {
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, white 2rem, white calc(100% - 2rem), transparent);
+}
+
+@utility animate-ticker {
+    @media (prefers-reduced-motion: no-preference) {
+        padding-left: 100%;
+        padding-right: calc(var(--ticker-gap, 0) * var(--ticker-rate, 4.5rem));
+        animation: crawl 20s linear infinite;
+        &:hover {
+            animation-play-state: paused;
+        }
+    }
+}
+
+/*
+ * RuneScape chat flair on a ticker headline (src/lib/headlines.ts), in the flair tokens. A flash swaps two colors
+ * about once a second, slow enough to stay well clear of flashing that harms; a glow cycles smoothly. The effects move
+ * each letter (`--i` is its place), a fraction of an em. Under reduced motion a color rests on its first and nothing
+ * moves.
+ */
+@keyframes flash1 {
+    50% {
+        color: var(--flair-yellow);
+    }
+}
+
+@keyframes flash2 {
+    50% {
+        color: var(--flair-blue);
+    }
+}
+
+@keyframes flash3 {
+    50% {
+        opacity: 0.55;
+    }
+}
+
+@keyframes glow1 {
+    25% {
+        color: var(--flair-yellow);
+    }
+    50% {
+        color: var(--flair-green);
+    }
+    75% {
+        color: var(--flair-cyan);
+    }
+}
+
+@keyframes glow2 {
+    33% {
+        color: var(--flair-purple);
+    }
+    66% {
+        color: var(--flair-blue);
+    }
+}
+
+@keyframes glow3 {
+    33% {
+        color: var(--flair-green);
+    }
+    66% {
+        color: var(--flair-cyan);
+    }
+}
+
+@keyframes wave {
+    25% {
+        transform: translateY(-0.2em);
+    }
+    75% {
+        transform: translateY(0.2em);
+    }
+}
+
+@keyframes wave2 {
+    25% {
+        transform: translate(-0.1em, -0.2em);
+    }
+    75% {
+        transform: translate(0.1em, 0.2em);
+    }
+}
+
+@keyframes shake {
+    25% {
+        transform: translate(0.06em, -0.12em);
+    }
+    50% {
+        transform: translate(-0.06em, 0.08em);
+    }
+    75% {
+        transform: translate(0.04em, 0.12em);
+    }
+}
+
+@utility flair-flash1 {
+    color: var(--flair-red);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: flash1 1.2s steps(1) infinite;
+    }
+}
+
+@utility flair-flash2 {
+    color: var(--flair-cyan);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: flash2 1.2s steps(1) infinite;
+    }
+}
+
+@utility flair-flash3 {
+    color: var(--flair-green);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: flash3 1.2s steps(1) infinite;
+    }
+}
+
+@utility flair-glow1 {
+    color: var(--flair-red);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: glow1 4s linear infinite;
+    }
+}
+
+@utility flair-glow2 {
+    color: var(--flair-red);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: glow2 3s linear infinite;
+    }
+}
+
+@utility flair-glow3 {
+    color: var(--foreground);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: glow3 3s linear infinite;
+    }
+}
+
+/* One letter of a headline with an effect. `pre` keeps a space its width in an inline block. */
+@utility flair-letter {
+    display: inline-block;
+    white-space: pre;
+}
+
+@utility flair-wave {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: wave 1.2s linear infinite calc(var(--i, 0) * -0.08s);
+    }
+}
+
+@utility flair-wave2 {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: wave2 1.2s linear infinite calc(var(--i, 0) * -0.08s);
+    }
+}
+
+@utility flair-shake {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: shake 0.3s linear infinite calc(var(--i, 0) * -0.07s);
     }
 }
 
