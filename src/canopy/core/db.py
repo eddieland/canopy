@@ -850,6 +850,28 @@ def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.R
     return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
 
 
+def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` decisions about ticket `key`, its units' included, across ticks, newest first."""
+    return conn.execute(
+        "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
+    ).fetchall()
+
+
+def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` ticks, newest first, each with `decisions`, how many it recorded."""
+    return conn.execute(
+        "SELECT t.*, (SELECT count(*) FROM decisions d WHERE d.tick_id = t.id) AS decisions "
+        "FROM ticks t ORDER BY t.id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
+def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:
+    """Return how many decisions a tick recorded."""
+    row = conn.execute("SELECT count(*) FROM decisions WHERE tick_id = ?", (tick_id,)).fetchone()
+    return int(row[0])
+
+
 # Conversations (DESIGN §22)
 
 # The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).

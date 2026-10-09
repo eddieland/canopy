@@ -51,6 +51,19 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
     })
 
+    it('marks the ticks and the tickets stale when the latest tick changes', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.ticks, [])
+        client.setQueryData(keys.tickDetail(2), { tick: null, decisions: [], output_path: null })
+        client.setQueryData(keys.ticket('ABC-102'), { ticket: mockTickets[0] })
+
+        applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: 8 })
+
+        expect(client.getQueryState(keys.ticks)?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.tickDetail(2))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
+    })
+
     it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
         const client = new QueryClient()
         const [first] = mockRuns

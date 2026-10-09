@@ -15,6 +15,9 @@ export const keys = {
     ticket: (key: string) => ['ticket', key] as const,
     chores: ['chores'] as const,
     chore: (name: string) => ['chore', name] as const,
+    // The ticks list and each tick's page share a prefix, so one invalidation marks both stale.
+    ticks: ['ticks'] as const,
+    tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
     tick: ['tick'] as const,
@@ -82,6 +85,22 @@ export function choreQuery(name: string) {
         queryKey: keys.chore(name),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/chores/{name}', { params: { path: { name } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/** The latest ticks, newest first. Marked stale whenever the stream says the latest tick changed. */
+export const ticksQuery = queryOptions({
+    queryKey: keys.ticks,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/ticks', { signal })),
+})
+
+/** One tick and its decisions, as `canopy decisions ID` prints them. */
+export function tickDetailQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.tickDetail(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/ticks/{tick_id}', { params: { path: { tick_id: id } }, signal })),
         placeholderData: undefined,
     })
 }

@@ -701,13 +701,17 @@ shows it.
 - Reads only. A rationale is the overseer's text: untrusted, rendered as text, cut as `canopy decisions` cuts it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
-- Open: whether a tick's page shows the overseer's output (`ticks/<id>.log`), agent output read from a file rather
-  than the journal.
+- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it (D104).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
 
-Status: not started.
+Status: in progress. The design (DESIGN §6, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
+`tests/canopy/test_web_ticks.py` over the mock journal, and Playwright from the header's tick to its decisions and from
+a ticket's decisions to their tick. The open question is settled by D104. The latest tick now carries how many
+decisions it recorded, so the stream sends it as a running tick records them and the open pages follow. A unit's
+decisions name its repository after the ticket, which `canopy decisions` leaves out. Waiting on the operator: the live
+run Accept describes.
 
 ## M25. Flaky CI triage
 

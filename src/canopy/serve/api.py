@@ -1,4 +1,4 @@
-"""The JSON and SSE API under `{base_path}/api` (DESIGN §19, §22).
+"""The JSON and SSE API under `{base_path}/api` (DESIGN §6, §19, §22).
 
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
 functions the CLI's verbs call (`canopy.core.conversation`), with channel `web`, so the guards are the same ones; a
@@ -10,9 +10,9 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 from importlib.metadata import version
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 from fastapi.sse import EventSourceResponse
 
 from canopy.core import chore_view, conversation
@@ -37,6 +37,8 @@ from canopy.serve.schema import (
     Stopped,
     StopRequest,
     StreamEvent,
+    Tick,
+    TickDetail,
     TicketDetail,
     TicketSummary,
 )
@@ -87,6 +89,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _live_routes(signed_in, backend)
     _write_routes(signed_in, backend)
     _chore_routes(signed_in, backend)
+    _tick_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
 
@@ -265,3 +268,20 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
                 raise refusal(r) from None
         log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
         return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
+
+
+def _tick_routes(api: APIRouter, backend: Backend) -> None:
+    """The ticks (DESIGN §6): what `canopy decisions` prints. Reads only; a rationale is untrusted text."""
+
+    @api.get("/ticks", operation_id="listTicks")
+    def ticks() -> list[Tick]:
+        with backend.open() as ctx:
+            return views.ticks(ctx)
+
+    @api.get("/ticks/{tick_id}", operation_id="showTick", responses={404: {"description": "No such tick."}})
+    def tick(tick_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> TickDetail:
+        with backend.open() as ctx:
+            found = views.tick_detail(ctx, tick_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
+        return found
