@@ -148,6 +148,12 @@
     }
 }
 
+@keyframes crawl {
+    to {
+        transform: translateX(-50%);
+    }
+}
+
 @keyframes shimmer {
     from {
         background-position: 100% 0;
@@ -265,6 +271,25 @@
     }
     @media (prefers-reduced-motion: reduce) {
         display: none;
+    }
+}
+
+/*
+ * The header ticker (src/components/shell/ticker.tsx). The window clips the strip and fades it out at both ends; the
+ * mask's gradient is alpha only, so its color is irrelevant. The strip holds two copies of the reel and crawls one
+ * copy's width, for `--ticker-duration`, then starts over on the same frame. It holds still under the pointer.
+ */
+@utility ticker-window {
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, white 2rem, white calc(100% - 2rem), transparent);
+}
+
+@utility animate-ticker {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: crawl var(--ticker-duration, 300s) linear infinite;
+        &:hover {
+            animation-play-state: paused;
+        }
     }
 }
 

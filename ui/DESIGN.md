@@ -79,6 +79,9 @@ Rules:
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
 - **Wide screens use the width** from `2xl`: the attention list widens, and a ticket's page puts its conversation
   beside its actions, work, and runs.
+- Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding
+  (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both ends. It is
+  the header's one piece of fun: written here, never journal text, and colored for nothing.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page.
@@ -88,7 +91,7 @@ Rules:
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.css`.
+a skeleton, the empty inbox, and the header's ticker. The keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -102,6 +105,8 @@ a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.c
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
   a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
+- The header's ticker crawls right to left at a reading pace (its duration scales with the headlines' length), and
+  holds still under the pointer. Its reel starts at a different headline each day. At rest it shows the reel's start.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
@@ -109,7 +114,7 @@ a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.c
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, and pulses, ripples, and the drifting leaf are hidden. New motion goes inside a
+  in place, and pulses, ripples, and the drifting leaf are hidden, and the ticker stands still. New motion goes inside a
   `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
