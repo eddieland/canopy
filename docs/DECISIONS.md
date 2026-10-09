@@ -530,3 +530,9 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Rejected: a repository turning reruns on (the first shared key that loosens policy, T7); the PR's branch (a PR would
   write its own judge); a named but missing skill falling back to general rules (fails toward hiding regressions).
 - Revisit: when a repository needs to refuse reruns an operator turned on.
+
+## D104. A tick's page names its overseer output's file and does not serve it
+
+- The web UI shows what the journal holds; `ticks/<id>.log` is agent output from a file, unbounded and unchecked.
+- Rejected: serving the file, or its tail (a new file-reading surface behind the listener for a debugging aid).
+- Revisit: if the operator debugs overseer runs from the browser often enough to want it.

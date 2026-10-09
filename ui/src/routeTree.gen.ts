@@ -18,6 +18,8 @@ import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
 import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
+import { Route as TicksIndexRouteImport } from './routes/ticks.index'
+import { Route as TicksIdRouteImport } from './routes/ticks.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +66,16 @@ const TicketsKeyRoute = TicketsKeyRouteImport.update({
   path: '/tickets/$key',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TicksIndexRoute = TicksIndexRouteImport.update({
+  id: '/ticks/',
+  path: '/ticks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TicksIdRoute = TicksIdRouteImport.update({
+  id: '/ticks/$id',
+  path: '/ticks/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,8 +85,10 @@ export interface FileRoutesByFullPath {
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/tickets/$key': typeof TicketsKeyRoute
+  '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
   '/tickets/': typeof TicketsIndexRoute
+  '/ticks/': typeof TicksIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,8 +98,10 @@ export interface FileRoutesByTo {
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/tickets/$key': typeof TicketsKeyRoute
+  '/ticks/$id': typeof TicksIdRoute
   '/chores': typeof ChoresIndexRoute
   '/tickets': typeof TicketsIndexRoute
+  '/ticks': typeof TicksIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,8 +112,10 @@ export interface FileRoutesById {
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/tickets/$key': typeof TicketsKeyRoute
+  '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
   '/tickets/': typeof TicketsIndexRoute
+  '/ticks/': typeof TicksIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -109,8 +127,10 @@ export interface FileRouteTypes {
     | '/worktrees'
     | '/chores/$name'
     | '/tickets/$key'
+    | '/ticks/$id'
     | '/chores/'
     | '/tickets/'
+    | '/ticks/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -120,8 +140,10 @@ export interface FileRouteTypes {
     | '/worktrees'
     | '/chores/$name'
     | '/tickets/$key'
+    | '/ticks/$id'
     | '/chores'
     | '/tickets'
+    | '/ticks'
   id:
     | '__root__'
     | '/'
@@ -131,8 +153,10 @@ export interface FileRouteTypes {
     | '/worktrees'
     | '/chores/$name'
     | '/tickets/$key'
+    | '/ticks/$id'
     | '/chores/'
     | '/tickets/'
+    | '/ticks/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -143,8 +167,10 @@ export interface RootRouteChildren {
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
+  TicksIdRoute: typeof TicksIdRoute
   ChoresIndexRoute: typeof ChoresIndexRoute
   TicketsIndexRoute: typeof TicketsIndexRoute
+  TicksIndexRoute: typeof TicksIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -212,6 +238,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TicketsKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ticks/': {
+      id: '/ticks/'
+      path: '/ticks'
+      fullPath: '/ticks/'
+      preLoaderRoute: typeof TicksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ticks/$id': {
+      id: '/ticks/$id'
+      path: '/ticks/$id'
+      fullPath: '/ticks/$id'
+      preLoaderRoute: typeof TicksIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -223,8 +263,10 @@ const rootRouteChildren: RootRouteChildren = {
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
   TicketsKeyRoute: TicketsKeyRoute,
+  TicksIdRoute: TicksIdRoute,
   ChoresIndexRoute: ChoresIndexRoute,
   TicketsIndexRoute: TicketsIndexRoute,
+  TicksIndexRoute: TicksIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

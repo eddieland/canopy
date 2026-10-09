@@ -80,8 +80,8 @@ Rules:
 - **Wide screens use the width** from `2xl`: the attention list widens, a ticket's page puts its conversation
   beside its actions, work, and runs, and a chore's page puts its notes beside its schedule, findings, and runs.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
-  was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
-  attention page's, and the nav's Attention item shows how many items it lists, on every page.
+  was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
+  the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
 
 ## Motion
@@ -160,6 +160,11 @@ inline script and checks it against the store's key.
 - **A chore's notes** are a conversation of the operator's words alone, under the chore's runs and findings, with a
   note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
+- **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
+  (on a ticket's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale under
+  them on one line. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
+  (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
+  colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.

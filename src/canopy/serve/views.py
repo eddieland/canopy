@@ -1,4 +1,4 @@
-"""Journal rows as the API's models: the attention list, runs, tickets and their conversations, and chores (§19, §22).
+"""Journal rows as the API's models: the attention list, runs, tickets and their conversations, chores, and ticks.
 
 Reads only. Every text that came from an agent or the tracker stays untrusted: control characters are dropped from
 message bodies as `canopy show` drops them, run summaries are cut to one line, and the UI renders all of it as text.
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_result, chore_view, contract, conversation, db
+from canopy.core import chore_result, chore_view, contract, conversation, db, items
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
@@ -19,6 +19,7 @@ from canopy.serve.schema import (
     ChoreRun,
     ChoreSummary,
     Comment,
+    Decision,
     LastTick,
     Message,
     MessageKind,
@@ -28,6 +29,7 @@ from canopy.serve.schema import (
     Spend,
     StartStatus,
     Tick,
+    TickDetail,
     TicketDetail,
     TicketSummary,
     Unit,
@@ -48,6 +50,9 @@ TICKET_RUNS = 10
 TICKET_MESSAGES = 100
 # A chore's page: its latest runs.
 CHORE_RUNS = 10
+# The ticks list, newest first, and a ticket's page: the latest decisions about it.
+TICKS = 50
+TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
 # The window the spend figure covers.
 SPEND_HOURS = 24
@@ -99,6 +104,11 @@ def tick(ctx: Context) -> Tick | None:
     row = db.last_tick(ctx.conn)
     if row is None:
         return None
+    return tick_of(row, db.decision_count(ctx.conn, int(row["id"])))
+
+
+def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
+    """A tick's row, and how many decisions it recorded."""
     return Tick(
         id=int(row["id"]),
         status=str(row["status"]),
@@ -106,7 +116,54 @@ def tick(ctx: Context) -> Tick | None:
         started_at=db.parse_time(row["started_at"]),
         ended_at=db.parse_time(row["ended_at"]) if row["ended_at"] else None,
         summary=conversation.printable(row["summary"]) if row["summary"] else None,
+        session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        decisions=decisions,
+    )
+
+
+def ticks(ctx: Context) -> list[Tick]:
+    """The latest ticks, newest first."""
+    return [tick_of(row, int(row["decisions"])) for row in db.recent_ticks(ctx.conn, TICKS)]
+
+
+def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
+    """One tick and its decisions, as `canopy decisions ID` prints them, or None if there is no such tick."""
+    row = db.get_tick(ctx.conn, tick_id)
+    if row is None:
+        return None
+    rows = db.decisions_for_tick(ctx.conn, tick_id)
+    output = ctx.state_dir / "ticks" / f"{tick_id}.log"
+    return TickDetail(
+        tick=tick_of(row, len(rows)),
+        decisions=[decision(d) for d in rows],
+        output_path=str(output) if output.exists() else None,
+    )
+
+
+def decision(row: sqlite3.Row) -> Decision:
+    """One decision, named as `canopy decisions` names it, its rationale on one line as it prints it."""
+    chore = str(row["chore"]) if row["chore"] is not None else None
+    pr = str(row["pr"]) if row["pr"] is not None else None
+    key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
+    repo = str(row["repo"]) if row["repo"] is not None else None
+    if chore is not None:
+        subject = f"{_CHORE}{chore}"
+    elif key is None and pr is not None:
+        subject = f"{_PR}{pr}"
+    else:
+        subject = items.subject(key, repo)
+    return Decision(
+        id=int(row["id"]),
+        tick_id=int(row["tick_id"]),
+        at=db.parse_time(str(row["created_at"])),
+        subject=subject,
+        ticket_key=key,
+        repo=repo,
+        chore=chore,
+        pr=pr,
+        action=str(row["action"]),
+        rationale=" ".join(conversation.printable(str(row["rationale"])).split()),
     )
 
 
@@ -216,6 +273,7 @@ def ticket(ctx: Context, key: str) -> TicketDetail | None:
         ],
         runs=[run(r) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
+        decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
     )
 
 

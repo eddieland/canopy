@@ -159,14 +159,36 @@ class Message(_Model):
     comment: Comment | None = None
 
 
+class Decision(_Model):
+    """One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals."""
+
+    id: int
+    tick_id: int
+    at: datetime
+    # What it is about, as `canopy decisions` names it with a unit's repository added: `PROJ-1`, `PROJ-1 (api)`, `api`,
+    # `chore:deps`, `pr:URL`, or `-` for the whole tick.
+    subject: str
+    ticket_key: str | None = None
+    repo: str | None = None
+    chore: str | None = None
+    pr: str | None = None
+    # dispatch:<kind> | wait | skip | done | mirror | attention:<reason> | refused:<guard>
+    action: str
+    # The overseer's text, untrusted: control characters dropped and whitespace collapsed, as `canopy decisions` prints
+    # it. Bounded at 2000 characters when it was recorded.
+    rationale: str
+
+
 class TicketDetail(_Model):
-    """One ticket: what `canopy show` prints."""
+    """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
     ticket: TicketSummary
     units: list[Unit]
     runs: list[Run]
     # The latest 100, oldest first.
     messages: list[Message]
+    # The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it.
+    decisions: list[Decision]
 
 
 class ChoreRun(_Model):
@@ -320,7 +342,7 @@ class Pool(_Model):
 
 
 class Tick(_Model):
-    """The latest tick, as `canopy status`'s first line shows it (DESIGN §14)."""
+    """A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded."""
 
     id: int
     # running | ok | skipped | overseer_failed | reconcile_failed | abandoned
@@ -329,8 +351,22 @@ class Tick(_Model):
     started_at: datetime
     ended_at: datetime | None = None
     summary: str | None = None
-    # What its overseer cost, when the runtime reported it (§13).
+    # The overseer's session and what it cost, when the runtime reported them (§13).
+    session_id: str | None = None
     cost_usd: float | None = None
+    # How many decisions it recorded so far.
+    decisions: int = 0
+
+
+class TickDetail(_Model):
+    """One tick: what `canopy decisions ID` prints."""
+
+    tick: Tick
+    # In the order they were recorded.
+    decisions: list[Decision]
+    # Where the overseer's stdout and stderr are, readable only by the operator, if the file exists. The page names it
+    # and does not serve it (D104).
+    output_path: str | None = None
 
 
 class LastTick(_Model):

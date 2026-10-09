@@ -259,6 +259,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/ticks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ticks */
+        get: operations["listTicks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ticks/{tick_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tick */
+        get: operations["showTick"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/worktrees": {
         parameters: {
             query?: never;
@@ -444,6 +478,35 @@ export type components = {
             id: string;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * Decision
+         * @description One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals.
+         */
+        Decision: {
+            /** Action */
+            action: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Chore */
+            chore: string | null;
+            /** Id */
+            id: number;
+            /** Pr */
+            pr: string | null;
+            /** Rationale */
+            rationale: string;
+            /** Repo */
+            repo: string | null;
+            /** Subject */
+            subject: string;
+            /** Tick Id */
+            tick_id: number;
+            /** Ticket Key */
+            ticket_key: string | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -733,17 +796,24 @@ export type components = {
         StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"];
         /**
          * Tick
-         * @description The latest tick, as `canopy status`'s first line shows it (DESIGN §14).
+         * @description A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded.
          */
         Tick: {
             /** Cost Usd */
             cost_usd: number | null;
+            /**
+             * Decisions
+             * @default 0
+             */
+            decisions: number;
             /** Dry Run */
             dry_run: boolean;
             /** Ended At */
             ended_at: string | null;
             /** Id */
             id: number;
+            /** Session Id */
+            session_id: string | null;
             /**
              * Started At
              * Format: date-time
@@ -753,6 +823,17 @@ export type components = {
             status: string;
             /** Summary */
             summary: string | null;
+        };
+        /**
+         * TickDetail
+         * @description One tick: what `canopy decisions ID` prints.
+         */
+        TickDetail: {
+            /** Decisions */
+            decisions: components["schemas"]["Decision"][];
+            /** Output Path */
+            output_path: string | null;
+            tick: components["schemas"]["Tick"];
         };
         /**
          * TicketChanged
@@ -769,9 +850,11 @@ export type components = {
         };
         /**
          * TicketDetail
-         * @description One ticket: what `canopy show` prints.
+         * @description One ticket: what `canopy show` prints, and the latest decisions about it.
          */
         TicketDetail: {
+            /** Decisions */
+            decisions: components["schemas"]["Decision"][];
             /** Messages */
             messages: components["schemas"]["Message"][];
             /** Runs */
@@ -1382,6 +1465,64 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RefusalResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    listTicks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Tick"][];
+                };
+            };
+        };
+    };
+    showTick: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tick_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickDetail"];
+                };
+            };
+            /** @description No such tick. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

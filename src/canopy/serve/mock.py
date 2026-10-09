@@ -4,7 +4,8 @@ The server reads and writes it through the same code as the loop's journal: only
 the pools' slots are stand-ins, since the first two belong to the loop and there is no treehouse to ask (backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
-found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Times
+found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
+ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Times
 are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -238,11 +239,14 @@ async def changes(backend: Backend, seconds: float | None) -> None:
 
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     repo = str(root)
-    conn.execute(
-        # It read every seeded message: a reply the operator adds waits for the next tick.
-        "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id) "
-        "VALUES (1, ?, ?, 'ok', 'mock tick', 8)",
-        (at(-60), at(-59)),
+    conn.executemany(
+        # The second read every seeded message: a reply the operator adds waits for the next tick.
+        "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id, session_id, cost_usd) "
+        "VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)",
+        [
+            (1, at(-121), at(-119), "dispatched 2, waiting on 1", 3, "ses_tick1", 0.28),
+            (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31),
+        ],
     )
     tickets = (
         # key, phase, branch, last seen
@@ -446,6 +450,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (at(-50), "Please keep the old login route working until the mobile app ships. <b>Thanks!</b>", at(-52)),
     )
     _chore_fixtures(conn)
+    _decisions(conn)
 
 
 def _chore_fixtures(conn: sqlite3.Connection) -> None:
@@ -495,3 +500,52 @@ def _chore_fixtures(conn: sqlite3.Connection) -> None:
         "VALUES (8, 'chore', ?, ?, 'operator', 'reply', 'cli', ?, 'mock-note-8')",
         (CHORE, at(-300), "Leave out the docs site's lockfile: it is never deployed."),
     )
+
+
+def _decisions(conn: sqlite3.Connection) -> None:
+    decisions = (
+        # tick, at, ticket, repo, chore, pr, action, rationale
+        (1, -120, "ABC-102", None, None, None, "dispatch:implement", "started privately; implement the export button"),
+        (1, -120, "ABC-100", "web", None, None, "dispatch:fix-ci", "CI fails on test_retry in web; fix-ci"),
+        (1, -120, "ABC-099", "web", None, "https://github.com/acme/web/pull/88", "wait", "PR 88 waits on review"),
+        (1, -120, None, None, CHORE, None, "dispatch:chore", "chore run 2"),
+        (1, -120, None, "api", None, None, "attention:repo_missing", "api has no clone"),
+        (2, -60, "ABC-102", None, None, None, "wait", "awaiting the operator's answer to message 5"),
+        (2, -60, "ABC-104", None, None, None, "refused:running", "run 43 is still working ABC-104"),
+        (
+            2,
+            -60,
+            "ABC-101",
+            None,
+            None,
+            None,
+            "wait",
+            "run 41 is implementing it.\n  The ticket says <b>keep</b> the old route:\tleft for the worker.",
+        ),
+        (
+            2,
+            -60,
+            "ABC-099",
+            "web",
+            None,
+            "https://github.com/acme/web/pull/88",
+            "attention:needs_reviewer",
+            "no reviewer",
+        ),
+        (
+            2,
+            -60,
+            None,
+            None,
+            None,
+            "https://github.com/acme/api/pull/12",
+            "wait",
+            "no new commit since the last review",
+        ),
+    )
+    for tick_id, when, key, repo, chore, pr, action, rationale in decisions:
+        conn.execute(
+            "INSERT INTO decisions (tick_id, created_at, ticket_key, repo, chore, pr, action, rationale) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (tick_id, at(when), key, repo, chore, pr, action, rationale),
+        )

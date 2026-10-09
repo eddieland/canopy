@@ -12,6 +12,8 @@ export const ROUTES = [
     'tickets/ABC-102',
     'chores',
     'chores/deps',
+    'ticks',
+    'ticks/2',
     'settings',
 ] as const
 export const THEMES = ['light', 'dark'] as const

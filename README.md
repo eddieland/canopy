@@ -86,7 +86,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
 - Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
-  add `--ticket KEY` to filter. `canopy loop` prints each tick's cost as it goes.
+  add `--ticket KEY` to filter. The web UI's Ticks page shows the same, and each ticket's page the decisions about it.
+  `canopy loop` prints each tick's cost as it goes.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
   `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own

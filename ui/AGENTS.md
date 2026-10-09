@@ -46,7 +46,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   through
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
   `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, and
-  `chores.updated` marks every chore's (a new note changes the list it carries). A new
+  `chores.updated` marks every chore's (a new note changes the list it carries); `tick.updated` marks the ticks, a
+  tick's page, and the ticket shown. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in
   `parseStreamEvent`. The worktrees are the one query not on the stream (D090): `runs.updated` marks them stale when
   the running runs' worktrees change, the page's Read again button refetches them, and they refetch every 30 seconds
