@@ -30,8 +30,9 @@ operator's choice to reach the machine from elsewhere on the VPC, which relaxes 
 ### H2. Extended only through native plugins or config; no custom layer to maintain
 
 Partial. The runtime is a command template (D009), trackers are MCP plus a skill (D014), and customization is skills
-where OpenCode already looks (§13). Worktree setup is treehouse's own hooks and `.worktreeinclude` (R10). Two places
-still ask the operator to keep code or text of their own in step with canopy:
+where OpenCode already looks (§13). Worktree setup is treehouse's own hooks and `.worktreeinclude`, and a setup
+command the operator writes for their repositories, not for canopy (R10). Two places still ask the operator to keep
+code or text of their own in step with canopy:
 
 - A notification destination other than the shipped ones is "a small program of the operator's" (§20). The desktop
   and Slack destinations the operator wants (N2) ship with canopy (M10).
@@ -129,25 +130,20 @@ unit of work, and pushing to the PR's own branch, which D056 now allows (C4).
 
 ### R10. Worktree setup hooks that cope with the Bazel monorepo
 
-Partial; the rest is M16. What treehouse provides natively, and canopy relies on:
+Built in M16; its live check is the operator's. Setting up a slot is three steps, all the operator's (§9):
 
-- `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reset (§9).
-- A committed `.worktreeinclude` seeds gitignored files (local config, generated files) from the primary clone into
-  each slot. A personal manifest is `treehouse get --include-file`, which canopy does not pass yet.
-- Slots are reused at fixed paths. Bazel keys its output base on the workspace path, so each slot's output base stays
-  warm across leases; a shared `--disk_cache` and `--repository_cache` in the operator's `.bazelrc` share work between
-  slots (§9).
+- Seeding: a committed `.worktreeinclude` seeds gitignored files (local config, generated files) from the primary clone
+  into each slot on every lease. A personal manifest, `paths.worktree_include`, replaces it; canopy passes it to every
+  `treehouse get` as `--include-file`.
+- `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reused, on the base.
+- `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run (D102).
 
-Gaps:
-
-- Fast disk: in a workspace (§18) canopy sets `TREEHOUSE_ROOT` to the workspace root, so the pools live wherever the
-  workspace does. In a workspace of one, treehouse's own `root` config applies. Today the answer is to put the
-  workspace on the fast disk; a user-only pool root is M16's question.
-- `post_create` runs on the base branch before `_run` checks out the ticket's branch, and a failing hook does not fail
-  the lease (PRIOR_ART "Open design questions"). Setup that depends on the branch, or that must succeed, has no place.
-- Each slot leaves a Bazel server running after its run. Nothing shuts it down; memory grows with the pool.
-- Unverified: whether the worker's `external_directory: deny` refuses reads through `bazel-out/` and `bazel-bin/`,
-  which are symlinks into the output base outside the worktree.
+For Bazel (§9): slots are reused at fixed paths, and Bazel keys its output base on the workspace path, so each slot's
+output base stays warm across leases. A shared `--disk_cache` and `--repository_cache` in the operator's `.bazelrc`
+share work between slots, `--output_user_root` puts the output bases on a fast disk, and `startup --max_idle_secs`
+ends a slot's idle server (D103). A fast disk otherwise takes the whole workspace, pools and clones together (§18,
+D033). Unverified until the canary's first real run: that the worker reads through `bazel-out/` and its siblings,
+links into the output base, and is refused the output base by its own path.
 
 ### R11. Private tickets: deliver a ticket without the conversation appearing on it
 

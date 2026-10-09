@@ -113,8 +113,8 @@ canopy (harness, Python)
   runs/            worker runs on tickets (§8)
     dispatch.py    guards, leases (all or nothing), render the worker prompt, spawn detached _run
     policy.py      attempt limits and the fix-ci cooldown per unit, derived from runs and run_slots
-    worker.py      canopy _run: branch setup in each slot, the worker, result parsing, push verification, slot return;
-                   a split's run, its children validated into split_children
+    worker.py      canopy _run: branch setup and the operator's setup command in each slot, the worker, result
+                   parsing, push verification, slot return; a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
@@ -602,7 +602,11 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    else `git checkout --no-track -B <branch> origin/<base>`. `-B` because a branch an earlier run left in the pool's
    repository would make `-b` fail; `--no-track` so a bare `git push` never targets the base. Note the branch's
    commit. A base missing from origin (such as a stacked-on branch deleted when its PR merged) fails the run as
-   `crashed` before the worker starts, with a note, whether the branch is new or continued.
+   `crashed` before the worker starts, with a note, whether the branch is new or continued. Then, with
+   `runtime.setup_cmd` set, run it in each slot in turn (§9, D102): cwd the slot, `CANOPY_REPO` the repository's name,
+   `CANOPY_RUN_ID` the run's id, timeout `runtime.setup_timeout_minutes`, output appended to the run log. An exit other
+   than 0, a timeout, or a command that cannot start fails the run as `crashed` before the worker starts, with a note
+   naming the repository in a workspace; the slots are returned as on any exit (step 6).
 3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), timeout `worker_timeout_minutes`, with
    `CANOPY_RUN_ID` set to the run's id and cwd = the slot, or for a joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
@@ -612,8 +616,9 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    session id and cost the events reported on the run at once, also after a timeout, so a git failure after this step
    does not lose them.
 
-   A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch; step 3 runs `split_cmd`
-   in the desk; step 4 parses and validates the split's result; step 5 is skipped, since a split pushes nothing.
+   A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch, and runs no setup, since
+   the splitter has no shell; step 3 runs `split_cmd` in the desk; step 4 parses and validates the split's result;
+   step 5 is skipped, since a split pushes nothing.
 5. In each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local branch). If
    not and the branch has commits since step 2, push once, without force. If any slot is still unpushed, record
    `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a human looks.
@@ -687,14 +692,63 @@ one, stays with the MCP.
 ## 9. Aggressive release
 
 - Slots are held only for the duration of `_run`.
-- Reacquisition lands on an arbitrary slot, so build caches must be
-  slot-independent (for Bazel: shared `--disk_cache` or a remote cache,
-  configured in the repository, not in canopy). canopy documents this; it does
-  not manage it.
-- treehouse `post_create` hooks (user-level config) are the place for
-  per-slot environment setup. canopy does not duplicate them.
+- Reacquisition lands on an arbitrary slot, so build caches must be slot-independent: for Bazel, a shared disk cache
+  or a remote one (below), configured in the operator's or the repository's `.bazelrc`, not in canopy. canopy
+  documents this; it does not manage it.
 - In a workspace, the operator may declare each pool's size; `canopy workspace sync` makes the slots ahead of time, so
   their hooks and build caches are warm before the first run lands in one (§18).
+
+### Setting up a slot
+
+Three steps, all the operator's, in the order they run (D102):
+
+1. **Seeding.** On every `get`, a reused slot's too, treehouse copies ignored files from the primary clone into the
+   slot: those the committed `.worktreeinclude` selects, or, with `paths.worktree_include` set, those the operator's
+   own manifest selects instead. canopy passes it as `--include-file`, by its absolute path, on every lease: a run's,
+   a review's, and sync's. treehouse reads one manifest, so a personal one replaces the committed one; copy in the
+   committed lines to keep them. Its lines are git's exclude-file patterns and select only ignored files, so it can
+   seed local config (`user.bazelrc`, `.env.local`) and never a tracked file. A missing file fails the lease, `no_slot`
+   (§8), before treehouse touches a slot.
+2. **`post_create` hooks**, in the user-level treehouse config, run after seeding when a slot is made or reused: on
+   the base, before `_run` checks out the run's branch. A failing hook is printed and the lease stands. They suit
+   setup that depends on the base alone, such as a toolchain or a warm fetch.
+3. **`runtime.setup_cmd`**, user-only, runs in each slot of a worker run after `_run` checks out its branch (§8
+   `_run` step 2), and fails the run when it fails. It suits setup that depends on the branch or must succeed:
+   installing the branch's dependencies, generating code its build needs. It is split into words as `notify.cmd` is,
+   with no shell and no placeholders. Splits and reviews run none: their agents have no shell.
+
+`setup_cmd` runs the branch's code (a lockfile's install scripts, a generator) on the operator's machine, outside the
+agent runtime's permissions. It is the code the worker's own shell runs a moment later, but outside any sandbox around
+`worker_cmd`, so it is wrapped the same way (HOST_ISOLATION §4.4, TRUST_MODEL T4). A broken setup crashes every run it
+meets, each spending an attempt (D030) and raising `crashed` (§14), whose note names it.
+
+### Bazel
+
+Bazel keys a workspace's output base on the workspace's path. Slots keep their paths across leases, so each slot's
+output base stays warm for whichever run leases it next. Slots share what the operator's `.bazelrc` shares: every
+Bazel command reads `~/.bazelrc`, and a repository's `.bazelrc` that imports a gitignored `user.bazelrc` gets the
+operator's in every slot through the personal manifest above.
+
+```text
+# ~/.bazelrc. Bazel 7 or later, where `common` skips options a command does not take. Paths are absolute.
+# Shared by every slot: action outputs, and downloaded external repositories.
+common --disk_cache=/fast/bazel/disk-cache
+common --repository_cache=/fast/bazel/repository-cache
+# Every slot's output base, under one root on the fast disk.
+startup --output_user_root=/fast/bazel/output
+# A slot's server exits after 15 idle minutes, not Bazel's default of 3 hours.
+startup --max_idle_secs=900
+```
+
+- The disk cache grows without bound: prune it, or cap it with `--experimental_disk_cache_gc_max_size` on Bazel 7.4
+  or later. A remote cache, where the repository has one, does the disk cache's job for every machine.
+- canopy does not stop a slot's Bazel server when it returns the slot (D103). `--max_idle_secs` ends it once no run
+  has used the slot for that long, so a run that reuses the slot soon after finds it warm.
+- `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` are links from the slot into its output base, outside the
+  worktree. The worker's `external_directory: deny` is checked against the path as written, as the desk canary found
+  for edits (ROADMAP M7), so the worker reads its outputs and test logs through the links and is refused the output
+  base by its own path. That is no boundary: the worker's shell reads either (HOST_ISOLATION §1). The canary
+  (`tests/canopy/test_opencode_canary.py`) checks it; it is opt-in, and its first real run confirms it.
 
 ## 10. Dependencies and stacking
 
@@ -861,6 +915,8 @@ split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent c
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
+setup_cmd = ""          # optional; runs in each slot on the run's branch, before the worker (§9)
+setup_timeout_minutes = 30
 # private_worker_cmd: worker_cmd with `--agent canopy-worker-private`, for a ticket started with `canopy start` (§22)
 
 [loop]
@@ -876,6 +932,7 @@ comment_suffix = ""          # and ends with this, if set
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
 state_dir = "~/.canopy"
+# worktree_include = "~/.config/canopy/worktreeinclude"   # optional; replaces the committed .worktreeinclude (§9)
 
 [notify]
 cmd = ""   # optional; receives the attention diff on stdin: the sink `default` (§20)
@@ -1284,6 +1341,14 @@ primary clone, so pools live under `<workspace>/.treehouse/`. The variable outra
 repository's `treehouse.toml` cannot move them, and `get` passes `--worktree-path '{pool}/{slot}/{repo}'` to pin the
 layout. These pools are separate from the operator's interactive ones under `~/.treehouse`, so an interactive
 `treehouse` never recycles canopy's slots. Build caches must still be slot-independent (§9).
+
+There is no key to put a workspace's pools anywhere else (D033). For a fast disk, put the workspace on it. git keeps
+each worktree's index and HEAD, and every object it writes, in the primary clone's `.git`, so a pool on another disk
+than its clone still does git's work on the clone's. treehouse names a pool after the repository and a hash of its
+remote URL, so one pool root that every workspace shared (the user file serves them all) would put two workspaces'
+clones of a repository in one pool, where each sync and each declared size would count the other's slots. Build
+outputs need not follow the workspace: Bazel's live under `--output_user_root`, wherever the operator's `.bazelrc`
+puts it (§9). A workspace of one's pool is wherever treehouse's own `root` config puts it.
 
 Reconcile runs `treehouse status --json` once per mapped repository with a clone and returns stale `canopy:` leases. A
 repository with no clone has no pool; the tick records `repo_missing` (§14) and dispatch refuses it. A run's slot is

@@ -166,7 +166,9 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 ## D033. Workspaces: one directory, a repository map, pools inside it
 
 - One queue, one capacity, one journal. A repository without a map is a workspace of one.
-- Rejected: one loop per repository (two journals must agree on one ticket); one pool for all repositories.
+- No pool root of its own: a fast disk takes the whole workspace, since git keeps each worktree's files in its clone.
+- Rejected: one loop per repository (two journals must agree on one ticket); one pool for all repositories; a
+  user-only pool root (treehouse pools by repository and remote URL, so workspaces sharing it share pools).
 
 ## D034. Chores: recurring non-ticket runs the operator defines and the overseer schedules
 
@@ -513,3 +515,18 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: a local machine or an agent's container renders text differently, so its baselines fail CI.
 - Two jobs: the branch's code runs with a read-only token; the job that pushes runs none of it and commits only PNGs.
 - Rejected: a Playwright Docker image (CI does not use one); updating on every PR push (a visual change is deliberate).
+
+## D102. Setup that needs the run's branch is `runtime.setup_cmd`, run by `_run` after checkout
+
+- In each slot of a worker run, before the worker; a failure or timeout ends the run `crashed`. Not for splits or
+  reviews. No placeholders; `CANOPY_REPO` names the slot's repository.
+- Why: treehouse's `post_create` runs on the base before `_run` checks out the branch; a failing hook keeps the lease.
+- Rejected: an upstream treehouse hook (treehouse never sees the run's branch); a command per repository (one command
+  reads `CANOPY_REPO`).
+- Revisit: if a broken setup spending an attempt on every ticket it meets proves common.
+
+## D103. canopy does not stop a slot's Bazel server; `startup --max_idle_secs` in the operator's `.bazelrc` does
+
+- Why: the harness knows no build tool, and a server stopped at return is cold for a run that reuses the slot at once.
+- Rejected: `bazel shutdown` when a slot is returned; a release command in config, for what one Bazel flag does.
+- Revisit: if idle servers still exhaust memory with a short idle timeout.

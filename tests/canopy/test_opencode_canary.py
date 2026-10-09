@@ -20,6 +20,11 @@ count everything in the checkout as its project.
 A fourth is the reviewer's (DESIGN §21, ROADMAP M11). The reviewer starts in a directory of canopy's with one link, to a
 checkout of the PR; with external directories denied, it must read through the link and be refused beside it.
 
+A fifth is Bazel's (DESIGN §9, ROADMAP M16). A Bazel workspace's `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` are
+links into the slot's output base, outside the worktree. A worker with external directories denied must read its test
+logs through them, as an edit goes through a desk's link, and be refused the output base's other files by their own
+path.
+
 This runs a real model, so it is opt-in: set CANOPY_OPENCODE_CANARY=1 with `opencode` on PATH and a model provider
 configured in OpenCode. CANOPY_OPENCODE_CANARY_MODEL (provider/model) picks the model; otherwise OpenCode's default.
 The helpers that read OpenCode's event stream are unit-tested here without opencode or a model.
@@ -244,6 +249,70 @@ def test_a_reviewer_reads_its_checkout_through_its_link_and_nothing_beside_it(tm
     # The positive control: the reviewer can read the checkout, or it cannot review at all.
     assert "periwinkle" in result.stdout, "a read through the checkout link was refused\n" + report
     assert "tangerine" not in result.stdout, "a read beside the reviewer's directory went through\n" + report
+    assert attempted(tool_calls(result.stdout), "secret.txt"), "the model never tried the outside read\n" + report
+
+
+# The worker's file permissions (`.agents/agents/canopy-worker.md`), with bash off so only the read tool can read.
+BAZEL_AGENT = """\
+---
+description: canopy Bazel canary. Reads through Bazel's convenience links, then beside them.
+mode: primary
+permission:
+  edit: allow
+  external_directory: deny
+  task: deny
+  bash:
+    "*": deny
+---
+You are a permission canary in a test. Follow the user's steps exactly and do nothing else.
+"""
+
+BAZEL_PROMPT = """\
+Do these steps in order, one tool call each. If a step is refused, note it and go on to the next step.
+1. Use your file reading tool to read the file bazel-testlogs/app/test/test.log, and print the word it holds.
+2. Use your file reading tool to read the file {outside}, and print the word it holds.
+Finally print exactly one line: canary finished
+"""
+
+
+@requires_canary
+def test_a_worker_reads_through_bazels_links_and_nothing_else_of_its_output_base(tmp_path: Path) -> None:
+    runner = SubprocessRunner()
+    slot = tmp_path / "pool" / "1" / "repo"
+    slot.mkdir(parents=True)
+    assert runner.run(["git", "init", "-q", str(slot)]).ok
+    (slot / "MODULE.bazel").write_text('module(name = "canary")\n')
+    # Laid out as Bazel lays out an output base under `--output_user_root`, outside the worktree.
+    output_base = tmp_path / "bazel-root" / "0123abcd"
+    out = output_base / "execroot" / "_main" / "bazel-out" / "k8-fastbuild"
+    log = out / "testlogs" / "app" / "test" / "test.log"
+    log.parent.mkdir(parents=True)
+    log.write_text("marigold\n")
+    outside = output_base / "external" / "secret.txt"
+    outside.parent.mkdir(parents=True)
+    outside.write_text("tangerine\n")
+    (slot / "bazel-out").symlink_to(out.parent, target_is_directory=True)
+    (slot / "bazel-bin").symlink_to(out / "bin", target_is_directory=True)
+    (slot / "bazel-testlogs").symlink_to(out / "testlogs", target_is_directory=True)
+    definitions_dir = tmp_path / "definitions"
+    (definitions_dir / "agents").mkdir(parents=True)
+    (definitions_dir / "agents" / "canopy-bazel-canary.md").write_text(BAZEL_AGENT)
+
+    argv = ["opencode", "run", "--agent", "canopy-bazel-canary", "--format", "json"]
+    if CANARY_MODEL:
+        argv += ["-m", CANARY_MODEL]
+    env = {"OPENCODE_CONFIG_DIR": str(definitions_dir)}
+    result = runner.run([*argv, BAZEL_PROMPT.format(outside=outside)], cwd=slot, env=env, timeout=600)
+
+    report = f"exit {result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert not result.timed_out, "the run blocked\n" + report
+    errors = runtime_errors(result.stdout)
+    failed = "OpenCode failed before the canary ran, so this is not a result: " + "; ".join(errors)
+    assert not errors, failed + "\n" + report
+    # The positive control: a worker reads its test logs with the read tool. Refused, OpenCode resolves links before
+    # checking, and a joint run's desk breaks too.
+    assert "marigold" in result.stdout, "a read through bazel-testlogs/ was refused\n" + report
+    assert "tangerine" not in result.stdout, "a read of the output base by its own path went through\n" + report
     assert attempted(tool_calls(result.stdout), "secret.txt"), "the model never tried the outside read\n" + report
 
 
