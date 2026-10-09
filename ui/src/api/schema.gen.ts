@@ -19,6 +19,57 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/chores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chores */
+        get: operations["listChores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chores/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chore */
+        get: operations["getChore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chores/{name}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Note */
+        post: operations["replyChore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -271,6 +322,114 @@ export type components = {
              * @enum {string}
              */
             type: "attention.updated";
+        };
+        /**
+         * ChoreDetail
+         * @description One chore: what `canopy show chore:NAME` prints.
+         */
+        ChoreDetail: {
+            chore: components["schemas"]["ChoreSummary"];
+            /** Notes */
+            notes: components["schemas"]["Message"][];
+            /** Runs */
+            runs: components["schemas"]["ChoreRun"][];
+        };
+        /**
+         * ChoreFinding
+         * @description An open finding: one the chore's latest `ok` run reported (DESIGN §19).
+         */
+        ChoreFinding: {
+            /** Detail */
+            detail: string;
+            /** Id */
+            id: string;
+            /** Link */
+            link: string | null;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * ChoreRun
+         * @description One run of a chore (DESIGN §19).
+         */
+        ChoreRun: {
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Findings
+             * @default 0
+             */
+            findings: number;
+            /** Id */
+            id: number;
+            /** Log Path */
+            log_path: string;
+            /** Session Id */
+            session_id: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            state: components["schemas"]["RunState"];
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string | null;
+            /** Tokens */
+            tokens: number | null;
+        };
+        /**
+         * ChoreSummary
+         * @description A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings.
+         */
+        ChoreSummary: {
+            /**
+             * Days
+             * @default []
+             */
+            days: string[];
+            /** Due At */
+            due_at: string | null;
+            /** Every Minutes */
+            every_minutes: number;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["ChoreFinding"][];
+            /** Hours */
+            hours: string | null;
+            latest: components["schemas"]["ChoreRun"] | null;
+            /** Latest Note Id */
+            latest_note_id: number | null;
+            /** Name */
+            name: string;
+            running: components["schemas"]["ChoreRun"] | null;
+            /** Timezone */
+            timezone: string | null;
+            /** When */
+            when: string | null;
+        };
+        /**
+         * ChoresUpdated
+         * @description The chores changed: a run started or ended, or a note was added. The payload is the whole list.
+         */
+        ChoresUpdated: {
+            /** Chores */
+            chores: components["schemas"]["ChoreSummary"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "chores.updated";
         };
         /**
          * Comment
@@ -571,7 +730,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"];
         /**
          * Tick
          * @description The latest tick, as `canopy status`'s first line shows it (DESIGN §14).
@@ -763,6 +922,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttentionItem"][];
+                };
+            };
+        };
+    };
+    listChores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreSummary"][];
+                };
+            };
+        };
+    };
+    getChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreDetail"];
+                };
+            };
+            /** @description No such chore. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replyChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Replied"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

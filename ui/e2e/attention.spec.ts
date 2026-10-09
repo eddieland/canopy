@@ -37,6 +37,19 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await expect(list.getByRole('link').filter({ hasText: 'awaiting_reply' })).toHaveAttribute('aria-current', 'page')
 })
 
+test("a chore's finding opens the chore's notes and a form for another", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
+
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByRole('link', { name: 'chore:deps' })).toBeVisible()
+    await expect(detail.getByTestId('message-8')).toContainText("Leave out the docs site's lockfile")
+    await expect(detail.getByTestId('message-8')).not.toContainText('waiting for the next run')
+    await expect(detail.getByRole('form', { name: 'Note' })).toBeVisible()
+    await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+})
+
 test('an item about no ticket says so, with nothing to answer', async ({ page }) => {
     await page.goto('attention')
     await settled(page)

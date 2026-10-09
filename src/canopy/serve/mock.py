@@ -3,9 +3,10 @@
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, and
 the pools' slots are stand-ins, since the first two belong to the loop and there is no treehouse to ask (backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
-slot past its declared size, and run 43 holds a slot in both. Times are fixed around 2026-10-08 12:00 UTC, so a test
-that freezes the browser's clock gets the same page every time. `changes` moves the running run's cost now and then,
-which the event stream then shows.
+slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
+found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Times
+are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
+`changes` moves the running run's cost now and then, which the event stream then shows.
 """
 
 from __future__ import annotations
@@ -60,7 +61,27 @@ slots_per_repo = 2
 
 [capacity.repo_slots]
 web = 4
+
+[chores.deps]
+prompt = "{chores}/deps.md"
+every_minutes = 360
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-18:00"
+timezone = "UTC"
+when = "Skip it when nothing has merged to main since the last run."
+
+[chores.build-health]
+prompt = "{chores}/build-health.md"
+every_minutes = 120
 """
+# The chore whose finding the attention list shows, and a run of each chore.
+CHORE = "deps"
+_LODASH = {
+    "id": "lodash-advisory",
+    "title": "lodash 4.17.20 has a prototype pollution advisory",
+    "detail": "web's lockfile pins lodash 4.17.20 through an old date picker; 4.17.21 fixes it.",
+    "link": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm",
+}
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 
@@ -165,8 +186,11 @@ def seed(directory: Path) -> Backend:
     for repo in _POOLS:
         (root / workspace.REPOS_DIR / repo / ".git").mkdir(parents=True)
     user_file = directory / "config" / "config.toml"
-    user_file.parent.mkdir()
-    user_file.write_text(_USER_TOML)
+    chores = user_file.parent / "chores"
+    chores.mkdir(parents=True)
+    for name in (CHORE, "build-health"):
+        (chores / f"{name}.md").write_text(f"Check {name} for the mock workspace.\n")
+    user_file.write_text(_USER_TOML.replace("{chores}", str(chores)))
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws, cfg.paths.state_dir)
@@ -217,7 +241,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     conn.execute(
         # It read every seeded message: a reply the operator adds waits for the next tick.
         "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id) "
-        "VALUES (1, ?, ?, 'ok', 'mock tick', 7)",
+        "VALUES (1, ?, ?, 'ok', 'mock tick', 8)",
         (at(-60), at(-59)),
     )
     tickets = (
@@ -420,4 +444,54 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         "commented_at) VALUES (6, 'ticket', 'ABC-101', ?, 'tracker', 'comment', 'tracker', ?, '10001', "
         "'557058:ann', ?)",
         (at(-50), "Please keep the old login route working until the mobile app ships. <b>Thanks!</b>", at(-52)),
+    )
+    _chore_fixtures(conn)
+
+
+def _chore_fixtures(conn: sqlite3.Connection) -> None:
+    chore_runs = (
+        # id, chore, started, ended, status, result, cost
+        (1, CHORE, -480, -474, "ok", {"status": "ok", "summary": "No advisory touches the lockfiles."}, 0.21),
+        (
+            2,
+            CHORE,
+            -240,
+            -233,
+            "ok",
+            {"status": "ok", "summary": "One advisory touches web's lockfile.", "findings": [_LODASH]},
+            0.26,
+        ),
+        (
+            3,
+            "build-health",
+            -130,
+            -124,
+            "ok",
+            {"status": "ok", "summary": "main is green; two flaky checks passed on a retry."},
+            0.33,
+        ),
+        (4, "build-health", -10, None, "running", None, 0.05),
+    )
+    for run_id, name, started, ended, status, result, cost in chore_runs:
+        conn.execute(
+            "INSERT INTO chore_runs (id, tick_id, chore, started_at, ended_at, status, result_json, log_path, "
+            "session_id, cost_usd, tokens_input, tokens_output) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id,
+                name,
+                at(started),
+                at(ended) if ended is not None else None,
+                status,
+                json.dumps(result) if result is not None else None,
+                f"/home/op/.canopy/chores/{run_id}.log",
+                f"ses_chore{run_id}",
+                cost,
+                int(cost * 40_000),
+                int(cost * 6_000),
+            ),
+        )
+    conn.execute(
+        "INSERT INTO messages (id, subject_kind, subject_id, at, source, kind, channel, body, submission) "
+        "VALUES (8, 'chore', ?, ?, 'operator', 'reply', 'cli', ?, 'mock-note-8')",
+        (CHORE, at(-300), "Leave out the docs site's lockfile: it is never deployed."),
     )

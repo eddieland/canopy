@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { NOW, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -35,6 +35,13 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102')
     await expect(nav.getByRole('link', { name: 'Tickets' })).toHaveAttribute('data-status', 'active')
+
+    await nav.getByRole('link', { name: 'Chores' }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chores')
+    await page.getByTestId('chores').getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps')
+    await expect(nav.getByRole('link', { name: 'Chores' })).toHaveAttribute('data-status', 'active')
 
     await nav.getByRole('link', { name: 'Settings' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
@@ -79,6 +86,35 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     await page.goto('tickets/ZZZ-9')
     await expect(page.getByText('canopy has no record of it')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Start privately' })).toBeVisible()
+})
+
+test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({
+    page,
+}) => {
+    // The fixtures' clock: deps last ran at 08:00 and is due again at 14:00.
+    await page.clock.setFixedTime(NOW)
+    await page.goto('chores')
+    await settled(page)
+    await expect(page.getByTestId('chore-build-health')).toContainText('running for 40m')
+    const deps = page.getByTestId('chore-deps')
+    await expect(deps).toContainText('last ok 4h ago, due in 1h')
+    await expect(deps.getByTestId('chore-findings')).toHaveText('1 open finding')
+    await expect(deps).toContainText('mon,tue,wed,thu,fri 08:00-18:00 UTC')
+
+    await page.goto('chores/deps')
+    await settled(page)
+    const finding = page.getByTestId('finding-lodash-advisory')
+    await expect(finding).toContainText('lodash 4.17.20 has a prototype pollution advisory')
+    await expect(finding.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')
+    await expect(page.getByTestId('chore-run-2')).toContainText('1 finding')
+    await expect(page.getByTestId('chore-run-2')).toContainText('session ses_chore2')
+    await expect(page.getByTestId('chore-notes').getByTestId('message-8')).toContainText("docs site's lockfile")
+    await expect(page.getByRole('form', { name: 'Note' })).toBeVisible()
+})
+
+test('a chore not defined for this workspace says so', async ({ page }) => {
+    await page.goto('chores/nope')
+    await expect(page.getByText("no chore 'nope' is defined for this workspace")).toBeVisible()
 })
 
 test('the worktrees page shows each pool of the workspace and what holds each slot', async ({ page }) => {
