@@ -1,12 +1,11 @@
-"""Layered configuration: built-in defaults, then the shared file, then the user's `config.toml`.
+"""Layered configuration: built-in defaults, then the workspace file, then the user's `config.toml`.
 
-The shared file is the workspace's `canopy-workspace.toml` in a workspace, and the repository's `canopy.toml` in a
-workspace of one (DESIGN §18). Both are the "repository file" of what follows.
+The shared file is the workspace's `canopy-workspace.toml`. No code repository's file is read (D016).
 
 Every key has a scope (DESIGN §12). A shared key may be set in either file and the user file wins. A user-only key may
-be set only in the user file; a repository file that sets one is an error, because anyone who can push to the
-repository controls that file (TRUST_MODEL T7). Unknown keys are errors in both files. Repository `policy.*` values
-apply only when stricter than the built-in defaults.
+be set only in the user file; a workspace file that sets one is an error, because a workspace file may be committed to
+a shared repository, and anyone who can push there controls it (TRUST_MODEL T7). Unknown keys are errors in both files.
+The workspace file's `policy.*` values apply only when stricter than the built-in defaults.
 
 The models below are the schema: each field carries its type, default, and scope, and policy fields say which
 direction is stricter. `load` enforces scopes and the tighten rule per file, merges, then lets pydantic validate
@@ -41,9 +40,8 @@ from pydantic import (
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
-REPO_FILE_NAME = "canopy.toml"
 WORKSPACE_FILE_NAME = "canopy-workspace.toml"
-# A workspace's state is always here, under its root; `paths.state_dir` applies only to a workspace of one.
+# A workspace's state is always here, under its root: each workspace has its own journal and locks (DESIGN §18).
 WORKSPACE_STATE_DIR = ".canopy"
 # Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
 WORKSPACE_MAP_TABLES = ("workspace", "repos")
@@ -71,7 +69,7 @@ class Scope(Enum):
 
 
 class Tighten(Enum):
-    """For repository policy: which direction is stricter than the default."""
+    """For the workspace file's policy: which direction is stricter than the default."""
 
     LOWER = "lower"
     HIGHER = "higher"
@@ -86,7 +84,7 @@ def _non_blank(value: str) -> str:
 
 
 # One or more plain ref components, each followed by "/". Branch names reach git's argv, so none may start with "-" or
-# hold anything git treats specially ("..", "@{", a leading "."). The repository file can set this key (TRUST_MODEL T7).
+# hold anything git treats specially ("..", "@{", a leading "."). The workspace file can set this key (TRUST_MODEL T7).
 BRANCH_PREFIX_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
 
 
@@ -197,8 +195,8 @@ def _setup_command(value: str) -> str:
 
 
 def _user_path(value: Path) -> Path:
-    # A relative path would resolve against the working directory, which is the repository: its files would stand in
-    # for the operator's prompts or state (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
+    # A relative path would resolve against the working directory, which is the workspace: its files would stand in
+    # for the operator's prompts (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
     expanded = value.expanduser()
     if not expanded.is_absolute():
         raise ValueError("must be an absolute path or start with ~")
@@ -305,7 +303,7 @@ class Tracker(Section):
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
-    # write, which a repository must not (TRUST_MODEL T7).
+    # write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
 
@@ -342,10 +340,10 @@ class Trust(Section):
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
     # Whose review feedback a worker may address without the operator's go-ahead (DESIGN §7, D089): VCS host logins,
     # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. User-only: a
-    # repository that listed its own bots would decide what steers the operator's workers.
+    # workspace file that listed its own bots would decide what steers the operator's workers.
     trusted_reviewers: Annotated[tuple[Annotated[StrictStr, AfterValidator(_reviewer)], ...], Scope.USER] = ()
     # What every worker comment starts and ends with, when set (DESIGN §8, D069). They only take authority away, from
-    # the comments that carry them; user-only, so a repository cannot pick marks that silence people's comments.
+    # the comments that carry them; user-only, so a shared file cannot pick marks that silence people's comments.
     comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
     comment_suffix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = ""
 
@@ -431,7 +429,7 @@ class Runtime(Section):
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
     # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8, D078). User-only: it
-    # chooses what workers are told to do, which a repository must not (TRUST_MODEL T7).
+    # chooses what workers are told to do, which a shared workspace file must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
     # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
     # ends the run `crashed` (DESIGN §8, D105). Empty means none. It runs the branch's code on this machine.
@@ -518,7 +516,6 @@ class Paths(Section):
 
     # No static default: `load` supplies `prompts/` next to the user file, which depends on XDG_CONFIG_HOME.
     prompt_overrides: Annotated[UserPath, Scope.USER]
-    state_dir: Annotated[UserPath, Scope.USER] = Path("~/.canopy")
     # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
     # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
     worktree_include: Annotated[UserPath | None, Scope.USER] = None
@@ -730,53 +727,36 @@ def user_config_path() -> Path:
     return user_config_dir() / "config.toml"
 
 
-def find_repo_root(start: Path) -> Path:
-    """The nearest directory at or above `start` that contains `.git` (a directory, or a file in a worktree)."""
-    start = start.resolve()
-    for d in (start, *start.parents):
-        if (d / ".git").exists():
-            return d
-    raise ConfigError(f"{start} is not inside a git repository")
+def load(root: Path, user_file: Path | None = None) -> Config:
+    """Read and validate the layered config for the workspace at `root`: its workspace file, then the user file.
 
-
-def load(repo_root: Path, user_file: Path | None = None) -> Config:
-    """Read and validate the layered config for the workspace at `repo_root`.
-
-    A `canopy-workspace.toml` at `repo_root` is the shared layer, and its state directory is `<repo_root>/.canopy`
-    whatever `paths.state_dir` says. Without one, the repository's `canopy.toml` is, as it always was.
+    No code repository's file is read (D016). The workspace file's map tables are `canopy.core.workspace`'s to read.
     """
     user_file = user_file or user_config_path()
-    workspace_file = repo_root / WORKSPACE_FILE_NAME
-    in_workspace = workspace_file.is_file()
-    repo_file = workspace_file if in_workspace else repo_root / REPO_FILE_NAME
-
-    skip = WORKSPACE_MAP_TABLES if in_workspace else ()
-    repo_values: dict[str, object] = _read(repo_file, skip=skip) if repo_file.exists() else {}
-    for name in repo_values:
+    shared_file = root / WORKSPACE_FILE_NAME
+    shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
+    for name in shared:
         if SPECS[name].scope is Scope.USER:
             raise ConfigError(
-                f"{repo_file}: {name} is user-only and cannot be set in the repository file; set it in {user_file}"
+                f"{shared_file}: {name} is user-only and cannot be set in the workspace file; set it in {user_file}"
             )
     if not user_file.exists():
         raise ConfigError(f"no user config at {user_file}; run `canopy init`")
     user_values = _read(user_file)
 
-    merged, origin = _merge(((repo_file, repo_values), (user_file, user_values)), repo_file)
+    merged, origin = _merge(((shared_file, shared), (user_file, user_values)), shared_file)
     # Unset or empty: `prompts/` next to the user file.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
-    if in_workspace:
-        # Each workspace has its own journal and locks, so two workspaces never share a queue's state (DESIGN §18).
-        merged["paths"]["state_dir"] = str(repo_root.absolute() / WORKSPACE_STATE_DIR)
 
     try:
         return Config.model_validate(merged)
     except ValidationError as e:
-        raise ConfigError(_describe(e, origin, repo_file, user_file)) from e
+        raise ConfigError(_describe(e, origin, shared_file, user_file)) from e
 
 
 def _merge(
-    layers: tuple[tuple[Path, dict[str, object]], ...], repo_file: Path
+    layers: tuple[tuple[Path, dict[str, object]], ...], shared_file: Path
 ) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
     """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file."""
     merged: dict[str, dict[str, object]] = {section: {} for section in (*SECTIONS, *TABLE_SECTIONS)}
@@ -784,7 +764,7 @@ def _merge(
     for source, values in layers:
         for name, value in values.items():
             spec = SPECS[name]
-            if source == repo_file and spec.tighten is not None and not _stricter(spec, value):
+            if source == shared_file and spec.tighten is not None and not _stricter(spec, value):
                 continue
             origin[name] = source
             if isinstance(value, dict) and name in TABLE_SECTIONS:
@@ -824,9 +804,9 @@ def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
 
 
 def _stricter(spec: KeySpec, value: object) -> bool:
-    """Return whether a repository policy value may replace the default.
+    """Return whether a workspace file's policy value may replace the default.
 
-    A value of the wrong type is kept, so that validation reports it against the repository file instead of silently
+    A value of the wrong type is kept, so that validation reports it against the workspace file instead of silently
     dropping it.
     """
     default = spec.field.default
@@ -840,7 +820,7 @@ def _stricter(spec: KeySpec, value: object) -> bool:
     return value < default if spec.tighten is Tighten.LOWER else value > default
 
 
-def _describe(error: ValidationError, origin: dict[str, Path], repo_file: Path, user_file: Path) -> str:
+def _describe(error: ValidationError, origin: dict[str, Path], shared_file: Path, user_file: Path) -> str:
     lines: list[str] = []
     for e in error.errors():
         loc = [str(p) for p in e["loc"] if p != "[key]"]
@@ -853,7 +833,7 @@ def _describe(error: ValidationError, origin: dict[str, Path], repo_file: Path, 
         name = ".".join(loc[:2])
         where = name + "".join(f"[{p}]" for p in loc[2:])
         if e["type"] == "missing":
-            files = str(user_file) if SPECS[name].scope is Scope.USER else f"{repo_file} or {user_file}"
+            files = str(user_file) if SPECS[name].scope is Scope.USER else f"{shared_file} or {user_file}"
             lines.append(f"missing required key {name}; set it in {files}")
         else:
             source = origin.get(name)

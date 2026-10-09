@@ -11,9 +11,8 @@ from pydantic import ValidationError
 from canopy.cli.main import main
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
-from canopy.core import db
+from canopy.core import db, workspace
 from canopy.core.config import CHORE_DAYS, Chore, load
-from canopy.core.workspace import of_one
 from tests.canopy.helpers import InlineRunner, in_tick, journal
 from tests.canopy.test_chores import chore_toml, decisions, state_block
 from tests.conftest import CanopyEnv
@@ -131,7 +130,7 @@ def test_outside_its_window_a_chore_is_refused_and_not_due(
 
 def test_a_run_waits_out_every_minutes_and_then_its_window(canopy_env: CanopyEnv, closed: Path) -> None:
     conn = journal(canopy_env)
-    [state] = view.states(conn, load(canopy_env.repo, canopy_env.user_file), of_one(canopy_env.repo))
+    [state] = view.states(conn, load(canopy_env.root, canopy_env.user_file), workspace.load(canopy_env.root))
     now = datetime.now(UTC)
     assert state.earliest() is None  # never run: `every_minutes` allows it now, the window does not
     assert db.format_time(state.due_at(now) or now) == next_midnight()

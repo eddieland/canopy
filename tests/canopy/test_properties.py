@@ -155,9 +155,8 @@ def test_the_prompt_survives_quoting_in_the_template(prompt: str) -> None:
 
 @settings(suppress_health_check=fixtures, max_examples=50)
 @given(attempts=st.integers(min_value=0, max_value=10**6), cooldown=st.integers(min_value=0, max_value=10**6))
-def test_repository_policy_never_loosens_the_defaults(tmp_path: Path, attempts: int, cooldown: int) -> None:
-    (tmp_path / ".git").mkdir(exist_ok=True)
-    (tmp_path / "canopy.toml").write_text(
+def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: int, cooldown: int) -> None:
+    (tmp_path / config.WORKSPACE_FILE_NAME).write_text(
         '[tracker]\nprovider = "jira"\nquery = "q"\n'
         f"[policy]\nmax_fix_ci_attempts = {attempts}\nfix_ci_cooldown_minutes = {cooldown}\n"
         f"max_implement_attempts = {attempts}\n"
@@ -175,13 +174,12 @@ def test_every_config_key_declares_a_scope() -> None:
     for spec in config.SPECS.values():
         assert spec.scope in (config.Scope.SHARED, config.Scope.USER)
     user_only = {name for name, spec in config.SPECS.items() if spec.scope is config.Scope.USER}
-    # TRUST_MODEL §6: commands, prompt paths, capacity, labels, and repliers never come from the repository.
+    # TRUST_MODEL §6: commands, prompt paths, capacity, labels, and repliers never come from a shared file.
     assert user_only >= {
         "runtime.overseer_cmd",
         "runtime.worker_cmd",
         "notify.cmd",
         "paths.prompt_overrides",
-        "paths.state_dir",
         "capacity.max_workers",
         "tracker.labels",
         "trust.authorized_repliers",
@@ -195,16 +193,15 @@ def test_every_config_key_declares_a_scope() -> None:
 
 
 @pytest.mark.parametrize("name", sorted(config.SPECS))
-def test_repository_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> None:
+def test_workspace_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> None:
     if config.SPECS[name].scope is not config.Scope.USER:
         return
-    (tmp_path / ".git").mkdir()
     if name in config.TABLE_SECTIONS:
         extra = f'[{name}.x]\nprompt = "~/x"\n'
     else:
         section, key = name.split(".")
         extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
-    (tmp_path / "canopy.toml").write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
+    (tmp_path / config.WORKSPACE_FILE_NAME).write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
     user = tmp_path / "config.toml"
     user.write_text('[tracker]\nlabels = ["mine"]\n')
     with pytest.raises(config.ConfigError, match="user-only"):

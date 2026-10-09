@@ -69,7 +69,7 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
     c, _ = signed_in_client(ctx)
 
     [pool] = c.get("/api/worktrees").json()
-    assert (pool["repo"], pool["size"], pool["error"]) == (workspace.one_name(ctx.repo_root), None, None)
+    assert (pool["repo"], pool["size"], pool["error"]) == ("repo", None, None)
     by_name = {w["name"]: w for w in pool["worktrees"]}
     assert {n: w["state"] for n, w in by_name.items()} == {
         "1": "working",

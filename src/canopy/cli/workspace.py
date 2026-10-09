@@ -62,7 +62,7 @@ def cmd_add(click_ctx: click.Context, repos: tuple[str, ...]) -> int:
 def _require_workspace() -> Path:
     root = workspace.find_root(Path.cwd())
     if root is None:
-        raise CliError(f"no {config.WORKSPACE_FILE_NAME} here or above; run `canopy init --workspace` first")
+        raise CliError(f"no {config.WORKSPACE_FILE_NAME} here or above; run `canopy init` first")
     return root
 
 

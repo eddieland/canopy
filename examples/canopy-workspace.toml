@@ -1,6 +1,6 @@
-# canopy-workspace.toml - the map of a workspace: several repositories that share one queue (DESIGN.md §18).
-# Written by `canopy init --workspace`. It takes the place of each repository's canopy.toml, with the same scopes:
-# shared keys only; personal settings live in ~/.config/canopy/config.toml. Commit it if the workspace is shared.
+# canopy-workspace.toml - the map of a workspace: the repositories that share one queue (DESIGN.md §18), one or more.
+# Written by `canopy init`. It is canopy's only shared config; no code repository holds any (D016). Shared keys only:
+# personal settings live in ~/.config/canopy/config.toml. Commit it if the workspace is shared.
 #
 # `canopy workspace sync` makes the workspace match this map: it clones what is listed and removes a clone that is no
 # longer listed, when nothing in it would be lost. Pool sizes are personal: capacity.slots_per_repo in your user file.

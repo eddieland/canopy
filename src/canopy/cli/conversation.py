@@ -166,7 +166,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
             "the ticket cannot start over."
         )
     limit = ctx.config.policy.max_implement_attempts
-    for (key, repo), counts in sorted(policy.attempts(ctx.conn, single=ctx.workspace.single).items(), key=str):
+    for (key, repo), counts in sorted(policy.attempts(ctx.conn).items(), key=str):
         if key == subject.id and counts["implement"] >= limit:
             where = "" if repo is None else f" in {repo}"
             click.echo(
@@ -212,8 +212,7 @@ def _show_ticket(ctx: Context, key: str) -> None:
                 "history, and the loop reads only what came after"
             )
         for unit in db.units(ctx.conn, key):
-            name = "" if ctx.workspace.single else f"{unit['repo']}  "
-            click.echo(f"  {name}PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
+            click.echo(f"  {unit['repo']}  PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
     _show_runs(ctx, key)
     _show_conversation(ctx, key, waits=conversation.is_started(record))
 
@@ -274,8 +273,7 @@ def _show_run(ctx: Context, run_id: int) -> None:
     if run["branch"]:
         click.echo(f"  branch {run['branch']}")
     for s in db.run_slots(ctx.conn, run_id):
-        where = "" if ctx.workspace.single else f"{s['repo']}  "
-        click.echo(f"  {where}slot {s['slot_path']}, from {s['base_branch']}")
+        click.echo(f"  {s['repo']}  slot {s['slot_path']}, from {s['base_branch']}")
     result = result_of(run)
     for pr in prs_of(result):
         click.echo(f"  PR {pr}")

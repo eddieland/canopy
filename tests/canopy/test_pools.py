@@ -22,7 +22,7 @@ LABEL = "agent-ready-tester"
 
 def declare(canopy_env: CanopyEnv, capacity: str) -> None:
     """Add `capacity` lines to the operator's user file."""
-    canopy_env.write_user(user_toml(canopy_env.state_dir) + f"\n[capacity]\n{capacity}\n")
+    canopy_env.write_user(user_toml() + f"\n[capacity]\n{capacity}\n")
 
 
 def fake_state(treehouse_state: Path) -> dict[str, Any]:
@@ -90,7 +90,7 @@ def test_slots_are_declared_in_the_user_file_only(ws: Ws, canopy_env: CanopyEnv)
     with pytest.raises(config.ConfigError, match=r"capacity\.slots_per_repo"):
         config.load(ws.root, canopy_env.user_file)
 
-    canopy_env.write_user(user_toml(canopy_env.state_dir))
+    canopy_env.write_user(user_toml())
     assert config.load(ws.root, canopy_env.user_file).capacity.slots_for("api") is None  # unmanaged by default
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(extra="\n[capacity.repo_slots]\napi = 9\n"))
     with pytest.raises(config.ConfigError, match=r"capacity\.repo_slots is user-only"):
@@ -489,7 +489,12 @@ def test_init_with_clone_urls_sets_up_a_workspace_ready_to_run(
     assert len(fake_state(treehouse_state)["pools"]) == 2
 
 
-def test_clone_urls_without_a_workspace_are_refused(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+def test_clone_urls_in_a_code_checkout_are_refused(
+    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    checkout = tmp_path / "code"
+    (checkout / ".git").mkdir(parents=True)
+    monkeypatch.chdir(checkout)
     assert main(["init", "--provider", "jira", "https://x.test/api.git"]) == 2
-    assert "pass --workspace" in capsys.readouterr().err
-    assert not (canopy_env.repo / config.WORKSPACE_FILE_NAME).exists()
+    assert "Pass --workspace" in capsys.readouterr().err
+    assert not (checkout / config.WORKSPACE_FILE_NAME).exists()

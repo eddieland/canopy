@@ -89,7 +89,7 @@ def holder(run_id: int) -> str:
 def check(ctx: Context, *, tick_id: int, request: Request) -> str | None:
     """Check the guards for a dry run, counting what this dry run already started as running (D036).
 
-    Returns the repository the review would lease in, or None in a workspace of one.
+    Returns the repository the review would lease in.
 
     Raises:
         Refusal: a guard refused.
@@ -250,12 +250,8 @@ def _check_shape(request: Request) -> None:
 
 
 def _check_repo(ctx: Context, repo: str | None) -> str | None:
-    """`unknown_repo`: in a workspace of several, the PR's repository must be named, in the map, and cloned."""
+    """`unknown_repo`: the PR's repository must be named, in the map, and cloned."""
     ws = ctx.workspace
-    if ws.single:
-        if repo is not None and ws.repo(repo) is None:
-            raise Refusal("unknown_repo", f"{repo!r} is not this repository ({ws.repos[0].name})")
-        return None
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if repo is None:
         raise Refusal("unknown_repo", f"--repo is required in a workspace: name the PR's repository ({names})")

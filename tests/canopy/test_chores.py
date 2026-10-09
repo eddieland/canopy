@@ -14,9 +14,8 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import db
+from canopy.core import db, workspace
 from canopy.core.config import load
-from canopy.core.workspace import of_one
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, in_tick, journal
@@ -314,12 +313,12 @@ def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
     third = db.get_chore_run(conn, 3)
     assert first is not None
     assert third is not None
-    cfg = load(canopy_env.repo, canopy_env.user_file)
-    found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, of_one(canopy_env.repo))}
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
     assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
     # A finding open longer than one page of history reads back further.
     monkeypatch.setattr(view, "_HISTORY_RUNS", 1)
-    found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, of_one(canopy_env.repo))}
+    found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
     assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
 
 
@@ -364,7 +363,7 @@ def test_a_chore_for_another_workspace_is_not_configured_here(
     tick_id = in_tick(conn, monkeypatch)
     assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
     assert decisions(conn, tick_id)[0][1] == "refused:unknown_chore"
-    canopy_env.write_user(text.replace('["elsewhere"]', '["repo"]'))  # the workspace of one is named for its directory
+    canopy_env.write_user(text.replace('["elsewhere"]', '["acme"]'))  # the name in this workspace's map
     assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
 
 
@@ -555,4 +554,4 @@ def test_a_chore_run_records_what_it_cost(
 
 
 def test_the_default_chore_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
-    assert "--format json" in load(canopy_env.repo, canopy_env.user_file).runtime.chore_cmd
+    assert "--format json" in load(canopy_env.root, canopy_env.user_file).runtime.chore_cmd

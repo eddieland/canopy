@@ -123,7 +123,7 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
     db.finish_run(conn, live, "done", "{}")
     assert main(["tick", "--dry-run"]) == 0
     assert not old.exists()
-    current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     assert [p.name for p in (canopy_env.state_dir / "runtime").iterdir()] == [current.name]
 
 
@@ -216,7 +216,18 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
     overseer_does(
         monkeypatch,
-        ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"],
+        [
+            "dispatch",
+            "PROJ-1",
+            "--repo",
+            "repo",
+            "--label",
+            "agent-ready-tester",
+            "--kind",
+            "implement",
+            "--slug",
+            "add-login",
+        ],
     )
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-add-login"))
     assert main(["tick"]) == 0
@@ -254,7 +265,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     worker_does(monkeypatch)
     monkeypatch.setenv("FAKE_WORKER_SLEEP", "60")
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
 

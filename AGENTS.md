@@ -96,8 +96,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
-- Log with `logging`, JSON lines to `~/.canopy/canopy.log`. Every tick has an id that appears in every log line it
-  produces.
+- Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every
+  log line it produces.
 
 ## Testing
 
@@ -108,9 +108,10 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - The fake agent command is `tests/fakes/agent`, a script that prints a configurable final JSON line. Tests configure
   it through an env var.
 - Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file), `agent_log`
-  (what each fake agent run saw), and `canopy_env` (a repository, user config, and state dir in a temp directory, with
-  HOME pointed there). Each fake's docstring lists the env vars and state keys it reads. The fake agent can run
-  commands (`FAKE_AGENT_COMMANDS`), which is how a test plays an overseer calling `canopy decide`.
+  (what each fake agent run saw), and `canopy_env` (a workspace of one repository, `repo`, and a user config in a temp
+  directory, with HOME pointed there; commands that name a repository pass `--repo repo`). Each fake's docstring lists
+  the env vars and state keys it reads. The fake agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test
+  plays an overseer calling `canopy decide`.
 - Every test directory has an `__init__.py`, `tests/` included (D019). ruff's `INP001` fails the lint on one that does
   not. The root one matters most: without it, `tests/canopy/` is imported as a package named `canopy` and shadows
   `src/canopy`.

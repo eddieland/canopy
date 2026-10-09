@@ -20,7 +20,6 @@ from canopy.infra import procs
 
 if TYPE_CHECKING:
     import sqlite3
-    from pathlib import Path
 
     from canopy.core.config import Config
     from canopy.core.items import Item
@@ -36,8 +35,7 @@ class Backend:
     """The loop's config and workspace, its journal, and the two functions the server borrows from the loop."""
 
     config: Config
-    repo_root: Path
-    workspace: Workspace | None
+    workspace: Workspace
     # The attention list as `canopy status` shows it.
     attention: Callable[[Context], list[Item]]
     # End a running run as `canopy stop --now` does; False if it had already ended.
@@ -53,11 +51,10 @@ class Backend:
     @contextmanager
     def open(self) -> Iterator[Context]:
         """A Context on a journal connection of its own, closed when the block ends. One per request or stream."""
-        conn = db.connect(db_path(self.config))
+        conn = db.connect(db_path(self.workspace))
         try:
             yield Context(
                 config=self.config,
-                repo_root=self.repo_root,
                 conn=conn,
                 runner=procs.SubprocessRunner(),
                 ws=self.workspace,

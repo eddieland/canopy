@@ -27,10 +27,10 @@ def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_ru
 @pytest.mark.parametrize(
     "argv",
     [
-        ["dispatch", "{key}", "--label", "agent-ready-tester", "--kind", "implement"],
+        ["dispatch", "{key}", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
         ["decide", "{key}", "wait", "--rationale", "r"],
         ["attention", "{key}", "needs_reviewer", "--detail", "d"],
-        ["ticket", "set", "{key}", "--phase", "ready"],
+        ["ticket", "set", "{key}", "--repo", "repo", "--phase", "ready"],
     ],
 )
 @pytest.mark.parametrize("key", ["-rf", "PROJ 1", "PROJ-1;id", "../x", "#12", "", "_x"])
@@ -63,7 +63,7 @@ def test_decide_records_and_touches_ticket(
     rows = [(d["ticket_key"], d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
     assert rows == [("PROJ-1", "skip", "blocked by PROJ-0"), (None, "skip", "mcp_unavailable: tracker")]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert ticket["repo"] == str(canopy_env.repo)
+    assert ticket["repo"] == str(canopy_env.root)
 
 
 def test_decide_needs_a_key_except_for_skip(
@@ -101,6 +101,8 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(
             [
                 "dispatch",
                 "PROJ-2",
+                "--repo",
+                "repo",
                 "--label",
                 "agent-ready-tester",
                 "--kind",
@@ -114,20 +116,34 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(
         == 0
     )
     assert (
-        main(["dispatch", "PROJ-3", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"]) == 0
+        main(
+            [
+                "dispatch",
+                "PROJ-3",
+                "--repo",
+                "repo",
+                "--label",
+                "agent-ready-tester",
+                "--kind",
+                "implement",
+                "--slug",
+                "add-login",
+            ]
+        )
+        == 0
     )
     rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
     assert rows == [
         (
             "dispatch:implement",
             (
-                "dry run: not dispatched; would work on agent/PROJ-2-work; label agent-ready-tester; cursor comment=7; "
-                "context=see comment 7"
+                "dry run: not dispatched; would work on agent/PROJ-2-work in repo; label agent-ready-tester; "
+                "cursor comment=7; context=see comment 7"
             ),
         ),
         (
             "dispatch:implement",
-            "dry run: not dispatched; would work on agent/PROJ-3-add-login; label agent-ready-tester",
+            "dry run: not dispatched; would work on agent/PROJ-3-add-login in repo; label agent-ready-tester",
         ),
     ]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
@@ -140,9 +156,23 @@ def test_dry_run_ticket_set_records_the_phase_only(
 ) -> None:
     in_tick(conn, monkeypatch)
     assert (
-        main(["ticket", "set", "PROJ-1", "--phase", "merged", "--cursor", "review=2026-10-07T20:58:50Z", "--done"]) == 0
+        main(
+            [
+                "ticket",
+                "set",
+                "PROJ-1",
+                "--repo",
+                "repo",
+                "--phase",
+                "merged",
+                "--cursor",
+                "review=2026-10-07T20:58:50Z",
+                "--done",
+            ]
+        )
+        == 0
     )
-    assert capsys.readouterr().out == "updated PROJ-1; dry run, cursors not advanced and not marked done\n"
+    assert capsys.readouterr().out == "updated PROJ-1 (repo); dry run, cursors not advanced and not marked done\n"
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert (row["phase"], row["done"]) == (None, 0)
     # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
@@ -219,7 +249,18 @@ def test_decisions_filters_by_ticket_and_reports_no_match(
 
 
 def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    args = ["ticket", "set", "PROJ-1", "--cursor", "comment=10001", "--cursor", "review=2026-10-07T20:58:50Z", "--done"]
+    args = [
+        "ticket",
+        "set",
+        "PROJ-1",
+        "--repo",
+        "repo",
+        "--cursor",
+        "comment=10001",
+        "--cursor",
+        "review=2026-10-07T20:58:50Z",
+        "--done",
+    ]
     assert main(args) == 0
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert (row["last_comment_id"], row["done"]) == ("10001", 1)
@@ -232,7 +273,7 @@ def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn:
     "value", ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)", "review=2026-10-07T20:58:50+00:00"]
 )
 def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
-    assert main(["ticket", "set", "PROJ-1", "--cursor", value]) == 2
+    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", value]) == 2
 
 
 @pytest.mark.parametrize(
@@ -248,9 +289,9 @@ def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
 def test_a_review_cursor_is_a_time(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str], value: str
 ) -> None:
-    assert main(["ticket", "set", "PROJ-1", "--cursor", f"review={value}"]) == 2
+    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={value}"]) == 2
     assert "a review cursor is the newest handled item's time in UTC" in capsys.readouterr().err
-    assert main(["ticket", "set", "PROJ-1", "--cursor", "review=2026-10-07T20:58:50Z"]) == 0
+    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "review=2026-10-07T20:58:50Z"]) == 0
     [unit] = db.units(conn, "PROJ-1")
     assert unit["last_review_id"] == "2026-10-07T20:58:50Z"
 
@@ -297,5 +338,5 @@ def test_trailing_line_breaks_are_not_part_of_a_valid_key(
     in_tick(conn, monkeypatch)
     assert main(["decide", key, "wait", "--rationale", "r"]) == 2
     assert main(["attention", "PROJ-1", "needs_reviewer\n", "--detail", "d"]) == 2
-    assert main(["ticket", "set", "PROJ-1", "--cursor", "comment=1\n"]) == 2
+    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=1\n"]) == 2
     assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0

@@ -4,16 +4,25 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
+from canopy.core import config, workspace
 from canopy.core.config import load
 from canopy.setup.init import is_ssh_url
-from tests.conftest import CanopyEnv, git
+from tests.conftest import CanopyEnv
 
 
-def test_init_writes_both_configs_and_installs_nothing_else(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
-) -> None:
+@pytest.fixture
+def empty(canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """An empty directory outside any workspace or repository, as the working directory, and no user file yet."""
     canopy_env.user_file.unlink()
-    canopy_env.repo_file.unlink()
+    path = tmp_path / "new"
+    path.mkdir()
+    monkeypatch.chdir(path)
+    return path
+
+
+def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
+    canopy_env: CanopyEnv, empty: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert main(["init", "--provider", "github"]) == 0
     out = capsys.readouterr().out
 
@@ -21,40 +30,61 @@ def test_init_writes_both_configs_and_installs_nothing_else(
     assert "Branch protection" in out
     assert "does not load" not in out
     assert 'labels = ["agent-ready-tester"]' in canopy_env.user_file.read_text()
-    assert 'provider = "github"' in canopy_env.repo_file.read_text()
-    # Agent runs load canopy's definitions from its own directory (D040); nothing goes into the repository.
-    assert sorted(p.name for p in canopy_env.repo.iterdir()) == [".git", "canopy.toml"]
+    assert 'provider = "github"' in (empty / config.WORKSPACE_FILE_NAME).read_text()
+    # Agent runs load canopy's definitions from its own directory (D040).
+    assert sorted(p.name for p in empty.iterdir()) == [".gitignore", "MAP.md", config.WORKSPACE_FILE_NAME]
 
-    # What init wrote loads. The user file has no state_dir, so it defaults under the fake HOME.
-    cfg = load(canopy_env.repo, canopy_env.user_file)
+    # What init wrote loads.
+    found = workspace.load(empty)
+    assert (found.name, found.repos, found.state_dir) == ("new", (), empty / ".canopy")
+    cfg = load(empty, canopy_env.user_file)
     assert cfg.tracker.labels == ("agent-ready-tester",)
-    assert cfg.paths.state_dir == canopy_env.home / ".canopy"
     assert "{definitions_dir}" in cfg.runtime.overseer_cmd
     assert "{definitions_dir}" in cfg.runtime.worker_cmd
 
 
-def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv) -> None:
+def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv, empty: Path) -> None:
     # A default written into a file is pinned there: a later canopy's default never reaches it.
-    canopy_env.user_file.unlink()
-    canopy_env.repo_file.unlink()
     assert main(["init", "--provider", "jira"]) == 0
     user = tomllib.loads(canopy_env.user_file.read_text())
-    repo = tomllib.loads(canopy_env.repo_file.read_text())
+    shared = tomllib.loads((empty / config.WORKSPACE_FILE_NAME).read_text())
     assert user == {
         "tracker": {"labels": ["agent-ready-tester"]},
         "trust": {"authorized_repliers": [], "trusted_reviewers": []},
     }
-    assert sorted(repo) == ["tracker"]
-    assert sorted(repo["tracker"]) == ["provider", "query"]
+    assert sorted(shared) == ["tracker", "workspace"]
+    assert sorted(shared["tracker"]) == ["provider", "query"]
 
 
-def test_init_never_overwrites_configs(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+def test_init_in_a_workspace_never_overwrites_configs(
+    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     user_before = canopy_env.user_file.read_text()
-    repo_before = canopy_env.repo_file.read_text()
+    shared_before = canopy_env.shared_file.read_text()
+    monkeypatch.chdir(canopy_env.repo)  # inside the workspace, not at its root
     assert main(["init", "--provider", "github"]) == 0
     assert canopy_env.user_file.read_text() == user_before
-    assert canopy_env.repo_file.read_text() == repo_before
-    assert f"kept  {canopy_env.user_file}" in capsys.readouterr().out
+    assert canopy_env.shared_file.read_text() == shared_before
+    out = capsys.readouterr().out
+    assert f"kept    {canopy_env.user_file}" in out
+    assert f"kept    {canopy_env.shared_file}" in out
+    assert not (canopy_env.repo / "canopy.toml").exists()
+
+
+def test_init_refuses_a_code_checkout(
+    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D016: canopy writes nothing into a code repository; --workspace makes a repository of its own one."""
+    checkout = tmp_path / "code"
+    (checkout / ".git").mkdir(parents=True)
+    (checkout / "src").mkdir()
+    monkeypatch.chdir(checkout / "src")
+    assert main(["init", "--provider", "jira"]) == 2
+    assert f"is inside the git repository {checkout}" in capsys.readouterr().err
+    assert sorted(p.name for p in checkout.iterdir()) == [".git", "src"]
+    monkeypatch.chdir(checkout)
+    assert main(["init", "--workspace", "--provider", "jira"]) == 0
+    assert (checkout / config.WORKSPACE_FILE_NAME).is_file()
 
 
 def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -66,7 +96,7 @@ def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.Ca
 
 
 def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    old = canopy_env.repo / ".opencode" / "agent" / "canopy-worker.md"
+    old = canopy_env.root / ".opencode" / "agent" / "canopy-worker.md"
     old.parent.mkdir(parents=True)
     old.write_text("---\ndescription: an old copy\n---\n")
     assert main(["init"]) == 0
@@ -76,30 +106,18 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
 
 
 def test_init_needs_provider_when_not_interactive(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+    empty: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    canopy_env.repo_file.unlink()
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     assert main(["init"]) == 2
     assert "--provider" in capsys.readouterr().err
-    assert not canopy_env.repo_file.exists()
+    assert list(empty.iterdir()) == []
 
 
-@pytest.mark.parametrize("provider", ["../evil", "Jira Cloud", ""])
-def test_init_rejects_odd_provider_names(canopy_env: CanopyEnv, provider: str) -> None:
-    canopy_env.repo_file.unlink()
+@pytest.mark.parametrize("provider", ["../evil", "Jira Cloud", "", "jira\n"])
+def test_init_rejects_odd_provider_names(empty: Path, provider: str) -> None:
     assert main(["init", "--provider", provider]) == 2
-
-
-def test_init_outside_a_repository(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(tmp_path)
-    assert main(["init", "--provider", "jira"]) == 2
-
-
-def test_init_rejects_provider_with_trailing_newline(canopy_env: CanopyEnv) -> None:
-    canopy_env.repo_file.unlink()
-    assert main(["init", "--provider", "jira\n"]) == 2
-    assert not canopy_env.repo_file.exists()
+    assert list(empty.iterdir()) == []
 
 
 @pytest.mark.parametrize(
@@ -120,53 +138,3 @@ def test_init_rejects_provider_with_trailing_newline(canopy_env: CanopyEnv) -> N
 )
 def test_is_ssh_url(url: str, *, ssh: bool) -> None:
     assert is_ssh_url(url) is ssh
-
-
-@pytest.fixture
-def no_env_git_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop git config passed through the environment, which may itself rewrite SSH URLs to HTTPS."""
-    monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
-    monkeypatch.delenv("GIT_CONFIG_PARAMETERS", raising=False)
-
-
-def _real_repo(canopy_env: CanopyEnv, url: str | None) -> None:
-    (canopy_env.repo / ".git").rmdir()
-    git("init", "--quiet", cwd=canopy_env.repo)
-    if url is not None:
-        git("remote", "add", "origin", url, cwd=canopy_env.repo)
-
-
-@pytest.mark.usefixtures("no_env_git_config")
-def test_init_warns_about_an_ssh_origin(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    _real_repo(canopy_env, "git@github.com:acme/api.git")
-    assert main(["init"]) == 0
-    out = capsys.readouterr().out
-    assert "origin pushes over SSH (git@github.com:acme/api.git)" in out
-    assert "D038" in out
-
-
-@pytest.mark.usefixtures("no_env_git_config")
-def test_init_warns_when_insteadof_rewrites_to_ssh(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    _real_repo(canopy_env, "https://github.com/acme/api.git")
-    git("config", "url.git@github.com:.pushInsteadOf", "https://github.com/", cwd=canopy_env.repo)
-    assert main(["init"]) == 0
-    assert "origin pushes over SSH (git@github.com:acme/api.git)" in capsys.readouterr().out
-
-
-def test_init_is_quiet_when_insteadof_rewrites_ssh_to_https(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
-) -> None:
-    _real_repo(canopy_env, "git@github.com:acme/api.git")
-    git("config", "url.https://github.com/.insteadOf", "git@github.com:", cwd=canopy_env.repo)
-    assert main(["init"]) == 0
-    assert "SSH" not in capsys.readouterr().out
-
-
-@pytest.mark.usefixtures("no_env_git_config")
-@pytest.mark.parametrize("url", ["https://github.com/acme/api.git", None])
-def test_init_is_quiet_about_https_or_no_origin(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], url: str | None
-) -> None:
-    _real_repo(canopy_env, url)
-    assert main(["init"]) == 0
-    assert "SSH" not in capsys.readouterr().out

@@ -137,10 +137,10 @@ class Pool:
     """Where treehouse runs for one repository's pool.
 
     `cwd` is a directory in the repository, from which treehouse finds its pool; None is this process's working
-    directory. `root` is the workspace root, passed as `TREEHOUSE_ROOT`; None leaves treehouse's own config in charge,
-    as in a workspace of one. `slots` is the pool's declared size (`capacity.slots_for`), which `lease` never grows the
-    pool past. None leaves the size to treehouse's `max_trees`. `include_file` is the operator's own `.worktreeinclude`
-    (`paths.worktree_include`), which treehouse reads in place of the committed one; None leaves the committed one.
+    directory. `root` is the workspace root, passed as `TREEHOUSE_ROOT`; None leaves treehouse's own config in charge.
+    `slots` is the pool's declared size (`capacity.slots_for`), which `lease` never grows the pool past. None leaves the
+    size to treehouse's `max_trees`. `include_file` is the operator's own `.worktreeinclude` (`paths.worktree_include`),
+    which treehouse reads in place of the committed one; None leaves the committed one.
     """
 
     cwd: Path | None = None

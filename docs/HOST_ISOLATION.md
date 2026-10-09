@@ -18,8 +18,8 @@ what a shell command touches. So a steered worker can, today:
 
 - Read `~/.ssh`, `~/.aws`, `~/.netrc`, `~/.docker/config.json`, browser profiles, and every other repository on disk.
 - Rewrite `~/.config/canopy/config.toml`: change `worker_cmd`, add itself to `trust.authorized_repliers`, raise
-  capacity. T7 keeps those keys out of the repository, but nothing keeps a worker out of the user config.
-- Write to the journal under `~/.canopy`, which is the audit log (T5).
+  capacity. T7 keeps those keys out of shared files, but nothing keeps a worker out of the user config.
+- Write to the journal under the workspace's `.canopy/`, which is the audit log (T5).
 - Plant a hook or `core.fsmonitor` in the pool's shared git directory. Later `git` calls run it on the host outside
   any worker: in `_run`, in the next run on that pool, or in the operator's own checkout if it shares that directory.
 - Append to `~/.bashrc`, drop binaries in `~/.local/bin`, or install a launch agent.
@@ -120,7 +120,7 @@ re-allowed only by naming that file).
 | Build and package caches | yes | yes | Separate from the operator's own caches (§7). |
 | A per-run temp directory, exported as `TMPDIR` | yes | yes | Scratch space. |
 | A chore's own `cwd` (default `<state_dir>/chores/<name>/`) | yes | only if it writes | Chores only (below). |
-| The rest of `~/.config/canopy` and `state_dir` (`~/.canopy`) | no | no | Config and journal belong to the harness. |
+| The rest of `~/.config/canopy` and the workspace's `.canopy/` | no | no | Config and journal belong to the harness. |
 | The rest of `$HOME` | no | no | Secrets, other repositories. |
 
 The run log is unaffected: the worker's stdout and stderr are file descriptors `_run` opened before the sandbox
@@ -140,9 +140,9 @@ shared git state:
 - The worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares the remote
   branch with HEAD.
 
-A chore gets the same policy. Its default `cwd` is inside `state_dir`, so its policy re-allows that one directory:
-read-only by default, since a chore's only output is its result line (D034), and writable for a chore whose own
-tooling writes there. The rest of `state_dir` stays denied.
+A chore gets the same policy. Its default `cwd` is inside the workspace's `.canopy/`, so its policy re-allows that one
+directory: read-only by default, since a chore's only output is its result line (D034), and writable for a chore whose
+own tooling writes there. The rest of `.canopy/` stays denied.
 
 ### 4.3 Network policy
 

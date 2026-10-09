@@ -45,7 +45,7 @@ def head(git_pool: GitPool) -> str:
 
 
 def review(*args: str, sha: str, pr: str = PR) -> list[str]:
-    return ["review", "run", "--pr", pr, "--sha", sha, *args]
+    return ["review", "run", "--pr", pr, "--sha", sha, "--repo", "repo", *args]
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, str | None, str, str]]:
@@ -149,7 +149,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
 def test_bad_pr(reviews: CanopyEnv, monkeypatch: pytest.MonkeyPatch, args: list[str], sha: str, reason: str) -> None:
     conn = journal(reviews)
     tick_id = in_tick(conn, monkeypatch)
-    command = ["review", "run", *(args or ["--pr", PR]), "--sha", sha]
+    command = ["review", "run", *(args or ["--pr", PR]), "--sha", sha, "--repo", "repo"]
     assert main(command, runner=InlineRunner()) == 1
     [(_, _, action, rationale)] = decisions(conn, tick_id)
     assert action == "refused:bad_pr"
@@ -202,7 +202,7 @@ def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
     conn = journal(reviews)
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner()
-    dispatch = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]
+    dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
     assert main(dispatch, runner=runner) == 0
     assert main(review("--ticket", "PROJ-1", sha=head(git_pool)), runner=runner) == 1
     assert main(review(sha=head(git_pool), pr=f"{PR}0"), runner=runner) == 1
@@ -219,7 +219,13 @@ def test_a_running_review_takes_worker_capacity(
     tick_id = in_tick(conn, monkeypatch)
     runner = InlineRunner()
     assert main(review(sha=head(git_pool)), runner=runner) == 0
-    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=runner) == 1
+    assert (
+        main(
+            ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
+            runner=runner,
+        )
+        == 1
+    )
     assert decisions(conn, tick_id)[-1][2:] == ("refused:capacity", "1 of 1 workers are running")
 
 
@@ -308,7 +314,7 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
 def test_the_review_phases_are_a_units(reviews: CanopyEnv, monkeypatch: pytest.MonkeyPatch, phase: str) -> None:
     conn = journal(reviews)
     in_tick(conn, monkeypatch)
-    assert main(["ticket", "set", "PROJ-1", "--phase", phase]) == 0
+    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--phase", phase]) == 0
     [unit] = db.units(conn, "PROJ-1")
     assert unit["phase"] == phase
 

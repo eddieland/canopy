@@ -345,14 +345,8 @@ def set_ticket(
             conn.execute("UPDATE tickets SET done = 1 WHERE key = ?", (key,))
 
 
-def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str, *, single: bool) -> None:
-    """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction.
-
-    A workspace of one has one repository, whose name follows its directory, so its ticket's one unit is renamed to
-    `unit` rather than a second one made: renaming the checkout never strands a ticket (D033).
-    """
-    if single:
-        conn.execute("UPDATE ticket_units SET repo = ? WHERE ticket_key = ?", (unit, key))
+def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str) -> None:
+    """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction."""
     conn.execute(
         "INSERT INTO ticket_units (ticket_key, repo) VALUES (?, ?) ON CONFLICT (ticket_key, repo) DO NOTHING",
         (key, unit),
@@ -365,7 +359,6 @@ def set_unit(
     repo: str,
     unit: str,
     *,
-    single: bool,
     phase: str | None = None,
     cursors: Mapping[str, str] | None = None,
     pr_url: str | None = None,
@@ -376,7 +369,7 @@ def set_unit(
     """
     with transaction(conn):
         touch_ticket(conn, key, repo)
-        _ensure_unit(conn, key, unit, single=single)
+        _ensure_unit(conn, key, unit)
         where = "WHERE ticket_key = ? AND repo = ?"
         if phase is not None:
             conn.execute(f"UPDATE ticket_units SET phase = ? {where}", (phase, key, unit))  # noqa: S608
@@ -428,7 +421,6 @@ def insert_run(
     branch: str,
     slots: Sequence[RunSlot],
     runs_dir: Path,
-    single: bool = True,
     works_units: bool = True,
     started: Callable[[int], Event | None] | None = None,
     private: bool = False,
@@ -437,11 +429,10 @@ def insert_run(
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
     Each of `slots` is recorded in `run_slots`, and each repository they came from becomes a unit of the ticket with the
-    run's branch. `single` says the workspace is a workspace of one (see `set_unit`). A run that does not work in units,
-    a split, leaves the ticket's branch and units as they are: it pushes nothing (DESIGN §18). `started` builds the
-    `run.started` event from the run's id, recorded in the same transaction, or None when no sink takes it. `private`
-    marks a run on a private ticket (DESIGN §22). `check` runs first in the transaction and refuses the run by raising:
-    what it reads cannot change before the row is written.
+    run's branch. A run that does not work in units, a split, leaves the ticket's branch and units as they are: it
+    pushes nothing (DESIGN §18). `started` builds the `run.started` event from the run's id, recorded in the same
+    transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check` runs
+    first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
     """
     with transaction(conn):
         if check is not None:
@@ -466,7 +457,7 @@ def insert_run(
         conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
         for slot in slots:
             if slot.repo is not None:
-                _ensure_unit(conn, key, slot.repo, single=single)
+                _ensure_unit(conn, key, slot.repo)
                 conn.execute(
                     "UPDATE ticket_units SET branch = ? WHERE ticket_key = ? AND repo = ?", (branch, key, slot.repo)
                 )

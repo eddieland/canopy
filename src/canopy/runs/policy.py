@@ -5,9 +5,6 @@ for a ticket is an attempt of its kind in each repository it leased a slot in, w
 never reset: a unit at its limit waits for a human. The fix-ci cooldown runs from the end of the latest fix-ci run that
 covered the unit. `dispatch.py` enforces these; the overseer's state block shows them.
 
-In a workspace of one, a ticket has one unit whatever its repository was called when each run was made, so counts are
-per ticket there, under the unit `None`.
-
 A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Its runs are counted per
 ticket, and never in a unit's counts.
 """
@@ -24,7 +21,7 @@ from canopy.core import db
 if TYPE_CHECKING:
     from canopy.core.config import Config
 
-# A unit: a ticket key and a repository name, or None for a workspace of one's only repository.
+# A unit: a ticket key and a repository name; None for a slot recorded with no repository name.
 Unit = tuple[str, str | None]
 
 # The kinds that work in a unit, and every kind `canopy dispatch` takes.
@@ -44,12 +41,12 @@ def limits(config: Config) -> dict[str, int]:
     }
 
 
-def unit(key: str, repo: str | None, *, single: bool) -> Unit:
+def unit(key: str, repo: str | None) -> Unit:
     """Return how the counts below name `key`'s unit in `repo`."""
-    return (key, None if single else repo)
+    return (key, repo)
 
 
-def attempts(conn: sqlite3.Connection, *, single: bool) -> dict[Unit, dict[str, int]]:
+def attempts(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
     """Return every unit's run count per kind. Kinds with no runs are 0; units with no runs are missing."""
     counts: dict[Unit, dict[str, int]] = {}
     rows = conn.execute(
@@ -58,7 +55,7 @@ def attempts(conn: sqlite3.Connection, *, single: bool) -> dict[Unit, dict[str, 
         (SPLIT,),
     )
     for row in rows:
-        counts_of = counts.setdefault(unit(str(row[0]), row[1], single=single), dict.fromkeys(KINDS, 0))
+        counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
         counts_of[str(row[2])] += int(row[3])
     return counts
 
@@ -69,12 +66,12 @@ def split_attempts(conn: sqlite3.Connection) -> dict[str, int]:
     return {str(r[0]): int(r[1]) for r in rows}
 
 
-def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None, *, single: bool) -> dict[str, int]:
+def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None) -> dict[str, int]:
     """Return one unit's run count per kind."""
-    return attempts(conn, single=single).get(unit(key, repo, single=single), dict.fromkeys(KINDS, 0))
+    return attempts(conn).get(unit(key, repo), dict.fromkeys(KINDS, 0))
 
 
-def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime, *, single: bool) -> dict[Unit, datetime]:
+def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:
     """Return, by unit, when fix-ci may next run, for units still inside the cooldown."""
     window = timedelta(minutes=config.policy.fix_ci_cooldown_minutes)
     until: dict[Unit, datetime] = {}
@@ -84,7 +81,7 @@ def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime, *,
     )
     for row in rows:
         ends = db.parse_time(str(row[2])) + window
-        name = unit(str(row[0]), row[1], single=single)
+        name = unit(str(row[0]), row[1])
         if ends > now and (name not in until or ends > until[name]):
             until[name] = ends
     return until

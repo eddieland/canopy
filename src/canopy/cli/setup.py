@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from canopy.cli import workspace as cli_workspace
-from canopy.cli.common import CliError, Obj
+from canopy.cli.common import CliError
 from canopy.core import config, conversation, definitions, workspace
 from canopy.infra import resources
 from canopy.serve import secret
@@ -17,39 +17,41 @@ from canopy.setup import workspace as setup_workspace
 
 
 @click.command("init")
-@click.option("--provider", help="Tracker provider for a new canopy.toml or workspace map (jira, github, linear, ...).")
+@click.option("--provider", help="Tracker provider for a new workspace map (jira, github, linear, ...).")
 @click.option(
     "--workspace",
-    "as_workspace",
+    "in_checkout",
     is_flag=True,
-    help="Set up this directory as a workspace of several repositories (canopy-workspace.toml). Implied inside one.",
+    help="Make this directory a workspace even though it is inside a git repository, such as one that holds only "
+    "the workspace's own files.",
 )
 @click.argument("repos", metavar="[[NAME=]URL]...", nargs=-1)
 @click.pass_context
-def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, ...], *, as_workspace: bool) -> int:
-    """Set up canopy for this repository, or workspace, and this user.
+def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, ...], *, in_checkout: bool) -> int:
+    """Set up a workspace in this directory, and your user config.
 
-    In a workspace, clone URLs add those repositories to the map and sync: each is cloned, and its pool made the size
-    your user config declares. A repository is named after its URL, unless given as NAME=URL.
+    canopy runs from a workspace, even for one repository: a directory of its own, ideally empty, where it clones each
+    repository and keeps their worktree pools and its journal. Clone URLs add those repositories to the map and sync:
+    each is cloned, and its pool made the size your user config declares. A repository is named after its URL, unless
+    given as NAME=URL. Run inside a workspace, init fills in what it is missing.
     """
-    workspace_root = workspace.find_root(Path.cwd())
-    if as_workspace or workspace_root is not None:
-        root = workspace_root or Path.cwd().resolve()
-        provider = _provider(provider, root / config.WORKSPACE_FILE_NAME, "workspace")
-        return _init_workspace(click_ctx, root, provider, repos)
-    if repos:
-        raise click.UsageError("clone URLs set up a workspace of several repositories; pass --workspace")
-    repo_root = config.find_repo_root(Path.cwd())
-    provider = _provider(provider, repo_root / config.REPO_FILE_NAME, "repository")
+    root = workspace.find_root(Path.cwd())
+    if root is None:
+        root = Path.cwd().resolve()
+        checkout = _git_root(root)
+        if checkout is not None and not in_checkout:
+            raise click.UsageError(
+                f"{root} is inside the git repository {checkout}. canopy runs from a workspace of its own and writes "
+                f"nothing into a code repository: run `canopy init` in an empty directory, with the repository's clone "
+                f"URL. Pass --workspace to make this directory a workspace anyway."
+            )
+    provider = _provider(provider, root / config.WORKSPACE_FILE_NAME, "workspace")
+    return _init_workspace(click_ctx, root, provider, repos)
 
-    user_file = config.user_config_path()
-    report = init.run(repo_root, user_file, provider)
-    _print_report(report, repo_root, user_file)
-    obj = click_ctx.find_object(Obj)
-    if obj is not None and (ssh_urls := init.ssh_push_urls(obj.runner, repo_root)):
-        click.echo()
-        click.echo(init.SSH_REMOTE_WARNING.format(urls=", ".join(ssh_urls)), nl=False)
-    return 0
+
+def _git_root(start: Path) -> Path | None:
+    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None."""
+    return next((d for d in (start, *start.parents) if (d / ".git").exists()), None)
 
 
 def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:
@@ -156,23 +158,3 @@ def cmd_secret(*, rotate: bool) -> int:
         click.echo("Every browser is signed out once the loop restarts.", err=True)
     click.echo(value)
     return 0
-
-
-def _print_report(report: init.Report, repo_root: Path, user_file: Path) -> None:
-    for path in report.written:
-        click.echo(f"wrote {path}")
-    for path in report.kept:
-        click.echo(f"kept  {path}")
-    if report.label is not None:
-        click.echo(f"\nYour queue label is {report.label!r}. Add it to a ticket to hand the ticket to canopy.")
-    if (repo_root / config.REPO_FILE_NAME) in report.written:
-        click.echo(f"Edit tracker.query in {repo_root / config.REPO_FILE_NAME} before the first tick.")
-    try:
-        prefix = config.load(repo_root, user_file).trust.branch_prefix
-    except config.ConfigError as e:
-        # Most often an existing user file from an earlier canopy whose templates lack {definitions_dir} (D040).
-        click.echo(f"\nThe config does not load yet; fix it before the first tick:\n{e}")
-        prefix = "agent/"
-    click.echo()
-    click.echo(init.BRANCH_PROTECTION.format(prefix=prefix), nl=False)
-    _print_shadowing(report)

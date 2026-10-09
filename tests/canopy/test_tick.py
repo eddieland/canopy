@@ -36,8 +36,8 @@ def test_dry_run_tick_records_the_overseer_plan(
     overseer_does(
         monkeypatch,
         ["decide", "PROJ-1", "wait", "--rationale", "checks pending"],
-        ["ticket", "set", "PROJ-1", "--phase", "ci_running", "--cursor", "ci=run-1"],
-        ["dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement"],
+        ["ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_running", "--cursor", "ci=run-1"],
+        ["dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
         ["attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"],
         ["decide", "PROJ-4;rm", "wait", "--rationale", "bad key"],
     )
@@ -57,8 +57,8 @@ def test_dry_run_tick_records_the_overseer_plan(
     assert '"tick_id": 1' in prompt
     assert '"dry_run": true' in prompt
     assert '"labels": [\n      "agent-ready-tester"\n    ]' in prompt
-    assert run["cwd"] == str(canopy_env.repo)
-    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    assert run["cwd"] == str(canopy_env.root)
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
 
     conn = journal(canopy_env)
@@ -90,7 +90,7 @@ def test_dry_run_tick_records_the_overseer_plan(
 def test_overseer_state_names_the_configured_needs_human_label(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
     overseer_does(monkeypatch)
     assert main(["tick", "--dry-run"]) == 0
     [run] = agent_runs(agent_log)
@@ -116,7 +116,7 @@ def test_overseer_state_names_the_comment_marks(
 def test_next_tick_sees_the_journal(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    overseer_does(monkeypatch, ["ticket", "set", "PROJ-9", "--phase", "needs_human"])
+    overseer_does(monkeypatch, ["ticket", "set", "PROJ-9", "--repo", "repo", "--phase", "needs_human"])
     assert main(["tick", "--dry-run"]) == 0
     overseer_does(monkeypatch)
     assert main(["tick", "--dry-run"]) == 0
@@ -206,10 +206,11 @@ def test_a_tick_whose_overseer_reports_nothing_records_no_cost(
     assert "cost" not in capsys.readouterr().out
 
 
-def test_overseer_refuses_to_start_when_the_repository_defines_its_agent(
+def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    config = canopy_env.repo / "opencode.json"
+    # The overseer runs at the workspace root, where OpenCode reads config (D044).
+    config = canopy_env.root / "opencode.json"
     config.write_text('{"agent": {"canopy-overseer": {"permission": {"bash": {"*": "deny", "rm *": "allow"}}}}}')
     assert main(["tick", "--dry-run"]) == 1
     tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()

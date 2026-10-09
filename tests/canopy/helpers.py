@@ -56,7 +56,12 @@ def commit_and_push(branch: str, message: str = "PROJ-1: the change") -> list[li
 
 
 def pool(treehouse_state: Path) -> list[dict[str, object]]:
-    slots: list[dict[str, object]] = json.loads(treehouse_state.read_text())["slots"]
+    """Every slot the fake treehouse holds: its shared pool's, then each repository's."""
+    state = json.loads(treehouse_state.read_text())
+    slots: list[dict[str, object]] = [
+        *state.get("slots", []),
+        *(s for p in state.get("pools", {}).values() for s in p.get("slots", [])),
+    ]
     return slots
 
 

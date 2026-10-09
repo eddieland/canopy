@@ -1,9 +1,8 @@
 """The workspace: the directory canopy runs from, the repositories its queue works in, and their pools (DESIGN §18).
 
 A directory with a `canopy-workspace.toml` is a workspace. Its map names each repository, cloned at `repos/<name>`,
-with a treehouse pool under `.treehouse/` and canopy's state under `.canopy/`. A repository with no workspace file
-above it is a workspace of one: the repository itself, with its `canopy.toml` as the shared config layer, and its pool
-and state where treehouse and `paths.state_dir` put them. Code takes a `Workspace` and has one path for both.
+with a treehouse pool under `.treehouse/` and canopy's state under `.canopy/`. canopy runs only from a workspace, even
+for one repository: it reads no config from a code repository (D016).
 
 The map's `[workspace]` and `[repos]` tables are read here; its `[tracker]`, `[policy]`, and `[trust]` tables are the
 shared config layer, read by `config.load`. Summaries and `MAP.md` are data, like ticket text: they help choose a
@@ -21,10 +20,19 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
 
 from canopy.core import treehouse
-from canopy.core.config import WORKSPACE_FILE_NAME, WORKSPACE_MAP_TABLES, ConfigError, RepoName, find_repo_root
+from canopy.core.config import (
+    WORKSPACE_FILE_NAME,
+    WORKSPACE_MAP_TABLES,
+    WORKSPACE_STATE_DIR,
+    ConfigError,
+    RepoName,
+)
 from canopy.infra import logs
 
 MAP_FILE_NAME = "MAP.md"
+# The shared config file earlier canopy read from a repository's root. It is never read now; finding one only adds a
+# hint to the error that there is no workspace (D016).
+OLD_REPO_FILE_NAME = "canopy.toml"
 REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
@@ -72,7 +80,7 @@ class _Map(_Table):
 
 @dataclass(frozen=True)
 class Repo:
-    """One repository in the map: its name, primary clone, clone URL, and summary. A workspace of one has no URL."""
+    """One repository in the map: its name, primary clone, clone URL, and summary."""
 
     name: str
     path: Path
@@ -87,31 +95,28 @@ class Repo:
 
 @dataclass(frozen=True)
 class Workspace:
-    """The root canopy runs from and the repositories in it.
-
-    `map_file` is the workspace file, or None for a workspace of one, whose only repository is the root.
-    """
+    """The root canopy runs from, its workspace file, and the repositories in it."""
 
     root: Path
     name: str
     repos: tuple[Repo, ...]
-    map_file: Path | None = None
+    map_file: Path
 
     @property
-    def single(self) -> bool:
-        """Whether this is a workspace of one: a repository with no workspace file."""
-        return self.map_file is None
+    def state_dir(self) -> Path:
+        """Where the journal, locks, logs, and `attention.md` live: `.canopy/`, private to the operator."""
+        return self.root.absolute() / WORKSPACE_STATE_DIR
 
     @property
     def map_prose(self) -> Path | None:
         """`MAP.md`, the prose the overseer reads about the repositories, if the workspace has one."""
         path = self.root / MAP_FILE_NAME
-        return path if not self.single and path.is_file() else None
+        return path if path.is_file() else None
 
     def repo(self, name: str | None) -> Repo | None:
-        """Return the repository named `name`. None names a workspace of one's only repository."""
+        """Return the repository named `name`, or None if the map has none by that name."""
         if name is None:
-            return self.repos[0] if self.single else None
+            return None
         return next((r for r in self.repos if r.name == name), None)
 
     def pool(self, name: str | None) -> treehouse.Pool:
@@ -122,21 +127,13 @@ class Workspace:
         run in it can be closed, though nothing new can be leased there.
         """
         repo = self.repo(name)
-        if self.single:
-            return treehouse.Pool(cwd=self.root)
         cwd = repo.path if repo is not None and repo.cloned else self.root
         return treehouse.Pool(cwd=cwd, root=self.root)
 
 
-def of_one(repo_root: Path) -> Workspace:
-    """Return the workspace of one for the repository at `repo_root`."""
-    name = one_name(repo_root)
-    return Workspace(root=repo_root, name=name, repos=(Repo(name=name, path=repo_root),))
-
-
-def one_name(repo_root: Path) -> str:
-    """Name a workspace of one's repository after its directory, reduced to a valid repository name."""
-    return reduce_name(repo_root.name) or "repo"
+def default_name(root: Path) -> str:
+    """Name a workspace after its directory, reduced to a valid repository name, when its map names none."""
+    return reduce_name(root.name) or "workspace"
 
 
 def reduce_name(text: str) -> str:
@@ -155,13 +152,36 @@ def find_root(start: Path) -> Path | None:
 
 
 def find(start: Path) -> Workspace:
-    """Return the workspace `start` is in: the nearest workspace file above it, else the repository it is in.
+    """Return the workspace `start` is in: the one whose workspace file is nearest above it.
 
     Raises:
-        ConfigError: neither is found, or the workspace file does not load.
+        ConfigError: there is none, or the workspace file does not load.
     """
     root = find_root(start)
-    return load(root) if root is not None else of_one(find_repo_root(start))
+    if root is None:
+        raise ConfigError(no_workspace_message(start))
+    return load(root)
+
+
+def no_workspace_message(start: Path) -> str:
+    """Say there is no workspace at or above `start`, and how to make one."""
+    message = (
+        f"no {WORKSPACE_FILE_NAME} here or above; canopy runs from a workspace. In an empty directory, run "
+        f"`canopy init --provider <tracker> <clone URL>...` to make one."
+    )
+    old = _old_repo_file(start)
+    if old is not None:
+        message += f"\n{old} is not read: move its keys to {WORKSPACE_FILE_NAME} in the workspace (D016)."
+    return message
+
+
+def _old_repo_file(start: Path) -> Path | None:
+    start = start.resolve()
+    for d in (start, *start.parents):
+        if (d / ".git").exists():
+            path = d / OLD_REPO_FILE_NAME
+            return path if path.is_file() else None
+    return None
 
 
 def load(root: Path) -> Workspace:
@@ -187,22 +207,21 @@ def load(root: Path) -> Workspace:
         Repo(name=name, path=root / REPOS_DIR / name, url=table.url, summary=table.summary)
         for name, table in sorted(parsed.repos.items())
     )
-    return Workspace(root=root, name=parsed.workspace.name or one_name(root), repos=repos, map_file=path)
+    return Workspace(root=root, name=parsed.workspace.name or default_name(root), repos=repos, map_file=path)
 
 
-def ensure_state_dir(workspace: Workspace, state_dir: Path) -> None:
+def ensure_state_dir(state_dir: Path) -> None:
     """Create the state directory readable only by the operator, and refuse one canopy did not make.
 
     A workspace's state is inside its root, which may be a checkout of a shared repository. A `.canopy/` that came from
     the checkout could hold agent definitions or a journal someone else wrote, so it must be the operator's own and
-    closed to everyone else, as canopy creates it (DESIGN §18). A workspace of one keeps its state where
-    `paths.state_dir` says, outside any checkout.
+    closed to everyone else, as canopy creates it (DESIGN §18).
 
     Raises:
         ConfigError: the workspace's state directory is not private to the operator.
     """
     state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if workspace.single or logs.private_dir(state_dir):
+    if logs.private_dir(state_dir):
         return
     raise ConfigError(
         f"{state_dir} is not private to you: canopy creates it as a directory only you can read, and this one is a "

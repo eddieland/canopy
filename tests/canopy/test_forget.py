@@ -86,7 +86,7 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
     assert dispatch(conn, monkeypatch, *LABEL, "--kind", "implement", runner=runner) == 1
     assert "dispatch refused (attempt_limit)" in capsys.readouterr().err
     assert operator("forget", KEY, monkeypatch=monkeypatch) == 0
-    assert "It has had 2 implement runs, and policy.max_implement_attempts is 2" in capsys.readouterr().out
+    assert "It has had 2 implement runs in repo, and policy.max_implement_attempts is 2" in capsys.readouterr().out
     assert dispatch(conn, monkeypatch, *LABEL, "--kind", "implement", "--slug", "third", runner=runner) == 1
     assert "dispatch refused (attempt_limit)" in capsys.readouterr().err
 
@@ -162,7 +162,7 @@ def test_forget_refuses_an_unknown_ticket_a_running_run_a_split_parent_and_other
     assert operator("forget", KEY, monkeypatch=monkeypatch) == 1
     assert f"forget refused (unknown): canopy has no record of {KEY}" in capsys.readouterr().err
 
-    db.touch_ticket(conn, KEY, str(canopy_env.repo))
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
     tick_id = db.start_tick(conn, dry_run=False)
     run_id = db.insert_run(
         conn, tick_id=tick_id, key=KEY, kind="implement", branch=OLD, slots=[], runs_dir=canopy_env.state_dir

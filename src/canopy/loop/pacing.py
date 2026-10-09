@@ -101,7 +101,7 @@ def gate(ctx: Context, now: datetime) -> datetime | None:
 
     One already open sets none, so a chore the overseer passed over cannot make the loop spin.
     """
-    cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, now, single=ctx.workspace.single).values()
+    cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, now).values()
     dues = [d for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if (d := s.due_at(now)) is not None]
     return min((t for t in (*cooldowns, *dues) if t > now), default=None)
 
