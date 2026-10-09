@@ -292,6 +292,21 @@ class Spend(_Model):
     cost_usd: float | None = None
 
 
+class KeptMessage(_Model):
+    """One message a mailbox sink kept (DESIGN §20), rendered in its sink's format. Untrusted, as journal text is."""
+
+    id: int
+    at: str
+    message: str
+
+
+class Mailbox(_Model):
+    """A mailbox sink's messages after the reader's place, oldest first: what `canopy-notify-relay --url` reads."""
+
+    sink: str
+    messages: list[KeptMessage]
+
+
 class AttentionUpdated(_Model):
     """The attention list changed. The payload is the whole list."""
 

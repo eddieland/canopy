@@ -18,9 +18,9 @@ LAYERS: tuple[frozenset[str], ...] = (
 )
 # Third-party packages only one canopy package may import.
 CONFINED = {"click": "cli", "fastapi": "serve", "starlette": "serve", "uvicorn": "serve"}
-# Programs canopy ships as separate distributions and runs only as commands (D041): the Slack sink holds a secret and
-# opens connections, which the harness never does (DESIGN §20).
-SEPARATE = frozenset({"canopy_notify_slack"})
+# Programs canopy ships as separate distributions (D041): the Slack sink holds a secret and opens connections, which the
+# harness never does, and canopy runs it only as a command; the relay runs on another machine (DESIGN §20).
+SEPARATE = frozenset({"canopy_notify_relay", "canopy_notify_slack"})
 
 
 def layer_of(package: str) -> int:

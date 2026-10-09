@@ -33,6 +33,7 @@ if [ -f "$source" ] && [ -x "$source" ]; then
     cp "$source" "$UV_TOOL_BIN_DIR/canopy"
     ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-desktop"
     ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-slack"
+    ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-relay"
 else
     echo "install-check: uv tool install $source"
     binary=0
@@ -45,8 +46,8 @@ export PATH="$UV_TOOL_BIN_DIR:$repo/tests/fakes:$PATH"
 
 canopy --version
 canopy --help >/dev/null
-# The sinks canopy ships come with the same install (DESIGN §20).
-for sink in canopy-notify-desktop canopy-notify-slack; do
+# The sinks canopy ships, and the relay, come with the same install (DESIGN §20).
+for sink in canopy-notify-desktop canopy-notify-slack canopy-notify-relay; do
     [ "$(command -v "$sink")" = "$UV_TOOL_BIN_DIR/$sink" ] || fail "$sink was not installed with canopy"
     # canopy's own --help succeeds too, so the usage line must name the sink: a link that runs canopy fails here.
     usage=$("$sink" --help </dev/null) || fail "$sink --help failed"

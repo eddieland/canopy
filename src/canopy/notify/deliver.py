@@ -3,7 +3,8 @@
 For each sink, in name order: gather its attention diff if it takes `attention`, its events after its cursor in the
 groups it takes, and a digest if one is due; render one message in its format; run its command with the message on
 stdin. Exit 0 within the timeout is a delivery, recorded in the journal; anything else changes nothing but the sink's
-failure count, so the next tick tries again. Sinks run one after another under the tick lock.
+failure count, so the next tick tries again. Sinks run one after another under the tick lock. A mailbox sink runs
+nothing: its message is kept in the journal, in the transaction that records the delivery, for a relay to collect.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox
+from canopy.core import db, mailbox, outbox
 from canopy.core.config import Sink, notify_words
 from canopy.infra import procs
 from canopy.notify import journal, message
@@ -50,6 +51,7 @@ def publish(ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter) 
         _record_loop_events(ctx)
     deliveries = [_deliver(ctx, name, sink, items, path=path, now=now, log=log) for name, sink in sinks.items()]
     journal.prune_events(ctx.conn, now)
+    mailbox.prune(ctx.conn, now)
     return deliveries
 
 
@@ -80,7 +82,12 @@ def _deliver(
         "events": len(events),
         "digest": digest is not None,
     }
-    failure = send(ctx, sink, msg.render(sink.format))
+    text = msg.render(sink.format)
+    if sink.mailbox:
+        journal.mark_delivered(ctx.conn, name, change, cursor=cursor, digest=digest is not None, keep=text)
+        log.info("kept in the mailbox", extra=fields)
+        return Delivery(name, "delivered")
+    failure = send(ctx, sink, text)
     if failure is None:
         journal.mark_delivered(ctx.conn, name, change, cursor=cursor, digest=digest is not None)
         log.info("notified", extra=fields)
@@ -96,6 +103,8 @@ def _deliver(
 
 def send(ctx: Context, sink: Sink, text: str) -> str | None:
     """Run the sink's command with `text` on stdin. Returns None on exit 0, else why it failed."""
+    if sink.cmd is None:
+        raise ValueError("a mailbox sink runs no command")
     argv = notify_words(sink.cmd)
     try:
         result = ctx.runner.run(argv, cwd=ctx.repo_root, stdin=text, timeout=TIMEOUT_SECONDS)
@@ -151,13 +160,20 @@ def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
 
 
 def test(ctx: Context, names: list[str]) -> list[Delivery]:
-    """Send a test message to each sink in `names` now, outside any tick, changing nothing in the journal."""
+    """Send a test message to each sink in `names` now, outside any tick.
+
+    It changes nothing in the journal but a mailbox sink's mailbox, which keeps the message for its relay to show.
+    """
     sinks = ctx.config.notify.all_sinks()
     results: list[Delivery] = []
     for name in names:
         sink = sinks[name]
         event = message.Event(0, "test", db.now(), {"text": f"canopy test message for {ctx.repo}; nothing is wrong"})
         msg = message.Message(name, ctx.repo, ctx.state_dir / "attention.md", None, 0, [event], None)
+        if sink.mailbox:
+            mailbox.put(ctx.conn, name, msg.render(sink.format))
+            results.append(Delivery(name, "delivered", "kept in the mailbox for canopy-notify-relay"))
+            continue
         failure = send(ctx, sink, msg.render(sink.format))
         results.append(Delivery(name, "delivered" if failure is None else "failed", failure or ""))
     return results
@@ -165,13 +181,17 @@ def test(ctx: Context, names: list[str]) -> list[Delivery]:
 
 @dataclass(frozen=True)
 class SinkStatus:
-    """One sink for `canopy status`: its last delivery, its consecutive failures and last error, events waiting."""
+    """One sink for `canopy status`: its last delivery, its consecutive failures and last error, events waiting.
+
+    `kept` is how many messages a mailbox sink holds for its relay, and None for a sink with a command.
+    """
 
     name: str
     last_delivery_at: str | None
     failures: int
     last_error: str | None
     waiting: int
+    kept: int | None = None
 
 
 def status(ctx: Context) -> list[SinkStatus]:
@@ -180,8 +200,9 @@ def status(ctx: Context) -> list[SinkStatus]:
     for name, sink in ctx.config.notify.all_sinks().items():
         row = journal.sink(ctx.conn, name)
         groups = [g for g in sink.events if g in _POINT_GROUPS]
+        kept = mailbox.count(ctx.conn, name) if sink.mailbox else None
         if row is None:
-            found.append(SinkStatus(name, None, 0, None, 0))
+            found.append(SinkStatus(name, None, 0, None, 0, kept))
             continue
         found.append(
             SinkStatus(
@@ -190,6 +211,7 @@ def status(ctx: Context) -> list[SinkStatus]:
                 int(row["failures"]),
                 row["last_error"],
                 journal.waiting(ctx.conn, int(row["cursor"]), groups),
+                kept,
             )
         )
     return found

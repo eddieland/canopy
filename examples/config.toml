@@ -86,6 +86,11 @@ cmd = ""
 # cmd = "canopy-notify-slack"                   # reads its webhook from ~/.config/canopy/slack-webhook, mode 600
 # events = ["attention", "loop", "runs"]
 # digest_every_minutes = 240
+#
+# A mailbox instead of a command: messages wait here for canopy-notify-relay on your laptop, over SSH or HTTP.
+# [notify.sinks.remote]
+# mailbox = true
+# events = ["attention", "loop", "runs"]
 
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.

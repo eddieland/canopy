@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "canopy",
+    "canopy-notify-relay",
     "canopy-notify-slack",
 ]
 
@@ -49,6 +50,7 @@ wheels = [
 name = "canopy"
 source = { editable = "." }
 dependencies = [
+    { name = "canopy-notify-relay" },
     { name = "canopy-notify-slack" },
     { name = "click" },
     { name = "fastapi" },
@@ -73,6 +75,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "canopy-notify-relay", editable = "packages/canopy-notify-relay" },
     { name = "canopy-notify-slack", editable = "packages/canopy-notify-slack" },
     { name = "click", specifier = ">=8.5.0" },
     { name = "fastapi", specifier = ">=0.142.4" },
@@ -94,6 +97,11 @@ dev = [
     { name = "rumdl", specifier = ">=0.2.78" },
     { name = "shellcheck-py", specifier = ">=0.11.0.1" },
 ]
+
+[[package]]
+name = "canopy-notify-relay"
+version = "0.0.1"
+source = { editable = "packages/canopy-notify-relay" }
 
 [[package]]
 name = "canopy-notify-slack"

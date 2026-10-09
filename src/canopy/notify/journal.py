@@ -1,6 +1,7 @@
 """What the journal holds for notification sinks (DESIGN §20).
 
-Each sink's cursor and failures, the attention items it was told about, and the event outbox.
+Each sink's cursor and failures, the attention items it was told about, and the event outbox. A mailbox sink's kept
+messages are `canopy.core.mailbox`'s.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from canopy.core import db
+from canopy.core import db, mailbox
 from canopy.core.items import Item, fingerprint, subject
 
 # Events every sink has passed are deleted once they are this old.
@@ -46,11 +47,13 @@ def forget_sinks(conn: sqlite3.Connection, keep: Iterable[str]) -> list[str]:
     kept = set(keep)
     names = {str(r[0]) for r in conn.execute("SELECT name FROM notify_sinks")}
     names |= {str(r[0]) for r in conn.execute("SELECT DISTINCT sink FROM notifications")}
+    names |= mailbox.sinks(conn)
     gone = sorted(names - kept)
     with db.transaction(conn):
         for name in gone:
             conn.execute("DELETE FROM notify_sinks WHERE name = ?", (name,))
             conn.execute("DELETE FROM notifications WHERE sink = ?", (name,))
+            mailbox.forget(conn, name)
     return gone
 
 
@@ -118,10 +121,17 @@ def diff(conn: sqlite3.Connection, sink_name: str, items: list[Item]) -> Diff:
     return Diff(added, [(g[0], g[1]) for g in gone], [g[2] for g in gone], [g[3] for g in gone])
 
 
-def mark_delivered(conn: sqlite3.Connection, sink_name: str, change: Diff | None, *, cursor: int, digest: bool) -> None:
-    """Record a delivery: the diff's new items told, its resolved ones forgotten, the cursor moved, failures reset."""
+def mark_delivered(
+    conn: sqlite3.Connection, sink_name: str, change: Diff | None, *, cursor: int, digest: bool, keep: str | None = None
+) -> None:
+    """Record a delivery: the diff's new items told, its resolved ones forgotten, the cursor moved, failures reset.
+
+    `keep` is a mailbox sink's message, kept in the same transaction: a stop cannot keep it without the delivery.
+    """
     ts = db.now()
     with db.transaction(conn):
+        if keep is not None:
+            mailbox.put(conn, sink_name, keep)
         if change is not None:
             conn.executemany(
                 "DELETE FROM notifications WHERE sink = ? AND fingerprint = ?",

@@ -60,6 +60,9 @@ slots_per_repo = 2
 
 [capacity.repo_slots]
 web = 4
+
+[notify.sinks.remote]
+mailbox = true
 """
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
@@ -189,6 +192,11 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+            # A message for `canopy-notify-relay --url` to read (DESIGN §20).
+            ctx.conn.execute(
+                "INSERT INTO notify_mailbox (sink, at, message) VALUES ('remote', ?, ?)",
+                (at(-5), json.dumps({"version": 1, "sink": "remote", "text": "canopy attention: 1 new\n+ ABC-100"})),
+            )
     return backend
 
 

@@ -109,7 +109,8 @@ def _print_sinks(ctx: Context) -> None:
     for s in sinks:
         last = f"last delivered {attention.age(s.last_delivery_at)} ago" if s.last_delivery_at else "never delivered"
         failing = f"; {s.failures} failed in a row: {s.last_error}" if s.failures else ""
-        click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{failing}")
+        kept = f"; {s.kept} kept in its mailbox" if s.kept is not None else ""
+        click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{kept}{failing}")
 
 
 def _print_attention(items: list[attention.Item]) -> None:

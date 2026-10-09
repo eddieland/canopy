@@ -524,12 +524,23 @@ def _sink_command(value: str) -> str:
 
 
 class Sink(Section):
-    """One `[notify.sinks.<name>]` table: a command that reads one message on stdin (DESIGN §20)."""
+    """One `[notify.sinks.<name>]` table: a command that reads one message on stdin, or a mailbox (DESIGN §20).
 
-    cmd: Annotated[StrictStr, AfterValidator(_notify_command), AfterValidator(_sink_command)]
+    A mailbox sink runs nothing: its messages wait in the journal for `canopy-notify-relay` to collect from another
+    machine, over SSH (`canopy notify read`) or the web UI's listener.
+    """
+
+    cmd: Annotated[StrictStr, AfterValidator(_notify_command), AfterValidator(_sink_command)] | None = None
+    mailbox: StrictBool = False
     format: Literal["json", "text"] = "json"
     events: tuple[EventGroup, ...] = ("attention", "loop")
     digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+
+    @model_validator(mode="after")
+    def _cmd_or_mailbox(self) -> Sink:
+        if (self.cmd is None) == (not self.mailbox):
+            raise ValueError("set one of cmd and mailbox = true")
+        return self
 
 
 SinkName = Annotated[str, AfterValidator(_sink_name)]

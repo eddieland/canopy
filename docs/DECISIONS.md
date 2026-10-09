@@ -300,6 +300,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 ## D064. The desktop sink ships inside canopy; Slack stays separate
 
 - Slack is separate because it holds a secret and needs the network; the desktop sink needs neither.
+- The relay (D102) is separate for the same reason, and runs on another machine.
 
 ## D065. The reviewer reads its checkout through a link in a directory of its own
 
@@ -513,3 +514,12 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: a local machine or an agent's container renders text differently, so its baselines fail CI.
 - Two jobs: the branch's code runs with a read-only token; the job that pushes runs none of it and commits only PNGs.
 - Rejected: a Playwright Docker image (CI does not use one); updating on every PR push (a visual change is deliberate).
+
+## D102. Notifications reach another machine by its pulling from a mailbox sink
+
+- A mailbox sink keeps each message in the journal; `canopy-notify-relay` on the laptop polls it over SSH or the
+  listener and hands each message to a local sink there. The harness still opens no connection (D035).
+- Why: the laptop is rarely reachable from the machine canopy runs on and sleeps; pulling catches up when it wakes.
+- Rejected: a sink running `ssh laptop canopy-notify-desktop` (needs the laptop's sshd, fails while it sleeps); a
+  stream (ticks are minutes apart, so a poll a minute loses nothing).
+- Revisit: when ticks come seconds apart, or the web UI shows notifications in the browser itself.
