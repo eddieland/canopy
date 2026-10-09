@@ -23,6 +23,7 @@ from canopy.serve.guard import host_name
 from canopy.serve.options import ServeOptions
 from canopy.serve.schema import (
     AttentionUpdated,
+    ChoresUpdated,
     RunsUpdated,
     SpendUpdated,
     StreamEvent,
@@ -340,18 +341,20 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 7)
+    headers, events = read_events(served, 8)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, spend, tick, changed, spent = (e.root for e in events)
+    first, runs, tickets, chores, spend, tick, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
+    assert isinstance(chores, ChoresUpdated)
+    assert [c.name for c in chores.chores] == ["build-health", "deps"]
     assert isinstance(spend, SpendUpdated)
     assert isinstance(tick, TickUpdated)
     assert tick.tick is not None
-    assert (tick.tick.id, tick.tick.status, tick.acknowledged) == (1, "ok", 7)
+    assert (tick.tick.id, tick.tick.status, tick.acknowledged) == (2, "ok", 8)
     # The mock journal moves the running run's cost: only the runs list and the spend are sent again.
     assert isinstance(changed, RunsUpdated)
     before = next(r for r in runs.runs if r.id == mock.LIVE_RUN)
@@ -426,6 +429,10 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "Pool",
         "Spend",
         "Tick",
+        "ChoreSummary",
+        "ChoreDetail",
+        "TickDetail",
+        "Decision",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -440,6 +447,11 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/tickets/{key}/start",
         "/api/tickets/{key}/stop",
         "/api/tickets/{key}/replies",
+        "/api/chores",
+        "/api/chores/{name}",
+        "/api/chores/{name}/replies",
+        "/api/ticks",
+        "/api/ticks/{tick_id}",
         "/api/worktrees",
         "/api/events",
         "/api/mailbox/{sink}",

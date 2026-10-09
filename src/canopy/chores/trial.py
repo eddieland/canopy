@@ -11,8 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.chores import execute, start, view
+from canopy.chores import execute, start
 from canopy.core import agent_output, conversation
+from canopy.core import chore_view as view
 
 if TYPE_CHECKING:
     from pathlib import Path

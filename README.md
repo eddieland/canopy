@@ -66,7 +66,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list. Press `t` while it waits to tick now.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
-  and every ticket's conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the
+  every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
+  finding with a note. Sign in once per browser with the
   secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so
   does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
@@ -89,14 +90,16 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   message with `canopy-notify-desktop` there. Or `--url` through the web UI, with the listener secret in a file
   (DESIGN §20, Mailbox sinks and the relay).
 - Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
-  add `--ticket KEY` to filter. `canopy loop` prints each tick's cost as it goes.
+  add `--ticket KEY` to filter. The web UI's Ticks page shows the same, and each ticket's page the decisions about it.
+  `canopy loop` prints each tick's cost as it goes.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
   `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
   overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
-  one now and prints its result, for writing its prompt.
+  one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix
+  lands, note it to the chore: `canopy reply chore:NAME 'text'`, or the web UI's chore page; its next runs read it.
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.

@@ -300,7 +300,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 ## D064. The desktop sink ships inside canopy; Slack stays separate
 
 - Slack is separate because it holds a secret and needs the network; the desktop sink needs neither.
-- The relay (D102) is separate for the same reason, and runs on another machine.
+- The relay (D105) is separate for the same reason, and runs on another machine.
 
 ## D065. The reviewer reads its checkout through a link in a directory of its own
 
@@ -515,7 +515,30 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Two jobs: the branch's code runs with a read-only token; the job that pushes runs none of it and commits only PNGs.
 - Rejected: a Playwright Docker image (CI does not use one); updating on every PR push (a visual change is deliberate).
 
-## D102. Notifications reach another machine by its pulling from a mailbox sink
+## D102. Flaky CI is judged by a separate `triage-ci` run, the only run that reruns CI
+
+- It reads a new failure before `fix-ci`, then reruns the failed jobs or reports the failure real. No edits, no
+  pushes, no slot.
+- Why: the agent that can push never gets a rerun tool, and flakes spend their own attempts, not `fix-ci`'s.
+- Rejected: triage inside `fix-ci` (the worker gains reruns and holds a slot to rerun); the overseer judging (it would
+  read CI logs while holding dispatch).
+- Revisit: if the tick between a `real` verdict and its `fix-ci` is measured as a real cost.
+
+## D103. The operator turns reruns on; the repository says what is flaky
+
+- `policy.max_triage_ci_attempts` defaults to 0, which a repository cannot loosen. `runtime.triage_skill` names a skill
+  the repository or the operator provides, read from the unit's primary clone, never the PR's branch.
+- Rejected: a repository turning reruns on (the first shared key that loosens policy, T7); the PR's branch (a PR would
+  write its own judge); a named but missing skill falling back to general rules (fails toward hiding regressions).
+- Revisit: when a repository needs to refuse reruns an operator turned on.
+
+## D104. A tick's page names its overseer output's file and does not serve it
+
+- The web UI shows what the journal holds; `ticks/<id>.log` is agent output from a file, unbounded and unchecked.
+- Rejected: serving the file, or its tail (a new file-reading surface behind the listener for a debugging aid).
+- Revisit: if the operator debugs overseer runs from the browser often enough to want it.
+
+## D105. Notifications reach another machine by its pulling from a mailbox sink
 
 - A mailbox sink keeps each message in the journal; `canopy-notify-relay` on the laptop polls it over SSH or the
   listener and hands each message to a local sink there. The harness still opens no connection (D035).

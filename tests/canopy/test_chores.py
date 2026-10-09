@@ -11,8 +11,9 @@ from typing import Any
 
 import pytest
 
-from canopy.chores import result, view
 from canopy.cli.main import main
+from canopy.core import chore_result as result
+from canopy.core import chore_view as view
 from canopy.core import db
 from canopy.core.config import load
 from canopy.core.workspace import of_one

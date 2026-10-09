@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
+import { Decisions } from '@/components/decisions'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
@@ -47,7 +48,7 @@ function TicketPage() {
 }
 
 function Ticket({ detail }: { detail: TicketDetail }) {
-    const { ticket, units, runs, messages } = detail
+    const { ticket, units, runs, messages, decisions } = detail
     const now = useNow()
     const how = ticket.private
         ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
@@ -98,6 +99,16 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             <RunsTable runs={runs} ticket={false} />
                         )}
                     </Panel>
+                    <Panel data-testid="ticket-decisions">
+                        <PanelHeader label="Decisions">
+                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                        </PanelHeader>
+                        {decisions.length === 0 ? (
+                            <Placeholder className="min-h-20">no tick has decided anything about it yet</Placeholder>
+                        ) : (
+                            <Decisions decisions={decisions} byTick />
+                        )}
+                    </Panel>
                 </div>
                 <Panel>
                     <PanelHeader label="Conversation">
@@ -110,9 +121,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                     <ReplyForm
                         key={ticket.key}
-                        ticketKey={ticket.key}
+                        target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
                         waiting={ticket.awaiting}
-                        isPublic={!ticket.private}
                     />
                 </Panel>
             </div>

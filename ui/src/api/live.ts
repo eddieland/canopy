@@ -5,9 +5,10 @@ import type { Run, StreamEvent } from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
- * read again, only if a page shows it. The worktrees are not on the stream: a run starting or ending, or changing the
- * worktrees it holds, marks them stale, and they are read again only if a page shows them. Unknown event types are
- * ignored, so the server can add some.
+ * read again, only if a page shows it, and so is a chore's page whenever the chores change, and the ticks and the
+ * ticket shown whenever the latest tick does. The worktrees are not on the stream: a run starting or ending, or
+ * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. Unknown event
+ * types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -25,6 +26,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         case 'tickets.updated':
             client.setQueryData(keys.tickets, event.tickets)
             break
+        case 'chores.updated':
+            client.setQueryData(keys.chores, event.chores)
+            void client.invalidateQueries({ queryKey: ['chore'], refetchType: 'active' })
+            break
         case 'ticket.changed':
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             break
@@ -33,6 +38,9 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         case 'tick.updated':
             client.setQueryData(keys.tick, { tick: event.tick, acknowledged: event.acknowledged })
+            // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions.
+            void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
+            void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             break
     }
 }
@@ -50,6 +58,7 @@ const LISTS: Record<string, string> = {
     'attention.updated': 'items',
     'runs.updated': 'runs',
     'tickets.updated': 'tickets',
+    'chores.updated': 'chores',
 }
 
 /** Parses an SSE `data` payload into a StreamEvent, or null when it is not one this UI knows. */

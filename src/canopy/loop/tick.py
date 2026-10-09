@@ -8,8 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.chores import view as chore_view
-from canopy.core import agent_output, conversation, db, definitions, prompts, treehouse
+from canopy.core import agent_output, chore_view, conversation, db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state

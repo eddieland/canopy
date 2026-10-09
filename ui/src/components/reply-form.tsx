@@ -2,40 +2,40 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
-import { newSubmission, refreshTicket, replyTicket } from '@/api/mutations'
+import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
+import type { Replied } from '@/api/types'
 import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
-import { repliedText } from '@/lib/outcomes'
+import { notedText, repliedText } from '@/lib/outcomes'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
 
+/** What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19). */
+export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | { kind: 'chore'; name: string }
+
 /**
- * Answers a ticket, as `canopy reply` does. The submission id is drawn when the form is rendered and kept until a
- * reply is recorded, so sending again after an uncertain result records nothing new (DESIGN §22). On a public ticket
- * the reply stays in canopy: it is how the operator says what to do about an untrusted reviewer's comments (D089).
+ * Answers a ticket, as `canopy reply` does, or notes something to a chore, as `canopy reply chore:NAME` does. The
+ * submission id is drawn when the form is rendered and kept until a reply is recorded, so sending again after an
+ * uncertain result records nothing new (DESIGN §22). On a public ticket the reply stays in canopy: it is how the
+ * operator says what to do about an untrusted reviewer's comments (D089).
  */
-export function ReplyForm({
-    ticketKey,
-    waiting,
-    isPublic = false,
-}: {
-    ticketKey: string
-    waiting: number | null
-    isPublic?: boolean
-}) {
+export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; waiting?: number | null }) {
     const client = useQueryClient()
     const [body, setBody] = useState('')
     const [submission, setSubmission] = useState(newSubmission)
     const [said, setSaid] = useState<string | null>(null)
     const mutation = useMutation({
-        mutationFn: (text: string) => replyTicket(ticketKey, text, submission),
+        mutationFn: (text: string): Promise<Replied> =>
+            target.kind === 'ticket'
+                ? replyTicket(target.key, text, submission)
+                : replyChore(target.name, text, submission),
         onSuccess: (replied) => {
-            setSaid(repliedText(ticketKey, replied))
+            setSaid(target.kind === 'ticket' ? repliedText(target.key, replied) : notedText(target.name, replied))
             setBody('')
             setSubmission(newSubmission())
-            void refreshTicket(client, ticketKey)
+            void (target.kind === 'ticket' ? refreshTicket(client, target.key) : refreshChore(client, target.name))
         },
     })
 
@@ -44,22 +44,25 @@ export function ReplyForm({
         if (body.trim()) mutation.mutate(body)
     }
 
+    const chore = target.kind === 'chore'
+    let label = chore ? 'Your note' : 'Your reply'
+    if (waiting !== null) label = `Your answer to message ${waiting}`
+    let placeholder = 'The next worker reads it as an instruction.'
+    if (chore)
+        placeholder = 'Its next runs read it as an instruction, a later note winning, such as a finding to leave out.'
+    else if (target.isPublic)
+        placeholder = 'Stays in canopy, never on the ticket. Say what to do about an untrusted review.'
+
     return (
-        <form onSubmit={submit} aria-label="Reply" className="flex flex-col gap-2 border-t p-3">
+        <form onSubmit={submit} aria-label={chore ? 'Note' : 'Reply'} className="flex flex-col gap-2 border-t p-3">
             <label className="flex flex-col gap-1.5">
-                <span className="panel-label">
-                    {waiting !== null ? `Your answer to message ${waiting}` : 'Your reply'}
-                </span>
+                <span className="panel-label">{label}</span>
                 <Textarea
                     name="body"
                     value={body}
                     maxLength={MAX_REPLY}
                     onChange={(event) => setBody(event.target.value)}
-                    placeholder={
-                        isPublic
-                            ? 'Stays in canopy, never on the ticket. Say what to do about an untrusted review.'
-                            : 'The next worker reads it as an instruction.'
-                    }
+                    placeholder={placeholder}
                 />
             </label>
             <div className="flex items-center justify-between gap-3">
@@ -69,7 +72,7 @@ export function ReplyForm({
                 </span>
                 <Button type="submit" disabled={mutation.isPending || !body.trim()}>
                     <Send />
-                    Reply
+                    {chore ? 'Add note' : 'Reply'}
                 </Button>
             </div>
         </form>

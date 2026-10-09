@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.chores import result, window
+from canopy.core import chore_result as result
+from canopy.core import chore_window as window
 from canopy.core import db
 
 if TYPE_CHECKING:

@@ -2,10 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
+import { attentionQuery, choreQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
+import { ChoreLink } from '@/components/chore-link'
+import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
@@ -136,7 +138,10 @@ function Answered() {
     return <Chip className="border-status-running/40 text-status-running">answered</Chip>
 }
 
-/** The selected item: its ticket's conversation and the reply form, or for an item about no ticket, what it says. */
+/**
+ * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another; or for an
+ * item about neither, what it says.
+ */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <Panel data-testid="attention-detail">
@@ -144,11 +149,7 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
                 <div className="flex flex-wrap items-center gap-2">
                     <ReasonChip item={item} />
                     {done && <Answered />}
-                    {item.ticket_key !== null ? (
-                        <TicketLink ticketKey={item.ticket_key} />
-                    ) : (
-                        <span className="font-mono text-xs">{item.subject}</span>
-                    )}
+                    <Subject item={item} />
                     <Age at={item.since} className="ml-auto" />
                 </div>
                 <p className="text-sm break-words whitespace-pre-wrap">{item.detail}</p>
@@ -158,15 +159,36 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
                     </p>
                 )}
             </div>
-            {item.ticket_key !== null ? (
-                <Thread ticketKey={item.ticket_key} />
-            ) : (
+            {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
+            {item.chore !== null && <ChoreThread name={item.chore} />}
+            {item.ticket_key === null && item.chore === null && (
                 <Placeholder className="min-h-24">
                     Nothing to answer here: it leaves when its cause is gone.
                 </Placeholder>
             )}
         </Panel>
     )
+}
+
+function Subject({ item }: { item: AttentionItem }) {
+    if (item.ticket_key !== null) return <TicketLink ticketKey={item.ticket_key} />
+    if (item.chore !== null) return <ChoreLink name={item.chore} />
+    return <span className="font-mono text-xs">{item.subject}</span>
+}
+
+/** A chore's item: the chore's notes, which its next runs read, and the form for another (DESIGN §19). */
+function ChoreThread({ name }: { name: string }) {
+    const { data, error } = useQuery(choreQuery(name))
+    if (error instanceof ApiError) return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    if (data === undefined) {
+        return (
+            <div className="flex min-h-60 flex-col gap-2 p-3">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="h-4 w-1/2" />
+            </div>
+        )
+    }
+    return <ChoreNotes detail={data} />
 }
 
 function Thread({ ticketKey }: { ticketKey: string }) {
@@ -193,7 +215,11 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             ) : (
                 <Conversation messages={messages} waiting={ticket.awaiting} />
             )}
-            <ReplyForm key={ticket.key} ticketKey={ticket.key} waiting={ticket.awaiting} isPublic={!ticket.private} />
+            <ReplyForm
+                key={ticket.key}
+                target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
+                waiting={ticket.awaiting}
+            />
             <div className="border-t">
                 <TicketActions key={ticket.key} ticket={ticket} />
             </div>

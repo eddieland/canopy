@@ -14,8 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.chores import view as chore_view
-from canopy.core import db
+from canopy.core import chore_view, db
 from canopy.loop import attention
 from canopy.runs import policy
 

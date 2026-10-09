@@ -13,10 +13,9 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
 from canopy.cli.loop import chore_line, one_line, prs_of, result_of, spent
-from canopy.core import conversation, db
+from canopy.core import chore_view, conversation, db
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.runs import halt, policy

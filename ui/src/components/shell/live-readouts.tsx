@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 import { metaQuery, tickQuery } from '@/api/queries'
 import type { Tick } from '@/api/types'
 import { Age } from '@/components/age'
+import { TickLink } from '@/components/tick-link'
 import type { StreamStatus } from '@/hooks/use-event-stream'
+import { TICK_TONE } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
 const STREAM_LABEL: Record<StreamStatus, string> = {
@@ -11,14 +13,6 @@ const STREAM_LABEL: Record<StreamStatus, string> = {
     open: 'live',
     reconnecting: 'reconnecting',
     closed: 'offline',
-}
-
-// A tick that failed or was cut short is shown in the failure color; a running one in the running color.
-const TICK_TONE: Record<string, string> = {
-    running: 'text-status-running',
-    overseer_failed: 'text-status-failed',
-    reconcile_failed: 'text-status-failed',
-    abandoned: 'text-status-failed',
 }
 
 /**
@@ -46,7 +40,10 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
     )
 }
 
-/** `tick 12 · 3m ago`, with its status when it is not `ok`, as `canopy status`'s first line names it. */
+/**
+ * `tick 12 · 3m ago`, with its status when it is not `ok`, as `canopy status`'s first line names it. The tick opens its
+ * page: what it decided and why.
+ */
 function LastTick({ tick }: { tick: Tick }) {
     const shown = tick.status === 'ok' ? null : tick.status.replace('_', ' ')
     return (
@@ -55,7 +52,7 @@ function LastTick({ tick }: { tick: Tick }) {
             title={tick.summary ?? undefined}
             data-testid="last-tick"
         >
-            tick {tick.id}
+            <TickLink id={tick.id} className="text-inherit" />
             {tick.dry_run ? ' (dry run)' : ''}
             {shown ? ` ${shown}` : ''} · {tick.ended_at === null ? 'for ' : ''}
             <Age at={tick.ended_at ?? tick.started_at} className="text-inherit" />

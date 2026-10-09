@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { repliedText, startedText, stoppedText } from './outcomes'
+import { notedText, repliedText, startedText, stoppedText } from './outcomes'
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {
@@ -20,6 +20,15 @@ describe('outcomes', () => {
             'A-1 was already stopped; nothing dispatches it now. Run 4 was ended and its slots returned.',
         )
         expect(stoppedText('A-1', { already: true, running_run: 4, ended: false }, true)).toContain('had already ended')
+    })
+
+    it('say what a note to a chore did, and that its next run reads it', () => {
+        expect(notedText('deps', { message_id: 9, answers: null, new: true })).toBe(
+            'Recorded message 9 on chore:deps. Its next run reads it.',
+        )
+        expect(notedText('deps', { message_id: 9, answers: null, new: false })).toBe(
+            'Message 9 on chore:deps already says this; nothing new recorded.',
+        )
     })
 
     it('say whether a reply was new', () => {
