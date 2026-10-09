@@ -57,7 +57,7 @@ interval_minutes = 15
 authorized_repliers = ["replace-with-your-account-id"]
 # GitHub logins whose PR review comments a worker may address without asking you, and "canopy:review" for canopy's own
 # reviewer ([review]). Anyone else's comments, a review bot's included, wait on the attention list as untrusted_review
-# until you answer with `canopy reply KEY '...'` or the web UI: what to do about them, or to leave them. Empty: all wait.
+# until you answer with `canopy reply KEY '...'` or the web UI: what to do about them, or leave them. Empty: all wait.
 trusted_reviewers = ["replace-with-your-github-login"]
 # Every comment a worker posts starts with the prefix and ends with the suffix, each if set; set at least one.
 # Workers post as you, so this is how canopy tells their comments from yours: a comment that carries every mark

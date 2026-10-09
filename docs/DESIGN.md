@@ -84,7 +84,7 @@ the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `serve`; `core
 own package and lower layers only. Features never import each other; what two share moves down a layer.
 `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
-```
+```text
 canopy (harness, Python)
   __main__.py      python -m canopy, how dispatch starts _run from the same installation
 
@@ -187,7 +187,7 @@ canopy (harness, Python)
     resources.py   finds migrations/, .agents/, and the built UI in a source checkout or bundled in the wheel
 ```
 
-```
+```text
 prompts/         overseer.md, worker-implement.md, worker-fix-ci.md, worker-resume.md, worker-split.md, reviewer.md,
                  and the private variants worker-implement-private.md, worker-fix-ci-private.md,
                  worker-resume-private.md
@@ -277,10 +277,11 @@ in order:
    repliers, branch prefix, PR label); capacity; policy (limits and stacking); running workers and their repositories;
    and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment, message, and mirror cursors
    (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and
-   when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
-   start and end). A ticket the operator started has a `private` object (§22): its start record's status, its message
-   cursor, the operator's messages newer than it, and the question awaiting a reply, if any. `chores` (§19) is present
-   only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
+   when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in
+   with its starting base, start and end). A ticket the operator started has a `private` object (§22): its start
+   record's status, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if
+   any. `chores` (§19) is present only when chores are configured. `mirror` holds the per-tick mirror limit and this
+   tick's heredoc delimiter (§22).
 5. **Run the overseer** with `overseer_cmd`, cwd = the repository root (the workspace root in a workspace, §18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
@@ -295,8 +296,8 @@ in order:
    starts nothing and is recorded as `dispatch:<kind>` with its cursors, context, and rationale
    `dry run: not dispatched; would work on <branch>` (plus `in <repositories>` in a workspace). `canopy ticket set`
    records phases, but neither it nor `canopy dispatch --cursor` advances cursors, and `--done` does not mark the
-   ticket done. `canopy mirror` records the comment and moves no mirror cursor. The rest of the tick is live: reconcile closes dead runs and returns stale leases, and the tick's
-   attention items become the attention list and are notified.
+   ticket done. `canopy mirror` records the comment and moves no mirror cursor. The rest of the tick is live: reconcile
+   closes dead runs and returns stale leases, and the tick's attention items become the attention list and are notified.
 
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
    What the overseer writes is rendered into the next prompt, so the CLI bounds it: keys and attention reasons are
@@ -899,12 +900,12 @@ Rules:
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
 - `canopy init --workspace`, or plain `canopy init` anywhere inside a workspace, sets up a workspace instead (§18).
 - `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
-  `trust.authorized_repliers` and `trust.trusted_reviewers` to fill in, and prints the label. It writes `canopy.toml` only if the repository has
-  none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose default serves: a default
-  written into a file is pinned there, and a later canopy's never reaches it (D087). It never overwrites either file
-  and installs nothing else (§13). If the config does not load (for example, templates lacking `{definitions_dir}`),
-  it prints the error. It warns about copies of canopy's agent definitions in the repository's OpenCode config, which
-  stop runs (§13).
+  `trust.authorized_repliers` and `trust.trusted_reviewers` to fill in, and prints the label. It writes `canopy.toml`
+  only if the repository has none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose
+  default serves: a default written into a file is pinned there, and a later canopy's never reaches it (D087). It never
+  overwrites either file and installs nothing else (§13). If the config does not load (for example, templates lacking
+  `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the repository's
+  OpenCode config, which stop runs (§13).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
@@ -1192,7 +1193,7 @@ repository: the workspace of one below.
 A workspace is a directory canopy manages: a map of the repositories a queue's tickets touch, one primary clone of
 each, the worktree pools, and canopy's state. The loop runs from the workspace root.
 
-```
+```text
 ~/work/acme/                 workspace root; canopy tick runs here
   canopy-workspace.toml      the map, and the shared config layer
   MAP.md                     prose: what each repository owns and how they depend on each other
@@ -1588,8 +1589,8 @@ with the timeout, records the agent's pid, parses the result, and closes the row
 `<state_dir>/chores/<run_id>.log`. No lease, branch, or push, so nothing to return or verify.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
-run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the latest `ok` run's open
-findings (id, title, link), so ids can be reused, and the result contract. It is written to
+run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the
+latest `ok` run's open findings (id, title, link), so ids can be reused, and the result contract. It is written to
 `<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
 
 Result contract, one JSON line, last line of the agent's text (§13):
@@ -2003,7 +2004,7 @@ the result contract. The reviewer:
 
 It posts exactly one comment on the PR's conversation, never a submitted review:
 
-```
+```text
 **canopy review**: an automated adversarial review of abc1234, run by canopy under this account. It is not a
 human review and not an approval.
 
@@ -2382,9 +2383,9 @@ place, public or private (D081).
 ### Waking the loop
 
 During the wait (§6, the loop), each step checks the journal for an operator message to a ticket recorded since the
-last tick began. A note to a chore (§19) does not wake it: the chore's next run reads it. One ends the wait and runs the next tick, at most once a minute. Every channel wakes it the same way, whether
-the message came from another process (`canopy reply`) or the loop's own server thread (D073). Capacity, attempt
-limits, and cooldowns hold as for any tick.
+last tick began. A note to a chore (§19) does not wake it: the chore's next run reads it. One ends the wait and runs the
+next tick, at most once a minute. Every channel wakes it the same way, whether the message came from another process
+(`canopy reply`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick.
 
 ### Channels
 
