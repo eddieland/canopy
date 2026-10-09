@@ -22,10 +22,12 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
   `docs/DESIGN.md` is incomplete.
-- Every new dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient.
+- Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
+  linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
 - Record a decision only when it will shape how a future developer changes or reasons about the code: a choice between
-  real alternatives, a constraint, a dependency. Not progress or state (that is the milestone's `Status:`, `Learned:`,
-  and `Next:` lines in `docs/ROADMAP.md`), not how things work (`docs/DESIGN.md`), not the story of a change (its PR).
+  real alternatives, a constraint, a runtime dependency. Not progress or state (that is the milestone's `Status:`,
+  `Learned:`, and `Next:` lines in `docs/ROADMAP.md`), not how things work (`docs/DESIGN.md`), not the story of a change
+  (its PR).
 - Write decision entries short: a title that states the decision and two to four one-line bullets for what, why,
   rejected alternatives, and what would make us revisit. No paragraphs, no history, no list of files touched. The
   format is at the top of `docs/DECISIONS.md`; when in doubt, cut.
@@ -37,7 +39,11 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - Python 3.12+. Package layout `src/canopy/`, in layered subpackages (DESIGN §5, D041). CLI entry point `canopy`.
 - `uv` for everything: `uv sync`, `uv run`, `uv tool install`.
-- `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests.
+- `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests, in strict mode,
+  where a warning fails the test that raised it.
+- `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
+  not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts and `actionlint` the GitHub workflows.
+  All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
 - ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow
   `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
@@ -66,10 +72,12 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - This covers Python, Markdown, TOML, YAML, SQL, shell, prompts, and anything else in the repo.
 - `.editorconfig` is the source of truth for whitespace: `max_line_length = 120`, UTF-8, LF line endings, final
   newline, 4-space indent (2 for TOML, YAML, JSON, SQL; tabs in `Makefile`). Configure your editor to honor it.
-- `ruff` enforces 120 for Python (`[tool.ruff] line-length = 120` in `pyproject.toml`). Keep the two in sync.
+- `ruff` enforces 120 for Python (`[tool.ruff] line-length = 120`), `rumdl` for Markdown (`[tool.rumdl] line-length`),
+  and `ec` for every other file, from `.editorconfig`. Keep the three in sync.
 - Do not introduce any other line-length target (80, 88, 100). Do not reflow existing text just to fill 120 columns;
   wrap new or edited prose at 120.
-- The only exceptions are lines that cannot be broken: long URLs, and generated files such as `uv.lock`.
+- The only exceptions are lines that cannot be broken: long URLs, Markdown tables and code blocks, a worker prompt's
+  one-line JSON result, and generated files such as `uv.lock`.
 
 ## Code conventions
 
