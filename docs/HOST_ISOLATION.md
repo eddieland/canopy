@@ -1,7 +1,9 @@
 # Host isolation for agent runs
 
 Status: proposal, not normative. `TRUST_MODEL.md` wins where the two disagree. Adopting any of this takes a ROADMAP
-milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with explicit human approval.
+milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with explicit human approval. §5 items 1 and 2,
+which hold with or without a sandbox, are built (DESIGN §8, D107, D108). The claims about `srt` below were checked
+against its source at version 0.0.79 (2026-10-09); re-check them against the version the operator pins.
 
 This document covers how to keep a worker (and a chore) from reaching the rest of the operator's machine. It recommends
 an OS-level sandbox wrapped around `worker_cmd`, lists the small harness changes that sandbox needs to be worth
@@ -84,7 +86,11 @@ runs in the worker's cwd, which `_run` sets to the slot or the desk (DESIGN §8,
 1. Resolves the paths the policy needs: the cwd, each worktree a desk links to, and each worktree's git common directory
    (`git rev-parse --git-common-dir`).
 2. Writes a per-run policy from a template in `~/.config/canopy/sandbox/`, filling in those paths.
-3. `exec`s the sandbox with that policy and the rest of its arguments unchanged.
+3. Drops from the environment what the inner `bash -c` would act on, `BASH_ENV` first. `srt` passes the caller's
+   environment through and adds its own: `TMPDIR`, the proxy variables, `GIT_SSH_COMMAND`, `GIT_CONFIG_PARAMETERS`.
+4. `exec`s the sandbox with that policy and the rest of its arguments unchanged, after a `--`:
+   `srt --settings <policy> -- "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms
+   too) anywhere in its arguments, and `-c` takes its value as a shell command, unquoted.
 
 The sandbox recommended here is Anthropic's `sandbox-runtime` (`srt`, Apache-2.0). It wraps any command using
 bubblewrap on Linux and `sandbox-exec` on macOS, and routes all network traffic through a local proxy that enforces a
@@ -97,7 +103,9 @@ denies writes to `~/.config/canopy` (§4.2), a worker cannot remove it either.
 ### 4.2 Filesystem policy
 
 Reads are denied under the home directory and re-allowed where needed. Writes are denied everywhere and allowed where
-needed. A deny list of known secret paths was considered and rejected: it always misses one.
+needed. A deny list of known secret paths was considered and rejected: it always misses one. `srt`'s policy takes this
+shape: its `allowRead` outranks `denyRead`, so a denied `$HOME` can re-allow directories under it (a denied file is
+re-allowed only by naming that file).
 
 | Path | Read | Write | Why |
 | --- | --- | --- | --- |
@@ -147,7 +155,9 @@ Everything is denied except an allowlist in the operator's policy template:
 - The package registries the repository's build and tests fetch from.
 
 `srt` also refuses to connect an allowed name to loopback, link-local, cloud metadata addresses, or the host's own
-addresses. Private ranges can be denied too, unless internal MCP services live there.
+addresses. Private ranges can be denied too (`deniedResolvedAddresses`), unless internal MCP services live there. That
+check is skipped when `srt` forwards through a parent proxy, which it takes from `HTTP(S)_PROXY` in the caller's
+environment; behind a corporate proxy, the proxy's own rules are the address check.
 
 The residual is exfiltration through an allowed host. With `github.com` allowed and the operator's token in reach, a
 worker can still push to any repository or post anywhere the operator can. That is §8's step.
@@ -169,20 +179,36 @@ The prefix alone moves the problem to the boundary. After the worker exits, `_ru
 the worker just had (`ls-remote`, and `push` if needed), and the next run fetches and checks out in it. That is code
 running outside the sandbox on files a worker wrote. Five changes, in the same milestone as the sandbox:
 
-1. Host-side git in a slot runs with hooks and filesystem monitors off:
-   `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c fetch.recurseSubmodules=false`. Cheap and correct with or
-   without a sandbox.
-2. `_run` records the slot's `.git` link before the worker starts and refuses (`crashed`, attention item) if it changed
-   afterwards, without running git there. The policy already denies writing it; this catches a policy that forgot.
+1. Built (D107). Every git the harness runs, in a slot or anywhere else, runs with hooks, filesystem monitors,
+   submodule fetches, and the `ext::` transport off: `-c core.hooksPath=/dev/null -c core.fsmonitor=false
+   -c fetch.recurseSubmodules=false -c protocol.ext.allow=never`. Checked with git 2.43 on a worktree pool: without
+   them, `_run`'s own steps run `post-checkout`, `reference-transaction` (on every ref a `fetch` updates),
+   `post-index-change`, and `pre-push` from the shared git directory, and the monitor on every index read; with them,
+   none. They do not stop a command the shared config names: a filter driver (with a committed `.gitattributes`) runs
+   on checkout, and `remote.<name>.uploadpack` on fetch over a local or SSH remote. Until a worker cannot write that
+   config (§4.2), those stay open.
+2. Built (D108). `_run` reads each slot's `.git` file before any git step. If it changed by the time the worker exits,
+   the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the slot
+   is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
+   forgot. Gap: a `_run` killed with SIGKILL leaves the slot to reconcile, which does not know what the file held.
 3. The prompt reaches the runtime byte for byte. D023 keeps ticket text out of a shell. `srt` joins its arguments into
-   one `bash -c` string after single-quoting each one. That is the POSIX-safe form, but it is a second parser on
-   ticket-written text. The canary (§6) proves prompts come through unchanged with a hypothesis property test over
-   quotes, newlines, `$()`, backticks, and arbitrary Unicode text (D027). `_run` reads the prompt as UTF-8, so bytes
-   that are not valid UTF-8 never reach the command line. If that is not convincing, D023's own revisit clause
-   applies: add a `{prompt_file}` placeholder and pass the path of the prompt `_run` already writes.
-4. Timeouts still end everything. `_run` kills the worker's process group with SIGKILL. The canary checks that nothing
-   inside the sandbox outlives it. canopy reads the result line, not the exit status, so `srt` exiting 0 on SIGTERM
-   does not matter.
+   one `bash -c` string after single-quoting each one, and quotes again at each layer it adds (`sh -c` around
+   bubblewrap on Linux, `env ... sandbox-exec` on macOS). That is the POSIX-safe form, but it is a second parser on
+   ticket-written text. The inner bash is neither a login nor an interactive shell, so it reads no rc file, but it
+   does source `$BASH_ENV` (§4.1 step 3). The canary (§6) proves prompts come through unchanged with a hypothesis
+   property test over quotes, newlines, `$()`, backticks, and arbitrary Unicode text (D027); the harness's half, that
+   the prompt is exactly one argument of the template, is `test_properties.py`. `_run` reads the prompt as UTF-8, so
+   bytes that are not valid UTF-8 never reach the command line. On Linux the whole quoted command is one argument to
+   `sh`, so it must fit in one argument's limit (128 KiB); `srt` refuses a longer one. If either is a problem, D023's
+   own revisit clause applies: add a `{prompt_file}` placeholder and pass the path of the prompt `_run` already writes.
+4. Timeouts still end everything. `_run` kills the worker's process group with SIGKILL; `test_procs.py` checks that a
+   descendant in the group dies with it. `srt` starts nothing detached: it, its shell, bubblewrap, and its proxies
+   (which run inside `srt`) stay in that group. bubblewrap gets `--new-session`, so the sandboxed processes are in a
+   group of their own, but also `--die-with-parent` and a PID namespace, so they die with bubblewrap. A kill of the
+   `srt` pid alone would not reach them; `kill_group` is the right call. On macOS nothing starts a new group, so a
+   process that calls `setsid` escapes, as it would without a sandbox. The canary checks that nothing inside the
+   sandbox outlives a timeout. canopy reads the result line, not the exit status, so `srt` exiting 0 when its child
+   dies of SIGTERM does not matter: a timeout is canopy's own clock.
 5. Worker git state is private (§4.2): a detached checkout in step 2, a per-run object directory with the shared one
    as an alternate, and a push by refspec. `_run` sets the object variables for the worker and for its own fallback
    push in step 5. This changes DESIGN §8 steps 2 and 5, and the push instruction in the worker prompts. The `-B`
@@ -219,9 +245,11 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
   fetches before the worker starts, which covers most runs. Check what the fix-ci and resume prompts ask for, and
   whether a fetch that writes only `FETCH_HEAD` (per worktree) is enough.
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
-  Linux: `srt` blocks creating Unix sockets, which includes the agent socket. canopy already recommends HTTPS remotes
-  and `canopy init` warns about SSH ones (D038). Still open: whether to support SSH inside the sandbox at all (allow
-  the agent socket, or push from the host in `_run`), or to leave SSH to unsandboxed runs.
+  Linux: `srt`'s seccomp filter blocks creating Unix sockets, which includes the agent socket. Its per-path
+  `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`, which lifts the block entirely.
+  canopy already recommends HTTPS remotes and `canopy init` warns about SSH ones (D038). Still open: whether to support
+  SSH inside the sandbox at all (allow the agent socket, or push from the host in `_run`), or to leave SSH to
+  unsandboxed runs.
 - OpenCode's local MCP servers start inside the sandbox and inherit it. Each one's hosts must be on the allowlist, and
   stdio servers that read credentials from HOME need those paths allowed.
 - Build caches. DESIGN §9 wants caches shared across slots. Sharing them with the operator's own builds would let a
@@ -233,6 +261,8 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
   hostile config can reach.
 - `sandbox-exec` is marked deprecated on macOS, though the Seatbelt framework it drives is what Chrome and several
   agent runtimes still use. Apple's `container` (a lightweight VM per container) is the macOS fallback if it goes away.
+- A policy with no restrictions at all makes `srt` run the command without bubblewrap. The canary's denials catch a
+  template that ends up empty.
 - Where this sits in the ROADMAP: the trigger says before a second team adopts canopy. It needs M2's real worker to be
   worth testing against.
 
