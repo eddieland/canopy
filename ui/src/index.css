@@ -150,7 +150,7 @@
 
 @keyframes crawl {
     to {
-        transform: translateX(-50%);
+        transform: translateX(-100%);
     }
 }
 
@@ -275,9 +275,11 @@
 }
 
 /*
- * The header ticker (src/components/shell/ticker.tsx). The window clips the strip and fades it out at both ends; the
- * mask's gradient is alpha only, so its color is irrelevant. The strip holds two copies of the reel and crawls one
- * copy's width, for `--ticker-duration`, then starts over on the same frame. It holds still under the pointer.
+ * The header ticker (src/components/shell/ticker.tsx). The window clips the line and fades it out at both ends; the
+ * mask's gradient is alpha only, so its color is irrelevant. The line is padded by the window's width before its text
+ * and the gap's distance after it (`--ticker-gap` seconds at `--ticker-rate` a second), and crawls its own width, so
+ * one pass is the headline entering, leaving, and the empty gap. The component sets the duration from the line's
+ * width. It holds still under the pointer. Under reduced motion there is no padding: the headline stands in place.
  */
 @utility ticker-window {
     overflow: hidden;
@@ -286,7 +288,9 @@
 
 @utility animate-ticker {
     @media (prefers-reduced-motion: no-preference) {
-        animation: crawl var(--ticker-duration, 300s) linear infinite;
+        padding-left: 100%;
+        padding-right: calc(var(--ticker-gap, 0) * var(--ticker-rate, 4.5rem));
+        animation: crawl 20s linear infinite;
         &:hover {
             animation-play-state: paused;
         }

@@ -79,9 +79,10 @@ Rules:
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
 - **Wide screens use the width** from `2xl`: the attention list widens, and a ticket's page puts its conversation
   beside its actions, work, and runs.
-- Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding
-  (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both ends. It is
-  the header's one piece of fun: written here, never journal text, and colored for nothing.
+- Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding, one
+  at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both
+  ends. It is the header's one piece of fun: written here, never journal text, and colored for nothing. Settings sets
+  its speed (Off, Slow, Normal, Spicy; Off hides it) and the seconds between headlines (0 by default).
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page.
@@ -105,8 +106,10 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
   a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
-- The header's ticker crawls right to left at a reading pace (its duration scales with the headlines' length), and
-  holds still under the pointer. Its reel starts at a different headline each day. At rest it shows the reel's start.
+- The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
+  left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
+  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. The reel starts at a
+  different headline each day. At rest the window is empty, between headlines.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
@@ -114,8 +117,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, and pulses, ripples, and the drifting leaf are hidden, and the ticker stands still. New motion goes inside a
-  `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
+  in place, pulses, ripples, and the drifting leaf are hidden, and the ticker shows its first headline in place. New
+  motion goes inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 
@@ -129,7 +132,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent means system) and synced across tabs.
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
-inline script and checks it against the store's key.
+inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
+`canopy-ticker` (`src/lib/ticker-settings.ts`), synced across tabs.
 
 ## Patterns
 
