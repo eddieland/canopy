@@ -5,9 +5,9 @@ import type { Run, StreamEvent } from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
- * read again, only if a page shows it. The worktrees are not on the stream: a run starting or ending, or changing the
- * worktrees it holds, marks them stale, and they are read again only if a page shows them. Unknown event types are
- * ignored, so the server can add some.
+ * read again, only if a page shows it, and so is a chore's page whenever the chores change. The worktrees are not on
+ * the stream: a run starting or ending, or changing the worktrees it holds, marks them stale, and they are read again
+ * only if a page shows them. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -24,6 +24,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         }
         case 'tickets.updated':
             client.setQueryData(keys.tickets, event.tickets)
+            break
+        case 'chores.updated':
+            client.setQueryData(keys.chores, event.chores)
+            void client.invalidateQueries({ queryKey: ['chore'], refetchType: 'active' })
             break
         case 'ticket.changed':
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
@@ -50,6 +54,7 @@ const LISTS: Record<string, string> = {
     'attention.updated': 'items',
     'runs.updated': 'runs',
     'tickets.updated': 'tickets',
+    'chores.updated': 'chores',
 }
 
 /** Parses an SSE `data` payload into a StreamEvent, or null when it is not one this UI knows. */

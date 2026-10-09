@@ -1,4 +1,4 @@
-"""The JSON and SSE API under `{base_path}/api` (DESIGN §22).
+"""The JSON and SSE API under `{base_path}/api` (DESIGN §19, §22).
 
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
 functions the CLI's verbs call (`canopy.core.conversation`), with channel `web`, so the guards are the same ones; a
@@ -15,12 +15,14 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import conversation
+from canopy.core import chore_view, conversation
 from canopy.infra import logs
 from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
+    ChoreDetail,
+    ChoreSummary,
     LastTick,
     Meta,
     Pool,
@@ -66,6 +68,16 @@ def ticket_ref(key: str, verb: str) -> Ref:
     return ref
 
 
+def chore_ref(name: str, verb: str) -> Ref:
+    """The chore `name` names, refused as `canopy reply chore:NAME` refuses it: `bad_ref` for a name no chore has."""
+    try:
+        ref = conversation.parse_ref(f"{conversation.CHORE}:{name}")
+        conversation.check_verb(ref, verb)
+    except conversation.Refused as r:
+        raise refusal(r) from None
+    return ref
+
+
 def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRouter:
     """Return the API's routes for a server set up with `options`, reading and writing through `backend`."""
     api = APIRouter(prefix=f"{options.base_path}/api")
@@ -74,6 +86,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _read_routes(signed_in, backend)
     _live_routes(signed_in, backend)
     _write_routes(signed_in, backend)
+    _chore_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
 
@@ -215,4 +228,40 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
             except conversation.Refused as r:
                 raise refusal(r) from None
         log.info("operator replied", extra={"ticket": ref.id, "message_id": replied.message_id, "channel": WEB})
+        return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
+
+
+def _chore_routes(api: APIRouter, backend: Backend) -> None:
+    """The chores (DESIGN §19): what `canopy status` and `canopy show chore:NAME` print, and the operator's notes.
+
+    Nothing here runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
+    """
+    log = logs.for_tick(None)
+
+    @api.get("/chores", operation_id="listChores")
+    def chores() -> list[ChoreSummary]:
+        with backend.open() as ctx:
+            return views.chores(backend, ctx)
+
+    @api.get("/chores/{name}", operation_id="getChore", responses={404: {"description": "No such chore."}})
+    def chore(name: str) -> ChoreDetail:
+        ref = chore_ref(name, "show")
+        with backend.open() as ctx:
+            found = views.chore(backend, ctx, ref.id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no chore {ref.id!r} is defined for this workspace")
+        return found
+
+    @api.post("/chores/{name}/replies", operation_id="replyChore", responses=_REFUSED)
+    def note(name: str, body: ReplyRequest) -> Replied:
+        ref = chore_ref(name, "reply")
+        with backend.open() as ctx:
+            try:
+                defined = chore_view.defined(ctx.config, ctx.workspace)
+                replied = conversation.reply(
+                    ctx.conn, ref, body.body, channel=WEB, submission=body.submission, chores=defined
+                )
+            except conversation.Refused as r:
+                raise refusal(r) from None
+        log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
         return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)

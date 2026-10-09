@@ -77,8 +77,8 @@ Rules:
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
-- **Wide screens use the width** from `2xl`: the attention list widens, and a ticket's page puts its conversation
-  beside its actions, work, and runs.
+- **Wide screens use the width** from `2xl`: the attention list widens, a ticket's page puts its conversation
+  beside its actions, work, and runs, and a chore's page puts its notes beside its schedule, findings, and runs.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page.
@@ -148,7 +148,8 @@ inline script and checks it against the store's key.
   `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
   reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The selection is
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation, the reply form,
-  and the ticket's actions; an item about no ticket shows its detail and nothing to answer. Under the list, Working
+  and the ticket's actions; a chore's item (a finding or `chore_failed`) shows the chore's notes and the note form; an
+  item about neither shows its detail and nothing to answer. Under the list, Working
   lists the running runs: ticket, kind, cost so far, and for how long.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
@@ -156,6 +157,12 @@ inline script and checks it against the store's key.
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text. An operator message no `ok` tick has read
   carries a `waiting for the next tick` chip in `status-running` (`src/lib/acknowledged.ts`), and an `awaiting_reply`
   item it answered an `answered` chip, with a line saying it leaves at the next tick; Waiting on you counts neither.
+- **A chore's notes** are a conversation of the operator's words alone, under the chore's runs and findings, with a
+  note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
+  `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
+- **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
+  its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
+  run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.

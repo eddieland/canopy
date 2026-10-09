@@ -25,14 +25,35 @@ const TONE: Record<Message['kind'], string> = {
 
 const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
 
+/** Which of the operator's messages nothing has read yet, and what the chip on each says and explains. */
+export interface Pending {
+    label: string
+    title: string
+    test: (message: Message) => boolean
+}
+
 /**
- * A ticket's conversation, oldest first (DESIGN §22). Every body is untrusted text, a tracker comment's or an agent's
- * included: it is rendered as React text, which escapes it, never as HTML. Bubbles pop in from their own side, one
- * after another, and a new one when it arrives. The operator's own messages that no `ok` tick has read yet say so: the
- * loop acts on them, and the attention list catches up, at the next tick.
+ * A ticket's conversation, or a chore's notes, oldest first (DESIGN §22). Every body is untrusted text, a tracker
+ * comment's or an agent's included: it is rendered as React text, which escapes it, never as HTML. Bubbles pop in from
+ * their own side, one after another, and a new one when it arrives. The operator's own messages that no `ok` tick has
+ * read yet say so: the loop acts on them, and the attention list catches up, at the next tick. A chore's notes say
+ * instead which its next run reads (`pending`).
  */
-export function Conversation({ messages, waiting }: { messages: Message[]; waiting: number | null }) {
+export function Conversation({
+    messages,
+    waiting = null,
+    pending,
+}: {
+    messages: Message[]
+    waiting?: number | null
+    pending?: Pending
+}) {
     const acknowledged = useQuery(tickQuery).data?.acknowledged
+    const unread: Pending = pending ?? {
+        label: 'waiting for the next tick',
+        title: UNREAD,
+        test: (message) => acknowledged !== undefined && awaitsTick(message, acknowledged),
+    }
     return (
         <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
             {messages.map((message) => (
@@ -48,7 +69,7 @@ export function Conversation({ messages, waiting }: { messages: Message[]; waiti
                     <Head
                         message={message}
                         waiting={message.id === waiting}
-                        unread={acknowledged !== undefined && awaitsTick(message, acknowledged)}
+                        unread={unread.test(message) ? unread : null}
                     />
                     <p
                         className={cn(
@@ -65,7 +86,7 @@ export function Conversation({ messages, waiting }: { messages: Message[]; waiti
     )
 }
 
-function Head({ message, waiting, unread }: { message: Message; waiting: boolean; unread: boolean }) {
+function Head({ message, waiting, unread }: { message: Message; waiting: boolean; unread: Pending | null }) {
     const comment = message.comment
     return (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
@@ -87,8 +108,8 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
             {comment && <Chip>data, authorizes nothing</Chip>}
             {waiting && <Chip className="border-status-blocked text-status-blocked">waits on your answer</Chip>}
             {unread && (
-                <span title={UNREAD}>
-                    <Chip className="border-status-running/40 text-status-running">waiting for the next tick</Chip>
+                <span title={unread.title}>
+                    <Chip className="border-status-running/40 text-status-running">{unread.label}</Chip>
                 </span>
             )}
             <Age at={message.at} className="ml-auto" />

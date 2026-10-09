@@ -78,6 +78,25 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     await expect(comment).toContainText('data, authorizes nothing')
 })
 
+test("a chore's finding is answered from the attention list with a note its next run reads", async ({ page }) => {
+    await page.goto('attention')
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
+    const detail = page.getByTestId('attention-detail')
+    const form = detail.getByRole('form', { name: 'Note' })
+    await form.getByRole('textbox').fill('Leave out lodash-advisory until 2026-10-15: the upgrade is merging.')
+    await form.getByRole('button', { name: 'Add note' }).click()
+    await expect(form.getByRole('status')).toContainText(/Recorded message \d+ on chore:deps\. Its next run reads it\./)
+    const mine = detail.getByTestId('conversation').locator('[data-source=operator]').last()
+    await expect(mine).toContainText('until 2026-10-15')
+    await expect(mine).toContainText('via web')
+    await expect(mine).toContainText('waiting for the next run')
+
+    await detail.getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
+        'until 2026-10-15',
+    )
+})
+
 test('stop now asks once more, then ends the run', async ({ page }) => {
     await page.goto('tickets/ABC-104')
     await page.getByRole('button', { name: 'Stop now' }).click()

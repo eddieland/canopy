@@ -13,6 +13,8 @@ export const keys = {
     runs: ['runs'] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
+    chores: ['chores'] as const,
+    chore: (name: string) => ['chore', name] as const,
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
     tick: ['tick'] as const,
@@ -64,6 +66,22 @@ export function ticketQuery(key: string) {
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/tickets/{key}', { params: { path: { key } }, signal })),
         // A ticket from another page's data is a different ticket: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}
+
+/** The configured chores, as `canopy status` lists them. The stream sends the list again whenever it changes. */
+export const choresQuery = queryOptions({
+    queryKey: keys.chores,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
+})
+
+/** One chore, as `canopy show chore:NAME` prints it. The stream marks it stale whenever the chores list changes. */
+export function choreQuery(name: string) {
+    return queryOptions({
+        queryKey: keys.chore(name),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/chores/{name}', { params: { path: { name } }, signal })),
         placeholderData: undefined,
     })
 }
