@@ -120,13 +120,10 @@ canopy (harness, Python)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
-  chores/          the operator's recurring chores (§19)
-    view.py        each configured chore: due time, runs, open findings; chore_failed items; its state block part
+  chores/          the operator's recurring chores (§19); what the web UI reads of them is in core (chore_*.py)
     start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
     execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
     trial.py       canopy chore try: one foreground run outside any tick that records nothing
-    window.py      a chore's days and hours: whether a run may start now, and when it next may
-    result.py      the result contract, validated with pydantic
     reconcile.py   chore runs whose _chore is gone marked crashed
 
   notify/          notification sinks (§20)
@@ -165,6 +162,10 @@ canopy (harness, Python)
 
   core/            what every feature shares
     agent_output.py an agent's stdout: its text, and OpenCode's JSON events' session id and cost (§13)
+    chore_view.py  each configured chore: due time, runs, open findings; chore_failed items; its state block part
+                   (§19), read by the loop, the CLI, chores, and the web UI
+    chore_window.py a chore's days and hours: whether a run may start now, and when it next may
+    chore_result.py a chore's result contract, validated with pydantic
     config.py      layered config: the workspace file or repository canopy.toml, and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
@@ -739,7 +740,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it dispatched records its
   own. `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its
   decisions; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a
-  dry run's plan. A tick that cannot take the lock writes no row.
+  dry run's plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a
+  ticket's page the latest decisions about it across ticks (§22). A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
@@ -1626,8 +1628,9 @@ not count against `max_workers`.
 
 ### Notes from the operator
 
-`canopy reply chore:<NAME> '<text>'` records a note to a chore: a message on its subject (§22), from the operator,
-refused `unknown` for a chore not defined for this workspace (D100). It is how the operator answers a finding without
+`canopy reply chore:<NAME> '<text>'`, or the note form on the chore's page in the web UI (§22), records a note to a
+chore: a message on its subject (§22), from the operator, refused `unknown` for a chore not defined for this workspace
+(D100). It is how the operator answers a finding without
 editing the prompt file: "leave out flaky/checkout/test_retry until 2026-10-15, the fix is merging".
 
 - Every later run's `## Run` section, a try's included, carries the latest 10 notes as `operator_notes` (id, time,
@@ -1636,7 +1639,7 @@ editing the prompt file: "leave out flaky/checkout/test_retry until 2026-10-15, 
 - Nothing clears a note; it falls out after 10 newer ones. A note saying "until" a date is the agent's to compare
   against the run's `now`. To take one back, write a newer note.
 - Notes reach neither the overseer's state block nor the attention list, and do not wake the loop.
-- `canopy show chore:<NAME>` lists them after the open findings.
+- `canopy show chore:<NAME>` lists them after the open findings, and the web UI's chore page beside them.
 
 ### Trying a chore
 
@@ -2156,8 +2159,8 @@ runs the PR's code).
 
 ## 22. Conversations
 
-Private tickets and the journal's conversation (ROADMAP M18), tracker comments in the journal (M19), and the web UI's
-pages and actions (M20) are built. Rationale in D072 to D076 and D080 to D082.
+Private tickets and the journal's conversation (ROADMAP M18), tracker comments in the journal (M19), the web UI's
+pages and actions (M20), its chores (M23), and its ticks (M24) are built. Rationale in D072 to D076 and D080 to D082.
 
 The journal is the one record of every ticket's conversation: what workers reported and asked, what people replied,
 and where each came from. A **channel** is a way into or out of that record: the tracker, the CLI, the web UI, and
@@ -2407,7 +2410,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop; notes to chores (M23) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -2422,8 +2425,9 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, and `reply` with channel `web`, and for a stop with `now`, the same
-  `runs.halt.end` as `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
+  CLI uses: `conversation.start`, `stop`, and `reply` with channel `web` (a note to a chore is a `reply` on its
+  subject, as `canopy reply chore:NAME` is), and for a stop with `now`, the same `runs.halt.end` as
+  `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
   that function and the attention list's (`loop.attention.listed`) when it starts the server (`serve.backend`). The one
   process it runs is `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the
   pool's lock.
@@ -2432,9 +2436,10 @@ Served by `canopy loop` from a thread (D073):
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   the list, and the last 24 hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
-  pool's slots, below), and tickets, each with its conversation. Actions: the CLI's verbs, reply, start, and stop (with
-  or without `now`). OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and
-  attach joins once M15 runs workers against OpenCode's server.
+  pool's slots, below), tickets, each with its conversation and the decisions about it, chores (below), and ticks
+  (below). Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a note to a chore.
+  OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and attach joins once
+  M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -2477,12 +2482,17 @@ The API, under `{base}/api`:
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
+| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
+| `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /spend` | what the last 24 hours cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
-| `GET /tickets/{key}` | one ticket: what `canopy show` prints, with its latest 100 messages |
+| `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
 | `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
+| `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
+| `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
+| `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /events` | the event stream, below |
 
@@ -2497,13 +2507,55 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 `web:<id>`, so a retried submission records nothing new.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
-When another connection has committed since, it reads the attention list, the runs, the tickets, the spend, and the
-latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`, `tickets.updated`,
-`spend.updated` (when the cost changed; its window moves with the clock), `tick.updated`, and `ticket.changed` naming
-each ticket whose summary changed. A new stream starts with all three lists, the spend, and the latest tick. The UI
-writes a list into its query with `setQueryData` and refetches a changed ticket only if a page shows it. The journal has
+When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
+spend, and the latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
+`tickets.updated`, `chores.updated`, `spend.updated` (when the cost changed; its window moves with the clock),
+`tick.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with every list,
+the spend, and the latest tick. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
+only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
+newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
+sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,
+each only if a page shows it. The journal has
 no notifications, so a once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser
 polls.
+
+The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
+`canopy reply chore:NAME` does in the terminal.
+
+- `GET /chores` lists the chores `canopy status` lists: those configured for this workspace, none while
+  `capacity.max_chores` is 0. Each has its `every_minutes`, `days`, `hours`, `timezone`, and `when`; its running run,
+  or else its latest ended one; its `due_at` (§19, the `not_due` and `outside_hours` guards' earliest start, by the
+  server's clock); its open findings, each with when its unbroken sequence of `ok` runs began; and its newest note's id.
+- `GET /chores/{name}` is one chore defined for this workspace, configured or not, as `canopy reply chore:NAME` takes
+  a note to one: that summary, its latest 10 runs with status, summary, number of findings, session, cost, and log
+  path, and the latest 10 notes, oldest first, which are what its next run's `## Run` section carries. A name no chore
+  could have is refused `bad_ref`; one not defined here is a 404.
+- `POST /chores/{name}/replies` takes the reply form's body and submission id, as a ticket's does, behind the same
+  session token and `Origin` check, and records a note with channel `web`. Nothing in the web UI runs a chore: the
+  overseer decides when one runs (§19), and `canopy chore try` stays in the CLI.
+- A chore run's summary is the harness's note or the agent's summary on one line, and a finding's title and detail are
+  the agent's: untrusted text, rendered as text with control characters dropped.
+- The chores page is in the navigation, and each chore has a page. On the attention list, a chore's item, a finding or
+  `chore_failed`, opens the chore's notes and the note form beside the list, as a ticket's opens its conversation. A
+  note no run of the chore has started since is marked as waiting for its next run: notes wake nothing and no tick
+  reads them (§19), so a tick's acknowledgement says nothing about them.
+
+The ticks pages (M24): the `decisions` table is the overseer's reasons for what the loop did and the evaluation corpus
+for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
+
+- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's
+  session and cost and how many decisions it recorded. `GET /ticks/{id}` is one tick and its decisions in the order
+  they were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
+- A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
+  (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick; with its
+  ticket, repository, chore, and PR apart, and its action and rationale.
+- A rationale is the overseer's text: untrusted, rendered as text, its control characters dropped and its whitespace
+  collapsed to one line as `canopy decisions` prints it. It was cut at 2000 characters when recorded (§6).
+- A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
+- The tick's page names where the overseer's output is, `<state_dir>/ticks/<id>.log`, when the file exists, and does
+  not serve it (D104): it is agent output from a file, unbounded and unchecked, where everything the UI shows comes from
+  the journal.
+- The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
 
 The worktrees page (taken on request, 2026-10-08; D090): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
