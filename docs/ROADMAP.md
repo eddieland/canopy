@@ -618,7 +618,12 @@ queue and finds, in the loop's output and log, waits reaching the cap after a qu
 `loop.interval_minutes` within one tick of the first morning activity, and each run's end followed by a tick within
 a couple of minutes.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_idle_pacing.py`), docs, and D083's update are in
+(2026-10-09). Two refinements of DESIGN's sketch: a ticket's `skip` and the chore refusals that lift by themselves
+(`chore_capacity`, `not_due`, `outside_hours`) count as quiet, since the overseer skips every unlabeled ticket the
+journal remembers each tick; and idle pacing off is all of it off, gates and run wakes included. On the open bullet,
+the build follows DESIGN: a shorter `--every` keeps idle pacing from that base. Waiting on the operator: the overnight
+run above, and whether `--every` should turn it off instead.
 
 ## M22. Trusted reviewers
 

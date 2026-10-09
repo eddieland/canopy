@@ -228,9 +228,57 @@ def finish_tick(conn: sqlite3.Connection, tick_id: int, status: str, summary: st
     )
 
 
-def set_tick_messages(conn: sqlite3.Connection, tick_id: int) -> None:
-    """Record the newest message as the one a tick has read up to: every message to it was there to see (§6, §22)."""
-    conn.execute("UPDATE ticks SET message_id = (SELECT coalesce(max(id), 0) FROM messages) WHERE id = ?", (tick_id,))
+def set_tick_read(conn: sqlite3.Connection, tick_id: int) -> None:
+    """Record what a tick has read up to: the newest message, and the time (§6, §22).
+
+    Every message up to it was there to see, and every run that started or ended before it.
+    """
+    conn.execute(
+        "UPDATE ticks SET message_id = (SELECT coalesce(max(id), 0) FROM messages), read_at = ? WHERE id = ?",
+        (now(), tick_id),
+    )
+
+
+def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
+    """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT * FROM ticks WHERE id < ? ORDER BY id DESC LIMIT 1", (tick_id,)
+    ).fetchone()
+    return row
+
+
+# The tables of detached runs: workers', chores', and reviews'. Fixed names, never input.
+_RUN_TABLES = ("runs", "chore_runs", "review_runs")
+
+
+def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether any run, chore run, or review run started or ended after `since`, a time the journal wrote (§6)."""
+    return any(
+        conn.execute(
+            f"SELECT 1 FROM {table} WHERE started_at > ? OR ended_at > ? LIMIT 1",  # noqa: S608
+            (since, since),
+        ).fetchone()
+        for table in _RUN_TABLES
+    )
+
+
+def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether any run, chore run, or review run ended after `since`, a time the journal wrote (§6)."""
+    return any(
+        conn.execute(f"SELECT 1 FROM {table} WHERE ended_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
+        for table in _RUN_TABLES
+    )
+
+
+def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
+    """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6)."""
+    tickets = conn.execute(
+        "SELECT 'ticket', key, phase, branch, last_comment_id, last_message_id, last_mirrored_id, done FROM tickets"
+    )
+    units = conn.execute(
+        "SELECT 'unit', ticket_key, repo, branch, pr_url, phase, last_review_id, last_ci_run_id FROM ticket_units"
+    )
+    return frozenset(tuple(r) for rows in (tickets, units) for r in rows)
 
 
 def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:

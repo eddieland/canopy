@@ -105,6 +105,7 @@ canopy (harness, Python)
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
     repeat.py      canopy loop: ticks one after another with a wait between them, its own lock, rich output
+    pacing.py      how long the loop waits: idle ticks, gates, and what wakes it early (§6, Idle pacing)
     web.py         the web UI for canopy loop: the listener secret checked, the server's backend wired, started
     state.py       the overseer's state block
     attention.py   the attention list from the journal; render attention.md, diff, notify
@@ -265,8 +266,10 @@ in order:
      reconcile, and a running review's lease is never returned as stale.
    - `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop; the overseer does not run.
-   - Record on the tick the newest message in the journal: every message up to it was there for this tick to read
-     (`ticks.message_id`). The latest `ok` tick's is what the web UI calls acknowledged (§22).
+   - Record on the tick the newest message in the journal and the time: every message up to it, and every run,
+     chore run, and review run that started or ended before it, was there for this tick to read (`ticks.message_id`,
+     `ticks.read_at`). The latest `ok` tick's message is what the web UI calls acknowledged (§22); idle pacing reads
+     both (below).
    - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
      ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
@@ -325,13 +328,14 @@ foreground until stopped:
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
 4. Print the tick's status, duration, and summary; each decision except `wait` and attention items, with its
-   rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, and what the tick's
-   overseer cost in dollars and tokens when the runtime reported it.
-5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status.
-   This pacing rule is `repeat.pace`; ROADMAP M21 lengthens it after idle ticks (Idle pacing, below) and M13 by tick
-   cost. An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early, but no
-   sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22). On a terminal, pressing `t`
-   (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor (D088); keys pressed during the tick are dropped.
+   rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, what the tick's
+   overseer cost in dollars and tokens when the runtime reported it, and the wait that follows.
+5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
+   lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; ROADMAP
+   M13 will lengthen it by tick cost. An operator message recorded since the tick began, such as a `canopy reply`, ends
+   the wait early, but no sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22); so does a run
+   ending (below). On a terminal, pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor
+   (D088); keys pressed during the tick are dropped.
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first lets the tick
@@ -344,7 +348,8 @@ Config is read once at loop start; restart to apply a change. Prompt files are r
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
-gains `loop started` and `loop stopped` lines, with no tick id, and a line when a key or a message ends a wait.
+gains `loop started` and `loop stopped` lines, with no tick id, a `loop waits` line per tick, and a line when a key, a
+message, or a run ending ends a wait.
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
@@ -352,21 +357,25 @@ loop runs and restored when it stops. Otherwise no keys are read, and the header
 
 ### Idle pacing
 
-Not built (ROADMAP M21, D083). A tick that finds nothing new costs a full overseer run and buys nothing, however cheap
-that run was, and most ticks overnight and at weekends are like that. So the loop waits longer after each idle tick in a
-row, and wakes early on the events that end idleness that it can see itself.
+ROADMAP M21, D083; `loop/pacing.py`. A tick that finds nothing new costs a full overseer run and buys nothing, however
+cheap that run was, and most ticks overnight and at weekends are like that. So the loop waits longer after each idle
+tick in a row, and wakes early on the events that end idleness that it can see itself.
 
 A tick is **idle** when all of these hold, each read from the journal by the loop:
 
 - It closed `ok`. Any other status is not idle and resets the count: a failing tick keeps today's pacing.
-- Its decisions are only `wait`, attention items, and refusals that lift by themselves: `running` and `capacity` (on a
-  run ending), `cooldown` (at a known time, below), and `attempt_limit` (never). Any dispatch, `done`, `mirror` (a new
-  tracker comment), or other refusal makes it not idle.
+- Its decisions are only `wait`, a ticket's `skip` (such as `not_labeled`, every tick), attention items, and refusals
+  that lift by themselves (`pacing.QUIET_REFUSALS`): `running`, `capacity`, and `chore_capacity` (on a run ending),
+  `cooldown`, `not_due`, and `outside_hours` (at a known time, below), and `attempt_limit` (never). Any dispatch,
+  `done`, `mirror` (a new tracker comment), or other refusal makes it not idle. A tick-wide `skip` closes the tick
+  `skipped`, which is not idle already.
 - The attention list after it is the list before it, compared as the loop's per-tick block already compares them.
 - No ticket or unit changed its phase, branch, a cursor, or `done`, and no ticket was seen for the first time.
 - No run, chore run, or review run started or ended, and no operator message was recorded, after the previous tick
-  rendered the overseer's state (§6 step 4). Something the previous tick could not have seen keeps this one from
-  counting as idle, even when it happened while the previous tick was still running.
+  read the journal for the overseer's state (`ticks.read_at` and `ticks.message_id`, §6 step 3). Something the
+  previous tick could not have seen keeps this one from counting as idle, even when it happened while the previous
+  tick was still running. The previous tick is the journal's, whatever ran it; one that never read the journal, such
+  as a `reconcile_failed` tick or the first tick of all, makes this one not idle.
 
 The wait after a tick is then:
 
@@ -374,29 +383,32 @@ The wait after a tick is then:
 - after the n-th idle tick in a row, `max(base, min(base * 2^n, loop.idle_max_minutes))`. With the defaults, 30, 60,
   120, then 120 for as long as nothing changes. It is never shorter than `base`, so idle pacing is off whenever the
   cap is not above `base`: set `loop.idle_max_minutes` to `loop.interval_minutes`, or pass an `--every` at or above
-  it.
+  it. Off, the loop paces as before M21: `base` after every tick, no gate shortens it, and only an operator message
+  wakes it. A shorter `--every` keeps idle pacing, from that base.
 
-`loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes`. The count lives in the loop, not
-the journal: a restarted loop starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any
-other. When M13's cost pacing is built, the wait is the longer of the two rules' waits, and what follows bounds that
-combined wait.
+`loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes` when set; left unset under a
+longer interval, it is no error and idle pacing is off. The count lives in the loop, not the journal: a restarted loop
+starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other. When M13's cost pacing
+is built, the wait is the longer of the two rules' waits, and what follows bounds that combined wait.
 
-Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both read
-from the state block: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
-on when it opens. One already open, such as a chore the overseer passed over because its `when` says not now, sets no
-deadline, so it cannot make the loop spin.
+Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
+the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
+on when it opens, even sooner than `base`. One already open, such as a chore the overseer passed over because its `when`
+says not now, sets no deadline, so it cannot make the loop spin.
 
 Besides an operator message, the wait ends early, with the same one-minute floor (`repeat.WAKE_MIN_SECONDS`), when a
-run, chore run, or review run ended after the tick rendered the overseer's state (§6 step 4): after anything that tick
-could have seen. A run that ends while the overseer is running is picked up a minute after the tick began, not a full
-interval later. The tick that follows is not idle, so the wait after it is `base` again, and the tick after that looks
-for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits on canopy's own work.
+run, chore run, or review run ended after the tick read the journal for the overseer's state (`ticks.read_at`): after
+anything that tick could have seen. A run that ends while the overseer is running is picked up a minute after the tick
+began, not a full interval later. The tick that follows is not idle, so the wait after it is `base` again, and the tick
+after that looks for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits on
+canopy's own work.
 
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
 tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
-trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The per-tick
-block shows the count with the wait, as `idle 3, next tick in 60m at 03:41`, and the `loop started` log line records
-`idle_max_minutes`; each tick's log line records whether it was idle and the wait chosen.
+trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
+the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h 00m at 03:41` (no count after a
+tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
+records whether it was idle, the count, and the wait chosen, in seconds.
 
 ## 7. Ticket phases and next actions
 
@@ -719,13 +731,13 @@ Rationale in D045 and D054.
 The schema is `migrations/0001_init.sql`, the whole schema as of v0.1; a journal that applied the pre-squash
 migrations is not upgraded (D068). Each later change is a new migration. Tables:
 
-- `ticks`: one row per tick; id, timestamps, dry_run, status, summary. Status is `running`, `ok`, `skipped`,
-  `overseer_failed`, `reconcile_failed`, or `abandoned`. What the runtime reported about its overseer run (§13), in the
-  same columns as `runs`: `session_id`, `cost_usd`, and tokens by kind, all NULL when it reported nothing. A tick's cost
-  is its overseer's alone; each run it dispatched records its own. `canopy decisions [TICK]` prints a tick (the latest
-  by default), its overseer's session and cost, and its decisions; `--ticket KEY` filters decisions by exact ticket key
-  and reports when none match. This is the way to read a dry run's plan. A tick that cannot take the lock writes no
-  row.
+- `ticks`: one row per tick; id, timestamps, dry_run, status, summary, and what it read up to (`message_id`, `read_at`,
+  §6 step 3). Status is `running`, `ok`, `skipped`, `overseer_failed`, `reconcile_failed`, or `abandoned`. What the
+  runtime reported about its overseer run (§13), in the same columns as `runs`: `session_id`, `cost_usd`, and tokens by
+  kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it dispatched records its
+  own. `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its
+  decisions; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a
+  dry run's plan. A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
@@ -852,6 +864,7 @@ pr_skill = ""           # optional; the skill workers open PRs with instead of t
 
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
+idle_max_minutes = 120  # and up to this long after idle ticks in a row (§6, Idle pacing)
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...

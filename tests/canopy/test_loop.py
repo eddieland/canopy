@@ -139,7 +139,7 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     tick1, tick2 = text.split("tick 1  ok")[1].split("tick 2  ok")
     assert "PROJ-2  dispatch:implement  dry run: not dispatched; would work on agent/PROJ-2-login" in tick1
     assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3" in tick1
-    assert "attention 1  ·  next tick at" in tick1
+    assert "attention 1  ·  next tick in 5m 00s at" in tick1
     assert "checks pending" not in text  # waits are counted in the summary, not listed
     assert "-   PROJ-3  needs_reviewer  resolved" in tick2
     assert "attention 0" in tick2
@@ -169,7 +169,7 @@ def test_each_tick_block_shows_what_its_overseer_cost(
     )
 
     tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
-    assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick at" in tick1
+    assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick in 1m 00s at" in tick1
     assert "cost" not in tick2
 
 
