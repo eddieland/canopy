@@ -398,7 +398,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 
 ## D083. The loop paces idle ticks from the journal
 
-- Wait doubles after each idle tick up to `loop.idle_max_minutes`; wakes early on operator messages and run endings.
+- Wait doubles after each idle tick up to `loop.idle_max_minutes`, ends at a gate (fix-ci cooldown, chore `due_at`),
+  and wakes early on operator messages and on runs ending after the tick's `ticks.read_at`.
+- A cap not above `base` turns all of it off, gates and run wakes included, so today's pacing is one setting away; an
+  unset cap under a longer interval does the same rather than fail an existing config.
 - Rejected: polling GitHub or the tracker in Python (D003); a cheap pre-check agent; quiet hours; webhooks (T8).
 - Revisit: if the cap's latency on teammates' comments or CI is felt.
 
@@ -481,7 +484,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
   next tick, which is when the attention list catches up (§14). The list itself stays the latest `ok` tick's.
 - Rejected: comparing `messages.at` with `ticks.started_at` (a tick reads messages after reconcile, not at its start);
   dropping an answered `awaiting_reply` from the served list at once (the UI and `canopy status` would disagree).
-- Revisit: when M21's idle pacing needs "a message the previous tick could not have seen"; it is this column.
+- Idle pacing (D083) reads it too: an operator message after the previous tick's is one that tick could not have seen.
 
 ## D098. `canopy chore try` runs outside every guard and records nothing
 

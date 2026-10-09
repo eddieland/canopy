@@ -15,7 +15,7 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
     assert rows == [
@@ -27,6 +27,7 @@ def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
         (6, "tick_cost"),
         (7, "tick_messages"),
         (8, "chore_cost"),
+        (9, "tick_read_at"),
     ]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -112,7 +113,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
     """D068: a journal this canopy cannot open names its live runs first, so it is not moved aside under one."""
     conn = fresh(tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (9, 'from_before_the_squash')")
+    conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'from_before_the_squash')")
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute(
@@ -123,7 +124,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
     with pytest.raises(db.MigrationError, match="run 1 is still working for the canopy before it"):
         db.migrate(conn, resources.migrations_dir())
     conn.execute("UPDATE runs SET status = 'done' WHERE id = 1")
-    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[9\]"):
+    with pytest.raises(db.MigrationError, match=r"migrations this canopy does not know: \[99\]"):
         db.migrate(conn, resources.migrations_dir())
 
 
@@ -172,7 +173,7 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     conn.execute(
         "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path) VALUES (1, 'nightly', 'x', 'ok', 'l')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4, 5, 6, 7, 8]
+    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4, 5, 6, 7, 8, 9]
     chore_run = db.get_chore_run(conn, 1)
     assert chore_run is not None
     assert (chore_run["session_id"], chore_run["cost_usd"], chore_run["tokens_input"]) == (None, None, None)

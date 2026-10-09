@@ -433,6 +433,18 @@ class Loop(Section):
     """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
 
     interval_minutes: Annotated[Minutes, Scope.USER] = 15
+    # The longest wait after idle ticks in a row (DESIGN §6, Idle pacing). Not above the interval, idle pacing is off.
+    idle_max_minutes: Annotated[Minutes, Scope.USER] = 120
+
+    @model_validator(mode="after")
+    def _cap_not_below_interval(self) -> Loop:
+        # Only when set: the default under a longer interval turns idle pacing off, as setting it to the interval does.
+        if "idle_max_minutes" in self.model_fields_set and self.idle_max_minutes < self.interval_minutes:
+            raise ValueError(
+                f"loop.idle_max_minutes ({self.idle_max_minutes}) must be at least loop.interval_minutes "
+                f"({self.interval_minutes}); set them equal to turn idle pacing off"
+            )
+        return self
 
 
 # Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).

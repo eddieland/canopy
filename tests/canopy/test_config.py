@@ -64,6 +64,7 @@ def test_needs_human_label_is_set_by_the_repository_and_overridden_by_the_user(c
         ("trust", 'comment_prefix = "Please"'),
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
+        ("loop", "idle_max_minutes = 1"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
@@ -166,6 +167,11 @@ def test_repository_file_is_optional_but_required_keys_are_not(canopy_env: Canop
         ("[runtime]\npr_skill = '-acme'\n", "a skill name of at most 64"),
         (f"[runtime]\npr_skill = '{'a' * 65}'\n", "a skill name of at most 64"),
         ("[notify]\ncmd = 3\n", "Input should be a valid string"),
+        ("[loop]\nidle_max_minutes = 0\n", "greater than or equal to 1"),
+        (
+            "[loop]\nidle_max_minutes = 14\n",
+            r"loop\.idle_max_minutes \(14\) must be at least loop\.interval_minutes \(15\)",
+        ),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
@@ -176,6 +182,16 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
     canopy_env.write_user(text)
     with pytest.raises(ConfigError, match=message):
         load(canopy_env.repo, canopy_env.user_file)
+
+
+def test_idle_max_minutes_defaults_to_120_and_may_equal_the_interval(canopy_env: CanopyEnv) -> None:
+    base = canopy_env.user_file.read_text()
+    assert load(canopy_env.repo, canopy_env.user_file).loop.idle_max_minutes == 120
+    canopy_env.write_user(base + "\n[loop]\ninterval_minutes = 30\nidle_max_minutes = 30\n")
+    assert load(canopy_env.repo, canopy_env.user_file).loop.idle_max_minutes == 30
+    # Unset, the default under a longer interval is no error: the cap is not above it, so idle pacing is off.
+    canopy_env.write_user(base + "\n[loop]\ninterval_minutes = 180\n")
+    assert load(canopy_env.repo, canopy_env.user_file).loop.idle_max_minutes == 120
 
 
 def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:
