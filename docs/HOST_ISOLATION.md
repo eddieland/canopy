@@ -2,8 +2,9 @@
 
 Status: proposal, not normative. `TRUST_MODEL.md` wins where the two disagree. Adopting any of this takes a ROADMAP
 milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with explicit human approval. §5 items 1 and 2,
-which hold with or without a sandbox, are built (DESIGN §8, D107, D108). The claims about `srt` below were checked
-against its source at version 0.0.79 (2026-10-09); re-check them against the version the operator pins.
+which hold with or without a sandbox, are built (DESIGN §8, D107, D108), and so is the half of item 5 that does (D109).
+The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against the
+version the operator pins.
 
 This document covers how to keep a worker (and a chore) from reaching the rest of the operator's machine. It recommends
 an OS-level sandbox wrapped around `worker_cmd`, lists the small harness changes that sandbox needs to be worth
@@ -132,13 +133,38 @@ git updates a ref through a lock file beside it and rewrites a shared `packed-re
 move another running worker's branch, which that worker then builds on and pushes as its own. So a worker writes no
 shared git state:
 
-- `_run` checks the branch out detached (`git checkout --detach`, from `origin/<branch>` or the base). A detached
-  worktree keeps HEAD, the index, and the reflog in `worktrees/<slot>/`, which belongs to that slot alone.
-- `_run` sets `GIT_OBJECT_DIRECTORY` to a per-run directory and lists the shared object directory in
-  `GIT_ALTERNATE_OBJECT_DIRECTORIES`. New objects land in the per-run directory; existing ones are read from the shared
-  directory, read-only. The per-run directory goes away with the run's temp directory.
-- The worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares the remote
-  branch with HEAD.
+- Built (D109): `_run` checks the branch out detached (`git checkout --detach`, from `origin/<branch>` or the base).
+  A detached worktree keeps HEAD, the index, and the reflog in `worktrees/<slot>/`, which belongs to that slot alone.
+- Built (D109): the worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares
+  the remote branch with HEAD.
+- Not built: new objects go to a per-run directory, with the shared object directory as an alternate (below).
+
+Checked with bubblewrap and git 2.43, a worktree slot under exactly this policy (the git common directory read-only,
+`worktrees/<slot>/` writable except `config.worktree`, the `.git` link read-only, and a per-run object directory
+writable through `GIT_OBJECT_DIRECTORY` and `GIT_ALTERNATE_OBJECT_DIRECTORIES`): a commit on the detached HEAD, a merge
+of `origin/<base>`, and the push by refspec all work, and the push leaves the shared remote-tracking refs alone. Moving
+any ref, making a branch, writing the common `config`, a hook, `config.worktree`, or the `.git` link all fail, and so
+does every plain `git fetch`, since the configured refspec updates a remote-tracking ref.
+
+The per-run object directory needs two things the first draft of this section missed:
+
+- It cannot simply go away with the run. The slot's HEAD, index, and reflog then name objects nobody has: `git status`
+  in the slot fails (`bad object HEAD`), and so does `git gc` in the primary clone, the operator's own repository. So
+  before deleting it, `_run` checks the slot out at step 2's commit, which is in the shared directory, with
+  `git checkout --detach --force`, and expires the slot's HEAD reflog (`git reflog expire --expire=now
+  --expire-unreachable=now HEAD`); after that, `gc` and `fsck` are clean. Step 5 runs before this, with the same two
+  variables, so it can see and push the worker's commits. This is cleanup on every exit path, like D108's, and a run
+  killed with SIGKILL needs reconcile to do it, so the directory lives at a path reconcile can find from the run, such
+  as `<state_dir>/runs/<id>.objects/`, which the policy re-allows as it does a chore's `cwd`.
+- The variables reach every git the worker's process tree runs, not only git in the slot. A commit in any other
+  repository lands in the per-run directory, so that repository reads `bad object HEAD` once it is gone, and a
+  repository made with `git init` then `git fetch` (how Go fetches modules into its cache) gets no `objects/` at all.
+  `git clone` is unaffected. So `_run` must not set them for an unsandboxed worker, whose tools write the operator's
+  real caches. `_run` passes the directory as `CANOPY_GIT_OBJECTS`, and the wrapper (§4.1), which knows it is
+  sandboxing, turns it into `GIT_OBJECT_DIRECTORY` and lists each slot's shared object directory, colon-separated, in
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES`. Inside the sandbox the worker can write only its temp directory and the sandbox's
+  own caches, so the leak reaches those; a cache a tool builds with `git init` and `git fetch` breaks after the run.
+  Giving such tools a per-run cache, or keeping them out of sandboxed builds, is open (§7).
 
 A chore gets the same policy. Its default `cwd` is inside `state_dir`, so its policy re-allows that one directory:
 read-only by default, since a chore's only output is its result line (D034), and writable for a chore whose own
@@ -209,10 +235,10 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    process that calls `setsid` escapes, as it would without a sandbox. The canary checks that nothing inside the
    sandbox outlives a timeout. canopy reads the result line, not the exit status, so `srt` exiting 0 when its child
    dies of SIGTERM does not matter: a timeout is canopy's own clock.
-5. Worker git state is private (§4.2): a detached checkout in step 2, a per-run object directory with the shared one
-   as an alternate, and a push by refspec. `_run` sets the object variables for the worker and for its own fallback
-   push in step 5. This changes DESIGN §8 steps 2 and 5, and the push instruction in the worker prompts. The `-B`
-   reasoning in step 2 goes away, since no run creates a local branch.
+5. Worker git state is private (§4.2). Built (D109): a detached checkout in step 2 and a push by refspec, in `_run`
+   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Not built: the per-run object
+   directory, passed as `CANOPY_GIT_OBJECTS`, used by step 5, and cleaned up on every exit path and by reconcile, as
+   §4.2 describes. That half only matters inside a sandbox, so it ships with the wrapper.
 
 No new config keys. `canopy init` can print a suggested `worker_cmd` and the one install command, but does not write
 them. The sandbox stays opt-in until the canary has passed on real machines.
@@ -241,9 +267,12 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
 
 ## 7. Open questions
 
-- Fetching inside a run. The worker cannot update shared remote-tracking refs, so a plain `git fetch` fails. `_run`
-  fetches before the worker starts, which covers most runs. Check what the fix-ci and resume prompts ask for, and
-  whether a fetch that writes only `FETCH_HEAD` (per worktree) is enough.
+- Fetching inside a run: answered. The worker cannot update shared remote-tracking refs, so every plain `git fetch`
+  fails. `_run` fetches just before the worker starts, and the only prompt that fetched (resume, for a PR that
+  conflicts with its base) now merges `origin/<base>` instead. A fetch that writes only `FETCH_HEAD`, which is per
+  worktree, works under the policy (`git fetch --refmap= origin <ref>`), for a worker that needs something newer.
+- Tools that keep git repositories in a cache (Go's module cache, pre-commit) under the per-run object directory
+  (§4.2).
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
   Linux: `srt`'s seccomp filter blocks creating Unix sockets, which includes the agent socket. Its per-path
   `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`, which lifts the block entirely.

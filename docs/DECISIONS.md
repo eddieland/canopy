@@ -567,3 +567,12 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: a repointed link moves host git to a directory the worker owns, past D107's flags; treehouse runs git there.
 - Rejected: leaving the slot leased for a human (reconcile returns it, running treehouse's git anyway).
 - Revisit: when a sandbox denies writing the link (HOST_ISOLATION §4.2); this stays as the check for a policy gap.
+
+## D109. Runs check out detached and push HEAD by refspec; no run makes a local branch
+
+- `_run` checks out `origin/<branch>` or `origin/<base>` detached; workers and the fallback push use
+  `git push origin HEAD:refs/heads/<branch>`.
+- Why: a pool's slots share branch refs, so a run's local branch is state other slots see and a sandboxed worker
+  cannot write (HOST_ISOLATION §4.2).
+- Rejected: `checkout -B` (git 2.43 lets two worktrees hold one branch, so a commit in either moves both).
+- Revisit: if an operator's `runtime.pr_skill` tool needs a local branch.

@@ -126,7 +126,7 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
     # No git ran after the worker: its commit was not pushed for it.
     assert git_pool.remote_head("agent/PROJ-1-work") is None
     assert hostgit.read_link(slot) == links[slot]
-    assert git("rev-parse", "--abbrev-ref", "HEAD", cwd=slot) == "agent/PROJ-1-work"
+    assert git("log", "-1", "--format=%s", cwd=slot) == "PROJ-1: work"  # the slot's own git directory again
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 

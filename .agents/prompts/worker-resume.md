@@ -1,8 +1,8 @@
 # canopy worker: resume
 
-You are resuming work on ticket {{KEY}} in {{SLOT}}. Branch `{{BRANCH}}` is checked out in each repository listed
-below, at its pushed state, or freshly from that repository's base branch if nothing was pushed there yet.
-This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
+You are resuming work on ticket {{KEY}} in {{SLOT}}. Branch `{{BRANCH}}` is checked out, with a detached HEAD, in each
+repository listed below, at its pushed state, or freshly from that repository's base branch if nothing was pushed there
+yet. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
 ## Repositories
 
@@ -10,10 +10,11 @@ This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
 {{STACKING}} If the context says the PR this ticket was stacked on has merged, change this ticket's PR to target its
 repository's base branch listed above, and if the branch then conflicts with it, merge that base into the branch and
-resolve the conflicts. If the context says the PR conflicts with its base, fetch that repository's base branch listed
-above and merge it into the branch. Resolve each conflict so both sides' changes survive; if one cannot be resolved
-without a decision about behavior that neither the ticket nor the code settles, do not guess: abort the merge and ask,
-as under "blocked" below. Never rebase: the push must not need force.
+resolve the conflicts. If the context says the PR conflicts with its base, merge that repository's base branch listed
+above into the branch as `origin/<base>`: canopy fetched it just before you started, so do not fetch. Resolve each
+conflict so both sides' changes survive; if one cannot be resolved without a decision about behavior that neither the
+ticket nor the code settles, do not guess: abort the merge and ask, as under "blocked" below. Never rebase: the push
+must not need force.
 
 ## Authorization
 
@@ -61,7 +62,8 @@ to it, and say in your summary that it waits on the operator.
 
 ## Obligations
 
-Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, one push per repository, no CI polling, never
+Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, with
+`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
 merge or approve, never transition the ticket directly or through closing keywords. Keep the agent runtime's attribution
 trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invalid>`. The tracker is
 {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it before touching the ticket.

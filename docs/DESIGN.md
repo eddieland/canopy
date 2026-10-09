@@ -603,15 +603,16 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    (§22): a private run whose ticket was stopped since, or a public run whose ticket was started privately since, ends
    `stopped` before any git step, and its slots are returned.
 2. Before any git step, read each slot's `.git` file, a worktree's link to the pool's git directory. In each slot:
-   `git fetch --prune origin`; if `origin/<branch>` exists, `git checkout -B <branch> origin/<branch>`,
-   else `git checkout --no-track -B <branch> origin/<base>`. `-B` because a branch an earlier run left in the pool's
-   repository would make `-b` fail; `--no-track` so a bare `git push` never targets the base. Note the branch's
-   commit. A base missing from origin (such as a stacked-on branch deleted when its PR merged) fails the run as
-   `crashed` before the worker starts, with a note, whether the branch is new or continued. Then, with
-   `runtime.setup_cmd` set, run it in each slot in turn (§9, D105): cwd the slot, `CANOPY_REPO` the repository's name,
-   `CANOPY_RUN_ID` the run's id, timeout `runtime.setup_timeout_minutes`, output appended to the run log. An exit other
-   than 0, a timeout, or a command that cannot start fails the run as `crashed` before the worker starts, with a note
-   naming the repository in a workspace; the slots are returned as on any exit (step 6).
+   `git fetch --prune origin`, then `git checkout --detach origin/<branch>` if it exists, else
+   `git checkout --detach origin/<base>`. No run makes a local branch: a pool's slots share the repository's branch
+   refs, so one would be state every slot sees, and the worker pushes HEAD by refspec (D109). Detached, a bare
+   `git push` has no branch to target, the base included. Note HEAD's commit. A base missing from origin (such as a
+   stacked-on branch deleted when its PR merged) fails the run as `crashed` before the worker starts, with a note,
+   whether the branch is new or continued. Then, with `runtime.setup_cmd` set, run it in each slot in turn (§9, D105):
+   cwd the slot, `CANOPY_REPO` the repository's name, `CANOPY_RUN_ID` the run's id, timeout
+   `runtime.setup_timeout_minutes`, output appended to the run log. An exit other than 0, a timeout, or a command that
+   cannot start fails the run as `crashed` before the worker starts, with a note naming the repository in a workspace;
+   the slots are returned as on any exit (step 6).
 3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), timeout `worker_timeout_minutes`, with
    `CANOPY_RUN_ID` set to the run's id and cwd = the slot, or for a joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
@@ -626,10 +627,10 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    step 5 is skipped, since a split pushes nothing.
 5. If any slot's `.git` file no longer holds what step 2 read, record `status='crashed'`, with a note naming each such
    slot, and run no git in any slot of the run: the file may now point at a git directory the worker made (D108).
-   Otherwise, in each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local
-   branch). If not and the branch has commits since step 2, push once, without force. If any slot is still unpushed,
-   record `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a human
-   looks.
+   Otherwise, in each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals HEAD). If not
+   and HEAD has moved since step 2, push once, without force: `git push origin HEAD:refs/heads/<branch>`. If any slot is
+   still unpushed, record `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed
+   and a human looks.
 6. Always: remove a joint run's desk, put back any slot's `.git` file the run changed (a slot whose file cannot be put
    back is not returned, and the next reconcile returns it), and
    `treehouse return --force --if-lease-id <id> --if-lease-holder <holder> <slot>` for every slot, in its repository's
@@ -664,7 +665,8 @@ read for a run in one repository.
 Worker obligations, stated in every worker prompt:
 
 - Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
-  repository.
+  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A resume
+  that merges its base merges `origin/<base>`, which step 2 fetched, and does not fetch.
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
   default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.

@@ -95,24 +95,34 @@ def test_worker_that_pushes_is_done(
     assert argv[3] == (canopy_env.state_dir / "runs" / "1.prompt").read_text()
 
     slot = Path(slot_of(conn, run["id"])["slot_path"])
-    assert git("rev-parse", "--abbrev-ref", "HEAD", cwd=slot) == "agent/PROJ-1-work"
+    # Detached: the worker pushed HEAD to the branch, which started from origin/main.
+    assert git("rev-parse", "--abbrev-ref", "HEAD", cwd=slot) == "HEAD"
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
-    # The branch started from origin/main, without tracking it: a bare `git push` must not target main.
     assert git("rev-parse", "HEAD~1", cwd=slot) == git_pool.remote_head("main")
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert unit_of(conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
     assert "run 1: done" in capsys.readouterr().out
 
 
-def test_new_branch_does_not_track_the_base(
+def test_a_run_makes_no_local_branch(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    worker_does(monkeypatch, ["git", "config", "--get", "branch.agent/PROJ-1-work.merge"])
-    dispatch_and_run(conn, monkeypatch)
+    """A pool's slots share its branch refs, so a worker starts detached, and a bare push has nowhere to go."""
+    worker_does(
+        monkeypatch,
+        ["git", "symbolic-ref", "--quiet", "HEAD"],
+        ["git", "for-each-ref", "--format=%(refname)", "refs/heads/agent/"],
+        ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"],
+        ["git", "push", "--quiet", "origin"],
+    )
+    run = dispatch_and_run(conn, monkeypatch)
     [w] = agent_runs(agent_log)
     commands = w["commands"]
     assert isinstance(commands, list)
-    assert commands[0]["returncode"] == 1  # no upstream configured
+    assert commands[0]["returncode"] == 1  # detached
+    assert commands[1]["stdout"] == ""
+    assert commands[3]["returncode"] != 0  # not on a branch: nothing a bare push could target, the base included
+    assert git_pool.remote_head("main") == git("rev-parse", "HEAD~1", cwd=Path(slot_of(conn, run["id"])["slot_path"]))
 
 
 def test_unpushed_commits_are_pushed_once(

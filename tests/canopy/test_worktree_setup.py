@@ -21,12 +21,9 @@ from tests.conftest import CanopyEnv, GitPool, git, user_toml
 
 LABEL = "agent-ready-tester"
 BRANCH = "agent/PROJ-1-work"
-# What a setup sees: the branch checked out, its repository, its run, and the branch's latest commit. It leaves a
-# file the worker then looks for, so the setup ran before the worker.
-SETUP = (
-    "sh -c 'echo \"setup on $(git rev-parse --abbrev-ref HEAD) in $CANOPY_REPO, run $CANOPY_RUN_ID: "
-    "$(git log -1 --format=%s)\"; touch .setup-done'"
-)
+# What a setup sees: its repository, its run, and the latest commit checked out, the branch's. It leaves a file the
+# worker then looks for, so the setup ran before the worker.
+SETUP = "sh -c 'echo \"setup in $CANOPY_REPO, run $CANOPY_RUN_ID: $(git log -1 --format=%s)\"; touch .setup-done'"
 
 
 def configure(canopy_env: CanopyEnv, *, runtime: str = "", paths: str = "") -> None:
@@ -112,7 +109,7 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
 
     assert run["status"] == "done"
     out = capsys.readouterr().out
-    assert f"setup on {BRANCH} in repo, run {run['id']}: earlier work\n" in out
+    assert f"setup in repo, run {run['id']}: earlier work\n" in out
     assert "--- setup repo exit 0 ---" in out  # in the run log, beside the worker's output
     [w] = agent_runs(agent_log)
     commands = w["commands"]
@@ -180,8 +177,8 @@ def test_a_joint_run_sets_up_every_slot_each_naming_its_repository(
     run = wait_for_run(conn, 1)
 
     log = Path(run["log_path"]).read_text()
-    assert f"setup on {BRANCH} in api, run 1: initial api\n" in log
-    assert f"setup on {BRANCH} in web, run 1: initial web\n" in log
+    assert "setup in api, run 1: initial api\n" in log
+    assert "setup in web, run 1: initial web\n" in log
     [w] = agent_runs(agent_log)
     commands = w["commands"]
     assert isinstance(commands, list)

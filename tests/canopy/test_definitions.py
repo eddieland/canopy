@@ -144,6 +144,35 @@ def _mcp_rules(agent: str) -> list[tuple[str, str]]:
     return rules
 
 
+def _bash_rules(agent: str) -> list[tuple[str, str]]:
+    """The agent's bash permission rules, in order: OpenCode's patterns for command lines."""
+    frontmatter = (resources.agents_dir() / f"{agent}.md").read_text().split("---")[1]
+    rules: list[tuple[str, str]] = []
+    in_bash = False
+    for line in frontmatter.splitlines():
+        if line.startswith("  ") and not line.startswith("   ") and not line.lstrip().startswith("#"):
+            in_bash = line.strip() == "bash:"
+        elif in_bash and line.startswith('    "'):
+            pattern, action = line.strip().rsplit(":", 1)
+            rules.append((pattern.strip('"'), action.strip()))
+    return rules
+
+
+@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> None:
+    """The prompts push HEAD by refspec from a detached checkout (D109); the definitions must not refuse it."""
+    rules = _bash_rules(agent)
+    assert rules
+    assert _allowed(rules, "git push origin HEAD:refs/heads/agent/PROJ-1-docs-fix")
+    for refused in (
+        "git push --force origin HEAD:refs/heads/agent/PROJ-1-x",
+        "git push -f origin HEAD:refs/heads/agent/PROJ-1-x",
+        "git push origin +HEAD:refs/heads/agent/PROJ-1-x",
+        "git push origin :refs/heads/agent/PROJ-1-x",
+    ):
+        assert not _allowed(rules, refused), refused
+
+
 def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
     # The last matching rule wins (D021); a tool no rule names keeps what the operator's runtime grants.
     verdicts = [action for pattern, action in rules if fnmatch.fnmatchcase(tool, pattern)]

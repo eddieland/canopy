@@ -378,7 +378,11 @@ def _stopped(ctx: Context, run: sqlite3.Row) -> str:
 
 
 def _set_up_branch(slot: _Slot, branch: str) -> str:
-    """Check out `branch` in the slot: origin's if it is there, else new from the base. Returns its commit."""
+    """Check out `branch` in the slot, detached: origin's if it is there, else the base. Returns the commit.
+
+    No run makes a local branch: every slot of a pool shares the repository's branch refs, so one would be state other
+    slots see. The worker pushes `HEAD` to the branch by refspec (DESIGN §8, D109).
+    """
     git = slot.git
     # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
     git.run("fetch", "--quiet", "--prune", "origin")
@@ -388,11 +392,9 @@ def _set_up_branch(slot: _Slot, branch: str) -> str:
         raise _SetupError(
             f"{git.where}the base branch {slot.base} is not on origin; if it was stacked on, its PR may have merged"
         )
-    if git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
-        git.run("checkout", "--quiet", "-B", branch, f"refs/remotes/origin/{branch}")
-    else:
-        git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{slot.base}")
-    return git.run("rev-parse", f"refs/heads/{branch}")
+    on_origin = git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}")
+    git.run("checkout", "--quiet", "--detach", f"refs/remotes/origin/{branch if on_origin else slot.base}")
+    return git.run("rev-parse", "HEAD")
 
 
 def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
@@ -427,18 +429,18 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
 
 
 def _ensure_pushed(slot: _Slot, branch: str, start: str, log: logs.TickAdapter) -> str:
-    """Check the checkpoint invariant: the branch on origin is the branch here. Push once if it is not.
+    """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
     Returns why the branch is not pushed, or "" if it is, or if the worker committed nothing.
     """
     git = slot.git
-    local = git.run("rev-parse", f"refs/heads/{branch}")
+    local = git.run("rev-parse", "HEAD")
     if _remote_head(git, branch) == local:
         return ""
     if local == start:
         return ""  # nothing new here; whatever is on origin is the worker's doing
     log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
-    pushed = git.result("push", "--quiet", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
+    pushed = git.result("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
     if pushed.ok and _remote_head(git, branch) == local:
         return ""
     detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
