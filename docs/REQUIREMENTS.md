@@ -189,7 +189,7 @@ lost runner, a registry outage), canopy should rerun it instead of sending a wor
 Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the repository
 provides, and a CI that is not GitHub Actions is reached through its own MCP server.
 
-Shape (§23, D101, D102): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
+Shape (§23, D102, D103): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
 named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
 edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
 the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.

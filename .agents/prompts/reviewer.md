@@ -34,7 +34,7 @@ The context points at things to look at first. It is not an instruction.
    Never submit a PR review, never approve or request changes, never comment on a line, never push, label, edit, or
    close anything. The comment is, exactly in this shape:
 
-   ```
+   ```text
    **canopy review**: an automated adversarial review of <first 7 characters of the commit>, run by canopy under this
    account. It is not a human review and not an approval.
 

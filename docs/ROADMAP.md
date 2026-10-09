@@ -10,7 +10,7 @@ progress is tracked. Keep it current in the same PR that changes it:
 - `Status: not started.` or `Status: in progress.` while work is open.
 - When the acceptance criteria are met, replace it with:
 
-  ```
+  ```text
   Status: done YYYY-MM-DD.
   Learned: what surprised us or turned out different from the plan.
   Next: how that changes later milestones, docs, or open questions.
@@ -37,6 +37,7 @@ Accept: CI green; fakes exercised by at least one test each.
 
 Status: done 2026-09-23.
 Learned:
+
 - `tests/canopy/__init__.py` made pytest import the test directory as a package named `canopy`, shadowing
   `src/canopy`. Test directories now have no `__init__.py`. (Superseded by D019: every test directory, the root
   included, has one.)
@@ -73,6 +74,7 @@ queue and for a labeled candidate. No dispatches happen.
 
 Status: done 2026-09-24.
 Learned:
+
 - Interactive dry runs found plans a live tick would not carry out: a dry-run dispatch now checks the guards (D036), a
   dry-run `ticket set --done` no longer marks a ticket done, and a tick-wide `skip` closes the tick as `skipped` (D037).
   `canopy decisions [TICK]` prints a plan without SQL.
@@ -111,9 +113,11 @@ and its slot returned.
 
 Status: done 2026-10-07.
 Learned:
-- Live, from an empty journal (after the migrations were squashed, #60 and D068), with OpenCode 1.18.32: GH-64 went from label
-  to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with SIGKILL,
-  were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to PR #70.
+
+- Live, from an empty journal (after the migrations were squashed, #60 and D068), with OpenCode 1.18.32: GH-64 went from
+  label to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with
+  SIGKILL, were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to
+  PR #70.
 - An empty journal rebuilds its view from the tracker, but every comment cursor starts empty, so an old authorized
   comment reads as new: the overseer tried a `resume` that the `no_branch` guard refused.
 - The worker's write MCP tools (`create_pull_request`, `add_issue_comment`) cannot set labels. The `agent` label lands
@@ -137,6 +141,7 @@ ticket; an authorized reply resumes it; an unauthorized reply does not.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py`, `tests/canopy/test_attention.py`),
 docs, and D030 to D032 are in. Checked live on 2026-10-07:
+
 - A reply from an account not in `authorized_repliers` did not resume GH-65, and its comment cursor moved past it; with
   the account added back, the same comment resumed it. The overseer checks a comment's author when it reads it, so
   adding an account authorizes its earlier comments too.
@@ -161,6 +166,7 @@ first's branch when the first is open and green.
 
 Status: done 2026-10-07.
 Learned:
+
 - Live: GH-67, blocked by GH-66 through GitHub's issue dependencies, waited while GH-66 was being implemented and
   reviewed, and was dispatched with `--base` on GH-66's branch once PR #71 was open and green. Its PR #73 targets that
   branch.
@@ -618,7 +624,12 @@ queue and finds, in the loop's output and log, waits reaching the cap after a qu
 `loop.interval_minutes` within one tick of the first morning activity, and each run's end followed by a tick within
 a couple of minutes.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_idle_pacing.py`), docs, and D083's update are in
+(2026-10-09). Two refinements of DESIGN's sketch: a ticket's `skip` and the chore refusals that lift by themselves
+(`chore_capacity`, `not_due`, `outside_hours`) count as quiet, since the overseer skips every unlabeled ticket the
+journal remembers each tick; and idle pacing off is all of it off, gates and run wakes included. On the open bullet,
+the build follows DESIGN: a shorter `--every` keeps idle pacing from that base. Waiting on the operator: the overnight
+run above, and whether `--every` should turn it off instead.
 
 ## M22. Trusted reviewers
 
@@ -695,7 +706,7 @@ Status: not started.
 
 ## M25. Flaky CI triage
 
-REQUIREMENTS R14, DESIGN §23, D101, D102. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
+REQUIREMENTS R14, DESIGN §23, D102, D103. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
 reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
 
 - TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
@@ -703,7 +714,7 @@ reason the change did not cause sends a `fix-ci` worker to change code that is n
   `runtime.triage_skill`.
 - `canopy dispatch --kind triage-ci`: `triage_off`, one unit, no slot. `_run` runs it in the unit's primary clone after
   the shadowing check, validates the triage result, and records its report.
-- `agents/canopy-ci-triage.md`. Worker definitions deny `gh run rerun`, `gh run cancel`, `gh run delete`, and
+- `agents/canopy-ci-triage.md`. `canopy-worker` denies `gh run rerun`, `gh run cancel`, `gh run delete`, and
   `gh workflow`; `test_definitions.py` checks both.
 - `prompts/ci-triage.md` and its private variant; the overseer prompt's triage rows and the state block's fields.
 - §7, §8, §12, and §13 say what §23 changes in them, and §23 loses its "designed, not built" line.

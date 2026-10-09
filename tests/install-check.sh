@@ -105,7 +105,8 @@ if [ "$binary" = 1 ]; then
         diff -r -x "${private#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" >/dev/null ||
             fail "the snapshot's $dir are not .agents/"
     done
-    grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" || fail "the snapshot's $private names no tracker tools"
+    grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" ||
+        fail "the snapshot's $private names no tracker tools"
     grep -v '^  "github_' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
         fail "the snapshot's $private is not .agents/ with the tracker's tools"
     echo "install-check: ok"
