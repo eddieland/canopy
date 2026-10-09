@@ -8,8 +8,8 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
-decoration. Dark is a cool slate, light is grey and white; neither is the lesser theme (D094). The directions weighed
-are recorded in `docs/ui-explorations/2026-10-08-style/`.
+decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme
+(D094). The directions weighed are recorded in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
 
@@ -32,6 +32,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-stopped` | A run the operator stopped. |
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
+| `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
 
@@ -81,8 +82,13 @@ Rules:
   beside its actions, work, and runs.
 - Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding, one
   at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both
-  ends. It is the header's one piece of fun: written here, never journal text, and colored for nothing. Settings sets
-  its speed (Off, Slow, Normal, Spicy; Off hides it) and the seconds between headlines (0 by default).
+  ends. It is the header's one piece of fun: written here, never journal text. Settings sets its speed (Off, Slow,
+  Normal, Spicy; Off hides it) and the seconds between headlines (0 by default).
+- A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
+  `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
+  ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
+  headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
+  of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover), the stream's state (and `mock`), and the theme toggle; the counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page.

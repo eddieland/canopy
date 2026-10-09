@@ -46,8 +46,15 @@ test('the header ticker crawls one headline at a time, at the speed and gap set 
     await expect(ticker).toHaveAttribute('data-speed', 'normal')
     await expect(headline).toHaveCount(1)
 
-    // At the end of its pass, the next headline takes the window.
+    // A flair's own loops (a flash, a wave) bubble their iterations up; they do not move the reel on.
     const first = await headline.textContent()
+    await headline.evaluate((element) => {
+        const event = new AnimationEvent('animationiteration', { bubbles: true, animationName: 'wave' })
+        element.firstElementChild?.dispatchEvent(event)
+    })
+    await expect(headline).toHaveText(first ?? '')
+
+    // At the end of its pass, the next headline takes the window.
     await headline.evaluate((element) => {
         const [crawl] = element.getAnimations()
         const duration = Number(crawl?.effect?.getComputedTiming().duration)
