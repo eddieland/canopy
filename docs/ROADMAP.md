@@ -645,6 +645,54 @@ operator approved the TRUST_MODEL and prompt changes in the PR (2026-10-08). D09
 the same file; its TRUST_MODEL and prompt changes wait on the operator's approval note in its PR. Waiting on the
 operator: the live run above.
 
+## M23. Chores in the web UI
+
+REQUIREMENTS N1 and C5, DESIGN §19 and §22, D100. Needs M9 and M20. Asked for by the operator (2026-10-09): a chore's
+finding reaches the web UI's attention list, but the browser can neither show the chore nor answer it, so a finding
+sends the operator back to the terminal.
+
+- The design first, in DESIGN §22 and `ui/DESIGN.md`: the routes, the pages, and where a chore's attention item leads.
+- `GET /chores`: each configured chore as `canopy status` lists it: running, or its latest run and next due time; its
+  `days` and `hours`; its open findings.
+- `GET /chores/{name}`: what `canopy show chore:NAME` prints: open findings, the latest runs with status, session, and
+  cost, and the operator's notes. 404 for a chore not defined for this workspace.
+- `POST /chores/{name}/replies`: `conversation.reply` with channel `web`, as `canopy reply chore:NAME`, behind the same
+  session token and `Origin` check as the ticket writes. Nothing that runs a chore: the overseer decides when one runs
+  (§19), and `canopy chore try` stays in the CLI.
+- A chores page in the navigation and a page per chore. A chore's attention item opens the chore's notes and a note
+  form beside the list, as a ticket's opens its conversation.
+- Tests over the mock journal: the routes, the 404, a note recorded with channel `web` that the chore's next prompt
+  carries; a Playwright test answering a chore's finding from the attention list.
+
+Accept: the tests above pass. Live: with M9's build-health chore running, the operator answers one of its findings
+from the browser, and the chore's next run's prompt carries the note.
+
+Status: not started.
+
+## M24. Ticks in the web UI
+
+REQUIREMENTS N1 and C5, DESIGN §6 and §22. Needs M20. Asked for by the operator (2026-10-09): the `decisions` table is
+the overseer's reasons for what the loop did and the evaluation corpus for prompt changes, and only `canopy decisions`
+shows it.
+
+- The design first, in DESIGN §22 and `ui/DESIGN.md`: the routes and the pages.
+- `GET /ticks`: the latest ticks, newest first, at most 50: status, dry run, start and end, summary, the overseer's
+  session and cost, and how many decisions.
+- `GET /ticks/{id}`: what `canopy decisions ID` prints: the tick and its decisions, each with its subject (ticket,
+  unit, repository, chore, or PR), action, and rationale. 404 for no such tick.
+- A ticks page and a page per tick; the header's latest tick links to its page. A ticket's page lists the latest
+  decisions about it across ticks, so "why has the loop not picked this up" is answered where the ticket is.
+- Reads only. A rationale is the overseer's text: untrusted, rendered as text, cut as `canopy decisions` cuts it.
+- Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
+  header's tick to its decisions.
+- Open: whether a tick's page shows the overseer's output (`ticks/<id>.log`), agent output read from a file rather
+  than the journal.
+
+Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
+why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Sandboxed workers: when a T4 or T6 incident happens, or before any second
