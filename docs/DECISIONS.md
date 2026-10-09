@@ -513,3 +513,20 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: a local machine or an agent's container renders text differently, so its baselines fail CI.
 - Two jobs: the branch's code runs with a read-only token; the job that pushes runs none of it and commits only PNGs.
 - Rejected: a Playwright Docker image (CI does not use one); updating on every PR push (a visual change is deliberate).
+
+## D102. Flaky CI is judged by a separate `triage-ci` run, the only run that reruns CI
+
+- It reads a new failure before `fix-ci`, then reruns the failed jobs or reports the failure real. No edits, no
+  pushes, no slot.
+- Why: the agent that can push never gets a rerun tool, and flakes spend their own attempts, not `fix-ci`'s.
+- Rejected: triage inside `fix-ci` (the worker gains reruns and holds a slot to rerun); the overseer judging (it would
+  read CI logs while holding dispatch).
+- Revisit: if the tick between a `real` verdict and its `fix-ci` is measured as a real cost.
+
+## D103. The operator turns reruns on; the repository says what is flaky
+
+- `policy.max_triage_ci_attempts` defaults to 0, which a repository cannot loosen. `runtime.triage_skill` names a skill
+  the repository or the operator provides, read from the unit's primary clone, never the PR's branch.
+- Rejected: a repository turning reruns on (the first shared key that loosens policy, T7); the PR's branch (a PR would
+  write its own judge); a named but missing skill falling back to general rules (fails toward hiding regressions).
+- Revisit: when a repository needs to refuse reruns an operator turned on.

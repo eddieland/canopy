@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08), and where canopy stands on
-each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is
-listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until
-then (AGENTS.md).
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09), and
+where canopy stands on each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two
+disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
+doc stays normative until then (AGENTS.md).
 
 A bare § is a section of `DESIGN.md`. Status words:
 
@@ -181,6 +181,18 @@ the web UI, on a public ticket too; the reply is the worker's instruction and ne
 worker hears it, an `implement` or `fix-ci` as well as a `resume` (D093); keeping it off the ticket is the worker
 prompt's, not a guard (TRUST_MODEL T6). The gate is the
 overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
+
+### R14. Flaky CI is rerun, not fixed
+
+Planned (M25). Written down 2026-10-09. When a PR's check fails for a reason the change did not cause (a flaky test, a
+lost runner, a registry outage), canopy should rerun it instead of sending a worker to "fix" code that is not broken.
+Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the repository
+provides, and a CI that is not GitHub Actions is reached through its own MCP server.
+
+Shape (§23, D102, D103): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
+named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
+edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
+the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
 
 ## Nice to have
 
