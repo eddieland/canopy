@@ -155,6 +155,7 @@ worker can still push to any repository or post anywhere the operator can. That 
 ### 4.4 What is wrapped
 
 - `worker_cmd`: yes.
+- `runtime.setup_cmd`: yes. It runs the branch's code in the slot just before the worker (DESIGN §9).
 - Chore `cmd`: yes.
 - `overseer_cmd`: no. The overseer acts through the `canopy` CLI, which needs the journal, the lock, and the user
   config, so its sandbox would have to allow exactly what §4.2 denies. It has no edit or write tools, and its bash is

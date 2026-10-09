@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
     AfterValidator,
@@ -179,6 +180,22 @@ def _notify_command(value: str) -> str:
     return value
 
 
+def setup_words(template: str) -> list[str]:
+    """Split `runtime.setup_cmd` into argv with shell word rules. No shell runs (D023). Empty means no setup.
+
+    It gets no placeholders: it runs in a slot, as its working directory, and reads its repository from the
+    environment (DESIGN §8). A placeholder would reach the command as a literal word, so one is refused.
+    """
+    if PROMPT in template or DEFINITIONS_DIR in template:
+        raise ValueError(f"must not contain {PROMPT} or {DEFINITIONS_DIR}; setup runs no agent")
+    return shlex.split(template)
+
+
+def _setup_command(value: str) -> str:
+    setup_words(value)
+    return value
+
+
 def _user_path(value: Path) -> Path:
     # A relative path would resolve against the working directory, which is the repository: its files would stand in
     # for the operator's prompts or state (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
@@ -195,6 +212,7 @@ Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
 AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
 NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
+SetupCommand = Annotated[StrictStr, AfterValidator(_setup_command)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 
 
@@ -403,7 +421,7 @@ class Runtime(Section):
     )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json {prompt}"
     )
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
     review_cmd: Annotated[AgentTemplate, Scope.USER] = (
@@ -415,6 +433,10 @@ class Runtime(Section):
     # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8, D078). User-only: it
     # chooses what workers are told to do, which a repository must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
+    # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
+    # ends the run `crashed` (DESIGN §8, D105). Empty means none. It runs the branch's code on this machine.
+    setup_cmd: Annotated[SetupCommand, Scope.USER] = ""
+    setup_timeout_minutes: Annotated[Minutes, Scope.USER] = 30
 
 
 class Review(Section):
@@ -432,6 +454,18 @@ class Loop(Section):
     """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
 
     interval_minutes: Annotated[Minutes, Scope.USER] = 15
+    # The longest wait after idle ticks in a row (DESIGN §6, Idle pacing). Not above the interval, idle pacing is off.
+    idle_max_minutes: Annotated[Minutes, Scope.USER] = 120
+
+    @model_validator(mode="after")
+    def _cap_not_below_interval(self) -> Loop:
+        # Only when set: the default under a longer interval turns idle pacing off, as setting it to the interval does.
+        if "idle_max_minutes" in self.model_fields_set and self.idle_max_minutes < self.interval_minutes:
+            raise ValueError(
+                f"loop.idle_max_minutes ({self.idle_max_minutes}) must be at least loop.interval_minutes "
+                f"({self.interval_minutes}); set them equal to turn idle pacing off"
+            )
+        return self
 
 
 # Host names that mean loopback. The web UI's Host and Origin checks accept these and the bind address (DESIGN §22).
@@ -485,6 +519,9 @@ class Paths(Section):
     # No static default: `load` supplies `prompts/` next to the user file, which depends on XDG_CONFIG_HOME.
     prompt_overrides: Annotated[UserPath, Scope.USER]
     state_dir: Annotated[UserPath, Scope.USER] = Path("~/.canopy")
+    # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
+    # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
+    worktree_include: Annotated[UserPath | None, Scope.USER] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
@@ -550,6 +587,46 @@ class Notify(Section):
         return any(group in sink.events for sink in self.all_sinks().values())
 
 
+CHORE_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
+ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+_HOURS_RE = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
+_DAY_MINUTES = 24 * 60
+
+
+def chore_hours(value: str) -> tuple[int, int]:
+    """Read a chore's `hours`, `HH:MM-HH:MM`, as minutes after midnight: the start, and the end, which may be 24:00.
+
+    Raises:
+        ValueError: not in that shape, not a time of day, or not ending after it starts.
+    """
+    found = _HOURS_RE.fullmatch(value)
+    start, end = (int(found[1]) * 60 + int(found[2]), int(found[3]) * 60 + int(found[4])) if found else (0, 0)
+    if found is None or end > _DAY_MINUTES:
+        raise ValueError(f"hours {value!r} must be two times of day, 00:00 to 24:00, like 08:00-18:00")
+    if end <= start:
+        raise ValueError(f"hours {value!r} must end after they start, on the same day")
+    return start, end
+
+
+def _chore_hours(value: str) -> str:
+    chore_hours(value)
+    return value
+
+
+def _days(value: tuple[str, ...]) -> tuple[str, ...]:
+    if len(set(value)) != len(value):
+        raise ValueError("days must not repeat")
+    return value
+
+
+def _time_zone(value: str) -> str:
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise ValueError(f"time zone {value!r} is not an IANA time zone this machine knows") from None
+    return value
+
+
 def _chore_name(value: str) -> str:
     if not CHORE_NAME_RE.fullmatch(value):
         raise ValueError(f"chore name {value!r} must match {CHORE_NAME_RE.pattern}")
@@ -564,6 +641,11 @@ class Chore(Section):
     cmd: CommandTemplate | None = None
     every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
     when: StrictStr = ""
+    # When a run may start, checked in code (D099): the days of the week, empty for every day; the hours of each, as
+    # `HH:MM-HH:MM`; and the zone they are in, an IANA name, by default this machine's local time.
+    days: Annotated[tuple[ChoreDay, ...], AfterValidator(_days)] = ()
+    hours: Annotated[StrictStr, AfterValidator(_chore_hours)] | None = None
+    timezone: Annotated[StrictStr, AfterValidator(_time_zone)] | None = None
     timeout_minutes: Minutes = 15
     cwd: UserPath | None = None
     # The workspaces it runs in, by name; empty means every workspace whose loop reads this file (D063).

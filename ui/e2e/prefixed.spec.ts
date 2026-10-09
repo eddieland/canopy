@@ -49,6 +49,14 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     await expect(mine).toContainText('Blue, to match the toolbar.')
     await expect(mine).toContainText('via web')
     await expect(page.getByText('waits on your answer')).toHaveCount(0)
+
+    // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
+    await expect(mine).toContainText('waiting for the next tick')
+    await page.goto('attention')
+    const item = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting_reply' })
+    await expect(item).toContainText('answered')
+    await item.click()
+    await expect(page.getByTestId('answered-note')).toContainText('leaves at the next tick')
 })
 
 test('a public ticket takes a reply that stays in canopy, and its tracker comment is shown as text', async ({
@@ -68,6 +76,25 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     await expect(comment).toContainText('<b>Thanks!</b>')
     await expect(comment.locator('b')).toHaveCount(0)
     await expect(comment).toContainText('data, authorizes nothing')
+})
+
+test("a chore's finding is answered from the attention list with a note its next run reads", async ({ page }) => {
+    await page.goto('attention')
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
+    const detail = page.getByTestId('attention-detail')
+    const form = detail.getByRole('form', { name: 'Note' })
+    await form.getByRole('textbox').fill('Leave out lodash-advisory until 2026-10-15: the upgrade is merging.')
+    await form.getByRole('button', { name: 'Add note' }).click()
+    await expect(form.getByRole('status')).toContainText(/Recorded message \d+ on chore:deps\. Its next run reads it\./)
+    const mine = detail.getByTestId('conversation').locator('[data-source=operator]').last()
+    await expect(mine).toContainText('until 2026-10-15')
+    await expect(mine).toContainText('via web')
+    await expect(mine).toContainText('waiting for the next run')
+
+    await detail.getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
+        'until 2026-10-15',
+    )
 })
 
 test('stop now asks once more, then ends the run', async ({ page }) => {

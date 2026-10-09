@@ -16,6 +16,8 @@ from canopy.runs import dispatch
 KEY_RE = dispatch.KEY_RE
 REASON_RE = re.compile(r"[a-z][a-z0-9_]*")
 CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
+# A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7, D096).
+REVIEW_CURSOR_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MAX_TEXT = 2000
 MAX_PR_URL = 300
 
@@ -23,6 +25,17 @@ MAX_PR_URL = 300
 def valid_key(value: str) -> bool:
     """Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
     return KEY_RE.fullmatch(value) is not None
+
+
+def valid_review_cursor(value: str) -> bool:
+    """A review cursor names a real moment in one fixed form, so cursors compare as strings (DESIGN §7)."""
+    if REVIEW_CURSOR_RE.fullmatch(value) is None:
+        return False
+    try:
+        db.parse_time(value)
+    except ValueError:
+        return False
+    return True
 
 
 def plain_pr_url(value: str) -> bool:
@@ -66,6 +79,12 @@ class CursorType(click.ParamType[tuple[str, str], object]):
         # A message cursor is a journal message id (DESIGN §22).
         if cursor_name == "message" and not (cursor_id.isascii() and cursor_id.isdigit()):
             self.fail(f"a message cursor is a message id, a number; got {cursor_id!r}", param, ctx)
+        if cursor_name == "review" and not valid_review_cursor(cursor_id):
+            self.fail(
+                f"a review cursor is the newest handled item's time in UTC, as YYYY-MM-DDTHH:MM:SSZ; got {cursor_id!r}",
+                param,
+                ctx,
+            )
         return cursor_name, cursor_id
 
 

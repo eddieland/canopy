@@ -1,6 +1,6 @@
 // Typed fixtures for unit tests, a few of the rows canopy/serve/mock.py seeds its journal with. The dev server and the
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
-import type { AttentionItem, Run, TicketSummary } from './types'
+import type { AttentionItem, ChoreSummary, Run, TicketSummary } from './types'
 
 export const mockRuns: Run[] = [
     {
@@ -18,7 +18,7 @@ export const mockRuns: Run[] = [
         session_id: 'ses_mock41',
         cost_usd: 0.42,
         tokens: 19320,
-        worktrees: ['/home/op/.treehouse/web-1'],
+        worktrees: ['.treehouse/web-3f9c2a1b/1/web'],
         log_path: '/home/op/.canopy/runs/41.log',
     },
     {
@@ -67,5 +67,41 @@ export const mockTickets: TicketSummary[] = [
         latest_message_id: 5,
         awaiting: 5,
         running_run: null,
+    },
+]
+
+export const mockChores: ChoreSummary[] = [
+    {
+        name: 'deps',
+        every_minutes: 360,
+        days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+        hours: '08:00-18:00',
+        timezone: 'UTC',
+        when: 'Skip it when nothing has merged to main since the last run.',
+        running: null,
+        latest: {
+            id: 2,
+            status: 'ok',
+            state: 'done',
+            started_at: '2026-10-08T08:00:00Z',
+            ended_at: '2026-10-08T08:07:00Z',
+            summary: "One advisory touches web's lockfile.",
+            findings: 1,
+            session_id: 'ses_chore2',
+            cost_usd: 0.26,
+            tokens: 11960,
+            log_path: '/home/op/.canopy/chores/2.log',
+        },
+        due_at: '2026-10-08T14:00:00Z',
+        findings: [
+            {
+                id: 'lodash-advisory',
+                title: 'lodash 4.17.20 has a prototype pollution advisory',
+                detail: "web's lockfile pins lodash 4.17.20 through an old date picker; 4.17.21 fixes it.",
+                link: 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm',
+                since: '2026-10-08T08:00:00Z',
+            },
+        ],
+        latest_note_id: 8,
     },
 ]

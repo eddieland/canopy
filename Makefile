@@ -15,17 +15,24 @@ check: lint test ui-check ## Verify without modifying files: lint, test, the UI'
 
 ##@ Development
 
-fmt: ui-fmt ## Run autoformatters (ruff import sorting, ruff format, oxfmt for ui/)
+fmt: ui-fmt ## Run autoformatters (ruff import sorting, ruff format, rumdl for Markdown, oxfmt for ui/)
 	uv run ruff check --select I --fix .
 	uv run ruff format .
+	uv run rumdl fmt .
 
-lint: ## Run linters and the type checker (ruff, pyrefly strict)
+# ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
+lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorconfig-checker, shellcheck, actionlint)
 	uv run ruff format --check .
 	uv run ruff check .
 	uv run pyrefly check
+	uv run rumdl check .
+	uv run ec
+	uv run shellcheck $$(git ls-files '*.sh')
+	uv run actionlint
 
-test: ## Run all tests
-	uv run pytest -q
+# One worker per CPU (D092). For one test or a debugger, run `uv run pytest` without -n: it stays serial.
+test: ## Run all tests, in parallel
+	uv run pytest -q -n auto
 
 ##@ Web UI (ui/; needs Node 22.12+, D079)
 

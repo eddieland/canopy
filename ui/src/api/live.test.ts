@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockChores, mockRuns, mockTickets } from './mocks'
 import { keys } from './queries'
-import type { Run, TicketDetail } from './types'
+import type { ChoreDetail, Run, TicketDetail } from './types'
 
 describe('applyStreamEvent', () => {
     it('replaces each list whole', () => {
@@ -16,7 +16,12 @@ describe('applyStreamEvent', () => {
         applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, state: 'stopped' }] })
         applyStreamEvent(client, { type: 'attention.updated', items: mockAttention })
         applyStreamEvent(client, { type: 'tickets.updated', tickets: mockTickets })
+        const spend = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
+        applyStreamEvent(client, { type: 'spend.updated', spend })
+        applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: null })
 
+        expect(client.getQueryData(keys.spend)).toEqual(spend)
+        expect(client.getQueryData(keys.tick)).toEqual({ tick: null, acknowledged: null })
         expect(client.getQueryData<Run[]>(keys.runs)).toHaveLength(1)
         expect(client.getQueryData<Run[]>(keys.runs)?.[0]?.state).toBe('stopped')
         expect(client.getQueryData(keys.attention)).toEqual(mockAttention)
@@ -34,6 +39,54 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.ticket('ABC-999'))?.isInvalidated).toBe(false)
     })
+
+    it('replaces the chores and marks every chore page stale, for a page to read again', () => {
+        const client = new QueryClient()
+        const detail = { chore: mockChores[0], runs: [], notes: [] } as unknown as ChoreDetail
+        client.setQueryData(keys.chore('deps'), detail)
+
+        applyStreamEvent(client, { type: 'chores.updated', chores: mockChores })
+
+        expect(client.getQueryData(keys.chores)).toEqual(mockChores)
+        expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it('marks the ticks and the tickets stale when the latest tick changes', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.ticks, [])
+        client.setQueryData(keys.tickDetail(2), { tick: null, decisions: [], output_path: null })
+        client.setQueryData(keys.ticket('ABC-102'), { ticket: mockTickets[0] })
+
+        applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: 8 })
+
+        expect(client.getQueryState(keys.ticks)?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.tickDetail(2))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
+    })
+
+    it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
+        const client = new QueryClient()
+        const [first] = mockRuns
+        if (!first) throw new Error('fixtures are empty')
+        client.setQueryData(keys.runs, mockRuns)
+        client.setQueryData(keys.worktrees, [])
+
+        applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns.map((r) => ({ ...r, cost_usd: 9 })) })
+        expect(client.getQueryState(keys.worktrees)?.isInvalidated).toBe(false)
+
+        const ended = { ...first, status: 'done', state: 'done', ended_at: '2026-10-08T12:20:00Z' } as const
+        applyStreamEvent(client, { type: 'runs.updated', runs: [ended, ...mockRuns.slice(1)] })
+        expect(client.getQueryState(keys.worktrees)?.isInvalidated).toBe(true)
+    })
+
+    it('leaves the worktrees alone on the first runs a stream sends', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.worktrees, [])
+
+        applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns })
+
+        expect(client.getQueryState(keys.worktrees)?.isInvalidated).toBe(false)
+    })
 })
 
 describe('parseStreamEvent', () => {
@@ -48,7 +101,17 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent('{"type":"lease.updated","lease":{}}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated","runs":{}}')).toBeNull()
+        const chores = { type: 'chores.updated', chores: mockChores }
+        expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
+        expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
+        const spend = { type: 'spend.updated', spend: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 } }
+        expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)
+        expect(parseStreamEvent('{"type":"spend.updated","spend":null}')).toBeNull()
+        const tick = '{"type":"tick.updated","tick":null,"acknowledged":7}'
+        expect(parseStreamEvent(tick)).toEqual({ type: 'tick.updated', tick: null, acknowledged: 7 })
+        expect(parseStreamEvent('{"type":"tick.updated"}')).toBeNull()
+        expect(parseStreamEvent('{"type":"tick.updated","tick":null,"acknowledged":"7"}')).toBeNull()
         expect(parseStreamEvent('null')).toBeNull()
     })
 })

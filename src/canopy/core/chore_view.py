@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.chores import result
+from canopy.core import chore_result as result
+from canopy.core import chore_window as window
 from canopy.core import db
 
 if TYPE_CHECKING:
@@ -28,13 +29,18 @@ _HISTORY_RUNS = 200
 
 
 def configured(config: Config, workspace: Workspace) -> dict[str, Chore]:
-    """Return the chores this loop runs, by name: none when `capacity.max_chores` is 0 (DESIGN §19, D063).
+    """Return the chores this loop runs, by name: none when `capacity.max_chores` is 0 (DESIGN §19, D063)."""
+    if config.capacity.max_chores == 0:
+        return {}
+    return defined(config, workspace)
+
+
+def defined(config: Config, workspace: Workspace) -> dict[str, Chore]:
+    """Return the chores the user config defines for this workspace, by name, even when `max_chores` is 0.
 
     A chore that lists `workspaces` runs only in those, named as the workspace is (its map's name, or a workspace of
     one's repository name).
     """
-    if config.capacity.max_chores == 0:
-        return {}
     return {
         name: chore
         for name, chore in sorted(config.chores.items())
@@ -78,12 +84,24 @@ class ChoreState:
         """Its most recent run that has ended."""
         return next((r for r in self.runs if r["status"] != "running"), None)
 
-    def due_at(self) -> datetime | None:
+    def earliest(self) -> datetime | None:
         """The earliest time the `not_due` guard allows a new run: `every_minutes` after the latest start. None: now."""
         latest = self.latest
         if latest is None:
             return None
         return db.parse_time(str(latest["started_at"])) + timedelta(minutes=self.chore.every_minutes)
+
+    def due_at(self, now: datetime) -> datetime | None:
+        """The earliest time every guard on time allows a new run: `earliest`, moved to when its window next opens.
+
+        None, or a time not after `now`, means it may run now.
+        """
+        earliest = self.earliest()
+        if not window.limited(self.chore):
+            return earliest
+        after = now if earliest is None or earliest < now else earliest
+        opens = window.next_open(self.chore, after)
+        return earliest if opens <= after else opens
 
     def findings(self) -> list[OpenFinding]:
         """The findings of the latest `ok` run. A run that ended any other way leaves them standing."""
@@ -113,10 +131,12 @@ def _oks(runs: list[sqlite3.Row]) -> list[tuple[sqlite3.Row, result.ChoreResult]
 
 def states(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[ChoreState]:
     """Return every configured chore's state, by name."""
-    return [_state(conn, name, chore) for name, chore in configured(config, workspace).items()]
+    return [state_of(conn, name, chore) for name, chore in configured(config, workspace).items()]
 
 
-def _state(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
+def state_of(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
+    """Return chore `name`'s state as the journal sees it."""
+
     def older(before: int) -> list[sqlite3.Row]:
         return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
@@ -180,7 +200,7 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[dict[str, ob
                 "ended_at": latest["ended_at"],
                 "summary": harness or (stored.summary if stored is not None else None),
             }
-        due = state.due_at()
+        due = state.due_at(now)
         section.append(
             {
                 "name": state.name,

@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08), and where canopy stands on
-each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is
-listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until
-then (AGENTS.md).
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09), and
+where canopy stands on each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two
+disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
+doc stays normative until then (AGENTS.md).
 
 A bare § is a section of `DESIGN.md`. Status words:
 
@@ -30,8 +30,9 @@ operator's choice to reach the machine from elsewhere on the VPC, which relaxes 
 ### H2. Extended only through native plugins or config; no custom layer to maintain
 
 Partial. The runtime is a command template (D009), trackers are MCP plus a skill (D014), and customization is skills
-where OpenCode already looks (§13). Worktree setup is treehouse's own hooks and `.worktreeinclude` (R10). Two places
-still ask the operator to keep code or text of their own in step with canopy:
+where OpenCode already looks (§13). Worktree setup is treehouse's own hooks and `.worktreeinclude`, and a setup
+command the operator writes for their repositories, not for canopy (R10). Two places still ask the operator to keep
+code or text of their own in step with canopy:
 
 - A notification destination other than the shipped ones is "a small program of the operator's" (§20). The desktop
   and Slack destinations the operator wants (N2) ship with canopy (M10).
@@ -58,7 +59,8 @@ Built. treehouse is the pool (D002): canopy leases a slot per run, one in each r
 records it in `run_slots`, returns it on every exit path, and returns stale leases in reconcile (§6, §8). The capacity
 limit is `capacity.max_workers`; treehouse's `max_trees` bounds the pool. In a workspace the operator can declare each
 pool's size (`capacity.slots_per_repo`), which leases stay within and `canopy workspace sync` creates and trims slots
-to match, alongside cloning and removing repositories to match the map (§18, M17).
+to match, alongside cloning and removing repositories to match the map (§18, M17). The web UI's worktrees page shows
+every slot: what holds it, its branch, and what runs in it (§22, D090).
 
 The shape differs from "a worktree per ticket": a ticket holds a slot only while a run is working on it, and its pushed
 branch is its checkpoint between runs (§9). That is what makes R3 possible.
@@ -128,25 +130,20 @@ unit of work, and pushing to the PR's own branch, which D056 now allows (C4).
 
 ### R10. Worktree setup hooks that cope with the Bazel monorepo
 
-Partial; the rest is M16. What treehouse provides natively, and canopy relies on:
+Built in M16; its live check is the operator's. Setting up a slot is three steps, all the operator's (§9):
 
-- `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reset (§9).
-- A committed `.worktreeinclude` seeds gitignored files (local config, generated files) from the primary clone into
-  each slot. A personal manifest is `treehouse get --include-file`, which canopy does not pass yet.
-- Slots are reused at fixed paths. Bazel keys its output base on the workspace path, so each slot's output base stays
-  warm across leases; a shared `--disk_cache` and `--repository_cache` in the operator's `.bazelrc` share work between
-  slots (§9).
+- Seeding: a committed `.worktreeinclude` seeds gitignored files (local config, generated files) from the primary clone
+  into each slot on every lease. A personal manifest, `paths.worktree_include`, replaces it; canopy passes it to every
+  `treehouse get` as `--include-file`.
+- `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reused, on the base.
+- `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run (D105).
 
-Gaps:
-
-- Fast disk: in a workspace (§18) canopy sets `TREEHOUSE_ROOT` to the workspace root, so the pools live wherever the
-  workspace does. In a workspace of one, treehouse's own `root` config applies. Today the answer is to put the
-  workspace on the fast disk; a user-only pool root is M16's question.
-- `post_create` runs on the base branch before `_run` checks out the ticket's branch, and a failing hook does not fail
-  the lease (PRIOR_ART "Open design questions"). Setup that depends on the branch, or that must succeed, has no place.
-- Each slot leaves a Bazel server running after its run. Nothing shuts it down; memory grows with the pool.
-- Unverified: whether the worker's `external_directory: deny` refuses reads through `bazel-out/` and `bazel-bin/`,
-  which are symlinks into the output base outside the worktree.
+For Bazel (§9, and the operator's guide, `docs/BAZEL.md`): slots are reused at fixed paths, and Bazel keys its output
+base on the workspace path, so each slot's output base stays warm across leases. A shared `--disk_cache` and
+`--repository_cache` in the operator's `.bazelrc` share work between slots, `--output_user_root` puts the output bases
+on a fast disk, and `startup --max_idle_secs` ends a slot's idle server (D106). A fast disk otherwise takes the whole
+workspace, pools and clones together (§18, D033). Unverified until the canary's first real run: that the worker reads
+through `bazel-out/` and its siblings, links into the output base, and is refused the output base by its own path.
 
 ### R11. Private tickets: deliver a ticket without the conversation appearing on it
 
@@ -176,8 +173,22 @@ an instruction ("use your best judgement based on the bot's review").
 
 Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default, with `canopy:review` for canopy's own
 reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
-the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. The gate is the
+the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. Every public
+worker hears it, an `implement` or `fix-ci` as well as a `resume` (D093); keeping it off the ticket is the worker
+prompt's, not a guard (TRUST_MODEL T6). The gate is the
 overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
+
+### R14. Flaky CI is rerun, not fixed
+
+Planned (M25). Written down 2026-10-09. When a PR's check fails for a reason the change did not cause (a flaky test, a
+lost runner, a registry outage), canopy should rerun it instead of sending a worker to "fix" code that is not broken.
+Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the repository
+provides, and a CI that is not GitHub Actions is reached through its own MCP server.
+
+Shape (§23, D102, D103): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
+named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
+edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
+the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
 
 ## Nice to have
 
@@ -211,7 +222,7 @@ Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, a
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10, D045), so
   B starts before A lands. Settled by D054: stacking stays, controlled by `policy.stacking` (`"auto"` or `"never"`),
   which the overseer prompt follows. No harness guard. Under `"never"`, B waits until A has landed: closed, and its PR
-  merged if it had one (D057).
+  merged if it had one (D054).
 - **C2. Local web UI vs no listener (N1, H1).** Settled by D055: listeners are allowed on loopback, or on a private
   network address the operator sets, behind the operator's listener secret (TRUST_MODEL T8). Loopback is the default
   and keeps H1; a private-network address is the operator's choice to relax it. A UI is now deferred, not ruled out.

@@ -9,7 +9,7 @@ Instructions for any agent working in this repository. Humans should read it too
 3. `docs/DESIGN.md`: target shape. Normative.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
-6. `docs/DECISIONS.md`: why things are the way they are. Append, never rewrite.
+6. `docs/DECISIONS.md`: why things are the way they are. Short bullets; a changed choice edits its entry.
 
 If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entry says otherwise.
 
@@ -22,12 +22,15 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
   `docs/DESIGN.md` is incomplete.
-- Every new dependency gets a `docs/DECISIONS.md` entry explaining why stdlib was insufficient.
+- Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
+  linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
 - Record a decision only when it will shape how a future developer changes or reasons about the code: a choice between
-  real alternatives, a constraint, a dependency. Do not use `docs/DECISIONS.md` to track progress or state. A
-  milestone's status goes on its `Status:` line in `docs/ROADMAP.md`, and what it taught on the `Learned:` and `Next:`
-  lines that follow; how things work goes in `docs/DESIGN.md`; context for one change goes in its PR description. If an
-  entry would stop mattering once its milestone is done, it is not a decision.
+  real alternatives, a constraint, a runtime dependency. Not progress or state (that is the milestone's `Status:`,
+  `Learned:`, and `Next:` lines in `docs/ROADMAP.md`), not how things work (`docs/DESIGN.md`), not the story of a change
+  (its PR).
+- Write decision entries short: a title that states the decision and two to four one-line bullets for what, why,
+  rejected alternatives, and what would make us revisit. No paragraphs, no history, no list of files touched. The
+  format is at the top of `docs/DECISIONS.md`; when in doubt, cut.
 - Changes to `docs/TRUST_MODEL.md`, `prompts/overseer.md`, or anything under `agents/` require an explicit human
   approval note in the PR description. These files define what the loop is allowed to do.
 - When unsure, prefer the smaller change and leave a note in the PR. Do not invent requirements.
@@ -36,7 +39,11 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - Python 3.12+. Package layout `src/canopy/`, in layered subpackages (DESIGN §5, D041). CLI entry point `canopy`.
 - `uv` for everything: `uv sync`, `uv run`, `uv tool install`.
-- `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests.
+- `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests, in strict mode,
+  where a warning fails the test that raised it.
+- `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
+  not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts and `actionlint` the GitHub workflows.
+  All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
 - ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow
   `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
@@ -49,8 +56,9 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (D027, dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
-  (D074, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only).
+  validators (D027, dev only), `pytest-xdist` to run the tests in parallel (D092, dev only), `rich` for terminal output
+  (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
+  client (D079, dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
@@ -64,10 +72,12 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - This covers Python, Markdown, TOML, YAML, SQL, shell, prompts, and anything else in the repo.
 - `.editorconfig` is the source of truth for whitespace: `max_line_length = 120`, UTF-8, LF line endings, final
   newline, 4-space indent (2 for TOML, YAML, JSON, SQL; tabs in `Makefile`). Configure your editor to honor it.
-- `ruff` enforces 120 for Python (`[tool.ruff] line-length = 120` in `pyproject.toml`). Keep the two in sync.
+- `ruff` enforces 120 for Python (`[tool.ruff] line-length = 120`), `rumdl` for Markdown (`[tool.rumdl] line-length`),
+  and `ec` for every other file, from `.editorconfig`. Keep the three in sync.
 - Do not introduce any other line-length target (80, 88, 100). Do not reflow existing text just to fill 120 columns;
   wrap new or edited prose at 120.
-- The only exceptions are lines that cannot be broken: long URLs, and generated files such as `uv.lock`.
+- The only exceptions are lines that cannot be broken: long URLs, Markdown tables and code blocks, a worker prompt's
+  one-line JSON result, and generated files such as `uv.lock`.
 
 ## Code conventions
 
@@ -111,7 +121,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- A web UI beyond what ROADMAP M20 lists. `canopy status` and a markdown file stay the CLI's surface.
+- A web UI beyond what ROADMAP M20, M23, and M24 list. `canopy status` and a markdown file stay the CLI's surface.
 - Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.

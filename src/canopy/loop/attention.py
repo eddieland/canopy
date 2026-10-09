@@ -21,8 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.chores import view as chore_view
-from canopy.core import conversation, db
+from canopy.core import chore_view, conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.infra import logs
 from canopy.notify import deliver
@@ -49,7 +48,18 @@ RUN_REASONS = {
 _HISTORY_TICKS = 1000
 FILE_NAME = "attention.md"
 # Kept importable from here: tests and the CLI name items through this module.
-__all__ = ["ACTION_PREFIX", "CHORE_PREFIX", "FILE_NAME", "Item", "age", "current", "fingerprint", "listed", "subject"]
+__all__ = [
+    "ACTION_PREFIX",
+    "CHORE_PREFIX",
+    "FILE_NAME",
+    "Item",
+    "age",
+    "current",
+    "fingerprint",
+    "keys",
+    "listed",
+    "subject",
+]
 
 
 def decided_about(decision: sqlite3.Row) -> str:
@@ -63,6 +73,11 @@ def decided_about(decision: sqlite3.Row) -> str:
 
 # An item is its ticket, its reason, and its repository if it has one.
 _ItemId = tuple[str | None, str, str | None]
+
+
+def keys(items: list[Item]) -> set[_ItemId]:
+    """Each item's identity, as two lists are compared: its ticket, its reason, and its repository."""
+    return {(i.ticket_key, i.reason, i.repo) for i in items}
 
 
 def _sort_key(item_id: _ItemId) -> tuple[str, str, str]:

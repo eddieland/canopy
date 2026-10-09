@@ -1,0 +1,80 @@
+import { expect, type Locator, test } from '@playwright/test'
+
+import { settled, signIn } from './helpers.ts'
+
+test.beforeEach(async ({ page }) => {
+    await signIn(page)
+})
+
+/** Resolves once `highlight` sits exactly on `link`, as it does once its slide has ended. */
+async function covers(highlight: Locator, link: Locator): Promise<void> {
+    await expect(async () => {
+        const [h, l] = await Promise.all([highlight.boundingBox(), link.boundingBox()])
+        expect(h?.y).toBeCloseTo(l?.y ?? Number.NaN, 0)
+    }).toPass()
+}
+
+test('the nav highlight slides to the item a navigation lands on', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    const highlight = page.getByTestId('nav-highlight')
+    await covers(highlight, nav.getByRole('link', { name: 'Attention' }))
+
+    await nav.getByRole('link', { name: 'Worktrees' }).click()
+    await covers(highlight, nav.getByRole('link', { name: 'Worktrees' }))
+
+    await page.getByRole('link', { name: 'Tickets' }).click()
+    await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
+    await covers(highlight, nav.getByRole('link', { name: 'Tickets' }))
+})
+
+test('under reduced motion, counters read their values and nothing waits on an animation', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('attention')
+    await settled(page)
+    await expect(page.getByTestId('counter-attention')).toContainText('5')
+    const running = await page.evaluate(() => document.getAnimations().map((a) => a.constructor.name))
+    expect(running).toEqual([])
+})
+
+test('the header ticker crawls one headline at a time, at the speed and gap set in Settings', async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    const ticker = page.getByTestId('ticker')
+    const headline = page.getByTestId('ticker-headline')
+    await expect(ticker).toHaveAttribute('data-speed', 'normal')
+    await expect(headline).toHaveCount(1)
+
+    // A flair's own loops (a flash, a wave) bubble their iterations up; they do not move the reel on.
+    const first = await headline.textContent()
+    await headline.evaluate((element) => {
+        const event = new AnimationEvent('animationiteration', { bubbles: true, animationName: 'wave' })
+        element.firstElementChild?.dispatchEvent(event)
+    })
+    await expect(headline).toHaveText(first ?? '')
+
+    // At the end of its pass, the next headline takes the window.
+    await headline.evaluate((element) => {
+        const [crawl] = element.getAnimations()
+        const duration = Number(crawl?.effect?.getComputedTiming().duration)
+        if (crawl) crawl.currentTime = duration - 20
+    })
+    await expect(headline).not.toHaveText(first ?? '')
+    await expect(headline).toHaveCount(1)
+
+    await page.getByTestId('ticker-spicy').click()
+    await expect(ticker).toHaveAttribute('data-speed', 'spicy')
+
+    // The gap pads the line by the distance the crawl covers in that time: 5 seconds at 9rem a second.
+    await page.getByTestId('ticker-gap').fill('5')
+    await expect(headline).toHaveCSS('padding-right', `${5 * 9 * 16}px`)
+
+    await page.getByTestId('ticker-off').click()
+    await expect(ticker).toHaveCount(0)
+    await page.reload()
+    await settled(page)
+    await expect(ticker).toHaveCount(0)
+    await expect(page.getByTestId('ticker-gap')).toHaveValue('5')
+    await expect(page.getByTestId('ticker-gap')).toBeDisabled()
+})

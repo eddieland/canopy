@@ -520,6 +520,8 @@ def _spawn(
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
         values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        if not split and conversation.has_operator_messages(ctx.conn, key):
+            required = (*required, *prompts.REQUIRED_OPERATOR)
     try:
         prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
     except (OSError, prompts.PromptError) as e:
@@ -569,7 +571,7 @@ def _unit_prs(ctx: Context, key: str) -> dict[str, str]:
     found: dict[str, str] = {}
     for u in db.units(ctx.conn, key):
         if u["pr_url"]:
-            # A workspace of one has only the one repository, whatever its unit calls it (D052).
+            # A workspace of one has only the one repository, whatever its unit calls it (D033).
             name = ctx.workspace.repos[0].name if ctx.workspace.single else str(u["repo"])
             found[name] = str(u["pr_url"])
     return found

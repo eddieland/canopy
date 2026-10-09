@@ -42,11 +42,16 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Types come from the server.** API types are generated from `src/canopy/serve/schema.py`. To change a shape,
   change the pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
-- **Live data comes from the stream, not polling.** No `refetchInterval`. Server pushes arrive through
+- **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees. Server pushes arrive
+  through
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
-  `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it. A new
+  `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, and
+  `chores.updated` marks every chore's (a new note changes the list it carries); `tick.updated` marks the ticks, a
+  tick's page, and the ticket shown. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in
-  `parseStreamEvent`.
+  `parseStreamEvent`. The worktrees are the one query not on the stream (D090): `runs.updated` marks them stale when
+  the running runs' worktrees change, the page's Read again button refetches them, and they refetch every 30 seconds
+  while a page shows them in a visible tab, the one `refetchInterval` (D090).
 - **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, and the
   client adds the session's token (`writeToken` in `src/api/client.ts`). A refusal is an `ApiError` with its `guard`;
   show it with `Notice`, which names the guard as the CLI does. Say what an action did in the CLI's words
@@ -65,8 +70,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from
-  `canopy/serve/mock.py`; the header shows `mock`. Its times are fixed around 2026-10-08 12:00 UTC: a screenshot test
-  freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts` holds a few typed rows for unit tests.
+  `canopy/serve/mock.py`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
+  2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`
+  holds a few typed rows for unit tests.
 
 ## Python side
 
@@ -82,8 +88,12 @@ SQL of its own.
 - Playwright (`e2e/`) runs against the production build served by FastAPI, never the Vite dev server. The root
   server needs the listener secret (`e2e/secret.ts`; `signIn` in `e2e/helpers.ts`) and never changes its journal;
   tests that write run against the prefixed one. Every route gets a screenshot per theme in
-  `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately
-  (`npx playwright test --update-snapshots=all`) and the PR says why; look at each new image before committing it.
+  `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately and the PR says why; look at each
+  new image before it merges. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch,
+  then run the Screenshots workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or
+  an agent's GitHub tools). It pushes a commit with the images that changed and starts CI on it; pull before going
+  on. `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not
+  match.
 
 ## Done for a UI pull request
 

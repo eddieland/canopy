@@ -228,6 +228,65 @@ def finish_tick(conn: sqlite3.Connection, tick_id: int, status: str, summary: st
     )
 
 
+def set_tick_read(conn: sqlite3.Connection, tick_id: int) -> None:
+    """Record what a tick has read up to: the newest message, and the time (§6, §22).
+
+    Every message up to it was there to see, and every run that started or ended before it.
+    """
+    conn.execute(
+        "UPDATE ticks SET message_id = (SELECT coalesce(max(id), 0) FROM messages), read_at = ? WHERE id = ?",
+        (now(), tick_id),
+    )
+
+
+def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
+    """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT * FROM ticks WHERE id < ? ORDER BY id DESC LIMIT 1", (tick_id,)
+    ).fetchone()
+    return row
+
+
+# The tables of detached runs: workers', chores', and reviews'. Fixed names, never input.
+_RUN_TABLES = ("runs", "chore_runs", "review_runs")
+
+
+def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether any run, chore run, or review run started or ended after `since`, a time the journal wrote (§6)."""
+    return any(
+        conn.execute(
+            f"SELECT 1 FROM {table} WHERE started_at > ? OR ended_at > ? LIMIT 1",  # noqa: S608
+            (since, since),
+        ).fetchone()
+        for table in _RUN_TABLES
+    )
+
+
+def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether any run, chore run, or review run ended after `since`, a time the journal wrote (§6)."""
+    return any(
+        conn.execute(f"SELECT 1 FROM {table} WHERE ended_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
+        for table in _RUN_TABLES
+    )
+
+
+def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
+    """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6)."""
+    tickets = conn.execute(
+        "SELECT 'ticket', key, phase, branch, last_comment_id, last_message_id, last_mirrored_id, done FROM tickets"
+    )
+    units = conn.execute(
+        "SELECT 'unit', ticket_key, repo, branch, pr_url, phase, last_review_id, last_ci_run_id FROM ticket_units"
+    )
+    return frozenset(tuple(r) for rows in (tickets, units) for r in rows)
+
+
+def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:
+    """The newest message the latest `ok` tick read, or None before the first `ok` tick that recorded one (§22)."""
+    row = conn.execute("SELECT message_id FROM ticks WHERE status = 'ok' ORDER BY id DESC LIMIT 1").fetchone()
+    return None if row is None or row[0] is None else int(row[0])
+
+
 def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
     """Close ticks left `running` by a tick process that died. Call only while holding the tick lock."""
     ids = [int(r[0]) for r in conn.execute("SELECT id FROM ticks WHERE status = 'running'")]
@@ -290,7 +349,7 @@ def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str, *, single: bool)
     """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction.
 
     A workspace of one has one repository, whose name follows its directory, so its ticket's one unit is renamed to
-    `unit` rather than a second one made: renaming the checkout never strands a ticket (D052).
+    `unit` rather than a second one made: renaming the checkout never strands a ticket (D033).
     """
     if single:
         conn.execute("UPDATE ticket_units SET repo = ? WHERE ticket_key = ?", (unit, key))
@@ -504,8 +563,13 @@ def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | No
     _set_report(conn, "ticks", tick_id, session_id, usage)
 
 
+def set_chore_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
+    """Record what the agent runtime reported about a chore run: its session, and what it cost (§13, §19)."""
+    _set_report(conn, "chore_runs", run_id, session_id, usage)
+
+
 def usage_of(row: sqlite3.Row) -> Usage | None:
-    """What a run or tick row says its agent cost, or None when the runtime reported nothing."""
+    """What a run, chore run, or tick row says its agent cost, or None when the runtime reported nothing."""
     if row["cost_usd"] is None:
         return None
     return agent_output.Usage(
@@ -519,7 +583,11 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
 
 
 def _set_report(
-    conn: sqlite3.Connection, table: Literal["runs", "ticks"], row_id: int, session_id: str | None, usage: Usage | None
+    conn: sqlite3.Connection,
+    table: Literal["runs", "chore_runs", "ticks"],
+    row_id: int,
+    session_id: str | None,
+    usage: Usage | None,
 ) -> None:
     spent = (
         (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
@@ -531,6 +599,18 @@ def _set_report(
         "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
         (session_id, *spent, row_id),
     )
+
+
+def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
+    """What the runs, chore runs, and ticks that started at or after `since` cost; None when none reported one (§13)."""
+    row = conn.execute(
+        "SELECT (SELECT SUM(cost_usd) FROM runs WHERE started_at >= ?), "
+        "(SELECT SUM(cost_usd) FROM chore_runs WHERE started_at >= ?), "
+        "(SELECT SUM(cost_usd) FROM ticks WHERE started_at >= ?)",
+        (since, since, since),
+    ).fetchone()
+    parts = [float(v) for v in row if v is not None]
+    return sum(parts) if parts else None
 
 
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
@@ -770,6 +850,28 @@ def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.R
     return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
 
 
+def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` decisions about ticket `key`, its units' included, across ticks, newest first."""
+    return conn.execute(
+        "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
+    ).fetchall()
+
+
+def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` ticks, newest first, each with `decisions`, how many it recorded."""
+    return conn.execute(
+        "SELECT t.*, (SELECT count(*) FROM decisions d WHERE d.tick_id = t.id) AS decisions "
+        "FROM ticks t ORDER BY t.id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+
+
+def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:
+    """Return how many decisions a tick recorded."""
+    row = conn.execute("SELECT count(*) FROM decisions WHERE tick_id = ?", (tick_id,)).fetchone()
+    return int(row[0])
+
+
 # Conversations (DESIGN §22)
 
 # The kind of subject a ticket is. Messages and start records are keyed by subject, so a new kind adds no table (D075).
@@ -870,12 +972,12 @@ def run_messages(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM messages WHERE run_id = ? ORDER BY id", (run_id,)).fetchall()
 
 
-def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None) -> int:
-    """Return the id of the newest message, or of the newest from `source`; 0 if there is none."""
-    if source is None:
-        row = conn.execute("SELECT max(id) FROM messages").fetchone()
-    else:
-        row = conn.execute("SELECT max(id) FROM messages WHERE source = ?", (source,)).fetchone()
+def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, subject_kind: str | None = None) -> int:
+    """Return the id of the newest message, of the newest from `source`, or about a kind of subject; 0 if none."""
+    row = conn.execute(
+        "SELECT max(id) FROM messages WHERE (? IS NULL OR source = ?) AND (? IS NULL OR subject_kind = ?)",
+        (source, source, subject_kind, subject_kind),
+    ).fetchone()
     return int(row[0] or 0)
 
 

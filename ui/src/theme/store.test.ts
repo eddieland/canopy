@@ -53,6 +53,20 @@ describe('theme store', () => {
         expect(listener).toHaveBeenCalled()
     })
 
+    it('catches a system change made before anything subscribed', async () => {
+        const system = stubSystemTheme(true)
+        const store = await load()
+        document.documentElement.classList.add('dark')
+
+        system.set(false)
+        const listener = vi.fn()
+        store.subscribe(listener)
+
+        expect(store.getSnapshot().resolved).toBe('light')
+        expect(document.documentElement.classList.contains('dark')).toBe(false)
+        expect(listener).toHaveBeenCalled()
+    })
+
     it('follows a system change only while the preference is system', async () => {
         const system = stubSystemTheme(false)
         const store = await load()
