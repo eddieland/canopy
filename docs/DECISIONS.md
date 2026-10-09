@@ -506,3 +506,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Rejected: editing the prompt file (a note is about this week's findings); clearing notes after a run (a note "until
   the 15th" must outlast one); a dismiss per finding (the agent, not the harness, knows whether a finding is the same).
 - Revisit: if operators need a note to end without writing another.
+
+## D101. Screenshot baselines are made on CI, by a workflow run on demand that pushes them
+
+- `screenshots.yml`: run on a branch, it updates the baselines with ci.yml's Chromium and fonts and commits the PNGs.
+- Why: a local machine or an agent's container renders text differently, so its baselines fail CI.
+- Two jobs: the branch's code runs with a read-only token; the job that pushes runs none of it and commits only PNGs.
+- Rejected: a Playwright Docker image (CI does not use one); updating on every PR push (a visual change is deliberate).
