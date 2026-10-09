@@ -123,7 +123,7 @@ and you label each one you want worked. The pools, journal, and attention list l
 
 ## How it works, briefly
 
-```
+```text
 canopy loop
   take the loop lock
   until Ctrl-C:

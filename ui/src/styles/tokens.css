@@ -71,9 +71,9 @@
     --color-status-failed: var(--status-failed);
 
     /*
-   * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names
-   * above. shadcn's own `accent` (a hover tint) is NOT aliased: here `accent` is the one brand color.
-   */
+     * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names
+     * above. shadcn's own `accent` (a hover tint) is NOT aliased: here `accent` is the one brand color.
+     */
     --color-primary: var(--accent);
     --color-primary-foreground: var(--accent-foreground);
     --color-secondary: var(--surface-raised);

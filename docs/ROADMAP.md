@@ -10,7 +10,7 @@ progress is tracked. Keep it current in the same PR that changes it:
 - `Status: not started.` or `Status: in progress.` while work is open.
 - When the acceptance criteria are met, replace it with:
 
-  ```
+  ```text
   Status: done YYYY-MM-DD.
   Learned: what surprised us or turned out different from the plan.
   Next: how that changes later milestones, docs, or open questions.
@@ -37,6 +37,7 @@ Accept: CI green; fakes exercised by at least one test each.
 
 Status: done 2026-09-23.
 Learned:
+
 - `tests/canopy/__init__.py` made pytest import the test directory as a package named `canopy`, shadowing
   `src/canopy`. Test directories now have no `__init__.py`. (Superseded by D019: every test directory, the root
   included, has one.)
@@ -73,6 +74,7 @@ queue and for a labeled candidate. No dispatches happen.
 
 Status: done 2026-09-24.
 Learned:
+
 - Interactive dry runs found plans a live tick would not carry out: a dry-run dispatch now checks the guards (D036), a
   dry-run `ticket set --done` no longer marks a ticket done, and a tick-wide `skip` closes the tick as `skipped` (D037).
   `canopy decisions [TICK]` prints a plan without SQL.
@@ -111,9 +113,11 @@ and its slot returned.
 
 Status: done 2026-10-07.
 Learned:
-- Live, from an empty journal (after the migrations were squashed, #60 and D068), with OpenCode 1.18.32: GH-64 went from label
-  to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with SIGKILL,
-  were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to PR #70.
+
+- Live, from an empty journal (after the migrations were squashed, #60 and D068), with OpenCode 1.18.32: GH-64 went from
+  label to PR #69 unattended, its slot returned and its `runs` row correct. GH-65's `_run` and worker, killed with
+  SIGKILL, were `crashed` on the next tick with the slot returned; an authorized reply then resumed its branch to
+  PR #70.
 - An empty journal rebuilds its view from the tracker, but every comment cursor starts empty, so an old authorized
   comment reads as new: the overseer tried a `resume` that the `no_branch` guard refused.
 - The worker's write MCP tools (`create_pull_request`, `add_issue_comment`) cannot set labels. The `agent` label lands
@@ -137,6 +141,7 @@ ticket; an authorized reply resumes it; an unauthorized reply does not.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py`, `tests/canopy/test_attention.py`),
 docs, and D030 to D032 are in. Checked live on 2026-10-07:
+
 - A reply from an account not in `authorized_repliers` did not resume GH-65, and its comment cursor moved past it; with
   the account added back, the same comment resumed it. The overseer checks a comment's author when it reads it, so
   adding an account authorizes its earlier comments too.
@@ -161,6 +166,7 @@ first's branch when the first is open and green.
 
 Status: done 2026-10-07.
 Learned:
+
 - Live: GH-67, blocked by GH-66 through GitHub's issue dependencies, waited while GH-66 was being implemented and
   reviewed, and was dispatched with `--base` on GH-66's branch once PR #71 was open and green. Its PR #73 targets that
   branch.

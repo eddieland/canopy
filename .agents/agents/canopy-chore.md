@@ -41,6 +41,7 @@ permission:
   "*branch*": deny
   "*fork*": deny
 ---
+
 The system prompt is supplied by the harness at invocation time via the
 `{prompt}` argument to `opencode run`. Keep this body minimal so the agent does
 not act without a rendered prompt:

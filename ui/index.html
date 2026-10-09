@@ -5,10 +5,10 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <meta name="color-scheme" content="light dark" />
         <!--
-      Blocking on purpose: sets the theme class and color-scheme before the first paint, so a reload never flashes the
-      other theme. Keep it in sync with src/theme/store.ts (STORAGE_KEY, the values, the resolution); a test in
-      src/theme/theme-script.test.ts runs this exact script. FastAPI allows it by hash in its CSP (serve/spa.py).
-    -->
+        Blocking on purpose: sets the theme class and color-scheme before the first paint, so a reload never flashes
+        the other theme. Keep it in sync with src/theme/store.ts (STORAGE_KEY, the values, the resolution); a test in
+        src/theme/theme-script.test.ts runs this exact script. FastAPI allows it by hash in its CSP (serve/spa.py).
+        -->
         <script>
             ;(function () {
                 var d = document.documentElement
