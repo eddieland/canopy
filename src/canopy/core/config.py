@@ -434,7 +434,7 @@ class Runtime(Section):
     # chooses what workers are told to do, which a repository must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
     # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
-    # ends the run `crashed` (DESIGN §8, D102). Empty means none. It runs the branch's code on this machine.
+    # ends the run `crashed` (DESIGN §8, D105). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.USER] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.USER] = 30
 

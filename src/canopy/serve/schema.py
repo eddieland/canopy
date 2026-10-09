@@ -159,14 +159,98 @@ class Message(_Model):
     comment: Comment | None = None
 
 
+class Decision(_Model):
+    """One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals."""
+
+    id: int
+    tick_id: int
+    at: datetime
+    # What it is about, as `canopy decisions` names it with a unit's repository added: `PROJ-1`, `PROJ-1 (api)`, `api`,
+    # `chore:deps`, `pr:URL`, or `-` for the whole tick.
+    subject: str
+    ticket_key: str | None = None
+    repo: str | None = None
+    chore: str | None = None
+    pr: str | None = None
+    # dispatch:<kind> | wait | skip | done | mirror | attention:<reason> | refused:<guard>
+    action: str
+    # The overseer's text, untrusted: control characters dropped and whitespace collapsed, as `canopy decisions` prints
+    # it. Bounded at 2000 characters when it was recorded.
+    rationale: str
+
+
 class TicketDetail(_Model):
-    """One ticket: what `canopy show` prints."""
+    """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
     ticket: TicketSummary
     units: list[Unit]
     runs: list[Run]
     # The latest 100, oldest first.
     messages: list[Message]
+    # The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it.
+    decisions: list[Decision]
+
+
+class ChoreRun(_Model):
+    """One run of a chore (DESIGN §19)."""
+
+    id: int
+    # The journal's status: running, ok, failed, unknown, timeout, crashed.
+    status: str
+    # `ok` is `done`; every other ending is `failed`, as it raises `chore_failed`.
+    state: RunState
+    started_at: datetime
+    ended_at: datetime | None = None
+    # The harness's note or the agent's summary, on one line.
+    summary: str | None = None
+    # How many findings an `ok` run reported.
+    findings: int = 0
+    session_id: str | None = None
+    cost_usd: float | None = None
+    tokens: int | None = None
+    log_path: str
+
+
+class ChoreFinding(_Model):
+    """An open finding: one the chore's latest `ok` run reported (DESIGN §19)."""
+
+    id: str
+    title: str
+    detail: str
+    link: str | None = None
+    # When the unbroken run of `ok` runs reporting it began.
+    since: datetime
+
+
+class ChoreSummary(_Model):
+    """A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings."""
+
+    name: str
+    every_minutes: int
+    # When a run may start (D099): days of the week, empty for every day; `HH:MM-HH:MM`; an IANA zone.
+    days: list[str] = []
+    hours: str | None = None
+    timezone: str | None = None
+    # The operator's words to the overseer on when a run is worth it.
+    when: str | None = None
+    running: ChoreRun | None = None
+    # Its most recent run that has ended.
+    latest: ChoreRun | None = None
+    # The earliest time the harness lets a new run start; None, or a time already past, means now.
+    due_at: datetime | None = None
+    findings: list[ChoreFinding] = []
+    # The newest of the operator's notes to it, so a new note changes the list the stream sends.
+    latest_note_id: int | None = None
+
+
+class ChoreDetail(_Model):
+    """One chore: what `canopy show chore:NAME` prints."""
+
+    chore: ChoreSummary
+    # The latest 10, newest first.
+    runs: list[ChoreRun]
+    # The operator's notes its next run reads: the latest 10, oldest first.
+    notes: list[Message]
 
 
 class Started(_Model):
@@ -258,7 +342,7 @@ class Pool(_Model):
 
 
 class Tick(_Model):
-    """The latest tick, as `canopy status`'s first line shows it (DESIGN §14)."""
+    """A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded."""
 
     id: int
     # running | ok | skipped | overseer_failed | reconcile_failed | abandoned
@@ -267,8 +351,22 @@ class Tick(_Model):
     started_at: datetime
     ended_at: datetime | None = None
     summary: str | None = None
-    # What its overseer cost, when the runtime reported it (§13).
+    # The overseer's session and what it cost, when the runtime reported them (§13).
+    session_id: str | None = None
     cost_usd: float | None = None
+    # How many decisions it recorded so far.
+    decisions: int = 0
+
+
+class TickDetail(_Model):
+    """One tick: what `canopy decisions ID` prints."""
+
+    tick: Tick
+    # In the order they were recorded.
+    decisions: list[Decision]
+    # Where the overseer's stdout and stderr are, readable only by the operator, if the file exists. The page names it
+    # and does not serve it (D104).
+    output_path: str | None = None
 
 
 class LastTick(_Model):
@@ -313,6 +411,13 @@ class TicketsUpdated(_Model):
     tickets: list[TicketSummary]
 
 
+class ChoresUpdated(_Model):
+    """The chores changed: a run started or ended, or a note was added. The payload is the whole list."""
+
+    type: Literal["chores.updated"] = "chores.updated"
+    chores: list[ChoreSummary]
+
+
 class TicketChanged(_Model):
     """Something about one ticket changed: a page showing it reads it again."""
 
@@ -338,7 +443,13 @@ class TickUpdated(_Model):
 class StreamEvent(
     RootModel[
         Annotated[
-            AttentionUpdated | RunsUpdated | TicketsUpdated | TicketChanged | SpendUpdated | TickUpdated,
+            AttentionUpdated
+            | RunsUpdated
+            | TicketsUpdated
+            | TicketChanged
+            | ChoresUpdated
+            | SpendUpdated
+            | TickUpdated,
             Field(discriminator="type"),
         ]
     ]

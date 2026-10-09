@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08), and where canopy stands on
-each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is
-listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until
-then (AGENTS.md).
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09), and
+where canopy stands on each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two
+disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
+doc stays normative until then (AGENTS.md).
 
 A bare § is a section of `DESIGN.md`. Status words:
 
@@ -136,12 +136,12 @@ Built in M16; its live check is the operator's. Setting up a slot is three steps
   into each slot on every lease. A personal manifest, `paths.worktree_include`, replaces it; canopy passes it to every
   `treehouse get` as `--include-file`.
 - `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reused, on the base.
-- `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run (D102).
+- `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run (D105).
 
 For Bazel (§9, and the operator's guide, `docs/BAZEL.md`): slots are reused at fixed paths, and Bazel keys its output
 base on the workspace path, so each slot's output base stays warm across leases. A shared `--disk_cache` and
 `--repository_cache` in the operator's `.bazelrc` share work between slots, `--output_user_root` puts the output bases
-on a fast disk, and `startup --max_idle_secs` ends a slot's idle server (D103). A fast disk otherwise takes the whole
+on a fast disk, and `startup --max_idle_secs` ends a slot's idle server (D106). A fast disk otherwise takes the whole
 workspace, pools and clones together (§18, D033). Unverified until the canary's first real run: that the worker reads
 through `bazel-out/` and its siblings, links into the output base, and is refused the output base by its own path.
 
@@ -177,6 +177,18 @@ the web UI, on a public ticket too; the reply is the worker's instruction and ne
 worker hears it, an `implement` or `fix-ci` as well as a `resume` (D093); keeping it off the ticket is the worker
 prompt's, not a guard (TRUST_MODEL T6). The gate is the
 overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
+
+### R14. Flaky CI is rerun, not fixed
+
+Planned (M25). Written down 2026-10-09. When a PR's check fails for a reason the change did not cause (a flaky test, a
+lost runner, a registry outage), canopy should rerun it instead of sending a worker to "fix" code that is not broken.
+Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the repository
+provides, and a CI that is not GitHub Actions is reached through its own MCP server.
+
+Shape (§23, D102, D103): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
+named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
+edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
+the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
 
 ## Nice to have
 

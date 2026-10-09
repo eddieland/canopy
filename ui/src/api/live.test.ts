@@ -2,9 +2,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockChores, mockRuns, mockTickets } from './mocks'
 import { keys } from './queries'
-import type { Run, TicketDetail } from './types'
+import type { ChoreDetail, Run, TicketDetail } from './types'
 
 describe('applyStreamEvent', () => {
     it('replaces each list whole', () => {
@@ -38,6 +38,30 @@ describe('applyStreamEvent', () => {
 
         expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.ticket('ABC-999'))?.isInvalidated).toBe(false)
+    })
+
+    it('replaces the chores and marks every chore page stale, for a page to read again', () => {
+        const client = new QueryClient()
+        const detail = { chore: mockChores[0], runs: [], notes: [] } as unknown as ChoreDetail
+        client.setQueryData(keys.chore('deps'), detail)
+
+        applyStreamEvent(client, { type: 'chores.updated', chores: mockChores })
+
+        expect(client.getQueryData(keys.chores)).toEqual(mockChores)
+        expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it('marks the ticks and the tickets stale when the latest tick changes', () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.ticks, [])
+        client.setQueryData(keys.tickDetail(2), { tick: null, decisions: [], output_path: null })
+        client.setQueryData(keys.ticket('ABC-102'), { ticket: mockTickets[0] })
+
+        applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: 8 })
+
+        expect(client.getQueryState(keys.ticks)?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.tickDetail(2))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
     })
 
     it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
@@ -77,6 +101,9 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent('{"type":"lease.updated","lease":{}}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated","runs":{}}')).toBeNull()
+        const chores = { type: 'chores.updated', chores: mockChores }
+        expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
+        expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
         const spend = { type: 'spend.updated', spend: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 } }
         expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)

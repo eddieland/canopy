@@ -473,7 +473,7 @@ Not started: whether `fix-ci` and `resume` continue a session, and workers again
 
 ## M16. Worktree setup for large monorepos
 
-REQUIREMENTS R10, DESIGN §9 and §18, D033, D102, D103. Needs M2. Taken on request (2026-10-09).
+REQUIREMENTS R10, DESIGN §9 and §18, D033, D105, D106. Needs M2. Taken on request (2026-10-09).
 
 - Where pools live: no pool root of their own. A fast disk takes the whole workspace, for reasons DESIGN §18 gives:
   git keeps each worktree's files in its clone, and treehouse pools by repository and remote URL, so a root every
@@ -481,10 +481,10 @@ REQUIREMENTS R10, DESIGN §9 and §18, D033, D102, D103. Needs M2. Taken on requ
 - `paths.worktree_include`, user-only: a personal `.worktreeinclude`, passed on every `treehouse get` as
   `--include-file`. It replaces the committed manifest, since treehouse reads one; a missing file is `no_slot`.
 - `runtime.setup_cmd` and `runtime.setup_timeout_minutes`, user-only: run in each slot of a worker run once `_run`
-  has checked out the run's branch, and a failure or timeout ends the run `crashed` before its worker starts (D102).
+  has checked out the run's branch, and a failure or timeout ends the run `crashed` before its worker starts (D105).
 - Bazel: an opt-in canary that a worker reads through `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` and is refused
   the output base by its own path; a `.bazelrc` recipe for a shared disk and repository cache in `docs/BAZEL.md`; an idle
-  slot's server ends by `startup --max_idle_secs`, not when the slot is returned (D103).
+  slot's server ends by `startup --max_idle_secs`, not when the slot is returned (D106).
 
 Accept: in a Bazel repository, with the recipe in the operator's `~/.bazelrc`, a personal manifest that seeds a
 gitignored file, and a `setup_cmd` that runs `bazel fetch` on the run's branch, a real `implement` run's worker finds
@@ -493,7 +493,7 @@ ends a real run `crashed` with no worker started and its slot returned. The Baze
 OpenCode. A slot's Bazel server exits once idle for `--max_idle_secs` after its run.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_worktree_setup.py` holds the harness's half of the
-acceptance), the canary, docs, and D102 and D103 are in. Waiting on the operator: the real run Accept describes, and
+acceptance), the canary, docs, and D105 and D106 are in. Waiting on the operator: the real run Accept describes, and
 the canary's first real run (`CANOPY_OPENCODE_CANARY=1`).
 
 ## M17. Declared repositories and pools
@@ -687,7 +687,12 @@ sends the operator back to the terminal.
 Accept: the tests above pass. Live: with M9's build-health chore running, the operator answers one of its findings
 from the browser, and the chore's next run's prompt carries the note.
 
-Status: not started.
+Status: in progress. The design (DESIGN §19, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
+`tests/canopy/test_web_chores.py` over the mock journal, and Playwright answering a chore's finding from the
+attention list. The chores' journal view moved down to `core` (`chore_view`, `chore_window`, `chore_result`) so the
+server, a feature, can read it as the CLI does. Chores are on the event stream (`chores.updated`), and a note no run
+has started since says it waits for the next run. TRUST_MODEL T8's list of web writes gains the note; it waits on the
+operator's approval note in the PR. Waiting on the operator: the live run Accept describes.
 
 ## M24. Ticks in the web UI
 
@@ -705,11 +710,39 @@ shows it.
 - Reads only. A rationale is the overseer's text: untrusted, rendered as text, cut as `canopy decisions` cuts it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
-- Open: whether a tick's page shows the overseer's output (`ticks/<id>.log`), agent output read from a file rather
-  than the journal.
+- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it (D104).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
+
+Status: in progress. The design (DESIGN §6, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
+`tests/canopy/test_web_ticks.py` over the mock journal, and Playwright from the header's tick to its decisions and from
+a ticket's decisions to their tick. The open question is settled by D104. The latest tick now carries how many
+decisions it recorded, so the stream sends it as a running tick records them and the open pages follow. A unit's
+decisions name its repository after the ticket, which `canopy decisions` leaves out. Waiting on the operator: the live
+run Accept describes.
+
+## M25. Flaky CI triage
+
+REQUIREMENTS R14, DESIGN §23, D102, D103. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
+reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
+
+- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
+- Config: `policy.max_triage_ci_attempts` (default 0), `runtime.triage_cmd`, `runtime.triage_timeout_minutes`,
+  `runtime.triage_skill`.
+- `canopy dispatch --kind triage-ci`: `triage_off`, one unit, no slot. `_run` runs it in the unit's primary clone after
+  the shadowing check, validates the triage result, and records its report.
+- `agents/canopy-ci-triage.md`. `canopy-worker` denies `gh run rerun`, `gh run cancel`, `gh run delete`, and
+  `gh workflow`; `test_definitions.py` checks both.
+- `prompts/ci-triage.md` and its private variant; the overseer prompt's triage rows and the state block's fields.
+- §7, §8, §12, and §13 say what §23 changes in them, and §23 loses its "designed, not built" line.
+- Tests with the fakes: `triage_off` under the default config; a dry-run tick that triages a new failure; a triage
+  run's cwd is the primary clone and it leases nothing; a `flaky` result without reruns recorded `failed`; a `real`
+  verdict followed by `fix-ci`; the limit refusing the next triage; `fix-ci` attempts not counting triages.
+
+Accept: the tests above pass. Live: on a PR whose check fails for a reason the change did not cause, the loop reruns it
+once and the PR goes green with no `fix-ci` run; on a PR with a real failure, the triage reports `real` and the next
+tick's `fix-ci` fixes it; a repository skill that names a flaky test is followed.
 
 Status: not started.
 
