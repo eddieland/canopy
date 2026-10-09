@@ -96,6 +96,8 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
     ctx = context(canopy_env)
     [item] = [i for i in attention.listed(ctx) if i.reason == "awaiting_reply"]
     assert item.ticket_key == KEY
+    # That tick read the question: the web UI marks only what came after it as waiting for a tick.
+    assert db.acknowledged_message_id(conn) == question["id"]
     assert QUESTION in item.detail
     capsys.readouterr()
     assert operator("show", KEY, monkeypatch=monkeypatch) == 0
@@ -151,8 +153,11 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None
     assert ticket["last_message_id"] == db.latest_message_id(conn, source="operator")
-    # The reply answered the question: the next tick raises no `awaiting_reply`.
+    # The reply answered the question: the next tick raises no `awaiting_reply`, and acknowledges the reply.
     assert conversation.awaiting(conn) == []
+    acknowledged = db.acknowledged_message_id(conn)
+    assert acknowledged is not None
+    assert acknowledged >= db.latest_message_id(conn, source="operator")
 
 
 def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() -> None:
@@ -165,7 +170,7 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
         with pytest.raises(conversation.Refused, match="bad_ref"):
             conversation.parse_ref(bad)
     conversation.check_verb(conversation.parse_ref("run:7"), "show")
-    with pytest.raises(conversation.Refused, match=r"unsupported.*takes only show"):
+    with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, show"):
         conversation.check_verb(conversation.parse_ref("chore:build-health"), "start")
     with pytest.raises(conversation.Refused, match=r"unsupported.*M14"):
         conversation.check_verb(conversation.parse_ref("api#42"), "show")
@@ -435,7 +440,7 @@ def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path) 
             "VALUES (1, 'OLD-1', 'implement', 'b', 'x', ?, 'l', ?, ?)",
             (ended, status, result),
         )
-    assert db.migrate(conn, resources.migrations_dir()) == [3, 4, 5, 6]
+    assert db.migrate(conn, resources.migrations_dir()) == [3, 4, 5, 6, 7, 8, 9]
     found = [(m["run_id"], m["kind"], m["body"], m["source"]) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
     assert found == [
         (2, "report", "ended blocked", "worker"),

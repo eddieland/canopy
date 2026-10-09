@@ -8,8 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.chores import view as chore_view
-from canopy.core import agent_output, conversation, db, definitions, prompts, treehouse
+from canopy.core import agent_output, chore_view, conversation, db, definitions, prompts, treehouse
 from canopy.core.config import render_command
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
@@ -70,6 +69,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
     chore_reconcile.run(ctx, log)
+    # Before anything reads a message or a run: the harness items and the state block see at least every message, and
+    # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
+    db.set_tick_read(ctx.conn, tick_id)
     _record_harness_items(ctx, tick_id)
 
     now = datetime.now(UTC)

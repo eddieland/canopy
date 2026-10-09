@@ -1,5 +1,6 @@
 """Trusted and untrusted reviewers (DESIGN §7, D089): the trusted list reaches the overseer and resume workers, and the
-operator's reply on a public ticket is its go-ahead, carried in the state block and the resume worker's prompt."""
+operator's reply on a public ticket is its go-ahead, carried in the state block and every public worker's prompt
+(D093)."""
 
 import json
 import sqlite3
@@ -155,3 +156,70 @@ def test_a_reply_on_a_public_ticket_needs_a_ticket_canopy_knows(
     # The same reply again is the same submission.
     assert main(["reply", KEY, GO_AHEAD]) == 0
     assert "already says this" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("kind", "heading"), [("implement", "implement"), ("fix-ci", "fix CI")])
+def test_every_public_worker_hears_the_operator_with_the_question_a_reply_answers(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+    heading: str,
+) -> None:
+    # Not only `resume`: a reply before the branch exists rides the next `implement`, and a `fix-ci` hears it too
+    # (D093). The question it answers comes with it, labeled as the earlier worker's.
+    question = "Keep the v1 endpoint, or drop it?"
+    worker_does(monkeypatch, result=json.dumps({"status": "blocked", "summary": "unclear", "question": question}))
+    blocked = run_once(conn, monkeypatch, "--kind", "implement")
+    asked = db.latest_message_id(conn)
+    message = reply(conn, monkeypatch, "Keep it until the client migrates.")
+    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
+    run = run_once(conn, monkeypatch, "--kind", kind, "--context", f"Operator message {message}")
+    prompt = (canopy_env.state_dir / "runs" / f"{run['id']}.prompt").read_text()
+    assert prompt.startswith(f"# canopy worker: {heading}")
+    section = prompt.split("## Messages from the operator\n\n", 1)[1].split("\n\nThe operator wrote these", 1)[0]
+    assert f"Message {asked}, an earlier worker's question, run {blocked['id']}" in section
+    assert f"> {question}" in section
+    assert f"Message {message}, the operator's reply to message {asked}" in section
+    # The worker's report is on the tracker, where it reads it; only questions and the operator's messages are here.
+    assert "> unclear" not in section
+
+
+@pytest.mark.parametrize("replied", [False, True])
+def test_an_override_without_the_operator_messages_fails_closed_once_there_are_some(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    replied: bool,  # noqa: FBT001  (a parametrized fixture)
+) -> None:
+    # An override written before D093 keeps serving tickets the operator never wrote to; from the first message on it
+    # would drop what the operator said, so the dispatch is refused instead (D093).
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
+    if replied:
+        db.touch_ticket(conn, KEY, str(canopy_env.repo))
+        reply(conn, monkeypatch, GO_AHEAD)
+    tick_id = in_tick(conn, monkeypatch)
+    code = main(["dispatch", KEY, "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner())
+    decisions = [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+    if not replied:
+        assert code == 0, decisions
+        return
+    assert code == 1
+    [(action, rationale)] = decisions
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{OPERATOR_MESSAGES}}" in rationale
+
+
+def test_forgetting_a_ticket_leaves_its_operator_messages_behind(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db.touch_ticket(conn, KEY, str(canopy_env.repo))
+    reply(conn, monkeypatch, GO_AHEAD)
+    assert conversation.has_operator_messages(conn, KEY)
+    assert main(["forget", KEY]) == 0
+    assert not conversation.has_operator_messages(conn, KEY)
+    assert conversation.prompt_operator_messages(conn, KEY) == "No messages from the operator."

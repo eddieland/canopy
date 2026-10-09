@@ -43,9 +43,11 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | Nothing dispatches a started ticket again until `canopy start`; `--now` ends its run. |
 | `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
+| `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
+| `canopy chore try NAME` | Runs a chore now, in the foreground, and prints its result. Records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
 | `canopy init --workspace [[NAME=]URL...]` | Sets up a workspace: map, `MAP.md`, `.gitignore`; adds and syncs URLs. |

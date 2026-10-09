@@ -5,8 +5,9 @@ import { keys } from './queries'
 import type { Replied, Session, Started, Stopped } from './types'
 
 /**
- * The operator's actions: sign in and out, and the CLI's verbs on a ticket. Each goes through the same function on the
- * server as `canopy start`, `stop`, and `reply`, with the same guards; a refusal is an ApiError naming its guard.
+ * The operator's actions: sign in and out, the CLI's verbs on a ticket, and a note to a chore. Each goes through the
+ * same function on the server as `canopy start`, `stop`, and `reply`, with the same guards; a refusal is an ApiError
+ * naming its guard.
  */
 
 export async function signIn(secret: string): Promise<Session> {
@@ -29,6 +30,18 @@ export async function replyTicket(key: string, body: string, submission: string)
     return unwrap(
         await api.POST('/api/tickets/{key}/replies', { params: { path: { key } }, body: { body, submission } }),
     )
+}
+
+/** A note to a chore, as `canopy reply chore:NAME`: its next runs read it (docs/DESIGN.md §19). */
+export async function replyChore(name: string, body: string, submission: string): Promise<Replied> {
+    return unwrap(
+        await api.POST('/api/chores/{name}/replies', { params: { path: { name } }, body: { body, submission } }),
+    )
+}
+
+/** After a note to a chore: read it again now, rather than wait for the stream. */
+export function refreshChore(client: QueryClient, name: string): Promise<void> {
+    return client.invalidateQueries({ queryKey: keys.chore(name) })
 }
 
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */

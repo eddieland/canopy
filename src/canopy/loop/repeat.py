@@ -4,9 +4,11 @@ Each iteration is an ordinary tick (`tick.run`), which takes and releases the ti
 by hand still fits in between. The loop also holds its own lock, `<state_dir>/loop.lock`, for as long as it runs: two
 loops on one state dir would run the overseer twice as often.
 
-How long to wait after a tick is `pace`'s decision. Today that is the configured interval; it is where pacing by what a
-tick cost will go (ROADMAP M13). An operator message recorded since the last tick began, such as a `canopy reply`, ends
-the wait early, at most once a minute (DESIGN §22). On a terminal, pressing `TICK_NOW_KEY` ends it at once.
+How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
+never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). An operator
+message recorded since the last tick began, such as a `canopy reply`, ends the wait early, at most once a minute (DESIGN
+§22), and so, with idle pacing on, does a run ending after the tick read the journal. On a terminal, pressing
+`TICK_NOW_KEY` ends it at once.
 
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
 terminal; with output sent to a file, the loop prints one block per tick and nothing in between. Each tick's block ends
@@ -31,7 +33,7 @@ from rich.text import Text
 
 from canopy.core import db
 from canopy.infra import lock, logs, resources
-from canopy.loop import attention, tick, web
+from canopy.loop import attention, pacing, tick, web
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -43,9 +45,9 @@ if TYPE_CHECKING:
 LOCK_FILE_NAME = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
 _WAIT_STEP_SECONDS = 0.5
-# An operator message starts the next tick early, but no sooner than this after the last one began.
+# An operator message or a run ending starts the next tick early, but no sooner than this after the last one began.
 WAKE_MIN_SECONDS = 60.0
-# A second stop signal this soon after the first is the same Ctrl-C, not a second one (D049). `uv run` forwards the
+# A second stop signal this soon after the first is the same Ctrl-C, not a second one. `uv run` forwards the
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
@@ -64,8 +66,12 @@ _STATUS_STYLES = {
 }
 
 
-# What ended a wait before its deadline: an operator message, or the operator pressing `TICK_NOW_KEY`.
-type Woken = Literal["message", "key"]
+# What ended a wait before its deadline: an operator message, a run ending, or the operator pressing `TICK_NOW_KEY`.
+type Woken = Literal["message", "run", "key"]
+_WOKEN_NOTES: dict[Woken | None, str] = {
+    "message": "operator message; next tick in ",
+    "run": "a run ended; next tick in ",
+}
 
 
 @dataclass
@@ -82,7 +88,7 @@ def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Gener
 
     A second signal raises KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process
     group, and the next tick closes the tick row as `abandoned`. Workers already dispatched are detached and keep going.
-    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second (D049).
+    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
     """
 
     def handle(_signum: int, _frame: FrameType | None) -> None:
@@ -98,11 +104,6 @@ def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Gener
     finally:
         for s, handler in previous.items():
             signal.signal(s, handler)
-
-
-def pace(outcome: tick.Outcome, interval_seconds: float) -> float:  # noqa: ARG001  (the seam for spend pacing, M13)
-    """Return how many seconds to wait after a tick that ended with `outcome`. Today, the interval whatever happened."""
-    return interval_seconds
 
 
 def run(
@@ -128,17 +129,27 @@ def run(
     """
     log = logs.for_tick(None)
     statuses: Counter[str] = Counter()
+    idle_max_minutes = ctx.config.loop.idle_max_minutes
+    pace = pacing.Pace(base_seconds=interval_minutes * 60, cap_seconds=idle_max_minutes * 60)
     with lock.hold(ctx.state_dir / LOCK_FILE_NAME):
         # The loop reads the journal before its first tick, which is what would otherwise migrate it.
         db.migrate(ctx.conn, resources.migrations_dir())
-        log.info("loop started", extra={"dry_run": dry_run, "interval_minutes": interval_minutes, "repo": ctx.repo})
+        log.info(
+            "loop started",
+            extra={
+                "dry_run": dry_run,
+                "interval_minutes": interval_minutes,
+                "idle_max_minutes": idle_max_minutes,
+                "repo": ctx.repo,
+            },
+        )
         serving = web.start(ctx, log) if serve else None
         try:
             _header(
                 console,
                 ctx,
                 dry_run=dry_run,
-                interval_minutes=interval_minutes,
+                pace=pace,
                 max_ticks=max_ticks,
                 serving=serving,
                 keys=keys is not None,
@@ -147,7 +158,7 @@ def run(
                 ctx,
                 statuses,
                 dry_run=dry_run,
-                interval_minutes=interval_minutes,
+                pace=pace,
                 max_ticks=max_ticks,
                 console=console,
                 stop=stop,
@@ -171,7 +182,7 @@ def _ticks(
     statuses: Counter[str],
     *,
     dry_run: bool,
-    interval_minutes: int,
+    pace: pacing.Pace,
     max_ticks: int | None,
     console: Console,
     stop: Stop,
@@ -181,34 +192,51 @@ def _ticks(
     log: logs.TickAdapter,
 ) -> None:
     """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status."""
+    idle_count = 0
     while not stop.requested:
-        before = attention.listed(ctx)
-        # Operator messages newer than this wake the wait after this tick: every channel records one the same way.
-        seen = db.latest_message_id(ctx.conn, source="operator")
+        before = pacing.before(ctx)
+        # Operator messages to a ticket newer than this wake the wait after this tick: every channel records one the
+        # same way. A note to a chore waits for the chore's next run.
+        seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
         started = clock()
         with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
             outcome = _tick(ctx, dry_run=dry_run, log=log)
         ended = clock()
         statuses[outcome.status] += 1
+        idle = pace.on and pacing.idle(ctx, outcome, before)
+        idle_count = idle_count + 1 if idle else 0
         last = max_ticks is not None and statuses.total() >= max_ticks
-        wait = None if last or stop.requested else pace(outcome, interval_minutes * 60)
+        wait = None if last or stop.requested else pacing.wait(ctx, pace, idle_count, datetime.now(UTC))
+        if wait is not None:
+            logs.for_tick(outcome.tick_id).info(
+                "loop waits", extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait)}
+            )
         # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
-        next_at = None if wait is None else _clock_time(wait)
-        _report(console, ctx, outcome, before, elapsed=ended - started, next_at=next_at)
+        _report(console, ctx, outcome, before.attention, elapsed=ended - started, wait=wait, idle_count=idle_count)
         if wait is None:
             break
+        # With idle pacing on, a run that ends after the tick read the journal wakes the wait too.
+        read_at = pacing.read_at(ctx, outcome) if pace.on else None
+
+        def wake(seen: int = seen, read_at: str | None = read_at) -> Woken | None:
+            if db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen:
+                return "message"
+            return "run" if read_at is not None and db.runs_ended_after(ctx.conn, read_at) else None
+
         woken = _wait(
             console,
             stop,
             ended + wait,
             sleep=sleep,
             clock=clock,
-            wake=lambda seen=seen: db.latest_message_id(ctx.conn, source="operator") > seen,
+            wake=wake,
             earliest=started + WAKE_MIN_SECONDS,
             keys=keys,
         )
         if woken == "message":
             log.info("an operator message ended the wait", extra={"after_message": seen})
+        elif woken == "run":
+            log.info("a run ending ended the wait", extra={"after": read_at})
         elif woken == "key":
             log.info("the operator asked for a tick now")
 
@@ -247,15 +275,16 @@ def _wait(
     *,
     sleep: Callable[[float], None],
     clock: Callable[[], float],
-    wake: Callable[[], bool] = lambda: False,
+    wake: Callable[[], Woken | None] = lambda: None,
     earliest: float = 0.0,
     keys: Callable[[], str] | None = None,
 ) -> Woken | None:
     """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
 
-    Once `wake()` is true, the wait ends at `earliest` instead, or at once if that has passed: an operator message
-    runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor: the operator asked for
-    this tick, as they could with `canopy tick`. Returns what ended the wait early, if anything did.
+    Once `wake()` names a reason, the wait ends at `earliest` instead, or at once if that has passed: an operator
+    message or a run ending runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor:
+    the operator asked for this tick, as they could with `canopy tick`. Returns what ended the wait early, if anything
+    did.
     """
     woken: Woken | None = None
     hint = f"  ·  {TICK_NOW_KEY} to tick now  ·  Ctrl-C to stop" if keys is not None else "  ·  Ctrl-C to stop"
@@ -265,11 +294,10 @@ def _wait(
         while not stop.requested and (remaining := deadline - clock()) > 0:
             if keys is not None and TICK_NOW_KEY in keys().lower():
                 return "key"
-            if woken is None and wake():
-                woken = "message"
+            if woken is None and (woken := wake()) is not None:
                 deadline = min(deadline, max(earliest, clock()))
                 continue
-            note = "operator message; next tick in " if woken else "next tick in "
+            note = _WOKEN_NOTES.get(woken, "next tick in ")
             live.update(
                 Text.assemble(
                     (note, "dim"),
@@ -287,7 +315,7 @@ def _header(
     ctx: Context,
     *,
     dry_run: bool,
-    interval_minutes: int,
+    pace: pacing.Pace,
     max_ticks: int | None,
     serving: web.Serving | None = None,
     keys: bool = False,
@@ -297,7 +325,7 @@ def _header(
     grid.add_column(style="dim")
     grid.add_column()
     grid.add_row("repository", Text(str(ctx.repo_root)))
-    grid.add_row("pace", f"wait {interval_minutes} minute{'' if interval_minutes == 1 else 's'} after each tick ends")
+    grid.add_row("pace", _pace_note(pace))
     mode = Text("dry run: the overseer plans, nothing is dispatched", style="yellow") if dry_run else Text("live")
     grid.add_row("mode", mode)
     grid.add_row("workers", f"up to {ctx.config.capacity.max_workers}")
@@ -313,6 +341,12 @@ def _header(
     console.print()
 
 
+def _pace_note(pace: pacing.Pace) -> str:
+    base, cap = round(pace.base_seconds / 60), round(pace.cap_seconds / 60)
+    note = f"wait {base} minute{'' if base == 1 else 's'} after each tick ends"
+    return f"{note}, up to {cap} minutes when idle" if pace.on else note
+
+
 def _report(
     console: Console,
     ctx: Context,
@@ -320,7 +354,8 @@ def _report(
     before: list[attention.Item],
     *,
     elapsed: float,
-    next_at: str | None,
+    wait: float | None,
+    idle_count: int = 0,
 ) -> None:
     """Print what one tick did: its status, the decisions that change something, and how the attention list moved."""
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
@@ -362,8 +397,9 @@ def _report(
     footer.append(f"attention {len(after)}", style="bold yellow" if after else "dim")
     if outcome.usage is not None:
         footer.append(f"  ·  cost {outcome.usage.describe()}")
-    if next_at is not None:
-        footer.append(f"  ·  next tick at {next_at}")
+    if wait is not None:
+        idle = f"idle {idle_count}, " if idle_count else ""
+        footer.append(f"  ·  {idle}next tick in {duration(wait)} at {_clock_time(wait)}")
     console.print(footer)
     console.print()
 
@@ -385,8 +421,7 @@ def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> 
 
 def _attention_rows(rows: Table, before: list[attention.Item], after: list[attention.Item]) -> None:
     """Items the tick added to the attention list, then items it resolved."""
-    had = {(i.ticket_key, i.reason, i.repo) for i in before}
-    has = {(i.ticket_key, i.reason, i.repo) for i in after}
+    had, has = attention.keys(before), attention.keys(after)
     for item in after:
         if (item.ticket_key, item.reason, item.repo) not in had:
             detail = _detail(item.detail)

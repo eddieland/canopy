@@ -12,8 +12,10 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.chores import result, start, view
+from canopy.chores import start
 from canopy.core import agent_output, conversation, db, definitions, outbox
+from canopy.core import chore_result as result
+from canopy.core import chore_view as view
 from canopy.core.config import render_command
 from canopy.infra import logs, stopping
 
@@ -23,13 +25,14 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Chore
     from canopy.core.context import Context
+    from canopy.infra import procs
 
 
 class ChoreError(Exception):
     """`_chore` cannot start this run at all: it does not exist or is not waiting to start."""
 
 
-class _SetupError(Exception):
+class SetupError(Exception):
     """Something before the agent ran failed."""
 
 
@@ -69,7 +72,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             outcome = _work(ctx, run, out, log)
         except stopping.Stopped as e:
             outcome = Outcome("crashed", None, str(e))
-        except _SetupError as e:
+        except SetupError as e:
             outcome = Outcome("crashed", None, str(e))
             log.error("chore run not started", extra={**fields, "error": str(e)})  # noqa: TRY400
         except Exception as e:
@@ -90,22 +93,14 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     # Read the config this process loaded: a chore deleted since `chore run` started it does not run.
     chore = view.configured(ctx.config, ctx.workspace).get(name)
     if chore is None:
-        raise _SetupError(f"chore {name} is no longer configured for this workspace")
-    cwd = _cwd(ctx, name, chore)
-    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
-    # reads project config from the directories above it too.
-    here = cwd.resolve()
-    shadowing = [found for d in (here, *here.parents) for found in definitions.shadowing(d)]
-    if shadowing:
-        raise _SetupError(definitions.shadowing_message(shadowing))
-    prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+        raise SetupError(f"chore {name} is no longer configured for this workspace")
+    run_id = int(run["id"])
+    prompt = start.prompt_file(ctx, run_id).read_text(encoding="utf-8")
+    cwd, argv = prepare(ctx, name, chore, prompt)
     log.info(
         "running chore",
-        extra={"chore_run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
+        extra={"chore_run_id": run_id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
     )
-    run_id = int(run["id"])
     done = ctx.runner.run(
         argv,
         cwd=cwd,
@@ -117,9 +112,36 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.write(f"--- chore stdout ---\n{done.stdout}\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
+    output = agent_output.read(done.stdout)
+    if output.session_id is not None or output.usage is not None:
+        db.set_chore_run_report(ctx.conn, run_id, output.session_id, output.usage)
+        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
+    return outcome_of(done, output, chore)
+
+
+def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str]]:
+    """Return where chore `name` runs and the command that runs it with `prompt`.
+
+    Raises:
+        SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
+    """
+    cwd = _cwd(ctx, name, chore)
+    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
+    # reads project config from the directories above it too.
+    here = cwd.resolve()
+    shadowing = [found for d in (here, *here.parents) for found in definitions.shadowing(d)]
+    if shadowing:
+        raise SetupError(definitions.shadowing_message(shadowing))
+    template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
+    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+
+
+def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:
+    """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
     if done.timed_out:
         return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes")
-    parsed = result.parse(agent_output.read(done.stdout).text)
+    parsed = result.parse(output.text)
     if parsed is None:
         return Outcome("unknown", None, "the chore's last line was not a valid result; its findings are not recorded")
     return Outcome(parsed.status, parsed)
@@ -129,7 +151,7 @@ def _cwd(ctx: Context, name: str, chore: Chore) -> Path:
     """The chore's working directory: its `cwd`, or a directory of its own that only the operator can read."""
     if chore.cwd is not None:
         if not chore.cwd.is_dir():
-            raise _SetupError(f"chore {name}'s cwd {chore.cwd} is not a directory")
+            raise SetupError(f"chore {name}'s cwd {chore.cwd} is not a directory")
         return chore.cwd
     cwd = start.default_cwd(ctx, name)
     cwd.mkdir(mode=0o700, exist_ok=True)

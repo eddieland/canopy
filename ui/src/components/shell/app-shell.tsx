@@ -2,8 +2,9 @@ import { useQuery } from '@tanstack/react-query'
 import { Outlet } from '@tanstack/react-router'
 import { ViewTransition } from 'react'
 
-import { sessionQuery } from '@/api/queries'
+import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
+import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
@@ -12,13 +13,15 @@ import { LiveReadouts } from './live-readouts'
 import { Mark } from './mark'
 import { Nav } from './nav'
 import { ThemeToggle } from './theme-toggle'
+import { Ticker } from './ticker'
 
 /**
- * The frame every page renders in: header, side navigation, and the routed page. Signed out, the sign-in page instead,
- * whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * The frame every page renders in: header (with its ticker), side navigation, and the routed page. Signed out, the
+ * sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
- * is ready, and the <ViewTransition> around the outlet cross-fades between them.
+ * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
+ * after another (`stagger`).
  */
 export function AppShell() {
     // Follows the system theme and other tabs on every page, the sign-in page included.
@@ -38,9 +41,10 @@ export function AppShell() {
                 )}
             >
                 <div className="flex items-center gap-2.5">
-                    <Mark />
+                    <LiveMark stream={stream} />
                     <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                 </div>
+                <Ticker />
                 <div className="flex items-center gap-4">
                     <LiveReadouts stream={stream} />
                     <span aria-hidden className="h-5 w-px bg-border" />
@@ -55,11 +59,17 @@ export function AppShell() {
             </aside>
             <main className="min-w-0 p-6">
                 <ViewTransition>
-                    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+                    <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
                         <Outlet />
                     </div>
                 </ViewTransition>
             </main>
         </div>
     )
+}
+
+/** The header's logo, alive with the stream and the latest tick. */
+function LiveMark({ stream }: { stream: StreamStatus }) {
+    const tick = useQuery(tickQuery).data?.tick
+    return <Mark live={stream === 'open'} ticking={tick?.status === 'running'} beat={tick?.id} />
 }

@@ -264,15 +264,15 @@ def _same_url(a: str, b: str) -> bool:
 
 
 def converge_pool(
-    runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, want: int, *, dry_run: bool
+    runner: procs.Runner, pool: treehouse.Pool, repo: workspace.Repo, want: int, *, dry_run: bool
 ) -> Checked:
-    """Make or remove slots until `repo`'s pool has `want`.
+    """Make or remove slots until `repo`'s pool, `pool`, has `want`.
 
     Slots are made by leasing as `canopy-sync` until the pool is big enough, then returning every one of those leases;
     one a crashed sync left is returned first. Surplus slots are removed highest name first, and only available ones,
-    with treehouse's unforced `destroy`: a busy one stays until a later sync finds it idle.
+    with treehouse's unforced `destroy`: a busy one stays until a later sync finds it idle. A new slot is seeded from
+    the pool's include file, as a run's lease would seed it, before its `post_create` hooks run.
     """
-    pool = ws.pool(repo.name)
     try:
         slots = treehouse.status(runner, pool=pool)
         if not dry_run and _return_sync_leases(runner, slots, pool):

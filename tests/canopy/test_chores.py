@@ -11,8 +11,9 @@ from typing import Any
 
 import pytest
 
-from canopy.chores import result, view
 from canopy.cli.main import main
+from canopy.core import chore_result as result
+from canopy.core import chore_view as view
 from canopy.core import db
 from canopy.core.config import load
 from canopy.core.workspace import of_one
@@ -427,3 +428,131 @@ def test_status_lists_each_chore(
     assert main(["status"]) == 0
     out = capsys.readouterr().out
     assert "\nChores (0/1 running):\n  build-health  last ok 0s ago, due in 1h\n" in out
+
+
+def run_section(prompt: str) -> dict[str, Any]:
+    section: dict[str, Any] = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
+    return section
+
+
+def test_try_runs_a_chore_in_the_foreground_and_records_nothing(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = journal(canopy_env)
+    run_inline(conn, monkeypatch, OK)
+    chore_reports(monkeypatch, {"status": "ok", "summary": "all green", "findings": []})
+    # Not due and nothing else allowed: a try is the operator's, outside every guard.
+    assert main(["chore", "try", "build-health", "--context", "Look at build 91"]) == 0
+    out = capsys.readouterr()
+    assert "trying chore build-health in " in out.err
+    assert "nothing is recorded" in out.err
+    assert '"summary": "all green"' in out.out
+    assert out.out.rstrip().endswith("chore try build-health: ok")
+
+    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 1
+    assert [d["action"] for d in conn.execute("SELECT action FROM decisions")] == ["dispatch:chore"]
+    tried = json.loads(agent_log.read_text().splitlines()[-1])
+    assert tried["cwd"] == str(canopy_env.state_dir / "chores" / "build-health")
+    assert tried["env"]["CANOPY_RUN_ID"] == "chore-try"
+    run = run_section(tried["argv"][3])
+    assert (run["run_id"], run["context"]) == (None, "Look at build 91")
+    # It sees what a run starting now would: the latest run and its open findings.
+    assert run["previous_run"]["run_id"] == 1
+    assert [f["id"] for f in run["open_findings"]] == [FINDING["id"]]
+
+
+def test_try_works_with_chores_off_and_reports_a_bad_result(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
+    chore_reports(monkeypatch, {"status": "done"})
+    assert main(["chore", "try", "build-health"]) == 1
+    out = capsys.readouterr().out
+    assert "chore try build-health: unknown (the chore's last line was not a valid result" in out
+    assert "--- agent text ---" in out
+    assert journal(canopy_env).execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+
+
+def test_try_refuses_an_unknown_chore_and_inside_canopy_runs(
+    canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["chore", "try", "nope"]) == 1
+    assert "no chore named 'nope' is defined for this workspace" in capsys.readouterr().err
+    monkeypatch.setenv("CANOPY_RUN_ID", "chore-3")
+    assert main(["chore", "try", "build-health"]) == 1
+    assert "chore try refused (inside_run)" in capsys.readouterr().err
+
+
+def test_a_note_to_a_chore_reaches_its_next_runs(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    note = f"Leave out {FINDING['id']} until 2026-10-15: the fix is merging."
+    assert main(["reply", "chore:build-health", note]) == 0
+    assert "Recorded message 1 on chore:build-health." in capsys.readouterr().out
+    assert main(["reply", "chore:build-health", note]) == 0
+    assert "nothing new recorded" in capsys.readouterr().out
+    assert main(["reply", "chore:nope", "x"]) == 1
+    assert "no chore 'nope' is defined for this workspace" in capsys.readouterr().err
+
+    conn = journal(canopy_env)
+    # A note waits for the chore's next run: it does not wake a waiting loop, which wakes for tickets' messages.
+    assert db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) == 0
+    run_inline(conn, monkeypatch, OK)
+    run = run_section(json.loads(agent_log.read_text().splitlines()[-1])["argv"][3])
+    [carried] = run["operator_notes"]
+    assert (carried["id"], carried["note"]) == (1, note)
+    assert main(["chore", "try", "build-health"]) == 0
+    assert run_section(json.loads(agent_log.read_text().splitlines()[-1])["argv"][3])["operator_notes"] == [carried]
+
+    capsys.readouterr()
+    assert main(["show", "chore:build-health"]) == 0
+    shown = capsys.readouterr().out
+    assert "Your notes its next run reads (1):" in shown
+    assert note in shown
+
+
+def test_a_chore_run_records_what_it_cost(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """With OpenCode's JSON events, as the default `chore_cmd` asks for, a chore run records its session and cost."""
+    text = canopy_env.user_file.read_text()
+    canopy_env.write_user(text.replace("--agent canopy-chore {prompt}", "--agent canopy-chore --format json {prompt}"))
+    monkeypatch.setenv("FAKE_CHORE_SESSION", "ses_chore")
+    conn = journal(canopy_env)
+    run_id = run_inline(conn, monkeypatch, OK)
+    row = db.get_chore_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "ok"  # the result line is read from the text events
+    assert row["session_id"] == "ses_chore"
+    usage = db.usage_of(row)
+    assert usage is not None
+    assert usage.cost_usd == 0.25  # two model calls at 0.125
+    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+
+    capsys.readouterr()
+    assert main(["show", "chore:build-health"]) == 0
+    assert "session ses_chore  $0.25, " in capsys.readouterr().out
+    assert main(["chore", "try", "build-health"]) == 0
+    assert "--- agent exit 0, cost $0.25, " in capsys.readouterr().out
+    # A try records nothing, its cost included.
+    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+
+
+def test_the_default_chore_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
+    assert "--format json" in load(canopy_env.repo, canopy_env.user_file).runtime.chore_cmd

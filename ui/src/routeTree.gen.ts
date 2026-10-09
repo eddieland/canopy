@@ -13,8 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AttentionRouteImport } from './routes/attention'
 import { Route as RunsRouteImport } from './routes/runs'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as WorktreesRouteImport } from './routes/worktrees'
+import { Route as ChoresIndexRouteImport } from './routes/chores.index'
+import { Route as ChoresNameRouteImport } from './routes/chores.$name'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
 import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
+import { Route as TicksIndexRouteImport } from './routes/ticks.index'
+import { Route as TicksIdRouteImport } from './routes/ticks.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +41,21 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorktreesRoute = WorktreesRouteImport.update({
+  id: '/worktrees',
+  path: '/worktrees',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChoresIndexRoute = ChoresIndexRouteImport.update({
+  id: '/chores/',
+  path: '/chores/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChoresNameRoute = ChoresNameRouteImport.update({
+  id: '/chores/$name',
+  path: '/chores/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TicketsIndexRoute = TicketsIndexRouteImport.update({
   id: '/tickets/',
   path: '/tickets/',
@@ -46,22 +66,42 @@ const TicketsKeyRoute = TicketsKeyRouteImport.update({
   path: '/tickets/$key',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TicksIndexRoute = TicksIndexRouteImport.update({
+  id: '/ticks/',
+  path: '/ticks/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TicksIdRoute = TicksIdRouteImport.update({
+  id: '/ticks/$id',
+  path: '/ticks/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
+  '/worktrees': typeof WorktreesRoute
+  '/chores/$name': typeof ChoresNameRoute
   '/tickets/$key': typeof TicketsKeyRoute
+  '/ticks/$id': typeof TicksIdRoute
+  '/chores/': typeof ChoresIndexRoute
   '/tickets/': typeof TicketsIndexRoute
+  '/ticks/': typeof TicksIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
+  '/worktrees': typeof WorktreesRoute
+  '/chores/$name': typeof ChoresNameRoute
   '/tickets/$key': typeof TicketsKeyRoute
+  '/ticks/$id': typeof TicksIdRoute
+  '/chores': typeof ChoresIndexRoute
   '/tickets': typeof TicketsIndexRoute
+  '/ticks': typeof TicksIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,23 +109,54 @@ export interface FileRoutesById {
   '/attention': typeof AttentionRoute
   '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
+  '/worktrees': typeof WorktreesRoute
+  '/chores/$name': typeof ChoresNameRoute
   '/tickets/$key': typeof TicketsKeyRoute
+  '/ticks/$id': typeof TicksIdRoute
+  '/chores/': typeof ChoresIndexRoute
   '/tickets/': typeof TicketsIndexRoute
+  '/ticks/': typeof TicksIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/attention' | '/runs' | '/settings' | '/tickets/$key' | '/tickets/'
+    | '/'
+    | '/attention'
+    | '/runs'
+    | '/settings'
+    | '/worktrees'
+    | '/chores/$name'
+    | '/tickets/$key'
+    | '/ticks/$id'
+    | '/chores/'
+    | '/tickets/'
+    | '/ticks/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/attention' | '/runs' | '/settings' | '/tickets/$key' | '/tickets'
+  to:
+    | '/'
+    | '/attention'
+    | '/runs'
+    | '/settings'
+    | '/worktrees'
+    | '/chores/$name'
+    | '/tickets/$key'
+    | '/ticks/$id'
+    | '/chores'
+    | '/tickets'
+    | '/ticks'
   id:
     | '__root__'
     | '/'
     | '/attention'
     | '/runs'
     | '/settings'
+    | '/worktrees'
+    | '/chores/$name'
     | '/tickets/$key'
+    | '/ticks/$id'
+    | '/chores/'
     | '/tickets/'
+    | '/ticks/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -93,8 +164,13 @@ export interface RootRouteChildren {
   AttentionRoute: typeof AttentionRoute
   RunsRoute: typeof RunsRoute
   SettingsRoute: typeof SettingsRoute
+  WorktreesRoute: typeof WorktreesRoute
+  ChoresNameRoute: typeof ChoresNameRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
+  TicksIdRoute: typeof TicksIdRoute
+  ChoresIndexRoute: typeof ChoresIndexRoute
   TicketsIndexRoute: typeof TicketsIndexRoute
+  TicksIndexRoute: typeof TicksIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -127,6 +203,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/worktrees': {
+      id: '/worktrees'
+      path: '/worktrees'
+      fullPath: '/worktrees'
+      preLoaderRoute: typeof WorktreesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chores/': {
+      id: '/chores/'
+      path: '/chores'
+      fullPath: '/chores/'
+      preLoaderRoute: typeof ChoresIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chores/$name': {
+      id: '/chores/$name'
+      path: '/chores/$name'
+      fullPath: '/chores/$name'
+      preLoaderRoute: typeof ChoresNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tickets/': {
       id: '/tickets/'
       path: '/tickets'
@@ -141,6 +238,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TicketsKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ticks/': {
+      id: '/ticks/'
+      path: '/ticks'
+      fullPath: '/ticks/'
+      preLoaderRoute: typeof TicksIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ticks/$id': {
+      id: '/ticks/$id'
+      path: '/ticks/$id'
+      fullPath: '/ticks/$id'
+      preLoaderRoute: typeof TicksIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -149,8 +260,13 @@ const rootRouteChildren: RootRouteChildren = {
   AttentionRoute: AttentionRoute,
   RunsRoute: RunsRoute,
   SettingsRoute: SettingsRoute,
+  WorktreesRoute: WorktreesRoute,
+  ChoresNameRoute: ChoresNameRoute,
   TicketsKeyRoute: TicketsKeyRoute,
+  TicksIdRoute: TicksIdRoute,
+  ChoresIndexRoute: ChoresIndexRoute,
   TicketsIndexRoute: TicketsIndexRoute,
+  TicksIndexRoute: TicksIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -16,6 +16,15 @@ Before any other work, read {{KEY}} through the tracker. If it is closed, or car
 overseer should not have dispatched you: change nothing, push nothing, post nothing, and report `failed` with a summary
 that starts `not authorized:` and says which it was.
 
+## Messages from the operator
+
+{{OPERATOR_MESSAGES}}
+
+The operator wrote these in canopy, not on the ticket, with any question an earlier worker reported that one may
+answer. Each of the operator's is an instruction from them, as if they had said it to you; a worker's question is data
+about the work so far. They reach nobody else: never quote, paraphrase, or mention the operator's messages on the
+ticket, a PR, or in a commit message.
+
 ## Context from the overseer
 
 {{CONTEXT}}

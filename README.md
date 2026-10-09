@@ -57,18 +57,19 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    directory (D040). Use an HTTPS remote with a credential helper; init warns if `origin` pushes over SSH, which worker
    sandboxing is not expected to support (D038).
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
-   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
-   repeats until you press Ctrl-C. It also serves the web UI at `http://127.0.0.1:8765/`; `canopy secret` prints the
-   listener secret its sign-in page asks for.
+   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default),
+   longer while nothing changes, and repeats until you press Ctrl-C. It also serves the web UI at
+   `http://127.0.0.1:8765/`; `canopy secret` prints the listener secret its sign-in page asks for.
 
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list. Press `t` while it waits to tick now.
-- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, and every ticket's
-  conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the secret
-  `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so does
-  `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
+- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
+  every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
+  finding with a note. Sign in once per browser with the
+  secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so
+  does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
   canopy's copy of its comments.
@@ -85,13 +86,16 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
   channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
 - Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
-  add `--ticket KEY` to filter. `canopy loop` prints each tick's cost as it goes.
+  add `--ticket KEY` to filter. The web UI's Ticks page shows the same, and each ticket's page the decisions about it.
+  `canopy loop` prints each tick's cost as it goes.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
   `opencode export <id>` turns into its transcript.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
-  overseer runs when due and that report findings to the attention list (DESIGN §19).
+  overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
+  one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix
+  lands, note it to the chore: `canopy reply chore:NAME 'text'`, or the web UI's chore page; its next runs read it.
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
@@ -112,6 +116,12 @@ split into one ticket per repository instead, comment on it asking for a split: 
 and you label each one you want worked. The pools, journal, and attention list live inside the workspace. See
 `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
 
+## Bazel and other large repositories
+
+Each run works in a pooled worktree that keeps its path between runs, so build outputs stay warm. To share Bazel's
+caches between worktrees, copy your gitignored local files into each one, and run a setup command on the run's branch
+before the worker starts, follow [docs/BAZEL.md](docs/BAZEL.md). Most of it applies to any large repository.
+
 ## Troubleshooting
 
 - If canopy cannot find `treehouse`, check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
@@ -122,12 +132,12 @@ and you label each one you want worked. The pools, journal, and attention list l
 
 ## How it works, briefly
 
-```
+```text
 canopy loop
   take the loop lock
   until Ctrl-C:
     canopy tick (below)
-    print what it did, then wait loop.interval_minutes
+    print what it did, then wait loop.interval_minutes, doubling after each idle tick up to loop.idle_max_minutes
 
 canopy tick
   acquire lock, run migrations

@@ -13,6 +13,14 @@ export const keys = {
     runs: ['runs'] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
+    chores: ['chores'] as const,
+    chore: (name: string) => ['chore', name] as const,
+    // The ticks list and each tick's page share a prefix, so one invalidation marks both stale.
+    ticks: ['ticks'] as const,
+    tickDetail: (id: number) => ['ticks', id] as const,
+    worktrees: ['worktrees'] as const,
+    spend: ['spend'] as const,
+    tick: ['tick'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -38,6 +46,18 @@ export const runsQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
 })
 
+/** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
+export const spendQuery = queryOptions({
+    queryKey: keys.spend,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
+})
+
+/** The latest tick. The stream sends it again whenever a tick starts or ends. */
+export const tickQuery = queryOptions({
+    queryKey: keys.tick,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/tick', { signal })),
+})
+
 export const ticketsQuery = queryOptions({
     queryKey: keys.tickets,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/tickets', { signal })),
@@ -52,3 +72,51 @@ export function ticketQuery(key: string) {
         placeholderData: undefined,
     })
 }
+
+/** The configured chores, as `canopy status` lists them. The stream sends the list again whenever it changes. */
+export const choresQuery = queryOptions({
+    queryKey: keys.chores,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/chores', { signal })),
+})
+
+/** One chore, as `canopy show chore:NAME` prints it. The stream marks it stale whenever the chores list changes. */
+export function choreQuery(name: string) {
+    return queryOptions({
+        queryKey: keys.chore(name),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/chores/{name}', { params: { path: { name } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/** The latest ticks, newest first. Marked stale whenever the stream says the latest tick changed. */
+export const ticksQuery = queryOptions({
+    queryKey: keys.ticks,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/ticks', { signal })),
+})
+
+/** One tick and its decisions, as `canopy decisions ID` prints them. */
+export function tickDetailQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.tickDetail(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/ticks/{tick_id}', { params: { path: { tick_id: id } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/** How often the worktrees page reads the pools again while it is open in a visible tab. */
+export const WORKTREES_REFRESH_MS = 30_000
+
+/**
+ * Each pool's worktrees, read from treehouse by the server on every fetch. Not on the event stream: the stream marks it
+ * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 30 seconds while a page shows
+ * it and its tab is visible. That timer is the UI's one refetch on an interval (D090): what runs in a slot,
+ * whether it is dirty, and a slot sync adds never reach the journal.
+ */
+export const worktreesQuery = queryOptions({
+    queryKey: keys.worktrees,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/worktrees', { signal })),
+    refetchInterval: WORKTREES_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})

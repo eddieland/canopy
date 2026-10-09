@@ -1,6 +1,8 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource-variable/ibm-plex-sans';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+@import '@fontsource/ibm-plex-mono/600.css';
 @import './styles/tokens.css';
 
 /* Defined so shadcn output compiles; `npm run lint` refuses it in our code. Themes change tokens, not components. */
@@ -16,22 +18,21 @@
     html {
         /* No layout shift when a page grows a scrollbar. */
         scrollbar-gutter: stable;
-        /* On the root, so it paints the whole canvas, the reserved gutter included. The instrument grid: hairlines
-       every 24px, fixed so content scrolls over it. */
+        /* On the root, so it paints the whole canvas, the reserved gutter included. */
         background-color: var(--background);
-        background-image:
-            linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-            linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
-        background-size: 24px 24px;
-        background-attachment: fixed;
         -webkit-font-smoothing: antialiased;
+        /*
+         * Every size is in rem, so the whole interface grows with the window on a large screen: the browser's size up
+         * to a 1600px window, a quarter larger from 2560px. 100% and 100rem are the browser's size here, the
+         * operator's own setting included.
+         */
+        font-size: clamp(100%, calc(100% + (100vw - 100rem) / 240), 125%);
     }
 
     body {
         min-height: 100dvh;
         color: var(--foreground);
         font-family: var(--font-sans);
-        font-feature-settings: 'cv11', 'ss01';
     }
 
     :focus-visible {
@@ -71,6 +72,387 @@
 ::view-transition-group(*) {
     animation-duration: 160ms;
     animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/*
+ * Motion (ui/DESIGN.md, "Motion"). Short, eased out, and only on something arriving or changing. Every rule below is
+ * inside no-preference, so under prefers-reduced-motion: reduce nothing moves and everything rests where it ends.
+ * Each animation's resting frame is its last (or, for a loop, its first): a screenshot sees the page at rest. A
+ * one-shot animation fills backwards, never forwards, so nothing is left applied once the page is at rest.
+ */
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+}
+
+@keyframes pop {
+    from {
+        opacity: 0;
+        transform: translateY(4px) scale(0.96);
+    }
+}
+
+@keyframes ripple {
+    from {
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(2.6);
+    }
+}
+
+@keyframes breathe {
+    50% {
+        opacity: 0.45;
+        transform: scale(0.7);
+    }
+}
+
+@keyframes sweep {
+    to {
+        transform: rotate(1turn);
+    }
+}
+
+@keyframes spin-in {
+    from {
+        opacity: 0;
+        transform: rotate(-90deg) scale(0.6);
+    }
+}
+
+@keyframes sway {
+    50% {
+        transform: rotate(2.5deg);
+    }
+}
+
+@keyframes drift {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) rotate(0deg);
+    }
+    15% {
+        opacity: 1;
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(7px, 15px) rotate(140deg);
+    }
+}
+
+@keyframes crawl {
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes shimmer {
+    from {
+        background-position: 100% 0;
+    }
+    to {
+        background-position: -100% 0;
+    }
+}
+
+/* Children arrive one after another: a page's blocks, a list's rows. `[--enter:pop]` on a child pops it instead. */
+@utility stagger {
+    @media (prefers-reduced-motion: no-preference) {
+        & > * {
+            animation: var(--enter, rise) 320ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+        & > :nth-child(2) {
+            animation-delay: 40ms;
+        }
+        & > :nth-child(3) {
+            animation-delay: 80ms;
+        }
+        & > :nth-child(4) {
+            animation-delay: 120ms;
+        }
+        & > :nth-child(5) {
+            animation-delay: 160ms;
+        }
+        & > :nth-child(6) {
+            animation-delay: 200ms;
+        }
+        & > :nth-child(n + 7) {
+            animation-delay: 240ms;
+        }
+    }
+}
+
+/* One digit of a rolling readout (src/components/rolling-number.tsx): a strip of 0 to 9 behind a one-line window. */
+@utility roll-window {
+    display: inline-block;
+    width: calc(1ch - 0.01em);
+    height: 1lh;
+    overflow: hidden;
+    vertical-align: top;
+}
+
+@utility roll-strip {
+    display: block;
+    transform: translateY(calc(var(--digit) * -1lh));
+    &::before {
+        content: '0\A 1\A 2\A 3\A 4\A 5\A 6\A 7\A 8\A 9';
+        white-space: pre;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        transition: transform 700ms cubic-bezier(0.2, 0, 0, 1) calc(var(--place) * 60ms);
+        /* The first value rolls up from zero. */
+        @starting-style {
+            transform: translateY(0);
+        }
+    }
+}
+
+/* A glyph of a rolling readout that is not a digit, drawn by CSS so the text is only in the readable copy. */
+@utility roll-glyph {
+    display: inline-block;
+    &::before {
+        content: attr(data-glyph);
+    }
+}
+
+/* At rest a ripple is invisible, so the animation needs no fill after it ends. */
+@utility animate-ripple {
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ripple 900ms cubic-bezier(0.2, 0, 0, 1) backwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        display: none;
+    }
+}
+
+@utility animate-breathe {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: breathe 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-sweep {
+    transform-box: view-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: sweep 1.4s linear infinite;
+    }
+}
+
+@utility animate-spin-in {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: spin-in 420ms cubic-bezier(0.2, 0, 0, 1) backwards;
+    }
+}
+
+@utility animate-sway {
+    transform-box: view-box;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: sway 5s ease-in-out infinite;
+    }
+}
+
+@utility animate-drift {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: drift 4.5s ease-in 1s infinite backwards;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        display: none;
+    }
+}
+
+/*
+ * The header ticker (src/components/shell/ticker.tsx). The window clips the line and fades it out at both ends; the
+ * mask's gradient is alpha only, so its color is irrelevant. The line is padded by the window's width before its text
+ * and the gap's distance after it (`--ticker-gap` seconds at `--ticker-rate` a second), and crawls its own width, so
+ * one pass is the headline entering, leaving, and the empty gap. The component sets the duration from the line's
+ * width. It holds still under the pointer. Under reduced motion there is no padding: the headline stands in place.
+ */
+@utility ticker-window {
+    overflow: hidden;
+    mask-image: linear-gradient(to right, transparent, white 2rem, white calc(100% - 2rem), transparent);
+}
+
+@utility animate-ticker {
+    @media (prefers-reduced-motion: no-preference) {
+        padding-left: 100%;
+        padding-right: calc(var(--ticker-gap, 0) * var(--ticker-rate, 4.5rem));
+        animation: crawl 20s linear infinite;
+        &:hover {
+            animation-play-state: paused;
+        }
+    }
+}
+
+/*
+ * RuneScape chat flair on a ticker headline (src/lib/headlines.ts), in the flair tokens. A flash swaps two colors
+ * about once a second, slow enough to stay well clear of flashing that harms; a glow cycles smoothly. The effects move
+ * each letter (`--i` is its place), a fraction of an em. Under reduced motion a color rests on its first and nothing
+ * moves.
+ */
+@keyframes flash1 {
+    50% {
+        color: var(--flair-yellow);
+    }
+}
+
+@keyframes flash2 {
+    50% {
+        color: var(--flair-blue);
+    }
+}
+
+@keyframes flash3 {
+    50% {
+        opacity: 0.55;
+    }
+}
+
+@keyframes glow1 {
+    25% {
+        color: var(--flair-yellow);
+    }
+    50% {
+        color: var(--flair-green);
+    }
+    75% {
+        color: var(--flair-cyan);
+    }
+}
+
+@keyframes glow2 {
+    33% {
+        color: var(--flair-purple);
+    }
+    66% {
+        color: var(--flair-blue);
+    }
+}
+
+@keyframes glow3 {
+    33% {
+        color: var(--flair-green);
+    }
+    66% {
+        color: var(--flair-cyan);
+    }
+}
+
+@keyframes wave {
+    25% {
+        transform: translateY(-0.2em);
+    }
+    75% {
+        transform: translateY(0.2em);
+    }
+}
+
+@keyframes wave2 {
+    25% {
+        transform: translate(-0.1em, -0.2em);
+    }
+    75% {
+        transform: translate(0.1em, 0.2em);
+    }
+}
+
+@keyframes shake {
+    25% {
+        transform: translate(0.06em, -0.12em);
+    }
+    50% {
+        transform: translate(-0.06em, 0.08em);
+    }
+    75% {
+        transform: translate(0.04em, 0.12em);
+    }
+}
+
+@utility flair-flash1 {
+    color: var(--flair-red);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: flash1 1.2s steps(1) infinite;
+    }
+}
+
+@utility flair-flash2 {
+    color: var(--flair-cyan);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: flash2 1.2s steps(1) infinite;
+    }
+}
+
+@utility flair-flash3 {
+    color: var(--flair-green);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: flash3 1.2s steps(1) infinite;
+    }
+}
+
+@utility flair-glow1 {
+    color: var(--flair-red);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: glow1 4s linear infinite;
+    }
+}
+
+@utility flair-glow2 {
+    color: var(--flair-red);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: glow2 3s linear infinite;
+    }
+}
+
+@utility flair-glow3 {
+    color: var(--foreground);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: glow3 3s linear infinite;
+    }
+}
+
+/* One letter of a headline with an effect. `pre` keeps a space its width in an inline block. */
+@utility flair-letter {
+    display: inline-block;
+    white-space: pre;
+}
+
+@utility flair-wave {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: wave 1.2s linear infinite calc(var(--i, 0) * -0.08s);
+    }
+}
+
+@utility flair-wave2 {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: wave2 1.2s linear infinite calc(var(--i, 0) * -0.08s);
+    }
+}
+
+@utility flair-shake {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: shake 0.3s linear infinite calc(var(--i, 0) * -0.07s);
+    }
+}
+
+/* A skeleton's light passing over it, left to right. */
+@utility animate-shimmer {
+    background-size: 200% 100%;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: shimmer 1.6s ease-in-out infinite;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
