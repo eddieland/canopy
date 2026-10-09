@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from canopy.core import definitions
+from canopy.core import definitions, hostgit
 from canopy.core.config import REPO_FILE_NAME
 from canopy.infra import procs
 
@@ -72,7 +72,7 @@ def is_ssh_url(url: str) -> bool:
 def ssh_push_urls(runner: procs.Runner, repo_root: Path) -> list[str]:
     """Return `origin`'s push URLs that go over SSH, after `insteadOf` rewrites. Empty if there is no `origin`."""
     try:
-        result = runner.run(["git", "remote", "get-url", "--push", "--all", "origin"], cwd=repo_root, timeout=30)
+        result = runner.run(hostgit.argv("remote", "get-url", "--push", "--all", "origin"), cwd=repo_root, timeout=30)
     except procs.ProcError:
         return []
     if not result.ok:

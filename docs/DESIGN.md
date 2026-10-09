@@ -178,6 +178,8 @@ canopy (harness, Python)
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts
     treehouse.py   status, get --lease, return, destroy; a Pool per repository, with its declared size (§18)
+    hostgit.py     git as the harness runs it: hooks, the filesystem monitor, and submodule fetches off; a slot's
+                   `.git` link, read and put back (§8)
     workspace.py   the workspace: its map, repositories, their pools, the private state directory (§18)
 
   infra/           plumbing that knows nothing about tickets or agents
@@ -600,7 +602,8 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    environment so the worker cannot act as the dispatching tick's overseer. Read the ticket's start record again
    (§22): a private run whose ticket was stopped since, or a public run whose ticket was started privately since, ends
    `stopped` before any git step, and its slots are returned.
-2. In each slot: `git fetch --prune origin`; if `origin/<branch>` exists, `git checkout -B <branch> origin/<branch>`,
+2. Before any git step, read each slot's `.git` file, a worktree's link to the pool's git directory. In each slot:
+   `git fetch --prune origin`; if `origin/<branch>` exists, `git checkout -B <branch> origin/<branch>`,
    else `git checkout --no-track -B <branch> origin/<base>`. `-B` because a branch an earlier run left in the pool's
    repository would make `-b` fail; `--no-track` so a bare `git push` never targets the base. Note the branch's
    commit. A base missing from origin (such as a stacked-on branch deleted when its PR merged) fails the run as
@@ -621,18 +624,32 @@ workspace of one, the ticket has one unit and `--repo` may be left out.
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch, and runs no setup, since
    the splitter has no shell; step 3 runs `split_cmd` in the desk; step 4 parses and validates the split's result;
    step 5 is skipped, since a split pushes nothing.
-5. In each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local branch). If
-   not and the branch has commits since step 2, push once, without force. If any slot is still unpushed, record
-   `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a human looks.
-6. Always: remove a joint run's desk, and `treehouse return --force --if-lease-id <id> --if-lease-holder <holder>
-   <slot>` for every slot, in its repository's pool. A trap runs this on any exit path: normal exit, exception, and
-   SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). SIGKILL cannot be trapped; reconcile handles it.
+5. If any slot's `.git` file no longer holds what step 2 read, record `status='crashed'`, with a note naming each such
+   slot, and run no git in any slot of the run: the file may now point at a git directory the worker made (D108).
+   Otherwise, in each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local
+   branch). If not and the branch has commits since step 2, push once, without force. If any slot is still unpushed,
+   record `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a human
+   looks.
+6. Always: remove a joint run's desk, put back any slot's `.git` file the run changed (a slot whose file cannot be put
+   back is not returned, and the next reconcile returns it), and
+   `treehouse return --force --if-lease-id <id> --if-lease-holder <holder> <slot>` for every slot, in its repository's
+   pool. A trap runs this on any exit path: normal exit, exception, and SIGTERM, SIGHUP, or SIGINT (the run is then
+   `crashed`). SIGKILL cannot be trapped; reconcile handles it.
 7. Update the `runs` row: ended_at, status, result_json, and in the same transaction record the run's messages about
    its ticket (§22): a `report`, its summary (else the harness's note, else the status) with each PR on a line, and
    for a `blocked` run its `question`. A git failure before or after the worker is `crashed`.
    `result_json` holds the validated result, text fields cut at 2000 characters, plus a `harness` note saying why the
    status differs from what the worker reported. `prs` is kept to the run's repositories, or filled from `pr` for a
    run in one; each plain `https://` URL is copied to its unit's `pr_url`, for display and the next run's prompt.
+
+Every git the harness runs, here, in a review (§21), and in `canopy init` and `canopy workspace sync`, goes through
+`core/hostgit.py`, which adds `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c fetch.recurseSubmodules=false
+-c protocol.ext.allow=never` (D107). A slot shares its git directory with the pool and the primary clone, and a worker
+can write there, so without them a hook or monitor it planted would run on the host, outside the worker, in step 2 or
+5 or in a later run or review. A command named in that directory's config (a filter driver,
+`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (HOST_ISOLATION
+§4.2). The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none,
+so a repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
 
 Worker result contract, one JSON line, last line of the worker's text (§13):
 

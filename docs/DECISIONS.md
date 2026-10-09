@@ -553,3 +553,17 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: the harness knows no build tool, and a server stopped at return is cold for a run that reuses the slot at once.
 - Rejected: `bazel shutdown` when a slot is returned; a release command in config, for what one Bazel flag does.
 - Revisit: if idle servers still exhaust memory with a short idle timeout.
+
+## D107. Every git the harness runs has hooks, the filesystem monitor, submodule fetches, and `ext::` off
+
+- `-c` flags from `core/hostgit.py`, which outrank any config; a test fails on a `"git"` literal anywhere else.
+- Why: slots share a git directory a worker can write, and `fetch` alone runs `reference-transaction` hooks.
+- Rejected: flags only on the calls after the worker (the next run's `fetch` is the same exposure).
+- Revisit: if a repository needs a hook on the harness's fallback push (Git LFS); the worker's own push runs hooks.
+
+## D108. A run whose slot's `.git` file changed is `crashed`, runs no more git, and the file is put back
+
+- `_run` reads it before any git step; after the worker, a change skips the push check in every slot of the run.
+- Why: a repointed link moves host git to a directory the worker owns, past D107's flags; treehouse runs git there.
+- Rejected: leaving the slot leased for a human (reconcile returns it, running treehouse's git anyway).
+- Revisit: when a sandbox denies writing the link (HOST_ISOLATION §4.2); this stays as the check for a policy gap.
