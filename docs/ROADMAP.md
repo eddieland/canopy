@@ -647,7 +647,7 @@ the ticket; a listed reviewer's comment resumes as before.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_trusted_reviewers.py`), docs, and D089 are in. The
 operator approved the TRUST_MODEL and prompt changes in the PR (2026-10-08). D093's follow-up is in, with its tests in
-the same file; its TRUST_MODEL and prompt changes wait on the operator's approval note in its PR. Waiting on the
+the same file, and the operator approved its TRUST_MODEL and prompt changes in its PR (2026-10-08). Waiting on the
 operator: the live run above.
 
 ## M23. Chores in the web UI
