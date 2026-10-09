@@ -70,8 +70,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
     chore_reconcile.run(ctx, log)
-    # Before anything reads a message: the harness items and the state block see at least every message up to here.
-    db.set_tick_messages(ctx.conn, tick_id)
+    # Before anything reads a message or a run: the harness items and the state block see at least every message, and
+    # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
+    db.set_tick_read(ctx.conn, tick_id)
     _record_harness_items(ctx, tick_id)
 
     now = datetime.now(UTC)

@@ -57,9 +57,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    directory (D040). Use an HTTPS remote with a credential helper; init warns if `origin` pushes over SSH, which worker
    sandboxing is not expected to support (D038).
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
-   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default), and
-   repeats until you press Ctrl-C. It also serves the web UI at `http://127.0.0.1:8765/`; `canopy secret` prints the
-   listener secret its sign-in page asks for.
+   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default),
+   longer while nothing changes, and repeats until you press Ctrl-C. It also serves the web UI at
+   `http://127.0.0.1:8765/`; `canopy secret` prints the listener secret its sign-in page asks for.
 
 ## Daily surface
 
@@ -128,7 +128,7 @@ canopy loop
   take the loop lock
   until Ctrl-C:
     canopy tick (below)
-    print what it did, then wait loop.interval_minutes
+    print what it did, then wait loop.interval_minutes, doubling after each idle tick up to loop.idle_max_minutes
 
 canopy tick
   acquire lock, run migrations
