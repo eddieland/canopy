@@ -376,7 +376,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - Journal text, tracker comments and agent output included, is untrusted: it is rendered as text, never as HTML, and
   no script is built from it.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
-  and reply to tickets, and end a stopped ticket's run, nothing else.
+  and reply to tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME` does,
+  nothing else. It cannot run a chore.
 - The relay (DESIGN §20) is a non-browser client: it signs in with the secret, from an operator-only file on the
   operator's other machine checked as the loop checks its own, and reads one route, a mailbox sink's messages. It
   writes nothing; holding the secret, it could (residual below).

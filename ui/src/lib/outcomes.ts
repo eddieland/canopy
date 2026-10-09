@@ -21,6 +21,12 @@ export function stoppedText(key: string, stopped: Stopped, now: boolean): string
         : `${head} Run ${stopped.running_run} had already ended.`
 }
 
+/** What a note to a chore did, as `canopy reply chore:NAME` says it: its next runs read it, not the next tick. */
+export function notedText(name: string, replied: Replied): string {
+    if (replied.new) return `Recorded message ${replied.message_id} on chore:${name}. Its next run reads it.`
+    return `Message ${replied.message_id} on chore:${name} already says this; nothing new recorded.`
+}
+
 export function repliedText(key: string, replied: Replied): string {
     const answered = replied.answers !== null ? `, answering message ${replied.answers}` : ''
     if (replied.new) return `Recorded message ${replied.message_id} on ${key}${answered}. The next tick reads it.`

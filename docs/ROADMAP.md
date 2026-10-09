@@ -678,7 +678,12 @@ sends the operator back to the terminal.
 Accept: the tests above pass. Live: with M9's build-health chore running, the operator answers one of its findings
 from the browser, and the chore's next run's prompt carries the note.
 
-Status: not started.
+Status: in progress. The design (DESIGN §19, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
+`tests/canopy/test_web_chores.py` over the mock journal, and Playwright answering a chore's finding from the
+attention list. The chores' journal view moved down to `core` (`chore_view`, `chore_window`, `chore_result`) so the
+server, a feature, can read it as the CLI does. Chores are on the event stream (`chores.updated`), and a note no run
+has started since says it waits for the next run. TRUST_MODEL T8's list of web writes gains the note; it waits on the
+operator's approval note in the PR. Waiting on the operator: the live run Accept describes.
 
 ## M24. Ticks in the web UI
 
@@ -696,17 +701,45 @@ shows it.
 - Reads only. A rationale is the overseer's text: untrusted, rendered as text, cut as `canopy decisions` cuts it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
-- Open: whether a tick's page shows the overseer's output (`ticks/<id>.log`), agent output read from a file rather
-  than the journal.
+- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it (D104).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
 
+Status: in progress. The design (DESIGN §6, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
+`tests/canopy/test_web_ticks.py` over the mock journal, and Playwright from the header's tick to its decisions and from
+a ticket's decisions to their tick. The open question is settled by D104. The latest tick now carries how many
+decisions it recorded, so the stream sends it as a running tick records them and the open pages follow. A unit's
+decisions name its repository after the ticket, which `canopy decisions` leaves out. Waiting on the operator: the live
+run Accept describes.
+
+## M25. Flaky CI triage
+
+REQUIREMENTS R14, DESIGN §23, D102, D103. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
+reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
+
+- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
+- Config: `policy.max_triage_ci_attempts` (default 0), `runtime.triage_cmd`, `runtime.triage_timeout_minutes`,
+  `runtime.triage_skill`.
+- `canopy dispatch --kind triage-ci`: `triage_off`, one unit, no slot. `_run` runs it in the unit's primary clone after
+  the shadowing check, validates the triage result, and records its report.
+- `agents/canopy-ci-triage.md`. `canopy-worker` denies `gh run rerun`, `gh run cancel`, `gh run delete`, and
+  `gh workflow`; `test_definitions.py` checks both.
+- `prompts/ci-triage.md` and its private variant; the overseer prompt's triage rows and the state block's fields.
+- §7, §8, §12, and §13 say what §23 changes in them, and §23 loses its "designed, not built" line.
+- Tests with the fakes: `triage_off` under the default config; a dry-run tick that triages a new failure; a triage
+  run's cwd is the primary clone and it leases nothing; a `flaky` result without reruns recorded `failed`; a `real`
+  verdict followed by `fix-ci`; the limit refusing the next triage; `fix-ci` attempts not counting triages.
+
+Accept: the tests above pass. Live: on a PR whose check fails for a reason the change did not cause, the loop reruns it
+once and the PR goes green with no `fix-ci` run; on a PR with a real failure, the triage reports `real` and the next
+tick's `fix-ci` fixes it; a repository skill that names a flaky test is followed.
+
 Status: not started.
 
-## M25. Notifications on another machine
+## M26. Notifications on another machine
 
-REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D102. Needs M10, and M20 for HTTP. Asked for by the operator
+REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D105. Needs M10, and M20 for HTTP. Asked for by the operator
 (2026-10-09): canopy runs on a development machine, and the operator wants its desktop notifications on the Mac they
 sit at, over SSH or HTTP.
 
@@ -725,7 +758,7 @@ Accept: the tests above pass. Live: with `canopy loop` on the development machin
 over SSH and then over HTTP through an SSH forward, a real attention item and a blocked worker's question each show as
 one macOS notification; the Mac asleep for an hour shows what was kept while it slept when it wakes.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D102 are in. The TRUST_MODEL
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D105 are in. The TRUST_MODEL
 T2, T6, and T8 changes need human approval in their PR. Waiting on the operator: the live run on their Mac. Taken on
 request while earlier milestones wait on their live runs.
 
