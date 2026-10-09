@@ -724,24 +724,12 @@ meets, each spending an attempt (D030) and raising `crashed` (§14), whose note 
 
 ### Bazel
 
-Bazel keys a workspace's output base on the workspace's path. Slots keep their paths across leases, so each slot's
-output base stays warm for whichever run leases it next. Slots share what the operator's `.bazelrc` shares: every
-Bazel command reads `~/.bazelrc`, and a repository's `.bazelrc` that imports a gitignored `user.bazelrc` gets the
-operator's in every slot through the personal manifest above.
+The operator's guide, with a `.bazelrc` recipe, examples of each setup step, sizing, and checks, is
+[BAZEL.md](BAZEL.md). What canopy relies on:
 
-```text
-# ~/.bazelrc. Bazel 7 or later, where `common` skips options a command does not take. Paths are absolute.
-# Shared by every slot: action outputs, and downloaded external repositories.
-common --disk_cache=/fast/bazel/disk-cache
-common --repository_cache=/fast/bazel/repository-cache
-# Every slot's output base, under one root on the fast disk.
-startup --output_user_root=/fast/bazel/output
-# A slot's server exits after 15 idle minutes, not Bazel's default of 3 hours.
-startup --max_idle_secs=900
-```
-
-- The disk cache grows without bound: prune it, or cap it with `--experimental_disk_cache_gc_max_size` on Bazel 7.4
-  or later. A remote cache, where the repository has one, does the disk cache's job for every machine.
+- Bazel keys a workspace's output base on the workspace's path. Slots keep their paths across leases, so each slot's
+  output base stays warm for whichever run leases it next. Slots share work only through what the operator's
+  `.bazelrc` shares: a disk cache and a repository cache, or a remote cache.
 - canopy does not stop a slot's Bazel server when it returns the slot (D103). `--max_idle_secs` ends it once no run
   has used the slot for that long, so a run that reuses the slot soon after finds it warm.
 - `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` are links from the slot into its output base, outside the

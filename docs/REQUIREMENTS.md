@@ -138,12 +138,12 @@ Built in M16; its live check is the operator's. Setting up a slot is three steps
 - `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reused, on the base.
 - `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run (D102).
 
-For Bazel (§9): slots are reused at fixed paths, and Bazel keys its output base on the workspace path, so each slot's
-output base stays warm across leases. A shared `--disk_cache` and `--repository_cache` in the operator's `.bazelrc`
-share work between slots, `--output_user_root` puts the output bases on a fast disk, and `startup --max_idle_secs`
-ends a slot's idle server (D103). A fast disk otherwise takes the whole workspace, pools and clones together (§18,
-D033). Unverified until the canary's first real run: that the worker reads through `bazel-out/` and its siblings,
-links into the output base, and is refused the output base by its own path.
+For Bazel (§9, and the operator's guide, `docs/BAZEL.md`): slots are reused at fixed paths, and Bazel keys its output
+base on the workspace path, so each slot's output base stays warm across leases. A shared `--disk_cache` and
+`--repository_cache` in the operator's `.bazelrc` share work between slots, `--output_user_root` puts the output bases
+on a fast disk, and `startup --max_idle_secs` ends a slot's idle server (D103). A fast disk otherwise takes the whole
+workspace, pools and clones together (§18, D033). Unverified until the canary's first real run: that the worker reads
+through `bazel-out/` and its siblings, links into the output base, and is refused the output base by its own path.
 
 ### R11. Private tickets: deliver a ticket without the conversation appearing on it
 

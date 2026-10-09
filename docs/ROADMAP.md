@@ -483,7 +483,7 @@ REQUIREMENTS R10, DESIGN §9 and §18, D033, D102, D103. Needs M2. Taken on requ
 - `runtime.setup_cmd` and `runtime.setup_timeout_minutes`, user-only: run in each slot of a worker run once `_run`
   has checked out the run's branch, and a failure or timeout ends the run `crashed` before its worker starts (D102).
 - Bazel: an opt-in canary that a worker reads through `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` and is refused
-  the output base by its own path; a `.bazelrc` recipe for a shared disk and repository cache in DESIGN §9; an idle
+  the output base by its own path; a `.bazelrc` recipe for a shared disk and repository cache in `docs/BAZEL.md`; an idle
   slot's server ends by `startup --max_idle_secs`, not when the slot is returned (D103).
 
 Accept: in a Bazel repository, with the recipe in the operator's `~/.bazelrc`, a personal manifest that seeds a
