@@ -8,9 +8,10 @@ import sys
 
 import click
 
-from canopy.chores import execute, start, trial, view
+from canopy.chores import execute, start, trial
 from canopy.cli.common import CliError, open_context, require_tick
 from canopy.cli.params import CHORE, TextType, truncate
+from canopy.core import chore_view as view
 from canopy.core import conversation, db
 from canopy.infra import logs, procs
 from canopy.loop import attention, tick

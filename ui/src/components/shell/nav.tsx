@@ -1,23 +1,33 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute } from '@tanstack/react-router'
-import { Activity, FolderTree, Inbox, MessagesSquare, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import {
+    Activity,
+    CalendarClock,
+    FolderTree,
+    Inbox,
+    MessagesSquare,
+    SlidersHorizontal,
+    type LucideIcon,
+} from 'lucide-react'
 
 import { attentionQuery } from '@/api/queries'
 import { cn } from '@/lib/utils'
 
-type To = '/attention' | '/runs' | '/worktrees' | '/tickets' | '/settings'
+type To = '/attention' | '/runs' | '/worktrees' | '/tickets' | '/chores' | '/settings'
 
 const ITEMS: { to: To; label: string; icon: LucideIcon }[] = [
     { to: '/attention', label: 'Attention', icon: Inbox },
     { to: '/runs', label: 'Runs', icon: Activity },
     { to: '/worktrees', label: 'Worktrees', icon: FolderTree },
     { to: '/tickets', label: 'Tickets', icon: MessagesSquare },
+    { to: '/chores', label: 'Chores', icon: CalendarClock },
     { to: '/settings', label: 'Settings', icon: SlidersHorizontal },
 ]
 
 /**
  * The side navigation. The active item is marked by one highlight with the accent hairline, which slides to the item
- * a navigation lands on; a ticket's page keeps Tickets active. Attention shows how many items it lists, on every page.
+ * a navigation lands on; a ticket's page keeps Tickets active, and a chore's Chores. Attention shows how many items it
+ * lists, on every page.
  */
 export function Nav() {
     const attention = useQuery(attentionQuery)

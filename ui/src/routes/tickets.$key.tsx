@@ -110,9 +110,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                     <ReplyForm
                         key={ticket.key}
-                        ticketKey={ticket.key}
+                        target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
                         waiting={ticket.awaiting}
-                        isPublic={!ticket.private}
                     />
                 </Panel>
             </div>

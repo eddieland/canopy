@@ -169,6 +169,68 @@ class TicketDetail(_Model):
     messages: list[Message]
 
 
+class ChoreRun(_Model):
+    """One run of a chore (DESIGN §19)."""
+
+    id: int
+    # The journal's status: running, ok, failed, unknown, timeout, crashed.
+    status: str
+    # `ok` is `done`; every other ending is `failed`, as it raises `chore_failed`.
+    state: RunState
+    started_at: datetime
+    ended_at: datetime | None = None
+    # The harness's note or the agent's summary, on one line.
+    summary: str | None = None
+    # How many findings an `ok` run reported.
+    findings: int = 0
+    session_id: str | None = None
+    cost_usd: float | None = None
+    tokens: int | None = None
+    log_path: str
+
+
+class ChoreFinding(_Model):
+    """An open finding: one the chore's latest `ok` run reported (DESIGN §19)."""
+
+    id: str
+    title: str
+    detail: str
+    link: str | None = None
+    # When the unbroken run of `ok` runs reporting it began.
+    since: datetime
+
+
+class ChoreSummary(_Model):
+    """A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings."""
+
+    name: str
+    every_minutes: int
+    # When a run may start (D099): days of the week, empty for every day; `HH:MM-HH:MM`; an IANA zone.
+    days: list[str] = []
+    hours: str | None = None
+    timezone: str | None = None
+    # The operator's words to the overseer on when a run is worth it.
+    when: str | None = None
+    running: ChoreRun | None = None
+    # Its most recent run that has ended.
+    latest: ChoreRun | None = None
+    # The earliest time the harness lets a new run start; None, or a time already past, means now.
+    due_at: datetime | None = None
+    findings: list[ChoreFinding] = []
+    # The newest of the operator's notes to it, so a new note changes the list the stream sends.
+    latest_note_id: int | None = None
+
+
+class ChoreDetail(_Model):
+    """One chore: what `canopy show chore:NAME` prints."""
+
+    chore: ChoreSummary
+    # The latest 10, newest first.
+    runs: list[ChoreRun]
+    # The operator's notes its next run reads: the latest 10, oldest first.
+    notes: list[Message]
+
+
 class Started(_Model):
     """What a start did: whether it was already started, and a run already working it."""
 
@@ -313,6 +375,13 @@ class TicketsUpdated(_Model):
     tickets: list[TicketSummary]
 
 
+class ChoresUpdated(_Model):
+    """The chores changed: a run started or ended, or a note was added. The payload is the whole list."""
+
+    type: Literal["chores.updated"] = "chores.updated"
+    chores: list[ChoreSummary]
+
+
 class TicketChanged(_Model):
     """Something about one ticket changed: a page showing it reads it again."""
 
@@ -338,7 +407,13 @@ class TickUpdated(_Model):
 class StreamEvent(
     RootModel[
         Annotated[
-            AttentionUpdated | RunsUpdated | TicketsUpdated | TicketChanged | SpendUpdated | TickUpdated,
+            AttentionUpdated
+            | RunsUpdated
+            | TicketsUpdated
+            | TicketChanged
+            | ChoresUpdated
+            | SpendUpdated
+            | TickUpdated,
             Field(discriminator="type"),
         ]
     ]

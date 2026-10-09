@@ -66,7 +66,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
   attention list. Press `t` while it waits to tick now.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
-  and every ticket's conversation, where you reply, start, and stop as with the CLI. Sign in once per browser with the
+  every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
+  finding with a note. Sign in once per browser with the
   secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so
   does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
@@ -92,7 +93,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
   overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
-  one now and prints its result, for writing its prompt.
+  one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix
+  lands, note it to the chore: `canopy reply chore:NAME 'text'`, or the web UI's chore page; its next runs read it.
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.

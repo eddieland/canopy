@@ -13,7 +13,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.chores import result, view, window
+from canopy.core import chore_result as result
+from canopy.core import chore_view as view
+from canopy.core import chore_window as window
 from canopy.core import conversation, db, outbox
 from canopy.infra import lock, logs, procs
 

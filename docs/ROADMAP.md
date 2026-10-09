@@ -678,7 +678,12 @@ sends the operator back to the terminal.
 Accept: the tests above pass. Live: with M9's build-health chore running, the operator answers one of its findings
 from the browser, and the chore's next run's prompt carries the note.
 
-Status: not started.
+Status: in progress. The design (DESIGN §19, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
+`tests/canopy/test_web_chores.py` over the mock journal, and Playwright answering a chore's finding from the
+attention list. The chores' journal view moved down to `core` (`chore_view`, `chore_window`, `chore_result`) so the
+server, a feature, can read it as the CLI does. Chores are on the event stream (`chores.updated`), and a note no run
+has started since says it waits for the next run. TRUST_MODEL T8's list of web writes gains the note; it waits on the
+operator's approval note in the PR. Waiting on the operator: the live run Accept describes.
 
 ## M24. Ticks in the web UI
 

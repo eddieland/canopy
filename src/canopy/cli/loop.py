@@ -9,10 +9,9 @@ from typing import TYPE_CHECKING
 import click
 from rich.console import Console
 
-from canopy.chores import view as chore_view
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.core import contract, conversation, db
+from canopy.core import chore_view, contract, conversation, db
 from canopy.infra import keys, lock
 from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
