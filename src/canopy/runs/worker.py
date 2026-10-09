@@ -1,9 +1,10 @@
 """`canopy _run <run_id>`: one worker execution in its leased slots (DESIGN §8, §18).
 
-Sets up the branch in each slot, makes the desk of a joint run, runs `worker_cmd` with a timeout, parses the result
-line, verifies the branch is pushed in each slot, removes the desk, returns every slot, and closes the `runs` row. The
-slots are returned on every exit path this process can see: normal, exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL
-cannot be caught; reconcile finds that run's dead pid on the next tick.
+Sets up the branch in each slot, runs the operator's `setup_cmd` there, makes the desk of a joint run, runs
+`worker_cmd` with a timeout, parses the result line, verifies the branch is pushed in each slot, removes the desk,
+returns every slot, and closes the `runs` row. The slots are returned on every exit path this process can see: normal,
+exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next
+tick.
 
 A split run is the same up to the worker: each slot is checked out at its base, the splitter runs with `split_cmd` in
 the desk, and nothing is pushed or verified. Its result names the tickets it created, which are validated and recorded
@@ -23,7 +24,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 from pydantic import BaseModel, ConfigDict, StrictStr
 
 from canopy.core import agent_output, contract, conversation, db, definitions, treehouse
-from canopy.core.config import render_command
+from canopy.core.config import render_command, setup_words
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, policy
@@ -38,6 +39,8 @@ MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # Never let git wait for credentials on a terminal nobody is watching.
 _GIT_ENV = {"GIT_TERMINAL_PROMPT": "0"}
+# The repository whose slot `setup_cmd` runs in, by its name in the map (DESIGN §8).
+SETUP_REPO_ENV = "CANOPY_REPO"
 
 
 class WorkerError(Exception):
@@ -321,6 +324,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         return Outcome("stopped", None, stopped)
     branch = str(run["branch"])
     starts = [_set_up_branch(slot, branch) for slot in slots]
+    for slot in slots:
+        _run_setup(ctx, run, slot, out, log)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
     result, text = _run_agent(ctx, run, slots, out, log, template=template)
@@ -375,6 +380,37 @@ def _set_up_branch(slot: _Slot, branch: str) -> str:
     else:
         git.run("checkout", "--quiet", "--no-track", "-B", branch, f"refs/remotes/origin/{slot.base}")
     return git.run("rev-parse", f"refs/heads/{branch}")
+
+
+def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
+    """Run the operator's `setup_cmd` in the slot, on the run's branch, and fail the run if it fails (DESIGN §8, D105).
+
+    Unlike treehouse's `post_create`, which runs on the base before the branch is checked out and whose failure leaves
+    the lease standing, this sees the branch the worker gets, and a failure stops the run before the worker starts.
+    """
+    argv = setup_words(ctx.config.runtime.setup_cmd)
+    if not argv:
+        return
+    run_id = int(run["id"])
+    timeout_minutes = ctx.config.runtime.setup_timeout_minutes
+    log.info("running setup", extra={"run_id": run_id, "cmd": argv[0], "cwd": str(slot.path), "repo": slot.repo})
+    try:
+        result = ctx.runner.run(
+            argv,
+            cwd=slot.path,
+            # The run's id, as the worker gets it: the operator's commands refuse inside canopy's runs (DESIGN §22).
+            env={conversation.RUN_ID_ENV: str(run_id), SETUP_REPO_ENV: slot.repo},
+            timeout=timeout_minutes * 60,
+        )
+    except procs.ProcError as e:
+        raise _SetupError(f"{slot.git.where}setup could not start: {e}") from e
+    out.write(f"--- setup {slot.repo} stdout ---\n{result.stdout}\n--- setup {slot.repo} stderr ---\n{result.stderr}\n")
+    out.write(f"--- setup {slot.repo} exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
+    out.flush()
+    if result.timed_out:
+        raise _SetupError(f"{slot.git.where}setup timed out after {timeout_minutes} minutes; see the run log")
+    if not result.ok:
+        raise _SetupError(f"{slot.git.where}setup exited {result.returncode}; see the run log")
 
 
 def _ensure_pushed(slot: _Slot, branch: str, start: str, log: logs.TickAdapter) -> str:

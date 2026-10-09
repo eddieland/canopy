@@ -180,6 +180,22 @@ def _notify_command(value: str) -> str:
     return value
 
 
+def setup_words(template: str) -> list[str]:
+    """Split `runtime.setup_cmd` into argv with shell word rules. No shell runs (D023). Empty means no setup.
+
+    It gets no placeholders: it runs in a slot, as its working directory, and reads its repository from the
+    environment (DESIGN §8). A placeholder would reach the command as a literal word, so one is refused.
+    """
+    if PROMPT in template or DEFINITIONS_DIR in template:
+        raise ValueError(f"must not contain {PROMPT} or {DEFINITIONS_DIR}; setup runs no agent")
+    return shlex.split(template)
+
+
+def _setup_command(value: str) -> str:
+    setup_words(value)
+    return value
+
+
 def _user_path(value: Path) -> Path:
     # A relative path would resolve against the working directory, which is the repository: its files would stand in
     # for the operator's prompts or state (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
@@ -196,6 +212,7 @@ Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
 AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
 NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
+SetupCommand = Annotated[StrictStr, AfterValidator(_setup_command)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 
 
@@ -416,6 +433,10 @@ class Runtime(Section):
     # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8, D078). User-only: it
     # chooses what workers are told to do, which a repository must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
+    # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
+    # ends the run `crashed` (DESIGN §8, D105). Empty means none. It runs the branch's code on this machine.
+    setup_cmd: Annotated[SetupCommand, Scope.USER] = ""
+    setup_timeout_minutes: Annotated[Minutes, Scope.USER] = 30
 
 
 class Review(Section):
@@ -498,6 +519,9 @@ class Paths(Section):
     # No static default: `load` supplies `prompts/` next to the user file, which depends on XDG_CONFIG_HOME.
     prompt_overrides: Annotated[UserPath, Scope.USER]
     state_dir: Annotated[UserPath, Scope.USER] = Path("~/.canopy")
+    # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
+    # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
+    worktree_include: Annotated[UserPath | None, Scope.USER] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).

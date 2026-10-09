@@ -120,6 +120,12 @@ split into one ticket per repository instead, comment on it asking for a split: 
 and you label each one you want worked. The pools, journal, and attention list live inside the workspace. See
 `examples/canopy-workspace.toml` and [docs/DESIGN.md](docs/DESIGN.md) §18.
 
+## Bazel and other large repositories
+
+Each run works in a pooled worktree that keeps its path between runs, so build outputs stay warm. To share Bazel's
+caches between worktrees, copy your gitignored local files into each one, and run a setup command on the run's branch
+before the worker starts, follow [docs/BAZEL.md](docs/BAZEL.md). Most of it applies to any large repository.
+
 ## Troubleshooting
 
 - If canopy cannot find `treehouse`, check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is

@@ -6,7 +6,8 @@ holders are `canopy:<KEY>`; sync's own short leases are `canopy-sync`, which rec
 
 treehouse finds a repository's pool from its working directory. In a workspace, every command runs in the repository's
 primary clone with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot goes, so the pools live
-under `<workspace>/.treehouse/` whatever treehouse's own config says (DESIGN §18). A `Pool` says which.
+under `<workspace>/.treehouse/` whatever treehouse's own config says (DESIGN §18). A `Pool` says which, and which
+personal `.worktreeinclude` every `get` passes as `--include-file` (DESIGN §9).
 """
 
 from __future__ import annotations
@@ -138,12 +139,14 @@ class Pool:
     `cwd` is a directory in the repository, from which treehouse finds its pool; None is this process's working
     directory. `root` is the workspace root, passed as `TREEHOUSE_ROOT`; None leaves treehouse's own config in charge,
     as in a workspace of one. `slots` is the pool's declared size (`capacity.slots_for`), which `lease` never grows the
-    pool past. None leaves the size to treehouse's `max_trees`.
+    pool past. None leaves the size to treehouse's `max_trees`. `include_file` is the operator's own `.worktreeinclude`
+    (`paths.worktree_include`), which treehouse reads in place of the committed one; None leaves the committed one.
     """
 
     cwd: Path | None = None
     root: Path | None = None
     slots: int | None = None
+    include_file: Path | None = None
 
 
 DEFAULT_POOL = Pool()
@@ -224,7 +227,9 @@ def lease_as(
 ) -> Lease:
     """Lease any slot of `pool` for `holder`, making one if none is available, whatever the pool's declared size.
 
-    Without `fetch`, the slot is cut from the clone's existing refs; a later `get` that reuses it fetches.
+    Without `fetch`, the slot is cut from the clone's existing refs; a later `get` that reuses it fetches. treehouse
+    seeds the slot from the pool's `include_file` on every `get`, a reused slot too, and fails one whose file is missing
+    before it touches any slot.
     """
     args = ["get", "--lease", "--lease-holder", holder, "--json"]
     if not fetch:
@@ -233,6 +238,9 @@ def lease_as(
         args += ["--base", base]
     if pool.root is not None:
         args += ["--worktree-path", WORKTREE_PATH]
+    if pool.include_file is not None:
+        # Absolute: treehouse reads a relative one from its working directory, the repository.
+        args += ["--include-file", str(pool.include_file)]
     result = _run(runner, args, pool)
     if not result.ok:
         raise _fail(result)

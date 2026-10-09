@@ -42,9 +42,10 @@ class Context:
         """Where treehouse runs for repository `repo`'s pool, with the size `capacity` declares for it.
 
         Only a workspace's pools have a declared size: a workspace of one's pool is treehouse's own, which may be the
-        operator's interactive pool as well (DESIGN §18).
+        operator's interactive pool as well (DESIGN §18). Every pool gets the operator's own `.worktreeinclude`, if
+        `paths.worktree_include` names one (DESIGN §9).
         """
-        pool = self.workspace.pool(repo)
+        pool = dataclasses.replace(self.workspace.pool(repo), include_file=self.config.paths.worktree_include)
         if self.workspace.single or repo is None:
             return pool
         return dataclasses.replace(pool, slots=self.config.capacity.slots_for(repo))
