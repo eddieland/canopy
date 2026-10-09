@@ -86,8 +86,12 @@ SQL of its own.
 - Playwright (`e2e/`) runs against the production build served by FastAPI, never the Vite dev server. The root
   server needs the listener secret (`e2e/secret.ts`; `signIn` in `e2e/helpers.ts`) and never changes its journal;
   tests that write run against the prefixed one. Every route gets a screenshot per theme in
-  `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately
-  (`npx playwright test --update-snapshots=all`) and the PR says why; look at each new image before committing it.
+  `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately and the PR says why; look at each
+  new image before it merges. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch,
+  then run the Screenshots workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or
+  an agent's GitHub tools). It pushes a commit with the images that changed and starts CI on it; pull before going
+  on. `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not
+  match.
 
 ## Done for a UI pull request
 
