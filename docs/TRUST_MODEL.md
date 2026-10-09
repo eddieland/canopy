@@ -201,6 +201,12 @@ Controls now:
   loads its definition the way canopy loads its own (DESIGN §13), and checks that
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
+- `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
+  and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
+  the agent runtime's permissions. It is user-only (T7), and the code is what the worker's own shell runs a moment
+  later; once `worker_cmd` runs in a sandbox, `setup_cmd` must run in the same one (HOST_ISOLATION §4.4). treehouse's
+  `post_create` hooks run on the base, and its seeding copies only ignored files from the operator's primary clone,
+  chosen by the committed `.worktreeinclude` or the operator's own (`paths.worktree_include`, user-only).
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through

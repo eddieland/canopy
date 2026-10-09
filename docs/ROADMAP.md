@@ -473,19 +473,28 @@ Not started: whether `fix-ci` and `resume` continue a session, and workers again
 
 ## M16. Worktree setup for large monorepos
 
-REQUIREMENTS R10. Needs M2. Sketch only; the design comes first.
+REQUIREMENTS R10, DESIGN §9 and §18, D033, D105, D106. Needs M2. Taken on request (2026-10-09).
 
-- Where pools live: a user-only key for the pool root in a workspace, so the pools can sit on a fast disk apart from
-  the workspace, or a documented reason to keep the workspace there instead (§18 pins `TREEHOUSE_ROOT` for T7's sake).
-- A personal `.worktreeinclude` manifest passed as `treehouse get --include-file`, user-only.
-- Setup that runs after `_run` checks out the run's branch and fails the run when it fails, unlike treehouse's
-  `post_create` (PRIOR_ART "Open design questions"): a user-only command template, or an upstream treehouse change.
-- Bazel: a canary for the worker's `external_directory: deny` against reads through `bazel-out/`; a documented
-  `.bazelrc` recipe for a shared disk and repository cache; whether returning a slot should stop its Bazel server.
+- Where pools live: no pool root of their own. A fast disk takes the whole workspace, for reasons DESIGN §18 gives:
+  git keeps each worktree's files in its clone, and treehouse pools by repository and remote URL, so a root every
+  workspace shared would merge their pools (D033).
+- `paths.worktree_include`, user-only: a personal `.worktreeinclude`, passed on every `treehouse get` as
+  `--include-file`. It replaces the committed manifest, since treehouse reads one; a missing file is `no_slot`.
+- `runtime.setup_cmd` and `runtime.setup_timeout_minutes`, user-only: run in each slot of a worker run once `_run`
+  has checked out the run's branch, and a failure or timeout ends the run `crashed` before its worker starts (D105).
+- Bazel: an opt-in canary that a worker reads through `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` and is refused
+  the output base by its own path; a `.bazelrc` recipe for a shared disk and repository cache in `docs/BAZEL.md`; an idle
+  slot's server ends by `startup --max_idle_secs`, not when the slot is returned (D106).
 
-Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
+Accept: in a Bazel repository, with the recipe in the operator's `~/.bazelrc`, a personal manifest that seeds a
+gitignored file, and a `setup_cmd` that runs `bazel fetch` on the run's branch, a real `implement` run's worker finds
+the seeded file in its slot and its `bazel test` hits the disk cache another slot filled. A `setup_cmd` that exits 1
+ends a real run `crashed` with no worker started and its slot returned. The Bazel canary passes under the pinned
+OpenCode. A slot's Bazel server exits once idle for `--max_idle_secs` after its run.
 
-Status: not started.
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_worktree_setup.py` holds the harness's half of the
+acceptance), the canary, docs, and D105 and D106 are in. Waiting on the operator: the real run Accept describes, and
+the canary's first real run (`CANOPY_OPENCODE_CANARY=1`).
 
 ## M17. Declared repositories and pools
 
@@ -739,7 +748,7 @@ Status: not started.
 
 ## M26. Notifications on another machine
 
-REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D105. Needs M10, and M20 for HTTP. Asked for by the operator
+REQUIREMENTS N2, DESIGN §20 (Mailbox sinks and the relay), D107. Needs M10, and M20 for HTTP. Asked for by the operator
 (2026-10-09): canopy runs on a development machine, and the operator wants its desktop notifications on the Mac they
 sit at, over SSH or HTTP.
 
@@ -758,7 +767,7 @@ Accept: the tests above pass. Live: with `canopy loop` on the development machin
 over SSH and then over HTTP through an SSH forward, a real attention item and a blocked worker's question each show as
 one macOS notification; the Mac asleep for an hour shows what was kept while it slept when it wakes.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D105 are in. The TRUST_MODEL
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_relay.py`), docs, and D107 are in. The TRUST_MODEL
 T2, T6, and T8 changes need human approval in their PR. Waiting on the operator: the live run on their Mac. Taken on
 request while earlier milestones wait on their live runs.
 
