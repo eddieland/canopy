@@ -115,7 +115,9 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
         results.append(_report(_clone_or_check(ctx, ws, repo, dry_run=dry_run)))
         want = ctx.config.capacity.slots_for(repo.name)
         if want is not None and repo.cloned:
-            results.append(_report(setup_workspace.converge_pool(ctx.runner, ws, repo, want, dry_run=dry_run)))
+            results.append(
+                _report(setup_workspace.converge_pool(ctx.runner, ctx.pool(repo.name), repo, want, dry_run=dry_run))
+            )
         elif want is not None and dry_run:
             # Not cloned yet, so it has no pool: a real sync clones it, then makes every slot.
             results.append(_report(setup_workspace.Checked(repo, "slots", f"0 of {want}, would make {want}")))

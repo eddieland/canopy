@@ -3,12 +3,15 @@
 
     treehouse status --json
     treehouse get --lease [--lease-holder H] [--json] [--base B] [--no-fetch] [--worktree-path TEMPLATE]
+                  [--include-file PATH]
     treehouse return [--force] [--if-lease-id ID] [--if-lease-holder H] <path|name>
     treehouse destroy [--yes] <path>
 
 Output shapes and exit codes follow treehouse's own (`status --json` array fields, `get --lease --json` allocation,
 `return` exits 0 returned, 1 failed or lease mismatch, 3 dirty and not forced). `destroy` without an `--include-*`
-flag removes only an available slot, and exits 1 for anything it keeps.
+flag removes only an available slot, and exits 1 for anything it keeps. `get --include-file` reads the file from the
+working directory and fails, exit 1, before any slot is touched when it cannot; it seeds nothing, but records the text
+on the slot it leases as `include_manifest`, and a `get` without the flag removes it, as treehouse's reset would.
 
 State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is an empty pool. Keys:
 
@@ -117,6 +120,14 @@ def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -
     if not args.lease:
         print("fake treehouse: only `get --lease` is supported", file=sys.stderr)
         return 2
+    manifest = None
+    if args.include_file is not None:
+        # Like treehouse, read before anything is acquired: a missing file fails the get with no slot touched.
+        try:
+            manifest = Path(args.include_file).read_text()
+        except OSError as e:
+            print(f"Error: failed to read include file {args.include_file!r}: {e}", file=sys.stderr)
+            return 1
     pool = pool_of(state)
     if pool is None:
         print("treehouse: not in a git or jj repository", file=sys.stderr)
@@ -141,6 +152,10 @@ def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -
         leased_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         base_branch=args.base or "main",
     )
+    if manifest is None:
+        slot.pop("include_manifest", None)
+    else:
+        slot["include_manifest"] = manifest
     if args.json:
         keys = ("path", "lease_id", "lease_holder", "leased_at", "base_branch")
         omit = state.get("get_omit", [])
@@ -216,6 +231,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     get.add_argument("--base")
     get.add_argument("--no-fetch", action="store_true")
     get.add_argument("--worktree-path")
+    get.add_argument("--include-file")
 
     ret = sub.add_parser("return")
     ret.add_argument("--force", action="store_true")
