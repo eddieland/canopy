@@ -13,10 +13,11 @@ import { LiveReadouts } from './live-readouts'
 import { Mark } from './mark'
 import { Nav } from './nav'
 import { ThemeToggle } from './theme-toggle'
+import { Ticker } from './ticker'
 
 /**
- * The frame every page renders in: header, side navigation, and the routed page. Signed out, the sign-in page instead,
- * whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * The frame every page renders in: header (with its ticker), side navigation, and the routed page. Signed out, the
+ * sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
@@ -43,6 +44,7 @@ export function AppShell() {
                     <LiveMark stream={stream} />
                     <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                 </div>
+                <Ticker />
                 <div className="flex items-center gap-4">
                     <LiveReadouts stream={stream} />
                     <span aria-hidden className="h-5 w-px bg-border" />

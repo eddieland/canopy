@@ -29,6 +29,14 @@
     --status-done: oklch(0.515 0.088 211);
     --status-failed: oklch(0.543 0.174 30);
 
+    /* The header ticker's RuneScape chat colors: flair only, never state. Darker here, to read on white. */
+    --flair-yellow: oklch(0.62 0.13 85);
+    --flair-red: oklch(0.56 0.2 27);
+    --flair-green: oklch(0.56 0.16 145);
+    --flair-cyan: oklch(0.58 0.11 205);
+    --flair-blue: oklch(0.5 0.2 262);
+    --flair-purple: oklch(0.52 0.2 315);
+
     --radius: 0.5rem;
 }
 
@@ -50,6 +58,13 @@
     --status-stopped: oklch(0.624 0.029 259);
     --status-done: oklch(0.796 0.114 206);
     --status-failed: oklch(0.712 0.181 23);
+
+    --flair-yellow: oklch(0.9 0.17 100);
+    --flair-red: oklch(0.68 0.21 27);
+    --flair-green: oklch(0.82 0.2 142);
+    --flair-cyan: oklch(0.85 0.13 200);
+    --flair-blue: oklch(0.65 0.18 262);
+    --flair-purple: oklch(0.72 0.2 315);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -69,6 +84,13 @@
     --color-status-stopped: var(--status-stopped);
     --color-status-done: var(--status-done);
     --color-status-failed: var(--status-failed);
+
+    --color-flair-yellow: var(--flair-yellow);
+    --color-flair-red: var(--flair-red);
+    --color-flair-green: var(--flair-green);
+    --color-flair-cyan: var(--flair-cyan);
+    --color-flair-blue: var(--flair-blue);
+    --color-flair-purple: var(--flair-purple);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names

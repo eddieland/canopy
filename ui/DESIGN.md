@@ -8,8 +8,8 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
-decoration. Dark is a cool slate, light is grey and white; neither is the lesser theme (D094). The directions weighed
-are recorded in `docs/ui-explorations/2026-10-08-style/`.
+decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme
+(D094). The directions weighed are recorded in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
 
@@ -32,6 +32,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-stopped` | A run the operator stopped. |
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
+| `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
 
@@ -79,6 +80,15 @@ Rules:
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
 - **Wide screens use the width** from `2xl`: the attention list widens, a ticket's page puts its conversation
   beside its actions, work, and runs, and a chore's page puts its notes beside its schedule, findings, and runs.
+- Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding, one
+  at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both
+  ends. It is the header's one piece of fun: written here, never journal text. Settings sets its speed (Off, Slow,
+  Normal, Spicy; Off hides it) and the seconds between headlines (0 by default).
+- A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
+  `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
+  ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
+  headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
+  of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
   the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page.
@@ -88,7 +98,7 @@ Rules:
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.css`.
+a skeleton, the empty inbox, and the header's ticker. The keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -102,6 +112,10 @@ a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.c
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
   a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
+- The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
+  left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
+  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. The reel starts at a
+  different headline each day. At rest the window is empty, between headlines.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
@@ -109,8 +123,8 @@ a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.c
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, and pulses, ripples, and the drifting leaf are hidden. New motion goes inside a
-  `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
+  in place, pulses, ripples, and the drifting leaf are hidden, and the ticker shows its first headline in place. New
+  motion goes inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 
@@ -124,7 +138,8 @@ a skeleton, and the empty inbox. The keyframes and utilities are in `src/index.c
 Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent means system) and synced across tabs.
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
-inline script and checks it against the store's key.
+inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
+`canopy-ticker` (`src/lib/ticker-settings.ts`), synced across tabs.
 
 ## Patterns
 
