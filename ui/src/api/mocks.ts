@@ -61,6 +61,7 @@ export const mockTickets: TicketSummary[] = [
         private: true,
         start: 'started',
         phase: 'needs_human',
+        last_decision: 'wait',
         done: false,
         branch: 'agent/ABC-102-export',
         active_at: '2026-10-08T11:56:00Z',

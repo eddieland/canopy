@@ -35,10 +35,22 @@ SUMMARY_WIDTH = 160
     help="Minutes to wait after each tick ends. Default: loop.interval_minutes.",
 )
 @click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
+@click.option(
+    "--defer",
+    type=click.IntRange(min=1),
+    metavar="MINUTES",
+    help="Wait MINUTES before the first tick. Press t during the wait to tick sooner.",
+)
 @click.option("--no-serve", is_flag=True, help="Do not serve the web UI, whatever serve.enabled says.")
 @click.pass_context
 def cmd_loop(
-    click_ctx: click.Context, *, dry_run: bool, every: int | None, max_ticks: int | None, no_serve: bool
+    click_ctx: click.Context,
+    *,
+    dry_run: bool,
+    every: int | None,
+    max_ticks: int | None,
+    defer: int | None,
+    no_serve: bool,
 ) -> int:
     """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to."""
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
@@ -56,6 +68,7 @@ def cmd_loop(
                 stop=stop,
                 serve=ctx.config.serve.enabled and not no_serve,
                 keys=pressed,
+                defer_minutes=defer,
             )
         except lock.LockBusyError:
             raise CliError(f"another canopy loop is running on {ctx.state_dir}; stop it first") from None
@@ -136,12 +149,20 @@ def _print_started(ctx: Context) -> None:
     for r in records:
         key = str(r["subject_id"])
         ticket = db.get_ticket(ctx.conn, key)
-        phase = (ticket["phase"] if ticket is not None else None) or "not seen by a tick yet"
+        phase = phase_of(ctx.conn, ticket) if ticket is not None else "not seen by a tick yet"
         done = ", done" if ticket is not None and ticket["done"] else ""
         since = r["started_at"] if r["status"] == "started" else r["stopped_at"]
         waiting = conversation.latest_question(ctx.conn, key) if r["status"] == "started" else None
         note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
         click.echo(f"  {key}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+
+
+def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
+    """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen."""
+    if ticket["phase"]:
+        return str(ticket["phase"])
+    decided = db.last_decision_of(conn, str(ticket["key"]))
+    return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
 
 
 def _print_workers(ctx: Context) -> None:

@@ -852,6 +852,21 @@ def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqli
     ).fetchall()
 
 
+def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
+    """Return the newest decision's action about ticket `key` since it was forgotten, or None if no tick made one.
+
+    The overseer records a decision for every ticket a tick looks at, but a phase only when told to, so this, not
+    `tickets.phase`, says whether a tick has seen the ticket.
+    """
+    row = conn.execute(
+        "SELECT d.action FROM decisions d LEFT JOIN tickets t ON t.key = d.ticket_key "
+        "WHERE d.ticket_key = ? AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at) "
+        "ORDER BY d.id DESC LIMIT 1",
+        (key,),
+    ).fetchone()
+    return None if row is None else str(row[0])
+
+
 def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     """Return the latest `limit` ticks, newest first, each with `decisions`, how many it recorded."""
     return conn.execute(

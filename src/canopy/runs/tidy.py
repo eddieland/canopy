@@ -1,7 +1,7 @@
 """Put a run's slot back the way treehouse expects it, before it is returned (DESIGN §8, HOST_ISOLATION §4.2).
 
 A run can leave two things in a slot that host-side git must not meet: a `.git` file that points somewhere new (D108),
-and a HEAD, index, ref, or reflog that names objects only the run's object directory holds (D112). `_run` undoes both on
+and a HEAD, index, ref, or reflog that names objects only the run's object directory holds (D113). `_run` undoes both on
 every exit path, and reconcile does for a run whose `_run` is gone.
 
 The object directory is `<state_dir>/runs/<id>.objects/`. `_run` makes it and passes it to the worker as

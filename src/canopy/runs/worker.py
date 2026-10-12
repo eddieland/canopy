@@ -280,7 +280,7 @@ def _run_agent(
         argv,
         cwd=cwd,
         # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the
-        # object directory; an unsandboxed worker ignores it (D112).
+        # object directory; an unsandboxed worker ignores it (D113).
         env={conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))},
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
@@ -395,7 +395,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         return Outcome("crashed", parsed, "; ".join(notes))
     objects = _objects(ctx, run)
     if tidy.used(objects):
-        # A sandboxed worker's commits are only in the run's object directory (D112).
+        # A sandboxed worker's commits are only in the run's object directory (D113).
         slots = [slot.reading(ctx, objects) for slot in slots]
 
     # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
@@ -496,7 +496,7 @@ def _push(git: _Git, branch: str) -> procs.Result:
 
     A push also moves origin's remote-tracking ref, which every slot of the pool shares. Pointed at a commit only the
     run's object directory holds, it would break git in every slot, and in the primary clone, once that directory goes
-    (D112). The next fetch moves it, from origin's own objects.
+    (D113). The next fetch moves it, from origin's own objects.
     """
     tracking = f"refs/remotes/origin/{branch}"
     before = git.result("rev-parse", "--verify", "--quiet", tracking).stdout.strip() if git.reads_run else ""
@@ -607,7 +607,7 @@ class _Git:
         self.slot = slot
         self.where = f"{name}: " if name else ""
         self.env = env
-        # Whether git here reads the run's object directory, and so must write no shared ref (D112).
+        # Whether git here reads the run's object directory, and so must write no shared ref (D113).
         self.reads_run = "GIT_OBJECT_DIRECTORY" in env
 
     def result(self, *args: str) -> procs.Result:

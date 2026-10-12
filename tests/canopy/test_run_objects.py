@@ -1,4 +1,4 @@
-"""The per-run object directory and how a run's slots are tidied (DESIGN §8, D112, HOST_ISOLATION §4.2).
+"""The per-run object directory and how a run's slots are tidied (DESIGN §8, D113, HOST_ISOLATION §4.2).
 
 A sandboxed worker cannot write the git directory its slot shares, so its new objects go to the run's own directory,
 which a sandbox wrapper names to git. These tests play that wrapper in the fake worker's commands: they set git's

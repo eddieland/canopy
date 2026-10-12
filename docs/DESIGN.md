@@ -118,7 +118,7 @@ canopy (harness, Python)
                    parsing, push verification, slot return; a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
     tidy.py        a run's object directory, and each slot put back before it is returned: its `.git` link, and
-                   no ref or reflog naming the run's own objects (§8, D112)
+                   no ref or reflog naming the run's own objects (§8, D113)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
@@ -216,8 +216,9 @@ them, with `migrations/`, under `canopy/_data/` (D022).
 A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack, and the
 dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the operator's cache once, so
 `resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch, chores, and reviews need to
-start `_run`, `_chore`, and `_review` via `python -m canopy`. Its run name picks the command: `canopy`, or a link named
-`canopy-notify-desktop` or `canopy-notify-slack`. `make binary` builds it for the current platform; the release
+start `_run`, `_chore`, and `_review` via `python -m canopy`. `SCIE_BOOT` picks the command: unset, `canopy`; set to
+`canopy-notify-desktop` or `canopy-notify-slack`, that sink. A link named for a sink can run canopy itself instead, so
+README installs each sink as a script that sets it (D112). `make binary` builds it for the current platform; the release
 workflow builds each platform's, runs the install check on each, and attaches them to the tag's release. The version
 is the tag's (D085): pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one
 and its commit.
@@ -323,14 +324,16 @@ Workers dispatched during a tick outlive it, as detached processes owned by `can
 
 ### The loop
 
-`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--no-serve]` is how ticks are meant to run (D042), in the
-foreground until stopped:
+`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run
+(D042), in the foreground until stopped:
 
 1. Take `<state_dir>/loop.lock`; if another loop holds it, refuse and exit 1. Each tick still takes the separate tick
    lock (step 1 above), so a hand-run `canopy tick` runs between the loop's ticks or finds the lock busy.
 2. Apply pending migrations before the first tick. Start the web UI's server in a thread, unless `--no-serve` or
    `serve.enabled = false`; without a usable listener secret, say why and serve nothing (§22). The header names its
-   URL.
+   URL. With `--defer`, wait that many minutes from here before the first tick; the header says when it will run. The
+   wait ends early as the one in step 5 does, by an operator message (no sooner than a minute after the loop started)
+   or `t`, and a stop during it ends the loop with no tick.
 3. Run a tick exactly as `canopy tick` does, passing `--dry-run` through. An error the tick code does not handle ends
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
@@ -355,8 +358,8 @@ Config is read once at loop start; restart to apply a change. Prompt files are r
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
-gains `loop started` and `loop stopped` lines, with no tick id, a `loop waits` line per tick, and a line when a key, a
-message, or a run ending ends a wait.
+gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
+`loop waits` line per tick, and a line when a key, a message, or a run ending ends a wait.
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
@@ -420,8 +423,11 @@ records whether it was idle, the count, and the wait chosen, in seconds.
 ## 7. Ticket phases and next actions
 
 The overseer derives phases each tick from live state. They are recorded in `tickets.phase` for the status view, never
-read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18), recorded in `ticket_units.phase`:
-`canopy ticket set` needs `--repo` for one.
+read back as truth. A ticket's own phase is recorded only when the overseer runs `canopy ticket set --phase`, while it
+records a decision for every ticket a tick looks at, so the status view and the web UI fall back on the newest
+decision since the ticket was last forgotten (`not recorded, last decision wait`), and say `not seen by a tick yet`
+only when there is none. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18), recorded in
+`ticket_units.phase`: `canopy ticket set` needs `--repo` for one.
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -605,7 +611,7 @@ dispatch names at least one, in a workspace of one repository too.
    (§22): a private run whose ticket was stopped since, or a public run whose ticket was started privately since, ends
    `stopped` before any git step, and its slots are returned.
 2. Before any git step, read each slot's `.git` file, a worktree's link to the pool's git directory, and record it in
-   `run_slots.git_link`, and make the run's object directory, `<state_dir>/runs/<id>.objects/` (D112). In each slot:
+   `run_slots.git_link`, and make the run's object directory, `<state_dir>/runs/<id>.objects/` (D113). In each slot:
    `git fetch --prune origin`, then `git checkout --detach origin/<branch>` if it exists, else
    `git checkout --detach origin/<base>`. No run makes a local branch: a pool's slots share the repository's branch
    refs, so one would be state every slot sees, and the worker pushes HEAD by refspec (D109). Detached, a bare
@@ -672,7 +678,7 @@ so a repository whose push needs one (Git LFS's `pre-push`) depends on the worke
 The object directory is for a sandboxed worker (HOST_ISOLATION §4.2), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
 those reach every git its tools run, so a commit in any other repository would land there and break that repository
-once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it (D112). An unsandboxed
+once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it (D113). An unsandboxed
 worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not exist.
 
 Worker result contract, one JSON line, last line of the worker's text (§13):
@@ -1938,12 +1944,26 @@ events = ["attention", "loop", "runs"]   # runs: a blocked worker's question arr
 - Linux: `notify-send --app-name=canopy -- TITLE BODY`. macOS: `osascript` with a fixed script reading title and body
   from its arguments. Neither is built into a shell command or script, so agent or org-member text runs nothing.
 - Exit 0 when the tool succeeded, 1 when it failed, 2 when it is not installed or stdin is empty.
+- From a release's single executable it runs with `SCIE_BOOT=canopy-notify-desktop` (§5, D112). So that `cmd` can name
+  it, README's install puts a script of that name on `PATH`; `--help` prints it:
+
+  ```sh
+  #!/bin/sh
+  exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy "$@"
+  ```
 
 ### The Slack sink
 
 `canopy-notify-slack` is its own distribution, a uv workspace member (D041): `packages/canopy-notify-slack/`, module
 `canopy_notify_slack`, stdlib only (`urllib.request`, `json`), importing nothing from `canopy`. `canopy` depends on it
-and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`.
+and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`. A
+release's single executable carries it too, run with `SCIE_BOOT=canopy-notify-slack` (§5, D112); README's install puts
+a script of that name on `PATH` so that `cmd` can name it, and `--help` prints it:
+
+```sh
+#!/bin/sh
+exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
+```
 
 - It reads `json` on stdin, posts one message to a Slack incoming webhook, and exits 0 on 2xx, else 1 with Slack's
   reply on stderr. A rate-limited post is retried next tick like any failure.
@@ -1956,9 +1976,13 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
   `$XDG_CONFIG_HOME/canopy/slack-token`, under the webhook file's checks, and must be one `xoxb-` bot token (a user
   token acts as the operator with all its scopes). The channel must be an id or a name, `#?[A-Za-z0-9._-]{1,80}`.
   Success is a 2xx reply whose JSON has `"ok": true`, since the Web API answers 200 to a refused post
-  (`not_in_channel`). `--token-file` without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit
-  2. The token is never in canopy's config, argv, journal, logs, or the sink's own messages; the channel is in argv,
-  which is the sink's `cmd`.
+  (`not_in_channel`). The whole reply is parsed; only what a failure prints is cut, to 500 characters. `--token-file`
+  without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit 2. The token is never in canopy's
+  config, argv, journal, logs, or the sink's own messages; the channel is in argv, which is the sink's `cmd`.
+- With `--channel`, `--username NAME` and `--icon-emoji :CODE:` post under that name and emoji instead of the app's
+  (`username` and `icon_emoji` in the body), which needs the app's `chat:write.customize` scope. The name must be
+  printable, not blank, and at most 80 characters; the emoji one code, optionally with a skin tone
+  (`:wave::skin-tone-3:`). Either without `--channel` is a usage error, exit 2: an app's webhook ignores both.
 - Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
   status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a
@@ -1966,7 +1990,8 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
   scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set
-  `cmd = "canopy-notify-slack --channel C0123ABCD"`.
+  `cmd = "canopy-notify-slack --channel C0123ABCD"`. For a name and icon of its own, add the `chat:write.customize`
+  scope and `--username canopy --icon-emoji :evergreen_tree:` to `cmd`.
 
 Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api
 rule (`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
