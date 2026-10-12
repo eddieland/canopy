@@ -31,7 +31,9 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
     c = client(None, backend)
     page = c.get("/api/ticks/2").json()
     assert page["tick"]["id"] == 2
-    assert page["output_path"] is None
+    # Where the overseer's output is, from the workspace root; tick 1 kept none. Its session is the transcript's.
+    assert page["output_path"] == ".canopy/ticks/2.log"
+    assert c.get("/api/ticks/1").json()["output_path"] is None
     shown = [(d["subject"], d["action"]) for d in page["decisions"]]
     assert shown == [
         ("ABC-102", "wait"),
@@ -49,19 +51,11 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
     # Each subject is the CLI's, with a unit's repository after its ticket.
     with backend.open() as ctx:
         rows = db.decisions_for_tick(ctx.conn, 2)
-        output = ctx.state_dir / "ticks" / "2.log"
     for row, shown_row in zip(rows, page["decisions"], strict=True):
         assert shown_row["subject"].startswith(attention.decided_about(row))
 
     first = c.get("/api/ticks/1").json()["decisions"]
     assert [d["subject"] for d in first] == ["ABC-102", "ABC-100 (web)", "ABC-099 (web)", "chore:deps", "api"]
-
-    # The overseer's output is named where it is, as `canopy decisions` names it, and never served.
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("the overseer's own words\n")
-    named = c.get("/api/ticks/2").json()
-    assert named["output_path"] == str(output)
-    assert "the overseer's own words" not in str(named)
 
 
 def test_no_such_tick_is_a_404_and_a_tick_id_is_a_positive_integer(backend: Backend) -> None:

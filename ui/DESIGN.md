@@ -185,6 +185,15 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   them on one line. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
   (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
   colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
+- **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
+  with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
+  breaks, its reasoning muted and italic under a `thinking` label. A tool call is one line, a native `<details>`: a
+  `RunDot` in `done` or `failed`, the tool's name, its title or its input's first value, and how long it took; it
+  opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
+  call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
+  all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
+  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
+  overseer's under its decisions.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.

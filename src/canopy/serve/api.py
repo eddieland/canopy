@@ -43,6 +43,7 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
+    Transcript,
 )
 
 if TYPE_CHECKING:
@@ -92,6 +93,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _write_routes(signed_in, backend)
     _chore_routes(signed_in, backend)
     _tick_routes(signed_in, backend)
+    _run_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
 
@@ -290,7 +292,10 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
 
 
 def _tick_routes(api: APIRouter, backend: Backend) -> None:
-    """The ticks (DESIGN §6): what `canopy decisions` prints. Reads only; a rationale is untrusted text."""
+    """The ticks (DESIGN §6): what `canopy decisions` prints, and the overseer's transcript.
+
+    Reads only; a rationale and a transcript are untrusted text.
+    """
 
     @api.get("/ticks", operation_id="listTicks")
     def ticks() -> list[Tick]:
@@ -303,4 +308,40 @@ def _tick_routes(api: APIRouter, backend: Backend) -> None:
             found = views.tick_detail(ctx, tick_id)
         if found is None:
             raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
+        return found
+
+    # The overseer's output, read back from the tick's output file on each request (DESIGN §22).
+    @api.get(
+        "/ticks/{tick_id}/transcript",
+        operation_id="getTickTranscript",
+        responses={404: {"description": "No such tick."}},
+    )
+    def tick_transcript(tick_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
+        with backend.open() as ctx:
+            found = views.tick_transcript(ctx, tick_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
+        return found
+
+
+def _run_routes(api: APIRouter, backend: Backend) -> None:
+    """One run (DESIGN §8), and its session's transcript. Reads only; a transcript is untrusted text."""
+
+    @api.get("/runs/{run_id}", operation_id="getRun", responses={404: {"description": "No such run."}})
+    def run(run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Run:
+        with backend.open() as ctx:
+            found = views.run_detail(ctx, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no run {run_id}")
+        return found
+
+    # Agent output, read back from the run's log on each request; never on the stream (DESIGN §22).
+    @api.get(
+        "/runs/{run_id}/transcript", operation_id="getRunTranscript", responses={404: {"description": "No such run."}}
+    )
+    def run_transcript(run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
+        with backend.open() as ctx:
+            found = views.run_transcript(ctx, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no run {run_id}")
         return found
