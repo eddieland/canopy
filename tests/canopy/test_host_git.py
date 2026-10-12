@@ -13,7 +13,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, hostgit
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
-from tests.conftest import CanopyEnv, GitPool, git
+from tests.conftest import CanopyEnv, GitPool, git, pool_state
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
@@ -27,7 +27,9 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
 
 
 @pytest.fixture
-def worktree_pool(git_pool: GitPool, treehouse_state: Path, tmp_path: Path) -> tuple[Path, list[Path]]:
+def worktree_pool(
+    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
+) -> tuple[Path, list[Path]]:
     """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
     primary = tmp_path / "primary"
     git("clone", "--quiet", str(git_pool.origin), str(primary), cwd=tmp_path)
@@ -35,14 +37,25 @@ def worktree_pool(git_pool: GitPool, treehouse_state: Path, tmp_path: Path) -> t
     for slot in slots:
         git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
     state = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
-    treehouse_state.write_text(json.dumps({"max_trees": len(slots), "slots": state}))
+    treehouse_state.write_text(pool_state(canopy_env.repo, state, max_trees=len(slots)))
     return primary, slots
 
 
 def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Row:
     runner = InlineRunner()
     tick_id = in_tick(conn, monkeypatch)
-    args = ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "work"]
+    args = [
+        "dispatch",
+        "PROJ-1",
+        "--repo",
+        "repo",
+        "--label",
+        "agent-ready-tester",
+        "--kind",
+        "implement",
+        "--slug",
+        "work",
+    ]
     assert main(args, runner=runner) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
@@ -121,7 +134,7 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
     assert run["status"] == "crashed"
     slot = Path(slot_of(conn, run["id"])["slot_path"])
     result = json.loads(run["result_json"])
-    assert result["harness"] == f"the worker rewrote {slot / '.git'}; nothing was checked or pushed"
+    assert result["harness"] == f"repo: the worker rewrote {slot / '.git'}; nothing was checked or pushed"
     assert result["status"] == "done"  # what the worker claimed is kept
     # No git ran after the worker: its commit was not pushed for it.
     assert git_pool.remote_head("agent/PROJ-1-work") is None

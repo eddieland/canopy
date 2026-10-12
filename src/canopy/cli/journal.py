@@ -75,13 +75,10 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
 
 
 def _unit(ctx: Context, repo: str | None) -> str | None:
-    """Return the repository `--repo` names, checked against the map, or None if it names none.
-
-    In a workspace of one, the only repository is implied and naming it is allowed, so its name is returned either way.
-    """
+    """Return the repository `--repo` names, checked against the map, or None if it names none."""
     ws = ctx.workspace
     if repo is None:
-        return ws.repos[0].name if ws.single else None
+        return None
     found = ws.repo(repo)
     if found is None:
         names = ", ".join(r.name for r in ws.repos) or "none yet"
@@ -111,8 +108,7 @@ def cmd_attention(
         raise click.UsageError("--pr must be a plain https:// URL of at most 300 characters", click_ctx)
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
-    # A workspace of one's item names no repository: there is only one, and naming it would make the item new (D032).
-    unit = None if ctx.workspace.single else _unit(ctx, repo)
+    unit = _unit(ctx, repo)
     if key is not None:
         db.touch_ticket(ctx.conn, key, ctx.repo)
     db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
@@ -130,7 +126,7 @@ def ticket_group() -> None:
 @click.option(
     "--repo",
     type=REPO,
-    help="The unit a phase about a PR and the review and ci cursors are for. Implied in a single repository.",
+    help="The unit a phase about a PR and the review and ci cursors are for.",
 )
 @click.option("--phase", type=click.Choice(PHASES))
 @click.option("--cursor", "cursor_pairs", type=CursorType(), multiple=True)
@@ -176,7 +172,7 @@ def cmd_ticket_set(
     )
     unit_cursors: dict[str, str] = {} if dry_run else dict(unit_pairs)
     if unit is not None and (unit_phase is not None or unit_cursors):
-        db.set_unit(ctx.conn, key, ctx.repo, unit, single=ctx.workspace.single, phase=unit_phase, cursors=unit_cursors)
+        db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
     click.echo(f"updated {key if repo is None else attention.subject(key, unit)}{note}")
     return 0

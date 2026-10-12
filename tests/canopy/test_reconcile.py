@@ -14,7 +14,7 @@ from canopy.core import config, db, definitions
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
-from tests.conftest import CanopyEnv, GitPool
+from tests.conftest import CanopyEnv, GitPool, pool_state
 
 # Above Linux's largest pid_max, so never a live process.
 DEAD_PID = 4_194_305
@@ -123,7 +123,7 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
     db.finish_run(conn, live, "done", "{}")
     assert main(["tick", "--dry-run"]) == 0
     assert not old.exists()
-    current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     assert [p.name for p in (canopy_env.state_dir / "runtime").iterdir()] == [current.name]
 
 
@@ -139,7 +139,7 @@ def test_stale_canopy_lease_is_returned_and_others_are_not(
         {"name": "1", "path": "/pool/1/repo", "status": "leased", "lease_id": "a", "lease_holder": "canopy:P-1"},
         {"name": "2", "path": "/pool/2/repo", "status": "leased", "lease_id": "b", "lease_holder": "someone-else"},
     ]
-    treehouse_state.write_text(json.dumps({"slots": slots}))
+    treehouse_state.write_text(pool_state(canopy_env.repo, slots))
     assert main(["tick", "--dry-run"]) == 0
     assert [s["status"] for s in pool(treehouse_state)] == ["available", "leased"]
     log = (canopy_env.state_dir / "canopy.log").read_text()
@@ -216,7 +216,18 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
     overseer_does(
         monkeypatch,
-        ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "add-login"],
+        [
+            "dispatch",
+            "PROJ-1",
+            "--repo",
+            "repo",
+            "--label",
+            "agent-ready-tester",
+            "--kind",
+            "implement",
+            "--slug",
+            "add-login",
+        ],
     )
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-add-login"))
     assert main(["tick"]) == 0
@@ -254,7 +265,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     worker_does(monkeypatch)
     monkeypatch.setenv("FAKE_WORKER_SLEEP", "60")
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
 

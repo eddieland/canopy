@@ -33,8 +33,8 @@ Everything below is for an agent helping the operator in their own session.
 
 ## Commands
 
-Run these from the repository the loop works on, or from anywhere in a workspace of several repositories (they find it
-from the current directory: the nearest `canopy-workspace.toml` above it, else the repository).
+Run these from anywhere in the workspace the loop runs in (they find it from the current directory: the nearest
+`canopy-workspace.toml` above it). canopy runs only in a workspace, even for one repository.
 
 | Command | What it does |
 |---|---|
@@ -49,8 +49,7 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and prints its result. Records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
-| `canopy init [--provider NAME]` | Writes the user config and `canopy.toml` if missing. Never overwrites either. |
-| `canopy init --workspace [[NAME=]URL...]` | Sets up a workspace: map, `MAP.md`, `.gitignore`; adds and syncs URLs. |
+| `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and the user config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
 | `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
@@ -59,8 +58,8 @@ from the current directory: the nearest `canopy-workspace.toml` above it, else t
 
 ## Where things are
 
-The state directory is `paths.state_dir`, `~/.canopy` by default, or `.canopy/` at the root of a workspace. Everything
-in it is readable only by the operator; in the commands below, replace `~/.canopy` with it.
+The state directory is `.canopy/` at the root of the workspace. Everything in it is readable only by the operator; run
+the commands below from the workspace root.
 
 | Path | What it holds |
 |---|---|
@@ -73,8 +72,8 @@ in it is readable only by the operator; in the commands below, replace `~/.canop
 | `chores/<run id>.log`, `.prompt` | A chore run's output and prompt; `chores/<name>/` is a chore's own directory. |
 
 Config: the user file `~/.config/canopy/config.toml` (`$XDG_CONFIG_HOME/canopy/config.toml`), personal, and the
-repository's `canopy.toml` (in a workspace, `canopy-workspace.toml`, which also lists the repositories), shared. The
-user file wins key by key; some keys, such as `tracker.labels` and everything under `runtime`, may be set only in the
+workspace's `canopy-workspace.toml`, which also lists the repositories, shared. No code repository holds canopy config.
+The user file wins key by key; some keys, such as `tracker.labels` and everything under `runtime`, may be set only in the
 user file.
 
 ## Answering "why wasn't KEY picked up?"
@@ -87,7 +86,7 @@ Work through these in order and stop at the first that explains it.
 2. What did the overseer decide about KEY?
 
    ```sh
-   sqlite3 -readonly ~/.canopy/canopy.db \
+   sqlite3 -readonly .canopy/canopy.db \
      "select tick_id, action, rationale from decisions where ticket_key = 'KEY' order by id desc limit 20"
    ```
 
@@ -100,17 +99,17 @@ Work through these in order and stop at the first that explains it.
      `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
      `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree, or the pool is
      at its declared size), `bad_slug`, `bad_base`, `no_branch` (nothing to continue in that repository yet),
-     `unknown_repo` (in a workspace: no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
+     `unknown_repo` (no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
      worker prompt did not render; an override may lack `{{LABELS}}`, or for a run over several repositories
-     `{{REPOSITORIES}}` and `{{PRS}}`), `spawn_failed`. In a workspace, attempt limits and the fix-ci cooldown count per
-     repository of the ticket. A run that ends `failed` with a summary starting `not authorized:` is the worker finding
+     `{{REPOSITORIES}}` and `{{PRS}}`), `spawn_failed`. Attempt limits and the fix-ci cooldown count per repository
+     of the ticket. A run that ends `failed` with a summary starting `not authorized:` is the worker finding
      the ticket closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.
    - `attention:<reason>`: it is waiting on a human (below).
 4. If it was dispatched, look at its runs:
 
    ```sh
-   sqlite3 -readonly ~/.canopy/canopy.db \
+   sqlite3 -readonly .canopy/canopy.db \
      "select id, kind, status, branch, started_at, ended_at, result_json from runs where ticket_key = 'KEY' order by id"
    ```
 
@@ -123,8 +122,8 @@ Work through these in order and stop at the first that explains it.
 
 ## The attention list
 
-`canopy status` or `attention.md`. Each item is a ticket and a reason, and in a workspace sometimes the repository of
-the ticket's PR it is about, shown as `KEY (repo)`. It disappears on its own the first tick its cause is gone; there is
+`canopy status` or `attention.md`. Each item is a ticket and a reason, and sometimes the repository of the ticket's PR
+it is about, shown as `KEY (repo)`. It disappears on its own the first tick its cause is gone; there is
 no dismissing. Reasons:
 
 | Reason | What the human does |
@@ -145,8 +144,9 @@ no dismissing. Reasons:
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 
 To split a ticket that needs several repositories into one ticket per repository, an authorized replier comments on it
-asking for a split. In a workspace of several, a later tick dispatches a splitter, which creates the children with no
-labels and comments on the ticket; label each child to start it. Without such a comment a ticket is never split.
+asking for a split. In a workspace of several repositories, a later tick dispatches a splitter, which creates the
+children with no labels and comments on the ticket; label each child to start it. Without such a comment a ticket is
+never split.
 
 The overseer may record other reasons; the detail says what it wants.
 

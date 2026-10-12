@@ -166,9 +166,7 @@ def cmd_get(state: dict[str, Any], args: argparse.Namespace, state_path: Path) -
 
 
 def cmd_return(state: dict[str, Any], args: argparse.Namespace) -> int:
-    slots = list(state.get("slots", []))
-    if os.environ.get("TREEHOUSE_ROOT"):
-        slots = [s for pool in state.get("pools", {}).values() for s in pool.get("slots", [])]
+    slots = [*state.get("slots", []), *(s for pool in state.get("pools", {}).values() for s in pool.get("slots", []))]
     target = args.target
     slot = next((s for s in slots if target in (s["name"], s["path"])), None)
     if slot is None:
@@ -196,9 +194,7 @@ def cmd_destroy(state: dict[str, Any], args: argparse.Namespace) -> int:
     if not args.yes:
         print("fake treehouse: only `destroy --yes` is supported", file=sys.stderr)
         return 2
-    pools = [state]
-    if os.environ.get("TREEHOUSE_ROOT"):
-        pools = list(state.get("pools", {}).values())
+    pools = [state, *state.get("pools", {}).values()]
     for pool in pools:
         slots = pool.get("slots", [])
         slot = next((s for s in slots if s["path"] == args.target), None)

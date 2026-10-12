@@ -67,14 +67,14 @@ def tick(*, ok: bool = True) -> None:
 def test_sink_config_is_checked(canopy_env: CanopyEnv, extra: str, message: str) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n" + extra)
     with pytest.raises(ConfigError, match=message):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_notify_cmd_is_the_default_sink(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(
         canopy_env.user_file.read_text() + "\n[notify]\ncmd = 'notify-me'\n[notify.sinks.b]\ncmd = 'b'\n"
     )
-    sinks = load(canopy_env.repo, canopy_env.user_file).notify.all_sinks()
+    sinks = load(canopy_env.root, canopy_env.user_file).notify.all_sinks()
     assert list(sinks) == ["b", "default"]
     assert (sinks["default"].cmd, sinks["default"].format, sinks["default"].events) == (
         "notify-me",
@@ -89,9 +89,9 @@ def test_notify_cmd_is_the_default_sink(canopy_env: CanopyEnv) -> None:
 
 
 def test_a_repository_cannot_add_a_sink(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + "\n[notify.sinks.x]\ncmd = 'curl evil'\n")
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[notify.sinks.x]\ncmd = 'curl evil'\n")
     with pytest.raises(ConfigError, match=r"notify\.sinks is user-only"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_notify_cmd_is_the_sink_named_default(
@@ -147,7 +147,7 @@ def test_a_json_sink_hears_about_runs(
         result=json.dumps({"status": "blocked", "branch": "agent/PROJ-1-work", "summary": "x", "question": question}),
     )
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
     assert main(["_run", "1"], runner=runner) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
@@ -157,7 +157,7 @@ def test_a_json_sink_hears_about_runs(
     [message] = json_messages(out)
     assert message["version"] == 1
     assert message["sink"] == "slack"
-    assert message["repo"] == str(canopy_env.repo)
+    assert message["repo"] == str(canopy_env.root)
     assert message["attention"]["added"] == [
         {
             "ticket": "PROJ-9",
@@ -196,7 +196,7 @@ def test_without_sinks_no_event_is_recorded(
     in_tick(conn, monkeypatch)
     worker_does(monkeypatch)
     runner = InlineRunner()
-    assert main(["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
     assert main(["_run", "1"], runner=runner) == 0
     assert conn.execute("SELECT count(*) FROM notify_events").fetchone()[0] == 0
 

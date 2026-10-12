@@ -24,7 +24,7 @@ def review_group() -> None:
 @click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL, as an opaque string.")
 @click.option("--sha", required=True, metavar="SHA", help="The full head commit you read on the PR just now.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
-@click.option("--repo", type=REPO, help="The PR's repository, in a workspace of several. Implied in one repository.")
+@click.option("--repo", type=REPO, help="The PR's repository, by its name in the map. Required.")
 @click.option("--context", type=TextType(), help="What the reviewer should look at first. Never quoted text.")
 @click.pass_context
 def cmd_review_run(

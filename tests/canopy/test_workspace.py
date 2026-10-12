@@ -35,7 +35,7 @@ def dispatch(key: str, *args: str) -> list[str]:
 # The map and the config layer
 
 
-def test_the_workspace_is_found_from_below_and_replaces_the_repository_file(
+def test_the_workspace_is_found_from_below_and_its_repositories_files_are_not_read(
     ws: Ws, canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (ws.clone("api") / "canopy.toml").write_text('[tracker]\nprovider = "jira"\nquery = "project = API"\n')
@@ -43,7 +43,7 @@ def test_the_workspace_is_found_from_below_and_replaces_the_repository_file(
     deep.mkdir()
     found = workspace.find(deep)
     assert found.root == ws.root
-    assert (found.name, found.single, found.map_file) == ("acme", False, ws.root / config.WORKSPACE_FILE_NAME)
+    assert (found.name, found.map_file) == ("acme", ws.root / config.WORKSPACE_FILE_NAME)
     assert [(r.name, r.path, r.summary, r.cloned) for r in found.repos] == [
         ("api", ws.clone("api"), "The api repository.", True),
         ("web", ws.clone("web"), "The web repository.", True),
@@ -51,8 +51,8 @@ def test_the_workspace_is_found_from_below_and_replaces_the_repository_file(
     cfg = config.load(found.root, canopy_env.user_file)
     # The repositories' own canopy.toml files are not read inside a workspace: one tracker, one queue.
     assert (cfg.tracker.provider, cfg.tracker.query) == ("github", "is:issue is:open")
-    # State is always under the workspace, whatever the user file's paths.state_dir says.
-    assert cfg.paths.state_dir == ws.state_dir
+    # Each workspace keeps its own state.
+    assert found.state_dir == ws.state_dir
 
 
 def test_the_workspace_file_is_a_repository_file_for_scopes_and_policy(ws: Ws, canopy_env: CanopyEnv) -> None:
@@ -87,12 +87,22 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
         load_both(ws.root, canopy_env.user_file)
 
 
-def test_a_repository_with_no_workspace_file_is_a_workspace_of_one(canopy_env: CanopyEnv) -> None:
-    found = workspace.find(canopy_env.repo)
-    assert (found.root, found.name, found.single, found.map_prose) == (canopy_env.repo, "repo", True, None)
-    assert [r.path for r in found.repos] == [canopy_env.repo]
-    assert workspace.one_name(Path("/x/2024_My.Repo")) == "my-repo"
-    assert workspace.one_name(Path("/x/___")) == "repo"
+def test_canopy_runs_only_in_a_workspace_and_reads_no_repository_file(tmp_path: Path) -> None:
+    """D016: a code repository is never a workspace, and a `canopy.toml` left in one is named, not read."""
+    checkout = tmp_path / "code"
+    (checkout / ".git").mkdir(parents=True)
+    with pytest.raises(config.ConfigError, match=r"no canopy-workspace\.toml here or above") as e:
+        workspace.find(checkout)
+    assert "is not read" not in str(e.value)
+    (checkout / "canopy.toml").write_text('[tracker]\nprovider = "jira"\n')
+    (checkout / "src").mkdir()
+    with pytest.raises(config.ConfigError, match=r"canopy\.toml is not read: move its keys"):
+        workspace.find(checkout / "src")
+
+
+def test_a_workspace_without_a_name_is_named_after_its_directory() -> None:
+    assert workspace.default_name(Path("/x/2024_My.Repo")) == "my-repo"
+    assert workspace.default_name(Path("/x/___")) == "workspace"
 
 
 def test_the_state_directory_must_be_private(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
@@ -136,7 +146,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
     assert run["cwd"] == str(ws.root)
     prompt = run["argv"][3]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
-    assert state["workspace"] == {"name": "acme", "single_repository": False, "map": str(ws.root / "MAP.md")}
+    assert state["workspace"] == {"name": "acme", "map": str(ws.root / "MAP.md")}
     assert [(r["name"], r["summary"], r["cloned"], r["leased_slots"]) for r in state["repositories"]] == [
         ("api", "The api repository.", True, []),
         ("docs", "The docs repository.", False, []),
@@ -159,7 +169,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
-            "--repo is required in a workspace: name the repositories for PROJ-2 (api, docs, web)",
+            "--repo is required: name the repositories for PROJ-2 (api, docs, web)",
         ),
     ]
     [item] = attention.current(conn)
@@ -373,6 +383,11 @@ def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(
     assert setup_workspace.shown("git@github.com:acme/api.git") == "git@github.com:acme/api.git"
 
 
-def test_sync_outside_a_workspace_refuses(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+def test_sync_outside_a_workspace_refuses(
+    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
     assert main(["workspace", "sync"]) == 1
-    assert "run `canopy init --workspace` first" in capsys.readouterr().err
+    assert "run `canopy init` first" in capsys.readouterr().err

@@ -153,7 +153,7 @@ Controls:
 
 - canopy never reads, stores, or forwards tokens. The runtime owns them.
 - The SQLite journal stores summaries, never raw CI logs or command output.
-  Worker stdout goes to a log file under `state_dir`, readable only by the
+  Worker stdout goes to a log file under the workspace's `.canopy/`, readable only by the
   operator.
 - Listeners follow T8. No outbound calls from the harness except through the
   configured commands. canopy ships one program that makes them, the Slack sink (DESIGN §20): it runs only as a sink
@@ -288,36 +288,37 @@ can comment on the ticket and its PRs, so one that disregards the prompt, or is 
 message there, and its work shows what the message asked for. Text the ticket's readers must never see belongs on a
 private ticket, whose worker cannot write to it.
 
-### T7. Hostile repository config
+### T7. Hostile shared config
 
-The repository's `canopy.toml` is read on every tick, from whatever the operator's checkout contains. Anyone who can
-push to the repository can change it, and a checkout of someone else's unreviewed branch carries their version. Unlike
-build scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent
-starts. If it could set the runtime commands, `notify.cmd`, chores, the review query, prompt paths, capacity, queue
-labels, or authorized repliers, one commit would be enough to run commands on operators' machines, raise their spend, or
-pick who steers their workers.
+canopy reads no config from a code repository (D016): a commit to one, or a checkout of someone else's unreviewed
+branch, cannot change what the harness does. Its shared config is the workspace file, `canopy-workspace.toml` (DESIGN
+§12, §18), read on every tick. A workspace may itself be a repository the operator shares with a team, so anyone who
+can push there can change that file, and a checkout of an unreviewed branch of it carries their version. Unlike build
+scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent starts.
+If it could set the runtime commands, `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, or
+authorized repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who
+steers their workers.
 
-In a workspace of several repositories (DESIGN §18), the workspace file `canopy-workspace.toml` is the repository file
-for everything in this section, and the repositories' own `canopy.toml` files are not read. It may be committed to a
-shared workspace repository, so it is exposed the same way. It also holds the map: repository names, one-line
-summaries, and clone URLs. Names and summaries are data, like ticket text. URLs are read only by `canopy workspace
-sync`, a command the operator runs, which prints each clone before making it; a tick never clones or changes a remote.
-Dropping a repository from the map makes the operator's next sync remove its clone under `repos/` and its slots, but
-only when nothing in them would be lost: a clean clone with no stash and no commit its remote lacks, and slots treehouse
-destroys unforced (D066). A pool's size is user-only (`capacity`), so the map cannot grow the operator's pools.
+The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
+data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
+clone before making it; a tick never clones or changes a remote. Dropping a repository from the map makes the
+operator's next sync remove its clone under `repos/` and its slots, but only when nothing in them would be lost: a clean
+clone with no stash and no commit its remote lacks, and slots treehouse destroys unforced (D066). A pool's size is
+user-only (`capacity`), so the map cannot grow the operator's pools.
 
 Controls, in code:
 
-- Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A repository file
+- Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A workspace file
   that sets one is a config error and the tick does not run.
-- `policy.*` values from the repository file apply only when stricter than the built-in defaults.
+- `policy.*` values from the workspace file apply only when stricter than the built-in defaults.
+- No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
   private to the operator (a symlink, someone else's, or open to others), and refuses to load a definitions snapshot
   that is not, so a committed `.canopy/` cannot supply a journal or agent definitions (D053).
 
-The repository's OpenCode config is read by the agent runtime, in the repository for the overseer and in the worktree
-for a worker, so it too comes from whoever can push. canopy's agent definitions are therefore not repository config:
+OpenCode config is read by the agent runtime, in the workspace root for the overseer and in the worktree for a
+worker, so it too comes from whoever can push. canopy's agent definitions are therefore not repository config:
 agent runs load them from a directory canopy owns, named in the operator's command templates (DESIGN §13, D040).
 OpenCode merges a repository's definition of the same agent into canopy's rather than replacing it, and a repository
 that repeats one of canopy's permission patterns can put its own rules after it (D044). So, in code:
@@ -410,7 +411,7 @@ the network (D076).
 ## 7. Operator responsibilities
 
 - Configure branch protection: no direct pushes to protected branches, required
-  reviews, no self-approval. In a workspace, in every repository in the map; `canopy init --workspace` lists them.
+  reviews, no self-approval, in every repository in the workspace's map; `canopy init` lists them.
 - Keep `trust.authorized_repliers` short, and `trust.trusted_reviewers` to accounts whose review comments you would
   have a worker act on unread: a listed bot steers your workers on every PR it reviews.
 - Check who can add your `tracker.labels` in your tracker. That permission is the authorization to start work, and it

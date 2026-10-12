@@ -25,14 +25,10 @@ share work.
 
 ## Before you start: a fast disk
 
-Put the workspace on the fast disk (`canopy init --workspace` in a directory there). A workspace's slots live inside
+Put the workspace on the fast disk (`canopy init` in a directory there). A workspace's slots live inside
 it, under `.treehouse/`, and canopy has no setting to move them, because git keeps each slot's index and objects in
 the primary clone under `repos/` anyway. Bazel's outputs and caches go wherever your `.bazelrc` says, so they can sit
 on the fast disk even when the workspace cannot.
-
-In a single repository without a workspace, the pool is wherever treehouse puts it: `~/.treehouse` by default, or the
-`root` in `~/.config/treehouse/config.toml`. A repository that commits its own `treehouse.toml` overrides your `root`.
-If it does, use a workspace.
 
 ## 1. Share Bazel's caches between slots
 
@@ -141,9 +137,9 @@ esac
 
 - canopy runs it with no shell, so give an absolute path (no `~`) or a command on your `PATH`. Write
   `sh -c '...'` for a one-liner.
-- It runs in each slot of a run: once in a single repository, once per repository in a joint run. Splits and reviews
-  run none.
-- Its output goes to the run's log, `.canopy/runs/<id>.log` in a workspace (`~/.canopy/runs/` otherwise), after a
+- It runs in each slot of a run: once for a run in one repository, once per repository in a joint run. Splits and
+  reviews run none.
+- Its output goes to the run's log, `.canopy/runs/<id>.log` in the workspace, after a
   `--- setup <repo> ---` header.
 - **A failure stops the run.** An exit other than 0, or running past `setup_timeout_minutes`, ends the run `crashed`
   before the worker starts, and the ticket goes on the attention list. The run still counts toward the ticket's

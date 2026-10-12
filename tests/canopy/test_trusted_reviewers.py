@@ -49,7 +49,7 @@ def tickets_of(state: dict[str, object]) -> dict[str, dict[str, object]]:
 def run_once(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str) -> sqlite3.Row:
     runner = InlineRunner()
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", KEY, "--label", "agent-ready-tester", *args], runner=runner) == 0
+    assert main(["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", *args], runner=runner) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
@@ -67,8 +67,8 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     trust(canopy_env, "octocat", "canopy:review")
-    db.touch_ticket(conn, KEY, str(canopy_env.repo))
-    db.touch_ticket(conn, "PROJ-2", str(canopy_env.repo))
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     message = reply(conn, monkeypatch, GO_AHEAD)
 
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
@@ -87,7 +87,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     assert "operator" not in tickets["PROJ-2"]
 
     # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
-    assert main(["ticket", "set", KEY, "--cursor", f"message={message}"]) == 0
+    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}"]) == 0
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None
     assert conversation.operator_section(conn, ticket) is None
@@ -150,7 +150,7 @@ def test_a_reply_on_a_public_ticket_needs_a_ticket_canopy_knows(
 ) -> None:
     assert main(["reply", KEY, GO_AHEAD]) == 1
     assert "reply refused (unknown)" in capsys.readouterr().err
-    db.touch_ticket(conn, KEY, str(canopy_env.repo))
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
     assert main(["reply", KEY, GO_AHEAD]) == 0
     assert f"Recorded message 1 on {KEY}." in capsys.readouterr().out
     # The same reply again is the same submission.
@@ -200,10 +200,13 @@ def test_an_override_without_the_operator_messages_fails_closed_once_there_are_s
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
     if replied:
-        db.touch_ticket(conn, KEY, str(canopy_env.repo))
+        db.touch_ticket(conn, KEY, str(canopy_env.root))
         reply(conn, monkeypatch, GO_AHEAD)
     tick_id = in_tick(conn, monkeypatch)
-    code = main(["dispatch", KEY, "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner())
+    code = main(
+        ["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
+        runner=InlineRunner(),
+    )
     decisions = [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
     if not replied:
         assert code == 0, decisions
@@ -217,7 +220,7 @@ def test_an_override_without_the_operator_messages_fails_closed_once_there_are_s
 def test_forgetting_a_ticket_leaves_its_operator_messages_behind(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    db.touch_ticket(conn, KEY, str(canopy_env.repo))
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
     reply(conn, monkeypatch, GO_AHEAD)
     assert conversation.has_operator_messages(conn, KEY)
     assert main(["forget", KEY]) == 0

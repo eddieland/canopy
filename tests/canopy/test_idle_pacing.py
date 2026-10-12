@@ -109,7 +109,7 @@ def listed(conn: sqlite3.Connection, tick_id: int) -> None:
 
 def seen_ticket(conn: sqlite3.Connection, _tick_id: int) -> None:
     db.set_ticket(conn, KEY, "/r", phase="ci_running")
-    db.set_unit(conn, KEY, "/r", "r", single=True, phase="ci_running", cursors={"ci": "1"}, pr_url=PR)
+    db.set_unit(conn, KEY, "/r", "r", phase="ci_running", cursors={"ci": "1"}, pr_url=PR)
 
 
 @pytest.mark.parametrize(
@@ -148,7 +148,7 @@ def sets_ticket(*, phase: str | None = None, done: bool = False) -> Step:
 
 
 def moves_ci_cursor(conn: sqlite3.Connection, _tick_id: int) -> None:
-    db.set_unit(conn, KEY, "/r", "r", single=True, cursors={"ci": "2"})
+    db.set_unit(conn, KEY, "/r", "r", cursors={"ci": "2"})
 
 
 def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:

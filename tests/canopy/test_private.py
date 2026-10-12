@@ -46,7 +46,7 @@ def operator(*args: str, monkeypatch: pytest.MonkeyPatch) -> int:
 
 def dispatch(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str, runner: InlineRunner) -> int:
     tick_id = in_tick(conn, monkeypatch)
-    code = main(["dispatch", KEY, *args], runner=runner)
+    code = main(["dispatch", KEY, "--repo", "repo", *args], runner=runner)
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
     return code
@@ -120,6 +120,8 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
                 canopy(
                     "dispatch",
                     KEY,
+                    "--repo",
+                    "repo",
                     "--kind",
                     "resume",
                     "--cursor",
@@ -195,7 +197,7 @@ def test_the_operators_commands_refuse_inside_canopys_runs(
 def test_start_refuses_without_tracker_tools_for_a_private_worker(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    canopy_env.write_repo('[tracker]\nprovider = "linear"\nquery = "assigned to me"\n')
+    canopy_env.write_shared('[tracker]\nprovider = "linear"\nquery = "assigned to me"\n')
     assert main(["start", KEY]) == 1
     assert "start refused (no_read_tools)" in capsys.readouterr().err
     canopy_env.write_user(
@@ -393,8 +395,8 @@ def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
 
 
 def test_the_private_worker_definition_allows_only_the_trackers_read_tools(canopy_env: CanopyEnv) -> None:
-    cfg = config.load(canopy_env.repo)
-    text = (definitions.ensure(cfg.paths.state_dir, cfg) / "agents" / "canopy-worker-private.md").read_text()
+    cfg = config.load(canopy_env.root)
+    text = (definitions.ensure(canopy_env.state_dir, cfg) / "agents" / "canopy-worker-private.md").read_text()
     rules = [line.strip() for line in text.splitlines() if line.startswith('  "atlassian_')]
     tools = cfg.tracker.tools()
     assert tools is not None
@@ -459,7 +461,7 @@ def test_run_messages_and_the_run_ended_event_carry_the_message() -> None:
 
 def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + '\n[notify.sinks.log]\ncmd = "true"\nevents = ["runs"]\n')
-    cfg = config.load(canopy_env.repo)
+    cfg = config.load(canopy_env.root)
     tick_id = db.start_tick(conn, dry_run=False)
     db.touch_ticket(conn, KEY, "/r")
     run_id = db.insert_run(
@@ -483,7 +485,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert main(["start", KEY]) == 0
-    db.touch_ticket(conn, "PROJ-2", str(canopy_env.repo))
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     assert main(["reply", KEY, "B"]) == 0
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
@@ -500,7 +502,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     ]
     assert private["awaiting_reply"] is None
     # A handled message moves the cursor past it.
-    assert main(["ticket", "set", KEY, "--cursor", f"message={question + 1}"]) == 0
+    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}"]) == 0
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None
     assert conversation.state_section(conn, ticket) == {
@@ -511,7 +513,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
 
 
 def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["ticket", "set", KEY, "--cursor", "message=c-1"]) == 2
+    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", "message=c-1"]) == 2
     assert "a message cursor is a message id" in capsys.readouterr().err
 
 
@@ -558,12 +560,12 @@ def test_show_drops_control_characters(
 
 
 def test_the_snapshot_follows_the_tracker_tools(canopy_env: CanopyEnv) -> None:
-    cfg = config.load(canopy_env.repo)
-    first = definitions.ensure(cfg.paths.state_dir, cfg)
+    cfg = config.load(canopy_env.root)
+    first = definitions.ensure(canopy_env.state_dir, cfg)
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nread_tools = ["getJiraIssue"]\n')
     )
-    second = definitions.ensure(cfg.paths.state_dir, config.load(canopy_env.repo))
+    second = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     assert first != second
     assert '"atlassian_getJiraIssue": allow' in (second / "agents" / "canopy-worker-private.md").read_text()
 
@@ -573,7 +575,7 @@ def test_config_refuses_a_tool_name_that_could_reach_the_definition_as_more_than
         canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nread_tools = ["a\\": allow"]\n')
     )
     with pytest.raises(config.ConfigError, match="read_tools"):
-        config.load(canopy_env.repo)
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'mcp_server = "github"\n')
+        config.load(canopy_env.root)
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'mcp_server = "github"\n')
     with pytest.raises(config.ConfigError, match="user-only"):
-        config.load(canopy_env.repo)
+        config.load(canopy_env.root)

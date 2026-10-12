@@ -31,7 +31,7 @@ SETUP = (
 
 def configure(canopy_env: CanopyEnv, *, runtime: str = "", paths: str = "") -> None:
     """Rewrite the user file with `runtime` lines in its `[runtime]` table and `paths` lines in its `[paths]` one."""
-    text = user_toml(canopy_env.state_dir)
+    text = user_toml()
     text = text.replace("[runtime]\n", f"[runtime]\n{runtime}\n").replace("[paths]\n", f"[paths]\n{paths}\n")
     canopy_env.write_user(text)
 
@@ -41,7 +41,9 @@ def setup_is(canopy_env: CanopyEnv, command: str, *extra: str) -> None:
 
 
 def dispatch(*args: str, kind: str = "implement") -> list[str]:
-    return ["dispatch", "PROJ-1", "--label", LABEL, "--kind", kind, *args]
+    """`canopy dispatch` for PROJ-1, in the only repository unless `args` name others."""
+    repos = () if "--repo" in args else ("--repo", "repo")
+    return ["dispatch", "PROJ-1", *repos, "--label", LABEL, "--kind", kind, *args]
 
 
 def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, runner: InlineRunner) -> sqlite3.Row:
@@ -134,7 +136,7 @@ def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
     run = dispatch_and_run(conn, monkeypatch, InlineRunner())
 
     assert run["status"] == "crashed"
-    assert json.loads(run["result_json"]) == {"harness": "setup exited 3; see the run log"}
+    assert json.loads(run["result_json"]) == {"harness": "repo: setup exited 3; see the run log"}
     assert "cannot fetch" in capsys.readouterr().out
     assert agent_runs(agent_log) == []  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
@@ -152,7 +154,7 @@ def test_a_setup_that_times_out_crashes_the_run(
     run = dispatch_and_run(conn, monkeypatch, SetupTimesOut())
 
     assert run["status"] == "crashed"
-    assert json.loads(run["result_json"]) == {"harness": "setup timed out after 5 minutes; see the run log"}
+    assert json.loads(run["result_json"]) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
     assert agent_runs(agent_log) == []
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -164,7 +166,7 @@ def test_a_setup_that_cannot_start_crashes_the_run(
     run = dispatch_and_run(conn, monkeypatch, InlineRunner())
 
     assert run["status"] == "crashed"
-    assert json.loads(run["result_json"])["harness"].startswith("setup could not start: ")
+    assert json.loads(run["result_json"])["harness"].startswith("repo: setup could not start: ")
     assert agent_runs(agent_log) == []
 
 
@@ -198,7 +200,18 @@ def test_a_split_runs_no_setup(
     in_tick(conn, monkeypatch)
     result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
     monkeypatch.setenv("FAKE_SPLITTER_RESULT", json.dumps(result))
-    split = ["dispatch", "PROJ-12", "--label", LABEL, "--kind", "split", "--request", "1", "--repo", "api"]
+    split = [
+        "dispatch",
+        "PROJ-12",
+        "--label",
+        LABEL,
+        "--kind",
+        "split",
+        "--request",
+        "1",
+        "--repo",
+        "api",
+    ]
     assert main([*split, "--repo", "web"]) == 0
     run = wait_for_run(conn, 1)
     assert run["status"] == "done", Path(run["log_path"]).read_text()
@@ -217,7 +230,7 @@ def test_a_split_runs_no_setup(
 def test_a_setup_command_is_checked_when_the_config_loads(canopy_env: CanopyEnv, line: str, message: str) -> None:
     configure(canopy_env, runtime=line)
     with pytest.raises(config.ConfigError, match=message):
-        config.load(canopy_env.repo, canopy_env.user_file)
+        config.load(canopy_env.root, canopy_env.user_file)
 
 
 @pytest.mark.parametrize(
@@ -230,9 +243,9 @@ def test_a_setup_command_is_checked_when_the_config_loads(canopy_env: CanopyEnv,
 )
 def test_setup_and_the_include_file_are_user_only(canopy_env: CanopyEnv, section: str, line: str) -> None:
     # Either would run or seed what a commit chose on the operator's machine (TRUST_MODEL T7).
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + f"\n[{section}]\n{line}\n")
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + f"\n[{section}]\n{line}\n")
     with pytest.raises(config.ConfigError, match="user-only"):
-        config.load(canopy_env.repo, canopy_env.user_file)
+        config.load(canopy_env.root, canopy_env.user_file)
 
 
 # The personal .worktreeinclude

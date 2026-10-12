@@ -1,11 +1,8 @@
-"""`canopy init`: set up canopy for a repository and an operator.
+"""What `canopy init` writes for every workspace: the user config, and the pieces `setup.workspace` builds on.
 
-Writes the user config and repository config if missing, and prints the branch protection canopy relies on (DESIGN §12,
-TRUST_MODEL §7). Warns when `origin` pushes over SSH (D038), and when the repository still has copies of canopy's agent
-definitions from an earlier canopy (D040, D044).
-
-Neither config file is ever overwritten. Nothing else is installed: agent runs load canopy's definitions and skills from
-a directory canopy owns (`definitions.py`).
+The user config is written if missing and never overwritten. Nothing else is installed: agent runs load canopy's
+definitions and skills from a directory canopy owns (`definitions.py`). canopy writes nothing into a code repository
+(D016).
 """
 
 from __future__ import annotations
@@ -16,8 +13,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from canopy.core import definitions, hostgit
-from canopy.core.config import REPO_FILE_NAME
+from canopy.core import hostgit
 from canopy.infra import procs
 
 # A provider name becomes a directory name; keep it to one plain path component.
@@ -42,14 +38,6 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
 """
 
-SSH_REMOTE_WARNING = """\
-Warning: origin pushes over SSH ({urls}).
-  canopy strongly recommends HTTPS remotes with a credential helper (D038). Worker sandboxing is expected to block
-  the SSH agent socket, so a sandboxed worker could not push. This is a recommendation; nothing is refused. To switch:
-    git remote set-url origin https://<host>/<owner>/<repo>.git
-  or keep the SSH URL and rewrite it for pushes: git config url.https://<host>/.pushInsteadOf git@<host>:
-"""
-
 # Transports git runs over ssh. Anything else with `://` (https, git, file) is not SSH.
 _SSH_SCHEMES = ("ssh://", "git+ssh://", "ssh+git://")
 
@@ -69,10 +57,10 @@ def is_ssh_url(url: str) -> bool:
     return colon > 0 and (slash == -1 or colon < slash)
 
 
-def ssh_push_urls(runner: procs.Runner, repo_root: Path) -> list[str]:
-    """Return `origin`'s push URLs that go over SSH, after `insteadOf` rewrites. Empty if there is no `origin`."""
+def ssh_push_urls(runner: procs.Runner, clone: Path) -> list[str]:
+    """Return `origin`'s push URLs in `clone` that go over SSH, after `insteadOf` rewrites. Empty if it has none."""
     try:
-        result = runner.run(hostgit.argv("remote", "get-url", "--push", "--all", "origin"), cwd=repo_root, timeout=30)
+        result = runner.run(hostgit.argv("remote", "get-url", "--push", "--all", "origin"), cwd=clone, timeout=30)
     except procs.ProcError:
         return []
     if not result.ok:
@@ -82,7 +70,7 @@ def ssh_push_urls(runner: procs.Runner, repo_root: Path) -> list[str]:
 
 @dataclass
 class Report:
-    """What `run` wrote, updated, and left alone, the label it chose for a new user file, and old agent definitions."""
+    """What init wrote, updated, and left alone, the label it chose for a new user file, and old agent definitions."""
 
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
@@ -101,7 +89,7 @@ def default_label() -> str:
 def user_config_text(label: str) -> str:
     """Return the text of a new user config file with queue label `label`."""
     return f"""\
-# canopy user config: personal, never committed. Overrides the repository's canopy.toml key by key.
+# canopy user config: personal, never committed. Overrides each workspace's canopy-workspace.toml key by key.
 # Only what is yours to decide is here; every other key keeps its default, and gets new ones as canopy changes. Keys
 # marked user-only in DESIGN.md §12 may be set only here. Every key, with its default:
 # https://github.com/eddieland/canopy/blob/main/examples/config.toml
@@ -121,23 +109,6 @@ trusted_reviewers = []
 """
 
 
-def repo_config_text(provider: str) -> str:
-    """Return the text of a new `canopy.toml` for tracker `provider`."""
-    query = EXAMPLE_QUERIES.get(provider, "describe which tickets to look at, in plain language")
-    return f"""\
-# canopy.toml: committed at the repository root, shared by everyone who runs canopy on it.
-# Shared keys only; personal settings live in the user config (DESIGN.md §12).
-
-[tracker]
-provider = {json.dumps(provider)}
-# How to find candidate tickets: the tracker's own search syntax, or plain language. Edit this.
-# Finding is not authorizing: each operator's own labels are checked on every ticket.
-query = {json.dumps(query)}
-# A worker that needs an answer adds the label `needs-human`, and removes it when it resumes. Create it in your tracker,
-# since canopy does not create labels, or set needs_human_label to one you have.
-"""
-
-
 def write_if_missing(path: Path, text: str, report: Report) -> None:
     """Write `text` to `path` unless it exists, and record which in `report`."""
     if path.exists():
@@ -146,24 +117,3 @@ def write_if_missing(path: Path, text: str, report: Report) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     report.written.append(path)
-
-
-def run(repo_root: Path, user_file: Path, provider: str | None) -> Report:
-    """Do the init. `provider` is needed only when the repository has no canopy.toml yet."""
-    report = Report()
-    if user_file.exists():
-        report.kept.append(user_file)
-    else:
-        report.label = default_label()
-        write_if_missing(user_file, user_config_text(report.label), report)
-
-    repo_file = repo_root / REPO_FILE_NAME
-    if repo_file.exists():
-        report.kept.append(repo_file)
-    else:
-        if provider is None:
-            raise ValueError("the repository has no canopy.toml; a tracker provider is needed to write one")
-        write_if_missing(repo_file, repo_config_text(provider), report)
-
-    report.shadowing = definitions.shadowing(repo_root)
-    return report

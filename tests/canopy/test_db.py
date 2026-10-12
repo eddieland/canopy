@@ -79,7 +79,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
     tick = db.start_tick(conn, dry_run=True)
     db.touch_ticket(conn, "PROJ-1", "/repo")
     db.set_ticket(conn, "PROJ-1", "/repo", phase="ci_red", cursors={"comment": "c-7"})
-    db.set_unit(conn, "PROJ-1", "/repo", "api", single=False, phase="ci_red", cursors={"ci": "run-7"})
+    db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "run-7"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
     db.finish_tick(conn, tick, "ok", "1 decision")
@@ -96,17 +96,6 @@ def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
     last = db.last_tick(conn)
     assert last is not None
     assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
-
-
-def test_a_workspace_of_one_renames_its_unit(tmp_path: Path) -> None:
-    """D033: a workspace of one names its unit when it next writes it, whatever the repository was called before."""
-    conn = fresh(tmp_path)
-    db.migrate(conn, resources.migrations_dir())
-    db.set_unit(conn, "PROJ-1", "/r", "before", single=True, pr_url="https://x.test/pr/1")
-    db.set_unit(conn, "PROJ-1", "/r", "renamed", single=True, phase="ci_running")
-    assert [(u["repo"], u["phase"], u["pr_url"]) for u in db.units(conn, "PROJ-1")] == [
-        ("renamed", "ci_running", "https://x.test/pr/1")
-    ]
 
 
 def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
