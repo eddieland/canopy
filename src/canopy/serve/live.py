@@ -2,9 +2,9 @@
 
 SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version`
 four times a second: it changes whenever another connection commits. Only then does the stream read the attention
-list, the runs, the tickets, the chores, the last 24 hours' spend, and the latest tick again, and it sends each that
-differs from what it sent last, plus `ticket.changed` for each ticket whose summary changed. The stream never writes, so
-its own reads never move `data_version`.
+list, the runs, the tickets, the chores, the last day's and 30 days' spend, and the latest tick again, and it sends
+each that differs from what it sent last, plus `ticket.changed` for each ticket whose summary changed. The stream never
+writes, so its own reads never move `data_version`.
 
 The connection is opened and used only by the stream's own coroutine, on the server's event loop: the reads are small
 and quick, and keeping them on one thread is what sqlite3 requires of a connection.
@@ -93,9 +93,9 @@ class _Sent:
         if chores != self.chores:
             self.chores = chores
             found.append(StreamEvent(chores))
-        # Sent when the cost changes, not its window: the window moves with the clock on every read.
+        # Sent when a cost changes, not a window: the windows move with the clock on every read.
         spend = views.spend(backend, ctx)
-        if self.spend is None or spend.cost_usd != self.spend.cost_usd:
+        if self.spend is None or _costs(spend) != _costs(self.spend):
             self.spend = spend
             found.append(StreamEvent(SpendUpdated(spend=spend)))
         last = views.last_tick(ctx)
@@ -103,3 +103,7 @@ class _Sent:
             self.tick = last
             found.append(StreamEvent(TickUpdated(tick=last.tick, acknowledged=last.acknowledged)))
         return found
+
+
+def _costs(spend: Spend) -> tuple[float | None, float | None]:
+    return spend.day.cost_usd, spend.month.cost_usd

@@ -365,9 +365,11 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert before.cost_usd is not None
     assert after.cost_usd > before.cost_usd
     assert isinstance(spent, SpendUpdated)
-    assert spent.spend.cost_usd is not None
-    assert spend.spend.cost_usd is not None
-    assert spent.spend.cost_usd == pytest.approx(spend.spend.cost_usd + after.cost_usd - before.cost_usd)
+    assert (spent.spend.day.hours, spent.spend.month.hours) == (24, 720)
+    for was, now in ((spend.spend.day, spent.spend.day), (spend.spend.month, spent.spend.month)):
+        assert now.cost_usd is not None
+        assert was.cost_usd is not None
+        assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
 
 
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:
@@ -430,6 +432,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "StreamEvent",
         "Pool",
         "Spend",
+        "SpendWindow",
         "Tick",
         "ChoreSummary",
         "ChoreDetail",

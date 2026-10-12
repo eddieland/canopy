@@ -155,10 +155,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   not: the page scrolls instead.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
-  attention, and spent in the last 24 hours from `GET /api/spend`, on the stream) and the worktrees page (working,
-  held, needs a look, free, across every pool). Each is a label, the value, and one line under it, with a 2px top
-  rule in the state color it counts: `status-running`, `status-stopped` for held, `status-blocked`, `status-failed`
-  while something is broken, the accent for spend.
+  attention, and spent in the last 24 hours and in the last 30 days from `GET /api/spend`, on the stream) and the
+  worktrees page (working, held, needs a look, free, across every pool). Each is a label, the value, and one line
+  under it, with a 2px top rule in the state color it counts: `status-running`, `status-stopped` for held,
+  `status-blocked`, `status-failed` while something is broken, the accent for spend.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's

@@ -27,6 +27,7 @@ from canopy.serve.schema import (
     Run,
     RunState,
     Spend,
+    SpendWindow,
     StartStatus,
     Tick,
     TickDetail,
@@ -60,8 +61,9 @@ CHORE_RUNS = 10
 TICKS = 50
 TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
-# The window the spend figure covers.
-SPEND_HOURS = 24
+# The windows the spend figures cover: the last day and the last 30.
+SPEND_DAY_HOURS = 24
+SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
 _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
@@ -95,9 +97,14 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last SPEND_HOURS hours cost, by the backend's clock."""
-    since = backend.clock() - timedelta(hours=SPEND_HOURS)
-    return Spend(since=since, hours=SPEND_HOURS, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+    """What the last day and the last 30 days cost, by the backend's clock."""
+    now = backend.clock()
+    return Spend(day=_spent(ctx, now, SPEND_DAY_HOURS), month=_spent(ctx, now, SPEND_MONTH_HOURS))
+
+
+def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
+    since = now - timedelta(hours=hours)
+    return SpendWindow(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
 
 
 def last_tick(ctx: Context) -> LastTick:
