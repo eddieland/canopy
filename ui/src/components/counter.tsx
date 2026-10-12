@@ -18,17 +18,19 @@ const RULE: Record<Tone, string> = {
 
 /**
  * One counter. Its value keeps a fixed width and rolls when it changes, and it shows a skeleton only until the first
- * data arrives.
+ * data arrives. Its test id is `counter-` and the label's first word, unless `testId` names one.
  */
 export function Counter({
     label,
     value,
     tone,
+    testId,
     children,
 }: {
     label: string
     value: number | string | undefined
     tone: Tone
+    testId?: string
     children: ReactNode
 }) {
     return (
@@ -37,7 +39,7 @@ export function Counter({
                 'flex min-w-0 flex-col gap-1.5 rounded-md border border-t-2 bg-surface px-4 py-3',
                 RULE[tone],
             )}
-            data-testid={`counter-${label.toLowerCase().split(/[ ,]+/)[0]}`}
+            data-testid={`counter-${testId ?? label.toLowerCase().split(/[ ,]+/)[0]}`}
         >
             <span className="panel-label">{label}</span>
             <span className="readout h-8 text-3xl leading-8 font-medium">

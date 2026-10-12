@@ -85,7 +85,7 @@ export function tickTranscriptQuery(id: number) {
     })
 }
 
-/** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
+/** What the last 24 hours and the last 30 days cost. The stream sends them again whenever a cost changes. */
 export const spendQuery = queryOptions({
     queryKey: keys.spend,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),

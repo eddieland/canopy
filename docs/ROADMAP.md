@@ -417,9 +417,9 @@ cost in dollars and tokens, and `canopy status` shows it per recent run. Taken i
 loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
 alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
 `overseer_cmd` in a user file from before needs `--format json` added. The web UI's attention page shows what the
-last 24 hours cost (2026-10-08). Chore runs record theirs, the default `chore_cmd` asks for events, and the
-spend counts them (2026-10-08); a chore `cmd` of the operator's needs `--format json` added. Not designed yet: the
-budget and the pacing rule.
+last 24 hours cost (2026-10-08), and the last 30 days (2026-10-12). Chore runs record theirs, the default
+`chore_cmd` asks for events, and the spend counts them (2026-10-08); a chore `cmd` of the operator's needs
+`--format json` added. Not designed yet: the budget and the pacing rule.
 
 ## M14. PR-scoped work
 

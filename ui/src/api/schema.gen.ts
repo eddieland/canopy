@@ -810,11 +810,31 @@ export type components = {
         };
         /**
          * Spend
+         * @description What the last day and the last 30 days cost, read together, so a month never shows less than its day.
+         */
+        Spend: {
+            day: components["schemas"]["SpendWindow"];
+            month: components["schemas"]["SpendWindow"];
+        };
+        /**
+         * SpendUpdated
+         * @description What a window cost changed. The payload is both windows, as `GET /spend` returns them.
+         */
+        SpendUpdated: {
+            spend: components["schemas"]["Spend"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "spend.updated";
+        };
+        /**
+         * SpendWindow
          * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
          *
          *     Worker, split, and chore runs and each tick's overseer, by when they started. Reviews record nothing yet.
          */
-        Spend: {
+        SpendWindow: {
             /** Cost Usd */
             cost_usd: number | null;
             /** Hours */
@@ -824,18 +844,6 @@ export type components = {
              * Format: date-time
              */
             since: string;
-        };
-        /**
-         * SpendUpdated
-         * @description What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it.
-         */
-        SpendUpdated: {
-            spend: components["schemas"]["Spend"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "spend.updated";
         };
         /**
          * Started
