@@ -331,7 +331,7 @@ def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
 
 
 def _check_base(prefix: str, branch: str, base: str) -> None:
-    """Refuse a base that is not another ticket's agent branch (DESIGN §10, D045)."""
+    """Refuse a base that is not another ticket's agent branch, so a PR cannot target a release branch (DESIGN §10)."""
     tail = base.removeprefix(prefix)
     if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
         raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
@@ -340,7 +340,7 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
 
 
 def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence[str]) -> str:
-    """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D059)."""
+    """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D058)."""
     ticket = db.get_ticket(ctx.conn, key)
     recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
     if kind == "implement":
@@ -499,7 +499,7 @@ def _spawn(
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
-    # splitter's own check of who asked for the split needs the request (D061).
+    # splitter's own check of who asked for the split needs the request.
     if split:
         required: tuple[str, ...] = prompts.REQUIRED_SPLIT
     else:

@@ -1,7 +1,7 @@
 """What an agent run printed (DESIGN §13): the text its result line is read from, and what the runtime reported.
 
 A command template either prints the agent's text on stdout, or, with OpenCode's `--format json`, prints one JSON event
-per line. canopy reads two kinds of event and one field of every event, each validated (D026, D071):
+per line. canopy reads two kinds of event and one field of every event, each validated (D026):
 
 - `text`: a finished piece of the agent's text, in `part.text`. Joined one per line they are what stdout holds without
   `--format json`, so every result contract reads the same either way.

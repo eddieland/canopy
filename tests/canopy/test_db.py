@@ -118,7 +118,7 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
 
 
 def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
-    """D060: a live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
+    """A live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
     migrations = tmp_path / "migrations"
     migrations.mkdir()
     (migrations / "0001_init.sql").write_text((resources.migrations_dir() / "0001_init.sql").read_text())
