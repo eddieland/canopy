@@ -22,7 +22,11 @@ def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(
     latest, first = c.get("/api/ticks").json()
     assert (latest["id"], latest["status"], latest["dry_run"], latest["decisions"]) == (2, "ok", False, 5)
     assert (latest["session_id"], latest["cost_usd"], latest["summary"]) == ("ses_tick2", 0.31, "mock tick")
-    assert (first["id"], first["decisions"], first["summary"]) == (1, 5, "dispatched 2, waiting on 1")
+    assert (first["id"], first["decisions"], first["summary"]) == (
+        1,
+        5,
+        "dispatched 2, waiting on 1:\n- ABC-099 implement\n- ABC-103 implement",
+    )
     # The header's tick carries the count too, so the stream sends it again as a running tick records decisions.
     assert c.get("/api/tick").json()["tick"]["decisions"] == 5
 
@@ -42,9 +46,9 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
         ("ABC-099 (web)", "attention:needs_reviewer"),
         ("pr:https://github.com/acme/api/pull/12", "wait"),
     ]
-    # The overseer's text on one line, as the CLI prints it; its markup is characters for the UI to show as text.
+    # The overseer's text with its line breaks, for the UI to lay out; its markup is characters to show as text.
     assert page["decisions"][2]["rationale"] == (
-        "run 41 is implementing it. The ticket says <b>keep</b> the old route: left for the worker."
+        "run 41 is implementing it.\n  The ticket says <b>keep</b> the old route: left for the worker."
     )
     assert page["decisions"][3]["pr"] == "https://github.com/acme/web/pull/88"
 

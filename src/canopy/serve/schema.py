@@ -97,7 +97,7 @@ class Run(_Model):
     branch: str | None = None
     started_at: datetime
     ended_at: datetime | None = None
-    # The worker's summary or the harness's note, on one line.
+    # The worker's summary or the harness's note, line breaks kept, cut at 300 characters.
     summary: str | None = None
     prs: list[str] = []
     # The runtime's session, for opening its transcript with the runtime's own tools.
@@ -179,8 +179,8 @@ class Decision(_Model):
     pr: str | None = None
     # dispatch:<kind> | wait | skip | done | mirror | attention:<reason> | refused:<guard>
     action: str
-    # The overseer's text, untrusted: control characters dropped and whitespace collapsed, as `canopy decisions` prints
-    # it. Bounded at 2000 characters when it was recorded.
+    # The overseer's text, untrusted: control characters dropped and line breaks kept. Bounded at 2000 characters when
+    # it was recorded.
     rationale: str
 
 
@@ -206,7 +206,7 @@ class ChoreRun(_Model):
     state: RunState
     started_at: datetime
     ended_at: datetime | None = None
-    # The harness's note or the agent's summary, on one line.
+    # The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
     summary: str | None = None
     # How many findings an `ok` run reported.
     findings: int = 0

@@ -6,8 +6,8 @@ import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
 import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Decisions } from '@/components/decisions'
-import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { RichText } from '@/components/rich-text'
 import { TranscriptPanel } from '@/components/transcript'
 import { Skeleton } from '@/components/ui/skeleton'
 import { localTime } from '@/lib/time'
@@ -78,8 +78,8 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         <dt className="panel-label self-center">ended</dt>
                         <dd className="font-mono text-xs">{tick.ended_at ?? 'still running'}</dd>
                         <dt className="panel-label">summary</dt>
-                        <dd className="text-sm break-words">
-                            {tick.summary === null ? 'none' : <LinkedText text={tick.summary} />}
+                        <dd>
+                            {tick.summary ? <RichText text={tick.summary} /> : <span className="text-sm">none</span>}
                         </dd>
                         <dt className="panel-label self-center">overseer</dt>
                         <dd className="font-mono text-xs">

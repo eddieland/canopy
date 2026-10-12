@@ -209,7 +209,7 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
   (on a ticket's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale under
-  them on one line. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
+  them as rich text. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
   (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
   colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
@@ -221,6 +221,13 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
   overseer's under its decisions.
+- **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
+  summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
+  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
+  It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
+  its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
+  shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
+  A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
