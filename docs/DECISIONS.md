@@ -601,3 +601,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: a link named for a sink can run canopy itself; `SCIE_BOOT` picks the command whatever the name or environment.
 - Rejected: links named for each sink; `canopy <sink>` as the command (the name `canopy` wins over the argument).
 - Revisit: if pex or scie-jump picks a BusyBox command reliably by link name.
+
+## D113. `tracker.ticket_url` is a shared template the web UI fills in to link a ticket
+
+- An `https://` URL with `{key}` once; the browser fills it, the key URL-encoded. The harness never fetches it (D003).
+- Why shared: the tracker's address is the team's, and a link runs nothing, spends nothing, and authorizes no one (T7).
+- Rejected: a URL per ticket from the overseer (agent-written text in an `href`); one link format per provider.
+- Revisit: if a tracker's page address needs more than the key, such as a project id kept apart from it.

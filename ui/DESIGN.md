@@ -183,6 +183,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
+- **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
+  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
+  its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
+  it in its header; when it is unset, neither shows.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.

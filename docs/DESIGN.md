@@ -879,6 +879,7 @@ to do instead.
 | `tracker.provider` | shared | a property of the repository's tracker |
 | `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
+| `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
 | `tracker.labels` | user-only | defines this operator's queue |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
@@ -905,6 +906,7 @@ Workspace file, beside the map (§18):
 provider = "jira"            # jira | github | linear | any name; selects tracker-<provider> skill
 needs_human_label = "needs-human"
 query = 'project = PROJ AND statusCategory != Done'
+ticket_url = ""              # optional; a ticket's page, with {key} for its key, for the web UI to link (§17)
 
 [policy]
 max_implement_attempts = 2
@@ -989,6 +991,8 @@ Rules:
   never set them (TRUST_MODEL §3).
 - `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
+- `tracker.ticket_url` is empty (no links) or a plain `https://` URL of at most 500 characters with `{key}` exactly
+  once and no other braces, such as `https://acme.atlassian.net/browse/{key}`. The web UI puts it in an `href`.
 - `canopy init` sets up a workspace in the current directory, or fills in the one it is inside (§18). A new workspace
   is never the home directory, where every later init below it would land, and never a directory that already has a
   `.canopy/`, which may be an earlier canopy's journal. In a git checkout it refuses, unless given `--workspace`:
@@ -1240,7 +1244,9 @@ no tracker code in the harness. Tracker differences are handled in three places,
 1. **The contract below.** Agents map it onto the tools a tracker's MCP server exposes without being told how. This is
    the default for any tracker.
 2. **Config.** `tracker.provider`, `tracker.query`, the queue labels, `needs_human_label`, and
-   `trust.authorized_repliers` in the tracker's own identity format.
+   `trust.authorized_repliers` in the tracker's own identity format. `tracker.ticket_url`, optional, is where a
+   ticket's page is, with `{key}` for its key: the web UI links each ticket's page there (§22, D113). It is the only
+   tracker address canopy knows, and nothing but a browser the operator clicks in follows it.
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action
    (closing keywords, smart commits). Skills ship for `jira` and `github`. A skill is optional; add one when the
@@ -2021,8 +2027,7 @@ Approved with M10:
 - Routing finer than groups (D032's revisit), such as `crashed` to a phone and `needs_reviewer` to Slack only.
 - Digests at fixed times of day instead of an interval.
 - Reminders for items open longer than some threshold.
-- Links to tickets. The harness knows no tracker URLs (D003); a `tracker.ticket_url` template would let every message
-  link its ticket.
+- Links to tickets. `tracker.ticket_url` (§17) links them in the web UI; a sink's message could link its ticket too.
 - A sink secret read from a command (a password manager's CLI) instead of a file.
 
 ## 21. Reviews
@@ -2588,7 +2593,7 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, and whether the data is mock |
+| `GET /meta` | canopy's version, whether the data is mock, and `tracker.ticket_url` (or none) |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |

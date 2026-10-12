@@ -606,7 +606,8 @@ pages for the attention list, runs, and tickets with their conversations, with r
 a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
 UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. The worktrees page is in too (2026-10-08),
 tested against the fake treehouse. A reply no `ok` tick has read yet says so, and its answered question is marked so
-until the next tick drops it (2026-10-08, D097): the list lagging a reply read as a bug. Waiting on the operator: a real
+until the next tick drops it (2026-10-08, D097): the list lagging a reply read as a bug. A ticket's page links it in
+the tracker when `tracker.ticket_url` is set (2026-10-12, D113), taken on request. Waiting on the operator: a real
 run, the loop serving a real journal to a browser on loopback and on a private address, with the worktrees page reading
 the real pools.
 

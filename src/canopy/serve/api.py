@@ -136,7 +136,7 @@ def _session_routes(api: APIRouter, sessions: Sessions) -> None:
 def _read_routes(api: APIRouter, backend: Backend) -> None:
     @api.get("/meta", operation_id="getMeta")
     def meta() -> Meta:
-        return Meta(version=version("canopy"), mock=backend.mock)
+        return Meta(version=version("canopy"), mock=backend.mock, ticket_url=backend.config.tracker.ticket_url or None)
 
     @api.get("/attention", operation_id="listAttention")
     def attention() -> list[AttentionItem]:

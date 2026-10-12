@@ -37,6 +37,8 @@ from pydantic import (
     model_validator,
 )
 
+from canopy.core import contract
+
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
@@ -243,6 +245,22 @@ def _server_name(value: str) -> str:
 
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
+TICKET_KEY = "{key}"
+MAX_TICKET_URL = 500
+
+
+def _ticket_url(value: str) -> str:
+    # Empty means unset. The web UI puts it in an `href`: only a plain https:// URL, with the key's place exactly once.
+    rest = value.replace(TICKET_KEY, "", 1)
+    if value and (
+        not contract.plain_url(value, MAX_TICKET_URL) or TICKET_KEY not in value or "{" in rest or "}" in rest
+    ):
+        raise ValueError(
+            f"must be empty, or a plain https:// URL of at most {MAX_TICKET_URL} characters with {TICKET_KEY} exactly "
+            "once and no other braces"
+        )
+    return value
+
 
 @dataclass(frozen=True)
 class TrackerTools:
@@ -304,6 +322,9 @@ class Tracker(Section):
     provider: Annotated[NonBlank, Scope.SHARED]
     query: Annotated[NonBlank, Scope.SHARED]
     needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
+    # A ticket's page in the tracker, with {key} where its key goes: the web UI links each ticket there (DESIGN §17,
+    # D113). Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
+    ticket_url: Annotated[StrictStr, Scope.SHARED, AfterValidator(_ticket_url)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
