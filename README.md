@@ -110,6 +110,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
   one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix
   lands, note it to the chore: `canopy reply chore:NAME 'text'`, or the web UI's chore page; its next runs read it.
+  `examples/chores/README.md` lists chores worth writing, with a worked example.
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
