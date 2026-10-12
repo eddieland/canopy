@@ -51,7 +51,7 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in
   `parseStreamEvent`. The worktrees are the one query not on the stream, since each read runs `treehouse status` and
   briefly takes every pool's lock: `runs.updated` marks them stale when the running runs' worktrees change, the page's
-  Read again button refetches them, and they refetch every 30 seconds while a page shows them in a visible tab, the
+  Read again button refetches them, and they refetch every 10 seconds while a page shows them in a visible tab, the
   one `refetchInterval`.
 - **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, and the
   client adds the session's token (`writeToken` in `src/api/client.ts`). A refusal is an `ApiError` with its `guard`;
