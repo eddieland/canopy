@@ -173,7 +173,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
-  at the next tick; Waiting on you counts neither.
+  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it, on the
+  worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`, `working now` in
+  `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the runs on the
+  stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.

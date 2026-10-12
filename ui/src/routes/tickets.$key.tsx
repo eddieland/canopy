@@ -14,6 +14,7 @@ import { StartTicket } from '@/components/start-ticket'
 import { TicketActions } from '@/components/ticket-actions'
 import { TrackerLink } from '@/components/tracker-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { WorkingNow } from '@/components/working-now'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -131,6 +132,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     ) : (
                         <Conversation messages={messages} waiting={ticket.awaiting} />
                     )}
+                    <WorkingNow ticketKey={ticket.key} />
                     <ReplyForm
                         key={ticket.key}
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
