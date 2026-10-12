@@ -42,7 +42,7 @@ export function Nav() {
                 aria-hidden
                 data-testid="nav-highlight"
                 className={cn(
-                    'absolute inset-x-2 top-2 h-8 rounded-sm bg-surface-raised',
+                    'absolute inset-x-2 top-2 h-8 rounded-sm bg-accent/16',
                     'motion-safe:transition-[translate,opacity] motion-safe:duration-300',
                     'motion-safe:ease-[cubic-bezier(0.2,0,0,1)]',
                     active === -1 && 'opacity-0',
@@ -63,7 +63,12 @@ export function Nav() {
                         'data-[status=active]:text-foreground data-[status=active]:hover:bg-transparent',
                     )}
                 >
-                    <Icon className="size-4 transition-transform group-hover:-rotate-6 motion-reduce:transition-none" />
+                    <Icon
+                        className={cn(
+                            'size-4 transition-[rotate,color] group-hover:-rotate-6 motion-reduce:transition-none',
+                            'group-data-[status=active]:text-accent',
+                        )}
+                    />
                     {label}
                     {to === '/attention' && listed !== undefined && listed > 0 && (
                         <span className="ml-auto readout text-xs text-accent" data-testid="nav-attention-count">

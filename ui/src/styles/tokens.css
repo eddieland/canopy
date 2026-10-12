@@ -44,22 +44,23 @@
 .dark {
     color-scheme: dark;
 
-    --background: oklch(0.163 0.012 261);
-    --surface: oklch(0.195 0.016 262);
-    --surface-raised: oklch(0.242 0.021 261);
-    --border: oklch(0.287 0.026 260);
-    --foreground: oklch(0.945 0.012 260);
-    --muted-foreground: oklch(0.624 0.029 259);
-    --accent: oklch(0.735 0.137 273);
-    --accent-foreground: oklch(0.163 0.012 261);
-    --ring: oklch(0.735 0.137 273 / 0.5);
-    --scrollbar: oklch(0.624 0.029 259 / 0.4);
+    /* A deep indigo slate: the neutrals carry the accent's hue, so the canvas itself has some color. */
+    --background: oklch(0.165 0.024 270);
+    --surface: oklch(0.2 0.03 270);
+    --surface-raised: oklch(0.252 0.038 270);
+    --border: oklch(0.305 0.045 270);
+    --foreground: oklch(0.95 0.014 265);
+    --muted-foreground: oklch(0.68 0.048 266);
+    --accent: oklch(0.76 0.15 278);
+    --accent-foreground: oklch(0.165 0.024 270);
+    --ring: oklch(0.76 0.15 278 / 0.5);
+    --scrollbar: oklch(0.68 0.048 266 / 0.4);
 
-    --status-running: oklch(0.797 0.164 160);
-    --status-blocked: oklch(0.824 0.149 73);
-    --status-stopped: oklch(0.624 0.029 259);
-    --status-done: oklch(0.796 0.114 206);
-    --status-failed: oklch(0.712 0.181 23);
+    --status-running: oklch(0.8 0.18 160);
+    --status-blocked: oklch(0.83 0.16 73);
+    --status-stopped: oklch(0.68 0.048 266);
+    --status-done: oklch(0.8 0.13 210);
+    --status-failed: oklch(0.72 0.19 23);
 
     --flair-yellow: oklch(0.9 0.17 100);
     --flair-red: oklch(0.68 0.21 27);

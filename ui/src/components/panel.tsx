@@ -2,11 +2,11 @@ import type { ComponentProps, ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
-/** A page's title block: a small panel label, the title, and one line of description. */
+/** A page's title block: a small panel label in the accent, the title, and one line of description. */
 export function PageHeader({ label, title, children }: { label: string; title: string; children?: ReactNode }) {
     return (
         <header className="flex flex-col gap-1">
-            <span className="panel-label">{label}</span>
+            <span className="panel-label text-accent">{label}</span>
             <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
             {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
         </header>

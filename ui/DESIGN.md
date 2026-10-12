@@ -7,8 +7,10 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
-marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
-decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme.
+marks what is live, selected, or the action to take, and heads each page; what is selected sits on the accent's tint.
+Status color is reserved for state, and a counter wears the color of what it counts; nothing is colored for
+decoration, but the header ticker's flair. Dark is a deep indigo slate, its neutrals carrying the accent's hue so the
+canvas has color of its own; light is grey and white; neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
@@ -25,7 +27,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `border` | Every hairline. Applied by default to `border`, so `border-b` needs no color. |
 | `foreground` | Primary text. |
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
-| `accent`, `accent-foreground` | The one accent: active nav hairline, live indicator, links, primary buttons, focus. |
+| `accent`, `accent-foreground` | The one accent: active nav item, page labels, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `status-running` | A run working. Pulses. |
@@ -94,6 +96,9 @@ Rules:
   was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
   the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
+  The page header's label is in the accent; a panel's stays in `muted-foreground`.
+- **Selected is the accent's tint**: the nav's highlight (`bg-accent/16`, its icon in the accent), the selected inbox
+  row (`bg-accent/14`), and the runs page's chosen filter. Hover stays `surface-raised`, so selected and hovered differ.
 
 ## Motion
 
@@ -158,7 +163,8 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   attention, and spent in the last 24 hours and in the last 30 days from `GET /api/spend`, on the stream) and the
   worktrees page (working, held, needs a look, free, across every pool). Each is a label, the value, and one line
   under it, with a 2px top rule in the state color it counts: `status-running`, `status-stopped` for held,
-  `status-blocked`, `status-failed` while something is broken, the accent for spend.
+  `status-blocked`, `status-failed` while something is broken, the accent for spend. The same color washes down from
+  the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
