@@ -8,8 +8,8 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
-decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme
-(D094). The directions weighed are recorded in `docs/ui-explorations/2026-10-08-style/`.
+decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme.
+This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
 
