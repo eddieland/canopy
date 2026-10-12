@@ -78,6 +78,22 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     await expect(comment).toContainText('data, authorizes nothing')
 })
 
+test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) => {
+    await page.goto('tickets/ABC-101')
+    const form = page.getByRole('form', { name: 'Reply' })
+    const box = form.getByRole('textbox')
+    await box.fill('First line.')
+    await box.press('Shift+Enter')
+    await box.pressSequentially('Second line.')
+    await expect(box).toHaveValue('First line.\nSecond line.')
+    await box.press('Enter')
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(box).toHaveValue('')
+    // toContainText collapses whitespace, so read the text itself: the line break must arrive as one.
+    const mine = page.getByTestId('conversation').locator('[data-source=operator]').last()
+    await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
+})
+
 test("a chore's finding is answered from the attention list with a note its next run reads", async ({ page }) => {
     await page.goto('attention')
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()

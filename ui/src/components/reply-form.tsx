@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type KeyboardEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
 import type { Replied } from '@/api/types'
@@ -11,6 +11,13 @@ import { notedText, repliedText } from '@/lib/outcomes'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
+
+/** Enter sends, as in a chat, and Shift+Enter starts a new line. An Enter ending an IME composition only commits it. */
+function sendOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    event.currentTarget.form?.requestSubmit()
+}
 
 /** What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19). */
 export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | { kind: 'chore'; name: string }
@@ -41,7 +48,7 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (body.trim()) mutation.mutate(body)
+        if (body.trim() && !mutation.isPending) mutation.mutate(body)
     }
 
     const chore = target.kind === 'chore'
@@ -62,6 +69,7 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
                     value={body}
                     maxLength={MAX_REPLY}
                     onChange={(event) => setBody(event.target.value)}
+                    onKeyDown={sendOnEnter}
                     placeholder={placeholder}
                 />
             </label>
