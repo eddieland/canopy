@@ -11,6 +11,9 @@ It runs as its own process, configured like any other sink:
     [notify.sinks.desktop]
     cmd = "canopy-notify-desktop"
     events = ["attention", "loop", "runs"]
+
+In a release's single executable (D067), run a sink with `SCIE_BOOT` set to its name; `RELEASE_HELP`, below, which
+`--help` prints, has a wrapper script for `PATH`.
 """
 
 from __future__ import annotations
@@ -24,6 +27,14 @@ from typing import TextIO
 
 from canopy.infra import procs
 
+RELEASE_HELP = """\
+In a release's single executable, run this sink with SCIE_BOOT set to its name: SCIE_BOOT=canopy-notify-desktop
+/path/to/canopy. A link named canopy-notify-desktop can run canopy itself instead. So that a sink's cmd can name
+canopy-notify-desktop, put this script on PATH under that name, with the path to your canopy, and make it executable:
+
+    #!/bin/sh
+    exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy "$@"
+"""
 TITLE = "canopy"
 MAX_LINES = 12
 MAX_BODY = 1000
@@ -74,7 +85,12 @@ def command(title: str, body: str, platform: str) -> list[str] | None:
 
 def run(argv: list[str], stdin: TextIO, *, runner: procs.Runner, platform: str) -> int:
     """Show the message on `stdin` as a desktop notification. Returns the exit code."""
-    parser = argparse.ArgumentParser(prog="canopy-notify-desktop", description=__doc__.split("\n", 1)[0])
+    parser = argparse.ArgumentParser(
+        prog="canopy-notify-desktop",
+        description=__doc__.split("\n", 1)[0],
+        epilog=RELEASE_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     # Arguments first: `--help` must not wait for a message on stdin.
     parser.parse_args(argv)
     title, body = message(stdin.read())

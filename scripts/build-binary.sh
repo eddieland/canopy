@@ -5,8 +5,8 @@
 #
 # The file is a pex in venv mode, wrapped in a scie that carries a python-build-standalone interpreter. Venv mode
 # matters: dispatch starts `_run` as `sys.executable -m canopy` (DESIGN §5), which needs an interpreter that can import
-# canopy. It is a BusyBox over canopy's three commands: run under the name of one, or with that name as the first
-# argument, it runs that command.
+# canopy. It is a BusyBox over canopy's three commands: SCIE_BOOT names the one to run, and unset, its name `canopy`
+# picks canopy. README installs the sinks as scripts that set SCIE_BOOT (D112).
 #
 # Usage: scripts/build-binary.sh
 set -eu
