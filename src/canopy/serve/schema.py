@@ -443,10 +443,10 @@ class TicketChanged(_Model):
 
 
 class SpendUpdated(_Model):
-    """What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it."""
+    """What a spend window cost changed. The payload is every window, as `GET /spend` returns them."""
 
     type: Literal["spend.updated"] = "spend.updated"
-    spend: Spend
+    spend: list[Spend]
 
 
 class TickUpdated(_Model):

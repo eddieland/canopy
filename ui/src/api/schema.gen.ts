@@ -776,10 +776,11 @@ export type components = {
         };
         /**
          * SpendUpdated
-         * @description What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it.
+         * @description What a spend window cost changed. The payload is every window, as `GET /spend` returns them.
          */
         SpendUpdated: {
-            spend: components["schemas"]["Spend"];
+            /** Spend */
+            spend: components["schemas"]["Spend"][];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -1305,7 +1306,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Spend"];
+                    "application/json": components["schemas"]["Spend"][];
                 };
             };
         };

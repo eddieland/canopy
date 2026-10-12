@@ -69,7 +69,8 @@ test('the counters show the loop at a glance, and the nav counts the list on eve
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
     await expect(page.getByTestId('counter-attention')).toContainText('5')
     await expect(page.getByTestId('counter-attention')).toContainText('1 failed · 1 waiting · 3 more')
-    await expect(page.getByTestId('counter-spent')).toContainText(/\$\d+\.\d\d/)
+    await expect(page.getByTestId('counter-spent-24h')).toContainText(/\$\d+\.\d\d/)
+    await expect(page.getByTestId('counter-spent-30d')).toContainText(/\$\d+\.\d\d/)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/ }).click()
     await expect(page.getByTestId('nav-attention-count')).toHaveText('5')

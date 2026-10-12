@@ -1,12 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { attentionQuery, runsQuery, spendQuery, ticketsQuery } from '@/api/queries'
+import type { Spend } from '@/api/types'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
 import { severity, type Severity } from '@/lib/attention'
 
-/** The loop at a glance, above the attention list: what runs, what waits on you, what needs you, what it cost. */
+// The spend windows the server reports (`SPEND_HOURS` in `canopy/serve/views.py`).
+const DAY = 24
+const MONTH = 30 * 24
+
+/**
+ * The loop at a glance, above the attention list: what runs, what waits on you, what needs you, and what it cost in
+ * the last day and the last 30.
+ */
 export function Counters() {
     const runs = useQuery(runsQuery)
     const tickets = useQuery(ticketsQuery)
@@ -26,7 +34,6 @@ export function Counters() {
         return found
     }, {})
     const broken = (counts?.failed ?? 0) > 0
-    const cost = spend.data?.cost_usd
 
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="counters">
@@ -45,14 +52,34 @@ export function Counters() {
             <Counter label="Attention" value={attention.data?.length} tone={broken ? 'failed' : 'plain'}>
                 {counts === undefined ? null : breakdown(counts)}
             </Counter>
-            <Counter
-                label="Spent, 24h"
-                value={spend.data === undefined ? undefined : cost === null || cost === undefined ? '–' : usd(cost)}
-                tone="accent"
-            >
-                {spend.data === undefined ? null : cost === null ? 'nothing reported' : 'overseer and workers'}
-            </Counter>
+            <Spent label="Spent, 24h" testId="spent-24h" spend={spend.data} hours={DAY} />
+            <Spent label="Spent, 30d" testId="spent-30d" spend={spend.data} hours={MONTH} />
         </div>
+    )
+}
+
+/** What one window cost: a dash when nothing in it reported a cost, or when the server sent no such window. */
+function Spent({
+    label,
+    testId,
+    spend,
+    hours,
+}: {
+    label: string
+    testId: string
+    spend: Spend[] | undefined
+    hours: number
+}) {
+    const cost = spend?.find((s) => s.hours === hours)?.cost_usd ?? null
+    return (
+        <Counter
+            label={label}
+            testId={testId}
+            value={spend === undefined ? undefined : cost === null ? '–' : usd(cost)}
+            tone="accent"
+        >
+            {spend === undefined ? null : cost === null ? 'nothing reported' : 'overseer and workers'}
+        </Counter>
     )
 }
 

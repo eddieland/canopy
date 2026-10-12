@@ -2581,9 +2581,10 @@ Served by `canopy loop` from a thread (D073):
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
-  the list, and the last 24 hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
-  pool's slots, below), tickets, each with its conversation and the decisions about it, chores (below), and ticks
-  (below). Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a note to a chore.
+  the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
+  ended last), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about it,
+  chores (below), and ticks (below). Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a
+  note to a chore.
   OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and attach joins once
   M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
@@ -2635,7 +2636,7 @@ The API, under `{base}/api`:
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
-| `GET /spend` | what the last 24 hours cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
+| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -2660,7 +2661,7 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
 spend, and the latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
-`tickets.updated`, `chores.updated`, `spend.updated` (when the cost changed; its window moves with the clock),
+`tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
 `tick.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with every list,
 the spend, and the latest tick. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's

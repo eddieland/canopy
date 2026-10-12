@@ -84,7 +84,7 @@ export function parseStreamEvent(data: string): StreamEvent | null {
     }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend
-        return typeof spend === 'object' && spend !== null ? (value as StreamEvent) : null
+        return Array.isArray(spend) ? (value as StreamEvent) : null
     }
     return null
 }

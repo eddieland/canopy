@@ -54,8 +54,8 @@ CHORE_RUNS = 10
 TICKS = 50
 TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
-# The window the spend figure covers.
-SPEND_HOURS = 24
+# The windows the spend figures cover, shortest first: the last day and the last 30.
+SPEND_HOURS = (24, 30 * 24)
 _CHORE = "chore:"
 _PR = "pr:"
 _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
@@ -88,10 +88,14 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     return found
 
 
-def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last SPEND_HOURS hours cost, by the backend's clock."""
-    since = backend.clock() - timedelta(hours=SPEND_HOURS)
-    return Spend(since=since, hours=SPEND_HOURS, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+def spend(backend: Backend, ctx: Context) -> list[Spend]:
+    """What each window in SPEND_HOURS cost, by the backend's clock, shortest first."""
+    now = backend.clock()
+    found: list[Spend] = []
+    for hours in SPEND_HOURS:
+        since = now - timedelta(hours=hours)
+        found.append(Spend(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since))))
+    return found
 
 
 def last_tick(ctx: Context) -> LastTick:
