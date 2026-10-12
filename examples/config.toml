@@ -90,6 +90,7 @@ cmd = ""
 #
 # [notify.sinks.slack]
 # cmd = "canopy-notify-slack"                   # reads its webhook from ~/.config/canopy/slack-webhook, mode 600
+# cmd = "canopy-notify-slack --channel C0123ABCD"  # or a bot token, from ~/.config/canopy/slack-token, mode 600
 # events = ["attention", "loop", "runs"]
 # digest_every_minutes = 240
 

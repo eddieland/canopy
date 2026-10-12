@@ -157,10 +157,10 @@ Controls:
   operator.
 - Listeners follow T8. No outbound calls from the harness except through the
   configured commands. canopy ships one program that makes them, the Slack sink (DESIGN §20): it runs only as a sink
-  the operator configured, reads its webhook from an operator-only file of its own, and never from canopy's config,
-  argv, journal, or logs. Lint bans network modules in the harness (`urllib.request`, `http.client`, `socket`) and
-  any import of the sink, so the process that holds the journal and enforces the guards never opens a connection or
-  reads a sink's secret.
+  the operator configured, reads its webhook or bot token from an operator-only file of its own, and never from
+  canopy's config, argv, journal, or logs. Lint bans network modules in the harness (`urllib.request`,
+  `http.client`, `socket`) and any import of the sink, so the process that holds the journal and enforces the guards
+  never opens a connection or reads a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 
@@ -424,8 +424,8 @@ the network (D076).
 - A `review.query` that matches other people's PRs comments on their work in your name; tell them first. A reviewer
   definition of your own that runs commands runs the PR's code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
-  Slack sink's webhook file readable only by you. People who can read the channel see what the loop does; they cannot
-  steer it.
+  Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope: the file holds
+  whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
 - Keep the listener secret file private, and bind a listener to a private-network address only on a network whose

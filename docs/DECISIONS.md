@@ -588,3 +588,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
   socket and every other along with the SSH agent's.
 - Rejected: all sockets; pushing from the host in `_run` (more host-side git in a slot a worker wrote, D107).
 - Revisit: if `srt` gains per-path socket rules on Linux, or an operator cannot use HTTPS.
+
+## D111. The Slack sink can post with a bot token as well as a webhook
+
+- `--channel` switches to `chat.postMessage`; the token lives in its own operator-only file, like the webhook URL.
+- Why: some workspaces disallow incoming webhooks, and one app token can serve several channels and sinks.
+- Rejected: the token in an environment variable or canopy's config (the harness would see it, T2); user tokens.
+- Revisit: when threads per ticket (§20, two-way) need the sink to report what it posted on stdout.

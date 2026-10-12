@@ -121,6 +121,7 @@ def hook() -> Generator[str]:
     thread.start()
     yield f"http://127.0.0.1:{server.server_port}/services/T/B/x"
     server.shutdown()
+    server.server_close()
 
 
 def webhook_file(tmp_path: Path, url: str, mode: int = 0o600) -> Path:
@@ -230,3 +231,103 @@ def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "usage: canopy-notify-desktop" in out
     assert "usage: canopy-notify-slack" in out
+
+
+# Slack with a bot token
+
+
+class _Api(BaseHTTPRequestHandler):
+    received: ClassVar[list[tuple[str | None, dict[str, Any]]]] = []
+    reply: ClassVar[dict[str, Any]] = {"ok": True}
+
+    def do_POST(self) -> None:
+        length = int(self.headers["Content-Length"])
+        _Api.received.append((self.headers["Authorization"], json.loads(self.rfile.read(length))))
+        # Like the Web API: 200 even when the post is refused.
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(json.dumps(_Api.reply).encode())
+
+    @override
+    def log_message(self, format: str, *args: Any) -> None:
+        del format, args
+
+
+@pytest.fixture
+def api() -> Generator[str]:
+    """A local stand-in for Slack's `chat.postMessage`. Yields its URL."""
+    _Api.received = []
+    _Api.reply = {"ok": True}
+    server = HTTPServer(("127.0.0.1", 0), _Api)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}/api/chat.postMessage"
+    server.shutdown()
+    server.server_close()
+
+
+def token_file(tmp_path: Path, token: str = "xoxb-1-2-secret", mode: int = 0o600) -> Path:  # noqa: S107
+    path = tmp_path / "slack-token"
+    path.write_text(token + "\n")
+    path.chmod(mode)
+    return path
+
+
+def test_the_slack_sink_posts_with_a_bot_token(api: str, tmp_path: Path) -> None:
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
+    [(authorization, posted)] = _Api.received
+    assert authorization == "Bearer xoxb-1-2-secret"
+    assert set(posted) == {"channel", "text"}
+    assert posted["channel"] == "C0123ABCD"
+    assert posted["text"].splitlines()[1] == "+ *PROJ-3* needs_reviewer: &lt;!channel&gt; https://x.test/1"
+
+
+def test_the_token_file_defaults_to_the_config_directory(
+    api: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    (tmp_path / "canopy").mkdir()
+    token_file(tmp_path / "canopy")
+    assert slack.run(["--channel", "#canopy"], io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
+    assert _Api.received[0][1]["channel"] == "#canopy"
+
+
+def test_a_web_api_error_is_exit_1(api: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _Api.reply = {"ok": False, "error": "not_in_channel"}
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url=api) == 1
+    assert "Slack refused the post" in (err := capsys.readouterr().err)
+    assert "not_in_channel" in err
+
+
+@pytest.mark.parametrize(
+    ("token", "mode", "channel", "message"),
+    [
+        ("xoxb-1-2-secret", 0o640, "C0123ABCD", "is readable by others; run: chmod 600"),
+        ("https://hooks.slack.com/services/T/B/x", 0o600, "C0123ABCD", "must hold one Slack bot token starting xoxb-"),
+        ("xoxp-1-2-secret", 0o600, "C0123ABCD", "must hold one Slack bot token"),
+        ("xoxb-1 xoxb-2", 0o600, "C0123ABCD", "must hold one Slack bot token"),
+        ("xoxb-1-2-sécret", 0o600, "C0123ABCD", "must hold one Slack bot token"),
+        ("xoxb-1-2-secret", 0o600, "C01 <!channel>", "is not a Slack channel id or name"),
+    ],
+)
+def test_the_token_file_and_channel_are_checked(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], token: str, mode: int, channel: str, message: str
+) -> None:
+    argv = ["--channel", channel, "--token-file", str(token_file(tmp_path, token, mode))]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url="http://127.0.0.1:1/") == 2
+    err = capsys.readouterr().err
+    assert message in err
+    assert "secret" not in err.replace(str(tmp_path), "")
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [["--token-file", "/x"], ["--channel", "C0123ABCD", "--webhook-file", "/x"]],
+)
+def test_a_token_and_a_webhook_are_not_mixed(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as exited:
+        slack.run(argv, io.StringIO(json.dumps(MESSAGE)))
+    assert exited.value.code == 2
+    assert "canopy-notify-slack: error:" in capsys.readouterr().err
