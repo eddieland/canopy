@@ -1933,12 +1933,22 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
   (`~/.config/canopy/slack-webhook`). The file must be a regular file (checked before it is opened), belong to the
   operator, be unreadable by group and others, and hold one `https://hooks.slack.com/` URL whose parsed host is that
   host; otherwise the sink exits 2 saying which. The URL is never in canopy's config, argv, journal, or logs.
+- With `--channel ID` it posts with a token instead (D111): `chat.postMessage` to `https://slack.com/api/`, the token
+  as a bearer header, `{"channel": ..., "text": ...}` as the body. The token comes from `--token-file PATH`, default
+  `$XDG_CONFIG_HOME/canopy/slack-token`, under the webhook file's checks, and must be one `xoxb-` bot token (a user
+  token acts as the operator with all its scopes). The channel must be an id or a name, `#?[A-Za-z0-9._-]{1,80}`.
+  Success is a 2xx reply whose JSON has `"ok": true`, since the Web API answers 200 to a refused post
+  (`not_in_channel`). `--token-file` without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit
+  2. The token is never in canopy's config, argv, journal, logs, or the sink's own messages; the channel is in argv,
+  which is the sink's `cmd`.
 - Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
   status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a
   link. Bare URLs stay clickable.
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
-  `[notify.sinks.slack]` table, and run `canopy notify test slack`.
+  `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
+  scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set
+  `cmd = "canopy-notify-slack --channel C0123ABCD"`.
 
 Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api
 rule (`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
@@ -1977,8 +1987,9 @@ Approved with M10:
 - T6: notifications carry agent- and org-member-written text off the machine. Controls: only the table's fields, cut
   to limits; Slack escaping. Residual: a steered agent picks up to 500 characters per item shown in the channel, and a
   link can carry data (as §19 says of findings).
-- §7: point a sink only where the audience may read the tickets and PRs it quotes; keep the webhook file readable only
-  by the operator. Channel readers see what the loop does but cannot steer it.
+- §7: point a sink only where the audience may read the tickets and PRs it quotes; keep the webhook or token file
+  readable only by the operator, and give a bot token only `chat:write`. Channel readers see what the loop does but
+  cannot steer it.
 
 ### Open
 
