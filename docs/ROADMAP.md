@@ -589,7 +589,8 @@ first.
   all user-only. FastAPI on uvicorn (D074), imported nowhere else, serving the app built from `ui/` (D079).
 - TRUST_MODEL T8's bind and secret rules; escaping of every journal value; a per-session token on writes.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
-  stop, through the same functions as the CLI.
+  stop, through the same functions as the CLI. Forget too, behind the ticket's key typed out (§22). Taken on request
+  (2026-10-12).
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
   while it is open, with the running run or review holding each. Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
@@ -607,7 +608,8 @@ pages for the attention list, runs, and tickets with their conversations, with r
 a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
 UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. The worktrees page is in too (2026-10-08),
 tested against the fake treehouse. A reply no `ok` tick has read yet says so, and its answered question is marked so
-until the next tick drops it (2026-10-08): the list lagging a reply read as a bug. Waiting on the operator: a real
+until the next tick drops it (2026-10-08): the list lagging a reply read as a bug. A ticket's page links it in the
+tracker when `tracker.ticket_url` is set (2026-10-12), taken on request. Waiting on the operator: a real
 run, the loop serving a real journal to a browser on loopback and on a private address, with the worktrees page reading
 the real pools.
 
@@ -711,7 +713,8 @@ shows it.
 - Reads only. A rationale is the overseer's text: untrusted, rendered as text, cut as `canopy decisions` cuts it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
-- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it.
+- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it; M27 serves its
+  session's events.
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
@@ -787,6 +790,35 @@ macOS machines, then a day of `canopy loop` with sandboxed workers pushes and op
 tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 
 Status: not started.
+
+## M27. Session transcripts in the web UI
+
+REQUIREMENTS R6 and N1, DESIGN §13 and §22. Needs M20 and M24. Asked for by the operator (2026-10-12): to explore
+what an OpenCode session did, its tool calls above all, in the browser rather than through `opencode export`.
+
+- `core/transcript.py` reads a session's events back from the file they were printed to, the run's log or the tick's
+  output: only the session the journal recorded, each event validated (D026), control characters dropped, and bounded
+  (32 MiB of the file, 2000 entries, 2 million characters, 20,000 per text and 5,000 per tool input). A symlink, a
+  FIFO, or anything else that is not a regular file is not read.
+- `GET /runs/{id}`, `GET /runs/{id}/transcript`, and `GET /ticks/{id}/transcript`, 404 for no such run or tick. Reads
+  only, and never on the stream.
+- A run's page, opened from its id in any list of runs, and the tick page's transcript under its decisions: the agent's
+  text, each tool call opening to its input and output, each model call's cost, and the runtime's errors.
+- A run's log and a tick's output are shown from the workspace root, as worktrees are.
+- TRUST_MODEL T8: the listener serves agent output from a file, which holds whatever a tool read.
+- Tests: the reader against OpenCode's event shapes, the routes over the mock journal, and Playwright from the runs page
+  to a run's tool calls.
+
+Accept: the tests above pass. Live: after a day of `canopy loop`, the operator opens a worker run's page and a tick's,
+and finds the tool calls `opencode export <id>` shows for the same session, and a failed run's runtime error.
+
+Status: in progress. Code, tests, and docs are in (2026-10-12). The event shapes were checked against OpenCode
+1.19.0's published binary: `run --format json` prints `text`, `reasoning` (only with `--thinking`), `tool_use` (once a
+call completes or fails), `step_start`, `step_finish`, and `error`, each with `sessionID` and a `timestamp` in
+milliseconds. A running run's events reach its log only when it ends, because `procs.run` captures stdout whole:
+watching one live needs the worker's stdout streamed to its log. A subagent (`task`) shows as one tool call whose output
+is its answer; its own session is not in the log. T8's change waits on the operator's approval note in the PR. Waiting
+on the operator: the live run Accept describes.
 
 ## Deferred, with the trigger that would unblock each
 

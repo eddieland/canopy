@@ -141,6 +141,24 @@ test('stop now asks once more, then ends the run', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Start again' })).toBeVisible()
 })
 
+test('forget asks for the key typed out, then forgets the branch and PR', async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await page.getByRole('button', { name: 'Forget' }).click()
+    const challenge = page.getByRole('form', { name: 'Forget' })
+    const forget = challenge.getByRole('button', { name: 'Forget ABC-103' })
+    await expect(forget).toBeDisabled()
+    await challenge.getByLabel('Type ABC-103 to confirm').fill('ABC-10')
+    await expect(forget).toBeDisabled()
+    await challenge.getByLabel('Type ABC-103 to confirm').fill('ABC-103')
+    await forget.click()
+    await expect(page.getByRole('status')).toContainText(
+        'ABC-103 is forgotten: its next implement starts over on a new branch. canopy no longer tracks branch ' +
+            'agent/ABC-103-billing-v2, https://github.com/acme/web/pull/91.',
+    )
+    await expect(challenge).toHaveCount(0)
+    await expect(page.getByText('none yet')).toBeVisible()
+})
+
 test('starting a ticket from the list opens it, private', async ({ page }) => {
     await page.goto('tickets')
     await page.getByLabel('Ticket key').fill('ABC-200')

@@ -14,7 +14,7 @@ interface RunsSearch {
     state?: RunState | undefined
 }
 
-export const Route = createFileRoute('/runs')({
+export const Route = createFileRoute('/runs/')({
     // Typed search params: `?state=blocked` filters; anything else is dropped, never trusted. Return every key, even
     // when undefined: the router merges this over the raw search, so an omitted key would keep the raw value.
     validateSearch: (search: Record<string, unknown>): RunsSearch => ({

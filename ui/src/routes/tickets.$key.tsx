@@ -12,7 +12,9 @@ import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { TicketActions } from '@/components/ticket-actions'
+import { TrackerLink } from '@/components/tracker-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
@@ -51,6 +53,7 @@ function TicketPage() {
 function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, runs, messages, decisions } = detail
     const now = useNow()
+    const tracker = useTicketUrl(ticket.key)
     const how = ticket.private
         ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
         : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
@@ -83,6 +86,14 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                                 {phaseLabel(ticket)}
                                 {ticket.done ? ', done' : ''}
                             </dd>
+                            {tracker && (
+                                <>
+                                    <dt className="panel-label self-center">tracker</dt>
+                                    <dd className="font-mono text-xs">
+                                        <TrackerLink href={tracker} />
+                                    </dd>
+                                </>
+                            )}
                             <dt className="panel-label self-center">branch</dt>
                             <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
                             {units.map((unit) => (
@@ -160,10 +171,17 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
 }
 
 function Unknown({ ticketKey }: { ticketKey: string }) {
+    const tracker = useTicketUrl(ticketKey)
     return (
         <>
             <PageHeader label="Ticket" title={ticketKey}>
                 canopy has no record of it. Start it to work it privately.
+                {tracker && (
+                    <>
+                        {' '}
+                        It is at <TrackerLink href={tracker} />.
+                    </>
+                )}
             </PageHeader>
             <Panel>
                 <PanelHeader label="Start a ticket" />

@@ -1,10 +1,10 @@
 """The event stream (DESIGN §22): the lists a page shows, sent again whole whenever the journal changes.
 
 SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version`
-once a second: it changes whenever another connection commits. Only then does the stream read the attention list, the
-runs, the tickets, the chores, the last 24 hours' spend, and the latest tick again, and it sends each that differs from
-what it sent last, plus `ticket.changed` for each ticket whose summary changed. The stream never writes, so its own
-reads never move `data_version`.
+four times a second: it changes whenever another connection commits. Only then does the stream read the attention
+list, the runs, the tickets, the chores, the last 24 hours' spend, and the latest tick again, and it sends each that
+differs from what it sent last, plus `ticket.changed` for each ticket whose summary changed. The stream never writes, so
+its own reads never move `data_version`.
 
 The connection is opened and used only by the stream's own coroutine, on the server's event loop: the reads are small
 and quick, and keeping them on one thread is what sqlite3 requires of a connection.
@@ -35,7 +35,9 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
 
-POLL_SECONDS = 1.0
+# Reading one pragma costs next to nothing, and a server has a handful of streams open, so a change shows within a
+# quarter of a second rather than within one.
+POLL_SECONDS = 0.25
 
 
 async def events(backend: Backend, *, poll_seconds: float = POLL_SECONDS) -> AsyncIterator[StreamEvent]:

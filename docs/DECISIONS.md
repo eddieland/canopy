@@ -354,3 +354,11 @@ such as a shipped migration, may still cite one, and git history has its text.
   cannot write (HOST_ISOLATION §4.2).
 - Rejected: `checkout -B` (git 2.43 lets two worktrees hold one branch, so a commit in either moves both).
 - Revisit: if an operator's `runtime.pr_skill` tool needs a local branch.
+
+## D113. The web UI links URLs in journal text, and only to themselves
+
+- An http or https URL in untrusted text becomes a link whose text is the URL as written; no other scheme, and no
+  Markdown or link syntax, so a link never shows one destination and opens another.
+- Why: workers and trackers write PR and CI URLs into their prose, and copying them out was the common next step.
+- Rejected: rendering Markdown (labelled links hide their target); a linkify library (a regex and `URL.canParse` do it).
+- Revisit: if journal text should link ticket keys or `repo#N` references to their pages as well.

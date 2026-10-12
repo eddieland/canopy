@@ -176,9 +176,13 @@ inline script and checks it against the store's key. The ticker's speed and gap 
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
-  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text. An operator message no `ok` tick has read
-  carries a `waiting for the next tick` chip in `status-running` (`src/lib/acknowledged.ts`), and an `awaiting_reply`
-  item it answered an `answered` chip, with a line saying it leaves at the next tick; Waiting on you counts neither.
+  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
+  message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
+  (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
+  at the next tick; Waiting on you counts neither.
+- **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
+  detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
+  new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
 - **A chore's notes** are a conversation of the operator's words alone, under the chore's runs and findings, with a
   note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
@@ -187,9 +191,22 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   them on one line. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
   (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
   colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
+- **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
+  with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
+  breaks, its reasoning muted and italic under a `thinking` label. A tool call is one line, a native `<details>`: a
+  `RunDot` in `done` or `failed`, the tool's name, its title or its input's first value, and how long it took; it
+  opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
+  call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
+  all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
+  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
+  overseer's under its decisions.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
+- **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
+  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
+  its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
+  it in its header; when it is unset, neither shows.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
@@ -197,5 +214,7 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
-  once more inline (Stop now, then End run N now), never through a browser dialog.
+  once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
+  for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
+  stays disabled until the field holds the ticket's key exactly.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.

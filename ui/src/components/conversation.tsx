@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { tickQuery } from '@/api/queries'
 import type { Message } from '@/api/types'
 import { Age } from '@/components/age'
+import { LinkedText } from '@/components/linked-text'
 import { Chip } from '@/components/status'
 import { awaitsTick } from '@/lib/acknowledged'
 import { localTime } from '@/lib/time'
@@ -78,7 +79,7 @@ export function Conversation({
                             TONE[message.kind],
                         )}
                     >
-                        {message.body}
+                        <LinkedText text={message.body} />
                     </p>
                 </li>
             ))}

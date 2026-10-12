@@ -7,6 +7,7 @@ export const STORAGE_KEY = 'canopy-theme'
 export const ROUTES = [
     'attention',
     'runs',
+    'runs/39',
     'worktrees',
     'tickets',
     'tickets/ABC-102',
