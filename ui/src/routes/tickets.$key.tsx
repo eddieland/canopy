@@ -15,6 +15,7 @@ import { TicketActions } from '@/components/ticket-actions'
 import { Skeleton } from '@/components/ui/skeleton'
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { phaseLabel } from '@/lib/phase'
 
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
@@ -79,7 +80,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
                             <dt className="panel-label self-center">phase</dt>
                             <dd className="font-mono text-xs">
-                                {ticket.phase ?? 'not seen by a tick yet'}
+                                {phaseLabel(ticket)}
                                 {ticket.done ? ', done' : ''}
                             </dd>
                             <dt className="panel-label self-center">branch</dt>

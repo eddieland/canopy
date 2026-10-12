@@ -420,8 +420,11 @@ records whether it was idle, the count, and the wait chosen, in seconds.
 ## 7. Ticket phases and next actions
 
 The overseer derives phases each tick from live state. They are recorded in `tickets.phase` for the status view, never
-read back as truth. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18), recorded in `ticket_units.phase`:
-`canopy ticket set` needs `--repo` for one.
+read back as truth. A ticket's own phase is recorded only when the overseer runs `canopy ticket set --phase`, while it
+records a decision for every ticket a tick looks at, so the status view and the web UI fall back on the newest
+decision since the ticket was last forgotten (`not recorded, last decision wait`), and say `not seen by a tick yet`
+only when there is none. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18), recorded in
+`ticket_units.phase`: `canopy ticket set` needs `--repo` for one.
 
 | Phase | Derived from | Next action |
 |---|---|---|

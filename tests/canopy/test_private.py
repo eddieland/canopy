@@ -11,6 +11,7 @@ from canopy.cli.main import main
 from canopy.core import config, conversation, db, definitions, outbox
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
+from canopy.serve import views
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
 from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
 from tests.conftest import CanopyEnv, GitPool
@@ -515,6 +516,47 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
 def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", "message=c-1"]) == 2
     assert "a message cursor is a message id" in capsys.readouterr().err
+
+
+def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # The overseer records a decision for every ticket it looks at, but not always the ticket's own phase.
+    def phase_line() -> str:
+        assert operator("status", monkeypatch=monkeypatch) == 0
+        [line] = [line for line in capsys.readouterr().out.splitlines() if line.startswith(f"  {KEY}  started")]
+        return line.split("  phase ", 1)[1]
+
+    def summary() -> tuple[str | None, str | None]:
+        found = views.summary(conn, db.recent_tickets(conn, 1, key=KEY)[0])
+        return found.phase, found.last_decision
+
+    def in_a_tick(*args: str) -> None:
+        tick_id = in_tick(conn, monkeypatch)
+        assert main(list(args)) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
+
+    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert phase_line() == "not seen by a tick yet"
+    assert summary() == (None, None)
+
+    in_a_tick("decide", KEY, "wait", "--rationale", "blocked_by: PROJ-2")
+    assert phase_line() == "not recorded, last decision wait"
+    assert summary() == (None, "wait")
+    assert operator("show", KEY, monkeypatch=monkeypatch) == 0
+    assert "phase not recorded, last decision wait;" in capsys.readouterr().out
+
+    in_a_tick("ticket", "set", KEY, "--phase", "blocked")
+    assert phase_line() == "blocked"
+    assert summary() == ("blocked", "wait")
+
+    # Forgetting clears the phase and starts the loop's view over: the decisions before it no longer count.
+    assert operator("forget", KEY, monkeypatch=monkeypatch) == 0
+    assert phase_line() == "not seen by a tick yet"
+    assert summary() == (None, None)
 
 
 def test_show_a_run_and_a_chore(
