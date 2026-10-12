@@ -14,6 +14,9 @@ but 0 on its next tick.
 
 Stdlib only, importing nothing from canopy: canopy runs it as a command, so the process that holds the journal and
 enforces the guards never opens a connection or reads this secret (D035).
+
+In a release's single executable (D067), run a sink with `SCIE_BOOT` set to its name; `RELEASE_HELP`, below, which
+`--help` prints, has a wrapper script for `PATH`.
 """
 
 from __future__ import annotations
@@ -32,11 +35,21 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
 
+RELEASE_HELP = """\
+In a release's single executable, run this sink with SCIE_BOOT set to its name: SCIE_BOOT=canopy-notify-slack
+/path/to/canopy. A link named canopy-notify-slack can run canopy itself instead. So that a sink's cmd can name
+canopy-notify-slack, put this script on PATH under that name, with the path to your canopy, and make it executable:
+
+    #!/bin/sh
+    exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
+"""
 SLACK_PREFIX = "https://hooks.slack.com/"
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
 # A bot token: a user token (`xoxp-`) acts as the operator, with every scope they granted it.
 TOKEN_PREFIX = "xoxb-"  # noqa: S105
 TIMEOUT_SECONDS = 30
+# How much of Slack's reply a failure prints.
+_MAX_REPLY = 500
 _MAX_LINES = 45
 # A channel id (`C0123ABCD`) or a name (`#canopy`, `canopy`).
 _CHANNEL = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
@@ -224,9 +237,10 @@ def _post(url: str, payload: dict[str, str], headers: dict[str, str]) -> tuple[b
     request = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method="POST")  # noqa: S310
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
-            return 200 <= response.status < 300, response.read().decode(errors="replace")[:500]  # noqa: PLR2004
+            # The whole reply: `post_message` parses it, and a successful `chat.postMessage` reply runs long.
+            return 200 <= response.status < 300, response.read().decode(errors="replace")  # noqa: PLR2004
     except urllib.error.HTTPError as e:
-        return False, f"HTTP {e.code}: {e.read().decode(errors='replace')[:500]}"
+        return False, f"HTTP {e.code}: {e.read().decode(errors='replace')[:_MAX_REPLY]}"
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return False, f"cannot reach Slack: {e}"
 
@@ -248,7 +262,12 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
 
     `prefix` is what the webhook URL must start with; `api_url` is where a token posts.
     """
-    parser = argparse.ArgumentParser(prog="canopy-notify-slack", description=__doc__.split("\n", 1)[0])
+    parser = argparse.ArgumentParser(
+        prog="canopy-notify-slack",
+        description=__doc__.split("\n", 1)[0],
+        epilog=RELEASE_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
     parser.add_argument("--channel", default=None, help="post with a bot token to this channel id, not a webhook")
     parser.add_argument("--token-file", type=Path, default=None, help="default: " + str(default_token_file()))
@@ -286,7 +305,7 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
         return 2
     ok, reply = send(render(parsed))
     if not ok:
-        print(f"canopy-notify-slack: Slack refused the post: {reply}", file=sys.stderr)  # noqa: T201
+        print(f"canopy-notify-slack: Slack refused the post: {reply[:_MAX_REPLY]}", file=sys.stderr)  # noqa: T201
         return 1
     return 0
 
