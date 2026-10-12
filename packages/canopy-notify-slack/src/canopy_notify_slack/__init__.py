@@ -2,8 +2,8 @@
 
 It reads canopy's `json` message format on stdin and posts one Slack message, to an incoming webhook or, given
 `--channel`, with a bot token through `chat.postMessage`, optionally under its own `--username` and `--icon-emoji`.
-The secret comes from a file that belongs to the operator and
-that nobody else can read, never from argv, the environment, or canopy's config: `--webhook-file PATH`, by default
+The secret comes from a file that belongs to the operator and that nobody else can read, never from argv, the
+environment, or canopy's config: `--webhook-file PATH`, by default
 `$XDG_CONFIG_HOME/canopy/slack-webhook`, or `--token-file PATH`, by default `$XDG_CONFIG_HOME/canopy/slack-token`.
 Text from the journal, which agents and org members wrote, is escaped for Slack's markup, so it cannot mention a person
 or `@channel`, or show one link and point at another.
