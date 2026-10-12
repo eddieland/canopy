@@ -113,6 +113,22 @@ test("a chore's finding is answered from the attention list with a note its next
     )
 })
 
+test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
+    await page.goto('settings')
+    await page.getByTestId('send-key-mod-enter').click()
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-pressed', 'true')
+    await page.goto('tickets/ABC-101')
+    const form = page.getByRole('form', { name: 'Reply' })
+    const box = form.getByRole('textbox')
+    await box.fill('One.')
+    await box.press('Enter')
+    await box.pressSequentially('Two.')
+    await expect(box).toHaveValue('One.\nTwo.')
+    await box.press('ControlOrMeta+Enter')
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(box).toHaveValue('')
+})
+
 test('stop now asks once more, then ends the run', async ({ page }) => {
     await page.goto('tickets/ABC-104')
     await page.getByRole('button', { name: 'Stop now' }).click()

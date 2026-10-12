@@ -8,16 +8,10 @@ import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { notedText, repliedText } from '@/lib/outcomes'
+import { sends, useSendKey } from '@/lib/send-key'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
-
-/** Enter sends, as in a chat, and Shift+Enter starts a new line. An Enter ending an IME composition only commits it. */
-function sendOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
-    event.preventDefault()
-    event.currentTarget.form?.requestSubmit()
-}
 
 /** What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19). */
 export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | { kind: 'chore'; name: string }
@@ -30,6 +24,7 @@ export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | {
  */
 export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; waiting?: number | null }) {
     const client = useQueryClient()
+    const sendKey = useSendKey()
     const [body, setBody] = useState('')
     const [submission, setSubmission] = useState(newSubmission)
     const [said, setSaid] = useState<string | null>(null)
@@ -51,6 +46,14 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
         if (body.trim() && !mutation.isPending) mutation.mutate(body)
     }
 
+    // The key Settings names sends through the form, as the button does; any other Enter makes a new line.
+    function sendOnKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+        const { key, shiftKey, ctrlKey, metaKey } = event
+        if (!sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) return
+        event.preventDefault()
+        event.currentTarget.form?.requestSubmit()
+    }
+
     const chore = target.kind === 'chore'
     let label = chore ? 'Your note' : 'Your reply'
     if (waiting !== null) label = `Your answer to message ${waiting}`
@@ -69,7 +72,7 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
                     value={body}
                     maxLength={MAX_REPLY}
                     onChange={(event) => setBody(event.target.value)}
-                    onKeyDown={sendOnEnter}
+                    onKeyDown={sendOnKey}
                     placeholder={placeholder}
                 />
             </label>
