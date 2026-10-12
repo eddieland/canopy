@@ -9,6 +9,7 @@ import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { phaseLabel } from '@/lib/phase'
 
 export const Route = createFileRoute('/tickets/')({
     component: TicketsPage,
@@ -56,7 +57,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
             <span className="font-mono text-xs text-muted-foreground">
-                {ticket.phase ?? 'not seen by a tick yet'}
+                {phaseLabel(ticket)}
                 {ticket.done ? ', done' : ''}
             </span>
             <span className="ml-auto flex items-center gap-4">

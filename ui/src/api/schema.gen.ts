@@ -739,7 +739,7 @@ export type components = {
         };
         /**
          * Session
-         * @description Whether this browser is signed in, and if so the token its writes must carry (D082).
+         * @description Whether this browser is signed in, and if so the token its writes must carry.
          */
         Session: {
             /** Signed In */
@@ -916,6 +916,8 @@ export type components = {
             done: boolean;
             /** Key */
             key: string;
+            /** Last Decision */
+            last_decision: string | null;
             /** Latest Message Id */
             latest_message_id: number | null;
             /** Phase */

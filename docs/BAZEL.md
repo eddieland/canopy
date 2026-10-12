@@ -55,7 +55,7 @@ What each line buys:
 - `--output_user_root`: Bazel keys each output base on the workspace's path, so every slot has its own, and it stays
   warm across runs because the slot keeps its path. This puts all of them on the fast disk. Changing it later makes
   every slot cold once.
-- `--max_idle_secs`: each slot runs its own Bazel server, and canopy does not stop it when it returns the slot (D106).
+- `--max_idle_secs`: each slot runs its own Bazel server, and canopy does not stop it when it returns the slot.
   This ends a server once nobody has used its slot for that long, so idle slots stop holding memory. A run that lands
   on the slot within the window still finds the server warm.
 

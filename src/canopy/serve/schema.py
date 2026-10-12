@@ -37,7 +37,7 @@ class Meta(_Model):
 
 
 class Session(_Model):
-    """Whether this browser is signed in, and if so the token its writes must carry (D082)."""
+    """Whether this browser is signed in, and if so the token its writes must carry."""
 
     signed_in: bool
     token: str | None = None
@@ -116,6 +116,8 @@ class TicketSummary(_Model):
     start: StartStatus | None = None
     # The overseer's last derived phase, for display; never read as truth.
     phase: str | None = None
+    # The newest decision a tick recorded about it since it was forgotten: None means no tick has seen it.
+    last_decision: str | None = None
     done: bool
     branch: str | None = None
     # The newest of: a message, a run starting or ending, a start or stop, a tick seeing it.
@@ -227,7 +229,7 @@ class ChoreSummary(_Model):
 
     name: str
     every_minutes: int
-    # When a run may start (D099): days of the week, empty for every day; `HH:MM-HH:MM`; an IANA zone.
+    # When a run may start, checked in code: days of the week, empty for every day; `HH:MM-HH:MM`; an IANA zone.
     days: list[str] = []
     hours: str | None = None
     timezone: str | None = None
@@ -378,7 +380,7 @@ class TickDetail(_Model):
     # In the order they were recorded.
     decisions: list[Decision]
     # Where the overseer's stdout and stderr are, readable only by the operator, if the file exists. The page names it
-    # and does not serve it (D104).
+    # and does not serve it: it is agent output from a file, unbounded and unchecked.
     output_path: str | None = None
 
 

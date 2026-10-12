@@ -245,6 +245,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
         private=record is not None,
         start=status,
         phase=str(row["phase"]) if row["phase"] else None,
+        last_decision=db.last_decision_of(conn, key),
         done=bool(row["done"]),
         branch=str(row["branch"]) if row["branch"] else None,
         active_at=db.parse_time(str(row["active_at"])),

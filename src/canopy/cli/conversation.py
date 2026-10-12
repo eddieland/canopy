@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.loop import chore_line, one_line, prs_of, result_of, spent
+from canopy.cli.loop import chore_line, one_line, phase_of, prs_of, result_of, spent
 from canopy.core import chore_view, conversation, db
 from canopy.infra import logs
 from canopy.loop import attention
@@ -205,7 +205,7 @@ def _show_ticket(ctx: Context, key: str) -> None:
     click.echo(f"{key}: {how}")
     if ticket is not None:
         done = ", done" if ticket["done"] else ""
-        click.echo(f"  phase {ticket['phase'] or 'unknown'}{done}; branch {ticket['branch'] or 'none yet'}")
+        click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket['branch'] or 'none yet'}")
         if ticket["forgotten_at"]:
             click.echo(
                 f"  forgotten {attention.age(str(ticket['forgotten_at']))} ago: the runs and messages before then are "

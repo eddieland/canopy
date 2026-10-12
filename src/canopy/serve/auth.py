@@ -1,4 +1,4 @@
-"""Signing in with the listener secret (TRUST_MODEL T8, DESIGN §22, D082).
+"""Signing in with the listener secret (TRUST_MODEL T8, DESIGN §22).
 
 The sign-in page sends the secret once. A right one gets a session cookie: its issue time and a random nonce, signed
 with the secret, so the server keeps no sessions, a session outlives a loop restart, and a new secret ends them all. The

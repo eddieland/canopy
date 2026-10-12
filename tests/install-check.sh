@@ -6,7 +6,7 @@
 # Usage: tests/install-check.sh [SOURCE]
 #   SOURCE is anything `uv tool install` accepts: this checkout by default, or git+https://github.com/eddieland/canopy
 #   to check what README tells people to run. Or it is the single executable `make binary` builds (D067), installed
-#   the way README says to install a release: copied onto PATH as `canopy`, with the sinks as links to it.
+#   the way README says to install a release: copied onto PATH as `canopy`, with the sinks as scripts that run it.
 set -eu
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -31,8 +31,16 @@ if [ -f "$source" ] && [ -x "$source" ]; then
     binary=1
     mkdir -p "$UV_TOOL_BIN_DIR"
     cp "$source" "$UV_TOOL_BIN_DIR/canopy"
-    ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-desktop"
-    ln -s canopy "$UV_TOOL_BIN_DIR/canopy-notify-slack"
+    # README's loop, in a subshell so the cd does not stick. The link is what an older README installed: the loop must
+    # replace it, not write through it to canopy.
+    (
+        cd "$UV_TOOL_BIN_DIR" && chmod +x canopy
+        ln -s canopy canopy-notify-slack
+        for sink in canopy-notify-desktop canopy-notify-slack; do
+            rm -f "$sink" && printf '#!/bin/sh\nexec env SCIE_BOOT=%s "%s/canopy" "$@"\n' "$sink" "$PWD" >"$sink"
+            chmod +x "$sink"
+        done
+    )
 else
     echo "install-check: uv tool install $source"
     binary=0
@@ -48,7 +56,7 @@ canopy --help >/dev/null
 # The sinks canopy ships come with the same install (DESIGN §20).
 for sink in canopy-notify-desktop canopy-notify-slack; do
     [ "$(command -v "$sink")" = "$UV_TOOL_BIN_DIR/$sink" ] || fail "$sink was not installed with canopy"
-    # canopy's own --help succeeds too, so the usage line must name the sink: a link that runs canopy fails here.
+    # canopy's own --help succeeds too, so the usage line must name the sink: a command that runs canopy fails here.
     usage=$("$sink" --help </dev/null) || fail "$sink --help failed"
     echo "$usage" | grep -q "^usage: $sink " || fail "$sink --help did not print the sink's usage"
 done
@@ -86,6 +94,24 @@ canopy tick --dry-run
 decisions=$(canopy decisions)
 echo "$decisions" | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
+
+# canopy runs each sink by the name in its cmd (DESIGN §20), as a child of its own process. The Slack sink has no
+# webhook file and fails saying so; the desktop sink shows the test or fails in its own words. canopy run in a sink's
+# place would reject the sink's arguments or print its own usage instead.
+cat >>"$config" <<'TOML'
+
+[notify.sinks.slack]
+cmd = "canopy-notify-slack --webhook-file /nonexistent/slack-webhook"
+
+[notify.sinks.desktop]
+cmd = "canopy-notify-desktop"
+TOML
+sinks=$(canopy notify test) && fail "canopy notify test passed"
+echo "$sinks" | grep -q '^slack: failed: exited 2: canopy-notify-slack: cannot read the webhook file' ||
+    fail "canopy did not run canopy-notify-slack: $sinks"
+echo "$sinks" | grep -Eq '^desktop: (delivered|failed: exited [12]: canopy-notify-desktop: )' ||
+    fail "canopy did not run canopy-notify-desktop: $sinks"
+sed -i.bak '/^\[notify\.sinks\./,$d' "$config"
 
 # The web UI (DESIGN §22): the listener secret, then the loop serving the UI this install bundles. The wheel bundles it
 # when npm was on PATH at build time; a release always has it.

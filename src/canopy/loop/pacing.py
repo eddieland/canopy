@@ -1,4 +1,4 @@
-"""How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6, D083).
+"""How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6).
 
 A tick is idle when the journal shows it found nothing new and changed nothing (`idle`). After the n-th idle tick in a
 row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`

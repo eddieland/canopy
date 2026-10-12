@@ -185,7 +185,7 @@ def test_without_a_build_every_route_says_it_is_not_built(tmp_path: Path, backen
         assert "not built" in response.text
 
 
-# Signing in with the listener secret, D082
+# Signing in with the listener secret (DESIGN §22)
 
 
 def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Path, backend: Backend) -> None:

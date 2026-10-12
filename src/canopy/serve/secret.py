@@ -1,4 +1,4 @@
-"""The listener secret (TRUST_MODEL T8, DESIGN §22, D082): an operator-only file the web UI's sign-in checks against.
+"""The listener secret (TRUST_MODEL T8, DESIGN §22): an operator-only file the web UI's sign-in checks against.
 
 Kept free of the web stack, so `canopy secret` imports nothing it does not need. The secret is never in config, the
 journal, logs, or prompts: the loop reads it once when it starts serving, and `canopy secret` prints it to the
@@ -67,7 +67,7 @@ def create(file: Path, *, rotate: bool) -> tuple[str, bool]:
     """Return the secret in `file`, writing a new one first if there is none or `rotate` is set. The bool: written.
 
     A new secret is 32 random bytes in URL-safe base64, in a file only the operator can read. Rotating it signs every
-    browser out (D082).
+    browser out, since every session cookie is signed with the old one.
 
     Raises:
         SecretError: without `rotate`, the file exists but `read` refuses it.

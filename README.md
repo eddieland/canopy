@@ -40,8 +40,17 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      [latest release](https://github.com/eddieland/canopy/releases/latest) (or `gh release download --repo
      eddieland/canopy --pattern 'canopy-linux-x86_64*'`), check it against its `.sha256`, and copy it to the machine
      as `~/.local/bin/canopy` (`mkdir -p ~/.local/bin` first if it is missing, and put it on `PATH` if it is not).
-     Make it executable and link the sinks to it:
-     `cd ~/.local/bin && chmod +x canopy && ln -sf canopy canopy-notify-desktop && ln -sf canopy canopy-notify-slack`.
+     Make it executable and add the sinks beside it, as scripts that run it with `SCIE_BOOT` set to their name (a
+     link to it can run canopy itself instead):
+
+     ```sh
+     cd ~/.local/bin && chmod +x canopy
+     for sink in canopy-notify-desktop canopy-notify-slack; do
+         rm -f "$sink" && printf '#!/bin/sh\nexec env SCIE_BOOT=%s "%s/canopy" "$@"\n' "$sink" "$PWD" >"$sink"
+         chmod +x "$sink"
+     done
+     ```
+
      On macOS, a browser download needs `xattr -d com.apple.quarantine canopy` too. To upgrade, replace the file.
    - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
      HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
@@ -57,7 +66,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    `canopy-workspace.toml`, and clones the repository under `repos/`. canopy writes nothing into your repositories and
    installs nothing else: agent runs load its agent definitions and skills from its own directory (D016, D040). Set
    `tracker.query` in `canopy-workspace.toml`. Use HTTPS clone URLs with a credential helper; worker sandboxing is not
-   expected to support SSH (D038).
+   expected to support SSH.
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` in the
    workspace and read the plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes`
    (15 by default), longer while nothing changes, and repeats until you press Ctrl-C. It also serves the web UI at
@@ -66,7 +75,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
-  attention list. Press `t` while it waits to tick now.
+  attention list. Press `t` while it waits to tick now. `canopy loop --defer 30` starts it waiting: the first tick runs
+  in 30 minutes, or when you press `t`.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
   every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
   finding with a note. Sign in once per browser with the
