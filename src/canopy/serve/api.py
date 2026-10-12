@@ -2,7 +2,7 @@
 
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
 functions the CLI's verbs call (`canopy.core.conversation`), with channel `web`, so the guards are the same ones; a
-guard's refusal is a 409 naming it.
+guard's refusal is a 409 naming it. A forget also carries the ticket's key as the operator typed it.
 """
 
 from __future__ import annotations
@@ -23,6 +23,8 @@ from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
     ChoreSummary,
+    ForgetRequest,
+    Forgot,
     LastTick,
     Meta,
     Pool,
@@ -232,6 +234,23 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
                 raise refusal(r) from None
         log.info("operator replied", extra={"ticket": ref.id, "message_id": replied.message_id, "channel": WEB})
         return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
+
+    # Forgetting cannot be undone from here, so the request carries the ticket's key as the operator typed it, and a
+    # mismatch is refused before anything is read (DESIGN §22).
+    @api.post("/tickets/{key}/forget", operation_id="forgetTicket", responses=_REFUSED)
+    def forget(key: str, body: ForgetRequest) -> Forgot:
+        ref = ticket_ref(key, "forget")
+        if body.confirm != ref.id:
+            raise refusal(conversation.Refused("not_confirmed", f"type {ref} to confirm forgetting its work"))
+        with backend.open() as ctx:
+            try:
+                forgot = conversation.forget(ctx.conn, ref, dispatch_lock=ctx.dispatch_lock_path)
+            except conversation.Refused as r:
+                raise refusal(r) from None
+        log.info(
+            "ticket forgotten", extra={"ticket": ref.id, "branch": forgot.branch, "prs": forgot.prs, "channel": WEB}
+        )
+        return Forgot(branch=forgot.branch, prs=forgot.prs)
 
 
 def _chore_routes(api: APIRouter, backend: Backend) -> None:

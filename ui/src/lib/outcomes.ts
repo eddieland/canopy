@@ -1,4 +1,4 @@
-import type { Replied, Started, Stopped } from '@/api/types'
+import type { Forgot, Replied, Started, Stopped } from '@/api/types'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
 
@@ -19,6 +19,18 @@ export function stoppedText(key: string, stopped: Stopped, now: boolean): string
     return stopped.ended
         ? `${head} Run ${stopped.running_run} was ended and its slots returned.`
         : `${head} Run ${stopped.running_run} had already ended.`
+}
+
+/** What a forget cleared, and what is left for the operator: closing its PRs and deleting its branch on origin. */
+export function forgotText(key: string, forgot: Forgot): string {
+    const head = `${key} is forgotten: its next implement starts over on a new branch.`
+    const named = [...(forgot.branch === null ? [] : [`branch ${forgot.branch}`]), ...forgot.prs]
+    if (named.length === 0) return head
+    return (
+        `${head} canopy no longer tracks ${named.join(', ')}. ` +
+        'Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and the ' +
+        'ticket cannot start over.'
+    )
 }
 
 /** What a note to a chore did, as `canopy reply chore:NAME` says it: its next runs read it, not the next tick. */

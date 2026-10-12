@@ -382,8 +382,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   no script is built from it. An http or https URL in it is a link whose text is the URL itself, so a link never
   shows one destination and opens another, and it opens in a new tab with no referrer (D113).
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
-  and reply to tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME` does,
-  nothing else. It cannot run a chore.
+  reply to, and forget tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME`
+  does, nothing else. A forget must carry the ticket's key typed out, checked in code. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
