@@ -1,7 +1,7 @@
 import { splitLinks } from '@/lib/links'
 
 /**
- * Untrusted journal text with its http and https URLs as links (D112). Every piece is React text, which escapes it;
+ * Untrusted journal text with its http and https URLs as links (D113). Every piece is React text, which escapes it;
  * a link's text is its URL as written, and it opens in a new tab with no referrer. Never inside another link.
  */
 export function LinkedText({ text }: { text: string }) {

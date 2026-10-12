@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
 import { cn } from '@/lib/utils'
+import { phaseLabel } from '@/lib/phase'
 
 interface AttentionSearch {
     item?: string | undefined
@@ -210,7 +211,7 @@ function Thread({ ticketKey }: { ticketKey: string }) {
         <>
             <PanelHeader label="Conversation">
                 <span className="readout text-xs text-muted-foreground">
-                    {ticket.phase ?? 'not seen by a tick yet'} · {messages.length}
+                    {phaseLabel(ticket)} · {messages.length}
                 </span>
             </PanelHeader>
             {messages.length === 0 ? (

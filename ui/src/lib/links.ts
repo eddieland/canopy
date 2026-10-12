@@ -9,7 +9,7 @@ const TRAILING = new Set(['.', ',', ';', ':', '!', '?', '*', '_'])
 const CLOSING: Record<string, string> = { ')': '(', ']': '[', '}': '{' }
 
 /**
- * Split untrusted text into plain pieces and the http and https URLs in it (D112). A link's text is the URL exactly
+ * Split untrusted text into plain pieces and the http and https URLs in it (D113). A link's text is the URL exactly
  * as written, so the page never shows one destination and opens another; nothing else in the text becomes markup.
  * Sentence punctuation after a URL, and a closing bracket the URL did not open, stay text.
  */

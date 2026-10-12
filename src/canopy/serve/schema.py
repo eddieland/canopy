@@ -116,6 +116,8 @@ class TicketSummary(_Model):
     start: StartStatus | None = None
     # The overseer's last derived phase, for display; never read as truth.
     phase: str | None = None
+    # The newest decision a tick recorded about it since it was forgotten: None means no tick has seen it.
+    last_decision: str | None = None
     done: bool
     branch: str | None = None
     # The newest of: a message, a run starting or ending, a start or stop, a tick seeing it.

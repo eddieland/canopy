@@ -149,12 +149,20 @@ def _print_started(ctx: Context) -> None:
     for r in records:
         key = str(r["subject_id"])
         ticket = db.get_ticket(ctx.conn, key)
-        phase = (ticket["phase"] if ticket is not None else None) or "not seen by a tick yet"
+        phase = phase_of(ctx.conn, ticket) if ticket is not None else "not seen by a tick yet"
         done = ", done" if ticket is not None and ticket["done"] else ""
         since = r["started_at"] if r["status"] == "started" else r["stopped_at"]
         waiting = conversation.latest_question(ctx.conn, key) if r["status"] == "started" else None
         note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
         click.echo(f"  {key}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+
+
+def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
+    """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen."""
+    if ticket["phase"]:
+        return str(ticket["phase"])
+    decided = db.last_decision_of(conn, str(ticket["key"]))
+    return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
 
 
 def _print_workers(ctx: Context) -> None:
