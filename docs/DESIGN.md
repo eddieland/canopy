@@ -322,14 +322,16 @@ Workers dispatched during a tick outlive it, as detached processes owned by `can
 
 ### The loop
 
-`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--no-serve]` is how ticks are meant to run (D042), in the
-foreground until stopped:
+`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run
+(D042), in the foreground until stopped:
 
 1. Take `<state_dir>/loop.lock`; if another loop holds it, refuse and exit 1. Each tick still takes the separate tick
    lock (step 1 above), so a hand-run `canopy tick` runs between the loop's ticks or finds the lock busy.
 2. Apply pending migrations before the first tick. Start the web UI's server in a thread, unless `--no-serve` or
    `serve.enabled = false`; without a usable listener secret, say why and serve nothing (§22). The header names its
-   URL.
+   URL. With `--defer`, wait that many minutes from here before the first tick; the header says when it will run. The
+   wait ends early as the one in step 5 does, by an operator message (no sooner than a minute after the loop started)
+   or `t`, and a stop during it ends the loop with no tick.
 3. Run a tick exactly as `canopy tick` does, passing `--dry-run` through. An error the tick code does not handle ends
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
@@ -354,8 +356,8 @@ Config is read once at loop start; restart to apply a change. Prompt files are r
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
-gains `loop started` and `loop stopped` lines, with no tick id, a `loop waits` line per tick, and a line when a key, a
-message, or a run ending ends a wait.
+gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
+`loop waits` line per tick, and a line when a key, a message, or a run ending ends a wait.
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
@@ -1956,6 +1958,10 @@ exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
   (`not_in_channel`). The whole reply is parsed; only what a failure prints is cut, to 500 characters. `--token-file`
   without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit 2. The token is never in canopy's
   config, argv, journal, logs, or the sink's own messages; the channel is in argv, which is the sink's `cmd`.
+- With `--channel`, `--username NAME` and `--icon-emoji :CODE:` post under that name and emoji instead of the app's
+  (`username` and `icon_emoji` in the body), which needs the app's `chat:write.customize` scope. The name must be
+  printable, not blank, and at most 80 characters; the emoji one code, optionally with a skin tone
+  (`:wave::skin-tone-3:`). Either without `--channel` is a usage error, exit 2: an app's webhook ignores both.
 - Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
   status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a
@@ -1963,7 +1969,8 @@ exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
   scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set
-  `cmd = "canopy-notify-slack --channel C0123ABCD"`.
+  `cmd = "canopy-notify-slack --channel C0123ABCD"`. For a name and icon of its own, add the `chat:write.customize`
+  scope and `--username canopy --icon-emoji :evergreen_tree:` to `cmd`.
 
 Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api
 rule (`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
