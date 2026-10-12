@@ -2,12 +2,12 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 import { keys } from './queries'
-import type { Replied, Session, Started, Stopped } from './types'
+import type { Forgot, Replied, Session, Started, Stopped } from './types'
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, and a note to a chore. Each goes through the
- * same function on the server as `canopy start`, `stop`, and `reply`, with the same guards; a refusal is an ApiError
- * naming its guard.
+ * same function on the server as `canopy start`, `stop`, `reply`, and `forget`, with the same guards; a refusal is an
+ * ApiError naming its guard.
  */
 
 export async function signIn(secret: string): Promise<Session> {
@@ -24,6 +24,11 @@ export async function startTicket(key: string): Promise<Started> {
 
 export async function stopTicket(key: string, now: boolean): Promise<Stopped> {
     return unwrap(await api.POST('/api/tickets/{key}/stop', { params: { path: { key } }, body: { now } }))
+}
+
+/** `canopy forget`, with the key as the operator typed it: the server refuses `not_confirmed` unless it matches. */
+export async function forgetTicket(key: string, confirm: string): Promise<Forgot> {
+    return unwrap(await api.POST('/api/tickets/{key}/forget', { params: { path: { key } }, body: { confirm } }))
 }
 
 export async function replyTicket(key: string, body: string, submission: string): Promise<Replied> {

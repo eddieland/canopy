@@ -208,6 +208,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tickets/{key}/forget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forget */
+        post: operations["forgetTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets/{key}/replies": {
         parameters: {
             query?: never;
@@ -507,6 +524,24 @@ export type components = {
             tick_id: number;
             /** Ticket Key */
             ticket_key: string | null;
+        };
+        /**
+         * ForgetRequest
+         * @description A forget, and the ticket's key as the operator typed it: the challenge, checked again in code (DESIGN §22).
+         */
+        ForgetRequest: {
+            /** Confirm */
+            confirm: string;
+        };
+        /**
+         * Forgot
+         * @description What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete.
+         */
+        Forgot: {
+            /** Branch */
+            branch: string | null;
+            /** Prs */
+            prs: string[];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1341,6 +1376,50 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forgetTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Forgot"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

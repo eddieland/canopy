@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { notedText, repliedText, startedText, stoppedText } from './outcomes'
+import { forgotText, notedText, repliedText, startedText, stoppedText } from './outcomes'
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {
@@ -20,6 +20,15 @@ describe('outcomes', () => {
             'A-1 was already stopped; nothing dispatches it now. Run 4 was ended and its slots returned.',
         )
         expect(stoppedText('A-1', { already: true, running_run: 4, ended: false }, true)).toContain('had already ended')
+    })
+
+    it("say what a forget cleared, and that its PRs and branch are the operator's to close", () => {
+        expect(forgotText('A-1', { branch: null, prs: [] })).toBe(
+            'A-1 is forgotten: its next implement starts over on a new branch.',
+        )
+        const said = forgotText('A-1', { branch: 'agent/A-1-x', prs: ['https://example.test/pr/1'] })
+        expect(said).toContain('canopy no longer tracks branch agent/A-1-x, https://example.test/pr/1.')
+        expect(said).toContain('delete its branch on origin yourself')
     })
 
     it('say what a note to a chore did, and that its next run reads it', () => {
