@@ -881,6 +881,8 @@ export type components = {
             done: boolean;
             /** Key */
             key: string;
+            /** Last Decision */
+            last_decision: string | null;
             /** Latest Message Id */
             latest_message_id: number | null;
             /** Phase */
