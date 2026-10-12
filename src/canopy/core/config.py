@@ -45,6 +45,10 @@ WORKSPACE_FILE_NAME = "canopy-workspace.toml"
 WORKSPACE_STATE_DIR = ".canopy"
 # Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
 WORKSPACE_MAP_TABLES = ("workspace", "repos")
+# Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
+REMOVED_KEYS = {
+    "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
+}
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
 DEFINITIONS_DIR = "{definitions_dir}"
@@ -797,6 +801,8 @@ def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
             continue
         for key, raw in table.items():
             name = f"{section}.{key}"
+            if name in REMOVED_KEYS:
+                raise ConfigError(f"{path}: {name} was removed: {REMOVED_KEYS[name]}")
             if name not in SPECS:
                 raise ConfigError(f"{path}: unknown key {name}")
             values[name] = raw

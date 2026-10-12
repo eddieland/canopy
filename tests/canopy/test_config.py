@@ -78,6 +78,13 @@ def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, se
         load(canopy_env.root, canopy_env.user_file)
 
 
+def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
+    """`paths.state_dir` was in the example user config; a copy of it must say to delete the key (D016)."""
+    canopy_env.write_user(canopy_env.user_file.read_text() + 'state_dir = "~/.canopy"\n')
+    with pytest.raises(ConfigError, match=r"paths\.state_dir was removed: delete it; state is always in the workspace"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 @pytest.mark.parametrize("where", ["workspace", "user"])
 def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
     if where == "workspace":

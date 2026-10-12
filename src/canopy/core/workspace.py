@@ -176,12 +176,15 @@ def no_workspace_message(start: Path) -> str:
 
 
 def _old_repo_file(start: Path) -> Path | None:
+    checkout = git_root(start)
+    path = checkout / OLD_REPO_FILE_NAME if checkout is not None else None
+    return path if path is not None and path.is_file() else None
+
+
+def git_root(start: Path) -> Path | None:
+    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None."""
     start = start.resolve()
-    for d in (start, *start.parents):
-        if (d / ".git").exists():
-            path = d / OLD_REPO_FILE_NAME
-            return path if path.is_file() else None
-    return None
+    return next((d for d in (start, *start.parents) if (d / ".git").exists()), None)
 
 
 def load(root: Path) -> Workspace:

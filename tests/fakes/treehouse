@@ -31,9 +31,8 @@ State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is a
                 directory at or above the working directory holding `.git`). Each is {slots, max_trees} as above. A
                 new slot goes where --worktree-path says (default {pool}/{slot}/{repo}), with {pool} the directory
                 `<TREEHOUSE_ROOT>/.treehouse/<repo>-fake`. `return` and `destroy` find a slot by path in any pool, as
-                treehouse does from the slot's own path. Without TREEHOUSE_ROOT, or with a top-level `slots` key
-                (one pool every repository shares, for a workspace of one repository), the top-level `slots` and
-                `max_trees` are the pool, and new slots go under `pool_dir`.
+                treehouse does from the slot's own path. Without TREEHOUSE_ROOT, the top-level `slots` and
+                `max_trees` are the pool.
 
 Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
 """
@@ -99,7 +98,7 @@ def repo_root() -> Path | None:
 def pool_of(state: dict[str, Any]) -> dict[str, Any] | None:
     """The pool the command works on: the working directory's repository's under TREEHOUSE_ROOT, else the state."""
     root = os.environ.get("TREEHOUSE_ROOT")
-    if not root or "slots" in state:
+    if not root:
         return state
     repo = repo_root()
     if repo is None:
@@ -110,7 +109,7 @@ def pool_of(state: dict[str, Any]) -> dict[str, Any] | None:
 def new_slot_path(state: dict[str, Any], args: argparse.Namespace, state_path: Path, name: str) -> Path:
     root = os.environ.get("TREEHOUSE_ROOT")
     repo = repo_root()
-    if not root or repo is None or "slots" in state:
+    if not root or repo is None:
         return Path(state.get("pool_dir", state_path.parent / "pool")) / name / "repo"
     template = args.worktree_path or "{pool}/{slot}/{repo}"
     pool_dir = Path(root) / ".treehouse" / f"{repo.name}-fake"

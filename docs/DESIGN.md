@@ -857,7 +857,8 @@ Configuration is layered. Each layer overrides the one before it, key by key:
 
 Every key has a scope. A **shared** key may be set in either file; the user file wins. A **user-only** key may be set
 only in the user file; a workspace file that sets one is a config error that names the key, and canopy refuses to
-run. Unknown keys are errors in both files.
+run. Unknown keys are errors in both files. A removed key, such as `paths.state_dir`, is an error that says what
+to do instead.
 
 | Key | Scope | Why |
 |---|---|---|

@@ -14,7 +14,7 @@ from canopy.serve import mock
 from tests.canopy.test_loop import context
 from tests.canopy.test_serve import client
 from tests.canopy.test_web import running_run, signed_in_client
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, pool_state
 
 KEY = "PROJ-1"
 
@@ -65,7 +65,7 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
         slot("7", "dirty"),
         slot("8", "damaged"),
     ]
-    treehouse_state.write_text(json.dumps({"slots": slots}))
+    treehouse_state.write_text(pool_state(ctx.workspace.repos[0].path, slots))
     c, _ = signed_in_client(ctx)
 
     [pool] = c.get("/api/worktrees").json()

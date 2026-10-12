@@ -21,7 +21,7 @@ from tests.canopy.helpers import (
     wait_for_run,
     worker_does,
 )
-from tests.conftest import CanopyEnv, GitPool
+from tests.conftest import CanopyEnv, GitPool, pool_state
 
 
 @pytest.fixture
@@ -374,7 +374,7 @@ def test_stale_worker_prompt_override_is_refused(
 def test_no_slot(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    treehouse_state.write_text(json.dumps({"max_trees": 0, "slots": []}))
+    treehouse_state.write_text(pool_state(canopy_env.repo, [], max_trees=0))
     tick_id = in_tick(conn, monkeypatch)
     assert (
         main(

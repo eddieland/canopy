@@ -38,7 +38,7 @@ def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, .
     root = workspace.find_root(Path.cwd())
     if root is None:
         root = Path.cwd().resolve()
-        checkout = _git_root(root)
+        checkout = workspace.git_root(root)
         if checkout is not None and not in_checkout:
             raise click.UsageError(
                 f"{root} is inside the git repository {checkout}. canopy runs from a workspace of its own and writes "
@@ -47,11 +47,6 @@ def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, .
             )
     provider = _provider(provider, root / config.WORKSPACE_FILE_NAME, "workspace")
     return _init_workspace(click_ctx, root, provider, repos)
-
-
-def _git_root(start: Path) -> Path | None:
-    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None."""
-    return next((d for d in (start, *start.parents) if (d / ".git").exists()), None)
 
 
 def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:

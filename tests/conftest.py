@@ -7,10 +7,14 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from canopy.infra.procs import SubprocessRunner
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
@@ -151,6 +155,14 @@ def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CanopyEnv:
     return env
 
 
+def pool_state(repo: Path, slots: Sequence[Mapping[str, object]], max_trees: int | None = None) -> str:
+    """The fake treehouse's state with `slots` as the pool of the repository whose primary clone is `repo`."""
+    pool: dict[str, object] = {"slots": list(slots)}
+    if max_trees is not None:
+        pool["max_trees"] = max_trees
+    return json.dumps({"pools": {str(repo): pool}})
+
+
 def git(*args: str, cwd: Path) -> str:
     """Run git through the procs boundary (D015) and return its stripped stdout; fail the test if it fails."""
     result = SubprocessRunner().run(["git", *args], cwd=cwd)
@@ -178,8 +190,8 @@ class GitPool:
 
 
 @pytest.fixture
-def git_pool(treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitPool:
-    """Real git behind the fake treehouse: `treehouse get` leases one of two clones of a bare origin.
+def git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitPool:
+    """Real git behind the fake treehouse: `treehouse get` leases one of two clones of a bare origin, as `repo`'s pool.
 
     Real treehouse slots are worktrees of one repository; clones behave the same for what canopy runs in a slot.
     """
@@ -207,5 +219,5 @@ def git_pool(treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPa
         git("checkout", "--quiet", "--detach", cwd=slot)
         slots.append(slot)
     pool = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
-    treehouse_state.write_text(json.dumps({"max_trees": len(slots), "slots": pool}))
+    treehouse_state.write_text(pool_state(canopy_env.repo, pool, max_trees=len(slots)))
     return GitPool(origin, tuple(slots))

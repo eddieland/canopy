@@ -57,7 +57,7 @@ class MigrationError(Exception):
 class RunSlot:
     """One slot a run leased: the repository whose pool it came from, the slot, its lease, and the run's base there."""
 
-    repo: str | None
+    repo: str
     slot_path: Path
     lease_id: str
     lease_holder: str
@@ -456,11 +456,10 @@ def insert_run(
             return run_id
         conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
         for slot in slots:
-            if slot.repo is not None:
-                _ensure_unit(conn, key, slot.repo)
-                conn.execute(
-                    "UPDATE ticket_units SET branch = ? WHERE ticket_key = ? AND repo = ?", (branch, key, slot.repo)
-                )
+            _ensure_unit(conn, key, slot.repo)
+            conn.execute(
+                "UPDATE ticket_units SET branch = ? WHERE ticket_key = ? AND repo = ?", (branch, key, slot.repo)
+            )
     return run_id
 
 
