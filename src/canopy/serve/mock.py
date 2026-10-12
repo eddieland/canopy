@@ -140,7 +140,7 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
         "web": [
             {
                 "status": "leased",
-                "branch": "agent/ABC-101-login",
+                "detached": True,
                 "lease_id": "lease-1",
                 "lease_holder": "canopy:ABC-101",
                 "leased_at": at(0),
@@ -148,7 +148,7 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
             },
             {
                 "status": "leased",
-                "branch": "agent/ABC-104-retry-queue",
+                "detached": True,
                 "lease_id": "lease-2",
                 "lease_holder": "canopy:ABC-104",
                 "leased_at": at(5),
@@ -161,7 +161,7 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
         "mobile": [
             {
                 "status": "leased",
-                "branch": "agent/ABC-104-retry-queue",
+                "detached": True,
                 "lease_id": "lease-3",
                 "lease_holder": "canopy:ABC-104",
                 "leased_at": at(5),

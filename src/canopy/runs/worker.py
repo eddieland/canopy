@@ -37,8 +37,10 @@ MAX_TEXT = 2000
 MAX_CHILD_KEY = 100
 MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
-# The repository whose slot `setup_cmd` runs in, by its name in the map (DESIGN §8).
+# The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
+# checked out detached (DESIGN §8).
 SETUP_REPO_ENV = "CANOPY_REPO"
+SETUP_BRANCH_ENV = "CANOPY_BRANCH"
 
 
 class WorkerError(Exception):
@@ -288,7 +290,7 @@ def _run_agent(
 def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid."""
     for slot in slots:
-        _check_out_base(slot)
+        _check_out(slot)
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = parse_split(text)
@@ -313,13 +315,41 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     return Outcome(parsed.status, parsed)
 
 
-def _check_out_base(slot: _Slot) -> None:
-    """Check out the slot's base branch from origin, detached: a split reads it and creates no branch."""
+def _check_out(slot: _Slot, branch: str = "") -> _Start:
+    """Check out the slot's base branch from origin, detached, or `branch` from origin if it is given and there.
+
+    A split reads its base and creates no branch. A worker run passes its branch, which it continues if it was pushed.
+    No run makes a local branch: every slot of a pool shares the repository's branch refs, so one would be state other
+    slots see. The worker pushes `HEAD` to the branch by refspec (DESIGN §8, D109).
+    """
     git = slot.git
+    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
     git.run("fetch", "--quiet", "--prune", "origin")
+    # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
+    # is another ticket's branch, deleted when its PR merged (DESIGN §10).
     if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{slot.base}"):
-        raise _SetupError(f"{git.where}the base branch {slot.base} is not on origin")
-    git.run("checkout", "--quiet", "--detach", f"refs/remotes/origin/{slot.base}")
+        hint = "; if it was stacked on, its PR may have merged" if branch else ""
+        raise _SetupError(f"{git.where}the base branch {slot.base} is not on origin{hint}")
+    target = slot.base
+    if branch and git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}"):
+        target = branch
+    git.run("checkout", "--quiet", "--detach", f"refs/remotes/origin/{target}")
+    if branch:
+        _drop_local_branch(git, branch, target)
+    return _Start(git.run("rev-parse", "HEAD"), len(_head_log(git)))
+
+
+def _drop_local_branch(git: _Git, branch: str, target: str) -> None:
+    """Delete a local `branch` an earlier canopy's `checkout -B` left in the pool's repository, if origin has it all.
+
+    A worker that made the branch again would fail, or fall back to the stale one. One with commits origin lacks is
+    kept: they may be the only copy.
+    """
+    ref = f"refs/heads/{branch}"
+    if git.ok("rev-parse", "--verify", "--quiet", ref) and git.ok(
+        "merge-base", "--is-ancestor", ref, f"refs/remotes/origin/{target}"
+    ):
+        git.result("branch", "--quiet", "--delete", "--force", branch)  # refused if a worktree has it checked out
 
 
 def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
@@ -328,7 +358,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
         return Outcome("stopped", None, stopped)
     branch = str(run["branch"])
-    starts = [_set_up_branch(slot, branch) for slot in slots]
+    starts = [_check_out(slot, branch) for slot in slots]
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
     runtime = ctx.config.runtime
@@ -377,28 +407,16 @@ def _stopped(ctx: Context, run: sqlite3.Row) -> str:
     return ""
 
 
-def _set_up_branch(slot: _Slot, branch: str) -> str:
-    """Check out `branch` in the slot, detached: origin's if it is there, else the base. Returns the commit.
+@dataclass(frozen=True)
+class _Start:
+    """Where a worker run's slot started: HEAD's commit, and how many entries HEAD's reflog then had."""
 
-    No run makes a local branch: every slot of a pool shares the repository's branch refs, so one would be state other
-    slots see. The worker pushes `HEAD` to the branch by refspec (DESIGN §8, D109).
-    """
-    git = slot.git
-    # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
-    git.run("fetch", "--quiet", "--prune", "origin")
-    # Checked even when the branch is continued: the worker's prompt targets the PR at the base. A stacked run's base
-    # is another ticket's branch, deleted when its PR merged (DESIGN §10).
-    if not git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{slot.base}"):
-        raise _SetupError(
-            f"{git.where}the base branch {slot.base} is not on origin; if it was stacked on, its PR may have merged"
-        )
-    on_origin = git.ok("rev-parse", "--verify", "--quiet", f"refs/remotes/origin/{branch}")
-    git.run("checkout", "--quiet", "--detach", f"refs/remotes/origin/{branch if on_origin else slot.base}")
-    return git.run("rev-parse", "HEAD")
+    commit: str
+    moves: int
 
 
 def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
-    """Run the operator's `setup_cmd` in the slot, on the run's branch, and fail the run if it fails (DESIGN §8, D105).
+    """Run the operator's `setup_cmd` in the slot, at the run's branch, and fail the run if it fails (DESIGN §8, D105).
 
     Unlike treehouse's `post_create`, which runs on the base before the branch is checked out and whose failure leaves
     the lease standing, this sees the branch the worker gets, and a failure stops the run before the worker starts.
@@ -414,7 +432,7 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
             argv,
             cwd=slot.path,
             # The run's id, as the worker gets it: the operator's commands refuse inside canopy's runs (DESIGN §22).
-            env={conversation.RUN_ID_ENV: str(run_id), SETUP_REPO_ENV: slot.repo},
+            env={conversation.RUN_ID_ENV: str(run_id), SETUP_REPO_ENV: slot.repo, SETUP_BRANCH_ENV: str(run["branch"])},
             timeout=timeout_minutes * 60,
         )
     except procs.ProcError as e:
@@ -428,23 +446,54 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
         raise _SetupError(f"{slot.git.where}setup exited {result.returncode}; see the run log")
 
 
-def _ensure_pushed(slot: _Slot, branch: str, start: str, log: logs.TickAdapter) -> str:
+def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapter) -> str:
     """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
-    Returns why the branch is not pushed, or "" if it is, or if the worker committed nothing.
+    Returns why the work is not pushed, or "" if it is, or if the worker committed nothing. Detached, HEAD is the only
+    thing holding the worker's commits, so a worker that moved it off them leaves them behind: that is unpushed too.
     """
     git = slot.git
     local = git.run("rev-parse", "HEAD")
-    if _remote_head(git, branch) == local:
-        return ""
-    if local == start:
-        return ""  # nothing new here; whatever is on origin is the worker's doing
-    log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
-    pushed = git.result("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
-    if pushed.ok and _remote_head(git, branch) == local:
-        return ""
-    detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
-    return f"{git.where}commits on {branch} are not on origin; the push failed: {detail}"
+    remote = _remote_head(git, branch)
+    # A HEAD that holds nothing past the start is no work of the worker's; whatever is on origin is its doing.
+    if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
+        log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
+        pushed = git.result("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+        remote = _remote_head(git, branch)
+        if not pushed.ok or remote != local:
+            detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
+            return f"{git.where}commits on {branch} are not on origin; the push failed: {detail}"
+    left = _left_behind(git, branch, start, remote)
+    if left:
+        return (
+            f"{git.where}the worker moved HEAD off {len(left)} commit(s) not on origin, such as {left[0][:12]}; "
+            "nothing was pushed for them"
+        )
+    return ""
+
+
+def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str]:
+    """Commits HEAD held during the run that neither HEAD, origin's `branch`, nor any of origin's branches holds.
+
+    Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
+    checked something else out, not one that tried to hide its work.
+    """
+    entries = _head_log(git)
+    held = list(dict.fromkeys(entries[: max(0, len(entries) - start.moves)]))
+    if not held:
+        return []
+    keep = ["HEAD"]
+    if remote and not git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
+        git.result("fetch", "--quiet", "origin", f"refs/heads/{branch}")  # writes FETCH_HEAD alone
+    if remote and git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
+        keep.append(remote)
+    return git.run("rev-list", *held, "--not", *keep, "--remotes=origin").split()
+
+
+def _head_log(git: _Git) -> list[str]:
+    """The commits in the slot's HEAD reflog, newest first, or none if it has no reflog."""
+    found = git.result("log", "--walk-reflogs", "--format=%H", "HEAD")
+    return found.stdout.split() if found.ok else []
 
 
 def _remote_head(git: _Git, branch: str) -> str:

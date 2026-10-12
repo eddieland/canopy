@@ -92,7 +92,8 @@ def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row 
         path=views.shown_path(str(slot.path), root),
         status=slot.status,
         state=state,
-        branch=_text(slot.branch),
+        # A run's slot is detached (D109): the branch it works on is the run's.
+        branch=_text(slot.branch) or (_text(str(run["branch"])) if run is not None and slot.detached else None),
         detached=slot.detached,
         branch_error=_text(slot.branch_error),
         holder=_text(slot.lease_holder),

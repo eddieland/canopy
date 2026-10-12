@@ -133,26 +133,17 @@ def test_the_shadowing_message_names_the_files(tmp_path: Path) -> None:
     assert "D044" in message
 
 
-def _mcp_rules(agent: str) -> list[tuple[str, str]]:
-    """The agent's top-level quoted permission rules, in order: OpenCode's patterns for MCP tool names."""
+def _rules(agent: str, section: str = "") -> list[tuple[str, str]]:
+    """The agent's quoted permission rules, in order: its top-level ones, OpenCode's patterns for MCP tool names, or
+    those under `section`, such as `bash`, whose patterns are command lines."""
     frontmatter = (resources.agents_dir() / f"{agent}.md").read_text().split("---")[1]
+    indent = "    " if section else "  "
+    inside = not section
     rules: list[tuple[str, str]] = []
     for line in frontmatter.splitlines():
-        if line.startswith('  "'):
-            pattern, action = line.strip().rsplit(":", 1)
-            rules.append((pattern.strip('"'), action.strip()))
-    return rules
-
-
-def _bash_rules(agent: str) -> list[tuple[str, str]]:
-    """The agent's bash permission rules, in order: OpenCode's patterns for command lines."""
-    frontmatter = (resources.agents_dir() / f"{agent}.md").read_text().split("---")[1]
-    rules: list[tuple[str, str]] = []
-    in_bash = False
-    for line in frontmatter.splitlines():
-        if line.startswith("  ") and not line.startswith("   ") and not line.lstrip().startswith("#"):
-            in_bash = line.strip() == "bash:"
-        elif in_bash and line.startswith('    "'):
+        if section and line.startswith("  ") and not line.startswith("   ") and not line.lstrip().startswith("#"):
+            inside = line.strip() == f"{section}:"
+        elif inside and line.startswith(f'{indent}"'):
             pattern, action = line.strip().rsplit(":", 1)
             rules.append((pattern.strip('"'), action.strip()))
     return rules
@@ -161,7 +152,7 @@ def _bash_rules(agent: str) -> list[tuple[str, str]]:
 @pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
 def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> None:
     """The prompts push HEAD by refspec from a detached checkout (D109); the definitions must not refuse it."""
-    rules = _bash_rules(agent)
+    rules = _rules(agent, "bash")
     assert rules
     assert _allowed(rules, "git push origin HEAD:refs/heads/agent/PROJ-1-docs-fix")
     for refused in (
@@ -201,7 +192,7 @@ def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
 )
 @pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
 def test_workers_deny_dangerous_mcp_tools(agent: str, tool: str) -> None:
-    assert not _allowed(_mcp_rules(agent), tool)
+    assert not _allowed(_rules(agent), tool)
 
 
 @pytest.mark.parametrize(
@@ -216,7 +207,7 @@ def test_workers_deny_dangerous_mcp_tools(agent: str, tool: str) -> None:
 )
 @pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
 def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None:
-    assert _allowed(_mcp_rules(agent), tool)
+    assert _allowed(_rules(agent), tool)
 
 
 @pytest.mark.parametrize(
@@ -231,4 +222,4 @@ def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None
     ],
 )
 def test_the_worker_keeps_the_ticket_tools_it_works_with(tool: str) -> None:
-    assert _allowed(_mcp_rules("canopy-worker"), tool)
+    assert _allowed(_rules("canopy-worker"), tool)

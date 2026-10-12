@@ -136,6 +136,57 @@ def test_unpushed_commits_are_pushed_once(
     )
 
 
+def test_commits_the_worker_moved_head_off_are_unpushed(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Detached, HEAD alone holds the worker's commits: checking out something else leaves them behind."""
+    worker_does(
+        monkeypatch,
+        ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: left behind"],
+        ["git", "checkout", "--quiet", "--detach", "origin/main"],
+    )
+    run = dispatch_and_run(conn, monkeypatch)
+    assert run["status"] == "unpushed"
+    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run["result_json"])["harness"]
+    assert git_pool.remote_head("agent/PROJ-1-work") is None
+
+
+def test_a_worker_that_pushed_and_then_moved_head_is_done(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    worker_does(
+        monkeypatch,
+        *commit_and_push("agent/PROJ-1-work"),
+        ["git", "checkout", "--quiet", "--detach", "origin/main"],
+    )
+    run = dispatch_and_run(conn, monkeypatch)
+    assert run["status"] == "done"
+    assert git_pool.remote_head("agent/PROJ-1-work") != git_pool.remote_head("main")
+
+
+@pytest.mark.parametrize("only_here", [False, True])
+def test_a_local_branch_an_earlier_canopy_left_is_dropped_unless_it_holds_commits_origin_lacks(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    only_here: bool,  # noqa: FBT001  (a parameter of the test)
+) -> None:
+    """Before D109 a run made its branch locally with `checkout -B`, and the pool's repository still has it."""
+    for slot in git_pool.slots:
+        git("branch", "agent/PROJ-1-work", "origin/main", cwd=slot)
+        if only_here:
+            stray = git("commit-tree", "-m", "only here", "-p", "origin/main", "origin/main^{tree}", cwd=slot)
+            git("branch", "--force", "agent/PROJ-1-work", stray, cwd=slot)
+    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
+    run = dispatch_and_run(conn, monkeypatch)
+    assert run["status"] == "done"
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    left = git("for-each-ref", "--format=%(refname)", "refs/heads/agent/PROJ-1-work", cwd=slot)
+    assert left == ("refs/heads/agent/PROJ-1-work" if only_here else "")
+
+
 def test_failed_push_is_unpushed(
     canopy_env: CanopyEnv,
     git_pool: GitPool,

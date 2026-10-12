@@ -542,7 +542,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 ## D105. Setup that needs the run's branch is `runtime.setup_cmd`, run by `_run` after checkout
 
 - In each slot of a worker run, before the worker; a failure or timeout ends the run `crashed`. Not for splits or
-  reviews. No placeholders; `CANOPY_REPO` names the slot's repository.
+  reviews. No placeholders; `CANOPY_REPO` names the slot's repository and `CANOPY_BRANCH` the run's branch.
 - Why: treehouse's `post_create` runs on the base before `_run` checks out the branch; a failing hook keeps the lease.
 - Rejected: an upstream treehouse hook (treehouse never sees the run's branch); a command per repository (one command
   reads `CANOPY_REPO`).

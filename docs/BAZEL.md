@@ -14,8 +14,8 @@ next run that leases it finds whatever the last one left that git ignores, Bazel
 2. **Seed.** treehouse copies gitignored files you name from your primary clone into the slot (setup step 2 below).
 3. **`post_create` hooks.** treehouse runs your hooks in the slot, on the base branch (setup step 3).
 4. **Checkout.** canopy fetches and checks out the run's branch.
-5. **`setup_cmd`.** canopy runs your setup command in the slot, on the run's branch. If it fails, the run ends there
-   (setup step 4).
+5. **`setup_cmd`.** canopy runs your setup command in the slot, at the run's branch with a detached HEAD
+   (`CANOPY_BRANCH` names it). If it fails, the run ends there (setup step 4).
 6. **Worker.** The agent works and pushes.
 7. **Return.** canopy returns the slot. The next lease's reset discards uncommitted files; ignored ones such as
    `bazel-out/` stay, and seeded ones are copied in fresh.
@@ -126,7 +126,8 @@ setup_timeout_minutes = 30
 
 ```sh
 #!/bin/sh
-# Run by canopy in each slot, on the run's branch, before the worker. CANOPY_REPO names the repository.
+# Run by canopy in each slot, at the run's branch (detached), before the worker. CANOPY_REPO names the repository,
+# CANOPY_BRANCH the branch.
 set -eu
 case "$CANOPY_REPO" in
 api)

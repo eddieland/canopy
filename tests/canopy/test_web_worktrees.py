@@ -54,7 +54,6 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
             "1",
             f"canopy:{KEY}",
             "lease-run",
-            branch="agent/PROJ-1-work",
             processes=[{"pid": 7, "name": "opencode\x1b[2J"}],
         ),
         leased("2", "canopy:r", "lease-review"),
@@ -83,7 +82,8 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
     }
     one = by_name["1"]
     assert (one["run"]["id"], one["run"]["kind"], one["review"]) == (run_id, "implement", None)
-    assert (one["branch"], one["detached"], one["holder"]) == ("agent/PROJ-1-work", False, f"canopy:{KEY}")
+    # Detached, as every run's slot is: the branch shown is the run's.
+    assert (one["branch"], one["detached"], one["holder"]) == ("agent/PROJ-1-work", True, f"canopy:{KEY}")
     assert one["leased_at"] == "2026-10-08T19:00:00.123456Z"
     assert one["processes"] == [{"pid": 7, "name": "opencode [2J"}]  # control characters dropped
     assert by_name["2"]["review"]["id"] == review_id

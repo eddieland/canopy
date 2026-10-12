@@ -81,7 +81,8 @@ Yours replaces the committed one, so copy in its lines to keep them. Only gitign
 ones. If the file is missing, every lease is refused `no_slot`.
 
 **Run a setup command on the run's branch.** `setup_cmd` runs in the slot after canopy checks out the run's branch and
-before the worker starts, with `CANOPY_REPO` naming the repository:
+before the worker starts, with `CANOPY_REPO` naming the repository and `CANOPY_BRANCH` the branch. HEAD is detached, so
+ask `CANOPY_BRANCH` for the branch's name, not git:
 
 ```toml
 # ~/.config/canopy/config.toml
