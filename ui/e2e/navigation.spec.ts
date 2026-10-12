@@ -86,6 +86,18 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     await page.goto('tickets/ZZZ-9')
     await expect(page.getByText('canopy has no record of it')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Start privately' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'jira.example/browse/ZZZ-9' })).toHaveAttribute(
+        'href',
+        'https://jira.example/browse/ZZZ-9',
+    )
+})
+
+test("a ticket's page links to it in the tracker, from tracker.ticket_url", async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    const link = page.getByRole('link', { name: 'jira.example/browse/ABC-102' })
+    await expect(link).toHaveAttribute('href', 'https://jira.example/browse/ABC-102')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
 })
 
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({

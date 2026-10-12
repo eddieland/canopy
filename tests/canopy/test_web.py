@@ -68,6 +68,20 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["ticket_url"] is None
+
+    template = "https://jira.example/browse/{key}"
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    other = context(canopy_env)
+    try:
+        c, _ = signed_in_client(other)
+        assert c.get("/api/meta").json()["ticket_url"] == template
+    finally:
+        other.conn.close()
+
+
 def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
 

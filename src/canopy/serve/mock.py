@@ -51,6 +51,7 @@ summary = "The web app."
 [tracker]
 provider = "jira"
 query = "project = ABC"
+ticket_url = "https://jira.example/browse/{key}"
 """
 
 _USER_TOML = """\

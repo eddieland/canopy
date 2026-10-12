@@ -222,6 +222,32 @@ def test_command_template_is_checked(canopy_env: CanopyEnv, replacement: str, me
         load(canopy_env.root, canopy_env.user_file)
 
 
+def test_ticket_url_is_a_shared_template_with_the_key_once(canopy_env: CanopyEnv) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).tracker.ticket_url == ""
+    template = "https://acme.atlassian.net/browse/{key}?focusedCommentId=1"
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    assert load(canopy_env.root, canopy_env.user_file).tracker.ticket_url == template
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "http://jira.example/browse/{key}",
+        "https://jira.example/browse/KEY",
+        "https://jira.example/{key}/{key}",
+        "https://jira.example/browse/{id}-{key}",
+        "https://jira.example/browse/{ key}",
+        "javascript:alert(1)//{key}",
+        "https://jira.example/browse/ {key}",
+        "https://jira.example/" + "a" * 500 + "{key}",
+    ],
+)
+def test_ticket_url_is_refused_unless_a_plain_https_template(canopy_env: CanopyEnv, template: str) -> None:
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    with pytest.raises(ConfigError, match=r"tracker\.ticket_url: Value error, must be empty, or a plain https://"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 def test_render_command_keeps_the_prompt_in_one_argument() -> None:
     prompt = "it's a `prompt` with $HOME; rm -rf / && echo {prompt} {definitions_dir}"
     argv = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt, Path("/defs"))

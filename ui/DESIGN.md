@@ -184,6 +184,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
+- **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
+  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
+  its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
+  it in its header; when it is unset, neither shows.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its

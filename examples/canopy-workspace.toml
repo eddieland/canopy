@@ -26,6 +26,8 @@ provider = "jira"
 # already exist, since canopy does not create labels.
 needs_human_label = "needs-human"
 query = 'project = ACME AND statusCategory != Done ORDER BY priority DESC, created ASC'
+# Optional: a ticket's page, with {key} where its key goes. The web UI links each ticket there.
+# ticket_url = "https://acme.atlassian.net/browse/{key}"
 
 [trust]
 branch_prefix = "agent/"

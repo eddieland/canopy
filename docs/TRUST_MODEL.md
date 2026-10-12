@@ -328,9 +328,11 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
-Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, and the branch
-prefix. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs, or agent branches under
-an unexpected prefix, which branch protection (§7) still governs. The provider also picks the default tracker server and
+Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, the branch
+prefix, and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs,
+agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
+leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
+nothing. The provider also picks the default tracker server and
 tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
