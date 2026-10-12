@@ -106,6 +106,7 @@ class Run(_Model):
     tokens: int | None = None
     # The worktrees a running run holds, from the workspace root when under it.
     worktrees: list[str] = []
+    # From the workspace root when under it, as a worktree's path is.
     log_path: str
 
 
@@ -381,9 +382,77 @@ class TickDetail(_Model):
     tick: Tick
     # In the order they were recorded.
     decisions: list[Decision]
-    # Where the overseer's stdout and stderr are, readable only by the operator, if the file exists. The page names it
-    # and does not serve it: it is agent output from a file, unbounded and unchecked.
+    # Where the overseer's stdout and stderr are, from the workspace root, if the file exists. Its session's events are
+    # served as the tick's transcript (DESIGN §22); the file itself is not.
     output_path: str | None = None
+
+
+class TranscriptText(_Model):
+    """A finished piece of the agent's text, or of its reasoning."""
+
+    kind: Literal["text"] = "text"
+    at: datetime | None = None
+    text: str
+    reasoning: bool = False
+    # Cut at the transcript's bound for one text.
+    cut: bool = False
+
+
+class TranscriptTool(_Model):
+    """One tool call, once it ended: its input as indented JSON, and its output, or its error when `error`."""
+
+    kind: Literal["tool"] = "tool"
+    at: datetime | None = None
+    tool: str
+    status: Literal["completed", "error"]
+    # The runtime's one-line description of the call, such as the command's purpose or the file's path.
+    title: str | None = None
+    input: str
+    output: str
+    duration_ms: int | None = None
+    cut: bool = False
+
+
+class TranscriptStep(_Model):
+    """One model call ended: why, and what it cost, when the runtime said."""
+
+    kind: Literal["step"] = "step"
+    at: datetime | None = None
+    reason: str | None = None
+    cost_usd: float | None = None
+    tokens: int | None = None
+
+
+class TranscriptError(_Model):
+    """The runtime reported an error in the session."""
+
+    kind: Literal["error"] = "error"
+    at: datetime | None = None
+    name: str
+    message: str
+
+
+type TranscriptEntry = Annotated[
+    TranscriptText | TranscriptTool | TranscriptStep | TranscriptError, Field(discriminator="kind")
+]
+# `read`: the log was read, whether or not it held any of the session's events yet (a running run's reach it when the
+# run ends). `no_session`: the runtime reported no session (a template without `--format json`). `no_log`: the log is
+# missing, a symlink, or not a regular file.
+type TranscriptStatus = Literal["read", "no_session", "no_log"]
+
+
+class Transcript(_Model):
+    """What a run's log or a tick's output holds of its session, read back from the events as printed (DESIGN §22).
+
+    Agent output: untrusted, rendered as text, and bounded. `truncated` says a bound left something out; `unreadable`
+    counts events that did not validate.
+    """
+
+    status: TranscriptStatus
+    session_id: str | None = None
+    entries: list[TranscriptEntry] = []
+    truncated: bool = False
+    unreadable: int = 0
 
 
 class LastTick(_Model):

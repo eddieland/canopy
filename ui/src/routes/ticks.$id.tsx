@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { tickDetailQuery } from '@/api/queries'
-import type { TickDetail } from '@/api/types'
+import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
+import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Decisions } from '@/components/decisions'
 import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { TranscriptPanel } from '@/components/transcript'
 import { Skeleton } from '@/components/ui/skeleton'
 import { localTime } from '@/lib/time'
 import { TICK_TONE, tickId } from '@/lib/ticks'
@@ -26,6 +27,7 @@ function TickPage() {
 
 function Loaded({ id }: { id: number }) {
     const { data, error } = useQuery(tickDetailQuery(id))
+    const { data: transcript } = useQuery(tickTranscriptQuery(id))
     if (error instanceof ApiError && error.status === 404) return <NoTick title={`tick ${id}`}>{error.message}</NoTick>
     if (data === undefined) {
         return (
@@ -37,7 +39,7 @@ function Loaded({ id }: { id: number }) {
             </>
         )
     }
-    return <Tick detail={data} />
+    return <Tick detail={data} transcript={transcript} />
 }
 
 function NoTick({ title, children }: { title: string; children: string }) {
@@ -51,14 +53,14 @@ function NoTick({ title, children }: { title: string; children: string }) {
     )
 }
 
-function Tick({ detail }: { detail: TickDetail }) {
+function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcript | undefined }) {
     const { tick, decisions, output_path: output } = detail
     return (
         <>
             <PageHeader label={tick.dry_run ? 'Tick, dry run' : 'Tick'} title={`tick ${tick.id}`}>
                 What the overseer decided in this tick, and why, as{' '}
                 <code className="font-mono text-xs">canopy decisions {tick.id}</code> prints it. Attention items and
-                refusals are the harness's.
+                refusals are the harness's. Under them, the overseer's session: what it read and ran to decide.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>
@@ -103,6 +105,7 @@ function Tick({ detail }: { detail: TickDetail }) {
                         <Decisions decisions={decisions} />
                     )}
                 </Panel>
+                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} />
             </div>
         </>
     )

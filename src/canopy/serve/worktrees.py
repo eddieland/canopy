@@ -98,7 +98,7 @@ def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row 
         branch_error=_text(slot.branch_error),
         holder=_text(slot.lease_holder),
         leased_at=_time(slot.leased_at),
-        run=views.run(run) if run is not None else None,
+        run=views.run(run, root) if run is not None else None,
         review=(
             ReviewHold(
                 id=int(review["id"]),

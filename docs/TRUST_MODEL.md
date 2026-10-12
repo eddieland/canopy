@@ -381,6 +381,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - Journal text, tracker comments and agent output included, is untrusted: it is rendered as text, never as HTML, and
   no script is built from it. An http or https URL in it is a link whose text is the URL itself, so a link never
   shows one destination and opens another, and it opens in a new tab with no referrer (D113).
+- It also serves a run's or tick's transcript (DESIGN §22): its session's events, read back from the run's log or
+  the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
+  command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
+  following links; the file itself is never served, and nothing else under the state directory is read.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME`
   does, nothing else. A forget must carry the ticket's key typed out, checked in code. It cannot run a chore.
@@ -391,7 +395,7 @@ shared machine can reach loopback, and is stopped only by the secret. A browser 
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
 cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
-the network (D076).
+the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 
 ## 6. What canopy must never do
 

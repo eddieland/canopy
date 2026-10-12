@@ -97,8 +97,9 @@ Partial; the rest is M15.
 
 - See: built. `canopy status` shows the attention list, running workers, the last tick, and the ten runs that ended
   most recently with their outcome, PR, summary, cost, run log, and OpenCode session id, which opens the run's
-  transcript with OpenCode's own tools (§13); `canopy decisions` shows what a tick decided. A running worker's
-  session id is known only once it ends: it is read from what `opencode run` printed.
+  transcript with OpenCode's own tools (§13); `canopy decisions` shows what a tick decided. The web UI shows an
+  ended run's or tick's transcript, its tool calls included, read back from its log (M27). A running worker's
+  session id and events are known only once it ends: they are read from what `opencode run` printed.
 - Prompt an idle ticket: built. An authorized reply on the ticket, or a review comment on the PR, is picked up by the
   next tick and resumes the work (§7). This keeps the operator's daily surface where coworkers' already is.
 - Prompt a running session: not possible today; M15 runs workers against OpenCode's server so the operator can

@@ -11,11 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AttentionRouteImport } from './routes/attention'
-import { Route as RunsRouteImport } from './routes/runs'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
+import { Route as RunsIndexRouteImport } from './routes/runs.index'
+import { Route as RunsIdRouteImport } from './routes/runs.$id'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
 import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
 import { Route as TicksIndexRouteImport } from './routes/ticks.index'
@@ -29,11 +30,6 @@ const IndexRoute = IndexRouteImport.update({
 const AttentionRoute = AttentionRouteImport.update({
   id: '/attention',
   path: '/attention',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RunsRoute = RunsRouteImport.update({
-  id: '/runs',
-  path: '/runs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -54,6 +50,16 @@ const ChoresIndexRoute = ChoresIndexRouteImport.update({
 const ChoresNameRoute = ChoresNameRouteImport.update({
   id: '/chores/$name',
   path: '/chores/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsIndexRoute = RunsIndexRouteImport.update({
+  id: '/runs/',
+  path: '/runs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RunsIdRoute = RunsIdRouteImport.update({
+  id: '/runs/$id',
+  path: '/runs/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TicketsIndexRoute = TicketsIndexRouteImport.update({
@@ -80,26 +86,28 @@ const TicksIdRoute = TicksIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
-  '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
+  '/runs/': typeof RunsIndexRoute
   '/tickets/': typeof TicketsIndexRoute
   '/ticks/': typeof TicksIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
-  '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores': typeof ChoresIndexRoute
+  '/runs': typeof RunsIndexRoute
   '/tickets': typeof TicketsIndexRoute
   '/ticks': typeof TicksIndexRoute
 }
@@ -107,13 +115,14 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
-  '/runs': typeof RunsRoute
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
+  '/runs/': typeof RunsIndexRoute
   '/tickets/': typeof TicketsIndexRoute
   '/ticks/': typeof TicksIndexRoute
 }
@@ -122,39 +131,42 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/attention'
-    | '/runs'
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
+    | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores/'
+    | '/runs/'
     | '/tickets/'
     | '/ticks/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/attention'
-    | '/runs'
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
+    | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores'
+    | '/runs'
     | '/tickets'
     | '/ticks'
   id:
     | '__root__'
     | '/'
     | '/attention'
-    | '/runs'
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
+    | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores/'
+    | '/runs/'
     | '/tickets/'
     | '/ticks/'
   fileRoutesById: FileRoutesById
@@ -162,13 +174,14 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AttentionRoute: typeof AttentionRoute
-  RunsRoute: typeof RunsRoute
   SettingsRoute: typeof SettingsRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
+  RunsIdRoute: typeof RunsIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicksIdRoute: typeof TicksIdRoute
   ChoresIndexRoute: typeof ChoresIndexRoute
+  RunsIndexRoute: typeof RunsIndexRoute
   TicketsIndexRoute: typeof TicketsIndexRoute
   TicksIndexRoute: typeof TicksIndexRoute
 }
@@ -187,13 +200,6 @@ declare module '@tanstack/react-router' {
       path: '/attention'
       fullPath: '/attention'
       preLoaderRoute: typeof AttentionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/runs': {
-      id: '/runs'
-      path: '/runs'
-      fullPath: '/runs'
-      preLoaderRoute: typeof RunsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -222,6 +228,20 @@ declare module '@tanstack/react-router' {
       path: '/chores/$name'
       fullPath: '/chores/$name'
       preLoaderRoute: typeof ChoresNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs/': {
+      id: '/runs/'
+      path: '/runs'
+      fullPath: '/runs/'
+      preLoaderRoute: typeof RunsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/runs/$id': {
+      id: '/runs/$id'
+      path: '/runs/$id'
+      fullPath: '/runs/$id'
+      preLoaderRoute: typeof RunsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tickets/': {
@@ -258,13 +278,14 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AttentionRoute: AttentionRoute,
-  RunsRoute: RunsRoute,
   SettingsRoute: SettingsRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
+  RunsIdRoute: RunsIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicksIdRoute: TicksIdRoute,
   ChoresIndexRoute: ChoresIndexRoute,
+  RunsIndexRoute: RunsIndexRoute,
   TicketsIndexRoute: TicketsIndexRoute,
   TicksIndexRoute: TicksIndexRoute,
 }

@@ -105,7 +105,7 @@ def read(stdout: str) -> AgentOutput:
     events = 0
     complete = True
     for line in stdout.splitlines():
-        event = _event(line)
+        event = parse_event(line)
         if event is None:
             continue
         events += 1
@@ -126,7 +126,7 @@ def read(stdout: str) -> AgentOutput:
     return AgentOutput("\n".join(texts), session, _total(steps) if complete else None)
 
 
-def _event(line: str) -> dict[str, object] | None:
+def parse_event(line: str) -> dict[str, object] | None:
     """Return `line` as an event: a JSON object with a string `type` and a `sessionID`. None if it is not one."""
     line = line.strip()
     if not line.startswith("{"):

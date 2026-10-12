@@ -62,7 +62,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   to `POST /api/session`.
 - **Never blank content.** A skeleton only when `data` is `undefined`. Reserve space for anything async.
 - **Typed search params.** Validate in the route's `validateSearch` and return every key, `undefined` when invalid:
-  the router merges the result over the raw search, so an omitted key keeps the raw string (see `routes/runs.tsx`).
+  the router merges the result over the raw search, so an omitted key keeps the raw string (see
+  `routes/runs.index.tsx`).
 - **URLs are relative to the base path.** The app may be served under a prefix. Use `apiUrl()` and `basePath` from
   `src/lib/base.ts` and router `Link`s; never write `/api/...` or `/assets/...` as an absolute path.
 - **No requests to another origin** at run time: no CDN fonts, icon fonts, analytics, or remote images. Bundle them.

@@ -30,6 +30,9 @@ export type ChoreSummary = Schemas['ChoreSummary']
 export type ChoreDetail = Schemas['ChoreDetail']
 export type ChoreRun = Schemas['ChoreRun']
 export type ChoreFinding = Schemas['ChoreFinding']
+export type Transcript = Schemas['Transcript']
+export type TranscriptEntry = Transcript['entries'][number]
+export type TranscriptTool = Schemas['TranscriptTool']
 
 // Every state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss.
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]
