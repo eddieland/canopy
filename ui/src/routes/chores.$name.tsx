@@ -7,6 +7,7 @@ import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreFinding, ChoreRun } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreNotes } from '@/components/chore-notes'
+import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -124,7 +125,9 @@ function Finding({ finding }: { finding: ChoreFinding }) {
                 <Age at={finding.since} className="ml-auto" />
             </div>
             {finding.detail && (
-                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">{finding.detail}</p>
+                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
+                    <LinkedText text={finding.detail} />
+                </p>
             )}
             {finding.link && (
                 <a
@@ -166,7 +169,11 @@ function RunRow({ run }: { run: ChoreRun }) {
                     </span>
                 </span>
             </div>
-            {run.summary && <p className="pl-[9.5rem] text-sm break-words">{run.summary}</p>}
+            {run.summary && (
+                <p className="pl-[9.5rem] text-sm break-words">
+                    <LinkedText text={run.summary} />
+                </p>
+            )}
             <div
                 className={cn(
                     'flex flex-wrap items-center gap-x-4 gap-y-1 pl-[9.5rem]',

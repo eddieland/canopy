@@ -169,9 +169,13 @@ inline script and checks it against the store's key. The ticker's speed and gap 
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
-  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text. An operator message no `ok` tick has read
-  carries a `waiting for the next tick` chip in `status-running` (`src/lib/acknowledged.ts`), and an `awaiting_reply`
-  item it answered an `answered` chip, with a line saying it leaves at the next tick; Waiting on you counts neither.
+  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
+  message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
+  (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
+  at the next tick; Waiting on you counts neither.
+- **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
+  detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
+  new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
 - **A chore's notes** are a conversation of the operator's words alone, under the chore's runs and findings, with a
   note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.

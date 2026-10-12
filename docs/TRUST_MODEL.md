@@ -377,7 +377,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   must name one of them (another site's page). Responses refuse framing and MIME sniffing and send no Referer;
   `index.html` carries a CSP that allows scripts only from the server and the one inline theme script by hash.
 - Journal text, tracker comments and agent output included, is untrusted: it is rendered as text, never as HTML, and
-  no script is built from it.
+  no script is built from it. An http or https URL in it is a link whose text is the URL itself, so a link never
+  shows one destination and opens another, and it opens in a new tab with no referrer (D112).
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   and reply to tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME` does,
   nothing else. It cannot run a chore.

@@ -2540,6 +2540,10 @@ Served by `canopy loop` from a thread (D073):
   the operator's session. React escapes text it renders, and nothing renders journal text as HTML
   (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Message bodies are sent with control
   characters dropped, as `canopy show` prints them.
+- An http or https URL in journal text (a message body, a run's or tick's summary, a rationale, an attention item's or
+  finding's detail) is shown as a link whose text is the URL as written, opening in a new tab with no referrer (D112).
+  No other scheme is linked, and nothing else in the text becomes markup. A row that is itself a link (an attention
+  item in the list) links nothing inside it.
 - It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
   `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
   `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
