@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import type { Decision } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
+import { LinkedText } from '@/components/linked-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
@@ -52,7 +53,9 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                         )}
                         {byTick && <Age at={decision.at} className="ml-auto" />}
                     </div>
-                    <p className="text-sm break-words">{decision.rationale}</p>
+                    <p className="text-sm break-words">
+                        <LinkedText text={decision.rationale} />
+                    </p>
                 </li>
             ))}
         </ul>

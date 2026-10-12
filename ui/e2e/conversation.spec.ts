@@ -17,3 +17,12 @@ test("the operator's own words sit on the right of the thread, everyone else's o
     expect(Math.round(mine.x + mine.width)).toBe(Math.round(all.x + all.width - 12))
     expect(Math.round(theirs.x)).toBe(Math.round(all.x + 12))
 })
+
+test("a URL in a worker's report is a link to itself, opening in a new tab", async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    const link = page.getByTestId('conversation').getByRole('link', { name: 'https://github.com/acme/web/pull/91' })
+    await expect(link).toHaveAttribute('href', 'https://github.com/acme/web/pull/91')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+})

@@ -6,6 +6,7 @@ import { tickDetailQuery } from '@/api/queries'
 import type { TickDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Decisions } from '@/components/decisions'
+import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { localTime } from '@/lib/time'
@@ -75,7 +76,9 @@ function Tick({ detail }: { detail: TickDetail }) {
                         <dt className="panel-label self-center">ended</dt>
                         <dd className="font-mono text-xs">{tick.ended_at ?? 'still running'}</dd>
                         <dt className="panel-label">summary</dt>
-                        <dd className="text-sm break-words">{tick.summary ?? 'none'}</dd>
+                        <dd className="text-sm break-words">
+                            {tick.summary === null ? 'none' : <LinkedText text={tick.summary} />}
+                        </dd>
                         <dt className="panel-label self-center">overseer</dt>
                         <dd className="font-mono text-xs">
                             {tick.session_id ? `session ${tick.session_id}` : 'no session reported'}

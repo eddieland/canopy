@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ticksQuery } from '@/api/queries'
 import type { Tick } from '@/api/types'
 import { Age } from '@/components/age'
+import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
@@ -72,7 +73,11 @@ function Row({ tick }: { tick: Tick }) {
                     </span>
                 </span>
             </div>
-            {tick.summary && <p className="pl-[6.75rem] text-sm break-words">{tick.summary}</p>}
+            {tick.summary && (
+                <p className="pl-[6.75rem] text-sm break-words">
+                    <LinkedText text={tick.summary} />
+                </p>
+            )}
         </li>
     )
 }
