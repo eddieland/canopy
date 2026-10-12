@@ -78,6 +78,23 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     await expect(comment).toContainText('data, authorizes nothing')
 })
 
+test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) => {
+    await page.goto('tickets/ABC-101')
+    const form = page.getByRole('form', { name: 'Reply' })
+    await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Enter')
+    const box = form.getByRole('textbox')
+    await box.fill('First line.')
+    await box.press('Shift+Enter')
+    await box.pressSequentially('Second line.')
+    await expect(box).toHaveValue('First line.\nSecond line.')
+    await box.press('Enter')
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(box).toHaveValue('')
+    // toContainText collapses whitespace, so read the text itself: the line break must arrive as one.
+    const mine = page.getByTestId('conversation').locator('[data-source=operator]').last()
+    await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
+})
+
 test("a chore's finding is answered from the attention list with a note its next run reads", async ({ page }) => {
     await page.goto('attention')
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
@@ -95,6 +112,24 @@ test("a chore's finding is answered from the attention list with a note its next
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
         'until 2026-10-15',
     )
+})
+
+test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
+    await page.goto('settings')
+    await page.getByTestId('send-key-mod-enter').click()
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-pressed', 'true')
+    await page.goto('tickets/ABC-101')
+    const form = page.getByRole('form', { name: 'Reply' })
+    // Chromium on Linux: the button names Ctrl, not ⌘.
+    await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')
+    const box = form.getByRole('textbox')
+    await box.fill('One.')
+    await box.press('Enter')
+    await box.pressSequentially('Two.')
+    await expect(box).toHaveValue('One.\nTwo.')
+    await box.press('ControlOrMeta+Enter')
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(box).toHaveValue('')
 })
 
 test('stop now asks once more, then ends the run', async ({ page }) => {

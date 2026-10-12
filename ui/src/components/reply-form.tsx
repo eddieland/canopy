@@ -1,16 +1,33 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Send } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { Command, CornerDownLeft, Send } from 'lucide-react'
+import { useState, type FormEvent, type KeyboardEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
 import type { Replied } from '@/api/types'
 import { Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
+import { Kbd } from '@/components/ui/kbd'
 import { notedText, repliedText } from '@/lib/outcomes'
+import { isApple, sends, sendShortcut, useSendKey } from '@/lib/send-key'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
+
+const APPLE = isApple(navigator.userAgent)
+
+/** The keys of a shortcut (`Control+Enter`) as one keycap: ⌘ and Enter as glyphs, Ctrl as its word. */
+function Shortcut({ keys }: { keys: string }) {
+    return (
+        <Kbd aria-hidden className="ml-0.5 bg-accent-foreground/15 text-accent-foreground">
+            {keys.split('+').map((key) => {
+                if (key === 'Meta') return <Command key={key} />
+                if (key === 'Enter') return <CornerDownLeft key={key} />
+                return <span key={key}>Ctrl</span>
+            })}
+        </Kbd>
+    )
+}
 
 /** What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19). */
 export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | { kind: 'chore'; name: string }
@@ -23,6 +40,8 @@ export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | {
  */
 export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; waiting?: number | null }) {
     const client = useQueryClient()
+    const sendKey = useSendKey()
+    const shortcut = sendShortcut(sendKey, APPLE)
     const [body, setBody] = useState('')
     const [submission, setSubmission] = useState(newSubmission)
     const [said, setSaid] = useState<string | null>(null)
@@ -41,7 +60,15 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (body.trim()) mutation.mutate(body)
+        if (body.trim() && !mutation.isPending) mutation.mutate(body)
+    }
+
+    // The key Settings names sends through the form, as the button does; any other Enter makes a new line.
+    function sendOnKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+        const { key, shiftKey, ctrlKey, metaKey } = event
+        if (!sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) return
+        event.preventDefault()
+        event.currentTarget.form?.requestSubmit()
     }
 
     const chore = target.kind === 'chore'
@@ -62,6 +89,7 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
                     value={body}
                     maxLength={MAX_REPLY}
                     onChange={(event) => setBody(event.target.value)}
+                    onKeyDown={sendOnKey}
                     placeholder={placeholder}
                 />
             </label>
@@ -70,9 +98,10 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
                 <span className="ml-auto readout text-xs text-muted-foreground">
                     {body.length}/{MAX_REPLY}
                 </span>
-                <Button type="submit" disabled={mutation.isPending || !body.trim()}>
+                <Button type="submit" disabled={mutation.isPending || !body.trim()} aria-keyshortcuts={shortcut}>
                     <Send />
                     {chore ? 'Add note' : 'Reply'}
+                    {shortcut && <Shortcut keys={shortcut} />}
                 </Button>
             </div>
         </form>
