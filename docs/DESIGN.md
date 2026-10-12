@@ -157,7 +157,7 @@ canopy (harness, Python)
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
-    init.py        canopy init: config files, branch protection text, SSH remote warning, old agent definition copies
+    init.py        canopy init: the user config, branch protection text, the SSH push URL check
     workspace.py   canopy init: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
@@ -975,21 +975,25 @@ Rules:
   never set them (TRUST_MODEL §3).
 - `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
-- `canopy init` sets up a workspace in the current directory, or fills in the one it is inside (§18). In a git
-  checkout that is not a workspace it refuses, unless given `--workspace`: canopy writes nothing into a code repository.
+- `canopy init` sets up a workspace in the current directory, or fills in the one it is inside (§18). A new workspace
+  is never the home directory, where every later init below it would land, and never a directory that already has a
+  `.canopy/`, which may be an earlier canopy's journal. In a git checkout it refuses, unless given `--workspace`:
+  canopy writes nothing into a code repository. A repository at the home directory is the operator's dotfiles, not a
+  code repository, and needs no flag. The refusal names a `canopy.toml` at the checkout's root as not read.
 - `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
   `trust.authorized_repliers` and `trust.trusted_reviewers` to fill in, and prints the label. It writes the workspace
   file only if there is none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose
   default serves: a default written into a file is pinned there, and a later canopy's never reaches it (D087). It never
   overwrites either file and installs nothing else (§13). If the config does not load (for example, templates lacking
-  `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the repository's
-  OpenCode config, which stop runs (§13).
+  `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
+  of the workspace root and of each cloned repository, which stop runs (§13).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
-- Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy init` runs
-  `git remote get-url --push --all origin`, which applies `insteadOf` and `pushInsteadOf` rewrites, and warns naming
-  every URL git would reach over SSH: `ssh://`, `git+ssh://`, or scp-like `[user@]host:path`. Only a warning: init
-  still succeeds, and nothing else checks the remote.
+- Remotes should be HTTPS with a credential helper, not SSH (D038). `canopy workspace sync`, which `canopy init` runs
+  for the URLs it is given, runs `git remote get-url --push --all origin` in each primary clone, which applies
+  `insteadOf` and `pushInsteadOf` rewrites, and warns naming every URL git would reach over SSH: `ssh://`,
+  `git+ssh://`, or scp-like `[user@]host:path`. Only a warning: sync still succeeds, and nothing else checks the
+  remote.
 - Reading is `tomllib`, merging is a key-by-key dict merge, and validation is pydantic models carrying each key's type,
   default, scope, and tighten direction (D026). Scope and tighten checks run per file before the merge, so errors name
   the file that caused them.
@@ -1284,8 +1288,9 @@ each, the worktree pools, and canopy's state. The loop runs from the workspace r
 ```
 
 canopy finds the workspace by walking up from the current directory to the nearest `canopy-workspace.toml`, so it
-works from inside `repos/` too. With none, every command but `canopy init` refuses, and names a `canopy.toml` left in
-the repository it was run from as not read (D016).
+works from inside `repos/` too. With none, every command that reads the config or the journal refuses, and names a
+`canopy.toml` left in the repository it was run from as not read (D016). `canopy init`, `canopy skill`, and
+`canopy secret` need no workspace.
 
 ### The map
 

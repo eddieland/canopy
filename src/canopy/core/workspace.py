@@ -169,13 +169,14 @@ def no_workspace_message(start: Path) -> str:
         f"no {WORKSPACE_FILE_NAME} here or above; canopy runs from a workspace. In an empty directory, run "
         f"`canopy init --provider <tracker> <clone URL>...` to make one."
     )
-    old = _old_repo_file(start)
+    old = old_repo_file(start)
     if old is not None:
         message += f"\n{old} is not read: move its keys to {WORKSPACE_FILE_NAME} in the workspace (D016)."
     return message
 
 
-def _old_repo_file(start: Path) -> Path | None:
+def old_repo_file(start: Path) -> Path | None:
+    """The `canopy.toml` at the root of the checkout `start` is in, if there is one. It is never read (D016)."""
     checkout = git_root(start)
     path = checkout / OLD_REPO_FILE_NAME if checkout is not None else None
     return path if path is not None and path.is_file() else None

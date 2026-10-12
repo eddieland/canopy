@@ -113,6 +113,11 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
         click.echo(f"The map lists no repositories; add them under [repos.<name>] in {ws.map_file}.")
     for repo in ws.repos:
         results.append(_report(_clone_or_check(ctx, ws, repo, dry_run=dry_run)))
+        # What git pushes to, after the operator's `insteadOf` and `pushInsteadOf` rewrites, not the map's URL (D038).
+        if repo.cloned and (urls := init.ssh_push_urls(ctx.runner, repo.path)):
+            click.echo(
+                f"{repo.name}: warning: origin pushes over SSH ({', '.join(urls)}); canopy recommends HTTPS (D038)"
+            )
         want = ctx.config.capacity.slots_for(repo.name)
         if want is not None and repo.cloned:
             results.append(
@@ -136,8 +141,6 @@ def _clone_or_check(
     if dry_run:
         return setup_workspace.Checked(repo, "to clone", f"{url} into {repo.path}")
     click.echo(f"{repo.name}: cloning {url} into {repo.path}")
-    if repo.url is not None and init.is_ssh_url(repo.url):
-        click.echo(f"{repo.name}: warning: {url} is reached over SSH; canopy recommends HTTPS (D038)")
     return setup_workspace.clone(ctx.runner, ws, repo)
 
 

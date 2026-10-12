@@ -4,10 +4,10 @@ canopy uses `status --json`, `get --lease --json`, and `return --force --if-leas
 `canopy workspace sync` also uses `destroy --yes` to remove idle slots a pool has beyond its declared size. Lease
 holders are `canopy:<KEY>`; sync's own short leases are `canopy-sync`, which reconcile never returns.
 
-treehouse finds a repository's pool from its working directory. In a workspace, every command runs in the repository's
-primary clone with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot goes, so the pools live
-under `<workspace>/.treehouse/` whatever treehouse's own config says (DESIGN §18). A `Pool` says which, and which
-personal `.worktreeinclude` every `get` passes as `--include-file` (DESIGN §9).
+treehouse finds a repository's pool from its working directory. Every command runs in the repository's primary clone
+with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot goes, so the pools live under
+`<workspace>/.treehouse/` whatever treehouse's own config says (DESIGN §18). A `Pool` says which, and which personal
+`.worktreeinclude` every `get` passes as `--include-file` (DESIGN §9).
 """
 
 from __future__ import annotations

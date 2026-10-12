@@ -87,6 +87,59 @@ def test_init_refuses_a_code_checkout(
     assert (checkout / config.WORKSPACE_FILE_NAME).is_file()
 
 
+def test_init_names_a_leftover_canopy_toml_in_the_checkout(
+    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    checkout = tmp_path / "code"
+    (checkout / ".git").mkdir(parents=True)
+    (checkout / "canopy.toml").write_text("[tracker]\n")
+    monkeypatch.chdir(checkout)
+    assert main(["init", "--provider", "jira"]) == 2
+    assert f"{checkout / 'canopy.toml'} is not read: move its keys" in capsys.readouterr().err
+
+
+def test_init_refuses_the_home_directory(
+    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every later init below it would fill it in, and its .canopy/ is an earlier canopy's journal."""
+    monkeypatch.chdir(canopy_env.home)
+    assert main(["init", "--provider", "jira"]) == 2
+    assert "is your home directory" in capsys.readouterr().err
+    assert not (canopy_env.home / config.WORKSPACE_FILE_NAME).exists()
+
+
+def test_init_refuses_a_directory_with_a_journal_and_no_workspace_file(
+    empty: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (empty / ".canopy").mkdir(mode=0o700)
+    assert main(["init", "--workspace", "--provider", "jira"]) == 2
+    assert "may be an earlier canopy's journal" in capsys.readouterr().err
+    assert not (empty / config.WORKSPACE_FILE_NAME).exists()
+
+
+def test_init_under_a_home_that_is_a_dotfiles_repository(
+    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A repository at the home directory is the operator's dotfiles, not a code repository."""
+    (canopy_env.home / ".git").mkdir()
+    root = canopy_env.home / "acme"
+    root.mkdir()
+    monkeypatch.chdir(root)
+    assert main(["init", "--provider", "jira"]) == 0
+    assert (root / config.WORKSPACE_FILE_NAME).is_file()
+
+
+def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An earlier single-repository init committed them; a clone of that repository carries them."""
+    old = canopy_env.repo / ".opencode" / "agent" / "canopy-worker.md"
+    old.parent.mkdir(parents=True)
+    old.write_text("---\ndescription: an old copy\n---\n")
+    assert main(["init"]) == 0
+    assert f"Warning: OpenCode config here defines one of canopy's agents ({old})" in capsys.readouterr().out
+
+
 def test_init_explains_an_old_user_file(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace("env OPENCODE_CONFIG_DIR={definitions_dir} ", ""))
     assert main(["init"]) == 0

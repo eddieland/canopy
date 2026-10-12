@@ -13,6 +13,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from canopy.core import hostgit
+from canopy.infra import procs
+
 # A provider name becomes a directory name; keep it to one plain path component.
 PROVIDER_RE = re.compile(r"[a-z0-9][a-z0-9_-]*")
 
@@ -52,6 +55,17 @@ def is_ssh_url(url: str) -> bool:
     colon = url.find(":")
     slash = url.find("/")
     return colon > 0 and (slash == -1 or colon < slash)
+
+
+def ssh_push_urls(runner: procs.Runner, clone: Path) -> list[str]:
+    """Return `origin`'s push URLs in `clone` that go over SSH, after `insteadOf` rewrites. Empty if it has none."""
+    try:
+        result = runner.run(hostgit.argv("remote", "get-url", "--push", "--all", "origin"), cwd=clone, timeout=30)
+    except procs.ProcError:
+        return []
+    if not result.ok:
+        return []
+    return [url for url in result.stdout.split() if is_ssh_url(url)]
 
 
 @dataclass

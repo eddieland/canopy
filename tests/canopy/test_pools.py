@@ -489,6 +489,30 @@ def test_init_with_clone_urls_sets_up_a_workspace_ready_to_run(
     assert len(fake_state(treehouse_state)["pools"]) == 2
 
 
+def test_sync_warns_about_an_origin_rewritten_to_push_over_ssh(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """D038: what git pushes to after the operator's rewrites, not the map's URL, which is a local path here."""
+    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(var, "canopy-test")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    origins = tmp_path / "origins"
+    origin = bare_origin(origins / "api.git", tmp_path)
+    global_config = tmp_path / "gitconfig"
+    git("config", "--file", str(global_config), "url.git@example.test:acme/.pushInsteadOf", f"{origins}/", cwd=tmp_path)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    root = tmp_path / "acme"
+    root.mkdir()
+    monkeypatch.chdir(root)
+
+    assert main(["init", "--provider", "github", str(origin)]) == 0
+    assert "api: warning: origin pushes over SSH (git@example.test:acme/api.git)" in capsys.readouterr().out
+
+
 def test_clone_urls_in_a_code_checkout_are_refused(
     canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

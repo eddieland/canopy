@@ -92,7 +92,7 @@ def blocked(
 ) -> tuple[str, str] | None:
     """Return the guard and reason that stop a `kind` run for unit `name` now, or None if neither does.
 
-    `name` is how the reason names the unit: the ticket key, followed by the repository in a workspace of several.
+    `name` is how the reason names the unit: the ticket key, followed by its repository.
     """
     if counts.get(kind, 0) >= limit:
         return "attempt_limit", f"{name} has had {counts.get(kind, 0)} {kind} runs and the limit is {limit}"

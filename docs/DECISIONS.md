@@ -194,7 +194,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 
 - An outage (tracker or GitHub unreachable) must not resolve and re-raise every item.
 
-## D038. Recommend HTTPS remotes; `canopy init` warns about SSH and refuses nothing
+## D038. Recommend HTTPS remotes; `canopy workspace sync` warns about SSH and refuses nothing
 
 - A sandboxed worker cannot reach the SSH agent socket.
 - Revisit: when the sandbox ships.

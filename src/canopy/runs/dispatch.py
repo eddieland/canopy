@@ -43,8 +43,8 @@ RUNS_DIR = "runs"
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
     """A guard refused the dispatch. `guard` names it in the `refused:<guard>` decision.
 
-    `repo` names the unit's repository when the refusal is about one unit of a ticket in a workspace of several, such as
-    the unit at its attempt limit; the attention item it raises is then about that unit.
+    `repo` names the unit's repository when the refusal is about one unit of a ticket, such as the unit at its attempt
+    limit; the attention item it raises is then about that unit.
     """
 
     def __init__(self, guard: str, reason: str, *, repo: str | None = None) -> None:

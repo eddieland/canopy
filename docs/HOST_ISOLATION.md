@@ -247,9 +247,9 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
   Linux: `srt`'s seccomp filter blocks creating Unix sockets, which includes the agent socket. Its per-path
   `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`, which lifts the block entirely.
-  canopy already recommends HTTPS remotes and `canopy init` warns about SSH ones (D038). Still open: whether to support
-  SSH inside the sandbox at all (allow the agent socket, or push from the host in `_run`), or to leave SSH to
-  unsandboxed runs.
+  canopy already recommends HTTPS remotes and `canopy workspace sync` warns about SSH ones (D038). Still open: whether
+  to support SSH inside the sandbox at all (allow the agent socket, or push from the host in `_run`), or to leave SSH
+  to unsandboxed runs.
 - OpenCode's local MCP servers start inside the sandbox and inherit it. Each one's hosts must be on the allowlist, and
   stdio servers that read credentials from HOME need those paths allowed.
 - Build caches. DESIGN §9 wants caches shared across slots. Sharing them with the operator's own builds would let a

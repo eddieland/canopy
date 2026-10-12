@@ -23,7 +23,7 @@ from canopy.setup import workspace as setup_workspace
     "in_checkout",
     is_flag=True,
     help="Make this directory a workspace even though it is inside a git repository, such as one that holds only "
-    "the workspace's own files.",
+    "the workspace's own files. A repository at your home directory, such as your dotfiles, needs no flag.",
 )
 @click.argument("repos", metavar="[[NAME=]URL]...", nargs=-1)
 @click.pass_context
@@ -38,15 +38,41 @@ def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, .
     root = workspace.find_root(Path.cwd())
     if root is None:
         root = Path.cwd().resolve()
-        checkout = workspace.git_root(root)
-        if checkout is not None and not in_checkout:
-            raise click.UsageError(
-                f"{root} is inside the git repository {checkout}. canopy runs from a workspace of its own and writes "
-                f"nothing into a code repository: run `canopy init` in an empty directory, with the repository's clone "
-                f"URL. Pass --workspace to make this directory a workspace anyway."
-            )
+        _check_new_root(root, in_checkout=in_checkout)
     provider = _provider(provider, root / config.WORKSPACE_FILE_NAME, "workspace")
     return _init_workspace(click_ctx, root, provider, repos)
+
+
+def _check_new_root(root: Path, *, in_checkout: bool) -> None:
+    """Refuse a directory that must not become a new workspace (D016).
+
+    Not the home directory: every later `canopy init` below it would fill it in rather than make a workspace, and its
+    `.canopy/` is an earlier canopy's journal. Not a directory with a `.canopy/` already, which a new workspace would
+    take over as its own. Not inside a code checkout, unless --workspace says the checkout holds only the workspace; a
+    repository at the home directory is the operator's dotfiles, not code canopy works on.
+    """
+    home = Path.home().resolve()
+    new_dir = (
+        "Make a directory of its own, such as ~/canopy, and run `canopy init --provider <tracker> <URL>...` there."
+    )
+    if root == home:
+        raise click.UsageError(f"{root} is your home directory, and a workspace is a directory of its own. {new_dir}")
+    state_dir = root / config.WORKSPACE_STATE_DIR
+    if state_dir.exists():
+        raise click.UsageError(
+            f"{state_dir} exists but {root} has no {config.WORKSPACE_FILE_NAME}: it may be an earlier canopy's "
+            f"journal, which a new workspace must not take over. Move it aside, or run `canopy init` elsewhere."
+        )
+    checkout = workspace.git_root(root)
+    if checkout is None or checkout == home or in_checkout:
+        return
+    message = (
+        f"{root} is inside the git repository {checkout}, and canopy writes nothing into a code repository. {new_dir}"
+    )
+    old = workspace.old_repo_file(root)
+    if old is not None:
+        message += f" {old} is not read: move its keys to {config.WORKSPACE_FILE_NAME} in the new workspace (D016)."
+    raise click.UsageError(f"{message} Pass --workspace if this repository holds only the workspace's own files.")
 
 
 def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:
@@ -94,6 +120,8 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
     click.echo()
     click.echo(init.BRANCH_PROTECTION.format(prefix=prefix), nl=False)
     click.echo(setup_workspace.protection_targets(ws), nl=False)
+    # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
+    report.shadowing += [path for repo in ws.repos if repo.cloned for path in definitions.shadowing(repo.path)]
     _print_shadowing(report)
     cli_workspace.check_synced(synced)
     return 0
