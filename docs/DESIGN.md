@@ -1921,6 +1921,12 @@ event carries its fields and `line` (its text-format line); the digest its count
 the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown fields. `text` serves a
 sink that only forwards a string.
 
+Presentation is the sink's. The fields are the contract, and a sink that can show more than lines builds its own
+message from them in its channel's native form, as the Slack sink does with Block Kit; `line`, `lines`, and `text`
+are canopy's one rendering, for sinks that only forward a string and as a fallback. So the harness never learns a
+channel's markup, and a new event kind needs fields a sink can present, not only a line. A sink shows a kind it does
+not know by its `line`.
+
 ### The desktop sink
 
 `canopy-notify-desktop` is a script in canopy's own install (`canopy.notify.desktop`), stdlib only (D035). It runs only
@@ -1977,10 +1983,15 @@ exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
   (`username` and `icon_emoji` in the body), which needs the app's `chat:write.customize` scope. The name must be
   printable, not blank, and at most 80 characters; the emoji one code, optionally with a skin tone
   (`:wave::skin-tone-3:`). Either without `--channel` is a usage error, exit 2: an app's webhook ignores both.
-- Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
-  status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
-- Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a
-  link. Bare URLs stay clickable.
+- Message: Block Kit built from the fields (Formats, above): a header with the repository directory name, a line of
+  counts, a section per attention item (ticket, reason, detail, and since when, as a Slack date in the reader's time
+  zone), the resolved items together, a section per event led by an emoji for its status (ticket, kind, run, its PRs,
+  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. At most Slack's
+  50 blocks, the last counting what was left out. The `text` the post also carries is the message as at most 45 lines,
+  which Slack shows in notifications and where blocks cannot be shown.
+- Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
+  `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. Each URL in it is made a link
+  that shows the URL itself; one holding `|`, which would take a label, stays text.
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
   scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set

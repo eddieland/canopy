@@ -176,9 +176,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D035. Notification sinks are commands fed from the journal
 
 - One message on stdin per tick, derived with no model; an outbox cursor per sink lets a failing sink retry alone.
-- The harness makes no network call; Slack is a separate process with its own secret file.
+- Presentation is the sink's: canopy sends fields, and each sink renders them in its channel's native form.
+- The harness makes no network call; Slack is a separate process with its own secret file. The desktop sink, holding
+  no secret and needing no network, ships inside canopy.
 - Rejected: HTTP in the harness (T2); the overseer posting via Slack MCP; interactive Slack (needs a listener).
-- The desktop sink ships inside canopy, since it holds no secret and needs no network.
 
 ## D036. A dry run runs every guard and changes nothing the next live tick reads
 
