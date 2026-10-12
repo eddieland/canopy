@@ -64,7 +64,6 @@ def backend(ctx: Context) -> Backend:
 
     return Backend(
         config=ctx.config,
-        repo_root=ctx.repo_root,
         workspace=ctx.ws,
         attention=attention.listed,
         end_run=end_run,

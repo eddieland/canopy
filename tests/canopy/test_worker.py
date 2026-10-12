@@ -44,7 +44,18 @@ def dispatch_and_run(
     tick_id = in_tick(conn, monkeypatch)
     assert (
         main(
-            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--slug", slug],
+            [
+                "dispatch",
+                "PROJ-1",
+                "--repo",
+                "repo",
+                "--label",
+                "agent-ready-tester",
+                "--kind",
+                "implement",
+                "--slug",
+                slug,
+            ],
             runner=runner,
         )
         == 0
@@ -87,7 +98,7 @@ def test_worker_that_pushes_is_done(
     assert w["cwd"] == slot_of(conn, run["id"])["slot_path"]
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
     # CANOPY_RUN_ID: the operator's commands refuse inside the run (DESIGN §22).
-    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.repo))
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     assert w["env"] == {"CANOPY_RUN_ID": str(run["id"]), "OPENCODE_CONFIG_DIR": str(snapshot)}
     argv = w["argv"]
     assert isinstance(argv, list)
@@ -255,7 +266,7 @@ def test_git_failure_is_crashed_and_returns_the_slot(
         git("remote", "set-url", "origin", str(git_pool.origin.parent / "gone.git"), cwd=slot)
     run = dispatch_and_run(conn, monkeypatch)
     assert run["status"] == "crashed"
-    assert json.loads(run["result_json"])["harness"].startswith("git fetch exited 128")
+    assert json.loads(run["result_json"])["harness"].startswith("repo: git fetch exited 128")
     assert not agent_log.exists()  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -277,7 +288,11 @@ def test_a_run_is_claimed_once(
     # A running run that another process claimed is refused too: the overseer cannot start a second worker in a slot.
     tick_id = in_tick(conn, monkeypatch)
     assert (
-        main(["dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 0
+        main(
+            ["dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
+            runner=InlineRunner(),
+        )
+        == 0
     )
     db.finish_tick(conn, tick_id, "ok", "test")
     conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
@@ -401,7 +416,7 @@ def test_status_lists_recent_runs_newest_first(
     assert main(["status"]) == 0
     assert "\nRecent runs (0):\n  none\n" in capsys.readouterr().out
     tick_id = db.start_tick(conn, dry_run=False)
-    db.touch_ticket(conn, "PROJ-1", str(canopy_env.repo))
+    db.touch_ticket(conn, "PROJ-1", str(canopy_env.root))
     for n in range(12):
         run_id = db.insert_run(
             conn, tick_id=tick_id, key="PROJ-1", kind="fix-ci", branch="b", slots=[], runs_dir=Path()

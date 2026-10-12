@@ -27,7 +27,7 @@ def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, 
     """Dispatch in a fresh tick with an InlineRunner, then do the run in-process. Returns the closed run."""
     runner = InlineRunner()
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", *args], runner=runner) == 0, decisions(conn, tick_id)
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
     db.finish_tick(conn, tick_id, "ok", "test")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     assert main(["_run", str(run_id)], runner=runner) == 0
@@ -39,7 +39,7 @@ def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, 
 def refused(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str) -> list[tuple[str, str]]:
     """Dispatch in a fresh tick, expect a refusal, and return the tick's decisions."""
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", *args], runner=InlineRunner()) == 1
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", *args], runner=InlineRunner()) == 1
     db.finish_tick(conn, tick_id, "ok", "test")
     return decisions(conn, tick_id)
 
@@ -111,7 +111,11 @@ def test_implement_prompt_without_context_or_repliers(
 ) -> None:
     in_tick(conn, monkeypatch)
     assert (
-        main(["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"], runner=InlineRunner()) == 0
+        main(
+            ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
+            runner=InlineRunner(),
+        )
+        == 0
     )
     prompt = prompt_of(canopy_env, 1)
     assert "## Context from the overseer\n\nNone.\n" in prompt
@@ -147,7 +151,7 @@ def test_implement_attempt_limit_refuses_and_raises_attention(
             dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement")["status"]
             == "failed"
         )
-    reason = "PROJ-1 has had 2 implement runs and the limit is 2"
+    reason = "PROJ-1 in repo has had 2 implement runs and the limit is 2"
     assert refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement") == [
         ("refused:attempt_limit", reason),
         ("attention:attempt_limit", reason),
@@ -162,8 +166,9 @@ def test_a_limit_of_zero_disables_the_kind(
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[policy]\nmax_resume_attempts = 0\n")
     db.touch_ticket(conn, "PROJ-1", "repo")
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work'")
+    conn.execute("INSERT INTO ticket_units (ticket_key, repo, branch) VALUES ('PROJ-1', 'repo', 'agent/PROJ-1-work')")
     [first, _] = refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "resume")
-    assert first == ("refused:attempt_limit", "PROJ-1 has had 0 resume runs and the limit is 0")
+    assert first == ("refused:attempt_limit", "PROJ-1 in repo has had 0 resume runs and the limit is 0")
 
 
 def test_fix_ci_cooldown_runs_from_the_end_of_the_last_fix(
@@ -174,7 +179,7 @@ def test_fix_ci_cooldown_runs_from_the_end_of_the_last_fix(
     fix = dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci")
     until = db.format_time(db.parse_time(str(fix["ended_at"])) + timedelta(minutes=30))
     assert refused(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci") == [
-        ("refused:cooldown", f"fix-ci for PROJ-1 may run again after {until}")
+        ("refused:cooldown", f"fix-ci for PROJ-1 in repo may run again after {until}")
     ]
     # The cooldown is fix-ci's only; a resume may run at once.
     assert dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "resume")["status"] == "done"
@@ -190,7 +195,18 @@ def test_cursors_advance_only_when_the_worker_starts(
     runner = InlineRunner()
     assert (
         main(
-            ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement", "--cursor", "comment=c1"],
+            [
+                "dispatch",
+                "PROJ-1",
+                "--repo",
+                "repo",
+                "--label",
+                "agent-ready-tester",
+                "--kind",
+                "implement",
+                "--cursor",
+                "comment=c1",
+            ],
             runner=runner,
         )
         == 0
@@ -198,6 +214,8 @@ def test_cursors_advance_only_when_the_worker_starts(
     args = [
         "dispatch",
         "PROJ-2",
+        "--repo",
+        "repo",
         "--label",
         "agent-ready-tester",
         "--kind",
@@ -263,13 +281,17 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
     """M3 acceptance, against the fakes. An overseer that asks for fix-ci every tick, as a PR whose checks keep
     failing would make it, gets one run per cooldown window and none past `max_fix_ci_attempts`."""
     worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    overseer_does(monkeypatch, ["dispatch", "PROJ-1", "--label", "agent-ready-tester", "--kind", "implement"])
+    overseer_does(
+        monkeypatch, ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+    )
     assert main(["tick"]) == 0
     wait_for_run(conn, 1)
 
     fix = [
         "dispatch",
         "PROJ-1",
+        "--repo",
+        "repo",
         "--label",
         "agent-ready-tester",
         "--kind",

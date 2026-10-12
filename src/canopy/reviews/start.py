@@ -86,10 +86,10 @@ def holder(run_id: int) -> str:
     return treehouse.holder_for(f"{HOLDER_KEY}{run_id}")
 
 
-def check(ctx: Context, *, tick_id: int, request: Request) -> str | None:
+def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     """Check the guards for a dry run, counting what this dry run already started as running (D036).
 
-    Returns the repository the review would lease in, or None in a workspace of one.
+    Returns the repository the review would lease in.
 
     Raises:
         Refusal: a guard refused.
@@ -175,7 +175,7 @@ def _spawn(
     return Started(run_id, pid, lease.path)
 
 
-def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None = None) -> str | None:
+def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None = None) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
@@ -249,16 +249,12 @@ def _check_shape(request: Request) -> None:
         raise Refusal("bad_pr", f"--ticket must match {KEY_RE.pattern}")
 
 
-def _check_repo(ctx: Context, repo: str | None) -> str | None:
-    """`unknown_repo`: in a workspace of several, the PR's repository must be named, in the map, and cloned."""
+def _check_repo(ctx: Context, repo: str | None) -> str:
+    """`unknown_repo`: the PR's repository must be named, in the map, and cloned."""
     ws = ctx.workspace
-    if ws.single:
-        if repo is not None and ws.repo(repo) is None:
-            raise Refusal("unknown_repo", f"{repo!r} is not this repository ({ws.repos[0].name})")
-        return None
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if repo is None:
-        raise Refusal("unknown_repo", f"--repo is required in a workspace: name the PR's repository ({names})")
+        raise Refusal("unknown_repo", f"--repo is required: name the PR's repository ({names})")
     found = ws.repo(repo)
     if found is None:
         raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")

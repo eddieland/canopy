@@ -64,10 +64,8 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     reviews = db.running_review_runs(ctx.conn)
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
     leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
-    if not ws.single:
-        # Only a workspace of several has desks; in a workspace of one, `desks/` would be the repository's own.
-        for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
-            log.warning("desk with no running run; removed", extra={"desk": str(desk)})
+    for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
+        log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     if not running:
         # No run is live, so no run of an earlier canopy is still loading its snapshot.
         _prune_definitions(ctx, log)

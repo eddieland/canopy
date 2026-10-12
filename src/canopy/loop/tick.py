@@ -77,7 +77,6 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     running = db.running_runs(ctx.conn)
     last_runs = db.latest_runs(ctx.conn)
-    single = ctx.workspace.single
     tickets = db.open_tickets(ctx.conn)
     private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {
@@ -96,8 +95,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
-        attempts=policy.attempts(ctx.conn, single=single),
-        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now, single=single),
+        attempts=policy.attempts(ctx.conn),
+        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
         now=now,
         split_attempts=policy.split_attempts(ctx.conn),
         split_children=db.open_split_children(ctx.conn),

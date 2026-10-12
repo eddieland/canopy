@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db, treehouse
-from canopy.core.workspace import Workspace, of_one
 from canopy.infra import lock, procs
 
 # Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
@@ -17,43 +16,45 @@ DISPATCH_LOCK = "dispatch.lock"
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
+    from canopy.core.workspace import Workspace
 
 
 @dataclass(frozen=True)
 class Context:
     """Config, workspace, journal connection, and process runner for one command.
 
-    `repo_root` is the workspace root: the directory the overseer runs in, and the repository itself in a workspace of
-    one. `ws` is the workspace; left out, it is the workspace of one at `repo_root`.
+    `ws` is the workspace the command runs in.
     """
 
     config: Config
-    repo_root: Path
     conn: sqlite3.Connection
     runner: procs.Runner
-    ws: Workspace | None = None
+    ws: Workspace
 
     @property
     def workspace(self) -> Workspace:
         """The workspace this command runs in."""
-        return self.ws if self.ws is not None else of_one(self.repo_root)
+        return self.ws
+
+    @property
+    def repo_root(self) -> Path:
+        """The workspace root: the directory the overseer runs in."""
+        return self.ws.root
 
     def pool(self, repo: str | None) -> treehouse.Pool:
         """Where treehouse runs for repository `repo`'s pool, with the size `capacity` declares for it.
 
-        Only a workspace's pools have a declared size: a workspace of one's pool is treehouse's own, which may be the
-        operator's interactive pool as well (DESIGN §18). Every pool gets the operator's own `.worktreeinclude`, if
-        `paths.worktree_include` names one (DESIGN §9).
+        Every pool gets the operator's own `.worktreeinclude`, if `paths.worktree_include` names one (DESIGN §9).
         """
         pool = dataclasses.replace(self.workspace.pool(repo), include_file=self.config.paths.worktree_include)
-        if self.workspace.single or repo is None:
+        if repo is None:
             return pool
         return dataclasses.replace(pool, slots=self.config.capacity.slots_for(repo))
 
     @property
     def state_dir(self) -> Path:
         """Where the journal, lock, and logs live."""
-        return self.config.paths.state_dir
+        return self.ws.state_dir
 
     @property
     def lock_path(self) -> Path:
@@ -71,6 +72,6 @@ class Context:
         return str(self.repo_root)
 
 
-def db_path(config: Config) -> Path:
-    """Return the journal's path for `config`."""
-    return config.paths.state_dir / db.DB_FILE_NAME
+def db_path(ws: Workspace) -> Path:
+    """Return the journal's path in workspace `ws`."""
+    return ws.state_dir / db.DB_FILE_NAME

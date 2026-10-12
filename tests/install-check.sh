@@ -56,12 +56,18 @@ done
 skill=$(canopy skill)
 echo "$skill" | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"
 
-project="$work/project"
-mkdir -p "$project"
-cd "$project"
-git init --quiet
-git remote add origin https://example.test/team/project.git
-canopy init --provider github
+# A workspace of one repository, cloned from a local origin as `canopy init` clones any URL it is given.
+origin="$work/project.git"
+git init --quiet --bare "$origin"
+seed="$work/seed"
+git init --quiet "$seed"
+git -C "$seed" -c user.name=install -c user.email=install@example.test commit --quiet --allow-empty -m initial
+git -C "$seed" push --quiet "$origin" HEAD
+workspace="$work/acme"
+mkdir -p "$workspace"
+cd "$workspace"
+canopy init --provider github "project=$origin"
+[ -d "$workspace/repos/project/.git" ] || fail "canopy init did not clone the repository into the workspace"
 
 # Point the runtime at the fake agent, keeping {definitions_dir} as the templates require. init writes no [runtime]:
 # the defaults run OpenCode.
@@ -93,7 +99,7 @@ if [ "$binary" = 1 ] || command -v npm >/dev/null; then
 fi
 
 # The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
-state="$HOME/.canopy"
+state="$workspace/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
 if [ "$binary" = 1 ]; then
     # The executable cannot run a script of ours, and has no path to this checkout. What it snapshotted must be what

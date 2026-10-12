@@ -215,18 +215,15 @@ class _Slot:
 
     @classmethod
     def of(cls, ctx: Context, row: sqlite3.Row) -> _Slot:
-        # A slot without a repository name can only be in a workspace of one, whose only repository it is.
-        repo = str(row["repo"]) if row["repo"] is not None else ctx.workspace.repos[0].name
+        repo = str(row["repo"])
         path = Path(row["slot_path"])
-        # A workspace of one's only repository goes unnamed in errors, as before workspaces.
-        name = "" if ctx.workspace.single else repo
         return cls(
             repo,
             path,
             str(row["lease_id"]),
             str(row["lease_holder"]),
             str(row["base_branch"]),
-            _Git(ctx.runner, path, name),
+            _Git(ctx.runner, path, repo),
             hostgit.read_link(path),
         )
 
@@ -512,7 +509,7 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
         return
     for repo, url in outcome.result.prs.items():
         if url and contract.plain_url(url, MAX_PR_URL):
-            db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, single=ctx.workspace.single, pr_url=url)
+            db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, pr_url=url)
 
 
 class _Git:

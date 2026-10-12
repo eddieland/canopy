@@ -36,7 +36,7 @@ def dispatch_and_run(
     """Dispatch in a fresh tick, then do the run in-process. Returns the closed run and the tick's decisions."""
     runner = InlineRunner()
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", key, *args], runner=runner) == 0, decisions(conn, tick_id)
+    assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
     db.finish_tick(conn, tick_id, "ok", "test")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     assert main(["_run", str(run_id)], runner=runner) == 0
@@ -78,7 +78,7 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
     slot = slot_of(conn, int(run["id"]))
     assert (run["status"], run["branch"], slot["base_branch"]) == ("done", "agent/PROJ-2-second", FIRST)
     assert made == [
-        ("dispatch:implement", f"run 2: agent/PROJ-2-second on {FIRST} in {slot['slot_path']}; label {LABEL}")
+        ("dispatch:implement", f"run 2: agent/PROJ-2-second on {FIRST} in repo at {slot['slot_path']}; label {LABEL}")
     ]
     assert subjects(git_pool, "agent/PROJ-2-second") == ["PROJ-2: stacked", "PROJ-1: the blocker", "initial"]
     assert subjects(git_pool, FIRST) == ["PROJ-1: the blocker", "initial"]  # the base is untouched
@@ -145,7 +145,7 @@ def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
     run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--base", FIRST)
     assert run["status"] == "crashed"
     note = json.loads(run["result_json"])["harness"]
-    assert note == f"the base branch {FIRST} is not on origin; if it was stacked on, its PR may have merged"
+    assert note == f"repo: the base branch {FIRST} is not on origin; if it was stacked on, its PR may have merged"
     assert not agent_log.exists()  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -169,7 +169,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     git("branch", "--quiet", "-D", FIRST, cwd=git_pool.origin)
     run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
     assert run["status"] == "crashed"
-    assert json.loads(run["result_json"])["harness"].startswith(f"the base branch {FIRST} is not on origin")
+    assert json.loads(run["result_json"])["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
     assert len(agent_log.read_text().splitlines()) == workers  # the worker never ran
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -196,7 +196,13 @@ def test_bad_base_is_refused_before_leasing(
     reason: str,
 ) -> None:
     tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-2", "--label", LABEL, "--kind", "implement", *args], runner=InlineRunner()) == 1
+    assert (
+        main(
+            ["dispatch", "PROJ-2", "--repo", "repo", "--label", LABEL, "--kind", "implement", *args],
+            runner=InlineRunner(),
+        )
+        == 1
+    )
     assert decisions(conn, tick_id) == [("refused:bad_base", reason)]
     assert not treehouse_state.exists()
 
@@ -204,12 +210,24 @@ def test_bad_base_is_refused_before_leasing(
 def test_a_continued_branch_cannot_be_its_own_base(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    db.touch_ticket(conn, "PROJ-2", str(canopy_env.repo))
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-2-own' WHERE key = 'PROJ-2'")
+    conn.execute("INSERT INTO ticket_units (ticket_key, repo, branch) VALUES ('PROJ-2', 'repo', 'agent/PROJ-2-own')")
     tick_id = in_tick(conn, monkeypatch)
     assert (
         main(
-            ["dispatch", "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", "agent/PROJ-2-own"],
+            [
+                "dispatch",
+                "PROJ-2",
+                "--repo",
+                "repo",
+                "--label",
+                LABEL,
+                "--kind",
+                "resume",
+                "--base",
+                "agent/PROJ-2-own",
+            ],
             runner=InlineRunner(),
         )
         == 1
@@ -221,9 +239,22 @@ def test_dry_run_names_the_base(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tick_id = in_tick(conn, monkeypatch, dry_run=True)
-    args = ["dispatch", "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST]
+    args = [
+        "dispatch",
+        "PROJ-2",
+        "--repo",
+        "repo",
+        "--label",
+        LABEL,
+        "--kind",
+        "implement",
+        "--slug",
+        "second",
+        "--base",
+        FIRST,
+    ]
     assert main(args, runner=InlineRunner()) == 0
-    rationale = f"dry run: not dispatched; would work on agent/PROJ-2-second on {FIRST}; label {LABEL}"
+    rationale = f"dry run: not dispatched; would work on agent/PROJ-2-second on {FIRST} in repo; label {LABEL}"
     assert decisions(conn, tick_id) == [("dispatch:implement", rationale)]
     assert not treehouse_state.exists()
 
@@ -244,9 +275,21 @@ def test_two_linked_tickets_are_worked_in_order(
         "FAKE_OVERSEER_COMMANDS",
         json.dumps(
             [
-                ["canopy", "dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", "--slug", "first"],
+                [
+                    "canopy",
+                    "dispatch",
+                    "PROJ-1",
+                    "--repo",
+                    "repo",
+                    "--label",
+                    LABEL,
+                    "--kind",
+                    "implement",
+                    "--slug",
+                    "first",
+                ],
                 ["canopy", "decide", "PROJ-2", "wait", "--rationale", "blocked_by: PROJ-1"],
-                ["canopy", "ticket", "set", "PROJ-2", "--phase", "blocked"],
+                ["canopy", "ticket", "set", "PROJ-2", "--repo", "repo", "--phase", "blocked"],
             ]
         ),
     )
@@ -262,6 +305,8 @@ def test_two_linked_tickets_are_worked_in_order(
                     "canopy",
                     "dispatch",
                     "PROJ-2",
+                    "--repo",
+                    "repo",
                     "--label",
                     LABEL,
                     "--kind",
@@ -299,5 +344,5 @@ def test_the_state_block_carries_the_stacking_policy(
         return json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])["policy"]["stacking"]
 
     assert stacking() == "auto"
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + '[policy]\nstacking = "never"\n')
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[policy]\nstacking = "never"\n')
     assert stacking() == "never"

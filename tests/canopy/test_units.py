@@ -432,16 +432,6 @@ def test_canopy_removes_only_the_desks_it_made(ws: Ws) -> None:
     assert (parent / "PROJ-3").resolve() == ws.clone("web").resolve()
 
 
-def test_a_single_repository_never_prunes_its_own_desks_directory(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    mine = canopy_env.repo / "desks" / "oak"
-    mine.mkdir(parents=True)
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
-    assert main(["tick", "--dry-run"]) == 0
-    assert mine.is_dir()
-
-
 def test_a_joint_run_refuses_a_workspace_that_defines_canopys_agents(
     ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

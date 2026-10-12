@@ -194,10 +194,10 @@ def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
 def test_notify_cmd_takes_no_prompt_placeholder(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[notify]\ncmd = 'notify-send {prompt}'\n")
     with pytest.raises(ConfigError, match=r"notify\.cmd: Value error, must not contain \{prompt\}"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_notify_cmd_must_split_into_words(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + '\n[notify]\ncmd = "notify-send \'canopy"\n')
     with pytest.raises(ConfigError, match=r"notify\.cmd: Value error, No closing quotation"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)

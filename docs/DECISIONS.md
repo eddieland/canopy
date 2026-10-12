@@ -74,11 +74,15 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - ruff `TID251` bans `subprocess`, `os.system`, `os.popen` outside `infra/procs.py`, tests included (except D024).
 - Revisit: if anything reaches for `os.exec*`, `os.spawn*`, or `pty`; ban them too.
 
-## D016. Layered config: shared repository file, personal user file
+## D016. Layered config: the workspace file, then the user file; nothing in a code repository
 
-- Defaults, then the repository's `canopy.toml` (shared keys only), then the user's `config.toml`, merged per key.
-- Keys that run commands, choose prompts, spend, or authorize are user-only; repository `policy.*` may only tighten.
-- Rejected: a gitignored `canopy.local.toml` (easy to commit by accident).
+- Defaults, then the workspace's `canopy-workspace.toml` (shared keys only), then the user's `config.toml`, per key.
+- canopy runs only from a workspace, even for one repository, and reads no config from a code repository: nothing
+  shared is repository-specific, and every operator would otherwise commit or gitignore a `canopy.toml`.
+- Keys that run commands, choose prompts, spend, or authorize are user-only; the workspace file's `policy.*` may only
+  tighten.
+- Rejected: a repository `canopy.toml` (per-repository config that is really per queue); tracker keys in the user file
+  (one file overrides every workspace); a gitignored `canopy.local.toml` (easy to commit by accident).
 
 ## D017. `pyrefly` strict is the only type checker
 
@@ -165,7 +169,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 
 ## D033. Workspaces: one directory, a repository map, pools inside it
 
-- One queue, one capacity, one journal. A repository without a map is a workspace of one.
+- One queue, one capacity, one journal. One repository is a workspace with a map of one (D016).
 - No pool root of its own: a fast disk takes the whole workspace, since git keeps each worktree's files in its clone.
 - Rejected: one loop per repository (two journals must agree on one ticket); one pool for all repositories; a
   user-only pool root (treehouse pools by repository and remote URL, so workspaces sharing it share pools).
@@ -190,7 +194,7 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 
 - An outage (tracker or GitHub unreachable) must not resolve and re-raise every item.
 
-## D038. Recommend HTTPS remotes; `canopy init` warns about SSH and refuses nothing
+## D038. Recommend HTTPS remotes; `canopy workspace sync` warns about SSH and refuses nothing
 
 - A sandboxed worker cannot reach the SSH agent socket.
 - Revisit: when the sandbox ships.

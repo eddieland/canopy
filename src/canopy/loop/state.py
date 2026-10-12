@@ -59,13 +59,9 @@ def state_block(
     operator = operator or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
-    def repo_name(repo: str | None) -> str:
-        # A workspace of one has only the one repository, whatever its rows call it (D033).
-        return workspace.repos[0].name if workspace.single or repo is None else repo
-
     def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
-        name = repo_name(u["repo"])
-        unit = policy.unit(key, name, single=workspace.single)
+        name = str(u["repo"])
+        unit = policy.unit(key, name)
         return {
             "repo": name,
             "branch": u["branch"],
@@ -84,9 +80,7 @@ def state_block(
             "kind": run["kind"],
             "status": run["status"],
             "branch": run["branch"],
-            "repos": [
-                {"repo": repo_name(s["repo"]), "base": s["base_branch"]} for s in run_slots.get(int(run["id"]), [])
-            ],
+            "repos": [{"repo": s["repo"], "base": s["base_branch"]} for s in run_slots.get(int(run["id"]), [])],
             "started_at": run["started_at"],
             "ended_at": run["ended_at"],
         }
@@ -119,11 +113,10 @@ def state_block(
         "now": db.format_time(now),
         "dry_run": dry_run,
         "repository": str(repo_root),
-        # The overseer runs at the workspace root, which in a workspace is not a repository: each repository's leased
-        # slots stand in for its own `treehouse status` (DESIGN §18).
+        # The overseer runs at the workspace root, which is not a repository: each repository's leased slots stand in
+        # for its own `treehouse status` (DESIGN §18).
         "workspace": {
             "name": workspace.name,
-            "single_repository": workspace.single,
             "map": str(workspace.map_prose) if workspace.map_prose is not None else None,
         },
         "repositories": [
@@ -170,7 +163,7 @@ def state_block(
             {
                 "run_id": r["id"],
                 "ticket": r["ticket_key"],
-                "repos": [repo_name(s["repo"]) for s in run_slots.get(int(r["id"]), [])],
+                "repos": [s["repo"] for s in run_slots.get(int(r["id"]), [])],
                 "kind": r["kind"],
                 "branch": r["branch"],
                 "started_at": r["started_at"],

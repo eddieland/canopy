@@ -30,7 +30,7 @@ from canopy.runs import dispatch, policy, worker
     type=REPO,
     multiple=True,
     help="A repository in the workspace the run works in: one unit of the ticket. Repeat it for a joint run over "
-    "several. Required in a workspace; optional in a single repository.",
+    "several. Required.",
 )
 @click.option(
     "--slug",
@@ -132,8 +132,7 @@ def cmd_dispatch(
     # empty for a private ticket, which its start record authorizes (DESIGN §22).
     authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
     on_base = f" on {base}" if base is not None else ""
-    # A workspace of one has one repository, so naming it would say nothing.
-    in_repo = "" if ctx.workspace.single else f" in {', '.join(repo_names)}"
+    in_repo = f" in {', '.join(repo_names)}"
     # A split works on no branch: it reads its repositories and creates a ticket for each.
     work = f"split {key} into {', '.join(repo_names)}" if kind == policy.SPLIT else f"{branch}{on_base}"
     requested = f"; request {request}" if request is not None else ""
@@ -167,12 +166,9 @@ def cmd_dispatch(
     db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors)
     if unit_cursors:
         cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
-        db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], single=ctx.workspace.single, cursors=cursors)
-    if in_repo:
-        where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
-        where += f"; desk {started.desk}" if started.desk is not None else ""
-    else:
-        where = f" in {started.slots[0].slot_path}"
+        db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], cursors=cursors)
+    where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
+    where += f"; desk {started.desk}" if started.desk is not None else ""
     rationale = f"run {started.run_id}: {work}{where}; {authorized}{requested}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})

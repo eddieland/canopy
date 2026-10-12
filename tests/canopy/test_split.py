@@ -171,14 +171,14 @@ def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(
     assert db.units(conn, "PROJ-12") == []
 
 
-def test_a_single_repository_is_never_split(
+def test_a_workspace_of_one_repository_is_never_split(
     canopy_env: CanopyEnv, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     conn = journal(canopy_env)
     tick_id = in_tick(conn, monkeypatch)
-    assert main(split("PROJ-1", "--request", "1"), runner=InlineRunner()) == 1
+    assert main(split("PROJ-1", "--request", "1", "--repo", "repo"), runner=InlineRunner()) == 1
     assert decisions(conn, tick_id) == [
-        ("refused:bad_split", "a split makes one ticket per repository, and this workspace has one repository")
+        ("refused:bad_split", "a split names every repository PROJ-1 covers, at least two; name each with --repo")
     ]
 
 
@@ -288,14 +288,14 @@ def test_a_child_is_not_worked_in_a_workspace_of_another_repository(
 ) -> None:
     conn = journal(canopy_env)
     tick_id = in_tick(conn, monkeypatch, dry_run=True)
-    db.touch_ticket(conn, "PROJ-12", str(canopy_env.repo))
+    db.touch_ticket(conn, "PROJ-12", str(canopy_env.root))
     conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status) "
         "VALUES (?, 'PROJ-12', 'split', '', 'x', 'y', 'l', 'done')",
         (tick_id,),
     )
     db.record_split_children(conn, "PROJ-12", 1, {"PROJ-13": "api"})
-    assert main(["dispatch", "PROJ-13", "--label", LABEL, "--kind", "implement"]) == 1
+    assert main(["dispatch", "PROJ-13", "--repo", "repo", "--label", LABEL, "--kind", "implement"]) == 1
     assert decisions(conn, tick_id) == [
         ("refused:unknown_repo", "PROJ-13 was split from PROJ-12 to cover api only; dispatch it with --repo api")
     ]

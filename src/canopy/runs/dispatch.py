@@ -43,8 +43,8 @@ RUNS_DIR = "runs"
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
     """A guard refused the dispatch. `guard` names it in the `refused:<guard>` decision.
 
-    `repo` names the unit's repository when the refusal is about one unit of a ticket in a workspace of several, such as
-    the unit at its attempt limit; the attention item it raises is then about that unit.
+    `repo` names the unit's repository when the refusal is about one unit of a ticket, such as the unit at its attempt
+    limit; the attention item it raises is then about that unit.
     """
 
     def __init__(self, guard: str, reason: str, *, repo: str | None = None) -> None:
@@ -138,9 +138,9 @@ def start(
 
     `implement` works on `<branch_prefix><KEY>-<slug>`, and later dispatches of any kind continue the branch the
     ticket's first implement named, in every repository. `base` stacks the run on another ticket's branch (DESIGN §10);
-    without it the run starts from each pool's base branch. `repos` names the units the run covers, one repository each;
-    it may be left out only in a workspace of one. A run over several repositories is a joint run (DESIGN §18). A
-    `split` names the authorized replier's comment that asked for it with `request`, and works no unit.
+    without it the run starts from each pool's base branch. `repos` names the units the run covers, one repository each.
+    A run over several repositories is a joint run (DESIGN §18). A `split` names the authorized replier's comment that
+    asked for it with `request`, and works no unit.
 
     Raises:
         Refusal: a guard refused, or a slot could not be leased or the worker started. Nothing is left running and
@@ -267,8 +267,6 @@ def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | No
         raise Refusal("bad_slug", "a split creates tickets and names no branch; leave out --slug")
     if base is not None:
         raise Refusal("bad_base", "a split creates tickets and starts from no branch; leave out --base")
-    if ctx.workspace.single:
-        raise Refusal("bad_split", "a split makes one ticket per repository, and this workspace has one repository")
     if len(repos) < 2:  # noqa: PLR2004
         raise Refusal("bad_split", f"a split names every repository {key} covers, at least two; name each with --repo")
     child = db.split_child(ctx.conn, key)
@@ -285,10 +283,7 @@ def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
     if child is None:
         return
     recorded = str(child["repo"])
-    ws = ctx.workspace
-    # A workspace of one implies its repository; a child recorded for another is not worked here.
-    named = tuple(repos) or ((ws.repos[0].name,) if ws.single else ())
-    if named != (recorded,):
+    if tuple(repos) != (recorded,):
         raise Refusal(
             "unknown_repo",
             f"{key} was split from {child['parent_key']} to cover {recorded} only; dispatch it with --repo {recorded}",
@@ -298,18 +293,13 @@ def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
 def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...]:
     """Refuse a repository the run cannot work in, and return the names of the ones it will (DESIGN §18).
 
-    In a workspace, every `--repo` must name a repository in the map with a primary clone; naming one the ticket has no
-    unit in yet adds that unit. In a workspace of one, `--repo` may be left out, and if given must name the repository.
-    A repository named twice is one unit.
+    Every `--repo` must name a repository in the map with a primary clone; naming one the ticket has no unit in yet adds
+    that unit. A repository named twice is one unit.
     """
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if not repos:
-        if not ws.single:
-            raise Refusal(
-                "unknown_repo", f"--repo is required in a workspace: name the repositories for {key} ({names})"
-            )
-        return (ws.repos[0].name,)
+        raise Refusal("unknown_repo", f"--repo is required: name the repositories for {key} ({names})")
     chosen: list[str] = []
     for repo in repos:
         found = ws.repo(repo)
@@ -366,14 +356,13 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
         raise Refusal("bad_slug", f"{kind} continues the ticket's recorded branch; --slug is for implement")
     if recorded is None:
         raise Refusal("no_branch", f"{key} has no branch in the journal for {kind} to continue; dispatch implement")
-    if not ctx.workspace.single:
-        with_branch = {str(u["repo"]) for u in db.units(ctx.conn, key) if u["branch"]}
-        for repo in repos:
-            if repo not in with_branch:
-                raise Refusal(
-                    "no_branch",
-                    f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with --repo {repo}",
-                )
+    with_branch = {str(u["repo"]) for u in db.units(ctx.conn, key) if u["branch"]}
+    for repo in repos:
+        if repo not in with_branch:
+            raise Refusal(
+                "no_branch",
+                f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with --repo {repo}",
+            )
     return recorded
 
 
@@ -400,18 +389,18 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
             raise Refusal(*refused)
         _check_capacity(ctx, running, planned)
         return done + 1
-    single = ctx.workspace.single
-    counts = policy.attempts(ctx.conn, single=single)
-    cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC), single=single)
+    counts = policy.attempts(ctx.conn)
+    cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC))
     limit = policy.limits(ctx.config)[kind]
     attempt = 1
     for repo in repos:
-        unit = policy.unit(key, repo, single=single)
+        unit = policy.unit(key, repo)
         unit_counts = counts.get(unit, dict.fromkeys(policy.KINDS, 0))
-        name = key if single else f"{key} in {repo}"
-        refused = policy.blocked(name, kind, counts=unit_counts, limit=limit, cooldown_until=cooldowns.get(unit))
+        refused = policy.blocked(
+            f"{key} in {repo}", kind, counts=unit_counts, limit=limit, cooldown_until=cooldowns.get(unit)
+        )
         if refused is not None:
-            raise Refusal(*refused, repo=None if single else repo)
+            raise Refusal(*refused, repo=repo)
         attempt = max(attempt, unit_counts[kind] + 1)
     _check_capacity(ctx, running, planned)
     return attempt
@@ -434,8 +423,7 @@ def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, 
             leases.append((repo, treehouse.lease(ctx.runner, key, pool=ctx.pool(repo))))
         except treehouse.TreehouseError as e:
             _return_all(ctx, leases)
-            where = "" if ctx.workspace.single else f"{repo}: "
-            raise Refusal("no_slot", f"{where}{e}") from e
+            raise Refusal("no_slot", f"{repo}: {e}") from e
     return leases
 
 
@@ -542,7 +530,6 @@ def _spawn(
         branch=branch,
         slots=slots,
         runs_dir=runs_dir(ctx),
-        single=ctx.workspace.single,
         works_units=not split,
         started=outbox.run_started(
             cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=policy.limits(cfg)[kind]
@@ -571,9 +558,7 @@ def _unit_prs(ctx: Context, key: str) -> dict[str, str]:
     found: dict[str, str] = {}
     for u in db.units(ctx.conn, key):
         if u["pr_url"]:
-            # A workspace of one has only the one repository, whatever its unit calls it (D033).
-            name = ctx.workspace.repos[0].name if ctx.workspace.single else str(u["repo"])
-            found[name] = str(u["pr_url"])
+            found[str(u["repo"])] = str(u["pr_url"])
     return found
 
 

@@ -22,7 +22,7 @@ LABEL = "agent-ready-tester"
 
 def declare(canopy_env: CanopyEnv, capacity: str) -> None:
     """Add `capacity` lines to the operator's user file."""
-    canopy_env.write_user(user_toml(canopy_env.state_dir) + f"\n[capacity]\n{capacity}\n")
+    canopy_env.write_user(user_toml() + f"\n[capacity]\n{capacity}\n")
 
 
 def fake_state(treehouse_state: Path) -> dict[str, Any]:
@@ -90,7 +90,7 @@ def test_slots_are_declared_in_the_user_file_only(ws: Ws, canopy_env: CanopyEnv)
     with pytest.raises(config.ConfigError, match=r"capacity\.slots_per_repo"):
         config.load(ws.root, canopy_env.user_file)
 
-    canopy_env.write_user(user_toml(canopy_env.state_dir))
+    canopy_env.write_user(user_toml())
     assert config.load(ws.root, canopy_env.user_file).capacity.slots_for("api") is None  # unmanaged by default
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(extra="\n[capacity.repo_slots]\napi = 9\n"))
     with pytest.raises(config.ConfigError, match=r"capacity\.repo_slots is user-only"):
@@ -489,7 +489,36 @@ def test_init_with_clone_urls_sets_up_a_workspace_ready_to_run(
     assert len(fake_state(treehouse_state)["pools"]) == 2
 
 
-def test_clone_urls_without_a_workspace_are_refused(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+def test_sync_warns_about_an_origin_rewritten_to_push_over_ssh(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """D038: what git pushes to after the operator's rewrites, not the map's URL, which is a local path here."""
+    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(var, "canopy-test")
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    origins = tmp_path / "origins"
+    origin = bare_origin(origins / "api.git", tmp_path)
+    global_config = tmp_path / "gitconfig"
+    git("config", "--file", str(global_config), "url.git@example.test:acme/.pushInsteadOf", f"{origins}/", cwd=tmp_path)
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    root = tmp_path / "acme"
+    root.mkdir()
+    monkeypatch.chdir(root)
+
+    assert main(["init", "--provider", "github", str(origin)]) == 0
+    assert "api: warning: origin pushes over SSH (git@example.test:acme/api.git)" in capsys.readouterr().out
+
+
+def test_clone_urls_in_a_code_checkout_are_refused(
+    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    checkout = tmp_path / "code"
+    (checkout / ".git").mkdir(parents=True)
+    monkeypatch.chdir(checkout)
     assert main(["init", "--provider", "jira", "https://x.test/api.git"]) == 2
-    assert "pass --workspace" in capsys.readouterr().err
-    assert not (canopy_env.repo / config.WORKSPACE_FILE_NAME).exists()
+    assert "Pass --workspace" in capsys.readouterr().err
+    assert not (checkout / config.WORKSPACE_FILE_NAME).exists()

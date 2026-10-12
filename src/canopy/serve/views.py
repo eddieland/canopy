@@ -181,8 +181,7 @@ def runs(ctx: Context) -> list[Run]:
 def shown_path(path: str, root: Path) -> str:
     """A worktree's path as a page shows it: from the workspace root when under it, else whole.
 
-    A workspace's pool paths then read as `.treehouse/web-3f9c2a1b/1/web`; a workspace of one's pool, under
-    `~/.treehouse` by default, is shown whole.
+    A workspace's pool paths then read as `.treehouse/web-3f9c2a1b/1/web`.
     """
     found = Path(path)
     return str(found.relative_to(root)) if found.is_relative_to(root) else path

@@ -18,7 +18,7 @@ import pytest
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db
+from canopy.core import config, db, workspace
 from canopy.core.context import Context
 from canopy.infra import lock, logs, procs
 from canopy.loop import repeat
@@ -72,11 +72,12 @@ class RaisingRunner:
 
 
 def context(env: CanopyEnv, runner: procs.Runner | None = None) -> Context:
-    cfg = config.load(env.repo, env.user_file)
-    cfg.paths.state_dir.mkdir(parents=True, exist_ok=True)
-    logs.configure(cfg.paths.state_dir)
-    conn = db.connect(env.state_dir / db.DB_FILE_NAME)
-    return Context(config=cfg, repo_root=env.repo, conn=conn, runner=runner or procs.SubprocessRunner())
+    cfg = config.load(env.root, env.user_file)
+    ws = workspace.load(env.root)
+    workspace.ensure_state_dir(ws.state_dir)
+    logs.configure(ws.state_dir)
+    conn = db.connect(ws.state_dir / db.DB_FILE_NAME)
+    return Context(config=cfg, conn=conn, runner=runner or procs.SubprocessRunner(), ws=ws)
 
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
@@ -109,7 +110,18 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     overseer_does(
         monkeypatch,
         canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-        canopy("dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement", "--slug", "login"),
+        canopy(
+            "dispatch",
+            "PROJ-2",
+            "--repo",
+            "repo",
+            "--label",
+            "agent-ready-tester",
+            "--kind",
+            "implement",
+            "--slug",
+            "login",
+        ),
         canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"),
     )
     time = FakeTime()
@@ -179,7 +191,18 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
     slug = "docs-readme-add-troubleshooting-section"
     overseer_does(
         monkeypatch,
-        canopy("dispatch", "PROJ-2", "--label", "agent-ready-tester", "--kind", "implement", "--slug", slug),
+        canopy(
+            "dispatch",
+            "PROJ-2",
+            "--repo",
+            "repo",
+            "--label",
+            "agent-ready-tester",
+            "--kind",
+            "implement",
+            "--slug",
+            slug,
+        ),
         canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3/" + "x" * 80),
     )
     time = FakeTime()

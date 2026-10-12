@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import config
+from canopy.core import config, workspace
 from canopy.core.config import ConfigError, load, render_command
 from tests.conftest import CanopyEnv
 
@@ -12,7 +12,7 @@ EXAMPLES = Path(__file__).parents[2] / "examples"
 
 
 def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
-    cfg = load(canopy_env.repo, canopy_env.user_file)
+    cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.tracker.provider == "jira"
     assert cfg.tracker.labels == ("agent-ready-tester",)
     assert cfg.tracker.needs_human_label == "needs-human"
@@ -24,7 +24,6 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.trust.comment_suffix == ""
     assert cfg.capacity.max_workers == 2
     assert cfg.loop.interval_minutes == 15
-    assert cfg.paths.state_dir == canopy_env.state_dir
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
 
 
@@ -32,27 +31,27 @@ def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEn
     canopy_env.write_user(
         canopy_env.user_file.read_text() + '\n[trust]\ntrusted_reviewers = ["octocat", "canopy:review", "ci[bot]"]\n'
     )
-    cfg = load(canopy_env.repo, canopy_env.user_file)
+    cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.trust.trusted_reviewers == ("octocat", "canopy:review", "ci[bot]")
 
 
-def test_user_file_wins_over_repository_for_shared_keys(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\npr_label = "bot"\n')
+def test_user_file_wins_over_the_workspace_file_for_shared_keys(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\npr_label = "bot"\n')
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("[runtime]", '[trust]\npr_label = "mine"\n\n[runtime]', 1)
     )
-    cfg = load(canopy_env.repo, canopy_env.user_file)
+    cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.tracker.query == "project = A"
     assert cfg.trust.pr_label == "mine"
 
 
-def test_needs_human_label_is_set_by_the_repository_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
-    assert load(canopy_env.repo, canopy_env.user_file).tracker.needs_human_label == "blocked-on-team"
+def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    assert load(canopy_env.root, canopy_env.user_file).tracker.needs_human_label == "blocked-on-team"
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nneeds_human_label = "ask-me"\n', 1)
     )
-    assert load(canopy_env.repo, canopy_env.user_file).tracker.needs_human_label == "ask-me"
+    assert load(canopy_env.root, canopy_env.user_file).tracker.needs_human_label == "ask-me"
 
 
 @pytest.mark.parametrize(
@@ -68,72 +67,80 @@ def test_needs_human_label_is_set_by_the_repository_and_overridden_by_the_user(c
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
-        ("paths", "state_dir = '/tmp/x'"),
+        ("paths", "worktree_include = '/tmp/x'"),
     ],
 )
-def test_repository_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
+def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
     section, line = section_key
     extra = f"\n[{section}]\n{line}\n" if section != "tracker" else f"{line}\n"
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + extra)
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + extra)
     with pytest.raises(ConfigError, match="user-only"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
-@pytest.mark.parametrize("where", ["repo", "user"])
+def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
+    """`paths.state_dir` was in the example user config; a copy of it must say to delete the key (D016)."""
+    canopy_env.write_user(canopy_env.user_file.read_text() + 'state_dir = "~/.canopy"\n')
+    with pytest.raises(ConfigError, match=r"paths\.state_dir was removed: delete it; state is always in the workspace"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("where", ["workspace", "user"])
 def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
-    if where == "repo":
-        canopy_env.write_repo(canopy_env.repo_file.read_text() + "jql = 'x'\n")
+    if where == "workspace":
+        canopy_env.write_shared(canopy_env.shared_file.read_text() + "jql = 'x'\n")
     else:
         canopy_env.write_user(canopy_env.user_file.read_text() + "\n[extras]\nfoo = 1\n")
     with pytest.raises(ConfigError, match="unknown key"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
-def test_repository_policy_only_tightens(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(
-        canopy_env.repo_file.read_text()
+def test_workspace_policy_only_tightens(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_shared(
+        canopy_env.shared_file.read_text()
         + "[policy]\nmax_fix_ci_attempts = 9\nfix_ci_cooldown_minutes = 5\nmax_resume_attempts = 1\n"
     )
-    policy = load(canopy_env.repo, canopy_env.user_file).policy
+    policy = load(canopy_env.root, canopy_env.user_file).policy
     assert policy.max_fix_ci_attempts == 2  # looser than the default: ignored
     assert policy.fix_ci_cooldown_minutes == 30  # shorter cooldown is looser: ignored
     assert policy.max_resume_attempts == 1  # tighter: used
 
 
 def test_user_policy_may_loosen(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + "[policy]\nmax_fix_ci_attempts = 1\n")
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + "[policy]\nmax_fix_ci_attempts = 1\n")
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[policy]\nmax_fix_ci_attempts = 5\n")
-    assert load(canopy_env.repo, canopy_env.user_file).policy.max_fix_ci_attempts == 5
+    assert load(canopy_env.root, canopy_env.user_file).policy.max_fix_ci_attempts == 5
 
 
 def test_stacking_defaults_to_auto(canopy_env: CanopyEnv) -> None:
-    assert load(canopy_env.repo, canopy_env.user_file).policy.stacking == "auto"
+    assert load(canopy_env.root, canopy_env.user_file).policy.stacking == "auto"
 
 
-def test_repository_may_turn_stacking_off_and_the_user_back_on(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + '[policy]\nstacking = "never"\n')
-    assert load(canopy_env.repo, canopy_env.user_file).policy.stacking == "never"  # stricter: used
+def test_the_workspace_may_turn_stacking_off_and_the_user_back_on(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[policy]\nstacking = "never"\n')
+    assert load(canopy_env.root, canopy_env.user_file).policy.stacking == "never"  # stricter: used
     canopy_env.write_user(canopy_env.user_file.read_text() + '\n[policy]\nstacking = "auto"\n')
-    assert load(canopy_env.repo, canopy_env.user_file).policy.stacking == "auto"  # the user file may loosen
+    assert load(canopy_env.root, canopy_env.user_file).policy.stacking == "auto"  # the user file may loosen
 
 
 def test_unknown_stacking_value_is_an_error_naming_the_file(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + '[policy]\nstacking = "sometimes"\n')
-    with pytest.raises(ConfigError, match=r"canopy\.toml.*policy\.stacking"):
-        load(canopy_env.repo, canopy_env.user_file)
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[policy]\nstacking = "sometimes"\n')
+    with pytest.raises(ConfigError, match=r"canopy-workspace\.toml.*policy\.stacking"):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_missing_user_file_says_run_init(canopy_env: CanopyEnv) -> None:
     canopy_env.user_file.unlink()
     with pytest.raises(ConfigError, match="canopy init"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
-def test_repository_file_is_optional_but_required_keys_are_not(canopy_env: CanopyEnv) -> None:
-    canopy_env.repo_file.unlink()
+def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
+    canopy_env.shared_file.unlink()
     with pytest.raises(ConfigError) as exc:
-        load(canopy_env.repo, canopy_env.user_file)
-    assert "missing required key tracker.provider" in str(exc.value)
+        load(canopy_env.root, canopy_env.user_file)
+    files = f"{canopy_env.shared_file} or {canopy_env.user_file}"
+    assert f"missing required key tracker.provider; set it in {files}" in str(exc.value)
     assert "missing required key tracker.query" in str(exc.value)
 
 
@@ -181,23 +188,23 @@ def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) ->
     text = text.replace(header, f"{header}\n{line}", 1) if header in text else f"{text}\n{header}\n{line}\n"
     canopy_env.write_user(text)
     with pytest.raises(ConfigError, match=message):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_idle_max_minutes_defaults_to_120_and_may_equal_the_interval(canopy_env: CanopyEnv) -> None:
     base = canopy_env.user_file.read_text()
-    assert load(canopy_env.repo, canopy_env.user_file).loop.idle_max_minutes == 120
+    assert load(canopy_env.root, canopy_env.user_file).loop.idle_max_minutes == 120
     canopy_env.write_user(base + "\n[loop]\ninterval_minutes = 30\nidle_max_minutes = 30\n")
-    assert load(canopy_env.repo, canopy_env.user_file).loop.idle_max_minutes == 30
+    assert load(canopy_env.root, canopy_env.user_file).loop.idle_max_minutes == 30
     # Unset, the default under a longer interval is no error: the cap is not above it, so idle pacing is off.
     canopy_env.write_user(base + "\n[loop]\ninterval_minutes = 180\n")
-    assert load(canopy_env.repo, canopy_env.user_file).loop.idle_max_minutes == 120
+    assert load(canopy_env.root, canopy_env.user_file).loop.idle_max_minutes == 120
 
 
 def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace('["agent-ready-tester"]', "[]"))
     with pytest.raises(ConfigError, match="at least 1 item"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 @pytest.mark.parametrize(
@@ -212,7 +219,7 @@ def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:
 def test_command_template_is_checked(canopy_env: CanopyEnv, replacement: str, message: str) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace("canopy-overseer {prompt}", replacement))
     with pytest.raises(ConfigError, match=message):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_render_command_keeps_the_prompt_in_one_argument() -> None:
@@ -234,7 +241,7 @@ def test_an_agent_template_without_the_definitions_dir_prints_its_replacement(ca
     text = re.sub(rf"^{key} = .*$", f"{key} = '{old}'", canopy_env.user_file.read_text(), flags=re.MULTILINE)
     canopy_env.write_user(text)
     with pytest.raises(ConfigError) as e:
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
     assert f"runtime.{key}: Value error, must contain {{definitions_dir}}" in str(e.value)
     assert f"'env OPENCODE_CONFIG_DIR={{definitions_dir}} {old}'" in str(e.value)
 
@@ -243,7 +250,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
     canopy_env.write_user(
         "\n".join(line for line in canopy_env.user_file.read_text().splitlines() if "_cmd" not in line)
     )
-    runtime = load(canopy_env.repo, canopy_env.user_file).runtime
+    runtime = load(canopy_env.root, canopy_env.user_file).runtime
     for template in (runtime.overseer_cmd, runtime.worker_cmd):
         assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
 
@@ -256,16 +263,9 @@ def test_xdg_config_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert config.user_config_path() == tmp_path / "home" / ".config" / "canopy" / "config.toml"
 
 
-def test_find_repo_root_walks_up(tmp_path: Path) -> None:
-    (tmp_path / ".git").write_text("gitdir: elsewhere\n")  # a worktree's .git is a file
-    nested = tmp_path / "a" / "b"
-    nested.mkdir(parents=True)
-    assert config.find_repo_root(nested) == tmp_path.resolve()
-
-
 def test_examples_are_valid(tmp_path: Path) -> None:
-    (tmp_path / ".git").mkdir()
-    (tmp_path / "canopy.toml").write_text((EXAMPLES / "canopy.toml").read_text())
+    (tmp_path / config.WORKSPACE_FILE_NAME).write_text((EXAMPLES / config.WORKSPACE_FILE_NAME).read_text())
+    assert [r.name for r in workspace.load(tmp_path).repos] == ["api", "web"]
     cfg = load(tmp_path, EXAMPLES / "config.toml")
     with (EXAMPLES / "config.toml").open("rb") as f:
         assert list(cfg.tracker.labels) == tomllib.load(f)["tracker"]["labels"]
@@ -273,28 +273,24 @@ def test_examples_are_valid(tmp_path: Path) -> None:
 
 def test_empty_prompt_overrides_means_the_default(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + 'prompt_overrides = ""\n')
-    cfg = load(canopy_env.repo, canopy_env.user_file)
+    cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
 
 
 @pytest.mark.parametrize(
     ("key", "value"),
-    [("prompt_overrides", "prompts"), ("prompt_overrides", "."), ("state_dir", ""), ("state_dir", "state")],
+    [("prompt_overrides", "prompts"), ("prompt_overrides", "."), ("worktree_include", "")],
 )
-def test_user_paths_must_not_resolve_against_the_repository(canopy_env: CanopyEnv, key: str, value: str) -> None:
-    # The working directory is the repository; a relative path would let it supply prompts or state (T7).
+def test_user_paths_must_not_resolve_against_the_workspace(canopy_env: CanopyEnv, key: str, value: str) -> None:
+    # The working directory is the workspace; a relative path would let a shared one supply prompts (T7).
     text = canopy_env.user_file.read_text()
     text = re.sub(rf"^{key} = .*$", "", text, flags=re.MULTILINE) + f'{key} = "{value}"\n'
     canopy_env.write_user(text)
     with pytest.raises(ConfigError, match=rf"paths\.{key}: Value error, must be an absolute path or start with ~"):
-        load(canopy_env.repo, canopy_env.user_file)
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_user_paths_expand_the_home_directory(canopy_env: CanopyEnv) -> None:
-    text = re.sub(
-        r"^state_dir = .*$", 'state_dir = "~/somewhere"', canopy_env.user_file.read_text(), flags=re.MULTILINE
-    )
-    canopy_env.write_user(text + 'prompt_overrides = "~/my-prompts"\n')
-    paths = load(canopy_env.repo, canopy_env.user_file).paths
-    assert paths.state_dir == canopy_env.home / "somewhere"
+    canopy_env.write_user(canopy_env.user_file.read_text() + 'prompt_overrides = "~/my-prompts"\n')
+    paths = load(canopy_env.root, canopy_env.user_file).paths
     assert paths.prompt_overrides == canopy_env.home / "my-prompts"

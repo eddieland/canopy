@@ -230,7 +230,7 @@ def free_port() -> int:
 
 
 def serve_on(env: CanopyEnv, port: int, extra: str = "") -> None:
-    env.write_user(user_toml(env.state_dir) + f"\n[serve]\nport = {port}\n{extra}")
+    env.write_user(user_toml() + f"\n[serve]\nport = {port}\n{extra}")
 
 
 def wait_until_up(url: str) -> None:
@@ -362,20 +362,20 @@ def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
 
 @pytest.mark.parametrize("bind", ["0.0.0.0", "::", "8.8.8.8", "canopy.example"])  # noqa: S104
 def test_serve_bind_must_be_loopback_or_private(canopy_env: CanopyEnv, bind: str) -> None:
-    canopy_env.write_user(user_toml(canopy_env.state_dir) + f'\n[serve]\nbind = "{bind}"\n')
+    canopy_env.write_user(user_toml() + f'\n[serve]\nbind = "{bind}"\n')
     with pytest.raises(config.ConfigError, match=r"serve\.bind"):
-        config.load(canopy_env.repo, canopy_env.user_file)
+        config.load(canopy_env.root, canopy_env.user_file)
 
 
 def test_serve_is_user_only(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_repo(canopy_env.repo_file.read_text() + '\n[serve]\nbind = "10.0.0.5"\n')
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '\n[serve]\nbind = "10.0.0.5"\n')
     with pytest.raises(config.ConfigError, match="user-only"):
-        config.load(canopy_env.repo, canopy_env.user_file)
+        config.load(canopy_env.root, canopy_env.user_file)
 
 
 def test_a_private_bind_loads(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(user_toml(canopy_env.state_dir) + '\n[serve]\nbind = "10.0.0.5"\nbase_path = "/canopy"\n')
-    loaded = config.load(canopy_env.repo, canopy_env.user_file).serve
+    canopy_env.write_user(user_toml() + '\n[serve]\nbind = "10.0.0.5"\nbase_path = "/canopy"\n')
+    loaded = config.load(canopy_env.root, canopy_env.user_file).serve
     assert (loaded.enabled, loaded.bind, loaded.port, loaded.base_path) == (True, "10.0.0.5", 8765, "/canopy")
 
 

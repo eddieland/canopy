@@ -194,7 +194,7 @@ def seed(directory: Path) -> Backend:
     user_file.write_text(_USER_TOML.replace("{chores}", str(chores)))
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
-    workspace.ensure_state_dir(ws, cfg.paths.state_dir)
+    workspace.ensure_state_dir(ws.state_dir)
     pools = _pools(root)
 
     def slots(_ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
@@ -202,7 +202,6 @@ def seed(directory: Path) -> Backend:
 
     backend = Backend(
         config=cfg,
-        repo_root=root,
         workspace=ws,
         attention=lambda _ctx: list(ATTENTION),
         end_run=_end_run,

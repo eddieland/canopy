@@ -1,15 +1,15 @@
 # ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
-# Overrides the repository's canopy.toml key by key. Keys marked user-only in DESIGN.md §12 may be set only here.
-# Every key, most at its default. `canopy init` writes only tracker.labels and trust.authorized_repliers: set the rest
-# only to change them (D087).
+# Overrides each workspace's canopy-workspace.toml key by key, in every workspace. Keys marked user-only in DESIGN.md
+# §12 may be set only here. Every key, most at its default. `canopy init` writes only tracker.labels and the trust
+# lists: set the rest only to change them (D087).
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a
 # label with another operator: both loops would work the same tickets.
 labels = ["agent-ready-yourname"]
-# Optional: narrow the repository's query to your labels to save the overseer reads.
+# Optional: narrow the workspace's query to your labels to save the overseer reads. It applies in every workspace.
 # query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
-# Optional: your own needs-human label, if it differs from the repository's.
+# Optional: your own needs-human label, if it differs from the workspace's.
 # needs_human_label = "needs-human"
 # For tickets you work privately with `canopy start` (DESIGN §22): the tracker's MCP server, as your OpenCode config
 # names it, and the only tools of it a private worker may call. Every other tool of that server is denied. Unset, the
@@ -23,8 +23,8 @@ labels = ["agent-ready-yourname"]
 max_workers = 2
 # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
 max_chores = 1
-# In a workspace: slots in each repository's pool. `canopy workspace sync` makes and removes slots to match, and no
-# run grows a pool past it. Unset leaves the pools to treehouse's own max_trees (DESIGN §18).
+# Slots in each repository's pool. `canopy workspace sync` makes and removes slots to match, and no run grows a pool
+# past it. Unset leaves the pools to treehouse's own max_trees (DESIGN §18).
 # slots_per_repo = 2
 # [capacity.repo_slots]   # per repository, by its name in the map; wins over slots_per_repo
 # api = 4
@@ -75,8 +75,6 @@ comment_suffix = ""
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
-# Journal, logs, and attention.md. A workspace of several repositories ignores this and keeps its own in .canopy/.
-state_dir = "~/.canopy"
 # Optional: your own .worktreeinclude, passed to every `treehouse get`. It replaces the committed one: copy in its lines
 # to keep them. It selects gitignored files in the primary clone to copy into each slot (DESIGN §9).
 # worktree_include = "~/.config/canopy/worktreeinclude"

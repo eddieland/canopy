@@ -1,15 +1,15 @@
 # Getting started
 
-From one repository on defaults to a workspace of several, with a Bazel repository that keeps a pool of warm slots.
-Each stage adds one thing to the one before. Start at stage 1 and stop at the first stage that fits your work: most
-operators never need stage 5.
+From one repository on defaults to several repositories sharing one queue, with a Bazel repository that keeps a pool
+of warm slots. Each stage adds one thing to the one before. Start at stage 1 and stop at the first stage that fits your
+work: most operators never need stage 5.
 
 | Stage | You have | It adds |
 | --- | --- | --- |
 | [1](#1-one-repository) | One repository | `canopy init`, a queue label, the loop |
-| [2](#2-slots-that-need-setup) | One repository whose checkouts need local files or an install | Seeding and `setup_cmd` |
-| [3](#3-a-workspace-of-one-repository) | One repository, with a pool canopy sizes | A workspace: its own pool, slots made ahead of time |
-| [4](#4-several-repositories) | Tickets that land in several repositories | The map, `MAP.md`, joint runs, splits |
+| [2](#2-slots-that-need-setup) | A repository whose checkouts need local files or an install | Seeding and `setup_cmd` |
+| [3](#3-a-pool-of-a-set-size) | Runs that should start in a ready slot | A sized pool, made ahead of time, on a fast disk |
+| [4](#4-several-repositories) | Tickets that land in several repositories | More repositories, `MAP.md`, joint runs, splits |
 | [5](#5-a-bazel-repository-with-several-slots) | A large Bazel repository in the workspace | Shared caches, warm hooks, a sized pool |
 
 This guide assumes README's install steps 1 to 3: treehouse and canopy installed, and your agent runtime connected to
@@ -17,42 +17,48 @@ GitHub's and your tracker's MCP servers. It picks up at step 4.
 
 ## Where things live
 
-Stages 1 and 2 run canopy in a repository; stages 3 to 5 run it in a workspace. The commands are the same. What
-changes is where canopy keeps things:
+canopy always runs from a workspace: a directory of its own, holding a clone of each repository it works in. It never
+reads config from, or writes files into, your own checkouts (D016). Every stage uses the same layout:
 
-| | One repository (stages 1, 2) | Workspace (stages 3 to 5) |
-| --- | --- | --- |
-| Shared config | `canopy.toml` in the repository | `canopy-workspace.toml` at the workspace root |
-| Personal config | `~/.config/canopy/config.toml` | the same file, for every workspace |
-| Primary clone | your own checkout | `repos/<name>/`, cloned by `canopy workspace sync` |
-| Worktree pool | wherever treehouse puts it, `~/.treehouse` by default | `.treehouse/` in the workspace |
-| Pool size | treehouse's `max_trees` | `capacity.slots_per_repo` or `capacity.repo_slots`, made by sync |
-| Journal, logs, `attention.md` | `~/.canopy/` (`paths.state_dir`) | `.canopy/` in the workspace |
-| Where `canopy loop` runs | the repository | the workspace root, or anywhere below it |
+| What | Where |
+| --- | --- |
+| Shared config and the list of repositories | `canopy-workspace.toml` at the workspace root |
+| What each repository owns, for the overseer | `MAP.md` at the workspace root |
+| Personal config | `~/.config/canopy/config.toml`, one file for every workspace |
+| Primary clones | `repos/<name>/`, cloned by `canopy init` or `canopy workspace sync` |
+| Worktree pools | `.treehouse/`, apart from your interactive pools under `~/.treehouse` |
+| Journal, logs, `attention.md` | `.canopy/`, readable only by you |
+
+Run `canopy` from the workspace root or anywhere below it.
 
 ## 1. One repository
 
-The smallest setup: canopy works tickets in the repository you already have checked out.
+The smallest setup: canopy works tickets in one repository.
 
-1. In the repository, run `canopy init` (add `--provider jira` or `--provider github` to skip the question). It
-   writes, overwriting nothing:
-   - `~/.config/canopy/config.toml`, your personal config, with a queue label of your own (`agent-ready-<you>`).
-   - `canopy.toml` at the repository root, the config everyone who runs canopy here shares.
+1. In an empty directory, run `canopy init` with the repository's HTTPS clone URL (add `--provider jira` or
+   `--provider github` to skip the question):
 
-   It prints the branch protection canopy relies on, and warns if `origin` pushes over SSH. Use an HTTPS remote with
-   a credential helper (D038).
-2. In `canopy.toml`, set `tracker.query` to find candidate tickets, and create the `needs-human` label in your tracker
-   (or set `needs_human_label` to one you have). Commit `canopy.toml`. `examples/canopy.toml` lists every shared key.
+   ```sh
+   canopy init --provider jira https://github.com/acme/api.git
+   ```
+
+   It writes, overwriting nothing, `~/.config/canopy/config.toml`, your personal config, with a queue label of your
+   own (`agent-ready-<you>`); and, in the directory, `canopy-workspace.toml`, `MAP.md`, and a `.gitignore` for what
+   canopy keeps there. It clones the repository into `repos/api/` and prints the branch protection canopy relies on.
+   Run in a git checkout, init refuses: canopy keeps nothing in your repositories.
+2. In `canopy-workspace.toml`, set `tracker.query` to find candidate tickets and write a one-line `summary` under
+   `[repos.api]`. Create the `needs-human` label in your tracker (or set `needs_human_label` to one you have).
+   `examples/canopy-workspace.toml` is a full one. Commit the workspace to a repository of its own only if teammates
+   share it.
 3. In your personal config, add your tracker account id to `trust.authorized_repliers`, so your comments can unblock a
    ticket, and your GitHub login to `trust.trusted_reviewers`, so your review comments send a worker back to its PR.
    `examples/config.toml` lists every key with its default.
-4. Add your queue label to a ticket, then run `canopy loop --dry-run --ticks 1` and read the plan it prints.
-   `canopy decisions` shows it again.
+4. Add your queue label to a ticket, then run `canopy loop --dry-run --ticks 1` in the workspace and read the plan it
+   prints. `canopy decisions` shows it again.
 5. Once you trust it, leave `canopy loop` running.
 
-Each run leases a slot (a git worktree) from treehouse's pool for this repository, works in it, and returns it. The
-pool is the one your interactive `treehouse` uses, under `~/.treehouse` unless treehouse's config says otherwise.
-`capacity.max_workers` (2 by default) caps how many workers run at once.
+Each run leases a slot (a git worktree of `repos/api/`) from the repository's pool under `.treehouse/`, works in it, and
+returns it. `capacity.max_workers` (2 by default) caps how many workers run at once.
 
 Stop here if a fresh checkout of your repository is all a worker needs. README's "Daily surface" covers what to do
 with the loop from now on.
@@ -61,7 +67,7 @@ with the loop from now on.
 
 A slot is a fresh git worktree. It has none of the gitignored files in your own checkout, such as `.env.local`, and no
 dependencies installed. If a worker cannot build or test without them, set the slot up before the worker starts. Both
-settings below live in your personal config and work the same in a workspace.
+settings below live in your personal config.
 
 **Seed gitignored files.** On every lease, treehouse copies the gitignored files a `.worktreeinclude` manifest names
 from the primary clone into the slot. To use your own manifest instead of the repository's committed one:
@@ -95,24 +101,16 @@ setup_timeout_minutes = 30
   limit. Keep out of it anything the branch can break that a worker should fix, such as a build or a test.
 - It runs the branch's code on your machine, outside the agent's permissions. If you sandbox workers, sandbox this the
   same way (TRUST_MODEL T4).
-- Its output is in the run's log, `~/.canopy/runs/<id>.log`, after a `--- setup <repo> ---` header.
+- Its output is in the run's log, `.canopy/runs/<id>.log`, after a `--- setup <repo> ---` header.
 
 For setup that depends only on the base branch, such as downloading a toolchain, a treehouse `post_create` hook fits
 better; stage 5 shows one. DESIGN §9 says how the three steps fit together.
 
-## 3. A workspace of one repository
+## 3. A pool of a set size
 
-A workspace is a directory canopy manages: a map of repositories, a primary clone of each under `repos/`, their pools
-under `.treehouse/`, and canopy's state under `.canopy/`. Move one repository into a workspace when you want any of:
-
-- **A pool of its own.** A workspace's pools are separate from your interactive ones under `~/.treehouse`, so your own
-  `treehouse` never recycles a slot canopy is warming, and a repository's committed `treehouse.toml` cannot move them.
-- **A pool of a set size, made ahead of time.** canopy sizes only a workspace's pools. `canopy workspace sync` makes
-  every slot before the first run needs one, so their hooks and caches are warm.
-- **Everything on one disk you choose.** Put the workspace on a fast disk and its clones, pools, and state go with it.
-- **A clean start for stage 4**, where more repositories join the same queue.
-
-Set the pool's size in your personal config first, so init makes the slots:
+Left alone, a repository's pool grows as runs need slots, up to treehouse's `max_trees`, and each new slot is set up
+by the first run that lands in it. Declare the pool's size instead when a new slot is slow to warm up, or you want to
+bound its disk use:
 
 ```toml
 # ~/.config/canopy/config.toml
@@ -120,26 +118,13 @@ Set the pool's size in your personal config first, so init makes the slots:
 slots_per_repo = 2
 ```
 
-Then, in an empty directory:
+Then run `canopy workspace sync` in the workspace. It makes every slot ahead of time, so their `post_create` hooks
+(stage 5) run then, not in a run, and removes idle slots past the size. A run that finds every slot busy is refused
+`no_slot` and tried again on a later tick. Set the size before `canopy init` and init makes the slots. `--dry-run` shows
+what sync would do first; run it again whenever you change the size.
 
-```sh
-canopy init --workspace --provider jira https://github.com/acme/api.git
-```
-
-It writes `canopy-workspace.toml` (the map), `MAP.md`, and a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`,
-and `.canopy/`; then clones the repository into `repos/api/` and makes its two slots. It prints the branch protection
-rules for each repository in the map.
-
-Then:
-
-1. Edit the map: set `tracker.query`, and write a one-line `summary` under `[repos.api]`. A repository's own
-   `canopy.toml` is not read inside a workspace, so copy any `[tracker]`, `[policy]`, or `[trust]` keys you set in it
-   into the map. `examples/canopy-workspace.toml` is a full one.
-2. Run `canopy loop --dry-run --ticks 1` from the workspace root, then `canopy loop`.
-
-The workspace starts with an empty journal in `.canopy/`; earlier runs stay in `~/.canopy/`. Switch when your loop has
-nothing in flight. `canopy workspace sync` makes the workspace match the map and your declared sizes again whenever you
-change either; `--dry-run` shows what it would do first.
+Put the workspace on a fast disk if you have one: its clones, pools, and state go with it, and canopy has no setting to
+move the pools elsewhere (D033).
 
 ## 4. Several repositories
 
@@ -147,7 +132,7 @@ When one queue's tickets land in several repositories, keep one workspace for al
 
 1. Add the repositories: `canopy workspace add https://github.com/acme/web.git`. Each is named after its URL
    (`web`), unless given as `NAME=URL`. It appends a `[repos.<name>]` table to the map, clones it, and makes its slots.
-   To start a new workspace with several at once, pass them all to `canopy init --workspace`.
+   To start a new workspace with several at once, pass them all to `canopy init`.
 2. Write each repository's `summary` in the map: one line on what it owns.
 3. Describe them in `MAP.md`: what each owns, which depends on which, where the contracts between them live, and in
    which order a change that crosses them lands. The overseer and workers read it to choose repositories. It is data,

@@ -7,10 +7,14 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from canopy.infra.procs import SubprocessRunner
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
@@ -67,69 +71,96 @@ def agent_log(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
 @dataclass(frozen=True)
 class CanopyEnv:
-    """A repository and an operator, both in tmp_path. The process cwd is the repository."""
+    """A workspace of one repository, `repo`, and an operator, all in tmp_path. The process cwd is the workspace root.
 
+    `repo` is the repository's primary clone, `repos/repo`: just a `.git` directory. `shared_file` is the workspace
+    file, whose `[tracker]` table comes last so that a test can append tracker keys to it; the user file ends with an
+    empty `[paths]` table, for paths keys.
+    """
+
+    root: Path
     repo: Path
     home: Path
     user_file: Path
-    repo_file: Path
-    state_dir: Path
+    shared_file: Path
+
+    @property
+    def state_dir(self) -> Path:
+        return self.root / ".canopy"
 
     def write_user(self, text: str) -> None:
         self.user_file.parent.mkdir(parents=True, exist_ok=True)
         self.user_file.write_text(text)
 
-    def write_repo(self, text: str) -> None:
-        self.repo_file.write_text(text)
+    def write_shared(self, text: str) -> None:
+        self.shared_file.write_text(text)
 
 
-REPO_TOML = """\
+REPO_NAME = "repo"
+SHARED_TOML = f"""\
+[workspace]
+name = "acme"
+
+[repos.{REPO_NAME}]
+url = "https://example.test/acme/{REPO_NAME}.git"
+summary = "The only repository."
+
 [tracker]
 provider = "jira"
 query = "project = PROJ"
 """
 
 
-def user_toml(state_dir: Path) -> str:
-    return f"""\
+def user_toml() -> str:
+    return """\
 [tracker]
 labels = ["agent-ready-tester"]
 
 [runtime]
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-overseer {{prompt}}'
-worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker {{prompt}}'
-private_worker_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-worker-private {{prompt}}'
-split_cmd = 'env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run --agent canopy-splitter {{prompt}}'
+overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer {prompt}'
+worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}'
+private_worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private {prompt}'
+split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-splitter {prompt}'
 
 [paths]
-state_dir = {json.dumps(str(state_dir))}
 """
 
 
 @pytest.fixture
 def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CanopyEnv:
-    """A git repository (just a `.git` directory) with a canopy.toml, and a user config whose runtime commands run the
-    fake agent and whose state dir is in tmp_path. HOME and XDG_CONFIG_HOME point into tmp_path too, so nothing reads
-    or writes the real operator's files. CANOPY_TICK_ID is cleared."""
+    """A workspace of one repository with its workspace file, and a user config whose runtime commands run the fake
+    agent. HOME and XDG_CONFIG_HOME point into tmp_path too, so nothing reads or writes the real operator's files.
+    CANOPY_TICK_ID is cleared."""
     home = tmp_path / "home"
-    repo = tmp_path / "repo"
+    root = tmp_path / "ws"
+    repo = root / "repos" / REPO_NAME
     (repo / ".git").mkdir(parents=True)
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
     monkeypatch.setenv("USER", "tester")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
-    monkeypatch.chdir(repo)
+    monkeypatch.chdir(root)
     env = CanopyEnv(
+        root=root,
         repo=repo,
         home=home,
         user_file=home / ".config" / "canopy" / "config.toml",
-        repo_file=repo / "canopy.toml",
-        state_dir=tmp_path / "state",
+        shared_file=root / "canopy-workspace.toml",
     )
-    env.write_repo(REPO_TOML)
-    env.write_user(user_toml(env.state_dir))
+    env.write_shared(SHARED_TOML)
+    env.write_user(user_toml())
+    # As canopy creates it, so a journal a test opens first is in a directory canopy accepts as the operator's own.
+    env.state_dir.mkdir(mode=0o700)
     return env
+
+
+def pool_state(repo: Path, slots: Sequence[Mapping[str, object]], max_trees: int | None = None) -> str:
+    """The fake treehouse's state with `slots` as the pool of the repository whose primary clone is `repo`."""
+    pool: dict[str, object] = {"slots": list(slots)}
+    if max_trees is not None:
+        pool["max_trees"] = max_trees
+    return json.dumps({"pools": {str(repo): pool}})
 
 
 def git(*args: str, cwd: Path) -> str:
@@ -159,8 +190,8 @@ class GitPool:
 
 
 @pytest.fixture
-def git_pool(treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitPool:
-    """Real git behind the fake treehouse: `treehouse get` leases one of two clones of a bare origin.
+def git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitPool:
+    """Real git behind the fake treehouse: `treehouse get` leases one of two clones of a bare origin, as `repo`'s pool.
 
     Real treehouse slots are worktrees of one repository; clones behave the same for what canopy runs in a slot.
     """
@@ -188,5 +219,5 @@ def git_pool(treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPa
         git("checkout", "--quiet", "--detach", cwd=slot)
         slots.append(slot)
     pool = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
-    treehouse_state.write_text(json.dumps({"max_trees": len(slots), "slots": pool}))
+    treehouse_state.write_text(pool_state(canopy_env.repo, pool, max_trees=len(slots)))
     return GitPool(origin, tuple(slots))

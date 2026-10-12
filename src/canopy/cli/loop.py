@@ -150,11 +150,8 @@ def _print_workers(ctx: Context) -> None:
     busy = len(running) + len(db.running_review_runs(ctx.conn))
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
-        # A joint run holds a slot in each of its repositories; a workspace of one's needs no name.
-        where = ", ".join(
-            str(s["slot_path"]) if ctx.workspace.single else f"{s['repo']} {s['slot_path']}"
-            for s in slots[int(r["id"])]
-        )
+        # A joint run holds a slot in each of its repositories.
+        where = ", ".join(f"{s['repo']} {s['slot_path']}" for s in slots[int(r["id"])])
         click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {where}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_review_runs(ctx.conn):

@@ -4,10 +4,10 @@ canopy uses `status --json`, `get --lease --json`, and `return --force --if-leas
 `canopy workspace sync` also uses `destroy --yes` to remove idle slots a pool has beyond its declared size. Lease
 holders are `canopy:<KEY>`; sync's own short leases are `canopy-sync`, which reconcile never returns.
 
-treehouse finds a repository's pool from its working directory. In a workspace, every command runs in the repository's
-primary clone with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot goes, so the pools live
-under `<workspace>/.treehouse/` whatever treehouse's own config says (DESIGN §18). A `Pool` says which, and which
-personal `.worktreeinclude` every `get` passes as `--include-file` (DESIGN §9).
+treehouse finds a repository's pool from its working directory. Every command runs in the repository's primary clone
+with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot goes, so the pools live under
+`<workspace>/.treehouse/` whatever treehouse's own config says (DESIGN §18). A `Pool` says which, and which personal
+`.worktreeinclude` every `get` passes as `--include-file` (DESIGN §9).
 """
 
 from __future__ import annotations
@@ -137,10 +137,10 @@ class Pool:
     """Where treehouse runs for one repository's pool.
 
     `cwd` is a directory in the repository, from which treehouse finds its pool; None is this process's working
-    directory. `root` is the workspace root, passed as `TREEHOUSE_ROOT`; None leaves treehouse's own config in charge,
-    as in a workspace of one. `slots` is the pool's declared size (`capacity.slots_for`), which `lease` never grows the
-    pool past. None leaves the size to treehouse's `max_trees`. `include_file` is the operator's own `.worktreeinclude`
-    (`paths.worktree_include`), which treehouse reads in place of the committed one; None leaves the committed one.
+    directory. `root` is the workspace root, passed as `TREEHOUSE_ROOT`; None leaves treehouse's own config in charge.
+    `slots` is the pool's declared size (`capacity.slots_for`), which `lease` never grows the pool past. None leaves the
+    size to treehouse's `max_trees`. `include_file` is the operator's own `.worktreeinclude` (`paths.worktree_include`),
+    which treehouse reads in place of the committed one; None leaves the committed one.
     """
 
     cwd: Path | None = None

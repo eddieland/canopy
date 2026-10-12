@@ -1,4 +1,4 @@
-"""`canopy init --workspace` and `canopy workspace sync` (DESIGN §18).
+"""`canopy init` and `canopy workspace sync` (DESIGN §18).
 
 Init writes a workspace's skeleton: the map, `MAP.md`, and a `.gitignore` for what canopy and treehouse keep under the
 root, plus the user config if missing. It never overwrites a file; a `.gitignore` only gains the lines it lacks.
@@ -48,8 +48,8 @@ def workspace_file_text(name: str, provider: str) -> str:
     """Return the text of a new `canopy-workspace.toml` named `name`, for tracker `provider`."""
     query = init.EXAMPLE_QUERIES.get(provider, "describe which tickets to look at, in plain language")
     return f"""\
-# canopy-workspace.toml: the workspace map, and the shared config layer in place of each repository's canopy.toml.
-# Commit it if the workspace is shared. The same scopes apply as to canopy.toml (DESIGN.md §12, §18).
+# canopy-workspace.toml: the workspace map, and the config shared by everyone who runs canopy on this workspace.
+# Commit it if the workspace is shared. Shared keys only; personal ones go in the user config (DESIGN.md §12, §18).
 
 [workspace]
 name = {json.dumps(name)}
@@ -89,7 +89,7 @@ def run_init(root: Path, user_file: Path, provider: str | None) -> init.Report:
     else:
         if provider is None:
             raise ValueError("the workspace has no canopy-workspace.toml; a tracker provider is needed to write one")
-        init.write_if_missing(workspace_file, workspace_file_text(workspace.one_name(root), provider), report)
+        init.write_if_missing(workspace_file, workspace_file_text(workspace.default_name(root), provider), report)
     init.write_if_missing(root / workspace.MAP_FILE_NAME, MAP_TEXT, report)
     _ignore(root / GITIGNORE, report)
     report.shadowing = definitions.shadowing(root)
@@ -140,7 +140,7 @@ class Checked:
 def repo_arg(arg: str) -> tuple[str, str]:
     """Split a `[NAME=]URL` argument into the repository's name and clone URL.
 
-    Without a name, it is the URL's last path segment without `.git`, reduced as a workspace of one's name is.
+    Without a name, it is the URL's last path segment without `.git`, reduced to a valid repository name.
 
     Raises:
         ValueError: the name or URL is not valid. The message says what to pass instead.
@@ -178,8 +178,6 @@ def add(ws: workspace.Workspace, entries: list[tuple[str, str]]) -> list[Added]:
     Raises:
         ValueError: an entry conflicts. The message names it.
     """
-    if ws.map_file is None:
-        raise ValueError("a workspace of one has no map to add repositories to")
     listed = {r.name: str(r.url) for r in ws.repos}
     added: list[Added] = []
     tables: list[str] = []

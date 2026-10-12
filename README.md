@@ -51,14 +51,16 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer, to comment on a PR.
    Grant nothing more: canopy's definitions deny the dangerous ones by name, but names differ by server. On GitHub
    the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D084).
-4. In your repository: `canopy init`. This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
-   default `~/.config/canopy/config.toml`, with a queue label of your own), writes a shared `canopy.toml` if the
-   repository has none, and installs nothing else: agent runs load canopy's agent definitions and skills from its own
-   directory (D040). Use an HTTPS remote with a credential helper; init warns if `origin` pushes over SSH, which worker
-   sandboxing is not expected to support (D038).
-5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` and read the
-   plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes` (15 by default),
-   longer while nothing changes, and repeats until you press Ctrl-C. It also serves the web UI at
+4. In an empty directory, which becomes your workspace: `canopy init --provider jira https://github.com/acme/api.git`
+   (or `github`, or your tracker's name). This writes your personal config (`$XDG_CONFIG_HOME/canopy/config.toml`, by
+   default `~/.config/canopy/config.toml`, with a queue label of your own), writes the workspace's
+   `canopy-workspace.toml`, and clones the repository under `repos/`. canopy writes nothing into your repositories and
+   installs nothing else: agent runs load its agent definitions and skills from its own directory (D016, D040). Set
+   `tracker.query` in `canopy-workspace.toml`. Use HTTPS clone URLs with a credential helper; worker sandboxing is not
+   expected to support SSH (D038).
+5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` in the
+   workspace and read the plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes`
+   (15 by default), longer while nothing changes, and repeats until you press Ctrl-C. It also serves the web UI at
    `http://127.0.0.1:8765/`; `canopy secret` prints the listener secret its sign-in page asks for.
 
 ## Daily surface
@@ -82,9 +84,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   worker back to a PR on their own; anyone else's comments, a review bot's included, wait on the attention list as
   `untrusted_review` until you say what to do with `canopy reply KEY 'use your judgement on the bot's review'` or the
   web UI. The reply stays in canopy, never on the ticket (DESIGN §7).
-- Read the attention list: `canopy status`, or `~/.canopy/attention.md`. To be told when it changes, add a notification
-  sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for a Slack
-  channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
+- Read the attention list: `canopy status`, or `.canopy/attention.md` in the workspace. To be told when it changes, add
+  a notification sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for
+  a Slack channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
 - Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
   add `--ticket KEY` to filter. The web UI's Ticks page shows the same, and each ticket's page the decisions about it.
   `canopy loop` prints each tick's cost as it goes.
@@ -102,8 +104,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 ## Growing your setup
 
-The install steps set canopy up for one repository. [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) goes on from
-there, one stage at a time: slots that need local files or an install, a workspace with a pool of its own, several
+The install steps set up a workspace of one repository. [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) goes on from
+there, one stage at a time: slots that need local files or an install, a pool of a set size made ahead of time, several
 repositories sharing one queue, and a large Bazel repository with a pool of warm slots.
 
 ## Troubleshooting
