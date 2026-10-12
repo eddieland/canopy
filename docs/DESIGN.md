@@ -148,7 +148,7 @@ canopy (harness, Python)
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
                    request
     views.py       journal rows as the API's models: attention items, runs, tickets, messages
-    live.py        the event stream: data_version read once a second, changed lists sent whole
+    live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
     guard.py       Host and Origin checks, and security headers on every response
@@ -2642,7 +2642,7 @@ A guard's refusal is a 409 whose `detail` names the guard and gives its reason, 
 a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
 `web:<id>`, so a retried submission records nothing new.
 
-The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
+The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
 spend, and the latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when the cost changed; its window moves with the clock),
@@ -2651,9 +2651,9 @@ the spend, and the latest tick. The UI writes a list into its query with `setQue
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
 sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,
-each only if a page shows it. The journal has
-no notifications, so a once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser
-polls.
+each only if a page shows it. The journal has no notifications, so reading one pragma every quarter second is the
+cheapest way to learn of a change, and quick enough that a change shows as it happens; nothing in the browser polls.
+An age on a page (`5m ago`) counts on a clock that ticks every second.
 
 The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
 `canopy reply chore:NAME` does in the terminal.
@@ -2719,7 +2719,7 @@ that pool for as long as it takes.
 It is not on the event stream: the journal does not hold a slot's branch or processes, and a `treehouse status` per
 pool once a second per open page would cost more than the page is worth. The UI reads it again when a `runs.updated`
 event changes which running runs hold which worktrees (a run's cost moving does not), when the operator asks, and
-every 30 seconds while a page shows it in a visible tab: what runs in a slot, whether it is dirty, and the slots
+every 10 seconds while a page shows it in a visible tab: what runs in a slot, whether it is dirty, and the slots
 a sync adds or removes never reach the journal, and a run's own refresh comes as it is recorded, before its worker has
 checked out its branch. Only an operator's read shows on the Read again button.
 

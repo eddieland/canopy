@@ -155,7 +155,7 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     expect((await reads).status()).toBe(200)
 })
 
-test('the worktrees page reads the pools again every 30 seconds, and only while it is open', async ({ page }) => {
+test('the worktrees page reads the pools again every 10 seconds, and only while it is open', async ({ page }) => {
     await page.clock.install()
     let reads = 0
     page.on('request', (r) => {
@@ -165,7 +165,7 @@ test('the worktrees page reads the pools again every 30 seconds, and only while 
     await settled(page)
     expect(reads).toBe(1)
 
-    await page.clock.runFor(29_000)
+    await page.clock.runFor(9_000)
     expect(reads).toBe(1)
     const next = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
     await page.clock.runFor(1_000)
