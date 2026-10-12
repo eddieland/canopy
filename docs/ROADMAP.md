@@ -16,10 +16,11 @@ progress is tracked. Keep it current in the same PR that changes it:
   Next: how that changes later milestones, docs, or open questions.
   ```
 
-  Keep `Learned` and `Next` to a few bullets or sentences each. Anything that
-  deserves a lasting rationale goes in `DECISIONS.md`. The entry here just
-  points to it. Edit a later milestone's bullets directly when `Next`
-  calls for it.
+  Keep `Learned` and `Next` to a few bullets or sentences each. A lasting
+  rationale for a behavior goes in `DESIGN.md`, next to the behavior; it goes
+  in `DECISIONS.md` only when the choice meets that file's bar, something
+  every future developer must know. The entry here just points to it. Edit a
+  later milestone's bullets directly when `Next` calls for it.
 
 ## M0. Skeleton
 
@@ -76,7 +77,7 @@ Status: done 2026-09-24.
 Learned:
 
 - Interactive dry runs found plans a live tick would not carry out: a dry-run dispatch now checks the guards (D036), a
-  dry-run `ticket set --done` no longer marks a ticket done, and a tick-wide `skip` closes the tick as `skipped` (D037).
+  dry-run `ticket set --done` no longer marks a ticket done, and a tick-wide `skip` closes the tick as `skipped`.
   `canopy decisions [TICK]` prints a plan without SQL.
 - The first real runs failed on setup, not on the loop: a missing then outdated treehouse, then no GitHub MCP server in
   the overseer's runtime (`mcp_unavailable: github`). With the server configured, tick 5 planned nothing on an empty
@@ -130,7 +131,7 @@ Next: give the worker a reliable way to label, or have the harness do it; M3's `
   overseer prompt.
 - `prompts/worker-fix-ci.md`, `prompts/worker-resume.md`.
 - Attempt counters, cooldowns, `attempt_limit` attention. Include `implement`: M2 has no attempt limit on it in code,
-  only the overseer prompt (D028).
+  only the overseer prompt.
 - Lift M2's `not_implemented` refusals for `fix-ci`, `resume`, and `--context` (D029).
 - Cursors updated per ticket so ticks are incremental.
 - `attention.py` render, diff, `notify.cmd`.
@@ -140,7 +141,7 @@ window and stops at the limit. A blocked worker's question appears on the
 ticket; an authorized reply resumes it; an unauthorized reply does not.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_fix_ci_resume.py`, `tests/canopy/test_attention.py`),
-docs, and D030 to D032 are in. Checked live on 2026-10-07:
+docs, and D030 are in. Checked live on 2026-10-07:
 
 - A reply from an account not in `authorized_repliers` did not resume GH-65, and its comment cursor moved past it; with
   the account added back, the same comment resumed it. The overseer checks a comment's author when it reads it, so
@@ -152,7 +153,7 @@ docs, and D030 to D032 are in. Checked live on 2026-10-07:
   `changes_requested`. Bot reviews drive `resume` though they never count as approval.
 
 Waiting on the operator: an authorized answer on GH-68 that resumes it, a real PR with a failing check taken
-through fix-ci to the limit, and a PR that conflicts with its base taken through `conflicted` (D070) to a clean merge.
+through fix-ci to the limit, and a PR that conflicts with its base taken through `conflicted` to a clean merge.
 DESIGN §15's three-failure attention item is M10's `loop.failing`.
 
 ## M4. Dependencies and stacking
@@ -185,7 +186,7 @@ deleted); watch it on #73. The `agent` label was missing on #73 as on #69 (M2's 
 
 Accept: a coworker runs it against their own ticket.
 
-Status: in progress. The skill, the install check, and the license are in (D046, D047). The skill is for the
+Status: in progress. The skill, the install check, and the license are in (D046). The skill is for the
 operator's own agent sessions: `canopy skill` prints it and agent runs do not load it. `uv tool install canopy` was
 wrong, since the PyPI name is another project's; README now installs from git, verified from an empty HOME on
 2026-09-25, and `tests/install-check.sh` repeats that in CI on Linux and macOS. The license is proprietary for now.
@@ -233,10 +234,10 @@ runs.
 Accept: one real ticket touching two repositories gets two linked PRs from one run. A joint run killed mid-way is
 detected on the next tick and all its slots are returned.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py`), docs, and D058 to D060 are in. The desk
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_units.py`), docs, and D058 are in. The desk
 canary ran against OpenCode 1.18.32 on 2026-10-07: it passes when the workspace root is not a git checkout, and fails
 when it is, because OpenCode takes the enclosing repository as its project and allowed a write by absolute path beside
-the desk. Per D059, no real joint run in a workspace that is a checkout until that is resolved (keep the workspace out
+the desk. Per D058, no real joint run in a workspace that is a checkout until that is resolved (keep the workspace out
 of git, or fall back to the first unit's worktree as the working directory). Waiting on the operator: one real ticket
 touching two repositories taken to two linked PRs, and a real joint run killed mid-way.
 
@@ -247,7 +248,7 @@ Needs M4's blocker ordering.
 - `dispatch --kind split`, `prompts/worker-split.md`, the `canopy-splitter` agent definition, `children` in the result
   contract validated into `split_children`, the child's recorded repository enforced by dispatch,
   `policy.max_split_attempts`.
-- Overseer prompt: split only when an authorized replier asks for it (`--request`, D061), never on its own judgment;
+- Overseer prompt: split only when an authorized replier asks for it (`--request`), never on its own judgment;
   the `split` phase and `split_unlabeled` attention; a child is a candidate only if its label was added after the split
   run ended, and `split_self_labeled` attention when one was not.
 - The TRUST_MODEL T1 and T6 changes for creating tickets, with human approval.
@@ -258,9 +259,9 @@ until the operator labels them; then they are worked in order, one PR each.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_split.py` holds the harness's half of the acceptance: a
 requested split reads a desk of worktrees at their bases, pushes nothing, and records the children its worker reports;
-invalid children are recorded nowhere; each child is dispatched only in its recorded repository), docs, D061, and D062
+invalid children are recorded nowhere; each child is dispatched only in its recorded repository), and docs
 are in. Rebuilt on M7's desks from the draft PR #54, which was written before them; a split needs an authorized
-replier's comment asking for it (D061), and without one a multi-repository ticket stays one ticket. The overseer prompt,
+replier's comment asking for it, and without one a multi-repository ticket stays one ticket. The overseer prompt,
 the `canopy-splitter` definition, and the TRUST_MODEL T1 and T6 changes need human approval in their PR. Not yet checked
 live: that OpenCode applies the splitter's name patterns to MCP tools; run the canary with them before the real split.
 Waiting on the operator: a real two-repository ticket split on request, its children labeled by hand and worked in
@@ -268,7 +269,7 @@ order. Started on request while M2 to M7 wait on their live runs.
 
 ## M9. Chores
 
-DESIGN §19 and D034. Needs only M3's attention list and notification; nothing in M4 to M8.
+DESIGN §19. Needs only M3's attention list and notification; nothing in M4 to M8.
 
 - `[chores.<name>]`, `runtime.chore_cmd`, and `capacity.max_chores` in the user config, user-only. With no chores, or
   `max_chores = 0`, the state block and the overseer's decisions are exactly what they were before M9 (a test).
@@ -289,11 +290,11 @@ clears its items at the next tick.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_chores.py` holds the harness's half of the acceptance:
 the guards, findings listed and notified once and resolved when no longer reported, a killed chore run crashed with
-`chore_failed`, a deleted chore's items cleared, and no `chores` key without chores), docs, and D063 are in. D063
-settles §19's open question on workspaces: a chore may list the workspaces it runs in. `canopy chore try` (D098)
-runs a chore by hand, recording nothing, for writing the build-health prompt. A chore's `days` and `hours` (D099)
-are a guard in code, so `when` holds only judgment. `canopy reply chore:NAME` (D100) leaves the chore a note its next
-runs follow. `examples/chores/build-health.md` is a prompt to start the live run from. The overseer prompt, the
+`chore_failed`, a deleted chore's items cleared, and no `chores` key without chores), and docs are in. The docs settle
+§19's open question on workspaces: a chore may list the workspaces it runs in. `canopy chore try` runs a chore by hand,
+recording nothing, for writing the build-health prompt. A chore's `days` and `hours` are a guard in code, so `when`
+holds only judgment. `canopy reply chore:NAME` leaves the chore a note its next runs follow.
+`examples/chores/build-health.md` is a prompt to start the live run from. The overseer prompt, the
 `canopy-chore` definition, and the TRUST_MODEL T1, T3, T6, T7, §6, and §7 changes need human approval in their PR.
 Waiting on the operator: a real build-health chore over several working days. Started on request while M2 to M8 wait
 on their live runs.
@@ -332,16 +333,16 @@ per-sink delivery, a sink failing for several ticks while another delivers and r
 failed sink's catch-up in one message, digests on their interval including a quiet one, `loop.failing` and
 `loop.recovered`, bounds, and the upgrade from `notify.cmd` re-notifying nothing; `tests/canopy/test_sinks.py` the
 desktop sink against fake `notify-send` and `osascript`, and the Slack sink against a local HTTP server), docs, and
-D064 are in. The repository is a uv workspace, with the Slack sink its first member; one `uv tool install` installs
-canopy and both sinks (`tests/install-check.sh`). The `chores` group came with it, since M9 landed first. DESIGN §15's
-three-failure attention item is not built: the attention list is the latest `ok` tick's, so `loop.failing` is its
-notification half and the whole of it. The TRUST_MODEL T2, T6, and §7 changes need human approval in their PR.
+D035's update are in. The repository is a uv workspace, with the Slack sink its first member; one `uv tool install`
+installs canopy and both sinks (`tests/install-check.sh`). The `chores` group came with it, since M9 landed first.
+DESIGN §15's three-failure attention item is not built: the attention list is the latest `ok` tick's, so `loop.failing`
+is its notification half and the whole of it. The TRUST_MODEL T2, T6, and §7 changes need human approval in their PR.
 Waiting on the operator: the desktop sink on their machine, then the Slack sink on a real channel, as Accept says.
 Started on request while M2 to M9 wait on their live runs.
 
 ## M11. Reviews
 
-DESIGN §21 and D039. Needs M3's `resume`, cursors, and attention list; nothing in M4 to M10, so it can be taken sooner
+DESIGN §21. Needs M3's `resume`, cursors, and attention list; nothing in M4 to M10, so it can be taken sooner
 if the operator asks. If M10 has landed, add the `reviews` event group; if not, M10 adds it.
 
 - `[review]`, `runtime.review_cmd`, `runtime.review_timeout_minutes`, `capacity.max_reviews`, and
@@ -368,7 +369,7 @@ identified comment and nothing else happens to the PR: no push, no ticket, no Gi
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), docs, and D065 are in. Checked live on
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), and docs are in. Checked live on
 2026-10-07 with OpenCode 1.18.32: the reviewer canary passes, and with `agent_prs` on, PR #69 got one identified
 `clean` comment at its commit and no GitHub review. The canary checks reads only; the reviewer also needs the runtime's
 write MCP `add_issue_comment` allowed for `canopy-reviewer`, which README step 3 does not say. Without it, three
@@ -399,24 +400,24 @@ the operator: whether each tick's block is legible over a working session.
 D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
 
 - Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run. Worker, split, and chore runs (D071) and each tick's overseer do; reviews read the same events but record
+  run. Worker, split, and chore runs and each tick's overseer do; reviews read the same events but record
   nothing yet.
 - A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
   to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
   within M21's gate deadlines.
 - Spend in the loop's per-tick block and in `canopy status`.
 - Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
-  dispatched it. How the runtime reports cost is settled by D071: OpenCode's JSON events on stdout.
+  dispatched it. How the runtime reports cost is settled: OpenCode's JSON events on stdout.
 
 Accept: written with the design, before work starts.
 
 Status: in progress. Taken in part on request (2026-10-07), with M15's session ids: worker and split runs record their
-cost in dollars and tokens, and `canopy status` shows it per recent run (D071). Taken in part again on request
+cost in dollars and tokens, and `canopy status` shows it per recent run. Taken in part again on request
 (2026-10-08): each tick records its overseer's session and cost, the default `overseer_cmd` asks for events, and the
 loop's per-tick block, `canopy tick`, `canopy status`, and `canopy decisions` show it. A tick's cost is its overseer's
 alone, so a worker's is not yet counted against the tick that dispatched it. Waiting on the operator: an
 `overseer_cmd` in a user file from before needs `--format json` added. The web UI's attention page shows what the
-last 24 hours cost (2026-10-08, D095). Chore runs record theirs, the default `chore_cmd` asks for events, and the
+last 24 hours cost (2026-10-08). Chore runs record theirs, the default `chore_cmd` asks for events, and the
 spend counts them (2026-10-08); a chore `cmd` of the operator's needs `--format json` added. Not designed yet: the
 budget and the pacing rule.
 
@@ -447,7 +448,7 @@ Status: not started.
 REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 
 - Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
-  runtime-specific output beyond one validated field (D009, D026). Done with `--format json` (D071), which also gives
+  runtime-specific output beyond one validated field (D009, D026). Done with `--format json`, which also gives
   M13 each run's cost.
 - `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
   session id, so the operator can open a transcript with OpenCode's own tools.
@@ -466,14 +467,14 @@ REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
 Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
-`canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id (D071).
+`canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id.
 Waiting on the operator: a real run under the pinned OpenCode with the default `worker_cmd`, whose session id opens its
 transcript (`opencode export <id>`); an operator's user file from before needs `--format json` added to `worker_cmd`.
 Not started: whether `fix-ci` and `resume` continue a session, and workers against OpenCode's server.
 
 ## M16. Worktree setup for large monorepos
 
-REQUIREMENTS R10, DESIGN §9 and §18, D033, D105, D106. Needs M2. Taken on request (2026-10-09).
+REQUIREMENTS R10, DESIGN §9 and §18, D033. Needs M2. Taken on request (2026-10-09).
 
 - Where pools live: no pool root of their own. A fast disk takes the whole workspace, for reasons DESIGN §18 gives:
   git keeps each worktree's files in its clone, and treehouse pools by repository and remote URL, so a root every
@@ -481,10 +482,10 @@ REQUIREMENTS R10, DESIGN §9 and §18, D033, D105, D106. Needs M2. Taken on requ
 - `paths.worktree_include`, user-only: a personal `.worktreeinclude`, passed on every `treehouse get` as
   `--include-file`. It replaces the committed manifest, since treehouse reads one; a missing file is `no_slot`.
 - `runtime.setup_cmd` and `runtime.setup_timeout_minutes`, user-only: run in each slot of a worker run once `_run`
-  has checked out the run's branch, and a failure or timeout ends the run `crashed` before its worker starts (D105).
+  has checked out the run's branch, and a failure or timeout ends the run `crashed` before its worker starts.
 - Bazel: an opt-in canary that a worker reads through `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` and is refused
   the output base by its own path; a `.bazelrc` recipe for a shared disk and repository cache in `docs/BAZEL.md`; an idle
-  slot's server ends by `startup --max_idle_secs`, not when the slot is returned (D106).
+  slot's server ends by `startup --max_idle_secs`, not when the slot is returned.
 
 Accept: in a Bazel repository, with the recipe in the operator's `~/.bazelrc`, a personal manifest that seeds a
 gitignored file, and a `setup_cmd` that runs `bazel fetch` on the run's branch, a real `implement` run's worker finds
@@ -493,7 +494,7 @@ ends a real run `crashed` with no worker started and its slot returned. The Baze
 OpenCode. A slot's Bazel server exits once idle for `--max_idle_secs` after its run.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_worktree_setup.py` holds the harness's half of the
-acceptance), the canary, docs, and D105 and D106 are in. Waiting on the operator: the real run Accept describes, and
+acceptance), the canary, and docs are in. Waiting on the operator: the real run Accept describes, and
 the canary's first real run (`CANOPY_OPENCODE_CANARY=1`).
 
 ## M17. Declared repositories and pools
@@ -554,7 +555,7 @@ the loop's wait, and the `resume` prompt carries the reply. Live, the operator s
 question from the CLI, the PR lands for review, and the ticket shows nothing canopy wrote.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_private.py` holds the harness's half of the
-acceptance), docs, and D080 are in; TRUST_MODEL T1 and T6 and the overseer prompt wait on the operator's approval note
+acceptance), and docs are in; TRUST_MODEL T1 and T6 and the overseer prompt wait on the operator's approval note
 in the PR. OpenCode's wildcard deny with named allows was confirmed by reading its source (1.18.35), not yet in a live
 run. Waiting on the operator: the live run Accept describes. With Atlassian's server, `?tools=all` in its URL lets a
 private worker read comments; without it only the primary read tools are reachable.
@@ -590,15 +591,15 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI.
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
-  while it is open, with the running run or review holding each (D090). Taken on request (2026-10-08).
+  while it is open, with the running run or review holding each. Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
-- Settled: the browser gets the listener secret from the operator's sign-in, once (D082); M15's session attach joins
+- Settled: the browser gets the listener secret from the operator's sign-in, once; M15's session attach joins
   the UI once M15 runs workers against OpenCode's server.
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
 Status: in progress. Built (2026-10-08): the design (DESIGN §22) settles both open questions: the browser signs in
-once with the listener secret and keeps a cookie signed with it (D082), and M15's session attach waits on M15's server,
+once with the listener secret and keeps a cookie signed with it, and M15's session attach waits on M15's server,
 with session ids on the runs page meanwhile. `canopy loop` serves from a thread unless `--no-serve` or
 `serve.enabled = false`, `serve.*` user-only, nothing served without a safe secret file (`canopy secret` makes one);
 pages for the attention list, runs, and tickets with their conversations, with reply, start, stop, and stop now through
@@ -606,14 +607,14 @@ pages for the attention list, runs, and tickets with their conversations, with r
 a seeded journal for development and the end-to-end tests; the install check proves an install bundles and serves the
 UI. TRUST_MODEL T8 and §6 wait on the operator's approval note in the PR. The worktrees page is in too (2026-10-08),
 tested against the fake treehouse. A reply no `ok` tick has read yet says so, and its answered question is marked so
-until the next tick drops it (2026-10-08, D097): the list lagging a reply read as a bug. A ticket's page links it in
-the tracker when `tracker.ticket_url` is set (2026-10-12, D113), taken on request. Waiting on the operator: a real
+until the next tick drops it (2026-10-08): the list lagging a reply read as a bug. A ticket's page links it in the
+tracker when `tracker.ticket_url` is set (2026-10-12), taken on request. Waiting on the operator: a real
 run, the loop serving a real journal to a browser on loopback and on a private address, with the worktrees page reading
 the real pools.
 
 ## M21. Idle-paced loop
 
-DESIGN §6 (Idle pacing), D083. Needs M12. Independent of M13: cost bounds spend, idleness says whether a tick was worth
+DESIGN §6 (Idle pacing). Needs M12. Independent of M13: cost bounds spend, idleness says whether a tick was worth
 running, and the loop waits the longer of the two.
 
 - `repeat.pace` decides whether the tick was idle from the journal and doubles the wait per idle tick in a row, from
@@ -634,7 +635,7 @@ queue and finds, in the loop's output and log, waits reaching the cap after a qu
 `loop.interval_minutes` within one tick of the first morning activity, and each run's end followed by a tick within
 a couple of minutes.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_idle_pacing.py`), docs, and D083's update are in
+Status: in progress. Code, fakes-based tests (`tests/canopy/test_idle_pacing.py`), and docs are in
 (2026-10-09). Two refinements of DESIGN's sketch: a ticket's `skip` and the chore refusals that lift by themselves
 (`chore_capacity`, `not_due`, `outside_hours`) count as quiet, since the overseer skips every unlabeled ticket the
 journal remembers each tick; and idle pacing off is all of it off, gates and run wakes included. On the open bullet,
@@ -668,7 +669,7 @@ operator: the live run above.
 
 ## M23. Chores in the web UI
 
-REQUIREMENTS N1 and C5, DESIGN §19 and §22, D100. Needs M9 and M20. Asked for by the operator (2026-10-09): a chore's
+REQUIREMENTS N1 and C5, DESIGN §19 and §22. Needs M9 and M20. Asked for by the operator (2026-10-09): a chore's
 finding reaches the web UI's attention list, but the browser can neither show the chore nor answer it, so a finding
 sends the operator back to the terminal.
 
@@ -711,21 +712,21 @@ shows it.
 - Reads only. A rationale is the overseer's text: untrusted, rendered as text, cut as `canopy decisions` cuts it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
-- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it (D104).
+- Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it.
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
 
 Status: in progress. The design (DESIGN §6, §22, `ui/DESIGN.md`), the routes, the pages, and their tests are in:
 `tests/canopy/test_web_ticks.py` over the mock journal, and Playwright from the header's tick to its decisions and from
-a ticket's decisions to their tick. The open question is settled by D104. The latest tick now carries how many
+a ticket's decisions to their tick. The open question is settled. The latest tick now carries how many
 decisions it recorded, so the stream sends it as a running tick records them and the open pages follow. A unit's
 decisions name its repository after the ticket, which `canopy decisions` leaves out. Waiting on the operator: the live
 run Accept describes.
 
 ## M25. Flaky CI triage
 
-REQUIREMENTS R14, DESIGN §23, D102, D103. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
+REQUIREMENTS R14, DESIGN §23. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
 reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
 
 - TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
@@ -749,7 +750,7 @@ Status: not started.
 
 ## M26. Sandboxed workers, opt-in
 
-HOST_ISOLATION, TRUST_MODEL T4 and T6, D107, D108, D109, D110. Needs M2. Asked for by the operator (2026-10-12), ahead
+HOST_ISOLATION, TRUST_MODEL T4 and T6, D107, D109. Needs M2. Asked for by the operator (2026-10-12), ahead
 of the deferred list's trigger: the sandbox should be proven on the operator's machines before a second team adopts
 canopy, not built after an incident.
 
@@ -759,12 +760,13 @@ canopy, not built after an incident.
   every exit path, each slot is checked out detached at step 2's commit, its HEAD reflog expired, and the directory
   deleted, before the slot is returned. An unsandboxed run leaves it empty, and nothing changes for it.
 - `run_slots` records each slot's `.git` link (a new migration), so reconcile's `end_run` does the same cleanup for a
-  run whose `_run` is gone, after the same link check `_run` makes; this closes D108's SIGKILL gap.
+  run whose `_run` is gone, after the same link check `_run` makes; this closes the gap a `_run` killed with SIGKILL
+  leaves (HOST_ISOLATION §5 item 2).
 - `examples/sandbox/`: `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and
   their git directories, write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
   `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`) that picks the policy; and the
   policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts left to fill in. No
-  Unix sockets, so sandboxed runs push over HTTPS (D110). Examples, not harness code: the harness sees only the
+  Unix sockets, so sandboxed runs push over HTTPS. Examples, not harness code: the harness sees only the
   command template, as today.
 - `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: the pinned `srt` install, the prefixes for `worker_cmd`,
   `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS remotes, and Ubuntu 24.04's
@@ -790,7 +792,7 @@ Status: not started.
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.
-- Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
+- Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
   their permissions, and the D044 guard are written for OpenCode, so a runtime needs its own (REQUIREMENTS N4).
 - Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN

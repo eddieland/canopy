@@ -32,7 +32,7 @@ A bare § is a section of `DESIGN.md`; other documents are named, as in TRUST_MO
   journal (D004), the pid claim and dispatch lock (D029), treehouse leases (D002), no retries in the worker.
 - **A retry budget that resets on a state change never escalates** (agent-orchestrator
   [#1531](https://github.com/Untrivial-ai/agent-orchestrator/pull/1531)). canopy: attempts are derived from `runs` and
-  never reset (D030); retrying needs an authorized reply (D028).
+  never reset (D030); retrying needs an authorized reply.
 - **Pushing events into a long-lived orchestrator session duplicates and contaminates it.** agent-orchestrator added
   automatic re-engagement and removed it two days later
   ([#3394](https://github.com/Untrivial-ai/agent-orchestrator/pull/3394)). canopy: a fresh overseer each tick with a
@@ -142,4 +142,4 @@ A bare § is a section of `DESIGN.md`; other documents are named, as in TRUST_MO
   (TRUST_MODEL T8), for the operator's own input; events are still not pushed into sessions automatically.
 - **Tracker adapters.** agent-orchestrator has closed at least eight Jira attempts unmerged; canopy's tracker is MCP
   plus a contract (D003, D014).
-- **Pasting issue bodies or CI logs into prompts** (D031, T1).
+- **Pasting issue bodies or CI logs into prompts** (T1).

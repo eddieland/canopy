@@ -8,8 +8,8 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
-decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme
-(D094). The directions weighed are recorded in `docs/ui-explorations/2026-10-08-style/`.
+decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme.
+This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
 
@@ -139,7 +139,8 @@ Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent m
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
-`canopy-ticker` (`src/lib/ticker-settings.ts`), synced across tabs.
+`canopy-ticker` (`src/lib/ticker-settings.ts`), and the key that sends a reply under `canopy-send-key`
+(`src/lib/send-key.ts`), both synced across tabs.
 
 ## Patterns
 
@@ -187,6 +188,11 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
   its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
   it in its header; when it is unset, neither shows.
+- **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
+  a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
+  composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
+  label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
+  The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.

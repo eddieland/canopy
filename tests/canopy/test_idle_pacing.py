@@ -1,4 +1,4 @@
-"""Idle pacing (DESIGN §6, D083, ROADMAP M21): longer waits after idle ticks in a row, gates, and early wakes.
+"""Idle pacing (DESIGN §6, ROADMAP M21): longer waits after idle ticks in a row, gates, and early wakes.
 
 What makes a tick idle is checked on a journal written by hand, with no overseer; the waits the loop chooses, against
 the fake overseer on a fake clock, as `test_loop.py` does.

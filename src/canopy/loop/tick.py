@@ -114,7 +114,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     prefix = "dry run; " if dry_run else ""
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
-    # `ok` would make its empty list the attention list and notify every open item as resolved (D037).
+    # `ok` would make its empty list the attention list and notify every open item as resolved.
     skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)

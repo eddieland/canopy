@@ -1,4 +1,4 @@
-"""Reading an agent's stdout: plain text, or OpenCode's JSON events (DESIGN §13, D071)."""
+"""Reading an agent's stdout: plain text, or OpenCode's JSON events (DESIGN §13)."""
 
 import json
 

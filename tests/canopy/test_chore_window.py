@@ -1,4 +1,4 @@
-"""A chore's `days` and `hours` (DESIGN §19, D099): when a run may start, checked in code."""
+"""A chore's `days` and `hours` (DESIGN §19): when a run may start, checked in code."""
 
 import json
 import time
