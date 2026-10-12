@@ -21,6 +21,7 @@
     --accent: oklch(0.486 0.189 269);
     --accent-foreground: oklch(1 0 0);
     --ring: oklch(0.486 0.189 269 / 0.55);
+    --scrollbar: oklch(0.492 0.026 277 / 0.4);
 
     /* Runs */
     --status-running: oklch(0.52 0.11 159);
@@ -52,6 +53,7 @@
     --accent: oklch(0.735 0.137 273);
     --accent-foreground: oklch(0.163 0.012 261);
     --ring: oklch(0.735 0.137 273 / 0.5);
+    --scrollbar: oklch(0.624 0.029 259 / 0.4);
 
     --status-running: oklch(0.797 0.164 160);
     --status-blocked: oklch(0.824 0.149 73);
@@ -78,6 +80,7 @@
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
     --color-ring: var(--ring);
+    --color-scrollbar: var(--scrollbar);
 
     --color-status-running: var(--status-running);
     --color-status-blocked: var(--status-blocked);

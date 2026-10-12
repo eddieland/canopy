@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, settled, signIn } from './helpers.ts'
+import { NOW, padDecisions, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -241,6 +241,20 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await decisions.nth(1).getByRole('link', { name: 'tick 1' }).click()
     await expect(page).toHaveURL(/\/ticks\/1$/)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
+})
+
+test('a long list scrolls inside its panel, so the panels under it stay in reach', async ({ page }) => {
+    await padDecisions(page, 'ABC-102', 40)
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const region = page.getByRole('region', { name: 'Decisions' })
+    await expect(region.locator('li')).toHaveCount(40)
+    const { client, scroll } = await region.evaluate((el) => ({ client: el.clientHeight, scroll: el.scrollHeight }))
+    expect(scroll).toBeGreaterThan(client)
+    // The keyboard scrolls it: it takes focus, and End goes to the last row.
+    await region.focus()
+    await page.keyboard.press('End')
+    await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
 })
 
 test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {

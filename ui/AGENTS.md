@@ -97,6 +97,8 @@ SQL of its own.
   an agent's GitHub tools). It pushes a commit with the images that changed and starts CI on it; pull before going
   on. `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not
   match.
+- Playwright hides scrollbars in headless Chromium, so those screenshots never show one. `e2e/scrollbars.spec.ts`
+  keeps them, for what a scrollbar is part of: a long list scrolling in its panel.
 
 ## Done for a UI pull request
 
