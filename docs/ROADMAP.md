@@ -746,13 +746,48 @@ tick's `fix-ci` fixes it; a repository skill that names a flaky test is followed
 
 Status: not started.
 
+## M26. Sandboxed workers, opt-in
+
+HOST_ISOLATION, TRUST_MODEL T4 and T6, D107, D108, D109, D110. Needs M2. Asked for by the operator (2026-10-12), ahead
+of the deferred list's trigger: the sandbox should be proven on the operator's machines before a second team adopts
+canopy, not built after an incident.
+
+- The per-run object directory (HOST_ISOLATION §4.2). `_run` makes `<state_dir>/runs/<id>.objects/` before step 2 and
+  passes it to `setup_cmd` and the worker as `CANOPY_GIT_OBJECTS`, never as git's own variables. When the worker left
+  anything in it, step 5 runs with `GIT_OBJECT_DIRECTORY` and `GIT_ALTERNATE_OBJECT_DIRECTORIES` set, and then, on
+  every exit path, each slot is checked out detached at step 2's commit, its HEAD reflog expired, and the directory
+  deleted, before the slot is returned. An unsandboxed run leaves it empty, and nothing changes for it.
+- `run_slots` records each slot's `.git` link (a new migration), so reconcile's `end_run` does the same cleanup for a
+  run whose `_run` is gone, after the same link check `_run` makes; this closes D108's SIGKILL gap.
+- `examples/sandbox/`: `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and
+  their git directories, write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
+  `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`) that picks the policy; and the
+  policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts left to fill in. No
+  Unix sockets, so sandboxed runs push over HTTPS (D110). Examples, not harness code: the harness sees only the
+  command template, as today.
+- `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: the pinned `srt` install, the prefixes for `worker_cmd`,
+  `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS remotes, and Ubuntu 24.04's
+  restriction on unprivileged user namespaces. `canopy init` prints the suggested `worker_cmd` and writes nothing.
+- The canary (HOST_ISOLATION §6), `tests/canopy/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`: a
+  plain script run through the real `worker_cmd` prefix and the example wrapper, every denial and every positive
+  control §6 lists, the prompt property test included. A Linux CI job runs it with bubblewrap and `srt`.
+- Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
+  tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
+- TRUST_MODEL T4 and T6: the sandbox as a control, what it does not cover (the shared kernel, exfiltration through an
+  allowed host), and that it is opt-in, with the operator's approval note in the PR. DESIGN §8 and §15 for the object
+  directory and reconcile's cleanup; HOST_ISOLATION's settled parts move to DESIGN.
+- Tests with the fakes: an empty object directory sets no git variable for step 5 and is deleted; a worker that commits
+  through it is pushed and leaves the slot on step 2's commit with `git gc` clean in the primary clone; a `_run`
+  killed after the worker leaves cleanup to reconcile, which refuses a slot whose link changed.
+
+Accept: the tests above pass, and the canary passes in CI on Linux. Live: the canary passes on the operator's Linux and
+macOS machines, then a day of `canopy loop` with sandboxed workers pushes and opens PRs as before, and a worker run that
+tries to read `~/.ssh` or write `~/.config/canopy` is refused.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
-- Sandboxed workers: when a T4 or T6 incident happens, or before any second
-  team adopts it. Proposal: `HOST_ISOLATION.md`. Its §5 items 1 and 2, and the half of item 5 that holds without a
-  sandbox, are in (D107, D108, D109), and its claims about `srt` and its git policy were checked. Left for the
-  milestone: the per-run object directory (§4.2), the `canopy-sandbox` example and policy template, the canary (§6),
-  and the TRUST_MODEL T4 and T6 changes.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts (D039).
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,

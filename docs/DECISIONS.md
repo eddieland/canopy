@@ -580,3 +580,11 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
   cannot write (HOST_ISOLATION §4.2).
 - Rejected: `checkout -B` (git 2.43 lets two worktrees hold one branch, so a commit in either moves both).
 - Revisit: if an operator's `runtime.pr_skill` tool needs a local branch.
+
+## D110. Sandboxed runs push over HTTPS; the sandbox allows no Unix sockets
+
+- An operator with SSH remotes runs workers unsandboxed or switches to HTTPS, which `canopy init` already recommends.
+- Why: `srt` on Linux can allow Unix sockets only all at once (`allowAllUnixSockets`), which would open the Docker
+  socket and every other along with the SSH agent's.
+- Rejected: all sockets; pushing from the host in `_run` (more host-side git in a slot a worker wrote, D107).
+- Revisit: if `srt` gains per-path socket rules on Linux, or an operator cannot use HTTPS.
