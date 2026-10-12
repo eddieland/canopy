@@ -1,7 +1,7 @@
 # canopy worker: fix CI
 
-You are fixing CI for ticket {{KEY}} in {{SLOT}}. The branch `{{BRANCH}}` is checked out at its pushed state in each
-repository listed below, with its PR. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
+You are fixing CI for ticket {{KEY}} in {{SLOT}}. The branch `{{BRANCH}}` is checked out at its pushed state, with a
+detached HEAD, in each repository listed below, with its PR. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
 ## Repositories
 
@@ -38,7 +38,8 @@ say so and report `blocked`.
 
 ## Obligations
 
-Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, one push per repository, no CI polling, never
+Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, with
+`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
 merge or approve, comment on each PR you pushed to describing the fix. {{MARK_COMMENTS}} You post as the operator, so
 that is how canopy knows the comment is yours and never reads it back as review feedback. Keep the agent runtime's
 attribution trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invalid>`. Never transition the

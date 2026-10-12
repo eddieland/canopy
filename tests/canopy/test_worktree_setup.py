@@ -21,11 +21,11 @@ from tests.conftest import CanopyEnv, GitPool, git, user_toml
 
 LABEL = "agent-ready-tester"
 BRANCH = "agent/PROJ-1-work"
-# What a setup sees: the branch checked out, its repository, its run, and the branch's latest commit. It leaves a
-# file the worker then looks for, so the setup ran before the worker.
+# What a setup sees: the run's branch, its repository, its run, and the latest commit checked out, the branch's. It
+# leaves a file the worker then looks for, so the setup ran before the worker.
 SETUP = (
-    "sh -c 'echo \"setup on $(git rev-parse --abbrev-ref HEAD) in $CANOPY_REPO, run $CANOPY_RUN_ID: "
-    "$(git log -1 --format=%s)\"; touch .setup-done'"
+    'sh -c \'echo "setup on $CANOPY_BRANCH in $CANOPY_REPO, run $CANOPY_RUN_ID: $(git log -1 --format=%s)"; '
+    "touch .setup-done'"
 )
 
 

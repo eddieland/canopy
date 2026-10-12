@@ -1,7 +1,7 @@
 # canopy private worker: fix CI
 
-You are fixing CI for ticket {{KEY}} in {{SLOT}}. The branch `{{BRANCH}}` is checked out at its pushed state in each
-repository listed below, with its PR. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
+You are fixing CI for ticket {{KEY}} in {{SLOT}}. The branch `{{BRANCH}}` is checked out at its pushed state, with a
+detached HEAD, in each repository listed below, with its PR. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
 ## Repositories
 
@@ -36,7 +36,9 @@ say so and report `blocked`.
 
 ## Obligations
 
-Stay in {{SLOT}}, push only to `{{BRANCH}}`, one push per repository, no CI polling, never merge or approve. Post no
+Stay in {{SLOT}}, push only to `{{BRANCH}}`, with
+`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
+merge or approve. Post no
 comments: describe the fix in your summary. Keep the agent runtime's attribution trailer on commits, or add
 `Co-authored-by: canopy worker <noreply@canopy.invalid>`. Never transition the ticket, including indirectly: refer to
 it by key only, with no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands (Jira smart commits such
