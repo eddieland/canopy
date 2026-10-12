@@ -13,8 +13,12 @@ from tests.conftest import CanopyEnv, GitPool, git
 
 LABEL = "agent-ready-tester"
 FIRST = "agent/PROJ-1-first"
-# Pushes whatever branch `_run` checked out to the same name on origin.
-PUSH = ["git", "push", "--quiet", "origin", "HEAD"]
+SECOND = "agent/PROJ-2-second"
+
+
+def push(branch: str) -> list[str]:
+    """What a worker runs to push: `_run` checks out detached, so HEAD goes to the branch by refspec."""
+    return ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}"]
 
 
 @pytest.fixture
@@ -57,7 +61,7 @@ def subjects(git_pool: GitPool, branch: str) -> list[str]:
 @pytest.fixture
 def blocker(git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
     """PROJ-1 implemented and pushed as `agent/PROJ-1-first`: the branch of the blocker's open PR."""
-    worker_does(monkeypatch, commit("PROJ-1: the blocker"), PUSH)
+    worker_does(monkeypatch, commit("PROJ-1: the blocker"), push(FIRST))
     run, _ = dispatch_and_run(conn, monkeypatch, "PROJ-1", "--label", LABEL, "--kind", "implement", "--slug", "first")
     assert run["status"] == "done"
 
@@ -70,7 +74,7 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
     conn: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker_does(monkeypatch, commit("PROJ-2: stacked"), PUSH)
+    worker_does(monkeypatch, commit("PROJ-2: stacked"), push(SECOND))
     run, made = dispatch_and_run(
         conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
     )
@@ -100,19 +104,19 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
     conn: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker_does(monkeypatch, commit("PROJ-2: stacked"), PUSH)
+    worker_does(monkeypatch, commit("PROJ-2: stacked"), push(SECOND))
     dispatch_and_run(
         conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
     )
 
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
-    worker_does(monkeypatch, commit("PROJ-2: review fix"), PUSH)
+    worker_does(monkeypatch, commit("PROJ-2: review fix"), push(SECOND))
     resume, _ = dispatch_and_run(conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
     assert (resume["status"], slot_of(conn, int(resume["id"]))["base_branch"]) == ("done", FIRST)
     assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, int(resume["id"]))
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
-    worker_does(monkeypatch, PUSH)
+    worker_does(monkeypatch, push(SECOND))
     retarget, _ = dispatch_and_run(
         conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "resume", "--context", "blocker merged"
     )
@@ -159,7 +163,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     conn: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker_does(monkeypatch, commit("PROJ-2: stacked"), PUSH)
+    worker_does(monkeypatch, commit("PROJ-2: stacked"), push(SECOND))
     dispatch_and_run(
         conn, monkeypatch, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
     )
@@ -269,7 +273,8 @@ def test_two_linked_tickets_are_worked_in_order(
 ) -> None:
     """M4 acceptance, the harness's half, against the fakes. The overseer's reading of blockers and PR state is prompt
     behavior: here a scripted overseer waits on the blocked ticket, then stacks it once the blocker's PR exists."""
-    worker_does(monkeypatch, commit("the change"), PUSH)
+    # Both tickets' workers run this, so neither pushes: `_run`'s own push puts each branch on origin (DESIGN §8).
+    worker_does(monkeypatch, commit("the change"))
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
     monkeypatch.setenv(
         "FAKE_OVERSEER_COMMANDS",

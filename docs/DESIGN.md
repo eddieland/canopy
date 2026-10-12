@@ -603,15 +603,20 @@ dispatch names at least one, in a workspace of one repository too.
    (§22): a private run whose ticket was stopped since, or a public run whose ticket was started privately since, ends
    `stopped` before any git step, and its slots are returned.
 2. Before any git step, read each slot's `.git` file, a worktree's link to the pool's git directory. In each slot:
-   `git fetch --prune origin`; if `origin/<branch>` exists, `git checkout -B <branch> origin/<branch>`,
-   else `git checkout --no-track -B <branch> origin/<base>`. `-B` because a branch an earlier run left in the pool's
-   repository would make `-b` fail; `--no-track` so a bare `git push` never targets the base. Note the branch's
-   commit. A base missing from origin (such as a stacked-on branch deleted when its PR merged) fails the run as
-   `crashed` before the worker starts, with a note, whether the branch is new or continued. Then, with
-   `runtime.setup_cmd` set, run it in each slot in turn (§9, D105): cwd the slot, `CANOPY_REPO` the repository's name,
-   `CANOPY_RUN_ID` the run's id, timeout `runtime.setup_timeout_minutes`, output appended to the run log. An exit other
-   than 0, a timeout, or a command that cannot start fails the run as `crashed` before the worker starts, with a note
-   naming the repository in a workspace; the slots are returned as on any exit (step 6).
+   `git fetch --prune origin`, then `git checkout --detach origin/<branch>` if it exists, else
+   `git checkout --detach origin/<base>`. No run makes a local branch: a pool's slots share the repository's branch
+   refs, so one would be state every slot sees, and the worker pushes HEAD by refspec (D109). Detached, a bare
+   `git push` has no branch to target under git's default `push.default`; under `matching`, or with a
+   `remote.origin.push`, it pushes what those name, which is why the prompts push by refspec. A local branch of the
+   run's name that an earlier canopy left, and that origin's branch (or the base) already holds, is deleted; one with
+   commits origin lacks is kept. Note HEAD's commit and the length of HEAD's reflog. A base missing from origin (such
+   as a stacked-on branch deleted when its PR merged) fails the run as `crashed` before the worker starts, with a
+   note, whether the branch is new or continued. Then, with `runtime.setup_cmd` set, run it in each slot in turn (§9,
+   D105): cwd the slot, `CANOPY_REPO` the repository's name, `CANOPY_BRANCH` the run's branch (HEAD is detached, so
+   git does not name it), `CANOPY_RUN_ID` the run's id, timeout `runtime.setup_timeout_minutes`, output appended to
+   the run log. An exit other than 0, a timeout, or a command that
+   cannot start fails the run as `crashed` before the worker starts, with a note naming the repository in a workspace;
+   the slots are returned as on any exit (step 6).
 3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), timeout `worker_timeout_minutes`, with
    `CANOPY_RUN_ID` set to the run's id and cwd = the slot, or for a joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
@@ -626,10 +631,12 @@ dispatch names at least one, in a workspace of one repository too.
    step 5 is skipped, since a split pushes nothing.
 5. If any slot's `.git` file no longer holds what step 2 read, record `status='crashed'`, with a note naming each such
    slot, and run no git in any slot of the run: the file may now point at a git directory the worker made (D108).
-   Otherwise, in each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals the local
-   branch). If not and the branch has commits since step 2, push once, without force. If any slot is still unpushed,
-   record `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a human
-   looks.
+   Otherwise, in each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals HEAD). If not
+   and HEAD holds commits past step 2's, push once, without force: `git push origin HEAD:refs/heads/<branch>`. Then,
+   since HEAD alone holds a detached worker's commits, look in HEAD's reflog entries since step 2 for commits that
+   neither HEAD, origin's branch, nor any of origin's branches holds: a worker that checked something else out left
+   them behind. If any slot's push failed or left commits behind, record `status='unpushed'`, naming each repository
+   in a workspace: the checkpoint invariant failed and a human looks.
 6. Always: remove a joint run's desk, put back any slot's `.git` file the run changed (a slot whose file cannot be put
    back is not returned, and the next reconcile returns it), and
    `treehouse return --force --if-lease-id <id> --if-lease-holder <holder> <slot>` for every slot, in its repository's
@@ -664,7 +671,8 @@ read for a run in one repository.
 Worker obligations, stated in every worker prompt:
 
 - Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
-  repository.
+  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A resume
+  that merges its base merges `origin/<base>`, which step 2 fetched, and does not fetch.
 - Keep the runtime's attribution trailer on commits, or add a `Co-authored-by: canopy worker` trailer (TRUST_MODEL T5).
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
   default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
@@ -923,7 +931,7 @@ split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent c
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
-setup_cmd = ""          # optional; runs in each slot on the run's branch, before the worker (§9)
+setup_cmd = ""          # optional; runs in each slot at the run's branch, before the worker (§9)
 setup_timeout_minutes = 30
 # private_worker_cmd: worker_cmd with `--agent canopy-worker-private`, for a ticket started with `canopy start` (§22)
 
@@ -2626,10 +2634,11 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 The worktrees page (taken on request, 2026-10-08; D090): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
 treehouse's own status on hover), its number (its path on hover), its lease holder, the branch it has checked out (or
-detached), the processes treehouse found running in it, and since when; an idle slot is its state and number alone, and
-a note gets a second line. A lease is matched to a running run or review by its lease id, as reconcile matches them, so
-a slot names the ticket, run kind, and run that hold it. The page groups slots in five states it colors: `working` (held
-by a run or review the journal shows running), `held` (leased or in use by anything else: the operator's own shell,
+detached; a run's slot is detached, D109, and shows the run's branch), the processes treehouse found running in it,
+and since when; an idle slot is its state and number alone, and a note gets a second line. A lease is matched to a
+running run or review by its lease id, as reconcile matches them, so a slot names the ticket, run kind, and run that
+hold it. The page groups slots in five states it colors: `working` (held by a run or review the journal shows
+running), `held` (leased or in use by anything else: the operator's own shell,
 `canopy-sync`, or a `canopy:` lease no running run holds, which it notes the next reconcile returns), `dirty` (unleased
 with uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
