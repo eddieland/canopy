@@ -588,3 +588,13 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
   socket and every other along with the SSH agent's.
 - Rejected: all sockets; pushing from the host in `_run` (more host-side git in a slot a worker wrote, D107).
 - Revisit: if `srt` gains per-path socket rules on Linux, or an operator cannot use HTTPS.
+
+## D111. A run's new git objects go to `<state_dir>/runs/<id>.objects/`, named to git only by a sandbox wrapper
+
+- `_run` passes it as `CANOPY_GIT_OBJECTS`; when the worker used it, `_run` reads it to push, then tidies each slot
+  (detached at `origin/<base>`, its own refs and HEAD reflog dropped) and deletes it. Reconcile does the same.
+- Why: a sandboxed worker cannot write the shared object directory, and git's variables set for every worker would
+  reach every repository its tools touch, breaking each once the directory goes.
+- Rejected: deleting the directory untidied (breaks `gc` in the primary clone); a writable shared object directory
+  (a worker could delete objects other slots need); a temp directory (reconcile could not find it after SIGKILL).
+- Revisit: if git gains a per-worktree object directory setting, or treehouse slots stop sharing one.

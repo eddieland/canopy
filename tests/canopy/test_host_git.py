@@ -13,7 +13,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, hostgit
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
-from tests.conftest import CanopyEnv, GitPool, git, pool_state
+from tests.conftest import CanopyEnv, GitPool, git
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
@@ -24,21 +24,6 @@ HOOKS = ("post-checkout", "reference-transaction", "pre-push", "post-index-chang
 @pytest.fixture
 def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     return journal(canopy_env)
-
-
-@pytest.fixture
-def worktree_pool(
-    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
-) -> tuple[Path, list[Path]]:
-    """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
-    primary = tmp_path / "primary"
-    git("clone", "--quiet", str(git_pool.origin), str(primary), cwd=tmp_path)
-    slots = [tmp_path / "wpool" / name / "repo" for name in ("1", "2")]
-    for slot in slots:
-        git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
-    state = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
-    treehouse_state.write_text(pool_state(canopy_env.repo, state, max_trees=len(slots)))
-    return primary, slots
 
 
 def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Row:

@@ -137,7 +137,8 @@ shared git state:
   A detached worktree keeps HEAD, the index, and the reflog in `worktrees/<slot>/`, which belongs to that slot alone.
 - Built (D109): the worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares
   the remote branch with HEAD.
-- Not built: new objects go to a per-run directory, with the shared object directory as an alternate (below).
+- Built (D111), but used only by the wrapper (§4.1): new objects go to a per-run directory, with the shared object
+  directory as an alternate (below).
 
 Checked with bubblewrap and git 2.43, a worktree slot under exactly this policy (the git common directory read-only,
 `worktrees/<slot>/` writable except `config.worktree`, the `.git` link read-only, and a per-run object directory
@@ -148,14 +149,21 @@ does every plain `git fetch`, since the configured refspec updates a remote-trac
 
 The per-run object directory needs two things the first draft of this section missed:
 
-- It cannot simply go away with the run. The slot's HEAD, index, and reflog then name objects nobody has: `git status`
-  in the slot fails (`bad object HEAD`), and so does `git gc` in the primary clone, the operator's own repository. So
-  before deleting it, `_run` checks the slot out at step 2's commit, which is in the shared directory, with
-  `git checkout --detach --force`, and expires the slot's HEAD reflog (`git reflog expire --expire=now
-  --expire-unreachable=now HEAD`); after that, `gc` and `fsck` are clean. Step 5 runs before this, with the same two
-  variables, so it can see and push the worker's commits. This is cleanup on every exit path, like D108's, and a run
-  killed with SIGKILL needs reconcile to do it, so the directory lives at a path reconcile can find from the run, such
-  as `<state_dir>/runs/<id>.objects/`, which the policy re-allows as it does a chore's `cwd`.
+- It cannot simply go away with the run. The slot's HEAD, index, refs, and reflog then name objects nobody has:
+  `git status` in the slot fails (`bad object HEAD`), and so does `git gc` in the primary clone, the operator's own
+  repository. So before deleting it, the slot is tidied (DESIGN §8 step 6): checked out detached at `origin/<base>`,
+  which step 2 fetched into the shared directory and a sandboxed worker cannot move, with `--force`, which also ends a
+  merge left in progress; its own refs (`refs/worktree/*`, `refs/bisect/*`, `refs/rewritten/*`), `ORIG_HEAD`, and
+  `FETCH_HEAD` deleted; and its HEAD reflog expired, never the shared branches'. Checked with bubblewrap and git 2.43
+  against a worker that committed, abandoned a commit, fetched into `FETCH_HEAD`, left a conflicted merge, and made a
+  `refs/worktree/` ref: without the own refs deleted, `for-each-ref`, `fsck`, and `gc` in the slot still fail; with
+  them, `status`, `fsck`, and `gc` are clean in the slot and the primary clone. Step 5 runs before this, with git
+  reading the directory too, so it can see and push the worker's commits; and since a host-side push also moves origin's
+  remote-tracking ref in the shared directory, which the worker's own push could not, step 5 puts that ref back as it
+  was, or every slot would name the deleted commit. Cleanup runs on every exit path, like D108's, and for a run killed
+  with SIGKILL reconcile does it, from the `.git` link `_run` recorded in `run_slots`, so the directory lives where
+  reconcile finds it from the run, `<state_dir>/runs/<id>.objects/`, which the policy re-allows as it does a chore's
+  `cwd`.
 - The variables reach every git the worker's process tree runs, not only git in the slot. A commit in any other
   repository lands in the per-run directory, so that repository reads `bad object HEAD` once it is gone, and a
   repository made with `git init` then `git fetch` (how Go fetches modules into its cache) gets no `objects/` at all.
@@ -236,9 +244,9 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    sandbox outlives a timeout. canopy reads the result line, not the exit status, so `srt` exiting 0 when its child
    dies of SIGTERM does not matter: a timeout is canopy's own clock.
 5. Worker git state is private (§4.2). Built (D109): a detached checkout in step 2 and a push by refspec, in `_run`
-   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Not built: the per-run object
-   directory, passed as `CANOPY_GIT_OBJECTS`, used by step 5, and cleaned up on every exit path and by reconcile, as
-   §4.2 describes. That half only matters inside a sandbox, so it ships with the wrapper.
+   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Built (D111): the per-run object
+   directory, passed as `CANOPY_GIT_OBJECTS`, read by step 5, and tidied away on every exit path and by reconcile, as
+   §4.2 describes. Nothing sets git's variables from it until the wrapper does.
 
 No new config keys. `canopy init` can print a suggested `worker_cmd` and the one install command, but does not write
 them. The sandbox stays opt-in until the canary has passed on real machines.

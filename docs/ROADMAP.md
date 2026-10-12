@@ -778,13 +778,17 @@ canopy, not built after an incident.
   directory and reconcile's cleanup; HOST_ISOLATION's settled parts move to DESIGN.
 - Tests with the fakes: an empty object directory sets no git variable for step 5 and is deleted; a worker that commits
   through it is pushed and leaves the slot on step 2's commit with `git gc` clean in the primary clone; a `_run`
-  killed after the worker leaves cleanup to reconcile, which refuses a slot whose link changed.
+  killed after the worker leaves cleanup to reconcile, which puts back a slot's changed link before any git there.
 
 Accept: the tests above pass, and the canary passes in CI on Linux. Live: the canary passes on the operator's Linux and
 macOS machines, then a day of `canopy loop` with sandboxed workers pushes and opens PRs as before, and a worker run that
 tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 
-Status: not started.
+Status: in progress. The per-run object directory and the `run_slots` link are in, with D111: `_run` and reconcile tidy
+each slot before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them
+found that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's
+remote-tracking ref back (HOST_ISOLATION §4.2). Next: the wrapper, the policy template, `docs/SANDBOX.md`, the canary,
+and TRUST_MODEL T4 and T6.
 
 ## Deferred, with the trigger that would unblock each
 

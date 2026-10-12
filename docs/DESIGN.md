@@ -117,6 +117,8 @@ canopy (harness, Python)
     worker.py      canopy _run: branch setup and the operator's setup command in each slot, the worker, result
                    parsing, push verification, slot return; a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
+    tidy.py        a run's object directory, and each slot put back before it is returned: its `.git` link, and
+                   no ref or reflog naming the run's own objects (§8, D111)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
@@ -602,23 +604,25 @@ dispatch names at least one, in a workspace of one repository too.
    environment so the worker cannot act as the dispatching tick's overseer. Read the ticket's start record again
    (§22): a private run whose ticket was stopped since, or a public run whose ticket was started privately since, ends
    `stopped` before any git step, and its slots are returned.
-2. Before any git step, read each slot's `.git` file, a worktree's link to the pool's git directory. In each slot:
+2. Before any git step, read each slot's `.git` file, a worktree's link to the pool's git directory, and record it in
+   `run_slots.git_link`, and make the run's object directory, `<state_dir>/runs/<id>.objects/` (D111). In each slot:
    `git fetch --prune origin`, then `git checkout --detach origin/<branch>` if it exists, else
    `git checkout --detach origin/<base>`. No run makes a local branch: a pool's slots share the repository's branch
    refs, so one would be state every slot sees, and the worker pushes HEAD by refspec (D109). Detached, a bare
    `git push` has no branch to target under git's default `push.default`; under `matching`, or with a
    `remote.origin.push`, it pushes what those name, which is why the prompts push by refspec. A local branch of the
    run's name that an earlier canopy left, and that origin's branch (or the base) already holds, is deleted; one with
-   commits origin lacks is kept. Note HEAD's commit and the length of HEAD's reflog. A base missing from origin (such
-   as a stacked-on branch deleted when its PR merged) fails the run as `crashed` before the worker starts, with a
-   note, whether the branch is new or continued. Then, with `runtime.setup_cmd` set, run it in each slot in turn (§9,
-   D105): cwd the slot, `CANOPY_REPO` the repository's name, `CANOPY_BRANCH` the run's branch (HEAD is detached, so
-   git does not name it), `CANOPY_RUN_ID` the run's id, timeout `runtime.setup_timeout_minutes`, output appended to
-   the run log. An exit other than 0, a timeout, or a command that
+   commits origin lacks is kept. Note HEAD's commit and the length of HEAD's reflog. A base missing from origin (such as
+   a stacked-on branch deleted when its PR merged) fails the run as `crashed` before the worker starts, with a note,
+   whether the branch is new or continued. Then, with `runtime.setup_cmd` set, run it in each slot in turn (§9, D105):
+   cwd the slot, `CANOPY_REPO` the repository's name, `CANOPY_BRANCH` the run's branch (HEAD is detached, so git does
+   not name it), `CANOPY_RUN_ID` the run's id, `CANOPY_GIT_OBJECTS` the object directory, timeout
+   `runtime.setup_timeout_minutes`, output appended to the run log. An exit other than 0, a timeout, or a command that
    cannot start fails the run as `crashed` before the worker starts, with a note naming the repository in a workspace;
    the slots are returned as on any exit (step 6).
 3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), timeout `worker_timeout_minutes`, with
-   `CANOPY_RUN_ID` set to the run's id and cwd = the slot, or for a joint run the desk (§18), which
+   `CANOPY_RUN_ID` set to the run's id, `CANOPY_GIT_OBJECTS` to the object directory, and cwd = the slot, or for a
+   joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
    process group. Its stdout and stderr go to the run log.
 4. Parse the last non-empty line of the worker's text as the result contract: its stdout, or the text of OpenCode's
@@ -631,17 +635,24 @@ dispatch names at least one, in a workspace of one repository too.
    step 5 is skipped, since a split pushes nothing.
 5. If any slot's `.git` file no longer holds what step 2 read, record `status='crashed'`, with a note naming each such
    slot, and run no git in any slot of the run: the file may now point at a git directory the worker made (D108).
-   Otherwise, in each slot, verify the branch is pushed (`git ls-remote origin refs/heads/<branch>` equals HEAD). If not
-   and HEAD holds commits past step 2's, push once, without force: `git push origin HEAD:refs/heads/<branch>`. Then,
-   since HEAD alone holds a detached worker's commits, look in HEAD's reflog entries since step 2 for commits that
-   neither HEAD, origin's branch, nor any of origin's branches holds: a worker that checked something else out left
-   them behind. If any slot's push failed or left commits behind, record `status='unpushed'`, naming each repository
-   in a workspace: the checkpoint invariant failed and a human looks.
-6. Always: remove a joint run's desk, put back any slot's `.git` file the run changed (a slot whose file cannot be put
-   back is not returned, and the next reconcile returns it), and
+   Otherwise, if the worker left anything in the object directory, git in each slot from here on reads it as well as the
+   slot's own objects (`GIT_OBJECT_DIRECTORY` and `GIT_ALTERNATE_OBJECT_DIRECTORIES`), and a push puts origin's
+   remote-tracking ref, which every slot shares, back as it was: pointed at a commit only the run's directory holds, it
+   would break git in every slot once that directory goes. In each slot, verify the branch is pushed
+   (`git ls-remote origin refs/heads/<branch>` equals HEAD). If not and HEAD holds commits past step 2's, push once,
+   without force: `git push origin HEAD:refs/heads/<branch>`. Then, since HEAD alone holds a detached worker's commits,
+   look in HEAD's reflog entries since step 2 for commits that neither HEAD, origin's branch, nor any of origin's
+   branches holds: a worker that checked something else out left them behind. If any slot's push failed or left commits
+   behind, record `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a
+   human looks.
+6. Always: remove a joint run's desk, tidy each slot (`runs/tidy.py`): put back its `.git` file if the run changed it,
+   and, if the object directory holds anything, check it out detached at `origin/<base>` with `--force`, delete its own
+   refs (`refs/worktree/*`, `refs/bisect/*`, `refs/rewritten/*`), `ORIG_HEAD`, and `FETCH_HEAD`, and expire its HEAD
+   reflog, so nothing in it names an object only that directory holds; then
    `treehouse return --force --if-lease-id <id> --if-lease-holder <holder> <slot>` for every slot, in its repository's
    pool. A trap runs this on any exit path: normal exit, exception, and SIGTERM, SIGHUP, or SIGINT (the run is then
-   `crashed`). SIGKILL cannot be trapped; reconcile handles it.
+   `crashed`). Then delete the object directory. A slot that cannot be tidied is not returned, and the directory is kept
+   for the operator. SIGKILL cannot be trapped; reconcile tidies and returns that run's slots from what step 2 recorded.
 7. Update the `runs` row: ended_at, status, result_json, and in the same transaction record the run's messages about
    its ticket (§22): a `report`, its summary (else the harness's note, else the status) with each PR on a line, and
    for a `blocked` run its `question`. A git failure before or after the worker is `crashed`.
@@ -657,6 +668,12 @@ can write there, so without them a hook or monitor it planted would run on the h
 `remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (HOST_ISOLATION
 §4.2). The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none,
 so a repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+
+The object directory is for a sandboxed worker (HOST_ISOLATION §4.2), which cannot write the git directory its slot
+shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
+those reach every git its tools run, so a commit in any other repository would land there and break that repository
+once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it (D111). An unsandboxed
+worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not exist.
 
 Worker result contract, one JSON line, last line of the worker's text (§13):
 
@@ -1194,7 +1211,8 @@ never notified twice, and an item that returns after going away is new again.
 
 ## 15. Failure handling
 
-- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; every slot returned and a
+- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; every slot tidied as
+  `_run`'s step 6 tidies it (§8), from the `.git` link `_run` recorded, and returned; the run's object directory and a
   joint run's desk removed; ticket goes to attention with `crashed`. Not auto-redispatched: the harness never restarts
   a run, and the overseer prompt waits for an authorized reply (§14). Every kind has an attempt limit in code, so an
   overseer that redispatches anyway stops at `policy.max_<kind>_attempts` (D030).
