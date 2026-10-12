@@ -214,8 +214,9 @@ them, with `migrations/`, under `canopy/_data/` (D022).
 A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack, and the
 dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the operator's cache once, so
 `resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch, chores, and reviews need to
-start `_run`, `_chore`, and `_review` via `python -m canopy`. Its run name picks the command: `canopy`, or a link named
-`canopy-notify-desktop` or `canopy-notify-slack`. `make binary` builds it for the current platform; the release
+start `_run`, `_chore`, and `_review` via `python -m canopy`. `SCIE_BOOT` picks the command: unset, `canopy`; set to
+`canopy-notify-desktop` or `canopy-notify-slack`, that sink. A link named for a sink can run canopy itself instead, so
+README installs each sink as a script that sets it (D112). `make binary` builds it for the current platform; the release
 workflow builds each platform's, runs the install check on each, and attaches them to the tag's release. The version
 is the tag's (D085): pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one
 and its commit.
@@ -1920,12 +1921,26 @@ events = ["attention", "loop", "runs"]   # runs: a blocked worker's question arr
 - Linux: `notify-send --app-name=canopy -- TITLE BODY`. macOS: `osascript` with a fixed script reading title and body
   from its arguments. Neither is built into a shell command or script, so agent or org-member text runs nothing.
 - Exit 0 when the tool succeeded, 1 when it failed, 2 when it is not installed or stdin is empty.
+- From a release's single executable it runs with `SCIE_BOOT=canopy-notify-desktop` (§5, D112). So that `cmd` can name
+  it, README's install puts a script of that name on `PATH`; `--help` prints it:
+
+  ```sh
+  #!/bin/sh
+  exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy "$@"
+  ```
 
 ### The Slack sink
 
 `canopy-notify-slack` is its own distribution, a uv workspace member (D041): `packages/canopy-notify-slack/`, module
 `canopy_notify_slack`, stdlib only (`urllib.request`, `json`), importing nothing from `canopy`. `canopy` depends on it
-and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`.
+and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`. A
+release's single executable carries it too, run with `SCIE_BOOT=canopy-notify-slack` (§5, D112); README's install puts
+a script of that name on `PATH` so that `cmd` can name it, and `--help` prints it:
+
+```sh
+#!/bin/sh
+exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
+```
 
 - It reads `json` on stdin, posts one message to a Slack incoming webhook, and exits 0 on 2xx, else 1 with Slack's
   reply on stderr. A rate-limited post is retried next tick like any failure.
@@ -1938,9 +1953,9 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
   `$XDG_CONFIG_HOME/canopy/slack-token`, under the webhook file's checks, and must be one `xoxb-` bot token (a user
   token acts as the operator with all its scopes). The channel must be an id or a name, `#?[A-Za-z0-9._-]{1,80}`.
   Success is a 2xx reply whose JSON has `"ok": true`, since the Web API answers 200 to a refused post
-  (`not_in_channel`). `--token-file` without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit
-  2. The token is never in canopy's config, argv, journal, logs, or the sink's own messages; the channel is in argv,
-  which is the sink's `cmd`.
+  (`not_in_channel`). The whole reply is parsed; only what a failure prints is cut, to 500 characters. `--token-file`
+  without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit 2. The token is never in canopy's
+  config, argv, journal, logs, or the sink's own messages; the channel is in argv, which is the sink's `cmd`.
 - Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
   status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a

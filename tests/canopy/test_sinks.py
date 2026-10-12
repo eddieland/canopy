@@ -231,6 +231,9 @@ def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "usage: canopy-notify-desktop" in out
     assert "usage: canopy-notify-slack" in out
+    # How to run each from a release's single executable (D067).
+    assert "exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy" in out
+    assert "exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy" in out
 
 
 # Slack with a bot token
@@ -291,6 +294,24 @@ def test_the_token_file_defaults_to_the_config_directory(
     token_file(tmp_path / "canopy")
     assert slack.run(["--channel", "#canopy"], io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
     assert _Api.received[0][1]["channel"] == "#canopy"
+
+
+def test_a_long_successful_reply_is_exit_0(api: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # A real reply echoes the message, with its `bot_profile`, and runs past the 500 characters a failure prints.
+    _Api.reply = {"ok": True, "channel": "C0123ABCD", "message": {"bot_profile": {"name": "canopy" * 100}}}
+    assert len(json.dumps(_Api.reply)) > 500
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
+    assert capsys.readouterr().err == ""
+
+
+def test_a_long_refusal_prints_only_its_start(api: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _Api.reply = {"ok": False, "error": "not_in_channel", "detail": "x" * 1000}
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url=api) == 1
+    err = capsys.readouterr().err
+    assert "not_in_channel" in err
+    assert "x" * 1000 not in err
 
 
 def test_a_web_api_error_is_exit_1(api: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

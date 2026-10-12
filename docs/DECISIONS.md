@@ -595,3 +595,9 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: some workspaces disallow incoming webhooks, and one app token can serve several channels and sinks.
 - Rejected: the token in an environment variable or canopy's config (the harness would see it, T2); user tokens.
 - Revisit: when threads per ticket (§20, two-way) need the sink to report what it posted on stdout.
+
+## D112. A release's sinks are scripts that set `SCIE_BOOT`, not links to the executable
+
+- Why: a link named for a sink can run canopy itself; `SCIE_BOOT` picks the command whatever the name or environment.
+- Rejected: links named for each sink; `canopy <sink>` as the command (the name `canopy` wins over the argument).
+- Revisit: if pex or scie-jump picks a BusyBox command reliably by link name.
