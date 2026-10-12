@@ -185,5 +185,7 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
-  once more inline (Stop now, then End run N now), never through a browser dialog.
+  once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
+  for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
+  stays disabled until the field holds the ticket's key exactly.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.

@@ -2403,7 +2403,7 @@ separate `list`.
 ### Forgetting a ticket's work
 
 `canopy forget REF` has canopy drop a ticket's work so the loop starts it over (D086). It takes a ticket, public or
-private, from the operator's shell only, and:
+private, from the operator's shell or the web UI's Forget (below), and:
 
 - refuses `unknown` for a ticket the journal has no row for, `running` while a run works it (wait for it, or end a
   started ticket's with `canopy stop --now`), and `split` for a ticket a split made children of: they are tickets of
@@ -2495,7 +2495,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop; notes to chores (M23) | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget; notes to chores (M23) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -2510,12 +2510,14 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, and `reply` with channel `web` (a note to a chore is a `reply` on its
-  subject, as `canopy reply chore:NAME` is), and for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
-  that function and the attention list's (`loop.attention.listed`) when it starts the server (`serve.backend`). The one
-  process it runs is `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the
-  pool's lock.
+  CLI uses: `conversation.start`, `stop`, `reply`, and `forget` with channel `web` (a note to a chore is a `reply`
+  on its subject, as `canopy reply chore:NAME` is), and for a stop with `now`, the same `runs.halt.end` as
+  `canopy stop --now`. A forget cannot be undone from the UI, so its request carries the ticket's key as the operator
+  typed it, and the server refuses `not_confirmed` before reading anything when it does not match (D112). Its outcome
+  names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
+  `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it that function and the attention list's
+  (`loop.attention.listed`) when it starts the server (`serve.backend`). The one process it runs is
+  `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
@@ -2715,7 +2717,6 @@ the operator's approval note.
   elsewhere; the overseer's `--context` holds 2000 characters.
 - Whether a private ticket's PR body and branch should name the ticket key.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
-- `forget` in the web UI. It is the CLI's only; the web channel would call the same function.
 - A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a
   limit from the `attempt_limit` refusal rather than before dispatching.
 - Mirrored comments edited or deleted after the mirror.

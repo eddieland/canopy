@@ -595,3 +595,10 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Why: some workspaces disallow incoming webhooks, and one app token can serve several channels and sinks.
 - Rejected: the token in an environment variable or canopy's config (the harness would see it, T2); user tokens.
 - Revisit: when threads per ticket (§20, two-way) need the sink to report what it posted on stdout.
+
+## D112. The web UI's forget needs the ticket's key typed, checked by the server
+
+- Forget cannot be undone from the UI, so one more click (as Stop now asks) is too easy; the server refuses
+  `not_confirmed` too, so no client skips the challenge.
+- Rejected: a browser `confirm()` dialog (ui/DESIGN.md: never); a client-only check.
+- Revisit: if forget gains an undo.

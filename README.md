@@ -78,8 +78,9 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 - Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
   reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
   KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
-- To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY`: its next
-  implement starts on a new branch. Its earlier runs still count toward the attempt limits (DESIGN §22).
+- To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY` (or Forget on
+  its page in the web UI): its next implement starts on a new branch. Its earlier runs still count toward the attempt
+  limits (DESIGN §22).
 - Review PRs. Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a
   worker back to a PR on their own; anyone else's comments, a review bot's included, wait on the attention list as
   `untrusted_review` until you say what to do with `canopy reply KEY 'use your judgement on the bot's review'` or the

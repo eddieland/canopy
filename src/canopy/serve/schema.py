@@ -276,6 +276,19 @@ class Stopped(_Model):
     ended: bool = False
 
 
+class ForgetRequest(_Model):
+    """A forget, and the ticket's key as the operator typed it: the challenge, checked again in code (DESIGN §22)."""
+
+    confirm: Annotated[str, Field(max_length=200)]
+
+
+class Forgot(_Model):
+    """What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete."""
+
+    branch: str | None = None
+    prs: list[str]
+
+
 class ReplyRequest(_Model):
     """A reply from the conversation's form, with the submission id the form drew when it was rendered."""
 
