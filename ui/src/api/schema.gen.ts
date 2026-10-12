@@ -557,6 +557,8 @@ export type components = {
         Meta: {
             /** Mock */
             mock: boolean;
+            /** Ticket Url */
+            ticket_url: string | null;
             /** Version */
             version: string;
         };

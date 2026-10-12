@@ -34,6 +34,8 @@ class Meta(_Model):
 
     version: str
     mock: bool
+    # `tracker.ticket_url`: a ticket's page in the tracker, with `{key}` where its key goes; None when unset.
+    ticket_url: str | None = None
 
 
 class Session(_Model):
