@@ -6,29 +6,40 @@
  * file that changes. `npm run lint` fails on a raw color or dark: anywhere else under src/.
  *
  * Status colors are tuned so each reads on surface and surface-raised in its theme, as a dot, as text, and at 15%
- * as a background tint (bg-status-running/15).
+ * as a background tint (bg-status-running/15). Section colors are tuned the same way, as an icon, as text, and at 16%.
+ *
+ * Both themes' neutrals carry the accent's indigo hue, so the canvas has some color of its own.
  */
 
 :root {
     color-scheme: light;
 
-    --background: oklch(0.954 0.005 258);
-    --surface: oklch(1 0 0);
-    --surface-raised: oklch(0.967 0.004 271);
-    --border: oklch(0.906 0.009 265);
-    --foreground: oklch(0.232 0.01 277);
-    --muted-foreground: oklch(0.492 0.026 277);
-    --accent: oklch(0.486 0.189 269);
+    --background: oklch(0.948 0.014 275);
+    --surface: oklch(0.995 0.004 275);
+    --surface-raised: oklch(0.962 0.012 275);
+    --border: oklch(0.895 0.022 275);
+    --foreground: oklch(0.23 0.028 275);
+    --muted-foreground: oklch(0.485 0.042 275);
+    --accent: oklch(0.5 0.2 275);
     --accent-foreground: oklch(1 0 0);
-    --ring: oklch(0.486 0.189 269 / 0.55);
-    --scrollbar: oklch(0.492 0.026 277 / 0.4);
+    --ring: oklch(0.5 0.2 275 / 0.55);
+    --scrollbar: oklch(0.485 0.042 275 / 0.4);
 
     /* Runs */
-    --status-running: oklch(0.52 0.11 159);
-    --status-blocked: oklch(0.535 0.12 65);
-    --status-stopped: oklch(0.492 0.026 277);
-    --status-done: oklch(0.515 0.088 211);
-    --status-failed: oklch(0.543 0.174 30);
+    --status-running: oklch(0.53 0.13 159);
+    --status-blocked: oklch(0.56 0.14 62);
+    --status-stopped: oklch(0.485 0.042 275);
+    --status-done: oklch(0.52 0.1 215);
+    --status-failed: oklch(0.55 0.19 28);
+
+    /* The nav's sections: identity, never state. */
+    --section-attention: oklch(0.57 0.2 2);
+    --section-runs: oklch(0.54 0.21 302);
+    --section-worktrees: oklch(0.54 0.11 182);
+    --section-tickets: oklch(0.55 0.15 242);
+    --section-chores: oklch(0.6 0.16 50);
+    --section-ticks: oklch(0.57 0.15 135);
+    --section-settings: oklch(0.52 0.13 275);
 
     /* The header ticker's RuneScape chat colors: flair only, never state. Darker here, to read on white. */
     --flair-yellow: oklch(0.62 0.13 85);
@@ -62,6 +73,14 @@
     --status-done: oklch(0.8 0.13 210);
     --status-failed: oklch(0.72 0.19 23);
 
+    --section-attention: oklch(0.75 0.17 2);
+    --section-runs: oklch(0.75 0.16 302);
+    --section-worktrees: oklch(0.8 0.12 182);
+    --section-tickets: oklch(0.77 0.13 242);
+    --section-chores: oklch(0.8 0.14 55);
+    --section-ticks: oklch(0.84 0.16 130);
+    --section-settings: oklch(0.76 0.1 275);
+
     --flair-yellow: oklch(0.9 0.17 100);
     --flair-red: oklch(0.68 0.21 27);
     --flair-green: oklch(0.82 0.2 142);
@@ -88,6 +107,14 @@
     --color-status-stopped: var(--status-stopped);
     --color-status-done: var(--status-done);
     --color-status-failed: var(--status-failed);
+
+    --color-section-attention: var(--section-attention);
+    --color-section-runs: var(--section-runs);
+    --color-section-worktrees: var(--section-worktrees);
+    --color-section-tickets: var(--section-tickets);
+    --color-section-chores: var(--section-chores);
+    --color-section-ticks: var(--section-ticks);
+    --color-section-settings: var(--section-settings);
 
     --color-flair-yellow: var(--flair-yellow);
     --color-flair-red: var(--flair-red);

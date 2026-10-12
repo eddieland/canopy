@@ -7,10 +7,13 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
-marks what is live, selected, or the action to take, and heads each page; what is selected sits on the accent's tint.
-Status color is reserved for state, and a counter wears the color of what it counts; nothing is colored for
-decoration, but the header ticker's flair. Dark is a deep indigo slate, its neutrals carrying the accent's hue so the
-canvas has color of its own; light is grey and white; neither is the lesser theme.
+marks what is live, selected, or the action to take; what is selected in a page sits on its tint. Each section of
+the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
+label over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
+counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
+decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
+color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
+neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
@@ -35,6 +38,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-stopped` | A run the operator stopped. |
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
+| `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
@@ -51,6 +55,10 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
+- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Chores orange,
+  Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go on the nav's
+  icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data: there a color
+  is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -96,9 +104,12 @@ Rules:
   was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
   the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
-  The page header's label is in the accent; a panel's stays in `muted-foreground`.
-- **Selected is the accent's tint**: the nav's highlight (`bg-accent/16`, its icon in the accent), the selected inbox
-  row (`bg-accent/14`), and the runs page's chosen filter. Hover stays `surface-raised`, so selected and hovered differ.
+  The page header's label is in its section's color; a panel's stays in `muted-foreground`.
+- **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
+  with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
+  the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Runs'
+  violet to Worktrees' teal. It is static.
 
 ## Motion
 
@@ -114,7 +125,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
-- The nav's highlight (its tint and accent hairline) is one element that slides to the active item.
+- The nav's highlight (its tint and hairline) is one element that slides to the active item, changing into that
+  item's section color as it goes.
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
   a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
