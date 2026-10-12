@@ -204,8 +204,8 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).
-- **N5. Docker or remote sandbox runtimes later.** Deferred; proposal in `HOST_ISOLATION.md`, which covers local
-  sandboxes only. A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
+- **N5. Docker or remote sandbox runtimes later.** Deferred. A local OS sandbox, opt-in, is ROADMAP M26
+  (`HOST_ISOLATION.md`). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
   decision first.
 
 ## Non-goals for now

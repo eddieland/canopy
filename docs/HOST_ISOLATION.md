@@ -1,10 +1,10 @@
 # Host isolation for agent runs
 
-Status: proposal, not normative. `TRUST_MODEL.md` wins where the two disagree. Adopting any of this takes a ROADMAP
-milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with explicit human approval. §5 items 1 and 2,
-which hold with or without a sandbox, are built (DESIGN §8, D107, D108), and so is the half of item 5 that does (D109).
-The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against the
-version the operator pins.
+Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
+Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
+explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107, D108), and
+so is the half of item 5 that does (D109). The claims about `srt` below were checked against its source at version
+0.0.79 (2026-10-09); re-check them against the version the operator pins.
 
 This document covers how to keep a worker (and a chore) from reaching the rest of the operator's machine. It recommends
 an OS-level sandbox wrapped around `worker_cmd`, lists the small harness changes that sandbox needs to be worth
