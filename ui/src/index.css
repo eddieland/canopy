@@ -58,6 +58,13 @@
     color: var(--muted-foreground);
 }
 
+/* A panel body that scrolls past its height (PanelScroll): a thin scrollbar, its thumb a muted hairline. */
+@utility panel-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent) transparent;
+}
+
 /*
  * The theme toggle's circular reveal (src/theme/transition.ts). The default cross-fade is off for the root, so
  * only the clip-path animation that script runs is seen.
