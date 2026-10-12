@@ -283,6 +283,15 @@ def test_the_slack_sink_posts_with_a_bot_token(api: str, tmp_path: Path) -> None
     assert posted["text"].splitlines()[1] == "+ *PROJ-3* needs_reviewer: &lt;!channel&gt; https://x.test/1"
 
 
+def test_the_slack_sink_posts_with_a_name_and_an_icon(api: str, tmp_path: Path) -> None:
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path))]
+    argv += ["--username", "canopy (api)", "--icon-emoji", ":wave::skin-tone-3:"]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
+    [(_, posted)] = _Api.received
+    assert set(posted) == {"channel", "text", "username", "icon_emoji"}
+    assert (posted["username"], posted["icon_emoji"]) == ("canopy (api)", ":wave::skin-tone-3:")
+
+
 def test_the_token_file_defaults_to_the_config_directory(
     api: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -323,8 +332,31 @@ def test_the_token_file_and_channel_are_checked(
 
 
 @pytest.mark.parametrize(
+    ("flags", "message"),
+    [
+        (["--username", "  "], "must be printable, not blank"),
+        (["--username", "a\nb"], "must be printable, not blank"),
+        (["--username", "x" * 81], "at most 80 characters"),
+        (["--icon-emoji", "robot_face"], "is not an emoji code"),
+        (["--icon-emoji", "https://x.test/i.png"], "is not an emoji code"),
+    ],
+)
+def test_the_name_and_icon_are_checked(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], flags: list[str], message: str
+) -> None:
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path)), *flags]
+    assert slack.run(argv, io.StringIO(json.dumps(MESSAGE)), api_url="http://127.0.0.1:1/") == 2
+    assert message in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
     "argv",
-    [["--token-file", "/x"], ["--channel", "C0123ABCD", "--webhook-file", "/x"]],
+    [
+        ["--token-file", "/x"],
+        ["--channel", "C0123ABCD", "--webhook-file", "/x"],
+        ["--username", "canopy"],
+        ["--icon-emoji", ":robot_face:"],
+    ],
 )
 def test_a_token_and_a_webhook_are_not_mixed(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exited:

@@ -1,8 +1,9 @@
 """`canopy-notify-slack`: canopy's Slack sink (DESIGN §20). Posts each message it reads on stdin to a Slack channel.
 
 It reads canopy's `json` message format on stdin and posts one Slack message, to an incoming webhook or, given
-`--channel`, with a bot token through `chat.postMessage`. The secret comes from a file that belongs to the operator and
-that nobody else can read, never from argv, the environment, or canopy's config: `--webhook-file PATH`, by default
+`--channel`, with a bot token through `chat.postMessage`, optionally under its own `--username` and `--icon-emoji`.
+The secret comes from a file that belongs to the operator and that nobody else can read, never from argv, the
+environment, or canopy's config: `--webhook-file PATH`, by default
 `$XDG_CONFIG_HOME/canopy/slack-webhook`, or `--token-file PATH`, by default `$XDG_CONFIG_HOME/canopy/slack-token`.
 Text from the journal, which agents and org members wrote, is escaped for Slack's markup, so it cannot mention a person
 or `@channel`, or show one link and point at another.
@@ -39,6 +40,9 @@ TIMEOUT_SECONDS = 30
 _MAX_LINES = 45
 # A channel id (`C0123ABCD`) or a name (`#canopy`, `canopy`).
 _CHANNEL = re.compile(r"#?[A-Za-z0-9._-]{1,80}")
+# An emoji code (`:robot_face:`), with an optional skin tone (`:wave::skin-tone-3:`).
+_EMOJI = re.compile(r"(?::[a-z0-9_+'-]{1,100}:){1,2}")
+_MAX_USERNAME = 80
 
 
 class SinkError(Exception):
@@ -106,6 +110,20 @@ def check_channel(channel: str) -> str:
     if not _CHANNEL.fullmatch(channel):
         raise SinkError(f"--channel {channel!r} is not a Slack channel id or name")
     return channel
+
+
+def check_username(username: str) -> str:
+    """Return `username` if it is a display name: printable, not blank, at most 80 characters."""
+    if not username.strip() or not username.isprintable() or len(username) > _MAX_USERNAME:
+        raise SinkError(f"--username {username!r} must be printable, not blank, and at most {_MAX_USERNAME} characters")
+    return username
+
+
+def check_icon_emoji(icon_emoji: str) -> str:
+    """Return `icon_emoji` if it is an emoji code such as `:robot_face:`."""
+    if not _EMOJI.fullmatch(icon_emoji):
+        raise SinkError(f"--icon-emoji {icon_emoji!r} is not an emoji code such as :robot_face:")
+    return icon_emoji
 
 
 def _same_origin(url: str, prefix: str) -> bool:
@@ -178,10 +196,20 @@ def post(url: str, text: str) -> tuple[bool, str]:
     return _post(url, {"text": text}, {"Content-Type": "application/json"})
 
 
-def post_message(api_url: str, token: str, channel: str, text: str) -> tuple[bool, str]:
-    """Post `text` to `channel` with `chat.postMessage`. Returns whether Slack accepted it, and its reply."""
+def post_message(
+    api_url: str, token: str, channel: str, text: str, *, username: str | None = None, icon_emoji: str | None = None
+) -> tuple[bool, str]:
+    """Post `text` to `channel` with `chat.postMessage`, as `username` with `icon_emoji` when given.
+
+    Returns whether Slack accepted it, and its reply.
+    """
     headers = {"Content-Type": "application/json; charset=utf-8", "Authorization": f"Bearer {token}"}
-    ok, reply = _post(api_url, {"channel": channel, "text": text}, headers)
+    payload = {"channel": channel, "text": text}
+    if username is not None:
+        payload["username"] = username
+    if icon_emoji is not None:
+        payload["icon_emoji"] = icon_emoji
+    ok, reply = _post(api_url, payload, headers)
     if not ok:
         return ok, reply
     # The Web API answers 200 to a refused post, with `"ok": false` and an `error` such as `not_in_channel`.
@@ -224,9 +252,18 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
     parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
     parser.add_argument("--channel", default=None, help="post with a bot token to this channel id, not a webhook")
     parser.add_argument("--token-file", type=Path, default=None, help="default: " + str(default_token_file()))
+    parser.add_argument("--username", default=None, help="with --channel, the name to post as")
+    parser.add_argument(
+        "--icon-emoji", default=None, help="with --channel, the emoji to post with, such as :robot_face:"
+    )
     args = parser.parse_args(argv)
-    if args.channel is None and args.token_file is not None:
-        parser.error("--token-file needs --channel")
+    for given, flag in (
+        (args.token_file, "--token-file"),
+        (args.username, "--username"),
+        (args.icon_emoji, "--icon-emoji"),
+    ):
+        if args.channel is None and given is not None:
+            parser.error(f"{flag} needs --channel")
     if args.channel is not None and args.webhook_file is not None:
         parser.error("--webhook-file and --channel are two ways to post; give one")
     send: Callable[[str], tuple[bool, str]]
@@ -236,7 +273,12 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
         else:
             channel = check_channel(args.channel)
             send = functools.partial(
-                post_message, api_url, read_token(args.token_file or default_token_file()), channel
+                post_message,
+                api_url,
+                read_token(args.token_file or default_token_file()),
+                channel,
+                username=None if args.username is None else check_username(args.username),
+                icon_emoji=None if args.icon_emoji is None else check_icon_emoji(args.icon_emoji),
             )
         parsed = read_message(stdin.read())
     except SinkError as e:
