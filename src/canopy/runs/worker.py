@@ -413,7 +413,7 @@ class _Start:
 
 
 def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
-    """Run the operator's `setup_cmd` in the slot, at the run's branch, and fail the run if it fails (DESIGN §8, D105).
+    """Run the operator's `setup_cmd` in the slot, at the run's branch, and fail the run if it fails (DESIGN §8).
 
     Unlike treehouse's `post_create`, which runs on the base before the branch is checked out and whose failure leaves
     the lease standing, this sees the branch the worker gets, and a failure stops the run before the worker starts.

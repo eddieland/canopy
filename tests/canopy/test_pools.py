@@ -496,7 +496,7 @@ def test_sync_warns_about_an_origin_rewritten_to_push_over_ssh(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """D038: what git pushes to after the operator's rewrites, not the map's URL, which is a local path here."""
+    """What git pushes to after the operator's rewrites, not the map's URL, which is a local path here."""
     for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
         monkeypatch.setenv(var, "canopy-test")
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")

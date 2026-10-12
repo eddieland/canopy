@@ -14,7 +14,7 @@ import { createQueryClient } from '@/lib/query-client'
 import { routeTree } from './routeTree.gen'
 
 const queryClient = createQueryClient()
-// Every write carries the session's token (DESIGN §22, D082).
+// Every write carries the session's token (DESIGN §22).
 api.use(writeToken(() => queryClient.getQueryData<Session>(keys.session)?.token))
 
 const router = createRouter({
