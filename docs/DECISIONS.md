@@ -589,7 +589,14 @@ text is in git history. Numbers are never reused, so gaps are entries that were 
 - Rejected: all sockets; pushing from the host in `_run` (more host-side git in a slot a worker wrote, D107).
 - Revisit: if `srt` gains per-path socket rules on Linux, or an operator cannot use HTTPS.
 
-## D111. A run's new git objects go to `<state_dir>/runs/<id>.objects/`, named to git only by a sandbox wrapper
+## D111. The Slack sink can post with a bot token as well as a webhook
+
+- `--channel` switches to `chat.postMessage`; the token lives in its own operator-only file, like the webhook URL.
+- Why: some workspaces disallow incoming webhooks, and one app token can serve several channels and sinks.
+- Rejected: the token in an environment variable or canopy's config (the harness would see it, T2); user tokens.
+- Revisit: when threads per ticket (§20, two-way) need the sink to report what it posted on stdout.
+
+## D112. A run's new git objects go to `<state_dir>/runs/<id>.objects/`, named to git only by a sandbox wrapper
 
 - `_run` passes it as `CANOPY_GIT_OBJECTS`; when the worker used it, `_run` reads it to push, then tidies each slot
   (detached at `origin/<base>`, its own refs and HEAD reflog dropped) and deletes it. Reconcile does the same.

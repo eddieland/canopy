@@ -784,7 +784,7 @@ Accept: the tests above pass, and the canary passes in CI on Linux. Live: the ca
 macOS machines, then a day of `canopy loop` with sandboxed workers pushes and opens PRs as before, and a worker run that
 tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 
-Status: in progress. The per-run object directory and the `run_slots` link are in, with D111: `_run` and reconcile tidy
+Status: in progress. The per-run object directory and the `run_slots` link are in, with D112: `_run` and reconcile tidy
 each slot before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them
 found that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's
 remote-tracking ref back (HOST_ISOLATION §4.2). Next: the wrapper, the policy template, `docs/SANDBOX.md`, the canary,

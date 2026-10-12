@@ -137,7 +137,7 @@ shared git state:
   A detached worktree keeps HEAD, the index, and the reflog in `worktrees/<slot>/`, which belongs to that slot alone.
 - Built (D109): the worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares
   the remote branch with HEAD.
-- Built (D111), but used only by the wrapper (§4.1): new objects go to a per-run directory, with the shared object
+- Built (D112), but used only by the wrapper (§4.1): new objects go to a per-run directory, with the shared object
   directory as an alternate (below).
 
 Checked with bubblewrap and git 2.43, a worktree slot under exactly this policy (the git common directory read-only,
@@ -244,7 +244,7 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    sandbox outlives a timeout. canopy reads the result line, not the exit status, so `srt` exiting 0 when its child
    dies of SIGTERM does not matter: a timeout is canopy's own clock.
 5. Worker git state is private (§4.2). Built (D109): a detached checkout in step 2 and a push by refspec, in `_run`
-   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Built (D111): the per-run object
+   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Built (D112): the per-run object
    directory, passed as `CANOPY_GIT_OBJECTS`, read by step 5, and tidied away on every exit path and by reconcile, as
    §4.2 describes. Nothing sets git's variables from it until the wrapper does.
 
