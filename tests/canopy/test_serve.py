@@ -193,7 +193,9 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     assert c.get("/").status_code == 200
     assert c.get("/assets/index-abc123.js").status_code == 200
     assert c.get("/api/session").json() == {"signed_in": False, "token": None}
-    for path in ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events"):
+    paths = ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events")
+    # A transcript is agent output from a file, and as much the operator's as the journal.
+    for path in (*paths, "/api/runs/39", "/api/runs/39/transcript", "/api/ticks/2/transcript"):
         assert c.get(path).status_code == 401, path
     assert c.post("/api/tickets/ABC-102/start", headers={"origin": ORIGIN}).status_code == 401
 
@@ -433,6 +435,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "ChoreDetail",
         "TickDetail",
         "Decision",
+        "Transcript",
+        "TranscriptStatus",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -440,6 +444,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/meta",
         "/api/attention",
         "/api/runs",
+        "/api/runs/{run_id}",
+        "/api/runs/{run_id}/transcript",
         "/api/spend",
         "/api/tick",
         "/api/tickets",
@@ -453,6 +459,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/chores/{name}/replies",
         "/api/ticks",
         "/api/ticks/{tick_id}",
+        "/api/ticks/{tick_id}/transcript",
         "/api/worktrees",
         "/api/events",
     }

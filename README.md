@@ -102,7 +102,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   add `--ticket KEY` to filter. The web UI's Ticks page shows the same, and each ticket's page the decisions about it.
   `canopy loop` prints each tick's cost as it goes.
 - See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
-  `opencode export <id>` turns into its transcript.
+  `opencode export <id>` turns into its transcript. In the web UI, a run's page shows that transcript, each tool call
+  with its input and output, once the run ends.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
   PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
