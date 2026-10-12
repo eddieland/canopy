@@ -759,11 +759,31 @@ export type components = {
         };
         /**
          * Spend
+         * @description What the last day and the last 30 days cost, read together, so a month never shows less than its day.
+         */
+        Spend: {
+            day: components["schemas"]["SpendWindow"];
+            month: components["schemas"]["SpendWindow"];
+        };
+        /**
+         * SpendUpdated
+         * @description What a window cost changed. The payload is both windows, as `GET /spend` returns them.
+         */
+        SpendUpdated: {
+            spend: components["schemas"]["Spend"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "spend.updated";
+        };
+        /**
+         * SpendWindow
          * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
          *
          *     Worker, split, and chore runs and each tick's overseer, by when they started. Reviews record nothing yet.
          */
-        Spend: {
+        SpendWindow: {
             /** Cost Usd */
             cost_usd: number | null;
             /** Hours */
@@ -773,19 +793,6 @@ export type components = {
              * Format: date-time
              */
             since: string;
-        };
-        /**
-         * SpendUpdated
-         * @description What a spend window cost changed. The payload is every window, as `GET /spend` returns them.
-         */
-        SpendUpdated: {
-            /** Spend */
-            spend: components["schemas"]["Spend"][];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "spend.updated";
         };
         /**
          * Started
@@ -1306,7 +1313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Spend"][];
+                    "application/json": components["schemas"]["Spend"];
                 };
             };
         };

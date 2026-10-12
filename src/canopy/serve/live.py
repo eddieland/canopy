@@ -67,7 +67,7 @@ class _Sent:
         self.runs: RunsUpdated | None = None
         self.chores: ChoresUpdated | None = None
         self.tickets: dict[str, TicketSummary] | None = None
-        self.spend: list[Spend] | None = None
+        self.spend: Spend | None = None
         self.tick: LastTick | None = None
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
@@ -95,7 +95,7 @@ class _Sent:
             found.append(StreamEvent(chores))
         # Sent when a cost changes, not a window: the windows move with the clock on every read.
         spend = views.spend(backend, ctx)
-        if self.spend is None or [s.cost_usd for s in spend] != [s.cost_usd for s in self.spend]:
+        if self.spend is None or _costs(spend) != _costs(self.spend):
             self.spend = spend
             found.append(StreamEvent(SpendUpdated(spend=spend)))
         last = views.last_tick(ctx)
@@ -103,3 +103,7 @@ class _Sent:
             self.tick = last
             found.append(StreamEvent(TickUpdated(tick=last.tick, acknowledged=last.acknowledged)))
         return found
+
+
+def _costs(spend: Spend) -> tuple[float | None, float | None]:
+    return spend.day.cost_usd, spend.month.cost_usd

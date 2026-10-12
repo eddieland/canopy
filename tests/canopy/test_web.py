@@ -213,7 +213,8 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
 def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_days_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
     backend = dataclasses.replace(web.backend(ctx), clock=lambda: now)
-    assert [s.cost_usd for s in views.spend(backend, ctx)] == [None, None]  # nothing reported yet
+    nothing = views.spend(backend, ctx)
+    assert (nothing.day.cost_usd, nothing.month.cost_usd) == (None, None)  # nothing reported yet
 
     def started(table: str, row_id: int, hours_ago: float, cost: float | None) -> None:
         at = db.format_time(now - timedelta(hours=hours_ago))
@@ -225,7 +226,8 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_da
     started("runs", running_run(ctx, "PROJ-4"), 30 * 24 + 1, 40.0)  # before both
     started("ticks", db.start_tick(ctx.conn, dry_run=False), 23.5, 0.5)
 
-    day, month = views.spend(backend, ctx)
+    spend = views.spend(backend, ctx)
+    day, month = spend.day, spend.month
     assert (day.hours, day.since, day.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
     assert (month.hours, month.since, month.cost_usd) == (720, now - timedelta(days=30), pytest.approx(10.75))
 

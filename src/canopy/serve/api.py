@@ -156,7 +156,7 @@ def _read_routes(api: APIRouter, backend: Backend) -> None:
             return views.last_tick(ctx)
 
     @api.get("/spend", operation_id="getSpend")
-    def spend() -> list[Spend]:
+    def spend() -> Spend:
         with backend.open() as ctx:
             return views.spend(backend, ctx)
 

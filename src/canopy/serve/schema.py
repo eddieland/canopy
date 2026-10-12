@@ -395,7 +395,7 @@ class LastTick(_Model):
     acknowledged: int | None = None
 
 
-class Spend(_Model):
+class SpendWindow(_Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 
     Worker, split, and chore runs and each tick's overseer, by when they started. Reviews record nothing yet.
@@ -405,6 +405,13 @@ class Spend(_Model):
     hours: int
     # None when nothing in the window reported a cost.
     cost_usd: float | None = None
+
+
+class Spend(_Model):
+    """What the last day and the last 30 days cost, read together, so a month never shows less than its day."""
+
+    day: SpendWindow
+    month: SpendWindow
 
 
 class AttentionUpdated(_Model):
@@ -443,10 +450,10 @@ class TicketChanged(_Model):
 
 
 class SpendUpdated(_Model):
-    """What a spend window cost changed. The payload is every window, as `GET /spend` returns them."""
+    """What a window cost changed. The payload is both windows, as `GET /spend` returns them."""
 
     type: Literal["spend.updated"] = "spend.updated"
-    spend: list[Spend]
+    spend: Spend
 
 
 class TickUpdated(_Model):
