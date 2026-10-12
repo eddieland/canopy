@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, settled, signIn } from './helpers.ts'
+import { NOW, padDecisions, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -232,14 +232,7 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
 })
 
 test('a long list scrolls inside its panel, so the panels under it stay in reach', async ({ page }) => {
-    // The mock's ticket has two decisions: pad them to forty, as a long-lived ticket collects.
-    await page.route('**/api/tickets/ABC-102', async (route) => {
-        const response = await route.fetch()
-        const body = (await response.json()) as { decisions: { id: number }[] }
-        const first = body.decisions[0]
-        body.decisions = Array.from({ length: 40 }, (_, i) => ({ ...first, id: 1000 + i }))
-        await route.fulfill({ response, json: body })
-    })
+    await padDecisions(page, 'ABC-102', 40)
     await page.goto('tickets/ABC-102')
     await settled(page)
     const region = page.getByRole('region', { name: 'Decisions' })
