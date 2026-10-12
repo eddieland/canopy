@@ -313,7 +313,7 @@ def test_journal_commands_name_a_unit(
     assert main(["attention", "PROJ-1", "multi_repo", "--detail", "api and web"]) == 0
     assert main(["attention", "PROJ-1", "needs_author", "--repo", "nope", "--detail", "x"]) == 1
     db.finish_tick(conn, tick_id, "ok", "test")
-    # Two units needing an author are two items (D032).
+    # Two units needing an author are two items: an item is its ticket, reason, and repository.
     assert [(i.subject, i.reason) for i in attention.current(conn)] == [
         ("PROJ-1", "multi_repo"),
         ("PROJ-1 (api)", "needs_author"),
@@ -324,7 +324,7 @@ def test_journal_commands_name_a_unit(
 def test_a_merge_conflict_is_a_units_phase(
     ws: Ws, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """D070: a PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
+    """A PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
     conn = ws.journal()
     in_tick(conn, monkeypatch)
     assert main(["ticket", "set", "PROJ-1", "--phase", "conflicted"]) == 2

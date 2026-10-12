@@ -11,7 +11,7 @@ import { Mark } from '@/components/shell/mark'
 import { Button } from '@/components/ui/button'
 
 /**
- * Asks for the listener secret once (D082). A right one sets a session cookie for 30 days; the secret itself is
+ * Asks for the listener secret once (DESIGN §22). A right one sets a session cookie for 30 days; the secret itself is
  * never kept by the page. The hidden user name lets a password manager file the secret under canopy.
  */
 export function SignIn() {
