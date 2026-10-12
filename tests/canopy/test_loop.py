@@ -9,6 +9,7 @@ import json
 import os
 import signal
 import sys
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -20,7 +21,7 @@ from rich.console import Console
 from canopy.cli.main import main
 from canopy.core import config, db, workspace
 from canopy.core.context import Context
-from canopy.infra import lock, logs, procs
+from canopy.infra import lock, logs, procs, resources
 from canopy.loop import repeat
 from tests.canopy.helpers import journal
 from tests.conftest import CanopyEnv
@@ -530,6 +531,101 @@ def test_without_keys_the_loop_does_not_offer_them(
     )
     assert sum(time.slept) == 60
     assert "tick now" not in out.getvalue()
+
+
+def deferred(
+    env: CanopyEnv, time: FakeTime, keys: FakeKeys | None = None, stop: repeat.Stop | None = None
+) -> tuple[Counter[str], str]:
+    """One tick, the first deferred ten minutes, on `time`'s clock."""
+    term, out = console()
+    statuses = repeat.run(
+        context(env),
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=1,
+        console=term,
+        stop=stop or repeat.Stop(),
+        keys=keys.pressed if keys is not None else None,
+        defer_minutes=10,
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+    return statuses, out.getvalue()
+
+
+def test_a_deferred_start_waits_before_the_first_tick(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    ticked: list[bool] = []
+    time = FakeTime(on_sleep=lambda: ticked.append(agent_log.exists()))
+
+    statuses, text = deferred(canopy_env, time)
+
+    assert statuses == {"ok": 1}
+    assert sum(time.slept) == 600  # the deferral, and no wait after the only tick
+    assert not any(ticked)  # the overseer ran after the wait, not before it
+    assert "first tick  in 10m 00s at" in text
+    assert text.index("first tick") < text.index("tick 1  ok")
+    log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
+    assert any(line["msg"] == "loop defers its first tick" and line["wait_seconds"] == 600 for line in log_lines)
+
+
+def test_the_tick_now_key_ends_a_deferred_start(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    keys = FakeKeys()
+    time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY))
+    statuses, _ = deferred(canopy_env, time, keys)
+    assert statuses == {"ok": 1}
+    assert time.slept == [0.5]
+
+
+def test_an_operator_message_ends_a_deferred_start_after_a_minute(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    db.touch_ticket(ctx.conn, "PROJ-1", "/r")
+    time = FakeTime()
+
+    def reply_once() -> None:
+        if len(time.slept) == 1:
+            assert main(["reply", "PROJ-1", "Go ahead."]) == 0
+
+    time.on_sleep = reply_once
+    statuses, _ = deferred(canopy_env, time)
+    assert statuses == {"ok": 1}
+    assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+
+
+def test_ctrl_c_during_a_deferred_start_stops_without_a_tick(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGINT))
+    stop = repeat.Stop()
+    with repeat.signals(stop):
+        statuses, text = deferred(canopy_env, time, stop=stop)
+    assert statuses == Counter()
+    assert len(time.slept) == 1
+    assert not agent_log.exists()
+    assert "stopped after 0 ticks: none" in text
+
+
+def test_loop_passes_defer_through(monkeypatch: pytest.MonkeyPatch, canopy_env: CanopyEnv) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run(_ctx: Context, **kwargs: object) -> Counter[str]:
+        seen.update(kwargs)
+        return Counter()
+
+    monkeypatch.setattr(repeat, "run", fake_run)
+    assert main(["loop", "--defer", "30", "--no-serve"]) == 0
+    assert seen["defer_minutes"] == 30
+    assert main(["loop", "--defer", "0"]) == 2  # at least a minute; to tick at once, leave it out
 
 
 @pytest.mark.parametrize(

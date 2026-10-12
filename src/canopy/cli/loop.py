@@ -35,10 +35,22 @@ SUMMARY_WIDTH = 160
     help="Minutes to wait after each tick ends. Default: loop.interval_minutes.",
 )
 @click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
+@click.option(
+    "--defer",
+    type=click.IntRange(min=1),
+    metavar="MINUTES",
+    help="Wait MINUTES before the first tick. Press t during the wait to tick sooner.",
+)
 @click.option("--no-serve", is_flag=True, help="Do not serve the web UI, whatever serve.enabled says.")
 @click.pass_context
 def cmd_loop(
-    click_ctx: click.Context, *, dry_run: bool, every: int | None, max_ticks: int | None, no_serve: bool
+    click_ctx: click.Context,
+    *,
+    dry_run: bool,
+    every: int | None,
+    max_ticks: int | None,
+    defer: int | None,
+    no_serve: bool,
 ) -> int:
     """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to."""
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
@@ -56,6 +68,7 @@ def cmd_loop(
                 stop=stop,
                 serve=ctx.config.serve.enabled and not no_serve,
                 keys=pressed,
+                defer_minutes=defer,
             )
         except lock.LockBusyError:
             raise CliError(f"another canopy loop is running on {ctx.state_dir}; stop it first") from None

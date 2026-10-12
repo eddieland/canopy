@@ -321,14 +321,16 @@ Workers dispatched during a tick outlive it, as detached processes owned by `can
 
 ### The loop
 
-`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--no-serve]` is how ticks are meant to run (D042), in the
-foreground until stopped:
+`canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run
+(D042), in the foreground until stopped:
 
 1. Take `<state_dir>/loop.lock`; if another loop holds it, refuse and exit 1. Each tick still takes the separate tick
    lock (step 1 above), so a hand-run `canopy tick` runs between the loop's ticks or finds the lock busy.
 2. Apply pending migrations before the first tick. Start the web UI's server in a thread, unless `--no-serve` or
    `serve.enabled = false`; without a usable listener secret, say why and serve nothing (§22). The header names its
-   URL.
+   URL. With `--defer`, wait that many minutes from here before the first tick; the header says when it will run. The
+   wait ends early as the one in step 5 does, by an operator message (no sooner than a minute after the loop started)
+   or `t`, and a stop during it ends the loop with no tick.
 3. Run a tick exactly as `canopy tick` does, passing `--dry-run` through. An error the tick code does not handle ends
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
@@ -353,8 +355,8 @@ Config is read once at loop start; restart to apply a change. Prompt files are r
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
-gains `loop started` and `loop stopped` lines, with no tick id, a `loop waits` line per tick, and a line when a key, a
-message, or a run ending ends a wait.
+gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
+`loop waits` line per tick, and a line when a key, a message, or a run ending ends a wait.
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
