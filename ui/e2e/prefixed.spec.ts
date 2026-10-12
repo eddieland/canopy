@@ -81,6 +81,7 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
 test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) => {
     await page.goto('tickets/ABC-101')
     const form = page.getByRole('form', { name: 'Reply' })
+    await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Enter')
     const box = form.getByRole('textbox')
     await box.fill('First line.')
     await box.press('Shift+Enter')
@@ -119,6 +120,8 @@ test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ 
     await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-pressed', 'true')
     await page.goto('tickets/ABC-101')
     const form = page.getByRole('form', { name: 'Reply' })
+    // Chromium on Linux: the button names Ctrl, not ⌘.
+    await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')
     const box = form.getByRole('textbox')
     await box.fill('One.')
     await box.press('Enter')

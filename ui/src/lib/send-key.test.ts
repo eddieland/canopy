@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT, type KeyPress, parseSendKey, sends } from './send-key'
+import { DEFAULT, isApple, type KeyPress, parseSendKey, sends, sendShortcut } from './send-key'
 
 const ENTER: KeyPress = { key: 'Enter', shiftKey: false, ctrlKey: false, metaKey: false, isComposing: false }
 
@@ -41,5 +41,21 @@ describe('sends', () => {
             expect(sends(setting, { ...ENTER, isComposing: true, ctrlKey: true })).toBe(false)
             expect(sends(setting, { ...ENTER, key: 'a', ctrlKey: true })).toBe(false)
         }
+    })
+})
+
+describe('sendShortcut', () => {
+    it('names Enter, the keyboard modifier with it, or nothing for the button', () => {
+        expect(sendShortcut('enter', false)).toBe('Enter')
+        expect(sendShortcut('mod-enter', false)).toBe('Control+Enter')
+        expect(sendShortcut('mod-enter', true)).toBe('Meta+Enter')
+        expect(sendShortcut('button', true)).toBeUndefined()
+    })
+
+    it('takes an Apple keyboard from the user agent', () => {
+        expect(isApple('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')).toBe(true)
+        expect(isApple('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)')).toBe(true)
+        expect(isApple('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')).toBe(false)
+        expect(isApple('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe(false)
     })
 })

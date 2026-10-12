@@ -186,7 +186,9 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
-  composition only commits it (`src/lib/send-key.ts`).
+  composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
+  label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
+  The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog.

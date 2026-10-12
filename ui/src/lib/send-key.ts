@@ -36,6 +36,21 @@ export function sends(setting: SendKey, press: KeyPress): boolean {
     return false
 }
 
+/** Whether a browser's user agent names an Apple device, whose keyboard sends with ⌘ where others use Ctrl. */
+export function isApple(userAgent: string): boolean {
+    return /Mac|iPhone|iPad|iPod/.test(userAgent)
+}
+
+/**
+ * The keys that send under `setting`, in `aria-keyshortcuts` terms (`Control+Enter`), or undefined under `button`.
+ * Both modifiers send, but the form names the one its keyboard has.
+ */
+export function sendShortcut(setting: SendKey, apple: boolean): string | undefined {
+    if (setting === 'enter') return 'Enter'
+    if (setting === 'mod-enter') return apple ? 'Meta+Enter' : 'Control+Enter'
+    return undefined
+}
+
 function read(): SendKey {
     try {
         return parseSendKey(window.localStorage.getItem(STORAGE_KEY))
