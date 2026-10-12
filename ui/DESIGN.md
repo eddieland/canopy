@@ -27,6 +27,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
 | `accent`, `accent-foreground` | The one accent: active nav hairline, live indicator, links, primary buttons, focus. |
 | `ring` | Focus outlines (the accent, translucent). |
+| `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
@@ -149,9 +150,9 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   the local time on hover.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
-  scroll under the panel's header, with a thin scrollbar in a muted hairline's color, so the panels below stay in
-  reach. The region takes focus, so the keyboard scrolls it too. A list that is its page's main content (the runs
-  page, a tick's decisions) does not: the page scrolls instead.
+  scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
+  so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
+  not: the page scrolls instead.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
   attention, and spent in the last 24 hours from `GET /api/spend`, on the stream) and the worktrees page (working,
