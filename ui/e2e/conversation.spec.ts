@@ -26,3 +26,18 @@ test("a URL in a worker's report is a link to itself, opening in a new tab", asy
     await expect(link).toHaveAttribute('target', '_blank')
     await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
 })
+
+test("a ticket's conversation ends on the run working it now, and only while one is", async ({ page }) => {
+    await page.goto('tickets/ABC-101')
+    await settled(page)
+    const working = page.getByTestId('working-41')
+    await expect(working).toContainText('working now')
+    await expect(working).toContainText('implement')
+    await working.getByRole('link', { name: 'run:41' }).click()
+    await expect(page).toHaveURL(/\/runs\/41$/)
+
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    await expect(page.getByTestId('conversation')).toBeVisible()
+    await expect(page.getByTestId('working-now')).toBeHidden()
+})
