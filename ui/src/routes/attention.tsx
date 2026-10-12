@@ -17,6 +17,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
 import { cn } from '@/lib/utils'
@@ -219,6 +220,7 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             ) : (
                 <Conversation messages={messages} waiting={ticket.awaiting} />
             )}
+            <WorkingNow ticketKey={ticket.key} />
             <ReplyForm
                 key={ticket.key}
                 target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
