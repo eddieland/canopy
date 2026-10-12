@@ -67,6 +67,55 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
     })
 
+    it('writes a run a page holds, and marks its transcript stale only when its status moves', () => {
+        const client = new QueryClient()
+        const [first, second] = mockRuns
+        if (!first || !second) throw new Error('fixtures are empty')
+        const empty = { status: 'read', session_id: null, entries: [], truncated: false, unreadable: 0 } as const
+        client.setQueryData(keys.run(first.id), first)
+        client.setQueryData(keys.runTranscript(first.id), empty)
+        client.setQueryData(keys.runTranscript(second.id), empty)
+
+        applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns.map((r) => ({ ...r, cost_usd: 9 })) })
+        expect(client.getQueryData<Run>(keys.run(first.id))?.cost_usd).toBe(9)
+        expect(client.getQueryState(keys.runTranscript(first.id))?.isInvalidated).toBe(false)
+        // A run no page holds is not written into the cache.
+        expect(client.getQueryData(keys.run(second.id))).toBeUndefined()
+
+        const ended = { ...first, status: 'done', state: 'done', ended_at: '2026-10-08T12:20:00Z' } as const
+        applyStreamEvent(client, { type: 'runs.updated', runs: [ended, ...mockRuns.slice(1)] })
+        expect(client.getQueryData<Run>(keys.run(first.id))?.status).toBe('done')
+        expect(client.getQueryState(keys.runTranscript(first.id))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.runTranscript(second.id))?.isInvalidated).toBe(false)
+    })
+
+    it('marks a tick transcript stale when its status moves, not as it records decisions', () => {
+        const client = new QueryClient()
+        const empty = { status: 'read', session_id: null, entries: [], truncated: false, unreadable: 0 } as const
+        const running = {
+            id: 3,
+            status: 'running',
+            dry_run: false,
+            started_at: '2026-10-08T12:00:00Z',
+            ended_at: null,
+            summary: null,
+            session_id: null,
+            cost_usd: null,
+            decisions: 0,
+        }
+        client.setQueryData(keys.tick, { tick: running, acknowledged: null })
+        client.setQueryData(keys.tickTranscript(3), empty)
+        client.setQueryData(keys.tickTranscript(2), empty)
+
+        applyStreamEvent(client, { type: 'tick.updated', tick: { ...running, decisions: 2 }, acknowledged: null })
+        expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(false)
+
+        const ended = { ...running, status: 'ok', ended_at: '2026-10-08T12:01:00Z', decisions: 2 }
+        applyStreamEvent(client, { type: 'tick.updated', tick: ended, acknowledged: null })
+        expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.tickTranscript(2))?.isInvalidated).toBe(false)
+    })
+
     it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
         const client = new QueryClient()
         const [first] = mockRuns

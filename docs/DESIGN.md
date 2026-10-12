@@ -1096,8 +1096,8 @@ From events the harness also reads, each validated (D026):
 The default `overseer_cmd`, `worker_cmd`, `split_cmd`, and `chore_cmd` ask for events. A tick records what its
 overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), and `_chore` what a
 chore reports on its chore run (§19). Other templates may ask for them too; what reviews report is not recorded yet
-(ROADMAP M13). A tick's output file and a run log hold the events as
-printed.
+(ROADMAP M13). A tick's output file and a run log hold the events as printed, and the web UI reads one session's back
+from them as its transcript (§22).
 
 ### Where the runtime finds canopy's definitions
 
@@ -2582,11 +2582,11 @@ Served by `canopy loop` from a thread (D073):
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
-  ended last), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about it,
-  chores (below), and ticks (below). Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a
-  note to a chore.
-  OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and attach joins once
-  M15 runs workers against OpenCode's server.
+  ended last, each with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets,
+  each with its conversation and the decisions about it, chores (below), and ticks (below). Actions: the CLI's verbs,
+  reply, start, and stop (with or without `now`), and a note to a chore. OpenCode's session attach (M15) is not in the
+  UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once M15 runs
+  workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -2633,9 +2633,12 @@ The API, under `{base}/api`:
 | `GET /meta` | canopy's version, whether the data is mock, and `tracker.ticket_url` (or none) |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
+| `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
+| `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
@@ -2704,10 +2707,39 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 - A rationale is the overseer's text: untrusted, rendered as text, its control characters dropped and its whitespace
   collapsed to one line as `canopy decisions` prints it. It was cut at 2000 characters when recorded (§6).
 - A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
-- The tick's page names where the overseer's output is, `<state_dir>/ticks/<id>.log`, when the file exists, and does
-  not serve it: it is agent output from a file, unbounded and unchecked, where everything the UI shows comes from
-  the journal.
+- The tick's page names where the overseer's output is, `.canopy/ticks/<id>.log`, when the file exists, and shows its
+  session's transcript under the decisions (below).
 - The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
+
+The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
+`opencode export`.
+
+- `GET /runs/{id}/transcript` reads the run's log, and `GET /ticks/{id}/transcript` the tick's output, on each request
+  (`core/transcript.py`). Of the events in it (§13), only those of the session the journal recorded for the run or tick
+  are read; any other line (stderr, a setup command's output, the harness's markers, another session's events) is left
+  out, and the file itself is never served.
+- Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
+  call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
+  long it took; a `step_finish` is one model call's reason, tokens, and cost; an `error` is the runtime's. `step_start`
+  and any type canopy does not know are left out, and an event of a known type that does not validate is counted, not
+  shown.
+- Bounded: at most 32 MiB of the file, to its last whole line; at most 2000 entries and 2 million characters in all;
+  each text, output, and error cut at 20,000 characters, and an input at 5,000. A cut says so. Control characters are
+  dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
+  without following links and without blocking.
+- A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
+  events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8); a running run's
+  page says so. A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its
+  answer.
+- It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
+  again when `runs.updated` moves that run's status, and a tick's when `tick.updated` moves that tick's.
+- A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
+- Everything in a transcript is agent output: untrusted, rendered as text. It holds whatever a tool read or printed, a
+  file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
+- Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
+  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving the file,
+  or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed to its
+  log, or when a second runtime prints another shape.
 
 The worktrees page (taken on request, 2026-10-08): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
@@ -2721,7 +2753,8 @@ running), `held` (leased or in use by anything else: the operator's own shell,
 with uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
 names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
-is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees. When a pool's slots
+is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here, in the runs page's worktrees, and for a run's log and
+a tick's output. When a pool's slots
 share a directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not

@@ -121,6 +121,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run */
+        get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Transcript */
+        get: operations["getRunTranscript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -302,6 +336,23 @@ export type paths = {
         };
         /** Tick */
         get: operations["showTick"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ticks/{tick_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tick Transcript */
+        get: operations["getTickTranscript"];
         put?: never;
         post?: never;
         delete?: never;
@@ -966,6 +1017,130 @@ export type components = {
             type: "tick.updated";
         };
         /**
+         * Transcript
+         * @description What a run's log or a tick's output holds of its session, read back from the events as printed (DESIGN §22).
+         *
+         *     Agent output: untrusted, rendered as text, and bounded. `truncated` says a bound left something out; `unreadable`
+         *     counts events that did not validate.
+         */
+        Transcript: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["TranscriptEntry"][];
+            /** Session Id */
+            session_id: string | null;
+            status: components["schemas"]["TranscriptStatus"];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Unreadable
+             * @default 0
+             */
+            unreadable: number;
+        };
+        TranscriptEntry: components["schemas"]["TranscriptText"] | components["schemas"]["TranscriptTool"] | components["schemas"]["TranscriptStep"] | components["schemas"]["TranscriptError"];
+        /**
+         * TranscriptError
+         * @description The runtime reported an error in the session.
+         */
+        TranscriptError: {
+            /** At */
+            at: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error";
+            /** Message */
+            message: string;
+            /** Name */
+            name: string;
+        };
+        /** @enum {string} */
+        TranscriptStatus: "read" | "no_session" | "no_log";
+        /**
+         * TranscriptStep
+         * @description One model call ended: why, and what it cost, when the runtime said.
+         */
+        TranscriptStep: {
+            /** At */
+            at: string | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "step";
+            /** Reason */
+            reason: string | null;
+            /** Tokens */
+            tokens: number | null;
+        };
+        /**
+         * TranscriptText
+         * @description A finished piece of the agent's text, or of its reasoning.
+         */
+        TranscriptText: {
+            /** At */
+            at: string | null;
+            /**
+             * Cut
+             * @default false
+             */
+            cut: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "text";
+            /**
+             * Reasoning
+             * @default false
+             */
+            reasoning: boolean;
+            /** Text */
+            text: string;
+        };
+        /**
+         * TranscriptTool
+         * @description One tool call, once it ended: its input as indented JSON, and its output, or its error when `error`.
+         */
+        TranscriptTool: {
+            /** At */
+            at: string | null;
+            /**
+             * Cut
+             * @default false
+             */
+            cut: boolean;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Input */
+            input: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "tool";
+            /** Output */
+            output: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "error";
+            /** Title */
+            title: string | null;
+            /** Tool */
+            tool: string;
+        };
+        /**
          * Unit
          * @description A ticket's work in one repository: its PR and phase (DESIGN §18).
          */
@@ -1214,6 +1389,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"][];
+                };
+            };
+        };
+    };
+    getRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description No such run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getRunTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
+                };
+            };
+            /** @description No such run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1606,6 +1857,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickDetail"];
+                };
+            };
+            /** @description No such tick. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTickTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tick_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
                 };
             };
             /** @description No such tick. */
