@@ -9,7 +9,7 @@ Instructions for any agent working in this repository. Humans should read it too
 3. `docs/DESIGN.md`: target shape. Normative.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
-6. `docs/DECISIONS.md`: why things are the way they are. Short bullets; a changed choice edits its entry.
+6. `docs/DECISIONS.md`: the few choices every agent must know, whatever it works on. Read it whole; add to it rarely.
 
 If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entry says otherwise.
 
@@ -24,13 +24,15 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
   `docs/DESIGN.md` is incomplete.
 - Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
   linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
-- Record a decision only when it will shape how a future developer changes or reasons about the code: a choice between
-  real alternatives, a constraint, a runtime dependency. Not progress or state (that is the milestone's `Status:`,
-  `Learned:`, and `Next:` lines in `docs/ROADMAP.md`), not how things work (`docs/DESIGN.md`), not the story of a change
-  (its PR).
-- Write decision entries short: a title that states the decision and two to four one-line bullets for what, why,
-  rejected alternatives, and what would make us revisit. No paragraphs, no history, no list of files touched. The
-  format is at the top of `docs/DECISIONS.md`; when in doubt, cut.
+- Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
+  the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, a runtime
+  dependency, or a direction the operator settled. The test: could an agent working on an unrelated part of canopy
+  break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature behaves as it does, and
+  what was rejected for it, goes in `docs/DESIGN.md` next to the behavior; why a line of code is so goes in a comment
+  there; the story of a change goes in its PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new
+  feature, command, config key, or default is not a decision by itself. When in doubt, leave it out.
+- An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
+  format are at the top of `docs/DECISIONS.md`.
 - Changes to `docs/TRUST_MODEL.md`, `prompts/overseer.md`, or anything under `agents/` require an explicit human
   approval note in the PR description. These files define what the loop is allowed to do.
 - When unsure, prefer the smaller change and leave a note in the PR. Do not invent requirements.
@@ -56,7 +58,7 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (D027, dev only), `pytest-xdist` to run the tests in parallel (D092, dev only), `rich` for terminal output
+  validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
   client (D079, dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
@@ -137,6 +139,6 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - `make all` passes.
 - New behavior has a test using the fakes.
-- Docs updated: `DESIGN.md` for behavior, `DECISIONS.md` for choices that will matter to future developers, `README.md`
-  if the install path or daily surface changed (and the install path is still five steps).
+- Docs updated: `DESIGN.md` for behavior and why it is that way, `README.md` if the install path or daily surface
+  changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

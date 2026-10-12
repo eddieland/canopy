@@ -51,7 +51,7 @@ WAKE_MIN_SECONDS = 60.0
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
-# Pressed during the wait, this key runs the next tick now, as `canopy tick` by hand would (D088).
+# Pressed during the wait, this key runs the next tick now, as `canopy tick` by hand would.
 TICK_NOW_KEY = "t"
 # Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
 # them.
@@ -441,7 +441,7 @@ def _report(
     if rows.row_count:
         console.print(rows)
 
-    # Running reviews take worker capacity too (D065).
+    # Running reviews take worker capacity too (DESIGN §6).
     running = len(db.running_runs(ctx.conn)) + len(db.running_review_runs(ctx.conn))
     footer = Text("  ", style="dim")
     footer.append(f"workers {running}/{ctx.config.capacity.max_workers}")

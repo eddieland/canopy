@@ -704,7 +704,7 @@ export type components = {
         };
         /**
          * Session
-         * @description Whether this browser is signed in, and if so the token its writes must carry (D082).
+         * @description Whether this browser is signed in, and if so the token its writes must carry.
          */
         Session: {
             /** Signed In */

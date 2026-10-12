@@ -1,4 +1,4 @@
-"""Property tests (D027) for the validators that stand between agent-written text and paths, argv, and prompts."""
+"""Property tests for the validators that stand between agent-written text and paths, argv, and prompts."""
 
 import re
 import string

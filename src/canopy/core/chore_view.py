@@ -29,7 +29,7 @@ _HISTORY_RUNS = 200
 
 
 def configured(config: Config, workspace: Workspace) -> dict[str, Chore]:
-    """Return the chores this loop runs, by name: none when `capacity.max_chores` is 0 (DESIGN §19, D063)."""
+    """Return the chores this loop runs, by name: none when `capacity.max_chores` is 0 (DESIGN §19)."""
     if config.capacity.max_chores == 0:
         return {}
     return defined(config, workspace)
@@ -157,7 +157,7 @@ class FailedItem:
 
 
 def failed_items(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[FailedItem]:
-    """Return a `chore_failed` item for each configured chore whose latest ended run did not end `ok` (D028)."""
+    """Return a `chore_failed` item for each configured chore whose latest ended run did not end `ok`."""
     items: list[FailedItem] = []
     for state in states(conn, config, workspace):
         run = state.latest_ended

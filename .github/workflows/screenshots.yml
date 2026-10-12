@@ -1,7 +1,7 @@
 name: Screenshots
 
 # Regenerates the Playwright screenshot baselines on CI's runner, with the Chromium and fonts the ui-e2e check compares
-# against, and pushes any that changed to the branch it was run on (D101). On demand only: run it on a branch from the
+# against, and pushes any that changed to the branch it was run on. On demand only: run it on a branch from the
 # Actions tab, `gh workflow run screenshots.yml --ref BRANCH`, or the GitHub API, after a deliberate visual change.
 on:
   workflow_dispatch:

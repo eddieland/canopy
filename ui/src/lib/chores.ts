@@ -1,7 +1,7 @@
 import type { ChoreSummary, Message } from '@/api/types'
 import { age } from '@/lib/time'
 
-/** When a chore may start (D099), as `canopy chore run` names it when it refuses: `mon,tue 08:00-18:00 UTC`. */
+/** When a chore may start, as `canopy chore run` names it when it refuses: `mon,tue 08:00-18:00 UTC`. */
 export function windowText(chore: Pick<ChoreSummary, 'days' | 'hours' | 'timezone'>): string {
     if (chore.days.length === 0 && chore.hours === null) return 'any time'
     const days = chore.days.length > 0 ? chore.days.join(',') : 'every day'

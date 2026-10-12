@@ -30,7 +30,7 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 	uv run shellcheck $$(git ls-files '*.sh')
 	uv run actionlint
 
-# One worker per CPU (D092). For one test or a debugger, run `uv run pytest` without -n: it stays serial.
+# One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial.
 test: ## Run all tests, in parallel
 	uv run pytest -q -n auto
 

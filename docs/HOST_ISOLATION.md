@@ -2,7 +2,7 @@
 
 Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
 Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
-explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107, D108), and
+explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
 so is the half of item 5 that does (D109). The claims about `srt` below were checked against its source at version
 0.0.79 (2026-10-09); re-check them against the version the operator pins.
 
@@ -153,9 +153,10 @@ The per-run object directory needs two things the first draft of this section mi
   before deleting it, `_run` checks the slot out at step 2's commit, which is in the shared directory, with
   `git checkout --detach --force`, and expires the slot's HEAD reflog (`git reflog expire --expire=now
   --expire-unreachable=now HEAD`); after that, `gc` and `fsck` are clean. Step 5 runs before this, with the same two
-  variables, so it can see and push the worker's commits. This is cleanup on every exit path, like D108's, and a run
-  killed with SIGKILL needs reconcile to do it, so the directory lives at a path reconcile can find from the run, such
-  as `<state_dir>/runs/<id>.objects/`, which the policy re-allows as it does a chore's `cwd`.
+  variables, so it can see and push the worker's commits. This is cleanup on every exit path, like putting back a
+  changed `.git` file (§5 item 2), and a run killed with SIGKILL needs reconcile to do it, so the directory lives at a
+  path reconcile can find from the run, such as `<state_dir>/runs/<id>.objects/`, which the policy re-allows as it
+  does a chore's `cwd`.
 - The variables reach every git the worker's process tree runs, not only git in the slot. A commit in any other
   repository lands in the per-run directory, so that repository reads `bad object HEAD` once it is gone, and a
   repository made with `git init` then `git fetch` (how Go fetches modules into its cache) gets no `objects/` at all.
@@ -167,7 +168,7 @@ The per-run object directory needs two things the first draft of this section mi
   Giving such tools a per-run cache, or keeping them out of sandboxed builds, is open (§7).
 
 A chore gets the same policy. Its default `cwd` is inside the workspace's `.canopy/`, so its policy re-allows that one
-directory: read-only by default, since a chore's only output is its result line (D034), and writable for a chore whose
+directory: read-only by default, since a chore's only output is its result line, and writable for a chore whose
 own tooling writes there. The rest of `.canopy/` stays denied.
 
 ### 4.3 Network policy
@@ -213,16 +214,16 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    none. They do not stop a command the shared config names: a filter driver (with a committed `.gitattributes`) runs
    on checkout, and `remote.<name>.uploadpack` on fetch over a local or SSH remote. Until a worker cannot write that
    config (§4.2), those stay open.
-2. Built (D108). `_run` reads each slot's `.git` file before any git step. If it changed by the time the worker exits,
-   the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the slot
-   is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
+2. Built (DESIGN §8). `_run` reads each slot's `.git` file before any git step. If it changed by the time the worker
+   exits, the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the
+   slot is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
    forgot. Gap: a `_run` killed with SIGKILL leaves the slot to reconcile, which does not know what the file held.
 3. The prompt reaches the runtime byte for byte. D023 keeps ticket text out of a shell. `srt` joins its arguments into
    one `bash -c` string after single-quoting each one, and quotes again at each layer it adds (`sh -c` around
    bubblewrap on Linux, `env ... sandbox-exec` on macOS). That is the POSIX-safe form, but it is a second parser on
    ticket-written text. The inner bash is neither a login nor an interactive shell, so it reads no rc file, but it
    does source `$BASH_ENV` (§4.1 step 3). The canary (§6) proves prompts come through unchanged with a hypothesis
-   property test over quotes, newlines, `$()`, backticks, and arbitrary Unicode text (D027); the harness's half, that
+   property test over quotes, newlines, `$()`, backticks, and arbitrary Unicode text; the harness's half, that
    the prompt is exactly one argument of the template, is `test_properties.py`. `_run` reads the prompt as UTF-8, so
    bytes that are not valid UTF-8 never reach the command line. On Linux the whole quoted command is one argument to
    `sh`, so it must fit in one argument's limit (128 KiB); `srt` refuses a longer one. If either is a problem, D023's
@@ -276,7 +277,7 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
   Linux: `srt`'s seccomp filter blocks creating Unix sockets, which includes the agent socket. Its per-path
   `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`, which lifts the block entirely.
-  canopy already recommends HTTPS remotes and `canopy workspace sync` warns about SSH ones (D038). Still open: whether
+  canopy already recommends HTTPS remotes and `canopy workspace sync` warns about SSH ones. Still open: whether
   to support SSH inside the sandbox at all (allow the agent socket, or push from the host in `_run`), or to leave SSH
   to unsandboxed runs.
 - OpenCode's local MCP servers start inside the sandbox and inherit it. Each one's hosts must be on the allowlist, and

@@ -1,4 +1,4 @@
-"""When a chore's `days` and `hours` let a run start (DESIGN §19, D099): clock times are a guard in code.
+"""When a chore's `days` and `hours` let a run start (DESIGN §19): clock times are a guard in code.
 
 A chore with neither may start at any time. The window governs only when a run starts; one running when it closes runs
 to its end or its timeout. Times are wall-clock times in the chore's `timezone`, or this machine's local time.

@@ -1,4 +1,4 @@
-"""Single keypresses at the terminal, read without Enter, for `canopy loop`'s countdown (DESIGN §6, D088).
+"""Single keypresses at the terminal, read without Enter, for `canopy loop`'s countdown (DESIGN §6).
 
 While `listen` is entered, the terminal is in cbreak mode: keys arrive one at a time and are not echoed, and Ctrl-C and
 Ctrl-Z still send their signals. The terminal's settings are put back on the way out. Only a terminal this process

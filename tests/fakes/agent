@@ -30,7 +30,7 @@ Stdlib only, no canopy imports: this runs as a separate process under whatever p
 
 import json
 import os
-import subprocess  # noqa: TID251  (stands in for an agent runtime, not canopy code; D024)
+import subprocess  # noqa: TID251  (stands in for an agent runtime, so a fake overseer can run the CLI)
 import sys
 import time
 from pathlib import Path

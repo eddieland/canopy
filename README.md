@@ -41,7 +41,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      eddieland/canopy --pattern 'canopy-linux-x86_64*'`), check it against its `.sha256`, and copy it to the machine
      as `~/.local/bin/canopy` (`mkdir -p ~/.local/bin` first if it is missing, and put it on `PATH` if it is not).
      Make it executable and add the sinks beside it, as scripts that run it with `SCIE_BOOT` set to their name (a
-     link to it can run canopy itself instead, D112):
+     link to it can run canopy itself instead):
 
      ```sh
      cd ~/.local/bin && chmod +x canopy
@@ -66,7 +66,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
    `canopy-workspace.toml`, and clones the repository under `repos/`. canopy writes nothing into your repositories and
    installs nothing else: agent runs load its agent definitions and skills from its own directory (D016, D040). Set
    `tracker.query` in `canopy-workspace.toml`. Use HTTPS clone URLs with a credential helper; worker sandboxing is not
-   expected to support SSH (D038).
+   expected to support SSH.
 5. Add your label (`agent-ready-<you>` by default) to a ticket, then run `canopy loop --dry-run --ticks 1` in the
    workspace and read the plan. Once you trust it, leave `canopy loop` running: it ticks, waits `loop.interval_minutes`
    (15 by default), longer while nothing changes, and repeats until you press Ctrl-C. It also serves the web UI at

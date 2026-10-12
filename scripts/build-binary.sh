@@ -6,7 +6,8 @@
 # The file is a pex in venv mode, wrapped in a scie that carries a python-build-standalone interpreter. Venv mode
 # matters: dispatch starts `_run` as `sys.executable -m canopy` (DESIGN §5), which needs an interpreter that can import
 # canopy. It is a BusyBox over canopy's three commands: SCIE_BOOT names the one to run, and unset, its name `canopy`
-# picks canopy. README installs the sinks as scripts that set SCIE_BOOT (D112).
+# picks canopy. README installs the sinks as scripts that set SCIE_BOOT, not links named for them: a link can run
+# canopy itself, and SCIE_BOOT picks the command whatever the name.
 #
 # Usage: scripts/build-binary.sh
 set -eu
@@ -30,7 +31,7 @@ for wheel in "$dist"/wheels/*.whl; do
     echo "$wheel --hash=sha256:$(shasum -a 256 "$wheel" | cut -d' ' -f1)" >>"$dist/requirements.txt"
 done
 
-# --no-emit-warnings: canopy lists canopy-notify-slack's script among its own (D064), and pex warns about that
+# --no-emit-warnings: canopy lists canopy-notify-slack's script among its own (D035), and pex warns about that
 # collision on every first run although both name the same function.
 uvx --python "$PYTHON_VERSION" "pex@$PEX_VERSION" \
     -r "$dist/requirements.txt" \
