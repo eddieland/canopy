@@ -1941,6 +1941,10 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
   (`not_in_channel`). `--token-file` without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit
   2. The token is never in canopy's config, argv, journal, logs, or the sink's own messages; the channel is in argv,
   which is the sink's `cmd`.
+- With `--channel`, `--username NAME` and `--icon-emoji :CODE:` post under that name and emoji instead of the app's
+  (`username` and `icon_emoji` in the body), which needs the app's `chat:write.customize` scope. The name must be
+  printable, not blank, and at most 80 characters; the emoji one code, optionally with a skin tone
+  (`:wave::skin-tone-3:`). Either without `--channel` is a usage error, exit 2: an app's webhook ignores both.
 - Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
   status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a
@@ -1948,7 +1952,8 @@ and lists the `canopy-notify-slack` script in its `[project.scripts]`, so instal
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
   scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set
-  `cmd = "canopy-notify-slack --channel C0123ABCD"`.
+  `cmd = "canopy-notify-slack --channel C0123ABCD"`. For a name and icon of its own, add the `chat:write.customize`
+  scope and `--username canopy --icon-emoji :evergreen_tree:` to `cmd`.
 
 Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api
 rule (`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
