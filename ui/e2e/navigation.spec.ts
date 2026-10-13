@@ -177,6 +177,35 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     expect((await reads).status()).toBe(200)
 })
 
+test('a slot with long text keeps it inside its row', async ({ page }) => {
+    // Treehouse can find many processes in one slot, and a branch or a note can be any length: each is cut to fit
+    // or wrapped, never past the panel's edge.
+    await page.route('**/api/worktrees', async (route) => {
+        const response = await route.fetch()
+        const pools = (await response.json()) as {
+            repo: string
+            worktrees: { name: string; branch: string | null; note: string | null; processes: object[] }[]
+        }[]
+        const slot = pools.find((p) => p.repo === 'web')?.worktrees.find((w) => w.name === '1')
+        if (slot === undefined) throw new Error('the mock has no slot web#1')
+        slot.processes = Array.from({ length: 12 }, (_, i) => ({ pid: 340928 + i, name: `great_gasdbq_${i}` }))
+        slot.branch = `agent/ABC-101-${'a-very-long-branch-name-'.repeat(6)}end`
+        slot.note = `left ${'/a/path/with/no/spaces'.repeat(12)}`
+        await route.fulfill({ response, json: pools })
+    })
+    await page.goto('worktrees')
+    await settled(page)
+    const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
+    await expect(slot).toContainText('great_gasdbq_0 340928')
+    const processes = slot.getByTestId('worktree-processes')
+    await expect(processes).toHaveAttribute('title', /great_gasdbq_11 340939/)
+    const overflow = await slot.evaluate((li) => {
+        const edge = li.getBoundingClientRect().right
+        return [...li.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > edge + 0.5).length
+    })
+    expect(overflow).toBe(0)
+})
+
 test('the worktrees page reads the pools again every 10 seconds, and only while it is open', async ({ page }) => {
     await page.clock.install()
     let reads = 0
