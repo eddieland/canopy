@@ -7,6 +7,7 @@ import { createRoot } from 'react-dom/client'
 
 import { api, writeToken } from '@/api/client'
 import { keys } from '@/api/queries'
+import { PAGE_SCROLLER } from '@/components/shell/app-shell'
 import type { Session } from '@/api/types'
 import { basePath } from '@/lib/base'
 import { createQueryClient } from '@/lib/query-client'
@@ -25,6 +26,8 @@ const router = createRouter({
     // Loaders read the Query cache; the router keeps no cache of its own.
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
+    // The page scrolls under the header, not the window (AppShell): a new page starts at its top there too.
+    scrollToTopSelectors: [`[data-scroll-restoration-id="${PAGE_SCROLLER}"]`],
 })
 
 declare module '@tanstack/react-router' {

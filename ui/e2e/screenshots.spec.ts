@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, ROUTES, settled, signIn, storeTheme, THEMES } from './helpers.ts'
+import { NOW, ROUTES, screenshotWhole, settled, signIn, storeTheme, THEMES } from './helpers.ts'
 
 for (const theme of THEMES) {
     for (const route of ROUTES) {
@@ -11,7 +11,7 @@ for (const theme of THEMES) {
             await page.goto(route)
             await settled(page)
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/)
-            await expect(page).toHaveScreenshot(`${route.replace(/[/?=]/g, '-')}-${theme}.png`, { fullPage: true })
+            await screenshotWhole(page, `${route.replace(/[/?=]/g, '-')}-${theme}.png`)
         })
     }
 
@@ -44,7 +44,7 @@ test.describe('on a wide screen', () => {
             await signIn(page)
             await page.goto(route)
             await settled(page)
-            await expect(page).toHaveScreenshot(`${route.replace('/', '-')}-wide-dark.png`, { fullPage: true })
+            await screenshotWhole(page, `${route.replace('/', '-')}-wide-dark.png`)
         })
     }
 })
