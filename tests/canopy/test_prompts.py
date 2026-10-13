@@ -1,8 +1,15 @@
+import re
+
 import pytest
 
-from canopy.core import prompts
+from canopy.cli.journal import PHASES
+from canopy.core import db, prompts
 from canopy.core.config import load
+from canopy.infra import resources
 from tests.conftest import CanopyEnv
+
+# A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
+_PHASE_ROW = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
 VALUES = {
     "KEY": "PROJ-1",
@@ -228,3 +235,15 @@ def test_shipped_resume_prompts_gate_untrusted_reviewers(canopy_env: CanopyEnv) 
     assert "## Messages from the operator\n\nNo messages from the operator.\n" in public
     private = prompts.render_worker(cfg, "resume", {**VALUES, "CONVERSATION": "No messages yet."}, private=True)
     assert "Trusted reviewers: `octocat`." in private
+
+
+def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
+    """The overseer records the phases its table names, so `ticket set --phase` must take each one."""
+    text = (resources.prompts_dir() / prompts.OVERSEER).read_text()
+    table = text.split("## Phase table", 1)[1].split("\n## ", 1)[0]
+    phases = _PHASE_ROW.findall(table)
+    assert phases
+    assert sorted(phases) == sorted(PHASES)
+    # The table says the phases from `pushed_no_pr` to `merged` are a unit's; the CLI then requires --repo for them.
+    unit = phases[phases.index("pushed_no_pr") : phases.index("merged") + 1]
+    assert set(unit) == db.UNIT_PHASES

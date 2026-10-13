@@ -35,6 +35,7 @@ PHASES = (
     "ci_running",
     "ci_red",
     "changes_requested",
+    "untrusted_review",
     "green_unreviewed",
     "approved",
     "merged",
