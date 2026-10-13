@@ -1008,6 +1008,11 @@ export type components = {
              */
             hours: number;
             /**
+             * Max Usd
+             * @description What the dearest run cost, of those that reported a cost; None when none did.
+             */
+            max_usd: number | null;
+            /**
              * Mean Usd
              * @description What a run cost on average, over those that reported a cost; None when none did.
              */

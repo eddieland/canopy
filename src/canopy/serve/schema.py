@@ -347,6 +347,8 @@ class ChoreSpendWindow(_Model):
     p99_usd: float | None = None
     """The 99th percentile of what a run cost, by nearest rank over those that reported a cost: the dearest run when
     fewer than 100 did. None when none did."""
+    max_usd: float | None = None
+    """What the dearest run cost, of those that reported a cost; None when none did."""
 
 
 class ChoreSpend(_Model):

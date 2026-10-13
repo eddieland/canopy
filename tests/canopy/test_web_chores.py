@@ -94,6 +94,7 @@ def test_a_chores_p99_is_by_nearest_rank_so_one_dear_run_in_a_hundred_does_not_s
     # 200 runs: 0.05, 198 at 0.10, and 0.33. The 198th cheapest is the 99th percentile.
     month = health["spend"]["month"]
     assert (month["priced"], month["p99_usd"], month["mean_usd"]) == (200, 0.1, pytest.approx(20.18 / 200))
+    assert month["max_usd"] == 0.33
     # Under 100 runs it is the dearest one.
     assert health["spend"]["day"]["p99_usd"] == 0.33
 
@@ -108,6 +109,7 @@ def spent(hours: int, runs: int, costs: list[float]) -> dict[str, Any]:
         "cost_usd": pytest.approx(total),
         "mean_usd": pytest.approx(total / len(costs)),
         "p99_usd": max(costs),
+        "max_usd": max(costs),
     }
 
 

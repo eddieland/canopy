@@ -622,7 +622,13 @@ def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int)
     # Nearest rank: the smallest cost at least 99% of the runs did not exceed.
     p99 = costs[math.ceil(0.99 * len(costs)) - 1]
     return ChoreSpendWindow(
-        hours=hours, runs=runs, priced=len(costs), cost_usd=total, mean_usd=total / len(costs), p99_usd=p99
+        hours=hours,
+        runs=runs,
+        priced=len(costs),
+        cost_usd=total,
+        mean_usd=total / len(costs),
+        p99_usd=p99,
+        max_usd=costs[-1],
     )
 
 

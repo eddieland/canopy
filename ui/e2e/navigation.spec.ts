@@ -237,7 +237,13 @@ test('the chores page lists each chore as canopy status does, and a chore page w
 
     await page.goto('chores/deps')
     await settled(page)
-    await expect(page.getByTestId('chore-spend-24h').getByRole('cell')).toHaveText(['2', '$0.47', '$0.23', '$0.26'])
+    await expect(page.getByTestId('chore-spend-24h').getByRole('cell')).toHaveText([
+        '2',
+        '$0.47',
+        '$0.23',
+        '$0.26',
+        '$0.26',
+    ])
     const finding = page.getByTestId('finding-lodash-advisory')
     await expect(finding).toContainText('lodash 4.17.20 has a prototype pollution advisory')
     await expect(finding.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')

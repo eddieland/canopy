@@ -179,8 +179,8 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
 }
 
 /**
- * What a chore's runs cost in each window: how many, the total, and a run's average and 99th percentile. The average
- * and percentile are over the runs that reported a cost; under 100 of them, the percentile is the dearest run.
+ * What a chore's runs cost in each window: how many, the total, and a run's average, 99th percentile, and most. The
+ * three are over the runs that reported a cost; under 100 of them, the percentile is the dearest run, as max is.
  */
 function SpendTable({ spend }: { spend: ChoreSpend }) {
     const windows: [string, ChoreSpendWindow][] = [
@@ -199,6 +199,7 @@ function SpendTable({ spend }: { spend: ChoreSpend }) {
                         <th className="panel-label w-24 pb-1.5 font-normal" title="99th percentile of a run's cost">
                             p99
                         </th>
+                        <th className="panel-label w-24 pb-1.5 font-normal">max</th>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
@@ -211,6 +212,7 @@ function SpendTable({ spend }: { spend: ChoreSpend }) {
                             <td className="readout">{costText(window.cost_usd)}</td>
                             <td className="readout">{costText(window.mean_usd)}</td>
                             <td className="readout">{costText(window.p99_usd)}</td>
+                            <td className="readout">{costText(window.max_usd)}</td>
                         </tr>
                     ))}
                 </tbody>
