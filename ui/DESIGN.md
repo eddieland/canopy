@@ -56,10 +56,10 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Reviews fuchsia,
-  Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go
-  on the nav's icons and highlight, the first step of the page header's trail, and the header's aurora, and nowhere
-  in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Pull requests gold,
+  Reviews fuchsia, Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from
+  `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the header's
+  aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -355,6 +355,13 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
   text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
   (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
+- **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
+  its page, its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
+  working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
+  state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
+  a link out under it as a ticket's page has, then panels for its fields, the runs that pushed to it (`RunsTable`), its
+  reviews as rows each opening the review, and its decisions. A review's page links to its PR's (`its page in
+  canopy`).
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
   when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.
