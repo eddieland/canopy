@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db
 from canopy.core import review_result as result
+from canopy.reviews import grants
 
 if TYPE_CHECKING:
     import sqlite3
@@ -56,10 +57,13 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
     runs = db.review_runs_of(conn, url)
     latest = runs[0]
     stored = result.stored(latest["result_json"])
+    granted = grants.granted(conn, url)
     return {
         "url": url,
         "ticket": next((r["ticket_key"] for r in runs if r["ticket_key"]), None),
         "review_runs": len(runs),
+        # Only a PR the operator granted more reviews has the key: its limit is the policy's plus this.
+        **({"granted": granted} if granted else {}),
         "latest": {
             "run_id": latest["id"],
             "sha": latest["sha"],

@@ -48,6 +48,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   `decisions.pr` names the PR of a decision about a review.
 - `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
   Only added to.
+- `review_grants`: one row per `canopy grant URL review`; the PR's URL, review runs granted, and when (§21, §22).
+  Only added to.
 - `split_children`: one row per ticket a split created; its parent, the repository it covers, and the split run.
   Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
