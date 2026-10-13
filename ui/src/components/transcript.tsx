@@ -62,7 +62,11 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                     <p className="flex flex-wrap gap-x-4 border-b px-3 py-1.5 font-mono text-xs text-muted-foreground">
                         <span>
                             {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
-                            {counts.failed > 0 && <span className="text-status-failed">, {counts.failed} failed</span>}
+                            {counts.failed > 0 && (
+                                <>
+                                    , <span className="text-status-failed">{counts.failed} failed</span>
+                                </>
+                            )}
                         </span>
                         <span>
                             {counts.calls} model {counts.calls === 1 ? 'call' : 'calls'}
