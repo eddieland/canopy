@@ -22,6 +22,8 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     const transcript = page.getByTestId('transcript')
     await expect(transcript).toContainText('session ses_mock39')
     await expect(transcript).toContainText('7 tool calls, 1 failed')
+    // Only the failure count takes the failure color, not the comma before it.
+    await expect(transcript.locator('.text-status-failed', { hasText: 'failed' })).toHaveText('1 failed')
     await expect(transcript).toContainText('3 model calls')
     const tools = transcript.getByTestId('transcript-tool')
     await expect(tools).toHaveCount(7)
