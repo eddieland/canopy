@@ -60,9 +60,11 @@ in order:
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
-   the journal. The session id and cost the runtime reported (§13) go on the `ticks` row, whether or not the run
-   succeeded. The run succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`;
-   otherwise the tick closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
+   the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
+   overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
+   id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
+   succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick
+   closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
    (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention list standing,
    so an outage does not resolve and re-raise every item.
 
