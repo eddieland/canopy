@@ -13,7 +13,7 @@ import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { TicketActions } from '@/components/ticket-actions'
-import { TrackerLink } from '@/components/tracker-link'
+import { TicketLinks } from '@/components/ticket-links'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -79,6 +79,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         </>
                     )
                 }
+                links={<TicketLinks tracker={tracker} units={units} />}
             >
                 {how}
             </PageHeader>
@@ -106,14 +107,6 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                                 {phaseLabel(ticket)}
                                 {ticket.done ? ', done' : ''}
                             </dd>
-                            {tracker && (
-                                <>
-                                    <dt className="panel-label self-center">tracker</dt>
-                                    <dd className="font-mono text-xs">
-                                        <TrackerLink href={tracker} />
-                                    </dd>
-                                </>
-                            )}
                             <dt className="panel-label self-center">branch</dt>
                             <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
                             {units.map((unit) => (
@@ -209,14 +202,8 @@ function Unknown({ ticketKey }: { ticketKey: string }) {
     const tracker = useTicketUrl(ticketKey)
     return (
         <>
-            <PageHeader label="Ticket" title={ticketKey}>
+            <PageHeader label="Ticket" title={ticketKey} links={<TicketLinks tracker={tracker} />}>
                 canopy has no record of it. Start it to work it privately.
-                {tracker && (
-                    <>
-                        {' '}
-                        It is at <TrackerLink href={tracker} />.
-                    </>
-                )}
             </PageHeader>
             <Panel>
                 <PanelHeader label="Start a ticket" />

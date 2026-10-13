@@ -6,9 +6,19 @@ import { cn } from '@/lib/utils'
 
 /**
  * A page's title block: a small panel label in its section's color (the accent on a page in no section), the title,
- * and one line of description.
+ * one line of description, and `links` under it, the page subject's links out.
  */
-export function PageHeader({ label, title, children }: { label: string; title: ReactNode; children?: ReactNode }) {
+export function PageHeader({
+    label,
+    title,
+    links,
+    children,
+}: {
+    label: string
+    title: ReactNode
+    links?: ReactNode
+    children?: ReactNode
+}) {
     const section = useSection()
     return (
         <header className="flex flex-col gap-1">
@@ -17,6 +27,7 @@ export function PageHeader({ label, title, children }: { label: string; title: R
             </span>
             <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
             {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
+            {links}
         </header>
     )
 }
