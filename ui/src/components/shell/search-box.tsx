@@ -1,7 +1,8 @@
 import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
-import { Search } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { isSearchShortcut, SEARCH_DEBOUNCE_MS, SEARCH_MAX, searchQueryOf } from '@/lib/search'
 import { cn } from '@/lib/utils'
@@ -9,7 +10,9 @@ import { cn } from '@/lib/utils'
 /**
  * The search box atop the nav, on every page (DESIGN §22, Search). `/` focuses it from anywhere but a text field, and
  * Escape leaves it. Typing opens the search page once the operator pauses, replacing the history entry while the page
- * is open, so Back leaves the search rather than stepping through each keystroke; Enter opens it at once.
+ * is open, so Back leaves the search rather than stepping through each keystroke; Enter opens it at once. While it
+ * holds text, a clear button takes the keycap's place: it empties the box and keeps the focus there, leaving the page
+ * as it is.
  */
 export function SearchBox() {
     const navigate = useNavigate()
@@ -47,6 +50,12 @@ export function SearchBox() {
         void navigate({ to: '/search', search: { q: query }, replace: onPage })
     }
 
+    function clear() {
+        window.clearTimeout(timer.current)
+        setValue('')
+        input.current?.focus()
+    }
+
     return (
         <search className="px-2 pt-2">
             <form
@@ -82,7 +91,20 @@ export function SearchBox() {
                         'placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden',
                     )}
                 />
-                <Kbd aria-hidden>/</Kbd>
+                {value ? (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label="Clear search"
+                        onClick={clear}
+                        className="hover:bg-muted"
+                    >
+                        <X aria-hidden />
+                    </Button>
+                ) : (
+                    <Kbd aria-hidden>/</Kbd>
+                )}
             </form>
         </search>
     )
