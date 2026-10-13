@@ -982,10 +982,15 @@ off the PR (D114), so canopy shows them itself, as a PR review of its own that o
   its `path:line` where the line is in the diff.
 - What the operator does from there, such as dismissing a finding or sending some findings to a worker, through the
   journal's existing channels (`canopy reply`, the overseer), never a write to the PR.
-- Open: whether the diff is read by the harness (`git diff` of the review's commit in a slot) or kept from the review
-  run, and how a finding is tracked across commits.
+- Settled: the diff is kept from the review run. `_review` writes `git diff` of the commit against where it leaves its
+  pool's base branch beside the run's log, since the harness cannot ask GitHub and the slot is gone afterwards
+  (DESIGN §21, The diff). Open: how a finding is followed from one commit's review to the next.
 
-Status: not started.
+Status: in progress. Migration 0016 records a review run's base branch, and `_review` keeps the diff, which
+`core/review_diff.py` reads back and anchors each finding on (2026-10-13). `GET /reviews` and `GET /reviews/{id}`
+serve them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note.
+The Reviews pages show them, findings on the diff. Next: what the operator does from a finding, through the journal's
+channels; then the live check, a real review's page against its PR's diff on GitHub.
 
 ## M33. Spend by what it bought
 

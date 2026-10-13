@@ -39,6 +39,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
+| `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
@@ -55,10 +56,10 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Chores orange,
-  Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go on the nav's
-  icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data: there a color
-  is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Reviews fuchsia,
+  Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go
+  on the nav's icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data:
+  there a color is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -280,6 +281,15 @@ tabs.
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
+- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
+  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
+  monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
+  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel. A finding's
+  card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
+  line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
+  `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
+  text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
+  (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. The search page has a panel per source with hits, in the server's order, its count
   in the header (`newest 20` when the source has more). A hit is a row: where it opens (its ticket or chore with the

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.core import db
-from canopy.reviews import result
+from canopy.core import review_result as result
 
 if TYPE_CHECKING:
     import sqlite3

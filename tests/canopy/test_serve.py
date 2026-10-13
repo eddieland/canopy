@@ -195,8 +195,9 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     assert c.get("/assets/index-abc123.js").status_code == 200
     assert c.get("/api/session").json() == {"signed_in": False, "token": None}
     paths = ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events")
-    # A transcript is agent output from a file, and as much the operator's as the journal.
-    for path in (*paths, "/api/runs/39", "/api/runs/39/transcript", "/api/ticks/2/transcript"):
+    # A transcript is agent output from a file, and a review's diff the PR's text: as much the operator's as the rest.
+    files = ("/api/runs/39", "/api/runs/39/transcript", "/api/ticks/2/transcript", "/api/reviews", "/api/reviews/4")
+    for path in (*paths, *files):
         assert c.get(path).status_code == 401, path
     assert c.post("/api/tickets/ABC-102/start", headers={"origin": ORIGIN}).status_code == 401
 
@@ -476,6 +477,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/search",
         "/api/events",
         "/api/loop",
+        "/api/reviews",
+        "/api/reviews/{run_id}",
         "/api/loop/pause",
         "/api/loop/resume",
         "/api/loop/reload",

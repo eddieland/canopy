@@ -18,7 +18,7 @@ from fastapi.sse import EventSourceResponse
 
 from canopy.core import chore_view, config, conversation, pause, search
 from canopy.infra import logs
-from canopy.serve import live, views, worktrees
+from canopy.serve import live, reviews, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
@@ -35,6 +35,8 @@ from canopy.serve.schema import (
     RefusalResponse,
     Replied,
     ReplyRequest,
+    ReviewDetail,
+    ReviewSummary,
     Run,
     SearchResults,
     Session,
@@ -101,6 +103,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _loop_routes(signed_in, backend)
     _run_routes(signed_in, backend)
     _search_routes(signed_in, backend)
+    _review_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
 
@@ -407,3 +410,21 @@ def _search_routes(api: APIRouter, backend: Backend) -> None:
                 return views.found(ctx, q)
             except search.BadQueryError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from None
+
+
+def _review_routes(api: APIRouter, backend: Backend) -> None:
+    """The reviews canopy keeps instead of posting them (DESIGN §21, D114). Reads only; all of it is untrusted."""
+
+    @api.get("/reviews", operation_id="listReviews")
+    def review_list() -> list[ReviewSummary]:
+        with backend.open() as ctx:
+            return reviews.reviews(ctx)
+
+    # The diff is read back from the file beside the run's log on each request; never on the stream.
+    @api.get("/reviews/{run_id}", operation_id="getReview", responses={404: {"description": "No such review run."}})
+    def review(run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> ReviewDetail:
+        with backend.open() as ctx:
+            found = reviews.review(ctx, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no review run {run_id}")
+        return found
