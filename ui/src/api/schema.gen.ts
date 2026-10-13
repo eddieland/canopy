@@ -936,6 +936,44 @@ export type components = {
             title: string;
         };
         /**
+         * ChoreSpend
+         * @description What one chore's runs cost in the last day and the last 30 days, read together.
+         */
+        ChoreSpend: {
+            /** @description The last 24 hours. */
+            day: components["schemas"]["ChoreSpendWindow"];
+            /** @description The last 30 days. */
+            month: components["schemas"]["ChoreSpendWindow"];
+        };
+        /**
+         * ChoreSpendWindow
+         * @description What one chore's runs that started in the last `hours` hours cost, as the agent runtime reported it (§13).
+         *
+         *     No start time, unlike `SpendWindow`: that moves with the clock, and would change the chores list on every read.
+         */
+        ChoreSpendWindow: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Hours
+             * @description How long the window is, in hours.
+             */
+            hours: number;
+            /**
+             * Priced
+             * @description How many of those reported a cost.
+             */
+            priced: number;
+            /**
+             * Runs
+             * @description How many of its runs started in the window, a running one included.
+             */
+            runs: number;
+        };
+        /**
          * ChoreSummary
          * @description A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings.
          */
@@ -981,6 +1019,8 @@ export type components = {
             name: string;
             /** @description Its run that is running now, if one is. */
             running: components["schemas"]["ChoreRun"] | null;
+            /** @description What its runs cost in the last day and the last 30 days. */
+            spend: components["schemas"]["ChoreSpend"];
             /**
              * Timezone
              * @description The IANA zone `days` and `hours` are in; None for the local time of the machine the loop runs on.

@@ -65,6 +65,10 @@ export type WorktreeState = Schemas['WorktreeState']
 export type ChoreSummary = Schemas['ChoreSummary']
 /** One chore: what `canopy show chore:NAME` prints. */
 export type ChoreDetail = Schemas['ChoreDetail']
+/** What one chore's runs cost in the last day and the last 30 days (DESIGN §13). */
+export type ChoreSpend = Schemas['ChoreSpend']
+/** What one chore's runs that started in a window cost: how many, how many reported a cost, and the total. */
+export type ChoreSpendWindow = Schemas['ChoreSpendWindow']
 /** One run of a chore (DESIGN §19). */
 export type ChoreRun = Schemas['ChoreRun']
 /** An open finding: one the chore's latest `ok` run reported (DESIGN §19). */

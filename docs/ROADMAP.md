@@ -430,9 +430,10 @@ Accept: written with the design, before work starts.
 Status: in progress. Taken in part on request (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids:
 worker, split, chore, and review runs and each tick's overseer record their cost in dollars and tokens, so every agent
 run canopy starts is in the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
-and the web UI's attention page (the last 24 hours and 30 days) show it. A tick's cost is its overseer's alone, so a
-worker's is not counted against the tick that dispatched it. An `overseer_cmd`, `review_cmd`, or chore `cmd` in a user
-file from before needs `--format json` added. What keeps it open: the budget and the pacing rule are not designed.
+and the web UI's attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's
+cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`,
+`review_cmd`, or chore `cmd` in a user file from before needs `--format json` added. What keeps it open: the budget
+and the pacing rule are not designed.
 
 ## M14. PR-scoped work
 

@@ -232,9 +232,12 @@ test('the chores page lists each chore as canopy status does, and a chore page w
     await expect(deps).toContainText('last ok 4h ago, due in 1h')
     await expect(deps.getByTestId('chore-findings')).toHaveText('1 open finding')
     await expect(deps).toContainText('mon,tue,wed,thu,fri 08:00-18:00 UTC')
+    await expect(deps.getByTestId('chore-spend')).toHaveText('$0.47 24h · $0.47 30d')
+    await expect(page.getByTestId('chore-build-health').getByTestId('chore-spend')).toHaveText('$0.38 24h · $0.38 30d')
 
     await page.goto('chores/deps')
     await settled(page)
+    await expect(page.getByTestId('chore-spend')).toContainText('$0.47 over 2 runs, $0.23 a run')
     const finding = page.getByTestId('finding-lodash-advisory')
     await expect(finding).toContainText('lodash 4.17.20 has a prototype pollution advisory')
     await expect(finding.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')

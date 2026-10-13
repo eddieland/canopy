@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { mockChores } from '@/api/mocks'
 
-import { awaitsRun, choreLine, dueText, windowText } from './chores'
+import { awaitsRun, choreLine, costText, dueText, spendText, windowText } from './chores'
 
 const [deps] = mockChores
 if (!deps) throw new Error('fixtures are empty')
@@ -31,6 +31,15 @@ describe('chores', () => {
             started_at: '2026-10-08T12:20:00Z',
         }
         expect(choreLine({ ...deps, running }, NOW)).toBe('running for 10m')
+    })
+
+    it('say what a chore spent in a window, the cost a run over the runs that reported one', () => {
+        expect(spendText(deps.spend.day)).toBe('$0.47 over 2 runs, $0.23 a run')
+        expect(spendText(deps.spend.month)).toBe('$0.87 over 4 runs, $0.29 a run, 1 reported none')
+        expect(spendText({ hours: 24, runs: 1, priced: 1, cost_usd: 0.2 })).toBe('$0.20 over 1 run')
+        expect(spendText({ hours: 24, runs: 2, priced: 0, cost_usd: null })).toBe('2 runs, none reported a cost')
+        expect(spendText({ hours: 24, runs: 0, priced: 0, cost_usd: null })).toBe('no runs')
+        expect(costText(null)).toBe('–')
     })
 
     it('mark a note no run has read: one after the latest run started', () => {

@@ -7,7 +7,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
-import { choreLine, windowText } from '@/lib/chores'
+import { choreLine, costText, windowText } from '@/lib/chores'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -77,9 +77,18 @@ function Row({ chore }: { chore: ChoreSummary }) {
                     {findings === 1 ? '1 open finding' : `${findings} open findings`}
                 </span>
             </div>
-            <p className="pl-[11.75rem] font-mono text-xs text-muted-foreground">
-                at most every {chore.every_minutes}m · {windowText(chore)}
-            </p>
+            <div className="flex flex-wrap items-center gap-x-3 pl-[11.75rem] font-mono text-xs text-muted-foreground">
+                <span>
+                    at most every {chore.every_minutes}m · {windowText(chore)}
+                </span>
+                <span
+                    className="readout ml-auto"
+                    title="what its runs cost in the last 24 hours and the last 30 days"
+                    data-testid="chore-spend"
+                >
+                    {costText(chore.spend.day.cost_usd)} 24h · {costText(chore.spend.month.cost_usd)} 30d
+                </span>
+            </div>
         </li>
     )
 }

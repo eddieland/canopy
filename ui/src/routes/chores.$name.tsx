@@ -12,7 +12,7 @@ import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/comp
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
-import { choreLine, windowText } from '@/lib/chores'
+import { choreLine, costText, spendText, windowText } from '@/lib/chores'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
@@ -116,6 +116,19 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                                 </ul>
                             </PanelScroll>
                         )}
+                    </Panel>
+                    <Panel data-testid="chore-spend">
+                        <PanelHeader label="Spend">
+                            <span className="readout text-xs text-muted-foreground">
+                                {costText(chore.spend.month.cost_usd)} in 30 days
+                            </span>
+                        </PanelHeader>
+                        <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
+                            <dt className="panel-label self-center">last 24 hours</dt>
+                            <dd className="font-mono text-xs">{spendText(chore.spend.day)}</dd>
+                            <dt className="panel-label self-center">last 30 days</dt>
+                            <dd className="font-mono text-xs">{spendText(chore.spend.month)}</dd>
+                        </dl>
                     </Panel>
                 </div>
                 <Panel data-testid="chore-notes">

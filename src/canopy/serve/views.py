@@ -19,6 +19,8 @@ from canopy.serve.schema import (
     ChoreRun,
     ChoreRunDetail,
     ChoreRunFinding,
+    ChoreSpend,
+    ChoreSpendWindow,
     ChoreSummary,
     Comment,
     Decision,
@@ -575,7 +577,8 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
     """A chore's state as its line in `canopy status` and the head of `canopy show chore:NAME` say it.
 
     Returns:
-        The chore's schedule, its running and latest ended runs, when it is next due, and its open findings.
+        The chore's schedule, its running and latest ended runs, when it is next due, its open findings, and what its
+        runs cost in the last day and the last 30 days.
     """
     defined = state.chore
     running = state.running
@@ -602,7 +605,17 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
             for f in state.findings()
         ],
         latest_note_id=db.latest_message_of(conn, conversation.CHORE, state.name),
+        spend=ChoreSpend(
+            day=_chore_spent(conn, state.name, now, SPEND_DAY_HOURS),
+            month=_chore_spent(conn, state.name, now, SPEND_MONTH_HOURS),
+        ),
     )
+
+
+def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int) -> ChoreSpendWindow:
+    since = db.format_time(now - timedelta(hours=hours))
+    runs, priced, cost = db.chore_spent_since(conn, name, since)
+    return ChoreSpendWindow(hours=hours, runs=runs, priced=priced, cost_usd=cost)
 
 
 def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:

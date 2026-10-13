@@ -112,6 +112,10 @@ export const mockChores: ChoreSummary[] = [
             },
         ],
         latest_note_id: 8,
+        spend: {
+            day: { hours: 24, runs: 2, priced: 2, cost_usd: 0.47 },
+            month: { hours: 720, runs: 4, priced: 3, cost_usd: 0.87 },
+        },
     },
 ]
 

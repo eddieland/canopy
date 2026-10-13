@@ -63,6 +63,25 @@ def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(back
     assert deps["latest_note_id"] == 8
 
 
+def test_each_chore_carries_what_its_runs_cost_in_the_last_day_and_the_last_30_days(backend: Backend) -> None:
+    with backend.open() as ctx:
+        for started, cost in [(-3 * 24 * 60, 0.4), (-2 * 24 * 60, None), (-31 * 24 * 60, 9.0)]:
+            ctx.conn.execute(
+                "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, log_path, cost_usd) "
+                "VALUES (1, 'deps', ?, ?, 'failed', 'x.log', ?)",
+                (mock.at(started), mock.at(started + 5), cost),
+            )
+    c = client(None, backend)
+    health, deps = c.get("/api/chores").json()
+
+    # A running run counts, as the spend counts it, by when it started.
+    assert health["spend"]["day"] == {"hours": 24, "runs": 2, "priced": 2, "cost_usd": pytest.approx(0.38)}
+    assert deps["spend"]["day"] == {"hours": 24, "runs": 2, "priced": 2, "cost_usd": pytest.approx(0.47)}
+    # One run reported no cost, and one started before the window.
+    assert deps["spend"]["month"] == {"hours": 720, "runs": 4, "priced": 3, "cost_usd": pytest.approx(0.87)}
+    assert c.get("/api/chores/deps").json()["chore"]["spend"] == deps["spend"]
+
+
 def test_a_chores_page_is_what_canopy_show_prints_and_any_other_name_is_refused(backend: Backend) -> None:
     c = client(None, backend)
     page = c.get("/api/chores/deps").json()
