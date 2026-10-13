@@ -1039,7 +1039,9 @@ changes. The first step was 41% of the first day's overseer spend, because the f
 message as the state block, which changes every tick, and so is written to the cache fresh on every tick.
 
 - Measured first: two dry ticks a minute apart, before and after, comparing the first step's cache write and cache
-  read. The change is kept only if the fixed prompt moves from one to the other.
+  read. The change is kept only if the fixed prompt moves from one to the other. Each tick is its own session; the
+  provider's cache is by content and lasts minutes, so only a tick that starts soon after another gains, which the
+  first day's ticks mostly did (2026-10-13: 103 of 158 gaps under 2 minutes).
 - The fixed prompt reaches the runtime where it caches across ticks, such as the overseer's agent definition body
   in canopy's definitions snapshot (D040), and the message carries only the state block. A prompt override (§12)
   still works and still wins. The provider skill goes the same way, instead of a tool call on most ticks.
@@ -1050,8 +1052,8 @@ message as the state block, which changes every tick, and so is written to the c
   override reaches the snapshot.
 
 Accept: the tests above pass. Live: a re-measurement (MEASUREMENTS) shows the first step's fresh cache write at the
-state block's size, not the prompt's plus the state block's, and a median tick at least 15% cheaper at the same
-price, with no change in what the ticks decided.
+state block's size, not the prompt's plus the state block's, on ticks that start within the cache's lifetime of the
+one before, and a median such tick at least 15% cheaper at the same price, with no change in what the ticks decided.
 
 Status: not started.
 

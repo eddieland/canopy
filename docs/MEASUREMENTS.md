@@ -197,9 +197,12 @@ a gate 3. Mean gap between ticks 7.5 minutes; 103 of 158 gaps under 2 minutes.
 - **F11. The fixed overseer prompt is rewritten to the cache every tick.** canopy passes `overseer.md` (45 KB, about
   13k tokens) and the state block as one message (`prompts.render_overseer`); the agent definition's own body is a
   stub. The state block changes every tick, so the message never hits the cache and the fixed part is paid as a cache
-  write each time. That is most of F12's fresh 23k to 25k, read from the code, not yet measured by moving it. About
-  13k tokens a tick from cache write to cache read is about $0.06 at the early price and $0.03 at the later, 15 to 20%
-  of a median tick, with no probe and no trust change. → M34.
+  write each time. That is most of F12's fresh 23k to 25k, read from the code, not yet measured by moving it. The
+  provider caches by content, not by session: each tick is a new session, yet its first step reads the 32k of system
+  prompt and tools from the cache an earlier tick wrote, when it starts within the cache's lifetime (about five
+  minutes) of one. On such a warm tick, about 13k tokens from cache write to cache read is about $0.06 at the early
+  price and $0.03 at the later, 15 to 20% of a median tick, with no probe and no trust change. A cold tick pays the
+  write either way, and anything that spaces ticks out (idle pacing, M29's gate) makes more of them cold. → M34.
 - **F12. The first step is 41% of overseer spend ($21.47).** 32k tokens of system prompt and tool schemas hit the
   cache; the prompt and state do not (F11). → M34.
 - **F13. A probe gate would still save little.** 144 of 157 ticks were woken by a harness or operator event and would
