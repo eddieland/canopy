@@ -84,8 +84,15 @@ Rules:
 - Radius: `rounded-md` (8px) for panels and buttons, `rounded-sm` (6px) for chips and nav items.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
   blocks.
-  The side rail runs the full height of the page and only the nav inside it is sticky: nothing in the shell is sized
+  The side rail runs the full height of the page and only its top part is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
+- **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
+  (`src/components/shell/rail.tsx`). Each block under the nav is a hairline and a `panel-label` over its content. The
+  working runs are those waiting on the operator's answer first, then those running, each oldest first: a dot in its
+  state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
+  it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
+  The spend is the attention page's two windows in small readouts. The footer (the search key and the version) sits
+  at the rail's foot, not the window's: the window's foot on a page that fits it, the page's foot on a longer one.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.

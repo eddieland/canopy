@@ -26,3 +26,18 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
         .filter((r) => r.state === 'running' && r.ticket_key === ticketKey)
         .toSorted((a, b) => a.started_at.localeCompare(b.started_at))
 }
+
+/**
+ * The runs the rail lists, at most `limit`: those waiting on the operator's answer first, then those running, each
+ * oldest first, so the one waiting longest leads. `more` counts the ones left out.
+ */
+export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: number } {
+    const working = runs
+        .filter((r) => r.state === 'blocked' || r.state === 'running')
+        .toSorted((a, b) => rank(a) - rank(b) || a.started_at.localeCompare(b.started_at))
+    return { shown: working.slice(0, limit), more: Math.max(working.length - limit, 0) }
+}
+
+function rank(run: Run): number {
+    return run.state === 'blocked' ? 0 : 1
+}

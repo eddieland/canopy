@@ -13,13 +13,15 @@ import { LiveReadouts } from './live-readouts'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
 import { Nav } from './nav'
+import { RailFooter, RailSpend, RailWorking } from './rail'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
 
 /**
- * The frame every page renders in: header (with its ticker), side navigation, and the routed page. Signed out, the
- * sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
+ * spend, and a footer), and the routed page. Signed out, the sign-in page instead, whatever the route: every API route
+ * but the session's needs a session (DESIGN §22).
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
@@ -62,11 +64,17 @@ export function AppShell() {
                     <ThemeToggle />
                 </div>
             </header>
-            {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav sticks. */}
-            <aside className="border-r bg-surface/60">
+            {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav and what is
+                under it stick, and the footer sits at the rail's foot. */}
+            <aside className="flex flex-col border-r bg-surface/60">
                 <div className="sticky top-12">
                     <SearchBox />
                     <Nav />
+                    <RailWorking />
+                    <RailSpend />
+                </div>
+                <div className="mt-auto pt-3">
+                    <RailFooter />
                 </div>
             </aside>
             <main className="min-w-0 p-6">
