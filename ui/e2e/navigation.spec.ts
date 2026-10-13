@@ -212,7 +212,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     const decisions = page.getByTestId('decisions').locator(':scope > li')
     await expect(decisions).toHaveCount(5)
     await expect(decisions.nth(0)).toContainText('awaiting the operator')
-    await expect(decisions.nth(1)).toContainText('refused:running')
+    await expect(decisions.nth(1)).toContainText('refused: running')
     // The rationale's markup arrives as the characters, on one line, as `canopy decisions` prints it.
     await expect(decisions.nth(2)).toContainText('The ticket says <b>keep</b> the old route: left for the worker.')
     await expect(decisions.nth(2).locator('b')).toHaveCount(0)
@@ -237,7 +237,7 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     const decisions = page.getByTestId('ticket-decisions').getByTestId('decisions').locator(':scope > li')
     await expect(decisions).toHaveCount(2)
     await expect(decisions.nth(0)).toContainText('tick 2')
-    await expect(decisions.nth(1)).toContainText('dispatch:implement')
+    await expect(decisions.nth(1)).toContainText('dispatch: implement')
     await decisions.nth(1).getByRole('link', { name: 'tick 1' }).click()
     await expect(page).toHaveURL(/\/ticks\/1$/)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')

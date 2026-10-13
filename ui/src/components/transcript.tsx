@@ -128,7 +128,7 @@ function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string |
             return (
                 <Row at={entry.at} start={start} className="py-1.5 font-mono text-xs text-muted-foreground">
                     <span>model call</span>
-                    {entry.reason && <Chip>{entry.reason}</Chip>}
+                    {entry.reason && <Chip word={entry.reason} />}
                     <span className="readout ml-auto">
                         {entry.tokens === null ? '' : `${tokenCount(entry.tokens)} tokens`}
                     </span>

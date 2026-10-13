@@ -97,7 +97,7 @@ function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
             <span className="flex w-36 shrink-0 flex-col gap-0.5">
                 <Where hit={hit} />
             </span>
-            {hit.label !== null && <Chip className="w-32 justify-center truncate">{hit.label}</Chip>}
+            {hit.label !== null && <Chip className="w-32 justify-center truncate" word={hit.label} />}
             {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
             <p className="min-w-0 flex-1 text-sm break-words">
                 {/* A snippet's pieces never reorder, so their index is their key. */}

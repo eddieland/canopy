@@ -12,8 +12,10 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     const rows = page.getByTestId('attention-list').getByRole('link')
     // Broken work, what waits on the operator, the rest by how long it has been open, then a chore's finding.
     await expect(rows).toHaveCount(5)
-    const reasons = ['worker_failed', 'awaiting_reply', 'repo_missing', 'needs_reviewer', 'lodash-advisory']
+    const reasons = ['worker failed', 'awaiting reply', 'repo missing', 'needs reviewer', 'lodash-advisory']
     for (const [index, reason] of reasons.entries()) await expect(rows.nth(index)).toContainText(reason)
+    // A reason reads as words, and keeps the CLI's spelling on hover.
+    await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
@@ -25,7 +27,7 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await page.goto('attention')
     await settled(page)
     const list = page.getByTestId('attention-list')
-    await list.getByRole('link').filter({ hasText: 'awaiting_reply' }).click()
+    await list.getByRole('link').filter({ hasText: 'awaiting reply' }).click()
 
     await expect(page).toHaveURL(/\/attention\?item=/)
     const detail = page.getByTestId('attention-detail')
@@ -34,7 +36,7 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await expect(detail.getByText('Your answer to message 5')).toBeVisible()
 
     await page.reload()
-    await expect(list.getByRole('link').filter({ hasText: 'awaiting_reply' })).toHaveAttribute('aria-current', 'page')
+    await expect(list.getByRole('link').filter({ hasText: 'awaiting reply' })).toHaveAttribute('aria-current', 'page')
 })
 
 test("a chore's finding opens the chore's notes and a form for another", async ({ page }) => {
@@ -53,7 +55,7 @@ test("a chore's finding opens the chore's notes and a form for another", async (
 test('an item about no ticket says so, with nothing to answer', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'repo_missing' }).click()
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'repo missing' }).click()
 
     const detail = page.getByTestId('attention-detail')
     await expect(detail).toContainText('api is in the workspace map but has no clone')
@@ -90,7 +92,7 @@ test('the runs working now are listed under the attention list', async ({ page }
 test("a started ticket's item offers the ticket's own actions beside its thread", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting_reply' }).click()
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' }).click()
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
     await expect(detail.getByText('Private: workers read the ticket and write nothing to it.')).toBeVisible()
