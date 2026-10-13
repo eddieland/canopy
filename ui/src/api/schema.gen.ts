@@ -155,6 +155,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review List */
+        get: operations["listReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Review */
+        get: operations["getReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -645,6 +679,50 @@ export type components = {
             ticket_key: string | null;
         };
         /**
+         * DiffFile
+         * @description One file the commit changes. `old_path` when it was renamed; `binary` when git shows no lines for it.
+         */
+        DiffFile: {
+            /**
+             * Binary
+             * @default false
+             */
+            binary: boolean;
+            /** Hunks */
+            hunks: components["schemas"]["DiffHunk"][];
+            /** Old Path */
+            old_path: string | null;
+            /** Path */
+            path: string;
+        };
+        /**
+         * DiffHunk
+         * @description One hunk: what follows its `@@` ranges, such as a function's name, and its lines.
+         */
+        DiffHunk: {
+            /** Header */
+            header: string;
+            /** Lines */
+            lines: components["schemas"]["DiffLine"][];
+        };
+        /**
+         * DiffLine
+         * @description One line of a hunk, with its number on each side it is on.
+         */
+        DiffLine: {
+            kind: components["schemas"]["DiffLineKind"];
+            /** New */
+            new: number | null;
+            /** Old */
+            old: number | null;
+            /** Text */
+            text: string;
+        };
+        /** @enum {string} */
+        DiffLineKind: "add" | "del" | "ctx";
+        /** @enum {string} */
+        FindingSeverity: "blocking" | "major" | "minor";
+        /**
          * ForgetRequest
          * @description A forget, and the ticket's key as the operator typed it: the challenge, checked again in code (DESIGN §22).
          */
@@ -825,6 +903,56 @@ export type components = {
             submission: string;
         };
         /**
+         * ReviewDetail
+         * @description One review run in full: its summary, findings, the diff they sit on, and the PR's other review runs.
+         */
+        ReviewDetail: {
+            /** Base Branch */
+            base_branch: string | null;
+            diff: components["schemas"]["ReviewDiff"] | null;
+            /** Findings */
+            findings: components["schemas"]["ReviewFinding"][];
+            /** Note */
+            note: string | null;
+            review: components["schemas"]["ReviewSummary"];
+            /** Runs */
+            runs: components["schemas"]["ReviewSummary"][];
+            /** Summary */
+            summary: string | null;
+        };
+        /**
+         * ReviewDiff
+         * @description The reviewed commit's diff against where it leaves its base branch: the PR's own text, untrusted, and bounded.
+         */
+        ReviewDiff: {
+            /** Files */
+            files: components["schemas"]["DiffFile"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
+         * ReviewFinding
+         * @description One finding, with where it falls in the diff: `file` indexes the diff's files, `line` is on the new side.
+         *
+         *     Both are None when the diff does not show the file; `line` alone is None when it does not show the line.
+         */
+        ReviewFinding: {
+            /** Detail */
+            detail: string;
+            /** File */
+            file: number | null;
+            /** Line */
+            line: number | null;
+            /** Location */
+            location: string;
+            severity: components["schemas"]["FindingSeverity"];
+            /** Title */
+            title: string;
+        };
+        /**
          * ReviewHold
          * @description A running review that holds a worktree (DESIGN §21).
          */
@@ -839,6 +967,45 @@ export type components = {
              */
             started_at: string;
         };
+        /** @enum {string} */
+        ReviewImpact: "low" | "normal" | "high";
+        /**
+         * ReviewSummary
+         * @description One review run of a PR at a commit (DESIGN §21): canopy's own review, which is never on the PR (D114).
+         */
+        ReviewSummary: {
+            /** Cost Usd */
+            cost_usd: number | null;
+            /** Ended At */
+            ended_at: string | null;
+            /**
+             * Findings
+             * @default 0
+             */
+            findings: number;
+            /** Id */
+            id: number;
+            impact: components["schemas"]["ReviewImpact"] | null;
+            /** Pr Url */
+            pr_url: string;
+            /** Repo */
+            repo: string | null;
+            /** Sha */
+            sha: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            state: components["schemas"]["RunState"];
+            /** Status */
+            status: string;
+            /** Ticket Key */
+            ticket_key: string | null;
+            verdict: components["schemas"]["ReviewVerdict"] | null;
+        };
+        /** @enum {string} */
+        ReviewVerdict: "clean" | "findings";
         /**
          * Run
          * @description One worker or split run (`run:ID`).
@@ -1581,6 +1748,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meta"];
+                };
+            };
+        };
+    };
+    listReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewSummary"][];
+                };
+            };
+        };
+    };
+    getReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDetail"];
+                };
+            };
+            /** @description No such review run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

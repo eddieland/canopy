@@ -678,7 +678,8 @@ only, and runs outside a tick.
 ### The diff
 
 For the web UI's review page (ROADMAP M32), which shows each finding on the diff at the line it names, `_review` keeps
-the reviewed commit's diff.
+the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GET /reviews/{id}` serves one with its
+findings anchored on its diff and the diff itself (§22); both read only.
 
 - **Taking it.** After the checkout, `_review` fetches the pool's base branch, the slot's lease's `base_branch`, which
   `review_runs.base_branch` records, as `refs/heads/<base>`, and writes `git diff` from the commit's merge base with it
