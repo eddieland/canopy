@@ -11,9 +11,13 @@ import { TicketTitle } from '@/components/ticket-title'
 import { RUN_TEXT, type TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
+// Where a ticket's row puts what goes under its head line, so it starts under the ticket's title: the state's column,
+// the key's, and the gaps after each. Written out in full so Tailwind finds them.
+const UNDER_TITLE = { pad: 'pl-[12.5rem]', margin: 'ml-[12.5rem]' }
+
 /**
- * Runs, one row each: state, id (opening the run's page), ticket, kind, the ticket's title, when, cost, and what it
- * said. `ticket` leaves out the ticket column and its title, for a ticket's own page.
+ * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
+ * it said. `ticket` leaves out the ticket and its title, for a ticket's own page.
  */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
@@ -54,7 +58,7 @@ function TicketRow({ group }: { group: TicketRuns }) {
         <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${latest.id}`}>
             <RunBody run={latest} ticket />
             {earlier.length > 0 && (
-                <div className="pl-[6.75rem]">
+                <div className={UNDER_TITLE.pad}>
                     <button
                         type="button"
                         aria-expanded={open}
@@ -71,7 +75,10 @@ function TicketRow({ group }: { group: TicketRuns }) {
                 </div>
             )}
             {open && (
-                <ul className="ml-[6.75rem] divide-y border-l" data-testid={`earlier-runs-${latest.ticket_key}`}>
+                <ul
+                    className={cn(UNDER_TITLE.margin, 'divide-y border-l')}
+                    data-testid={`earlier-runs-${latest.ticket_key}`}
+                >
                     {earlier.map((run) => (
                         <RunRow key={run.id} run={run} ticket={false} />
                     ))}
@@ -82,6 +89,7 @@ function TicketRow({ group }: { group: TicketRuns }) {
 }
 
 function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
+    const indent = ticket ? UNDER_TITLE.pad : 'pl-[6.75rem]'
     return (
         <>
             <div className="flex items-center gap-3">
@@ -89,11 +97,18 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     <RunDot state={run.state} />
                     {run.status}
                 </span>
-                <RunLink id={run.id} className="w-14" />
-                {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
-                <Chip word={run.kind} />
-                {run.private && <Chip>private</Chip>}
-                {ticket && <TicketTitle title={run.ticket_title} className="flex-1" />}
+                {ticket ? (
+                    <>
+                        <TicketLink ticketKey={run.ticket_key} className="w-24 shrink-0 truncate" />
+                        <TicketTitle title={run.ticket_title} className="flex-1" />
+                        {/* Fixed width, so every row's run id lines up, whatever chips follow it. */}
+                        <span className="flex w-56 shrink-0 items-center gap-3">
+                            <RunFacts run={run} />
+                        </span>
+                    </>
+                ) : (
+                    <RunFacts run={run} />
+                )}
                 <span className="ml-auto flex items-center gap-4">
                     <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
                         {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
@@ -105,9 +120,9 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     </span>
                 </span>
             </div>
-            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className="pl-[6.75rem]" />}
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={indent} />}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[6.75rem] font-mono text-xs">
+                <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs', indent)}>
                     {run.prs.map((pr) => (
                         <a
                             key={pr}
@@ -132,6 +147,16 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     )}
                 </div>
             )}
+        </>
+    )
+}
+
+function RunFacts({ run }: { run: Run }) {
+    return (
+        <>
+            <RunLink id={run.id} className="w-14" />
+            <Chip word={run.kind} />
+            {run.private && <Chip>private</Chip>}
         </>
     )
 }

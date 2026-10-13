@@ -207,8 +207,11 @@ tabs.
   not: the page scrolls instead.
 - **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's
   latest run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs
-  before it, newest first, indented under the summary with a hairline at their left. A ticket that asked, got its
-  answer, and asked again is one blocked row, not two. The state filter goes by each ticket's latest run, and so do
+  before it, newest first, with a hairline at their left. The head line leads with the ticket: the state, the key,
+  and the title, which takes the free width, then the run's id and chips in a fixed-width column, so every row's
+  title and run id line up whatever chips a run has. What goes under it (the summary, the PRs, the toggle, the
+  earlier runs) starts under the title. A ticket that asked, got its answer, and asked again is one blocked row,
+  not two. The state filter goes by each ticket's latest run, and so do
   the rail's working runs and the Running counter's `N blocked`: a blocked run a later one followed waits on nothing.
   A ticket's page lists its runs flat (`RunsTable`), since every row there is the same ticket's.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
