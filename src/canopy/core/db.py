@@ -502,6 +502,11 @@ def claim_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
     return cur.rowcount == 1
 
 
+def set_slot_link(conn: sqlite3.Connection, run_id: int, repo: str, link: bytes | None) -> None:
+    """Record what a run's slot's `.git` file held when `_run` started (DESIGN §8)."""
+    conn.execute("UPDATE run_slots SET git_link = ? WHERE run_id = ? AND repo = ?", (link, run_id, repo))
+
+
 def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
     """Record the pid, and so the process group, of a run's worker agent."""
     conn.execute("UPDATE runs SET worker_pid = ? WHERE id = ?", (pid, run_id))
