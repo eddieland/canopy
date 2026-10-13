@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 
 /**
  * A ticket's links out, under its page's title so they are the first thing found: its page in the tracker, then each
- * repository's PR, then its branch in each repository whose `branch_url` is set. Renders nothing when there are none.
+ * repository's PR, then its branch in each repository that has a branch link. Renders nothing when there are none.
  */
 export function TicketLinks({
     tracker,

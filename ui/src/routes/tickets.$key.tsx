@@ -76,6 +76,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
         <>
             <PageHeader
                 chips={<Chip>{ticket.private ? 'private' : 'public'}</Chip>}
+                tab={ticket.title === null ? ticket.key : `${ticket.key} ${ticket.title}`}
                 title={
                     ticket.title === null ? (
                         ticket.key

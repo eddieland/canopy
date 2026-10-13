@@ -1,8 +1,11 @@
+import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { Children, type ComponentProps, type ReactNode } from 'react'
 
+import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
+import { pageTitle } from '@/lib/page-title'
 import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
@@ -11,10 +14,12 @@ import { cn } from '@/lib/utils'
  * subject's links out. The trail starts at the page's section, in the section's color (the accent on a page in no
  * section). On the section's own list that is all it is; on any page under it, the section links to its list, then
  * come `parents`, plain router `Link`s the trail styles, to the pages between it and this one, and every step ends in
- * a chevron. The title is the trail's last step, so the trail never repeats it.
+ * a chevron. The title is the trail's last step, so the trail never repeats it. The header also names the browser
+ * tab (`pageTitle`): `tab`, or the title when it is plain text.
  */
 export function PageHeader({
     title,
+    tab,
     parents,
     root,
     chips,
@@ -23,6 +28,8 @@ export function PageHeader({
 }: {
     /** The page's name. */
     title: ReactNode
+    /** The page's name in the browser tab, when `title` is not plain text or the tab wants other words. */
+    tab?: string
     /**
      * Links to the pages between the section and this one, outermost first, such as a chore run's chore. Each takes
      * `activeOptions={{ exact: true }}`, so a page under it does not mark it the current one.
@@ -44,8 +51,11 @@ export function PageHeader({
     const atSection = section !== undefined && steps.length === 0 && matchRoute({ to: section }) !== false
     const linked = section !== undefined && !atSection
     const end = linked && <ChevronRight aria-hidden className="size-3 shrink-0" />
+    const attention = useQuery(attentionQuery).data?.length
     return (
         <header className="flex flex-col gap-1">
+            {/* React puts it in the document's head, ahead of index.html's, so it names the tab. */}
+            <title>{pageTitle(tab ?? (typeof title === 'string' ? title : undefined), attention)}</title>
             <nav aria-label="Breadcrumb">
                 <ol className="flex flex-wrap items-center gap-1 panel-label">
                     <li

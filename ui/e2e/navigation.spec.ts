@@ -12,6 +12,19 @@ test('the root redirects to the attention list', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Attention')
 })
 
+test('the tab names the page, after what needs the operator', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const count = await page.getByTestId(/^attention-item-/).count()
+    expect(count).toBeGreaterThan(0)
+    await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
+
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await nav.getByRole('link', { name: 'Tickets' }).click()
+    await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
+    await expect(page).toHaveTitle(`(${count}) ABC-102 Export reports as CSV · canopy`)
+})
+
 test('the nav moves between pages without reloading the shell', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
@@ -90,15 +103,45 @@ test('the side rail runs the full height of the page and its nav stays in view w
     await page.goto('tickets/ABC-102')
     await settled(page)
     const rail = page.locator('aside')
-    const height = await page.evaluate(() => document.documentElement.scrollHeight)
-    expect(height).toBeGreaterThan(page.viewportSize()?.height ?? 0)
-    // From under the header to the page's foot, not just one viewport.
-    expect(await rail.evaluate((el) => el.getBoundingClientRect().bottom + window.scrollY)).toBe(height)
+    const scroller = page.locator('[data-scroll-restoration-id=page]')
+    const height = await scroller.evaluate((el) => el.scrollHeight)
+    expect(height).toBeGreaterThan(await scroller.evaluate((el) => el.clientHeight))
+    // From under the header to the page's foot, not just one window.
+    expect(await rail.evaluate((el) => el.getBoundingClientRect().height)).toBe(height)
 
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight))
     await expect(
         page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Attention' }),
     ).toBeInViewport()
+})
+
+test('the header spans the window and only what is under it scrolls', async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const header = page.getByTestId('app-header')
+    const scroller = page.locator('[data-scroll-restoration-id=page]')
+    // The window never scrolls, so no gutter of its own cuts the header short.
+    expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBe(page.viewportSize()?.height)
+    expect(await header.evaluate((el) => el.getBoundingClientRect().right)).toBe(page.viewportSize()?.width)
+
+    await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+    await expect(header).toBeInViewport({ ratio: 1 })
+    // A new page starts at its top, and going back returns to where the last one was.
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
+    await expect(page).toHaveURL(/\/runs$/)
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(0)
+    await page.goBack()
+    await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
+    await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+})
+
+test('the keys scroll the page from a fresh load', async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    await page.keyboard.press('PageDown')
+    await expect
+        .poll(() => page.locator('[data-scroll-restoration-id=page]').evaluate((el) => el.scrollTop))
+        .toBeGreaterThan(0)
 })
 
 test('search params are typed: a known state filters, an unknown one is dropped', async ({ page }) => {

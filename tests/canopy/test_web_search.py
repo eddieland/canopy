@@ -153,7 +153,11 @@ def test_the_route_searches_the_mock_journal_and_refuses_a_bad_query(backend: Ba
     assert body["more"] == []
 
     for q in ("a", "x" * 201, "a b c d e f g h i"):
-        assert c.get("/api/search", params={"q": q}).status_code == 422
+        answer = c.get("/api/search", params={"q": q})
+        assert answer.status_code == 422
+        # One shape for every 422, the schema's: a list of validation errors naming the parameter.
+        [error] = answer.json()["detail"]
+        assert error["loc"] == ["query", "q"]
     assert c.get("/api/search").status_code == 422
 
 

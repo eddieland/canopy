@@ -105,7 +105,10 @@ separate `list`.
   write transaction, and `stop` marks the record stopped in one: whichever commits first wins, and `stop` reports any
   run the other committed. `_run` reads the record again before it starts the worker and ends the run `stopped` if the
   record is stopped.
-- The state block marks each private ticket and carries its operator messages newer than its message cursor.
+- The state block marks each started ticket and carries its operator messages newer than its message cursor. A
+  stopped ticket is not among its tickets: the block names it in `stopped`, by key, and the overseer records no
+  decision for it, where it once recorded a `wait` every tick for as long as the ticket stayed stopped. The key stays
+  in the block so that a queue label left on the ticket does not make the overseer take it for a public one.
 - `canopy dispatch` needs no `--label` for a started ticket. It checks the start record in code, a guard where a public
   ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
   in the tracker.
@@ -407,6 +410,12 @@ that read a message but did not close `ok` acknowledges nothing, as it leaves th
 A guard's refusal is a 409 whose `detail` names the guard and gives its reason, as the CLI prints them. A reply carries
 a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
 `web:<id>`, so a retried submission records nothing new.
+
+The OpenAPI schema (`python -m canopy.serve openapi`) says all of this as well, so the UI's generated types carry it
+as JSDoc. Each route has its resource's tag, a summary, a description, and every error it answers with the model of
+its body: a 403 on every route (the guard, or a write's token and `Origin` checks), a 401 on all but `/session`, a 404
+for no such thing, a 409 for a guard's refusal, and FastAPI's validation error for every 422, a search of too many
+words included. Every model, field, path parameter, and named type is described; `test_serve.py` checks each.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open

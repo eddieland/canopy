@@ -9,7 +9,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Attention */
+        /**
+         * List the attention items
+         * @description The attention list, as `canopy status` shows it: what needs the operator, and since when.
+         */
         get: operations["listAttention"];
         put?: never;
         post?: never;
@@ -26,7 +29,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Chores */
+        /**
+         * List the chores
+         * @description Each chore configured for this workspace, as `canopy status` lists it; none while `capacity.max_chores` is 0.
+         */
         get: operations["listChores"];
         put?: never;
         post?: never;
@@ -43,7 +49,12 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Chore */
+        /**
+         * Get a chore
+         * @description One chore defined for this workspace, configured or not: what `canopy show chore:NAME` prints.
+         *
+         *     A name no chore could have is refused `bad_ref`; one not defined here is a 404.
+         */
         get: operations["getChore"];
         put?: never;
         post?: never;
@@ -62,7 +73,12 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Note */
+        /**
+         * Add a note to a chore
+         * @description `canopy reply chore:NAME`: a note the chore's next runs read.
+         *
+         *     Idempotent on the submission id: a retried submission records nothing new.
+         */
         post: operations["replyChore"];
         delete?: never;
         options?: never;
@@ -77,7 +93,12 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Chore Run */
+        /**
+         * Get a chore run
+         * @description One run of the chore: its row, the whole of its summary, the harness's note, and its findings.
+         *
+         *     A run is found only under its own chore, and a chore since deleted from the config keeps its runs.
+         */
         get: operations["getChoreRun"];
         put?: never;
         post?: never;
@@ -94,7 +115,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Chore Run Transcript */
+        /**
+         * Get a chore run's transcript
+         * @description The chore run's session, read back from its log: agent output, untrusted and bounded.
+         */
         get: operations["getChoreRunTranscript"];
         put?: never;
         post?: never;
@@ -111,7 +135,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Events */
+        /**
+         * Stream the events
+         * @description Server-sent events: every list a page shows, first whole, then again whenever the journal changes it.
+         */
         get: operations["streamEvents"];
         put?: never;
         post?: never;
@@ -128,7 +155,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Loop */
+        /**
+         * Get the loop's state
+         * @description Whether the loop is paused: since when, and through which channel, or not.
+         */
         get: operations["getLoop"];
         put?: never;
         post?: never;
@@ -147,7 +177,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Pause Loop */
+        /**
+         * Pause the loop
+         * @description `canopy pause`: no tick starts until the operator resumes the loop. A tick running now finishes.
+         */
         post: operations["pauseLoop"];
         delete?: never;
         options?: never;
@@ -164,7 +197,12 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Reload Config */
+        /**
+         * Reload the config
+         * @description Ask the loop to read its config again, as SIGHUP does. It writes nothing.
+         *
+         *     A config that does not validate is refused `config_invalid`, and the loop keeps the one it runs on.
+         */
         post: operations["reloadConfig"];
         delete?: never;
         options?: never;
@@ -181,7 +219,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Resume Loop */
+        /**
+         * Resume the loop
+         * @description `canopy resume`: ticks start again.
+         */
         post: operations["resumeLoop"];
         delete?: never;
         options?: never;
@@ -196,7 +237,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Meta */
+        /**
+         * Get the server's meta
+         * @description The version of canopy serving, whether the data is mock, `tracker.ticket_url`, and the branch link templates.
+         */
         get: operations["getMeta"];
         put?: never;
         post?: never;
@@ -213,7 +257,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Review List */
+        /**
+         * List the reviews
+         * @description The latest 100 review runs canopy kept, newest first.
+         */
         get: operations["listReviews"];
         put?: never;
         post?: never;
@@ -230,7 +277,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Review */
+        /**
+         * Get a review
+         * @description One review run: its summary, its findings anchored on its diff, the diff, and the PR's other runs.
+         */
         get: operations["getReview"];
         put?: never;
         post?: never;
@@ -247,7 +297,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Runs */
+        /**
+         * List the runs
+         * @description The running runs, then the 50 that ended last.
+         */
         get: operations["listRuns"];
         put?: never;
         post?: never;
@@ -264,7 +317,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Run */
+        /**
+         * Get a run
+         * @description One run, as the runs list shows it.
+         */
         get: operations["getRun"];
         put?: never;
         post?: never;
@@ -281,7 +337,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Run Transcript */
+        /**
+         * Get a run's transcript
+         * @description The run's session, read back from its log: agent output, untrusted and bounded.
+         */
         get: operations["getRunTranscript"];
         put?: never;
         post?: never;
@@ -298,7 +357,12 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Find */
+        /**
+         * Search the journal
+         * @description The tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source.
+         *
+         *     A query of too many words is a 422 like one too short or too long, so every 422 has the same body.
+         */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -315,12 +379,23 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Session */
+        /**
+         * Get the session
+         * @description Whether this browser is signed in, and if so the token its writes must carry as `X-Canopy-Token`.
+         */
         get: operations["getSession"];
         put?: never;
-        /** Sign In */
+        /**
+         * Sign in
+         * @description Sign in with the listener secret: a right one sets the session cookie for 30 days, and returns its token.
+         *
+         *     A wrong one is answered after a second, so guessing is slow.
+         */
         post: operations["signIn"];
-        /** Sign Out */
+        /**
+         * Sign out
+         * @description Clear the session cookie in this browser. Other browsers stay signed in until the secret changes.
+         */
         delete: operations["signOut"];
         options?: never;
         head?: never;
@@ -334,7 +409,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Spend */
+        /**
+         * Get the spend
+         * @description What the last 24 hours and the last 30 days each cost, as the agent runtime reported it.
+         */
         get: operations["getSpend"];
         put?: never;
         post?: never;
@@ -351,8 +429,11 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Last Tick */
-        get: operations["getTick"];
+        /**
+         * Get the latest tick
+         * @description The latest tick, as `canopy status`'s first line shows it, or none; and the newest message acknowledged.
+         */
+        get: operations["getLastTick"];
         put?: never;
         post?: never;
         delete?: never;
@@ -368,7 +449,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Tickets */
+        /**
+         * List the tickets
+         * @description The journal's tickets, most recent activity first, at most 200.
+         */
         get: operations["listTickets"];
         put?: never;
         post?: never;
@@ -385,7 +469,12 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Ticket */
+        /**
+         * Get a ticket
+         * @description One ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions.
+         *
+         *     A key that is not a ticket's is refused `bad_ref` or `unsupported`; one canopy has no record of is a 404.
+         */
         get: operations["getTicket"];
         put?: never;
         post?: never;
@@ -404,7 +493,13 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Forget */
+        /**
+         * Forget a ticket's work
+         * @description `canopy forget`: drop the ticket's branch and PRs, so its next `implement` starts over.
+         *
+         *     Cannot be undone: `confirm` must be the ticket's key, or it is refused `not_confirmed` before anything is read.
+         *     The branch and PRs it returns are the operator's to close and delete.
+         */
         post: operations["forgetTicket"];
         delete?: never;
         options?: never;
@@ -421,7 +516,12 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Reply */
+        /**
+         * Reply on a ticket
+         * @description `canopy reply`: add the operator's message to the ticket's conversation, answering its latest question.
+         *
+         *     Idempotent on the submission id: a retried submission records nothing new.
+         */
         post: operations["replyTicket"];
         delete?: never;
         options?: never;
@@ -438,7 +538,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Start */
+        /**
+         * Start a ticket
+         * @description `canopy start`: work the ticket privately, in place of a queue label; its conversation stays in the journal.
+         */
         post: operations["startTicket"];
         delete?: never;
         options?: never;
@@ -455,7 +558,10 @@ export type paths = {
         };
         get?: never;
         put?: never;
-        /** Stop */
+        /**
+         * Stop a ticket
+         * @description `canopy stop`: no new dispatches; a running run finishes unless `now` ends it, as `--now` does.
+         */
         post: operations["stopTicket"];
         delete?: never;
         options?: never;
@@ -470,7 +576,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Ticks */
+        /**
+         * List the ticks
+         * @description The latest 50 ticks, newest first.
+         */
         get: operations["listTicks"];
         put?: never;
         post?: never;
@@ -487,8 +596,11 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Tick */
-        get: operations["showTick"];
+        /**
+         * Get a tick
+         * @description One tick: what `canopy decisions ID` prints.
+         */
+        get: operations["getTick"];
         put?: never;
         post?: never;
         delete?: never;
@@ -504,7 +616,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Tick Output */
+        /**
+         * Get a tick's output
+         * @description The end of the overseer's output as written, stderr included: agent output, untrusted and bounded.
+         */
         get: operations["getTickOutput"];
         put?: never;
         post?: never;
@@ -521,7 +636,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Tick Transcript */
+        /**
+         * Get a tick's transcript
+         * @description The overseer's session, read back from the tick's output: agent output, untrusted and bounded.
+         */
         get: operations["getTickTranscript"];
         put?: never;
         post?: never;
@@ -538,7 +656,10 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** Pools */
+        /**
+         * List the worktrees
+         * @description Each pool's slots from `treehouse status --json`, with the running run or review holding each.
+         */
         get: operations["listWorktrees"];
         put?: never;
         post?: never;
@@ -557,29 +678,52 @@ export type components = {
          * @description One item on the attention list (DESIGN §14): what needs the operator, and since when.
          */
         AttentionItem: {
-            /** Chore */
+            /**
+             * Chore
+             * @description The chore it is about, when it is about one.
+             */
             chore: string | null;
-            /** Detail */
+            /**
+             * Detail
+             * @description What the operator should know, in the CLI's words: untrusted text.
+             */
             detail: string;
             /**
              * Finding
+             * @description A chore's finding rather than a ticket's item.
              * @default false
              */
             finding: boolean;
-            /** Id */
+            /**
+             * Id
+             * @description Stable across ticks and rewordings: the item's fingerprint.
+             */
             id: string;
-            /** Reason */
+            /**
+             * Reason
+             * @description Why: `awaiting_reply`, `worker_failed`, ..., or a chore finding's id.
+             */
             reason: string;
-            /** Repo */
+            /**
+             * Repo
+             * @description The repository it is about, when it is about one.
+             */
             repo: string | null;
             /**
              * Since
              * Format: date-time
+             * @description When the unbroken run of ticks that recorded it began.
              */
             since: string;
-            /** Subject */
+            /**
+             * Subject
+             * @description How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`.
+             */
             subject: string;
-            /** Ticket Key */
+            /**
+             * Ticket Key
+             * @description The ticket it is about, when it is about one; a chore's and a repository's items have none.
+             */
             ticket_key: string | null;
         };
         /**
@@ -587,10 +731,13 @@ export type components = {
          * @description The attention list changed. The payload is the whole list.
          */
         AttentionUpdated: {
-            /** Items */
+            /**
+             * Items
+             * @description The attention list, as `GET /attention` returns it.
+             */
             items: components["schemas"]["AttentionItem"][];
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "attention.updated";
@@ -600,10 +747,17 @@ export type components = {
          * @description One chore: what `canopy show chore:NAME` prints.
          */
         ChoreDetail: {
+            /** @description The chore, as the chores list shows it. */
             chore: components["schemas"]["ChoreSummary"];
-            /** Notes */
+            /**
+             * Notes
+             * @description The operator's notes its next run reads: the latest 10, oldest first.
+             */
             notes: components["schemas"]["Message"][];
-            /** Runs */
+            /**
+             * Runs
+             * @description Its latest 10 runs, newest first.
+             */
             runs: components["schemas"]["ChoreRun"][];
         };
         /**
@@ -611,18 +765,31 @@ export type components = {
          * @description An open finding: one the chore's latest `ok` run reported (DESIGN §19).
          */
         ChoreFinding: {
-            /** Detail */
+            /**
+             * Detail
+             * @description Its detail, as the agent wrote it: untrusted text.
+             */
             detail: string;
-            /** Id */
+            /**
+             * Id
+             * @description The finding's id, as the chore gave it: the same across runs that report it.
+             */
             id: string;
-            /** Link */
+            /**
+             * Link
+             * @description A URL the agent gave for it: untrusted.
+             */
             link: string | null;
             /**
              * Since
              * Format: date-time
+             * @description When the unbroken run of `ok` runs reporting it began.
              */
             since: string;
-            /** Title */
+            /**
+             * Title
+             * @description Its title, as the agent wrote it: untrusted text.
+             */
             title: string;
         };
         /**
@@ -630,32 +797,59 @@ export type components = {
          * @description One run of a chore (DESIGN §19).
          */
         ChoreRun: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
+             */
             cost_usd: number | null;
-            /** Ended At */
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
             ended_at: string | null;
             /**
              * Findings
+             * @description How many findings an `ok` run reported.
              * @default 0
              */
             findings: number;
-            /** Id */
+            /**
+             * Id
+             * @description The run's id.
+             */
             id: number;
-            /** Log Path */
+            /**
+             * Log Path
+             * @description Where its log is: from the workspace root when under it.
+             */
             log_path: string;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description The runtime's session, for opening its transcript with the runtime's own tools.
+             */
             session_id: string | null;
             /**
              * Started At
              * Format: date-time
+             * @description When it started.
              */
             started_at: string;
+            /** @description `ok` is `done`; every other ending is `failed`, as it raises `chore_failed`. */
             state: components["schemas"]["RunState"];
-            /** Status */
+            /**
+             * Status
+             * @description The journal's status: running, ok, failed, unknown, timeout, crashed.
+             */
             status: string;
-            /** Summary */
+            /**
+             * Summary
+             * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
+             */
             summary: string | null;
-            /** Tokens */
+            /**
+             * Tokens
+             * @description How many tokens the agent runtime reported it used; None when it reported nothing.
+             */
             tokens: number | null;
         };
         /**
@@ -663,17 +857,28 @@ export type components = {
          * @description One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22).
          */
         ChoreRunDetail: {
-            /** Chore */
+            /**
+             * Chore
+             * @description The chore's name.
+             */
             chore: string;
             /**
              * Findings
+             * @description An `ok` run's findings, as it listed them.
              * @default []
              */
             findings: components["schemas"]["ChoreRunFinding"][];
-            /** Note */
+            /**
+             * Note
+             * @description Why the harness decided the run's status, when it did: a timeout, a crash, a result that did not validate.
+             */
             note: string | null;
+            /** @description The run, as its chore's page lists it. */
             run: components["schemas"]["ChoreRun"];
-            /** Summary */
+            /**
+             * Summary
+             * @description The agent's summary, line breaks kept and not cut: its result bounded it at 2000 characters.
+             */
             summary: string | null;
         };
         /**
@@ -681,13 +886,25 @@ export type components = {
          * @description A finding as one chore run reported it (DESIGN §19).
          */
         ChoreRunFinding: {
-            /** Detail */
+            /**
+             * Detail
+             * @description Its detail, as the agent wrote it: untrusted text.
+             */
             detail: string;
-            /** Id */
+            /**
+             * Id
+             * @description The finding's id, as the chore gave it: the same across runs that report it.
+             */
             id: string;
-            /** Link */
+            /**
+             * Link
+             * @description A URL the agent gave for it: untrusted.
+             */
             link: string | null;
-            /** Title */
+            /**
+             * Title
+             * @description Its title, as the agent wrote it: untrusted text.
+             */
             title: string;
         };
         /**
@@ -697,29 +914,54 @@ export type components = {
         ChoreSummary: {
             /**
              * Days
+             * @description The days of the week a run may start, checked in code; empty for every day.
              * @default []
              */
             days: string[];
-            /** Due At */
+            /**
+             * Due At
+             * @description The earliest time the harness lets a new run start; None, or a time already past, means now.
+             */
             due_at: string | null;
-            /** Every Minutes */
+            /**
+             * Every Minutes
+             * @description The least time between the starts of two runs, in minutes.
+             */
             every_minutes: number;
             /**
              * Findings
+             * @description Its open findings.
              * @default []
              */
             findings: components["schemas"]["ChoreFinding"][];
-            /** Hours */
+            /**
+             * Hours
+             * @description The hours a run may start, as `HH:MM-HH:MM`, checked in code; None for any hour.
+             */
             hours: string | null;
+            /** @description Its most recent run that has ended. */
             latest: components["schemas"]["ChoreRun"] | null;
-            /** Latest Note Id */
+            /**
+             * Latest Note Id
+             * @description The newest of the operator's notes to it, so a new note changes the list the stream sends.
+             */
             latest_note_id: number | null;
-            /** Name */
+            /**
+             * Name
+             * @description The chore's name, as `chore:NAME` names it.
+             */
             name: string;
+            /** @description Its run that is running now, if one is. */
             running: components["schemas"]["ChoreRun"] | null;
-            /** Timezone */
+            /**
+             * Timezone
+             * @description The IANA zone `days` and `hours` are in; None for the local time of the machine the loop runs on.
+             */
             timezone: string | null;
-            /** When */
+            /**
+             * When
+             * @description The operator's words to the overseer on when a run is worth it.
+             */
             when: string | null;
         };
         /**
@@ -727,10 +969,13 @@ export type components = {
          * @description The chores changed: a run started or ended, or a note was added. The payload is the whole list.
          */
         ChoresUpdated: {
-            /** Chores */
+            /**
+             * Chores
+             * @description The chores, as `GET /chores` returns them.
+             */
             chores: components["schemas"]["ChoreSummary"][];
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "chores.updated";
@@ -740,13 +985,25 @@ export type components = {
          * @description Where a mirrored tracker comment came from (DESIGN §22, M19).
          */
         Comment: {
-            /** At */
+            /**
+             * At
+             * @description When it was written, as the tracker gave the time.
+             */
             at: string;
-            /** Author */
+            /**
+             * Author
+             * @description Who wrote it, as the tracker names them: untrusted text.
+             */
             author: string;
-            /** Id */
+            /**
+             * Id
+             * @description The comment's id in the tracker.
+             */
             id: string;
-            /** Truncated */
+            /**
+             * Truncated
+             * @description Whether its body was cut when it was mirrored.
+             */
             truncated: boolean;
         };
         /**
@@ -754,11 +1011,21 @@ export type components = {
          * @description What asking the loop to read its config again found (DESIGN §6). It applies at once, or after a running tick.
          */
         ConfigReload: {
-            /** After Tick */
+            /**
+             * After Tick
+             * @description A tick is running: it finishes on the config it started with, and the reload follows when it ends.
+             */
             after_tick: boolean;
-            /** Changed */
+            /**
+             * Changed
+             * @description Keys whose values differ from the config the loop runs on, as `section.key`; `workspace map` for the
+             *     workspace file's repositories. Empty when the files say what the loop already runs on.
+             */
             changed: string[];
-            /** Restart */
+            /**
+             * Restart
+             * @description The changed keys that take effect only when the loop restarts: the web UI's listener.
+             */
             restart: string[];
         };
         /**
@@ -766,28 +1033,58 @@ export type components = {
          * @description One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals.
          */
         Decision: {
-            /** Action */
+            /**
+             * Action
+             * @description dispatch:<kind> | wait | skip | done | mirror | attention:<reason> | refused:<guard>
+             */
             action: string;
             /**
              * At
              * Format: date-time
+             * @description When it was recorded.
              */
             at: string;
-            /** Chore */
+            /**
+             * Chore
+             * @description The chore it is about, when it is about one.
+             */
             chore: string | null;
-            /** Id */
+            /**
+             * Id
+             * @description The decision's id.
+             */
             id: number;
-            /** Pr */
+            /**
+             * Pr
+             * @description The URL of the PR it is about, when it is about one.
+             */
             pr: string | null;
-            /** Rationale */
+            /**
+             * Rationale
+             * @description The overseer's text, untrusted: control characters dropped and line breaks kept. Bounded at 2000 characters
+             *     when it was recorded.
+             */
             rationale: string;
-            /** Repo */
+            /**
+             * Repo
+             * @description The repository it is about, when it is about one.
+             */
             repo: string | null;
-            /** Subject */
+            /**
+             * Subject
+             * @description What it is about, as `canopy decisions` names it with a unit's repository added: `PROJ-1`, `PROJ-1 (api)`,
+             *     `api`, `chore:deps`, `pr:URL`, or `-` for the whole tick.
+             */
             subject: string;
-            /** Tick Id */
+            /**
+             * Tick Id
+             * @description The tick that recorded it.
+             */
             tick_id: number;
-            /** Ticket Key */
+            /**
+             * Ticket Key
+             * @description The ticket it is about, when it is about one.
+             */
             ticket_key: string | null;
         };
         /**
@@ -797,14 +1094,24 @@ export type components = {
         DiffFile: {
             /**
              * Binary
+             * @description Whether git shows no lines for it.
              * @default false
              */
             binary: boolean;
-            /** Hunks */
+            /**
+             * Hunks
+             * @description Its hunks.
+             */
             hunks: components["schemas"]["DiffHunk"][];
-            /** Old Path */
+            /**
+             * Old Path
+             * @description Its path before, when it was renamed.
+             */
             old_path: string | null;
-            /** Path */
+            /**
+             * Path
+             * @description The file's path in the repository.
+             */
             path: string;
         };
         /**
@@ -812,9 +1119,15 @@ export type components = {
          * @description One hunk: what follows its `@@` ranges, such as a function's name, and its lines.
          */
         DiffHunk: {
-            /** Header */
+            /**
+             * Header
+             * @description What follows the hunk's `@@` ranges, such as a function's name.
+             */
             header: string;
-            /** Lines */
+            /**
+             * Lines
+             * @description Its lines.
+             */
             lines: components["schemas"]["DiffLine"][];
         };
         /**
@@ -822,24 +1135,54 @@ export type components = {
          * @description One line of a hunk, with its number on each side it is on.
          */
         DiffLine: {
+            /** @description Whether it is added, deleted, or context. */
             kind: components["schemas"]["DiffLineKind"];
-            /** New */
+            /**
+             * New
+             * @description Its number on the new side; None for a deleted line.
+             */
             new: number | null;
-            /** Old */
+            /**
+             * Old
+             * @description Its number on the old side; None for an added line.
+             */
             old: number | null;
-            /** Text */
+            /**
+             * Text
+             * @description The line's text, without its `+`, `-`, or space: untrusted.
+             */
             text: string;
         };
-        /** @enum {string} */
+        /**
+         * @description Whether a diff line is added, deleted, or context.
+         * @enum {string}
+         */
         DiffLineKind: "add" | "del" | "ctx";
-        /** @enum {string} */
+        /**
+         * ErrorResponse
+         * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, or a 404.
+         */
+        ErrorResponse: {
+            /**
+             * Detail
+             * @description What went wrong, in words.
+             */
+            detail: string;
+        };
+        /**
+         * @description How much a review finding matters (DESIGN §21).
+         * @enum {string}
+         */
         FindingSeverity: "blocking" | "major" | "minor";
         /**
          * ForgetRequest
          * @description A forget, and the ticket's key as the operator typed it: the challenge, checked again in code (DESIGN §22).
          */
         ForgetRequest: {
-            /** Confirm */
+            /**
+             * Confirm
+             * @description The ticket's key, typed by the operator; anything else is refused `not_confirmed`.
+             */
             confirm: string;
         };
         /**
@@ -847,9 +1190,15 @@ export type components = {
          * @description What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete.
          */
         Forgot: {
-            /** Branch */
+            /**
+             * Branch
+             * @description The branch the ticket's work was on.
+             */
             branch: string | null;
-            /** Prs */
+            /**
+             * Prs
+             * @description The URLs of its units' PRs.
+             */
             prs: string[];
         };
         /** HTTPValidationError */
@@ -862,8 +1211,13 @@ export type components = {
          * @description The latest tick, or none before the first, and the newest message a tick has acknowledged.
          */
         LastTick: {
-            /** Acknowledged */
+            /**
+             * Acknowledged
+             * @description The newest message the latest `ok` tick read, which may be an earlier tick than `tick`: an operator message
+             *     after it waits for the next tick, and the attention list is still from before it (§14). None before the first.
+             */
             acknowledged: number | null;
+            /** @description The latest tick; None before the first. */
             tick: components["schemas"]["Tick"] | null;
         };
         /**
@@ -871,6 +1225,7 @@ export type components = {
          * @description Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes.
          */
         LoopState: {
+            /** @description The pause; None when the loop is not paused. */
             paused: components["schemas"]["Pause"] | null;
         };
         /**
@@ -878,9 +1233,10 @@ export type components = {
          * @description The loop was paused or resumed. The payload is what `GET /loop` returns.
          */
         LoopUpdated: {
+            /** @description The pause; None when the loop is not paused. */
             paused: components["schemas"]["Pause"] | null;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "loop.updated";
@@ -890,28 +1246,53 @@ export type components = {
          * @description One message in a ticket's conversation.
          */
         Message: {
-            /** Answers */
+            /**
+             * Answers
+             * @description The message a reply answers.
+             */
             answers: number | null;
             /**
              * At
              * Format: date-time
+             * @description When the journal recorded it.
              */
             at: string;
-            /** Body */
+            /**
+             * Body
+             * @description Its text, control characters dropped and line breaks kept: untrusted.
+             */
             body: string;
-            /** Channel */
+            /**
+             * Channel
+             * @description How it reached the journal: run | cli | web | slack | tracker
+             */
             channel: string;
+            /** @description The tracker comment it mirrors, for one that came from the tracker. */
             comment: components["schemas"]["Comment"] | null;
-            /** Id */
+            /**
+             * Id
+             * @description The message's id.
+             */
             id: number;
+            /** @description What it is. */
             kind: components["schemas"]["MessageKind"];
-            /** Run Id */
+            /**
+             * Run Id
+             * @description The run that wrote it, for a worker's message.
+             */
             run_id: number | null;
+            /** @description Who wrote it. */
             source: components["schemas"]["MessageSource"];
         };
-        /** @enum {string} */
+        /**
+         * @description What a message is (DESIGN §22).
+         * @enum {string}
+         */
         MessageKind: "report" | "question" | "reply" | "comment";
-        /** @enum {string} */
+        /**
+         * @description Who wrote a message (DESIGN §22).
+         * @enum {string}
+         */
         MessageSource: "worker" | "operator" | "tracker";
         /**
          * Meta
@@ -920,16 +1301,27 @@ export type components = {
         Meta: {
             /**
              * Branch Urls
+             * @description Each repository's branch link template, by name: a branch's page on its host, with `{branch}` where its name
+             *     goes, from `branch_url` or a GitHub `url`. A repository without one is left out.
              * @default {}
              */
             branch_urls: {
                 [key: string]: string;
             };
-            /** Mock */
+            /**
+             * Mock
+             * @description Whether the journal is seeded from fixtures (`python -m canopy.serve --mock`), not the operator's.
+             */
             mock: boolean;
-            /** Ticket Url */
+            /**
+             * Ticket Url
+             * @description `tracker.ticket_url`: a ticket's page in the tracker, with `{key}` where its key goes; None when unset.
+             */
             ticket_url: string | null;
-            /** Version */
+            /**
+             * Version
+             * @description canopy's version, as the installed package reports it.
+             */
             version: string;
         };
         /**
@@ -937,10 +1329,12 @@ export type components = {
          * @description The operator paused the loop (DESIGN §6): since when, and through which channel.
          */
         Pause: {
+            /** @description How it was paused. */
             channel: components["schemas"]["PauseChannel"];
             /**
              * Since
              * Format: date-time
+             * @description When the loop was paused.
              */
             since: string;
         };
@@ -949,25 +1343,42 @@ export type components = {
          * @description What a pause or a resume did: whether the loop was already so, and the state it left.
          */
         PauseChanged: {
-            /** Already */
+            /**
+             * Already
+             * @description Whether the loop was already paused, or already not, so nothing changed.
+             */
             already: boolean;
+            /** @description The state it left. */
             loop: components["schemas"]["LoopState"];
         };
-        /** @enum {string} */
+        /**
+         * @description How the operator paused the loop. `loop` is the `p` key at the loop's terminal.
+         * @enum {string}
+         */
         PauseChannel: "loop" | "cli" | "web";
         /**
          * Pool
          * @description One repository's treehouse pool, read when asked for.
          */
         Pool: {
-            /** Error */
+            /**
+             * Error
+             * @description Why its worktrees could not be read: no clone, or treehouse failed.
+             */
             error: string | null;
-            /** Repo */
+            /**
+             * Repo
+             * @description The repository, as the workspace names it.
+             */
             repo: string;
-            /** Size */
+            /**
+             * Size
+             * @description The size `capacity` declares for it; None leaves it to treehouse's `max_trees` (DESIGN §18).
+             */
             size: number | null;
             /**
              * Worktrees
+             * @description Its slots.
              * @default []
              */
             worktrees: components["schemas"]["Worktree"][];
@@ -977,9 +1388,15 @@ export type components = {
          * @description A process treehouse found running in a worktree.
          */
         Process: {
-            /** Name */
+            /**
+             * Name
+             * @description Its name, control characters dropped.
+             */
             name: string;
-            /** Pid */
+            /**
+             * Pid
+             * @description Its process id.
+             */
             pid: number;
         };
         /**
@@ -987,9 +1404,15 @@ export type components = {
          * @description A guard refused the operator's action: which guard, and why, as the CLI says it.
          */
         Refusal: {
-            /** Guard */
+            /**
+             * Guard
+             * @description The guard's name, as the CLI prints it: `bad_ref`, `not_confirmed`, `config_invalid`, ...
+             */
             guard: string;
-            /** Reason */
+            /**
+             * Reason
+             * @description Why it refused, in the CLI's words.
+             */
             reason: string;
         };
         /**
@@ -997,6 +1420,7 @@ export type components = {
          * @description A 409's body.
          */
         RefusalResponse: {
+            /** @description The guard that refused, and its reason. */
             detail: components["schemas"]["Refusal"];
         };
         /**
@@ -1004,11 +1428,20 @@ export type components = {
          * @description What a reply recorded: the message, the message it answers, and whether it was new.
          */
         Replied: {
-            /** Answers */
+            /**
+             * Answers
+             * @description The question it answers, if it answers one.
+             */
             answers: number | null;
-            /** Message Id */
+            /**
+             * Message Id
+             * @description The message the reply is.
+             */
             message_id: number;
-            /** New */
+            /**
+             * New
+             * @description Whether it was recorded now, rather than by an earlier submission with the same id.
+             */
             new: boolean;
         };
         /**
@@ -1016,9 +1449,15 @@ export type components = {
          * @description A reply from the conversation's form, with the submission id the form drew when it was rendered.
          */
         ReplyRequest: {
-            /** Body */
+            /**
+             * Body
+             * @description The reply's text. Bounded again in code at 4000 characters, after stripping (DESIGN §22).
+             */
             body: string;
-            /** Submission */
+            /**
+             * Submission
+             * @description The id the form drew when it was rendered, sent again unchanged on a retry, so a retry records nothing new.
+             */
             submission: string;
         };
         /**
@@ -1026,17 +1465,34 @@ export type components = {
          * @description One review run in full: its summary, findings, the diff they sit on, and the PR's other review runs.
          */
         ReviewDetail: {
-            /** Base Branch */
+            /**
+             * Base Branch
+             * @description The branch the PR merges into.
+             */
             base_branch: string | null;
+            /** @description None when there is no diff: a review from before diffs were kept, or one whose base could not be read. */
             diff: components["schemas"]["ReviewDiff"] | null;
-            /** Findings */
+            /**
+             * Findings
+             * @description Its findings, each anchored on the diff where it can be.
+             */
             findings: components["schemas"]["ReviewFinding"][];
-            /** Note */
+            /**
+             * Note
+             * @description The harness's note, when it decided the status.
+             */
             note: string | null;
+            /** @description The review run, as the reviews list shows it. */
             review: components["schemas"]["ReviewSummary"];
-            /** Runs */
+            /**
+             * Runs
+             * @description Every review run of the same PR, newest first, this one included.
+             */
             runs: components["schemas"]["ReviewSummary"][];
-            /** Summary */
+            /**
+             * Summary
+             * @description The reviewer's summary, line breaks kept: untrusted text.
+             */
             summary: string | null;
         };
         /**
@@ -1044,10 +1500,14 @@ export type components = {
          * @description The reviewed commit's diff against where it leaves its base branch: the PR's own text, untrusted, and bounded.
          */
         ReviewDiff: {
-            /** Files */
+            /**
+             * Files
+             * @description The files it changes.
+             */
             files: components["schemas"]["DiffFile"][];
             /**
              * Truncated
+             * @description A bound left something out.
              * @default false
              */
             truncated: boolean;
@@ -1059,16 +1519,32 @@ export type components = {
          *     Both are None when the diff does not show the file; `line` alone is None when it does not show the line.
          */
         ReviewFinding: {
-            /** Detail */
+            /**
+             * Detail
+             * @description Its detail, as the reviewer wrote it: untrusted text.
+             */
             detail: string;
-            /** File */
+            /**
+             * File
+             * @description The index in the diff's files of the file it is in; None when the diff does not show it.
+             */
             file: number | null;
-            /** Line */
+            /**
+             * Line
+             * @description The line it is on, on the new side; None when the diff does not show it.
+             */
             line: number | null;
-            /** Location */
+            /**
+             * Location
+             * @description Where it is, as the reviewer wrote it: `path:line`, say. Untrusted text.
+             */
             location: string;
+            /** @description How much it matters. */
             severity: components["schemas"]["FindingSeverity"];
-            /** Title */
+            /**
+             * Title
+             * @description Its title, as the reviewer wrote it: untrusted text.
+             */
             title: string;
         };
         /**
@@ -1076,114 +1552,205 @@ export type components = {
          * @description A running review that holds a worktree (DESIGN §21).
          */
         ReviewHold: {
-            /** Id */
+            /**
+             * Id
+             * @description The review run's id.
+             */
             id: number;
-            /** Pr Url */
+            /**
+             * Pr Url
+             * @description The URL of the PR it reviews.
+             */
             pr_url: string;
             /**
              * Started At
              * Format: date-time
+             * @description When it started.
              */
             started_at: string;
         };
-        /** @enum {string} */
+        /**
+         * @description A change's impact, as the reviewer calls it: `low` as `review.low_impact` allows (DESIGN §21).
+         * @enum {string}
+         */
         ReviewImpact: "low" | "normal" | "high";
         /**
          * ReviewSummary
          * @description One review run of a PR at a commit (DESIGN §21): canopy's own review, which is never on the PR (D114).
          */
         ReviewSummary: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
+             */
             cost_usd: number | null;
-            /** Ended At */
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
             ended_at: string | null;
             /**
              * Findings
+             * @description How many findings it reported.
              * @default 0
              */
             findings: number;
-            /** Id */
+            /**
+             * Id
+             * @description The review run's id.
+             */
             id: number;
+            /** @description The change's impact, once it reported one. */
             impact: components["schemas"]["ReviewImpact"] | null;
-            /** Pr Url */
+            /**
+             * Pr Url
+             * @description The PR's URL as the overseer gave it: an opaque https:// string.
+             */
             pr_url: string;
-            /** Repo */
+            /**
+             * Repo
+             * @description The PR's repository, as the workspace names it.
+             */
             repo: string | null;
-            /** Sha */
+            /**
+             * Sha
+             * @description The commit it reviewed.
+             */
             sha: string;
             /**
              * Started At
              * Format: date-time
+             * @description When it started.
              */
             started_at: string;
+            /** @description `done` is done; every other ending is failed. */
             state: components["schemas"]["RunState"];
-            /** Status */
+            /**
+             * Status
+             * @description The journal's status: running, done, failed, unknown, timeout, crashed.
+             */
             status: string;
-            /** Ticket Key */
+            /**
+             * Ticket Key
+             * @description The ticket the PR is for, when it is for one.
+             */
             ticket_key: string | null;
+            /** @description Its verdict, once it reported one. */
             verdict: components["schemas"]["ReviewVerdict"] | null;
         };
-        /** @enum {string} */
+        /**
+         * @description A review run's verdict (DESIGN §21).
+         * @enum {string}
+         */
         ReviewVerdict: "clean" | "findings";
         /**
          * Run
          * @description One worker or split run (`run:ID`).
          */
         Run: {
-            /** Branch */
+            /**
+             * Branch
+             * @description The branch it works on.
+             */
             branch: string | null;
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
+             */
             cost_usd: number | null;
-            /** Ended At */
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
             ended_at: string | null;
-            /** Id */
+            /**
+             * Id
+             * @description The run's id.
+             */
             id: number;
-            /** Kind */
+            /**
+             * Kind
+             * @description implement | fix-ci | resume | split
+             */
             kind: string;
-            /** Log Path */
+            /**
+             * Log Path
+             * @description Where its log is: from the workspace root when under it, as a worktree's path is.
+             */
             log_path: string;
-            /** Private */
+            /**
+             * Private
+             * @description Whether it works a ticket started in canopy, whose conversation never reaches the tracker.
+             */
             private: boolean;
             /**
              * Prs
+             * @description The PRs its result names, each an https:// URL.
              * @default []
              */
             prs: string[];
-            /** Session Id */
+            /**
+             * Session Id
+             * @description The runtime's session, for opening its transcript with the runtime's own tools.
+             */
             session_id: string | null;
             /**
              * Started At
              * Format: date-time
+             * @description When it started.
              */
             started_at: string;
+            /** @description Its status, grouped as the UI colors it. */
             state: components["schemas"]["RunState"];
-            /** Status */
+            /**
+             * Status
+             * @description The journal's status: running, done, blocked, failed, crashed, unpushed, unknown, timeout, stopped.
+             */
             status: string;
-            /** Summary */
+            /**
+             * Summary
+             * @description The worker's summary or the harness's note, line breaks kept, cut at 300 characters.
+             */
             summary: string | null;
-            /** Ticket Key */
+            /**
+             * Ticket Key
+             * @description The ticket it works.
+             */
             ticket_key: string;
-            /** Ticket Title */
+            /**
+             * Ticket Title
+             * @description The ticket's title, as the overseer named it (DESIGN §13); None until it does.
+             */
             ticket_title: string | null;
-            /** Tokens */
+            /**
+             * Tokens
+             * @description How many tokens the agent runtime reported it used; None when it reported nothing.
+             */
             tokens: number | null;
             /**
              * Worktrees
+             * @description The worktrees a running run holds, from the workspace root when under it.
              * @default []
              */
             worktrees: string[];
         };
-        /** @enum {string} */
+        /**
+         * @description A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the operator's.
+         * @enum {string}
+         */
         RunState: "running" | "blocked" | "done" | "failed" | "stopped";
         /**
          * RunsUpdated
          * @description The runs changed. The payload is the whole list, as `GET /runs` returns it.
          */
         RunsUpdated: {
-            /** Runs */
+            /**
+             * Runs
+             * @description The runs, as `GET /runs` returns them.
+             */
             runs: components["schemas"]["Run"][];
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "runs.updated";
@@ -1196,20 +1763,40 @@ export type components = {
             /**
              * At
              * Format: date-time
+             * @description The row's time: when it was recorded, started, or last active.
              */
             at: string;
-            /** Chore */
+            /**
+             * Chore
+             * @description The chore a run, note, or decision is about.
+             */
             chore: string | null;
-            /** Label */
+            /**
+             * Label
+             * @description A fixed word: a message's kind (`note` for a chore's), a decision's action, a status, or a ticket's phase.
+             */
             label: string | null;
-            /** Run Id */
+            /**
+             * Run Id
+             * @description The run that reported a message, or a chore run's own id.
+             */
             run_id: number | null;
-            /** Snippet */
+            /**
+             * Snippet
+             * @description The field that matched, on one line, cut around its first match: untrusted text.
+             */
             snippet: string;
+            /** @description What the row is. */
             source: components["schemas"]["SearchSource"];
-            /** Tick Id */
+            /**
+             * Tick Id
+             * @description A tick, or the tick that recorded a decision.
+             */
             tick_id: number | null;
-            /** Ticket Key */
+            /**
+             * Ticket Key
+             * @description The ticket a hit is, or whose message or decision it is.
+             */
             ticket_key: string | null;
         };
         /**
@@ -1217,23 +1804,41 @@ export type components = {
          * @description A search: the words it looked for, its hits by source and newest first, and the sources that had more.
          */
         SearchResults: {
-            /** Hits */
+            /**
+             * Hits
+             * @description Its hits, at most 20 a source, by source and newest first.
+             */
             hits: components["schemas"]["SearchHit"][];
-            /** More */
+            /**
+             * More
+             * @description The sources that held more hits than it returned.
+             */
             more: components["schemas"]["SearchSource"][];
-            /** Words */
+            /**
+             * Words
+             * @description The words it looked for, as it split the query.
+             */
             words: string[];
         };
-        /** @enum {string} */
+        /**
+         * @description Where a search hit is (DESIGN §22, Search), in the order the search reads them.
+         * @enum {string}
+         */
         SearchSource: "ticket" | "message" | "chore_run" | "decision" | "tick";
         /**
          * Session
          * @description Whether this browser is signed in, and if so the token its writes must carry.
          */
         Session: {
-            /** Signed In */
+            /**
+             * Signed In
+             * @description Whether the request carried a valid session cookie, or the server signs nobody in (mock data only).
+             */
             signed_in: boolean;
-            /** Token */
+            /**
+             * Token
+             * @description The token every write sends as `X-Canopy-Token`; None when signed out.
+             */
             token: string | null;
         };
         /**
@@ -1241,7 +1846,10 @@ export type components = {
          * @description The listener secret, as the operator gave it to the sign-in page.
          */
         SignIn: {
-            /** Secret */
+            /**
+             * Secret
+             * @description The listener secret, from the file `canopy secret` wrote.
+             */
             secret: string;
         };
         /**
@@ -1249,7 +1857,9 @@ export type components = {
          * @description What the last day and the last 30 days cost, read together, so a month never shows less than its day.
          */
         Spend: {
+            /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
+            /** @description The last 30 days. */
             month: components["schemas"]["SpendWindow"];
         };
         /**
@@ -1257,9 +1867,10 @@ export type components = {
          * @description What a window cost changed. The payload is both windows, as `GET /spend` returns them.
          */
         SpendUpdated: {
+            /** @description Both windows, as `GET /spend` returns them. */
             spend: components["schemas"]["Spend"];
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "spend.updated";
@@ -1271,13 +1882,20 @@ export type components = {
          *     Worker, split, chore, and review runs and each tick's overseer, by when they started.
          */
         SpendWindow: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description What it cost, in US dollars; None when nothing in the window reported a cost.
+             */
             cost_usd: number | null;
-            /** Hours */
+            /**
+             * Hours
+             * @description How long the window is, in hours.
+             */
             hours: number;
             /**
              * Since
              * Format: date-time
+             * @description When the window starts.
              */
             since: string;
         };
@@ -1286,28 +1904,47 @@ export type components = {
          * @description What a start did: whether it was already started, and a run already working it.
          */
         Started: {
-            /** Already */
+            /**
+             * Already
+             * @description Whether the ticket was already started, so nothing changed.
+             */
             already: boolean;
-            /** Running Private */
+            /**
+             * Running Private
+             * @description Whether that run is private; a public one may still write to the ticket.
+             */
             running_private: boolean | null;
-            /** Running Run */
+            /**
+             * Running Run
+             * @description A run already working the ticket, if one is.
+             */
             running_run: number | null;
         };
-        /** @enum {string} */
+        /**
+         * @description Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22).
+         * @enum {string}
+         */
         StartStatus: "started" | "stopped";
         /**
          * Stopped
          * @description What a stop did: whether it was already stopped, the run still working it, and whether `now` ended that run.
          */
         Stopped: {
-            /** Already */
+            /**
+             * Already
+             * @description Whether the ticket was already stopped, so nothing changed.
+             */
             already: boolean;
             /**
              * Ended
+             * @description Whether `now` ended that run.
              * @default false
              */
             ended: boolean;
-            /** Running Run */
+            /**
+             * Running Run
+             * @description A run still working the ticket, if one is.
+             */
             running_run: number | null;
         };
         /**
@@ -1317,6 +1954,7 @@ export type components = {
         StopRequest: {
             /**
              * Now
+             * @description End the run working the ticket now, rather than let it finish.
              * @default false
              */
             now: boolean;
@@ -1331,29 +1969,52 @@ export type components = {
          * @description A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded.
          */
         Tick: {
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description What the overseer cost, in US dollars, when the runtime reported it (§13).
+             */
             cost_usd: number | null;
             /**
              * Decisions
+             * @description How many decisions it recorded so far.
              * @default 0
              */
             decisions: number;
-            /** Dry Run */
+            /**
+             * Dry Run
+             * @description Whether it was a dry run: it recorded decisions and acted on none.
+             */
             dry_run: boolean;
-            /** Ended At */
+            /**
+             * Ended At
+             * @description When it ended; None while it runs.
+             */
             ended_at: string | null;
-            /** Id */
+            /**
+             * Id
+             * @description The tick's id.
+             */
             id: number;
-            /** Session Id */
+            /**
+             * Session Id
+             * @description The overseer's session, when the runtime reported it (§13).
+             */
             session_id: string | null;
             /**
              * Started At
              * Format: date-time
+             * @description When it started.
              */
             started_at: string;
-            /** Status */
+            /**
+             * Status
+             * @description running | ok | skipped | overseer_failed | reconcile_failed | abandoned
+             */
             status: string;
-            /** Summary */
+            /**
+             * Summary
+             * @description The overseer's summary of the tick: untrusted text.
+             */
             summary: string | null;
         };
         /**
@@ -1361,10 +2022,18 @@ export type components = {
          * @description One tick: what `canopy decisions ID` prints.
          */
         TickDetail: {
-            /** Decisions */
+            /**
+             * Decisions
+             * @description Its decisions, in the order they were recorded.
+             */
             decisions: components["schemas"]["Decision"][];
-            /** Output Path */
+            /**
+             * Output Path
+             * @description Where the overseer's stdout and stderr are, from the workspace root, if the file exists. Its session's events
+             *     are served as the tick's transcript, and its end as the tick's output (DESIGN §22).
+             */
             output_path: string | null;
+            /** @description The tick, as the ticks list shows it. */
             tick: components["schemas"]["Tick"];
         };
         /**
@@ -1372,10 +2041,13 @@ export type components = {
          * @description Something about one ticket changed: a page showing it reads it again.
          */
         TicketChanged: {
-            /** Key */
+            /**
+             * Key
+             * @description The ticket's key.
+             */
             key: string;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "ticket.changed";
@@ -1385,14 +2057,27 @@ export type components = {
          * @description One ticket: what `canopy show` prints, and the latest decisions about it.
          */
         TicketDetail: {
-            /** Decisions */
+            /**
+             * Decisions
+             * @description The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it.
+             */
             decisions: components["schemas"]["Decision"][];
-            /** Messages */
+            /**
+             * Messages
+             * @description Its conversation: the latest 100 messages, oldest first.
+             */
             messages: components["schemas"]["Message"][];
-            /** Runs */
+            /**
+             * Runs
+             * @description Its latest runs, newest first.
+             */
             runs: components["schemas"]["Run"][];
+            /** @description The ticket, as the tickets list shows it. */
             ticket: components["schemas"]["TicketSummary"];
-            /** Units */
+            /**
+             * Units
+             * @description Its work in each repository.
+             */
             units: components["schemas"]["Unit"][];
         };
         /**
@@ -1403,28 +2088,60 @@ export type components = {
             /**
              * Active At
              * Format: date-time
+             * @description The newest of: a message, a run starting or ending, a start or stop, a tick seeing it.
              */
             active_at: string;
-            /** Awaiting */
+            /**
+             * Awaiting
+             * @description The question waiting on the operator's reply, on a started ticket.
+             */
             awaiting: number | null;
-            /** Branch */
+            /**
+             * Branch
+             * @description The branch its work is on.
+             */
             branch: string | null;
-            /** Done */
+            /**
+             * Done
+             * @description Whether the overseer marked it done.
+             */
             done: boolean;
-            /** Key */
+            /**
+             * Key
+             * @description The ticket's key, as the tracker names it.
+             */
             key: string;
-            /** Last Decision */
+            /**
+             * Last Decision
+             * @description The newest decision a tick recorded about it since it was forgotten: None means no tick has seen it.
+             */
             last_decision: string | null;
-            /** Latest Message Id */
+            /**
+             * Latest Message Id
+             * @description The newest message in its conversation, so a new message changes the list the stream sends.
+             */
             latest_message_id: number | null;
-            /** Phase */
+            /**
+             * Phase
+             * @description The overseer's last derived phase, for display; never read as truth.
+             */
             phase: string | null;
-            /** Private */
+            /**
+             * Private
+             * @description Started in canopy (DESIGN §22): its conversation never reaches the tracker.
+             */
             private: boolean;
-            /** Running Run */
+            /**
+             * Running Run
+             * @description The run working it now, if one is.
+             */
             running_run: number | null;
+            /** @description Whether the operator's start of it stands; None when it was never started in canopy. */
             start: components["schemas"]["StartStatus"] | null;
-            /** Title */
+            /**
+             * Title
+             * @description A short name the overseer gave it from the ticket's own title (DESIGN §13); None until it does.
+             */
             title: string | null;
         };
         /**
@@ -1432,10 +2149,13 @@ export type components = {
          * @description The tickets list changed. The payload is the whole list, as `GET /tickets` returns it.
          */
         TicketsUpdated: {
-            /** Tickets */
+            /**
+             * Tickets
+             * @description The tickets, as `GET /tickets` returns them.
+             */
             tickets: components["schemas"]["TicketSummary"][];
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "tickets.updated";
@@ -1450,21 +2170,26 @@ export type components = {
         TickOutput: {
             /**
              * Size
+             * @description The whole file's size, in bytes.
              * @default 0
              */
             size: number;
             /**
              * Status
+             * @description `read`: the file was read. `no_output`: it is missing (none kept, or the tick is still running), a symlink, or
+             *     not a regular file.
              * @enum {string}
              */
             status: "read" | "no_output";
             /**
              * Text
+             * @description The end of the file, starting at a whole line.
              * @default
              */
             text: string;
             /**
              * Truncated
+             * @description The file holds more than `text`.
              * @default false
              */
             truncated: boolean;
@@ -1474,11 +2199,15 @@ export type components = {
          * @description A tick started or ended. The payload is what `GET /tick` returns: the latest tick, and what was acknowledged.
          */
         TickUpdated: {
-            /** Acknowledged */
+            /**
+             * Acknowledged
+             * @description The newest message the latest `ok` tick read; None before the first.
+             */
             acknowledged: number | null;
+            /** @description The latest tick; None before the first. */
             tick: components["schemas"]["Tick"] | null;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the event is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             type: "tick.updated";
@@ -1493,61 +2222,94 @@ export type components = {
         Transcript: {
             /**
              * Entries
+             * @description The session's events, in order.
              * @default []
              */
             entries: components["schemas"]["TranscriptEntry"][];
-            /** Session Id */
+            /**
+             * Session Id
+             * @description The runtime's session, if it reported one.
+             */
             session_id: string | null;
+            /** @description Whether the log was read, and if not, why. */
             status: components["schemas"]["TranscriptStatus"];
             /**
              * Truncated
+             * @description A bound left something out.
              * @default false
              */
             truncated: boolean;
             /**
              * Unreadable
+             * @description How many events did not validate.
              * @default 0
              */
             unreadable: number;
         };
+        /** @description One entry of a transcript, told apart by its `kind`. */
         TranscriptEntry: components["schemas"]["TranscriptText"] | components["schemas"]["TranscriptTool"] | components["schemas"]["TranscriptStep"] | components["schemas"]["TranscriptError"];
         /**
          * TranscriptError
          * @description The runtime reported an error in the session.
          */
         TranscriptError: {
-            /** At */
+            /**
+             * At
+             * @description When the runtime reported it, if it said.
+             */
             at: string | null;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the entry is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "error";
-            /** Message */
+            /**
+             * Message
+             * @description The error's message: untrusted.
+             */
             message: string;
-            /** Name */
+            /**
+             * Name
+             * @description The error's name, as the runtime gave it.
+             */
             name: string;
         };
-        /** @enum {string} */
+        /**
+         * @description `read`: the log was read, whether or not it held any of the session's events yet (a running run's reach it when the run ends). `no_session`: the runtime reported no session (a template without `--format json`). `no_log`: the log is missing, a symlink, or not a regular file.
+         * @enum {string}
+         */
         TranscriptStatus: "read" | "no_session" | "no_log";
         /**
          * TranscriptStep
          * @description One model call ended: why, and what it cost, when the runtime said.
          */
         TranscriptStep: {
-            /** At */
+            /**
+             * At
+             * @description When the runtime reported it, if it said.
+             */
             at: string | null;
-            /** Cost Usd */
+            /**
+             * Cost Usd
+             * @description What it cost, in US dollars.
+             */
             cost_usd: number | null;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the entry is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "step";
-            /** Reason */
+            /**
+             * Reason
+             * @description Why the call ended, in the runtime's word.
+             */
             reason: string | null;
+            /** @description The tokens, each kind apart. */
             split: components["schemas"]["TranscriptTokens"] | null;
-            /** Tokens */
+            /**
+             * Tokens
+             * @description Every kind of token together.
+             */
             tokens: number | null;
         };
         /**
@@ -1555,24 +2317,32 @@ export type components = {
          * @description A finished piece of the agent's text, or of its reasoning.
          */
         TranscriptText: {
-            /** At */
+            /**
+             * At
+             * @description When the runtime reported it, if it said.
+             */
             at: string | null;
             /**
              * Cut
+             * @description Cut at the transcript's bound for one text.
              * @default false
              */
             cut: boolean;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the entry is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "text";
             /**
              * Reasoning
+             * @description Whether it is the model's reasoning rather than its answer.
              * @default false
              */
             reasoning: boolean;
-            /** Text */
+            /**
+             * Text
+             * @description The text: untrusted.
+             */
             text: string;
         };
         /**
@@ -1580,15 +2350,30 @@ export type components = {
          * @description One model call's tokens by kind, as the runtime counted them.
          */
         TranscriptTokens: {
-            /** Cache Read */
+            /**
+             * Cache Read
+             * @description Input tokens read from the cache.
+             */
             cache_read: number;
-            /** Cache Write */
+            /**
+             * Cache Write
+             * @description Input tokens written to the cache.
+             */
             cache_write: number;
-            /** Input */
+            /**
+             * Input
+             * @description Input tokens.
+             */
             input: number;
-            /** Output */
+            /**
+             * Output
+             * @description Output tokens.
+             */
             output: number;
-            /** Reasoning */
+            /**
+             * Reasoning
+             * @description Reasoning tokens.
+             */
             reasoning: number;
         };
         /**
@@ -1596,32 +2381,52 @@ export type components = {
          * @description One tool call, once it ended: its input as indented JSON, and its output, or its error when `error`.
          */
         TranscriptTool: {
-            /** At */
+            /**
+             * At
+             * @description When the runtime reported it, if it said.
+             */
             at: string | null;
             /**
              * Cut
+             * @description Its input or output was cut at the transcript's bound for one.
              * @default false
              */
             cut: boolean;
-            /** Duration Ms */
+            /**
+             * Duration Ms
+             * @description How long it took, in milliseconds, if the runtime said.
+             */
             duration_ms: number | null;
-            /** Input */
+            /**
+             * Input
+             * @description Its input, as indented JSON: untrusted.
+             */
             input: string;
             /**
-             * @description discriminator enum property added by openapi-typescript
+             * @description What the entry is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             kind: "tool";
-            /** Output */
+            /**
+             * Output
+             * @description Its output, or its error: untrusted.
+             */
             output: string;
             /**
              * Status
+             * @description How the call ended.
              * @enum {string}
              */
             status: "completed" | "error";
-            /** Title */
+            /**
+             * Title
+             * @description The runtime's one-line description of the call, such as the command's purpose or the file's path.
+             */
             title: string | null;
-            /** Tool */
+            /**
+             * Tool
+             * @description The tool's name.
+             */
             tool: string;
         };
         /**
@@ -1629,11 +2434,20 @@ export type components = {
          * @description A ticket's work in one repository: its PR and phase (DESIGN §18).
          */
         Unit: {
-            /** Phase */
+            /**
+             * Phase
+             * @description The overseer's last derived phase for this unit, for display; never read as truth.
+             */
             phase: string | null;
-            /** Pr Url */
+            /**
+             * Pr Url
+             * @description The URL of its PR, once it has one.
+             */
             pr_url: string | null;
-            /** Repo */
+            /**
+             * Repo
+             * @description The repository, as the workspace names it.
+             */
             repo: string | null;
         };
         /** ValidationError */
@@ -1654,37 +2468,69 @@ export type components = {
          * @description One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it.
          */
         Worktree: {
-            /** Branch */
+            /**
+             * Branch
+             * @description The branch checked out, or for a detached run's slot, the run's branch.
+             */
             branch: string | null;
-            /** Branch Error */
+            /**
+             * Branch Error
+             * @description Why treehouse could not read the branch.
+             */
             branch_error: string | null;
             /**
              * Detached
+             * @description Whether its HEAD is detached.
              * @default false
              */
             detached: boolean;
-            /** Holder */
+            /**
+             * Holder
+             * @description Who holds its lease, as treehouse names them.
+             */
             holder: string | null;
-            /** Leased At */
+            /**
+             * Leased At
+             * @description When its lease was taken.
+             */
             leased_at: string | null;
-            /** Name */
+            /**
+             * Name
+             * @description The slot's name in its pool.
+             */
             name: string;
-            /** Note */
+            /**
+             * Note
+             * @description Something the operator should know about this slot, in the CLI's words: a stale canopy lease, say.
+             */
             note: string | null;
-            /** Path */
+            /**
+             * Path
+             * @description From the workspace root when under it, as a workspace's pools are; else whole.
+             */
             path: string;
             /**
              * Processes
+             * @description The processes running in it, at most 20.
              * @default []
              */
             processes: components["schemas"]["Process"][];
+            /** @description The running review holding this lease, matched by lease id. */
             review: components["schemas"]["ReviewHold"] | null;
+            /** @description The running run holding this lease, matched by lease id. */
             run: components["schemas"]["Run"] | null;
+            /** @description Its status, grouped as the UI colors it. */
             state: components["schemas"]["WorktreeState"];
-            /** Status */
+            /**
+             * Status
+             * @description treehouse's own word: available, leased, in-use, dirty, damaged, unverified, or "you're here".
+             */
             status: string;
         };
-        /** @enum {string} */
+        /**
+         * @description A worktree's state, in five groups the UI colors (DESIGN §22). `working` is held by a run or review the journal shows running; `held` is leased or in use by anything else; `dirty` is unleased with uncommitted changes; `broken` is damaged, unverified, or a status canopy does not know.
+         * @enum {string}
+         */
         WorktreeState: "working" | "held" | "dirty" | "idle" | "broken";
     };
     responses: never;
@@ -1713,6 +2559,24 @@ export interface operations {
                     "application/json": components["schemas"]["AttentionItem"][];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listChores: {
@@ -1733,6 +2597,24 @@ export interface operations {
                     "application/json": components["schemas"]["ChoreSummary"][];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getChore: {
@@ -1740,6 +2622,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The chore's name, as `chore:NAME` names it. */
                 name: string;
             };
             cookie?: never;
@@ -1755,12 +2638,41 @@ export interface operations {
                     "application/json": components["schemas"]["ChoreDetail"];
                 };
             };
-            /** @description No such chore. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such chore defined for this workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -1778,6 +2690,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The chore's name, as `chore:NAME` names it. */
                 name: string;
             };
             cookie?: never;
@@ -1797,7 +2710,25 @@ export interface operations {
                     "application/json": components["schemas"]["Replied"];
                 };
             };
-            /** @description A guard refused it. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1822,7 +2753,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The chore's name, as `chore:NAME` names it. */
                 name: string;
+                /** @description The chore run's id. */
                 run_id: number;
             };
             cookie?: never;
@@ -1838,12 +2771,41 @@ export interface operations {
                     "application/json": components["schemas"]["ChoreRunDetail"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such run of this chore. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -1861,7 +2823,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The chore's name, as `chore:NAME` names it. */
                 name: string;
+                /** @description The chore run's id. */
                 run_id: number;
             };
             cookie?: never;
@@ -1877,12 +2841,41 @@ export interface operations {
                     "application/json": components["schemas"]["Transcript"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such run of this chore. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -1913,6 +2906,24 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getLoop: {
@@ -1931,6 +2942,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoopState"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1953,6 +2982,24 @@ export interface operations {
                     "application/json": components["schemas"]["PauseChanged"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     reloadConfig: {
@@ -1973,7 +3020,25 @@ export interface operations {
                     "application/json": components["schemas"]["ConfigReload"];
                 };
             };
-            /** @description A guard refused it. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2002,6 +3067,24 @@ export interface operations {
                     "application/json": components["schemas"]["PauseChanged"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getMeta: {
@@ -2020,6 +3103,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meta"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2042,6 +3143,24 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewSummary"][];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getReview: {
@@ -2049,6 +3168,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The review run's id. */
                 run_id: number;
             };
             cookie?: never;
@@ -2064,12 +3184,32 @@ export interface operations {
                     "application/json": components["schemas"]["ReviewDetail"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such review run. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2100,6 +3240,24 @@ export interface operations {
                     "application/json": components["schemas"]["Run"][];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getRun: {
@@ -2107,6 +3265,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The run's id, as `run:ID` names it. */
                 run_id: number;
             };
             cookie?: never;
@@ -2122,12 +3281,32 @@ export interface operations {
                     "application/json": components["schemas"]["Run"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such run. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2145,6 +3324,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The run's id, as `run:ID` names it. */
                 run_id: number;
             };
             cookie?: never;
@@ -2160,12 +3340,32 @@ export interface operations {
                     "application/json": components["schemas"]["Transcript"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such run. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2181,6 +3381,7 @@ export interface operations {
     search: {
         parameters: {
             query: {
+                /** @description The words to find, every one of them: 2 to 200 characters, at most 8 words. */
                 q: string;
             };
             header?: never;
@@ -2198,12 +3399,32 @@ export interface operations {
                     "application/json": components["schemas"]["SearchResults"];
                 };
             };
-            /** @description Too short, too long, or too many words. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -2223,6 +3444,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2254,7 +3484,18 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2285,6 +3526,15 @@ export interface operations {
                     "application/json": components["schemas"]["Session"];
                 };
             };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getSpend: {
@@ -2305,9 +3555,27 @@ export interface operations {
                     "application/json": components["schemas"]["Spend"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    getTick: {
+    getLastTick: {
         parameters: {
             query?: never;
             header?: never;
@@ -2323,6 +3591,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LastTick"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -2345,6 +3631,24 @@ export interface operations {
                     "application/json": components["schemas"]["TicketSummary"][];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getTicket: {
@@ -2352,6 +3656,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
                 key: string;
             };
             cookie?: never;
@@ -2367,12 +3672,41 @@ export interface operations {
                     "application/json": components["schemas"]["TicketDetail"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such ticket. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2390,6 +3724,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
                 key: string;
             };
             cookie?: never;
@@ -2409,7 +3744,25 @@ export interface operations {
                     "application/json": components["schemas"]["Forgot"];
                 };
             };
-            /** @description A guard refused it. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2434,6 +3787,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
                 key: string;
             };
             cookie?: never;
@@ -2453,7 +3807,25 @@ export interface operations {
                     "application/json": components["schemas"]["Replied"];
                 };
             };
-            /** @description A guard refused it. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2478,6 +3850,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
                 key: string;
             };
             cookie?: never;
@@ -2493,7 +3866,25 @@ export interface operations {
                     "application/json": components["schemas"]["Started"];
                 };
             };
-            /** @description A guard refused it. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2518,6 +3909,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
                 key: string;
             };
             cookie?: never;
@@ -2537,7 +3929,25 @@ export interface operations {
                     "application/json": components["schemas"]["Stopped"];
                 };
             };
-            /** @description A guard refused it. */
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2575,13 +3985,32 @@ export interface operations {
                     "application/json": components["schemas"]["Tick"][];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
-    showTick: {
+    getTick: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description The tick's id. */
                 tick_id: number;
             };
             cookie?: never;
@@ -2597,12 +4026,32 @@ export interface operations {
                     "application/json": components["schemas"]["TickDetail"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such tick. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2620,6 +4069,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tick's id. */
                 tick_id: number;
             };
             cookie?: never;
@@ -2635,12 +4085,32 @@ export interface operations {
                     "application/json": components["schemas"]["TickOutput"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such tick. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2658,6 +4128,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                /** @description The tick's id. */
                 tick_id: number;
             };
             cookie?: never;
@@ -2673,12 +4144,32 @@ export interface operations {
                     "application/json": components["schemas"]["Transcript"];
                 };
             };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description No such tick. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2707,6 +4198,24 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Pool"][];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

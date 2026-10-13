@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import start
@@ -21,7 +22,6 @@ from canopy.infra import logs, stopping
 
 if TYPE_CHECKING:
     import sqlite3
-    from pathlib import Path
 
     from canopy.core.config import Chore
     from canopy.core.context import Context
@@ -125,7 +125,8 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if chore is None:
         raise SetupError(f"chore {name} is no longer configured for this workspace")
     run_id = int(run["id"])
-    prompt = start.prompt_file(ctx, run_id).read_text(encoding="utf-8")
+    # Beside the row's log, so a run started before an upgrade moved the directory still finds its prompt.
+    prompt = start.prompt_file(Path(run["log_path"])).read_text(encoding="utf-8")
     cwd, argv = prepare(ctx, name, chore, prompt)
     log.info(
         "running chore",

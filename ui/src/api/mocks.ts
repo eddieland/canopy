@@ -98,7 +98,7 @@ export const mockChores: ChoreSummary[] = [
             session_id: 'ses_chore2',
             cost_usd: 0.26,
             tokens: 11960,
-            log_path: '/home/op/.canopy/chores/2.log',
+            log_path: '/home/op/.canopy/chore-runs/deps/2.log',
         },
         due_at: '2026-10-08T14:00:00Z',
         findings: [
