@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc", "unicorn", "import", "jsx-a11y"],
+  "plugins": ["react", "typescript", "oxc", "unicorn", "import", "jsx-a11y", "promise", "vitest"],
   "jsPlugins": [
     {
       "name": "react-compiler",
@@ -13,9 +13,14 @@
       "specifier": "eslint-plugin-jsdoc"
     }
   ],
+  // Strict and consistent: every rule in these categories is an error, and a rule from style or restriction is
+  // listed by name below. Those two categories are not on whole, since their rules contradict each other
+  // (import/no-named-export against import/prefer-default-export) and the code (unicorn/no-null, eslint/no-ternary).
   "categories": {
     "correctness": "error",
-    "suspicious": "error"
+    "suspicious": "error",
+    "pedantic": "error",
+    "perf": "error"
   },
   "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/api/schema.gen.ts", "playwright-report", "test-results"],
   "rules": {
@@ -29,6 +34,23 @@
       }
     ],
     "react/react-in-jsx-scope": "off",
+    // Pedantic rules that count size rather than shape: a long component or a module with many imports is not a
+    // defect by itself.
+    "eslint/max-lines": "off",
+    "eslint/max-lines-per-function": "off",
+    "import/max-dependencies": "off",
+    // unicorn/no-negated-condition is the same rule.
+    "eslint/no-negated-condition": "off",
+    // An explicit `undefined` argument stays: it fills a parameter that is required so no caller forgets it.
+    "unicorn/no-useless-undefined": ["error", { "checkArguments": false }],
+    // It would make Number.parseFloat('16px'), a computed style's 16, into Number('16px'), NaN.
+    "unicorn/prefer-number-coercion": "off",
+    // What is keyed by its index is a list parsed from text (rich text, a diff's lines), which never reorders and
+    // has no other identity.
+    "react/no-array-index-key": "off",
+    // A test narrows what noUncheckedIndexedAccess leaves possibly undefined (`if (!first) throw ...`, `?? ''`):
+    // that is a guard, not a branch in what the test checks.
+    "vitest/no-conditional-in-test": "off",
     "react-compiler/static-components": "error",
     "react-compiler/use-memo": "error",
     "react-compiler/void-use-memo": "error",
@@ -71,6 +93,92 @@
       }
     ],
     "jsdoc-js/no-types": "error",
+    // Style rules, one by one: one way to write each thing.
+    "eslint/arrow-body-style": "error",
+    "eslint/curly": "error",
+    "eslint/default-param-last": "error",
+    "eslint/logical-assignment-operators": "error",
+    "eslint/no-implicit-coercion": "error",
+    "eslint/no-lone-blocks": "error",
+    "eslint/no-return-assign": "error",
+    "eslint/no-useless-computed-key": "error",
+    "eslint/object-shorthand": "error",
+    "eslint/operator-assignment": "error",
+    "eslint/prefer-const": "error",
+    "eslint/prefer-exponentiation-operator": "error",
+    "eslint/prefer-object-spread": "error",
+    "eslint/prefer-template": "error",
+    "eslint/yoda": "error",
+    "import/consistent-type-specifier-style": "error",
+    "import/first": "error",
+    "import/newline-after-import": "error",
+    "import/no-duplicates": "error",
+    "import/no-mutable-exports": "error",
+    "react/function-component-definition": "error",
+    "react/jsx-boolean-value": "error",
+    "react/jsx-curly-brace-presence": "error",
+    "react/jsx-fragments": "error",
+    "react/jsx-pascal-case": "error",
+    "react/self-closing-comp": "error",
+    "typescript/adjacent-overload-signatures": "error",
+    "typescript/array-type": "error",
+    "typescript/consistent-generic-constructors": "error",
+    "typescript/consistent-indexed-object-style": "error",
+    "typescript/consistent-type-assertions": "error",
+    "typescript/consistent-type-definitions": "error",
+    "typescript/method-signature-style": "error",
+    "typescript/no-empty-interface": "error",
+    "typescript/no-inferrable-types": "error",
+    "typescript/prefer-for-of": "error",
+    "typescript/prefer-function-type": "error",
+    "unicorn/catch-error-name": "error",
+    "unicorn/error-message": "error",
+    "unicorn/filename-case": "error",
+    "unicorn/no-zero-fractions": "error",
+    "unicorn/number-literal-case": "error",
+    "unicorn/prefer-dom-node-text-content": "error",
+    "unicorn/prefer-global-this": "error",
+    "unicorn/prefer-includes": "error",
+    "unicorn/prefer-keyboard-event-key": "error",
+    "unicorn/prefer-modern-dom-apis": "error",
+    "unicorn/prefer-negative-index": "error",
+    "unicorn/prefer-object-from-entries": "error",
+    "unicorn/prefer-optional-catch-binding": "error",
+    "unicorn/prefer-spread": "error",
+    "unicorn/prefer-string-trim-start-end": "error",
+    "unicorn/prefer-structured-clone": "error",
+    "unicorn/switch-case-braces": "error",
+    "unicorn/text-encoding-identifier-case": "error",
+    "unicorn/throw-new-error": "error",
+    "vitest/consistent-vitest-vi": "error",
+    "vitest/no-alias-methods": "error",
+    "vitest/no-duplicate-hooks": "error",
+    "vitest/no-test-prefixes": "error",
+    "vitest/prefer-hooks-in-order": "error",
+    "vitest/prefer-hooks-on-top": "error",
+    "vitest/prefer-to-be": "error",
+    "vitest/prefer-to-contain": "error",
+    "vitest/prefer-to-have-length": "error",
+    // Restriction rules, one by one. react/no-danger keeps untrusted text as text (ui/AGENTS.md).
+    "eslint/no-alert": "error",
+    "eslint/no-empty": "error",
+    "eslint/no-param-reassign": "error",
+    "eslint/no-sequences": "error",
+    "eslint/no-var": "error",
+    "import/no-commonjs": "error",
+    "promise/catch-or-return": "error",
+    "react/button-has-type": "error",
+    "react/no-danger": "error",
+    "react/no-unknown-property": "error",
+    "typescript/no-empty-object-type": "error",
+    "typescript/no-import-type-side-effects": "error",
+    "typescript/no-namespace": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-require-imports": "error",
+    "unicorn/no-abusive-eslint-disable": "error",
+    "unicorn/prefer-modern-math-apis": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "unicorn/prefer-number-properties": "error",
     "import/no-cycle": "error",
     "typescript/consistent-type-imports": "error",
     "typescript/no-explicit-any": "error",
@@ -82,6 +190,13 @@
     ]
   },
   "overrides": [
+    {
+      // A browser test acts in order: each step waits on the page the last one left.
+      "files": ["e2e/**"],
+      "rules": {
+        "eslint/no-await-in-loop": "off"
+      }
+    },
     {
       "files": ["src/components/ui/**"],
       "rules": {

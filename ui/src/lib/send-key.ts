@@ -37,15 +37,21 @@ export interface KeyPress {
 
 /** Whether a key press in a reply or note sends it, under `setting`. */
 export function sends(setting: SendKey, press: KeyPress): boolean {
-    if (press.key !== 'Enter' || press.isComposing || press.shiftKey) return false
-    if (setting === 'enter') return true
-    if (setting === 'mod-enter') return press.ctrlKey || press.metaKey
+    if (press.key !== 'Enter' || press.isComposing || press.shiftKey) {
+        return false
+    }
+    if (setting === 'enter') {
+        return true
+    }
+    if (setting === 'mod-enter') {
+        return press.ctrlKey || press.metaKey
+    }
     return false
 }
 
 /** Whether a browser's user agent names an Apple device, whose keyboard sends with ⌘ where others use Ctrl. */
 export function isApple(userAgent: string): boolean {
-    return /Mac|iPhone|iPad|iPod/.test(userAgent)
+    return /Mac|iPhone|iPad|iPod/u.test(userAgent)
 }
 
 /**
@@ -53,14 +59,18 @@ export function isApple(userAgent: string): boolean {
  * Both modifiers send, but the form names the one its keyboard has.
  */
 export function sendShortcut(setting: SendKey, apple: boolean): string | undefined {
-    if (setting === 'enter') return 'Enter'
-    if (setting === 'mod-enter') return apple ? 'Meta+Enter' : 'Control+Enter'
+    if (setting === 'enter') {
+        return 'Enter'
+    }
+    if (setting === 'mod-enter') {
+        return apple ? 'Meta+Enter' : 'Control+Enter'
+    }
     return undefined
 }
 
 function read(): SendKey {
     try {
-        return parseSendKey(window.localStorage.getItem(STORAGE_KEY))
+        return parseSendKey(globalThis.localStorage.getItem(STORAGE_KEY))
     } catch {
         // Storage can be unavailable (privacy modes).
         return DEFAULT
@@ -71,24 +81,32 @@ let snapshot = read()
 const listeners = new Set<() => void>()
 
 function announce(next: SendKey): void {
-    if (next === snapshot) return
+    if (next === snapshot) {
+        return
+    }
     snapshot = next
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) announce(read())
+    if (event.key === STORAGE_KEY || event.key === null) {
+        announce(read())
+    }
 }
 
 function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
+        globalThis.addEventListener('storage', onStorage)
         announce(read())
     }
     return () => {
         listeners.delete(listener)
-        if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+        if (listeners.size === 0) {
+            globalThis.removeEventListener('storage', onStorage)
+        }
     }
 }
 
@@ -104,7 +122,7 @@ export function useSendKey(): SendKey {
 /** Stores the setting and applies it now. */
 export function setSendKey(next: SendKey): void {
     try {
-        window.localStorage.setItem(STORAGE_KEY, next)
+        globalThis.localStorage.setItem(STORAGE_KEY, next)
     } catch {
         // Not persisted, but still applied for this page.
     }

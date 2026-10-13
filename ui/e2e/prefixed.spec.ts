@@ -5,9 +5,9 @@ import { expect, test } from '@playwright/test'
 
 test('the app works under a path prefix', async ({ page }) => {
     await page.goto('')
-    await expect(page).toHaveURL(/\/canopy\/attention$/)
+    await expect(page).toHaveURL(/\/canopy\/attention$/u)
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/canopy\/runs$/)
+    await expect(page).toHaveURL(/\/canopy\/runs$/u)
     await page.reload()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
 })
@@ -15,7 +15,9 @@ test('the app works under a path prefix', async ({ page }) => {
 test('stream events update the cache without refetching', async ({ page }) => {
     const fetches: string[] = []
     page.on('request', (request) => {
-        if (request.resourceType() === 'fetch') fetches.push(new URL(request.url()).pathname)
+        if (request.resourceType() === 'fetch') {
+            fetches.push(new URL(request.url()).pathname)
+        }
     })
     await page.goto('runs')
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
@@ -64,7 +66,7 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
 }) => {
     await page.goto('tickets/ABC-101')
     const form = page.getByRole('form', { name: 'Reply' })
-    await expect(form.getByRole('textbox')).toHaveAttribute('placeholder', /never on the ticket/)
+    await expect(form.getByRole('textbox')).toHaveAttribute('placeholder', /never on the ticket/u)
     await form.getByRole('textbox').fill('Use your judgement on the review bot.')
     await form.getByRole('button', { name: 'Reply' }).click()
     await expect(form.getByRole('status')).toContainText('Recorded message')
@@ -107,7 +109,9 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     const form = detail.getByRole('form', { name: 'Note' })
     await form.getByRole('textbox').fill('Leave out lodash-advisory until 2026-10-15: the upgrade is merging.')
     await form.getByRole('button', { name: 'Add note' }).click()
-    await expect(form.getByRole('status')).toContainText(/Recorded message \d+ on chore:deps\. Its next run reads it\./)
+    await expect(form.getByRole('status')).toContainText(
+        /Recorded message \d+ on chore:deps\. Its next run reads it\./u,
+    )
     const mine = detail.getByTestId('conversation').locator('[data-source=operator]').last()
     await expect(mine).toContainText('until 2026-10-15')
     await expect(mine).toContainText('via web')
@@ -195,7 +199,7 @@ test('starting a ticket from the list opens it, private', async ({ page }) => {
     await page.goto('tickets')
     await page.getByLabel('Ticket key').fill('ABC-200')
     await page.getByRole('button', { name: 'Start privately' }).click()
-    await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-200$/)
+    await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-200$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-200')
     await expect(page.locator('header').getByText('private', { exact: true })).toBeVisible()
 })
@@ -214,7 +218,7 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await control.getByRole('button', { name: 'Pause' }).click()
     await expect(control).toHaveAttribute('data-paused', 'true')
     await expect(control).toContainText('paused · 0s')
-    await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/)
+    await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/u)
 
     // The pause is the journal's: another page reads it back, as the loop does.
     await page.reload()

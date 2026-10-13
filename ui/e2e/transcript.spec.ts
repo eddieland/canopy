@@ -12,7 +12,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await page.goto('runs')
     await settled(page)
     await page.getByTestId('run-39').getByRole('link', { name: 'run:39' }).click()
-    await expect(page).toHaveURL(/\/runs\/39$/)
+    await expect(page).toHaveURL(/\/runs\/39$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('run:39')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
         'data-status',
@@ -46,7 +46,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await expect(transcript.locator('details[open]')).toHaveCount(0)
 
     await page.getByRole('link', { name: 'ABC-099' }).first().click()
-    await expect(page).toHaveURL(/\/tickets\/ABC-099$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
 })
 
 test("a failed run's transcript ends in the runtime's error, and a running one's waits for it to end", async ({
@@ -118,7 +118,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await expect(text.locator('.text-syntax-string', { hasText: '"ses_tick2"' }).first()).toBeVisible()
     await expect(text.locator('span', { hasText: 'service=mcp' })).toHaveCount(0)
     // The file's size, in the header.
-    await expect(output).toContainText(/\d+\.\d KiB/)
+    await expect(output).toContainText(/\d+\.\d KiB/u)
     // It opens at its end, where stderr is.
     await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
 
@@ -135,7 +135,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await page.goto('chores/deps')
     await settled(page)
     await page.getByTestId('chore-run-2').getByRole('link', { name: '#2' }).click()
-    await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/)
+    await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps #2')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chores' })).toHaveAttribute(
         'data-status',
@@ -152,7 +152,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await expect(web).toContainText('1 high severity vulnerability')
 
     await page.locator('dl').getByRole('link', { name: 'chore:deps' }).click()
-    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page).toHaveURL(/\/chores\/deps$/u)
 
     await page.goto('chores/build-health/runs/4')
     await settled(page)

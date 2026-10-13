@@ -33,9 +33,13 @@ export const SOURCE_LABEL: Record<SearchSource, string> = {
  * The router parses a search param as JSON first, so `?q=123` arrives as a number.
  */
 export function searchQueryOf(raw: unknown): string | undefined {
-    if (typeof raw !== 'string' && typeof raw !== 'number') return undefined
-    const text = String(raw).split(/\s+/).filter(Boolean).join(' ')
-    if (text.length < SEARCH_MIN || text.length > SEARCH_MAX) return undefined
+    if (typeof raw !== 'string' && typeof raw !== 'number') {
+        return undefined
+    }
+    const text = String(raw).split(/\s+/u).filter(Boolean).join(' ')
+    if (text.length < SEARCH_MIN || text.length > SEARCH_MAX) {
+        return undefined
+    }
     return new Set(text.split(' ')).size > SEARCH_WORDS ? undefined : text
 }
 
@@ -53,8 +57,10 @@ export interface Piece {
  */
 export function marked(text: string, words: readonly string[]): Piece[] {
     const terms = words.filter(Boolean).toSorted((a, b) => b.length - a.length)
-    if (terms.length === 0) return text ? [{ text, mark: false }] : []
-    const pattern = new RegExp(`(${terms.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'i')
+    if (terms.length === 0) {
+        return text ? [{ text, mark: false }] : []
+    }
+    const pattern = new RegExp(`(${terms.map((w) => w.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')})`, 'iu')
     // A split on a capturing group puts each match at an odd index.
     return text
         .split(pattern)
@@ -74,7 +80,11 @@ export function isSearchShortcut(
     event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>,
     target: unknown,
 ) {
-    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) return false
-    if (!(target instanceof HTMLElement)) return true
+    if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
+        return false
+    }
+    if (!(target instanceof HTMLElement)) {
+        return true
+    }
     return !(target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
 }

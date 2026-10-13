@@ -16,31 +16,41 @@ export interface JsonToken {
 
 // One JSON token: a string (a key when a colon follows it), a number, a literal, or a structural character.
 const TOKEN =
-    /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/g
+    /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/gu
 
 /** `text` as its lines, each as tokens: a line holding a JSON object or array split up, any other line whole. */
 export function jsonLines(text: string): JsonToken[][] {
-    return text.split('\n').map(tokenize)
+    return text.split('\n').map((line) => tokenize(line))
 }
 
 /** One line as tokens: split up when it is a JSON object or array, else one `text` token (none when empty). */
 export function tokenize(line: string): JsonToken[] {
-    if (line === '') return []
-    if (!isJson(line)) return [{ kind: 'text', text: line }]
+    if (line === '') {
+        return []
+    }
+    if (!isJson(line)) {
+        return [{ kind: 'text', text: line }]
+    }
     const tokens: JsonToken[] = []
     let last = 0
     for (const match of line.matchAll(TOKEN)) {
-        if (match.index > last) tokens.push({ kind: 'text', text: line.slice(last, match.index) })
+        if (match.index > last) {
+            tokens.push({ kind: 'text', text: line.slice(last, match.index) })
+        }
         tokens.push({ kind: kindOf(match), text: match[0] })
         last = match.index + match[0].length
     }
-    if (last < line.length) tokens.push({ kind: 'text', text: line.slice(last) })
+    if (last < line.length) {
+        tokens.push({ kind: 'text', text: line.slice(last) })
+    }
     return tokens
 }
 
 function isJson(line: string): boolean {
     const start = line.trimStart()[0]
-    if (start !== '{' && start !== '[') return false
+    if (start !== '{' && start !== '[') {
+        return false
+    }
     try {
         JSON.parse(line)
         return true
@@ -50,9 +60,17 @@ function isJson(line: string): boolean {
 }
 
 function kindOf(match: RegExpMatchArray): JsonKind {
-    if (match[1] !== undefined) return 'key'
-    if (match[2] !== undefined) return 'string'
-    if (match[3] !== undefined) return 'number'
-    if (match[4] !== undefined) return 'literal'
+    if (match[1] !== undefined) {
+        return 'key'
+    }
+    if (match[2] !== undefined) {
+        return 'string'
+    }
+    if (match[3] !== undefined) {
+        return 'number'
+    }
+    if (match[4] !== undefined) {
+        return 'literal'
+    }
     return 'punct'
 }

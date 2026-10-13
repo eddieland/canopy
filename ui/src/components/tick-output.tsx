@@ -6,7 +6,8 @@ import type { TickOutput } from '@/api/types'
 import { Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { type JsonKind, jsonLines } from '@/lib/json-lines'
+import { jsonLines } from '@/lib/json-lines'
+import type { JsonKind } from '@/lib/json-lines'
 import { byteSize } from '@/lib/ticks'
 
 /**
@@ -36,17 +37,19 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                 <Placeholder className="min-h-20">
                     {running ? 'the overseer’s output is written when it ends' : 'none kept'}
                 </Placeholder>
-            ) : !shown ? (
+            ) : shown ? (
+                data === undefined ? (
+                    <div className="flex flex-col gap-2 p-3">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-4 w-1/2" />
+                    </div>
+                ) : (
+                    <Body output={data} />
+                )
+            ) : (
                 <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
                     <span className="break-all">{path}</span> as written: stdout, then stderr
                 </p>
-            ) : data === undefined ? (
-                <div className="flex flex-col gap-2 p-3">
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                </div>
-            ) : (
-                <Body output={data} />
             )}
         </Panel>
     )
@@ -56,7 +59,9 @@ function Body({ output }: { output: TickOutput }) {
     if (output.status === 'no_output') {
         return <Placeholder className="min-h-20">its output is gone, or is not a file canopy reads</Placeholder>
     }
-    if (output.text === '') return <Placeholder className="min-h-20">empty</Placeholder>
+    if (output.text === '') {
+        return <Placeholder className="min-h-20">empty</Placeholder>
+    }
     return (
         <>
             {output.truncated && (
@@ -68,7 +73,9 @@ function Body({ output }: { output: TickOutput }) {
                 label="the overseer's output"
                 // Open at the end, where stderr and the session's last events are.
                 ref={(el) => {
-                    if (el) el.scrollTop = el.scrollHeight
+                    if (el) {
+                        el.scrollTop = el.scrollHeight
+                    }
                 }}
                 data-testid="tick-output-text"
             >

@@ -11,7 +11,7 @@ function finding(title: string, file: number | null, line: number | null): Revie
 const REVIEW: ReviewSummary = {
     id: 4,
     pr_url: 'https://github.com/acme/web/pull/88',
-    sha: '9b2f4c61' + '3'.repeat(32),
+    sha: `9b2f4c61${'3'.repeat(32)}`,
     ticket_key: 'ABC-099',
     repo: 'web',
     status: 'done',

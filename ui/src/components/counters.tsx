@@ -4,7 +4,8 @@ import { attentionQuery, runsQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
-import { countBySeverity, type Severity } from '@/lib/attention'
+import { countBySeverity } from '@/lib/attention'
+import type { Severity } from '@/lib/attention'
 import { latestRuns } from '@/lib/run-state'
 
 /**

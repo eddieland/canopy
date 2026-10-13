@@ -15,6 +15,8 @@ export function Notice({ error, children, className }: { error?: unknown; childr
             </p>
         )
     }
-    if (!children) return null
+    if (!children) {
+        return null
+    }
     return <output className={cn('block text-xs text-muted-foreground', className)}>{children}</output>
 }

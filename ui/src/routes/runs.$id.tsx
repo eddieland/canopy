@@ -29,7 +29,9 @@ function RunPage() {
     const { id } = Route.useParams()
     // A run's id is a positive number, as a tick's is.
     const parsed = tickId(id)
-    if (parsed === null) return <NoRun title={`run:${id}`}>not a run: a run's id is a positive number</NoRun>
+    if (parsed === null) {
+        return <NoRun title={`run:${id}`}>not a run: a run&apos;s id is a positive number</NoRun>
+    }
     return <Loaded id={parsed} />
 }
 
@@ -37,7 +39,9 @@ function Loaded({ id }: { id: number }) {
     const { data, error } = useQuery(runQuery(id))
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(runTranscriptQuery(id))
-    if (error instanceof ApiError && error.status === 404) return <NoRun title={`run:${id}`}>{error.message}</NoRun>
+    if (error instanceof ApiError && error.status === 404) {
+        return <NoRun title={`run:${id}`}>{error.message}</NoRun>
+    }
     if (data === undefined) {
         return (
             <>
@@ -51,8 +55,8 @@ function Loaded({ id }: { id: number }) {
     return (
         <>
             <PageHeader title={`run:${data.id}`} chips={data.private && <Chip>private</Chip>}>
-                What the worker did, from its session's events in the run's log: its text, each tool call with its input
-                and output, and what each model call cost.
+                What the worker did, from its session&apos;s events in the run&apos;s log: its text, each tool call with
+                its input and output, and what each model call cost.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
@@ -118,7 +122,7 @@ function RunPanel({ run }: { run: Run }) {
                                         'underline-offset-4 hover:underline',
                                     )}
                                 >
-                                    {pr.replace(/^https:\/\//, '')}
+                                    {pr.replace(/^https:\/\//u, '')}
                                     <ExternalLink className="size-3" />
                                 </a>
                             ))}
