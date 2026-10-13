@@ -1,9 +1,10 @@
 """What the server reads and writes through, handed to it by whoever runs it (DESIGN §22).
 
-`serve` is a feature: it cannot import `loop` or `runs`. The attention list (`loop.attention.listed`), ending a
-stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), and asking the loop to read its config again
-(`loop.reread`, as SIGHUP does) are theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes
-stand-ins over its seeded journal. Reading a pool is `treehouse status` unless told otherwise: the mock has no
+`serve` is a feature: it cannot import `loop`, `runs`, or `reviews`. The attention list (`loop.attention.listed`),
+ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop to read its config again
+(`loop.reread`, as SIGHUP does), and the attempt and review limits `canopy grant` raises (`runs.policy`,
+`reviews.grants`) are theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over
+its seeded journal. Reading a pool is `treehouse status` unless told otherwise: the mock has no
 treehouse to ask.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
@@ -27,6 +28,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.config import Config
+    from canopy.core.conversation import Ref
     from canopy.core.items import Item
     from canopy.core.workspace import Workspace
 
@@ -47,6 +49,33 @@ class Reloading:
     after_tick: bool
 
 
+@dataclass(frozen=True)
+class Limit:
+    """A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22)."""
+
+    # `implement`, `fix-ci`, or `resume` for a unit's; `review` for a PR's.
+    kind: str
+    # The unit's repository; a PR's, when it is a unit's PR.
+    repo: str | None
+    # The PR, for a review limit.
+    pr_url: str | None
+    # Its runs of the kind, however they ended: every one counts (D030).
+    runs: int
+    # The runs the operator granted it past the policy's limit.
+    granted: int
+    # The policy's limit plus `granted`.
+    limit: int
+
+
+@dataclass(frozen=True)
+class Granted:
+    """What a grant of one more run recorded: the unit's repository (none for a PR), its runs, and its limit now."""
+
+    repo: str | None
+    runs: int
+    limit: int
+
+
 @dataclass
 class Backend:
     """The loop's config and workspace, its journal, and the functions the server borrows from the loop."""
@@ -59,6 +88,13 @@ class Backend:
     end_run: Callable[[Context, sqlite3.Row], bool]
     # Ask the loop to read its config again, as SIGHUP does. Raises ConfigError, naming the file, when it does not load.
     reload: Callable[[Context], Reloading]
+    # The ticket's units' attempt limits, each kind of each unit it has had runs in, as `canopy grant` raises them.
+    limits: Callable[[Context, str], list[Limit]]
+    # The PR's review limit, or None for a PR canopy has never reviewed.
+    review_limit: Callable[[Context, str], Limit | None]
+    # `canopy grant REF KIND [--repo NAME]` for one more run: a ticket's unit, or with `review` a PR. Raises Refused
+    # with the CLI's guards.
+    grant: Callable[[Context, Ref, str, str | None], Granted]
     # Fixture data, shown as `mock` in the UI's header.
     mock: bool = False
     # A pool's slots, for the worktrees page: `treehouse status --json`, through `ctx.runner`. Called on a thread per

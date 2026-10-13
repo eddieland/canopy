@@ -31,6 +31,10 @@ export type Stopped = Schemas['Stopped']
 export type Replied = Schemas['Replied']
 /** What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete. */
 export type Forgot = Schemas['Forgot']
+/** A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22). */
+export type Limit = Schemas['Limit']
+/** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */
+export type Granted = Schemas['Granted']
 /** What a dismissal left: the chore's finding, and whether it is now dismissed. */
 export type Dismissed = Schemas['Dismissed']
 /** What a dismissal of a review's finding left: the run, the finding's number, and whether it is now dismissed. */

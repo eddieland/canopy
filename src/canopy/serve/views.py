@@ -26,6 +26,7 @@ from canopy.serve.schema import (
     Comment,
     Decision,
     LastTick,
+    Limit,
     LoopState,
     Message,
     MessageKind,
@@ -58,6 +59,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.context import Context
+    from canopy.serve import backend as served
     from canopy.serve.backend import Backend
 
 # How many runs that ended the runs list carries, after the running ones.
@@ -97,7 +99,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     for item in backend.attention(ctx):
         key = item.ticket_key
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
-        ticket = key if key is not None and chore is None and not key.startswith(_PR) else None
+        pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
+        ticket = key if key is not None and chore is None and pr is None else None
         found.append(
             AttentionItem(
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
@@ -109,6 +112,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 detail=conversation.printable(item.detail),
                 since=db.parse_time(item.since),
                 finding=item.finding,
+                pr=pr,
             )
         )
     return found
@@ -487,29 +491,55 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     )
 
 
-def ticket(ctx: Context, key: str) -> TicketDetail | None:
+def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
     """One ticket, as `canopy show` prints it, or None if the journal has no record of it.
 
     Returns:
-        The ticket, its units, and its latest runs, messages, and decisions.
+        The ticket, its units, its limits, and its latest runs, messages, and decisions.
     """
     rows = db.recent_tickets(ctx.conn, 1, key=key)
     if not rows:
         return None
     [row] = rows
+    units = [
+        Unit(
+            repo=str(u["repo"]) if u["repo"] else None,
+            pr_url=str(u["pr_url"]) if u["pr_url"] else None,
+            phase=str(u["phase"]) if u["phase"] else None,
+        )
+        for u in db.units(ctx.conn, key)
+    ]
+    reviews = [
+        (u.repo, found)
+        for u in units
+        if u.pr_url is not None and (found := backend.review_limit(ctx, u.pr_url)) is not None
+    ]
     return TicketDetail(
         ticket=summary(ctx.conn, row),
-        units=[
-            Unit(
-                repo=str(u["repo"]) if u["repo"] else None,
-                pr_url=str(u["pr_url"]) if u["pr_url"] else None,
-                phase=str(u["phase"]) if u["phase"] else None,
-            )
-            for u in db.units(ctx.conn, key)
-        ],
+        units=units,
+        limits=[limit(found) for found in backend.limits(ctx, key)]
+        + [limit(found, repo=repo) for repo, found in reviews],
         runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
+    )
+
+
+def limit(found: served.Limit, *, repo: str | None = None) -> Limit:
+    """A limit the backend found, as the API sends it; `repo` names the unit whose PR a review limit is on.
+
+    Returns:
+        The limit, its repository `repo` when the backend's names none.
+    """
+    return Limit.model_validate(
+        {
+            "kind": found.kind,
+            "repo": found.repo or repo,
+            "pr_url": found.pr_url,
+            "runs": found.runs,
+            "granted": found.granted,
+            "limit": found.limit,
+        }
     )
 
 

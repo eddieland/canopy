@@ -1,4 +1,4 @@
-import type { ConfigReload, Dismissed, Forgot, Replied, ReviewDismissed, Started, Stopped } from '@/api/types'
+import type { ConfigReload, Dismissed, Forgot, Granted, Replied, ReviewDismissed, Started, Stopped } from '@/api/types'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
 
@@ -40,6 +40,23 @@ export function forgotText(key: string, forgot: Forgot): string {
         `${head} canopy no longer tracks ${named.join(', ')}. ` +
         'Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and the ' +
         'ticket cannot start over.'
+    )
+}
+
+/**
+ * What a grant did, as `canopy grant` says it: the runs so far, which still count, and the limit now. `subject` is the
+ * ticket's key, or the PR's URL for its reviews.
+ */
+export function grantedText(subject: string, granted: Granted): string {
+    if (granted.kind === 'review') {
+        return (
+            `${subject} has had ${granted.runs} review runs, and may now have ${granted.limit}. ` +
+            'The next tick decides whether to review it.'
+        )
+    }
+    return (
+        `${subject} in ${granted.repo ?? 'its repository'} has had ${granted.runs} ${granted.kind} runs, and may now ` +
+        `have ${granted.limit}. The next tick decides whether to dispatch it.`
     )
 }
 

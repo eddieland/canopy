@@ -19,6 +19,8 @@ from canopy.core import config, conversation, db, pause
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.loop import repeat, reread, web
+from canopy.reviews import grants
+from canopy.runs import policy
 from canopy.serve import live, secret, views
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
@@ -189,6 +191,93 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     assert (ticket["branch"], ticket["phase"], ticket["forgotten_run_id"]) == (None, None, run_id)
     assert db.units(ctx.conn, KEY) == []
     assert db.get_run(ctx.conn, run_id) is not None
+
+
+def ended_run(ctx: Context, key: str, kind: str) -> int:
+    """A `kind` run of `key` in the workspace's repository, ended `failed`: it counts toward the unit's limit."""
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    db.touch_ticket(ctx.conn, key, ctx.repo)
+    slot = db.RunSlot("repo", Path("/pool/1"), f"lease-{key}", f"canopy:{key}", "main")
+    run_id = db.insert_run(
+        ctx.conn,
+        tick_id=tick_id,
+        key=key,
+        kind=kind,
+        branch=f"agent/{key}-work",
+        slots=[slot],
+        runs_dir=ctx.state_dir / "runs",
+    )
+    ctx.conn.execute("UPDATE runs SET status = 'failed', ended_at = started_at WHERE id = ?", (run_id,))
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    return run_id
+
+
+def test_grant_from_the_web_raises_a_units_limit_as_canopy_grant_does(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+
+    def grant(body: dict[str, str]) -> httpx2.Response:
+        return c.post(f"/api/tickets/{KEY}/grants", json=body, headers=headers)
+
+    assert refused(grant({"kind": "implement"})).startswith("unknown: canopy has no record of PROJ-1")
+    for _ in range(2):
+        ended_run(ctx, KEY, "implement")
+    implement = {"kind": "implement", "repo": "repo", "pr_url": None, "runs": 2, "granted": 0, "limit": 2}
+    assert c.get(f"/api/tickets/{KEY}").json()["limits"] == [
+        implement,
+        {"kind": "fix-ci", "repo": "repo", "pr_url": None, "runs": 0, "granted": 0, "limit": 2},
+        {"kind": "resume", "repo": "repo", "pr_url": None, "runs": 0, "granted": 0, "limit": 3},
+    ]
+
+    # The CLI's guards hold, and a split's limit is only config's to raise.
+    assert refused(grant({"kind": "implement", "repo": "other"})) == "unknown_repo: PROJ-1 has had no runs in other"
+    assert grant({"kind": "split"}).status_code == 422
+    assert c.post(f"/api/tickets/{KEY}/grants", json={"kind": "implement"}, headers={"origin": ORIGIN}).status_code == (
+        403
+    )
+    assert policy.grants(ctx.conn) == {}
+
+    # One more run, every earlier one still counted; the ticket's page shows the new limit.
+    assert grant({"kind": "implement"}).json() == {"kind": "implement", "repo": "repo", "runs": 2, "limit": 3}
+    assert policy.grants(ctx.conn) == {(KEY, "repo"): {"implement": 1}}
+    assert c.get(f"/api/tickets/{KEY}").json()["limits"][0] == {**implement, "granted": 1, "limit": 3}
+
+
+def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_does(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    pr = "https://github.com/acme/repo/pull/7"
+
+    def grant(url: str) -> httpx2.Response:
+        return c.post("/api/pull-request/grants", params={"url": url}, headers=headers)
+
+    assert refused(grant(pr)).startswith("unknown: canopy has not reviewed")
+    assert refused(grant("https://github.com/acme/repo/issues/7")).startswith("bad_ref")
+    assert refused(grant(KEY)).startswith("bad_ref")
+
+    ended_run(ctx, KEY, "implement")
+    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase="in_review")
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    db.insert_review_run(
+        ctx.conn, tick_id=tick_id, pr_url=pr, sha="a" * 40, ticket=KEY, repo="repo", logs_dir=ctx.state_dir / "reviews"
+    )
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    review = {"kind": "review", "repo": "repo", "pr_url": pr, "runs": 1, "granted": 0, "limit": 3}
+    assert c.get("/api/pull-request", params={"url": pr}).json()["review_limit"] == review
+
+    assert grant(pr).json() == {"kind": "review", "repo": None, "runs": 1, "limit": 4}
+    assert grants.granted(ctx.conn, pr) == 1
+    assert c.get("/api/pull-request", params={"url": pr}).json()["review_limit"] == {**review, "granted": 1, "limit": 4}
+    # The ticket's page shows the review limit of its unit's PR after its units' attempt limits.
+    assert c.get(f"/api/tickets/{KEY}").json()["limits"][-1] == {**review, "granted": 1, "limit": 4}
+
+
+def test_an_item_about_a_pr_no_ticket_owns_names_the_pr(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    pr = "https://github.com/acme/repo/pull/7"
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    db.record_decision(ctx.conn, tick_id, None, "attention:review_limit", "at its limit", pr=pr)
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    [item] = c.get("/api/attention").json()
+    assert (item["pr"], item["ticket_key"], item["subject"]) == (pr, None, f"pr:{pr}")
 
 
 def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_do(ctx: Context) -> None:
