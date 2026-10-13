@@ -488,9 +488,9 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   log, or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed
   to its log, or when a second runtime prints another shape.
 
-The tick's output (taken on request, 2026-10-13): the transcript keeps only the overseer's session, so what the runtime printed on stderr, and
-any line that is not one of its events, sent the operator back to the file, most of all for a tick whose overseer
-failed.
+The tick's output (taken on request, 2026-10-13): the transcript keeps only the overseer's session, so what the
+runtime printed on stderr, and any line that is not one of its events, sent the operator back to the file, most of all
+for a tick whose overseer failed.
 
 - `GET /ticks/{id}/output` reads the end of the tick's output file as written on each request (`transcript.tail`): its
   stdout, the `--- stderr ---` line the tick writes, and its stderr (§6). The same checks as a transcript's: a
