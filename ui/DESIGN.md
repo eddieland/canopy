@@ -250,7 +250,8 @@ tabs.
   breaks, its reasoning muted and italic under a `thinking` label. A tool call is one line, a native `<details>`: a
   `RunDot` in `done` or `failed`, the tool's name, its title or its input's first value, and how long it took; it
   opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
-  call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
+  call is a muted line with its reason, tokens, and cost, that opens the same way to its tokens by kind, each a label
+  and a readout on one line; Open all leaves it closed. A runtime error is tinted `status-failed`. Open all and Close
   all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
   overseer's under its decisions.

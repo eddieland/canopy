@@ -589,6 +589,11 @@ def _text(session: str, minutes: float, text: str) -> str:
     return _event("text", session, minutes, part={"type": "text", "text": text})
 
 
+def _reasoning(session: str, minutes: float, text: str) -> str:
+    """What a reasoning model thought, as a template with `--thinking` prints it (DESIGN §13)."""
+    return _event("reasoning", session, minutes, part={"type": "reasoning", "text": text})
+
+
 def _tool(session: str, minutes: float, tool: str, state: dict[str, object], seconds: float = 1) -> str:
     ms = int((T0 + timedelta(minutes=minutes)).timestamp() * 1000)
     metadata: dict[str, object] = {}
@@ -599,11 +604,13 @@ def _tool(session: str, minutes: float, tool: str, state: dict[str, object], sec
 
 
 def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls") -> str:
+    # Most of what a call sends is read back from the provider's cache, after the first.
+    sent = int(cost * 30_000)
     tokens = {
-        "input": int(cost * 30_000),
-        "output": int(cost * 4_000),
-        "reasoning": 0,
-        "cache": {"read": 0, "write": 0},
+        "input": sent // 4,
+        "output": int(cost * 3_000),
+        "reasoning": int(cost * 1_000),
+        "cache": {"read": sent - sent // 4 - 512, "write": 512},
     }
     return _event(
         "step_finish", session, minutes, part={"type": "step-finish", "reason": reason, "cost": cost, "tokens": tokens}
@@ -729,6 +736,9 @@ def _transcripts(state_dir: Path) -> None:
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
     tick_2 = [
+        _reasoning(
+            s2, -60.1, "Nothing is waiting on me except ABC-101, and the state will say whether run 41 is done."
+        ),
         _text(s2, -60, "Reading the journal's state first."),
         _done(s2, -59.9, "Read the loop's state", "canopy state", "## Tickets\n- ABC-101 implementing (run 41)\n"),
         _done(

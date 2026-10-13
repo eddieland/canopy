@@ -70,6 +70,21 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await expect(transcript).toContainText('session ses_tick2')
     await expect(transcript.getByTestId('transcript-tool')).toHaveCount(2)
     await expect(transcript).toContainText('Record the decision on ABC-101')
+
+    // With --thinking, what the model thought, under its label.
+    await expect(transcript.getByTestId('transcript-entries').locator('li').first()).toContainText(
+        'thinkingNothing is waiting on me except ABC-101',
+    )
+    // A model call opens to its tokens by kind; Open all opens only the tool calls.
+    const call = transcript.getByTestId('transcript-step')
+    await expect(call).toHaveCount(1)
+    const split = call.locator('dl')
+    await expect(split).toBeHidden()
+    await call.locator('summary').click()
+    await expect(split).toHaveText('input2.3kcache read6.5kcache write512output930reasoning310')
+    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await expect(transcript.locator('details[open]')).toHaveCount(2)
+    await expect(split).toBeHidden()
 })
 
 test('a run that does not exist, or a path that names none, says so', async ({ page }) => {

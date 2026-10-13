@@ -1427,6 +1427,7 @@ export type components = {
             kind: "step";
             /** Reason */
             reason: string | null;
+            split: components["schemas"]["TranscriptTokens"] | null;
             /** Tokens */
             tokens: number | null;
         };
@@ -1454,6 +1455,22 @@ export type components = {
             reasoning: boolean;
             /** Text */
             text: string;
+        };
+        /**
+         * TranscriptTokens
+         * @description One model call's tokens by kind, as the runtime counted them.
+         */
+        TranscriptTokens: {
+            /** Cache Read */
+            cache_read: number;
+            /** Cache Write */
+            cache_write: number;
+            /** Input */
+            input: number;
+            /** Output */
+            output: number;
+            /** Reasoning */
+            reasoning: number;
         };
         /**
          * TranscriptTool

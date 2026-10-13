@@ -1,7 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
-import type { Transcript, TranscriptEntry, TranscriptTool } from '@/api/types'
+import type { Transcript, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
 import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
@@ -138,18 +138,7 @@ function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string |
         case 'tool':
             return <Tool entry={entry} start={start} open={open} />
         case 'step':
-            return (
-                <Row at={entry.at} start={start} className="py-1.5 font-mono text-xs text-muted-foreground">
-                    <span>model call</span>
-                    {entry.reason && <Chip word={entry.reason} />}
-                    <span className="readout ml-auto">
-                        {entry.tokens === null ? '' : `${tokenCount(entry.tokens)} tokens`}
-                    </span>
-                    <span className="readout w-14 text-right">
-                        {entry.cost_usd === null ? '' : `$${entry.cost_usd.toFixed(2)}`}
-                    </span>
-                </Row>
-            )
+            return <ModelCall entry={entry} start={start} />
         case 'error':
             return (
                 <Row at={entry.at} start={start} className="bg-status-failed/8">
@@ -232,6 +221,74 @@ function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | n
         </li>
     )
 }
+
+/**
+ * A model call's end: one muted line, its reason, tokens, and cost, that opens to its tokens by kind. What it wrote and
+ * ran are the rows above it; what it was sent, the runtime does not print.
+ */
+function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | null }) {
+    const line = (
+        <>
+            <When at={entry.at} start={start} />
+            <span>model call</span>
+            {entry.reason && <Chip word={entry.reason} />}
+            <span className="readout ml-auto">{entry.tokens === null ? '' : `${tokenCount(entry.tokens)} tokens`}</span>
+            <span className="readout w-14 shrink-0 text-right">
+                {entry.cost_usd === null ? '' : `$${entry.cost_usd.toFixed(2)}`}
+            </span>
+        </>
+    )
+    const muted = 'flex items-center gap-3 px-3 py-1.5 font-mono text-xs text-muted-foreground'
+    if (entry.split === null) {
+        return (
+            <li className={muted}>
+                {line}
+                <span className="size-3.5 shrink-0" />
+            </li>
+        )
+    }
+    const split = entry.split
+    return (
+        <li data-testid="transcript-step">
+            <details className="group">
+                <summary
+                    className={cn(
+                        muted,
+                        'cursor-pointer list-none hover:bg-surface-raised',
+                        '[&::-webkit-details-marker]:hidden',
+                    )}
+                >
+                    {line}
+                    <ChevronRight
+                        className={cn(
+                            'size-3.5 shrink-0 text-muted-foreground',
+                            'transition-transform group-open:rotate-90',
+                        )}
+                    />
+                </summary>
+                <dl className="flex flex-wrap gap-x-6 gap-y-1 pr-3 pb-2 pl-[5.25rem] font-mono text-xs">
+                    {TOKEN_KINDS.map(([key, label]) => (
+                        <div key={key} className="flex items-baseline gap-2">
+                            <dt className="panel-label">{label}</dt>
+                            <dd className="readout" title={`${split[key]} tokens`}>
+                                {tokenCount(split[key])}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            </details>
+        </li>
+    )
+}
+
+/** A model call's token kinds, in the order the runtime reports them, as the page labels them. */
+const TOKEN_KINDS = [
+    ['input', 'input'],
+    ['cache_read', 'cache read'],
+    ['cache_write', 'cache write'],
+    ['output', 'output'],
+    ['reasoning', 'reasoning'],
+] as const
 
 function Block({ label, failed = false, children }: { label: string; failed?: boolean; children: string }) {
     return (

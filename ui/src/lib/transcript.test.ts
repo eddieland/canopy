@@ -43,7 +43,7 @@ describe('tally and startOf', () => {
         { kind: 'text', at: null, text: 'hi', reasoning: false, cut: false },
         tool('completed'),
         tool('error'),
-        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10 },
+        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null },
         { kind: 'error', at: null, name: 'APIError', message: '' },
     ]
 
