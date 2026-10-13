@@ -16,8 +16,8 @@ from canopy.core.contract import bounded, one_line
 MAX_SUMMARY = 2000
 MAX_TITLE = 200
 MAX_LOCATION = 300
+MAX_DETAIL = 1000
 MAX_FINDINGS = 20
-MAX_URL = 500
 
 
 class Finding(BaseModel):
@@ -28,17 +28,21 @@ class Finding(BaseModel):
     severity: Literal["blocking", "major", "minor"]
     title: Annotated[StrictStr, one_line, bounded(MAX_TITLE)]
     location: Annotated[StrictStr, one_line, bounded(MAX_LOCATION)] = ""
+    # What is wrong and why, for the worker that fixes it: the review is posted nowhere else (DESIGN §21).
+    detail: Annotated[StrictStr, bounded(MAX_DETAIL)] = ""
 
 
 class ReviewResult(BaseModel):
-    """`done` means the review was read through and its comment posted; `failed` that the reviewer could not review."""
+    """`done` means the review was read through; `failed` that the reviewer could not review.
+
+    The result is the whole review: it lives in the journal and is posted nowhere (D114).
+    """
 
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     status: Literal["done", "failed"]
     verdict: Literal["clean", "findings"] | None = None
     impact: Literal["low", "normal", "high"] | None = None
-    comment: Annotated[StrictStr, contract.url(MAX_URL)] | None = None
     summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
     findings: Annotated[list[Finding], Field(max_length=MAX_FINDINGS)] = []
 
@@ -62,7 +66,7 @@ def stored(result_json: object) -> ReviewResult | None:
 
 
 CONTRACT = (
-    '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","comment":"https://...",'
-    '"summary":"one paragraph","findings":[{"severity":"blocking|major|minor","title":"one line",'
-    '"location":"path:line"}]}'
+    '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",'
+    '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
+    '"detail":"what is wrong and why"}]}'
 )

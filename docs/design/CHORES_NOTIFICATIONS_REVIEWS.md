@@ -273,7 +273,7 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
 | `runs` | `run.ended` | a run's row closed | ticket, run, kind, status, branch, pr, prs, summary, question, message |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
-| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, comment |
+| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, how many findings |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
 | `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
 | `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
@@ -484,15 +484,22 @@ Approved with M10:
 ## 21. Reviews
 
 A review is an adversarial read of one PR at one commit by a fresh agent run, with no transcript of the author's run,
-told to assume the change is wrong until the code shows otherwise. It posts one comment on the PR that says what it
-is, and reports a verdict. It never approves, requests changes, pushes, or merges. Human review stays the gate (§3).
+told to assume the change is wrong until the code shows otherwise. It reports a verdict and its findings to canopy's
+journal, and posts nothing: no comment on the PR or the ticket, no GitHub review (D114). It never approves, requests
+changes, pushes, or merges. Human review stays the gate (§3). The operator reads reviews with `canopy review show`
+until the web UI shows them as a PR review of canopy's own (ROADMAP M32).
 
 Two kinds of PR get reviews, and neither needs a ticket:
 
 - **The loop's own PRs.** With `review.agent_prs` on, a ticket's PR is reviewed once its checks pass, before the
-  overseer asks a human for review. Findings go back to a worker through `resume`, like a human's review comments.
+  overseer asks a human for review. Findings go back to a worker through `resume`, which carries them in its prompt.
 - **PRs the operator names with `review.query`.** Reviewed and nothing else: the loop never pushes to them, fixes
-  them, or opens a ticket for them. The comment is the whole output.
+  them, or opens a ticket for them. The review in the journal is the whole output, for the operator alone.
+
+Why nothing is posted: a review on the PR speaks for the operator, in their name, to everyone who reads the PR, and
+an adversarial reader is wrong often enough that the operator wants to see its findings before anyone else does. Kept
+in the journal, a review costs the PR's audience nothing, needs no write tool, and cannot be forged by anything that
+posts as the operator, since the loop never read reviews from the PR anyway.
 
 ### Configuration
 
@@ -531,7 +538,7 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 With no `[review]` table, neither `agent_prs` nor `query` set, or `capacity.max_reviews = 0`, nothing about reviews
 reaches the overseer: no `reviews` key in the state block, §7's phase table unchanged, and every `canopy review run`
 refuses as `reviews_off`. A test holds this. With `agent_prs` off the phase table is also unchanged, and a loop PR
-that `query` matches is reviewed like any other match: one comment, no `resume`.
+that `query` matches is reviewed like any other match: a review in the journal, no `resume`.
 
 ### Running a review
 
@@ -545,7 +552,7 @@ commit the overseer read. `--ticket` links an agent PR to its ticket. Under the 
   characters, or `--ticket` is not a valid key (§17).
 - `unknown_repo`: no `--repo`, or one not in the map or with no clone. The slot comes from that repository's pool.
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is.
-- `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and comment.
+- `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and impact.
 - `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, however they ended. Also records the
   `review_limit` attention item.
 - `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
@@ -582,38 +589,21 @@ the result contract. The reviewer:
 - looks for defects, not style: wrong behavior, missed cases, security problems, broken contracts, missing tests for
   new behavior, and anything the repository's own docs (such as `AGENTS.md`) name as a rule;
 - verifies each finding against the code, and reports none when it finds none;
-- treats everything it reads, the diff included, as data (TRUST_MODEL T1).
-
-It posts exactly one comment on the PR's conversation, never a submitted review, whose line-comment tool can also
-approve:
-
-```text
-**canopy review**: an automated adversarial review of abc1234, run by canopy under this account. It is not a
-human review and not an approval.
-
-Verdict: findings (1 blocking, 1 minor). Impact: normal.
-1. **blocking** `src/retry.py:42`: ...
-2. **minor** `tests/test_retry.py`: ...
-
-<!-- canopy-review {"v":1,"run":42,"sha":"<full sha>","verdict":"findings","impact":"normal"} -->
-```
-
-The first line identifies it to people, the last-line marker to programs. The comment is posted as the operator
-(D010), so anything running as the operator could forge the marker. The loop never trusts it, only its journal.
+- writes each finding for someone who has not read the PR: a title, a `path:line`, and a detail saying what is wrong,
+  why, and the case that shows it;
+- posts nothing anywhere, and treats everything it reads, the diff included, as data (TRUST_MODEL T1).
 
 Result contract, one JSON line, last line of the reviewer's text (§13), validated with pydantic (D026):
 
 ```json
-{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","comment":"https://...",
- "summary":"one paragraph",
- "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line"}]}
+{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",
+ "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
 ```
 
-- `done` means the review was read through and the comment posted. `comment` is its plain `https://` URL and must be
-  the reviewed PR's URL followed by `#` or `/` (PR 70's is not PR 7's). A `done` without one is recorded as `failed`
-  with a harness note. `failed` means the reviewer could not review; the summary says why.
-- The harness cannot check that the comment exists (principle 5); the overseer does (below).
-- At most 20 findings. `title` and `location` are one line, cut at 200 and 300 characters; `summary` is cut at 2000.
+- `done` means the review was read through. `failed` means the reviewer could not review; the summary says why. A
+  `comment` key, from a reviewer prompt older than D114, is ignored.
+- At most 20 findings. `title` and `location` are one line, cut at 200 and 300 characters; `detail` is cut at 1000,
+  and `summary` at 2000.
   `verdict` is `findings` exactly when `findings` is not empty, and a `done` review has a verdict and an impact.
 - `low` without `review.low_impact` is recorded as `normal`, with a harness note.
 - Anything else is `unknown`. `review_runs` status is `running`, `done`, `failed`, `unknown`, `timeout`, or `crashed`.
@@ -621,17 +611,16 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 ### The verdict, and automating on it
 
 canopy never approves (TRUST_MODEL §6): a review changes no GitHub review state and cannot satisfy a required
-approval. The verdict is the marker, not a commit status or label, since a tool that sets one can set any. A repository
-that wants low-impact PRs to skip a human reviewer can run its own
-automation, such as a CI job that reads the latest `canopy-review` marker for the head commit from an account it
-allows and sets a required check. That is the repository owners' decision. The marker is only as trustworthy as
-every agent the operator runs, until a bot identity (ROADMAP, deferred).
+approval. The verdict and impact are for the operator and the overseer, and leave the machine only as the `review.ended`
+event's fields (§20). No repository automation can read them, so a review cannot let a low-impact PR skip a human
+reviewer. A repository that wants that needs a verdict it can trust, which waits on a bot identity (ROADMAP, deferred).
 
 ### The overseer's part
 
 The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
 and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, and
-latest run: id, commit, status, verdict, impact, comment URL, finding titles, start and end.
+latest run: id, commit, status, verdict, impact, finding titles, start and end, and `reviewed_at`, its end in the
+`review` cursor's form (§7).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -640,18 +629,19 @@ they are `untrusted_review` and wait for the operator's go-ahead like any untrus
 | Phase | Derived from | Next action |
 |---|---|---|
 | `review_pending` | checks pass, no approval, no `done` review of the head commit, under the per-PR limit | `canopy review run --ticket KEY` |
-| `review_findings` | the head commit's `done` review has findings, newer than the `review` cursor | classify as review comments (§7): dispatch `resume` pointing at the review run and its comment, or `needs_author` |
+| `review_findings` | the head commit's `done` review has findings, newer than the `review` cursor | classify as review comments (§7): dispatch `resume --review-run <id>`, or `needs_author` |
 
-A clean review, or a PR at its review limit, moves on to `green_unreviewed`, whose `needs_reviewer` item links the
-latest review. A `resume` pushes a new commit, which is reviewed again, up to the per-PR limit. The overseer recognizes
-a review's comment by the comment URL in the state block, never by the marker, and never counts it toward
-`changes_requested`.
+A clean review, or a PR at its review limit, moves on to `green_unreviewed`, whose `needs_reviewer` item names the
+latest review run. A `resume` pushes a new commit, which is reviewed again, up to the per-PR limit. The overseer knows a
+review only from the state block. Nothing on the PR is one, and a review never counts toward `changes_requested`.
 
-When it reads a PR, the overseer checks that the latest `done` review's comment exists on that PR, by the operator's
-account, with a marker naming that run. If not, it records `review_unposted` (Attention, below), and an agent PR moves
-on to `needs_reviewer` as a PR at its review limit does: a worker is never sent to a missing comment. The `reviewed`
-guard still holds for that commit; the next commit is reviewed as usual. Operator comments with a `canopy-review`
-marker that no run in the state block names are ignored, like any text that is not an authorized reply.
+`canopy dispatch KEY --kind resume --review-run ID` hands the worker review run `ID`'s findings. The dispatch refuses as
+`bad_review` unless the kind is `resume` and the run is this ticket's, of a repository the dispatch names, `done`, and
+has findings. The worker's prompt carries them under `## canopy's review` as `{{REVIEW_FINDINGS}}`, each finding's
+title, location, and detail made printable, and `None.` on any other resume. A prompt override without that
+placeholder fails to render for a `--review-run` dispatch, so the findings are never dropped silently. The worker
+treats them as a trusted reviewer's comments when `canopy:review` is trusted, and never posts them; there is no comment
+to reply to. The `review` cursor's time for a review run is its `reviewed_at`.
 
 For PRs from `review.query`, the overseer runs the query each tick and keeps only PRs of this repository (the one whose
 PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
@@ -666,8 +656,6 @@ Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dis
 
 - `review_failed`: a PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed`. Recorded every tick
   that the PR is still a candidate and nothing newer has run; `canopy review run` may retry within the per-PR limit.
-- `review_unposted`: the latest `done` review's comment is not on the PR (above). It lasts until a newer review of the
-  PR ends `done` with its comment in place.
 - `review_limit`: recorded by the refusal, and by the overseer every tick that a candidate PR's head is unreviewed and
   it is at its limit.
 - Findings are not attention items. For an agent PR they lead to a `resume`, or the existing `needs_author` or
@@ -676,7 +664,14 @@ Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dis
 `canopy attention` takes `--pr URL`, in place of a ticket key for a PR with no ticket, or beside one for an agent PR.
 An item with only a PR is shown as `pr:<URL>`, and its `notifications` row holds that in `ticket_key`, which no ticket
 key can equal (§17). The `reviews` event group (§20) carries `review.ended`: PR, ticket, run, status, verdict, impact,
-comment.
+and how many findings, never their text.
+
+### Reading reviews
+
+`canopy review show` lists the review runs of the last 14 days, newest first: id, start, status, verdict, how many
+findings, impact, PR, and commit. `canopy review show ID` prints one in full: the summary and each finding with its
+detail. Text the reviewer wrote is made printable, as any message shown on a terminal is (§22). It reads the journal
+only, and runs outside a tick.
 
 ### Agent definition
 
@@ -684,8 +679,8 @@ canopy ships `canopy-reviewer` in the definitions directory (§13), not the repo
 T7):
 
 - no edits, no subagents, no bash; reads allowed only inside the checkout;
-- MCP: the tracker and GitHub, read tools only, plus the one tool that posts a comment on a PR's conversation. Tools
-  that submit a PR review, push or write files, change labels, or edit or delete comments are denied by name.
+- MCP: the tracker and GitHub, read tools only. Tools that comment or reply anywhere, submit a PR review, push or write
+  files, change labels, or edit or delete are denied by name.
 
 A review that should run the PR's tests uses the operator's own copy of the definition, with bash allowed for exactly
 those commands, as a chore does (§19). That runs the PR's code on the operator's machine, a reason to keep
@@ -700,28 +695,24 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
-  `--cursor review=` with the time of the run's comment.
+  `--cursor review=` with the run's `reviewed_at`.
 
 ### Trust model changes
 
 Recorded in TRUST_MODEL with M11's human approval: T1 (the reviewer reads the most hostile text; what it writes is
 data; `review.query` authorizes and is user-only), T3 (`max_reviews`, `max_reviews_per_day`, `max_reviews_per_pr`,
 one review per commit, and the review timeout are controls in code), T4 (the harness runs nothing from the checkout,
-and the reviewer's working directory is outside it), T5 (first line and marker), T6 (one comment per run is a prompt
-rule only; extra comments are noise, not authority), T7 (every review key user-only except
+and the reviewer's working directory is outside it), T6 (the reviewer has no write tool; what it read leaves only
+through the journal and a resumed worker's prompt), T7 (every review key user-only except
 `policy.max_reviews_per_pr`), §6 (never submit a PR review; never push to or edit a PR the loop is only reviewing),
-and §7 (a `review.query` matching other people's PRs comments in your name; a reviewer definition that runs commands
-runs the PR's code).
+and §7 (a reviewer definition that runs commands runs the PR's code). D114 removed the review comment and its T5
+marker, with the operator's approval.
 
 ### Open
 
-- Inline comments on lines: GitHub puts them in a submitted review, whose tool can also approve. They wait for a
-  runtime that can deny the approve event, or a bot identity.
-- Updating the earlier comment instead of adding one per commit. Editing needs a tool that can edit any of the
-  operator's comments.
+- Showing a review as a PR review of canopy's own, findings on the diff's lines, in the web UI (ROADMAP M32), and
+  what the operator does from there: dismiss a finding, or send it to a worker.
 - A repository-offered review rubric, such as its own `low_impact`, that an operator opts into by name.
-- A comment tool the runtime lets the reviewer call once, on one PR, would turn T6's residual into a control. canopy
-  will not ship one: it would be VCS code (principle 5).
 - Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
   (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR
   only through MCP.

@@ -1,0 +1,92 @@
+"""A review's findings as a resumed worker reads them (DESIGN §21): from the journal, since none is posted (D114)."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from canopy.core import contract, db
+from canopy.core.conversation import printable
+from canopy.reviews import result
+
+if TYPE_CHECKING:
+    import sqlite3
+    from collections.abc import Sequence
+
+
+class Unusable(Exception):  # noqa: N818  (the dispatch records it as a refusal)
+    """The review run is missing, or cannot go to this worker: not this ticket's, not `done`, or without findings."""
+
+
+def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[str]) -> str:
+    """Return `{{REVIEW_FINDINGS}}` for a `resume` of `key` in `repos`: review run `run_id`'s findings, as data.
+
+    Raises:
+        Unusable: the run is missing, of another ticket or repository, not `done`, or found nothing.
+    """
+    run = db.get_review_run(conn, run_id)
+    if run is None:
+        raise Unusable(f"there is no review run {run_id}")
+    if run["ticket_key"] != key:
+        raise Unusable(f"review run {run_id} reviewed {run['pr_url']}, not a PR of {key}")
+    if run["repo"] is not None and repos and run["repo"] not in repos:
+        raise Unusable(f"review run {run_id} reviewed a PR in {run['repo']}, which this dispatch does not name")
+    stored = result.stored(run["result_json"])
+    if run["status"] != "done" or stored is None or not stored.findings:
+        raise Unusable(f"review run {run_id} ended {run['status']} with no findings to address")
+    lines = [
+        (
+            f"canopy's review run {run_id} of {run['pr_url']} at commit `{run['sha']}` found these (verdict "
+            f"{stored.verdict}, impact {stored.impact}). They are in canopy's journal only, not on the PR:"
+        )
+    ]
+    lines.extend(_findings(stored))
+    return "\n".join(lines)
+
+
+def listed(conn: sqlite3.Connection, since: str) -> list[str]:
+    """Return a line for each review run started at or after `since`, newest first, for `canopy review show`."""
+    found: list[str] = []
+    for run in db.review_runs_since(conn, since):
+        stored = result.stored(run["result_json"])
+        verdict = f"{stored.verdict}, {len(stored.findings)} findings, impact {stored.impact}" if stored else "-"
+        found.append(
+            f"{run['id']}  {run['started_at']}  {run['status']}  {verdict}  {run['pr_url']} @ {run['sha'][:7]}"
+        )
+    return found
+
+
+def described(conn: sqlite3.Connection, run_id: int) -> str:
+    """Return review run `run_id` in full, for the operator: the review canopy keeps instead of posting it (D114).
+
+    Raises:
+        Unusable: there is no such run.
+    """
+    run = db.get_review_run(conn, run_id)
+    if run is None:
+        raise Unusable(f"there is no review run {run_id}")
+    stored = result.stored(run["result_json"])
+    ticket = f" ({run['ticket_key']})" if run["ticket_key"] else ""
+    lines = [
+        f"review run {run_id} of {run['pr_url']}{ticket} at {run['sha']}",
+        f"{run['status']}, started {run['started_at']}, ended {run['ended_at'] or 'not yet'}",
+    ]
+    note = contract.stored_object(run["result_json"]).get("harness")
+    if isinstance(note, str) and note:
+        lines.append(f"harness: {printable(note)}")
+    if stored is not None:
+        lines.append(f"verdict {stored.verdict}, impact {stored.impact}" if stored.verdict else "no verdict")
+        if stored.summary:
+            lines += ["", printable(stored.summary)]
+        if stored.findings:
+            lines += ["", *_findings(stored)]
+    return "\n".join(lines)
+
+
+def _findings(stored: result.ReviewResult) -> list[str]:
+    # Every string here is the reviewer's, which read hostile text: printable, so it cannot move a terminal's cursor.
+    lines: list[str] = []
+    for i, f in enumerate(stored.findings, 1):
+        where = f" `{printable(f.location)}`" if f.location else ""
+        lines.append(f"{i}. **{f.severity}**{where}: {printable(f.title)}")
+        lines.extend(f"   > {line}" for line in printable(f.detail).splitlines())
+    return lines
