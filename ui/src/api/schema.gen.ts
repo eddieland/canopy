@@ -239,7 +239,7 @@ export type paths = {
         };
         /**
          * Get the server's meta
-         * @description The version of canopy serving, whether the data is mock, and `tracker.ticket_url`, if set.
+         * @description The version of canopy serving, whether the data is mock, `tracker.ticket_url`, and the branch link templates.
          */
         get: operations["getMeta"];
         put?: never;
@@ -1299,6 +1299,15 @@ export type components = {
          * @description The server itself: what it runs and whether its data is real.
          */
         Meta: {
+            /**
+             * Branch Urls
+             * @description Each repository's branch link template, by name: a branch's page on its host, with `{branch}` where its name
+             *     goes, from `branch_url` or a GitHub `url`. A repository without one is left out.
+             * @default {}
+             */
+            branch_urls: {
+                [key: string]: string;
+            };
             /**
              * Mock
              * @description Whether the journal is seeded from fixtures (`python -m canopy.serve --mock`), not the operator's.

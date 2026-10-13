@@ -69,6 +69,21 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["branch_urls"] == {}
+
+    template = "https://github.com/acme/repo/tree/{branch}"
+    shared = canopy_env.shared_file.read_text()
+    canopy_env.write_shared(shared.replace("[tracker]", f'branch_url = "{template}"\n\n[tracker]', 1))
+    other = context(canopy_env)
+    try:
+        c, _ = signed_in_client(other)
+        assert c.get("/api/meta").json()["branch_urls"] == {"repo": template}
+    finally:
+        other.conn.close()
+
+
 def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get("/api/meta").json()["ticket_url"] is None

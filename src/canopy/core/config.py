@@ -268,20 +268,32 @@ def _server_name(value: str) -> str:
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
 TICKET_KEY = "{key}"
-MAX_TICKET_URL = 500
+MAX_LINK_URL = 500
 
 
-def _ticket_url(value: str) -> str:
-    # Empty means unset. The web UI puts it in an `href`: only a plain https:// URL, with the key's place exactly once.
-    rest = value.replace(TICKET_KEY, "", 1)
-    if value and (
-        not contract.plain_url(value, MAX_TICKET_URL) or TICKET_KEY not in value or "{" in rest or "}" in rest
-    ):
-        raise ValueError(
-            f"must be empty, or a plain https:// URL of at most {MAX_TICKET_URL} characters with {TICKET_KEY} exactly "
-            "once and no other braces"
-        )
-    return value
+def link_template(placeholder: str) -> AfterValidator:
+    """Refuse a link template unless it is empty or a plain https:// URL with `placeholder` in it exactly once.
+
+    The web UI puts the template in an `href`, with the placeholder replaced: `tracker.ticket_url`'s `{key}`, a
+    repository's `branch_url`'s `{branch}`.
+
+    Returns:
+        A validator that passes an empty or valid template through unchanged and raises `ValueError` on anything else.
+    """
+
+    def check(value: str) -> str:
+        # Empty means unset.
+        rest = value.replace(placeholder, "", 1)
+        if value and (
+            not contract.plain_url(value, MAX_LINK_URL) or placeholder not in value or "{" in rest or "}" in rest
+        ):
+            raise ValueError(
+                f"must be empty, or a plain https:// URL of at most {MAX_LINK_URL} characters with {placeholder} "
+                "exactly once and no other braces"
+            )
+        return value
+
+    return AfterValidator(check)
 
 
 @dataclass(frozen=True)
@@ -346,7 +358,7 @@ class Tracker(Section):
     needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
     # A ticket's page in the tracker, with {key} where its key goes: the web UI links each ticket there (DESIGN §17).
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
-    ticket_url: Annotated[StrictStr, Scope.SHARED, AfterValidator(_ticket_url)] = ""
+    ticket_url: Annotated[StrictStr, Scope.SHARED, link_template(TICKET_KEY)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can

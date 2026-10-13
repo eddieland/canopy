@@ -203,14 +203,21 @@ test("a ticket's page links to it in the tracker, from tracker.ticket_url, under
     await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
 })
 
-test("a ticket's page links to its PR under its title, beside the tracker", async ({ page }) => {
+test("a ticket's page links to its PR and its branch under its title, beside the tracker", async ({ page }) => {
     await page.goto('tickets/ABC-103')
     const links = page.locator('main header').getByRole('navigation', { name: 'Links out' })
-    await expect(links.getByRole('link')).toHaveText(['jira.example/browse/ABC-103', 'github.com/acme/web/pull/91'])
+    const branch = 'github.com/acme/web/tree/agent/ABC-103-billing-v2'
+    await expect(links.getByRole('link')).toHaveText([
+        'jira.example/browse/ABC-103',
+        'github.com/acme/web/pull/91',
+        branch,
+    ])
     await expect(links.getByRole('link', { name: 'github.com/acme/web/pull/91' })).toHaveAttribute(
         'href',
         'https://github.com/acme/web/pull/91',
     )
+    // From the web repository's branch_url in the map.
+    await expect(links.getByRole('link', { name: branch })).toHaveAttribute('href', `https://${branch}`)
 })
 
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({
@@ -254,6 +261,11 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     const working = web.getByTestId('worktree-1')
     await expect(working).toHaveAttribute('data-state', 'working')
     await expect(working).toContainText('agent/ABC-101-login')
+    // The web repository has a branch_url in the map, so the branch links to its page there.
+    await expect(working.getByRole('link', { name: 'agent/ABC-101-login' })).toHaveAttribute(
+        'href',
+        'https://github.com/acme/web/tree/agent/ABC-101-login',
+    )
     // The slots' shared directory is said once, in the header; each slot's path is on its number.
     await expect(web.getByTestId('pool-root')).toHaveText('.treehouse/web-3f9c2a1b/')
     await expect(working.getByText('#1')).toHaveAttribute('title', '.treehouse/web-3f9c2a1b/1/web')
@@ -271,7 +283,7 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     await expect(mobile.getByTestId('worktree-1')).toContainText('run:43')
     await expect(web.getByTestId('worktree-2')).toContainText('run:43')
 
-    await working.getByRole('link', { name: 'ABC-101' }).click()
+    await working.getByRole('link', { name: 'ABC-101', exact: true }).click()
     await expect(page).toHaveURL(/\/tickets\/ABC-101$/)
     await page.goBack()
 

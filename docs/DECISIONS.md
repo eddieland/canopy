@@ -377,3 +377,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: a review on the PR speaks in the operator's name before they have seen it; kept local it needs no write grant.
 - Rejected: one identified comment per commit with a marker (the M11 design); repository automation on the verdict.
 - Revisit: with a bot identity, or once the operator wants the web UI's shadow review (ROADMAP M32) published.
+
+## D115. The web UI's branch links default to the GitHub page a clone URL implies
+
+- A repository's GitHub `url` gives `https://github.com/OWNER/REPO/tree/{branch}` unless its map sets `branch_url`.
+  This one URL format is the only host knowledge in the harness; it builds a link and calls nothing. Settled by the
+  operator.
+- Why: most workspaces are GitHub, and a link that needs a template per repository is a link nobody configures.
+- Rejected: templates only (more config for the common case); formats for other hosts (a template covers them).
+- Revisit: if a second host is common enough to want its own default.

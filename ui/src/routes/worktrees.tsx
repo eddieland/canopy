@@ -13,6 +13,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
@@ -152,7 +153,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
             ) : (
                 <ul className="divide-y" data-testid="worktrees">
                     {pool.worktrees.map((w) => (
-                        <WorktreeRow key={w.path} worktree={w} shared={root !== null} />
+                        <WorktreeRow key={w.path} worktree={w} repo={pool.repo} shared={root !== null} />
                     ))}
                 </ul>
             )}
@@ -186,7 +187,9 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
  * word, with treehouse's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
  * line, since it is something to act on. An idle slot is the state and number alone, dimmed.
  */
-function WorktreeRow({ worktree: w, shared }: { worktree: Worktree; shared: boolean }) {
+function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
+    const branchUrl = useBranchUrls()
+    const branchHref = w.branch === null ? undefined : branchUrl(repo, w.branch)
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
@@ -209,9 +212,26 @@ function WorktreeRow({ worktree: w, shared }: { worktree: Worktree; shared: bool
                 {!idle && (
                     <>
                         <Holder worktree={w} />
-                        <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
-                            {w.branch ?? (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
-                        </span>
+                        {branchHref === undefined ? (
+                            <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
+                                {w.branch ??
+                                    (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
+                            </span>
+                        ) : (
+                            <a
+                                href={branchHref}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                title={branchHref}
+                                className={cn(
+                                    'inline-flex min-w-0 items-center gap-1 font-mono text-xs text-accent',
+                                    'underline-offset-4 hover:underline',
+                                )}
+                            >
+                                <span className="truncate">{w.branch}</span>
+                                <ExternalLink aria-hidden className="size-3 shrink-0" />
+                            </a>
+                        )}
                     </>
                 )}
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
