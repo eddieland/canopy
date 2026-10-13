@@ -63,6 +63,56 @@ def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(back
     assert deps["latest_note_id"] == 8
 
 
+def test_each_chore_carries_what_its_runs_cost_in_the_last_day_and_the_last_30_days(backend: Backend) -> None:
+    with backend.open() as ctx:
+        for started, cost in [(-3 * 24 * 60, 0.4), (-2 * 24 * 60, None), (-31 * 24 * 60, 9.0)]:
+            ctx.conn.execute(
+                "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, log_path, cost_usd) "
+                "VALUES (1, 'deps', ?, ?, 'failed', 'x.log', ?)",
+                (mock.at(started), mock.at(started + 5), cost),
+            )
+    c = client(None, backend)
+    health, deps = c.get("/api/chores").json()
+
+    # A running run counts, as the spend counts it, by when it started.
+    assert health["spend"]["day"] == spent(24, 2, [0.05, 0.33])
+    assert deps["spend"]["day"] == spent(24, 2, [0.21, 0.26])
+    # One run reported no cost, and one started before the window.
+    assert deps["spend"]["month"] == spent(720, 4, [0.21, 0.26, 0.4])
+    assert c.get("/api/chores/deps").json()["chore"]["spend"] == deps["spend"]
+
+
+def test_a_chores_p99_is_by_nearest_rank_so_one_dear_run_in_a_hundred_does_not_set_it(backend: Backend) -> None:
+    with backend.open() as ctx:
+        ctx.conn.executemany(
+            "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, log_path, cost_usd) "
+            "VALUES (1, 'build-health', ?, ?, 'ok', 'x.log', 0.1)",
+            [(mock.at(-2 * 24 * 60), mock.at(-2 * 24 * 60 + 5))] * 198,
+        )
+    health, _ = client(None, backend).get("/api/chores").json()
+
+    # 200 runs: 0.05, 198 at 0.10, and 0.33. The 198th cheapest is the 99th percentile.
+    month = health["spend"]["month"]
+    assert (month["priced"], month["p99_usd"], month["mean_usd"]) == (200, 0.1, pytest.approx(20.18 / 200))
+    assert month["max_usd"] == 0.33
+    # Under 100 runs it is the dearest one.
+    assert health["spend"]["day"]["p99_usd"] == 0.33
+
+
+def spent(hours: int, runs: int, costs: list[float]) -> dict[str, Any]:
+    """A chore's spend window as the API sends it, for `runs` runs of which those in `costs` reported one."""
+    total = sum(costs)
+    return {
+        "hours": hours,
+        "runs": runs,
+        "priced": len(costs),
+        "cost_usd": pytest.approx(total),
+        "mean_usd": pytest.approx(total / len(costs)),
+        "p99_usd": max(costs),
+        "max_usd": max(costs),
+    }
+
+
 def test_a_chores_page_is_what_canopy_show_prints_and_any_other_name_is_refused(backend: Backend) -> None:
     c = client(None, backend)
     page = c.get("/api/chores/deps").json()

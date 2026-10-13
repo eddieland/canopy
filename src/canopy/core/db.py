@@ -833,6 +833,19 @@ def chore_runs(
     ).fetchall()
 
 
+def chore_costs_since(conn: sqlite3.Connection, chore: str, since: str) -> tuple[int, list[float]]:
+    """How many of `chore`'s runs started at or after `since`, and what each of those that reported a cost cost (§13).
+
+    Returns:
+        The runs, a running one included, and the costs reported, in US dollars, cheapest first.
+    """
+    rows = conn.execute(
+        "SELECT cost_usd FROM chore_runs WHERE chore = ? AND started_at >= ?",
+        (chore, since),
+    ).fetchall()
+    return len(rows), sorted(float(r[0]) for r in rows if r[0] is not None)
+
+
 def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
     """Return when the operator dismissed each of `chore`'s findings it dismissed, by finding id (DESIGN §19)."""
     rows = conn.execute("SELECT finding_id, dismissed_at FROM finding_dismissals WHERE chore = ?", (chore,))

@@ -6,6 +6,7 @@ message bodies as `canopy show` drops them, run summaries are cut to one line, a
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,6 +20,8 @@ from canopy.serve.schema import (
     ChoreRun,
     ChoreRunDetail,
     ChoreRunFinding,
+    ChoreSpend,
+    ChoreSpendWindow,
     ChoreSummary,
     Comment,
     Decision,
@@ -575,7 +578,8 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
     """A chore's state as its line in `canopy status` and the head of `canopy show chore:NAME` say it.
 
     Returns:
-        The chore's schedule, its running and latest ended runs, when it is next due, and its open findings.
+        The chore's schedule, its running and latest ended runs, when it is next due, its open findings, and what its
+        runs cost in the last day and the last 30 days.
     """
     defined = state.chore
     running = state.running
@@ -602,6 +606,29 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
             for f in state.findings()
         ],
         latest_note_id=db.latest_message_of(conn, conversation.CHORE, state.name),
+        spend=ChoreSpend(
+            day=_chore_spent(conn, state.name, now, SPEND_DAY_HOURS),
+            month=_chore_spent(conn, state.name, now, SPEND_MONTH_HOURS),
+        ),
+    )
+
+
+def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int) -> ChoreSpendWindow:
+    since = db.format_time(now - timedelta(hours=hours))
+    runs, costs = db.chore_costs_since(conn, name, since)
+    if not costs:
+        return ChoreSpendWindow(hours=hours, runs=runs, priced=0)
+    total = sum(costs)
+    # Nearest rank: the smallest cost at least 99% of the runs did not exceed.
+    p99 = costs[math.ceil(0.99 * len(costs)) - 1]
+    return ChoreSpendWindow(
+        hours=hours,
+        runs=runs,
+        priced=len(costs),
+        cost_usd=total,
+        mean_usd=total / len(costs),
+        p99_usd=p99,
+        max_usd=costs[-1],
     )
 
 
