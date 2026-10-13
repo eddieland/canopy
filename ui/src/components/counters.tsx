@@ -1,21 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { attentionQuery, runsQuery, spendQuery, ticketsQuery } from '@/api/queries'
-import type { SpendWindow } from '@/api/types'
+import { attentionQuery, runsQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
 import { countBySeverity, type Severity } from '@/lib/attention'
 
 /**
- * The loop at a glance, above the attention list: what runs, what waits on you, what needs you, and what it cost in
- * the last day and the last 30.
+ * The loop at a glance, above the attention list: what runs, what waits on you, and what needs you. What it cost is
+ * in the rail, on every page.
  */
 export function Counters() {
     const runs = useQuery(runsQuery)
     const tickets = useQuery(ticketsQuery)
     const attention = useQuery(attentionQuery)
-    const spend = useQuery(spendQuery)
 
     const running = runs.data?.filter((r) => r.state === 'running').length
     const waiting = tickets.data?.filter((t) => t.awaiting !== null).length
@@ -44,29 +42,8 @@ export function Counters() {
             <Counter label="Attention" value={attention.data?.length} tone={broken ? 'failed' : 'plain'}>
                 {counts === undefined ? null : breakdown(counts)}
             </Counter>
-            <Spent label="Spent, 24h" testId="spent-24h" window={spend.data?.day} />
-            <Spent label="Spent, 30d" testId="spent-30d" window={spend.data?.month} />
         </div>
     )
-}
-
-/** What one window cost: a dash when nothing in it reported a cost. */
-function Spent({ label, testId, window }: { label: string; testId: string; window: SpendWindow | undefined }) {
-    const cost = window?.cost_usd ?? null
-    return (
-        <Counter
-            label={label}
-            testId={testId}
-            value={window === undefined ? undefined : cost === null ? '–' : usd(cost)}
-            tone="accent"
-        >
-            {window === undefined ? null : cost === null ? 'nothing reported' : 'overseer and workers'}
-        </Counter>
-    )
-}
-
-function usd(cost: number): string {
-    return `$${cost.toFixed(2)}`
 }
 
 function breakdown(counts: Record<Severity, number>): string {

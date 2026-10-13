@@ -6,10 +6,12 @@ import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
 import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Decisions } from '@/components/decisions'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { TranscriptPanel } from '@/components/transcript'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { localTime } from '@/lib/time'
 import { TICK_TONE, tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
@@ -56,6 +58,7 @@ function NoTick({ title, children }: { title: string; children: string }) {
 
 function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcript | undefined }) {
     const { tick, decisions, output_path: output } = detail
+    const decisionsOrder = useListOrder('tick-decisions')
     return (
         <>
             <PageHeader label={tick.dry_run ? 'Tick, dry run' : 'Tick'} title={`tick ${tick.id}`}>
@@ -98,12 +101,15 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                 </Panel>
                 <Panel>
                     <PanelHeader label="Decisions">
-                        <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                        <span className="flex items-center gap-2">
+                            {decisions.length > 1 && <OrderToggle list="tick-decisions" />}
+                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                        </span>
                     </PanelHeader>
                     {decisions.length === 0 ? (
                         <Placeholder className="min-h-20">none</Placeholder>
                     ) : (
-                        <Decisions decisions={decisions} />
+                        <Decisions decisions={ordered('tick-decisions', decisionsOrder, decisions)} />
                     )}
                 </Panel>
                 <TranscriptPanel transcript={transcript} running={tick.status === 'running'} />

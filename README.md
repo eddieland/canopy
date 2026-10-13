@@ -13,6 +13,8 @@ attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds
 standing write access to your repositories, your tracker, or your internal tools.
 
+![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-light-root-linux.png)
+
 **Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
 notifications, and private tickets are built; sandboxed workers (M26) and cutting the overseer's spend (M28 to M30)
 are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still to run:
