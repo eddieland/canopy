@@ -3,7 +3,8 @@
 Attention items are decisions with action `attention:<reason>`, recorded every tick the cause holds: by the overseer
 for what it reads in the world, and by the harness for runs that ended in a way a human must look at (`from_runs`). The
 current list is therefore the items of the latest tick whose overseer finished; an item disappears when a tick no
-longer records it.
+longer records it. A tick that could not run the overseer because `canopy` does not work for it adds one item of its own
+to that list, while it is the latest tick.
 
 A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
@@ -45,6 +46,8 @@ RUN_REASONS = {
     "timeout": "unknown_result",
     "failed": "worker_failed",
 }
+# A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
+UNAVAILABLE = "canopy_unavailable"
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
 FILE_NAME = "attention.md"
@@ -104,7 +107,7 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         )
     ]
     if not ticks:
-        return []
+        return _unavailable(conn, None)
     # Only the placeholder count is interpolated; the tick ids are bound parameters.
     rows = conn.execute(
         f"SELECT tick_id, ticket_key, action, rationale, created_at, repo, chore, pr FROM decisions "  # noqa: S608
@@ -132,7 +135,29 @@ def current(conn: sqlite3.Connection) -> list[Item]:
                 break
             since = earlier[1]
         items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
-    return items
+    return items + _unavailable(conn, ticks[0])
+
+
+def _unavailable(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
+    """The `canopy_unavailable` item, while the latest ended tick closed so (DESIGN §6 step 5).
+
+    That tick ran no overseer, so it leaves the list standing as a failed tick does, and adds this one item: the cause
+    is canopy's own, and the operator hears of it at once rather than after `loop.failing`'s streak. It is gone at the
+    first tick that ends otherwise.
+
+    Returns:
+        The item, open since the first tick of the streak after `last_ok`, or nothing.
+    """
+    latest = conn.execute("SELECT status FROM ticks WHERE status != 'running' ORDER BY id DESC LIMIT 1").fetchone()
+    if latest is None or latest[0] != UNAVAILABLE:
+        return []
+    rows = conn.execute(
+        "SELECT rationale, created_at FROM decisions WHERE action = ? AND tick_id > ? ORDER BY id",
+        (f"{ACTION_PREFIX}{UNAVAILABLE}", last_ok or 0),
+    ).fetchall()
+    if not rows:
+        return []
+    return [Item(None, UNAVAILABLE, str(rows[-1]["rationale"]), str(rows[0]["created_at"]))]
 
 
 def listed(ctx: Context) -> list[Item]:
