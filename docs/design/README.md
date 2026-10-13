@@ -166,6 +166,7 @@ canopy (harness, Python)
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
                    request
     views.py       journal rows as the API's models: attention items, runs, tickets, messages, search hits
+    reviews.py     review runs as the API's models: each one's findings anchored on its diff (§21)
     live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
@@ -173,6 +174,7 @@ canopy (harness, Python)
     options.py     ServeOptions: loopback or private host, port, base path, mock data
     server.py      the server's thread for canopy loop: uvicorn without signal handlers, restarted with a backoff
     mock.py        a journal seeded from fixtures, and the changes its stream shows
+    mock_reviews.py the mock journal's review runs and the diffs beside their logs
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/

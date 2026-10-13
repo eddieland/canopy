@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from canopy.core import config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
 from canopy.infra import logs, resources
+from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend
 
 if TYPE_CHECKING:
@@ -215,6 +216,7 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+            mock_reviews.seed(ctx.conn, ws.state_dir, at)
     _transcripts(ws.state_dir)
     return backend
 

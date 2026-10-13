@@ -820,6 +820,11 @@ def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM review_runs WHERE pr_url = ? ORDER BY id DESC", (pr_url,)).fetchall()
 
 
+def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` review runs, newest first."""
+    return conn.execute("SELECT * FROM review_runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+
+
 def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
     """Return the review runs started at or after `since`, newest first."""
     return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
