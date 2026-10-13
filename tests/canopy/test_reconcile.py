@@ -27,7 +27,7 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps([["canopy", *c] for c in commands]))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 def lease(treehouse_state: Path, key: str) -> dict[str, str]:

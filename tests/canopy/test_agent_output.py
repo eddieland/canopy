@@ -25,7 +25,7 @@ def step(cost: object = 0.25, tokens: object = TOKENS) -> str:
 
 def test_plain_text_is_read_as_it_is() -> None:
     stdout = f"chatter\n{RESULT}\n"
-    assert agent_output.read(stdout) == AgentOutput(stdout)
+    assert agent_output.read(stdout) == AgentOutput(stdout, stdout)  # plain text is one message
 
 
 def test_events_give_the_text_the_session_and_the_cost() -> None:
@@ -40,6 +40,7 @@ def test_events_give_the_text_the_session_and_the_cost() -> None:
     ]
     output = agent_output.read("\n".join(lines))
     assert output.text == f"Working on it.\nStill working.\n{RESULT}"
+    assert output.last == RESULT
     assert output.session_id == "ses_abc123"
     assert output.usage == Usage(1.25, input=200, output=40, reasoning=6, cache_read=800, cache_write=100)
     assert output.usage is not None
@@ -54,7 +55,7 @@ def test_a_result_line_is_not_an_event() -> None:
 def test_events_with_no_model_call_cost_nothing() -> None:
     error = json.dumps({"type": "error", "timestamp": 1, "sessionID": "ses_abc123", "error": {"name": "UnknownError"}})
     output = agent_output.read(error)
-    assert (output.text, output.session_id) == ("", "ses_abc123")
+    assert (output.text, output.last, output.session_id) == ("", "", "ses_abc123")
     assert output.usage == Usage(0, 0, 0, 0, 0, 0)
 
 
