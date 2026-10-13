@@ -38,7 +38,7 @@ function RunsPage() {
     const order = useListOrder('runs')
     return (
         <>
-            <PageHeader label="Workers" title="Runs">
+            <PageHeader title="Runs">
                 Each ticket's latest run, running ones first, then the ones that ended last: what it worked on, what it
                 said, and what it cost. A ticket's earlier runs open under it.
             </PageHeader>

@@ -21,7 +21,7 @@ function ChoresPage() {
     const { data } = useQuery(choresQuery)
     return (
         <>
-            <PageHeader label="Recurring" title="Chores">
+            <PageHeader title="Chores">
                 Each configured chore, as <code className="font-mono text-xs">canopy status</code> lists it. The
                 overseer decides when one runs; a note tells its next runs what to leave out or look at.
             </PageHeader>

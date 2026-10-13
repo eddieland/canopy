@@ -9,7 +9,7 @@ An operations inbox: a control room's at-a-glance state, kept calm enough to rea
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take; what is selected in a page sits on its tint. Each section of
 the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
-label over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
+trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
 decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
 color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
@@ -30,7 +30,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `border` | Every hairline. Applied by default to `border`, so `border-b` needs no color. |
 | `foreground` | Primary text. |
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
-| `accent`, `accent-foreground` | The one accent: active nav item, page labels, links, primary buttons, focus, live. |
+| `accent`, `accent-foreground` | The one accent: active nav item, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `status-running` | A run working. Pulses. |
@@ -58,8 +58,8 @@ Rules:
   claims it.
 - **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Reviews fuchsia,
   Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go
-  on the nav's icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data:
-  there a color is a state's. A page in no section (the 404) takes the accent.
+  on the nav's icons and highlight, the first step of the page header's trail, and the header's aurora, and nowhere
+  in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -125,7 +125,14 @@ Rules:
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
-  The page header's label is in its section's color; a panel's stays in `muted-foreground`.
+  The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
+- **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
+  section's name in its color, then the pages between it and this one. On the section's own list the name is plain
+  text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
+  section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
+  (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
+  repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
+  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
