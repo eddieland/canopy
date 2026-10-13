@@ -1,4 +1,4 @@
-"""Fixtures for tests of workspaces of several repositories (DESIGN §18)."""
+"""Fixtures for tests of workspaces of several repositories (DESIGN §18), and a pool of worktrees."""
 
 import json
 import os
@@ -10,7 +10,7 @@ import pytest
 
 from canopy.core import config, db
 from canopy.infra import resources
-from tests.conftest import CanopyEnv, git
+from tests.conftest import CanopyEnv, GitPool, git, pool_state
 
 
 def map_text(*repos: tuple[str, str], extra: str = "") -> str:
@@ -92,3 +92,18 @@ def seed_pools(ws: Ws, treehouse_state: Path) -> None:
 def th(treehouse_state: Path) -> dict[str, list[object]]:
     state: dict[str, list[object]] = json.loads(treehouse_state.read_text())
     return state
+
+
+@pytest.fixture
+def worktree_pool(
+    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
+) -> tuple[Path, list[Path]]:
+    """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
+    primary = tmp_path / "primary"
+    git("clone", "--quiet", str(git_pool.origin), str(primary), cwd=tmp_path)
+    slots = [tmp_path / "wpool" / name / "repo" for name in ("1", "2")]
+    for slot in slots:
+        git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
+    state = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
+    treehouse_state.write_text(pool_state(canopy_env.repo, state, max_trees=len(slots)))
+    return primary, slots

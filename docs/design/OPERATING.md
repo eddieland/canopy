@@ -417,7 +417,8 @@ never notified twice, and an item that returns after going away is new again.
 
 ## 15. Failure handling
 
-- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; every slot returned and a
+- Worker crash: detected by pid liveness in reconcile; what is left of the worker is killed; every slot tidied as
+  `_run`'s step 6 tidies it (§8), from the `.git` link `_run` recorded, and returned; the run's object directory and a
   joint run's desk removed; ticket goes to attention with `crashed`. Not auto-redispatched: the harness never restarts
   a run, and the overseer prompt waits for an authorized reply (§14). Every kind has an attempt limit in code, so an
   overseer that redispatches anyway stops at `policy.max_<kind>_attempts` (D030).

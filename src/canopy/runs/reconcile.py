@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, definitions, treehouse
 from canopy.infra import logs, procs
-from canopy.runs import desks
+from canopy.runs import desks, dispatch, tidy
 
 if TYPE_CHECKING:
     import sqlite3
@@ -86,10 +86,13 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
 
 
 def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.TickAdapter) -> set[str]:
-    """Close a run whose `_run` is gone, or was killed, as `status`: stop its worker, return its slots, remove its desk.
+    """Close a run whose `_run` is gone, or was killed, as `status`: stop its worker, tidy and return its slots.
 
-    Reconcile closes a crashed run this way, and `canopy stop --now` a stopped one (DESIGN §22). Returns the lease ids
-    returned.
+    Its desk and its object directory are removed too. Reconcile closes a crashed run this way, and `canopy stop --now`
+    a stopped one (DESIGN §22). Each slot is tidied as `_run` would have (DESIGN §8): its `.git` file checked against
+    what `_run` recorded, and the slot moved off the run's own objects. One that cannot be tidied is not returned, and
+    the object directory is kept. Returns the lease ids it dealt with, returned or kept, which reconcile then leaves
+    alone.
 
     Raises:
         treehouse.TreehouseError: a slot could not be returned.
@@ -109,7 +112,24 @@ def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.Ti
         log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
     conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"harness": note}))
     outcomes: list[str] = []
+    objects = tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
+    tidied = True
     for slot in slots:
+        where = {**fields, "slot": slot["slot_path"], "repo": slot["repo"]}
+        link = slot["git_link"]
+        if not tidy.tidy(
+            ctx.runner,
+            Path(slot["slot_path"]),
+            link=bytes(link) if link is not None else None,
+            base=str(slot["base_branch"]),
+            objects=objects,
+            log=log,
+            fields=where,
+        ):
+            tidied = False
+            returned.add(str(slot["lease_id"]))  # kept for the operator: not returned as a stale lease either
+            outcomes.append("kept")
+            continue
         outcome = treehouse.return_slot(
             ctx.runner,
             Path(slot["slot_path"]),
@@ -119,6 +139,8 @@ def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.Ti
         )
         returned.add(str(slot["lease_id"]))
         outcomes.append(outcome.value)
+    if tidied:
+        tidy.remove_objects(objects, log)
     if len(slots) > 1:
         desks.remove(desks.path(ctx.workspace.root, str(run["ticket_key"])))
     log.warning("run closed without its `_run`", extra={**fields, "status": status, "note": note, "returned": outcomes})
