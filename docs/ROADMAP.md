@@ -838,8 +838,12 @@ tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
 before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
 that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). Next: the wrapper, the policy template, `docs/SANDBOX.md`, the canary, and TRUST_MODEL T4
-and T6.
+back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `examples/sandbox/`, tested
+against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
+included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
+`allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
+denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
+§6). Next: `docs/SANDBOX.md`, the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 

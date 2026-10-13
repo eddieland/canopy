@@ -1,0 +1,45 @@
+{
+  "#": [
+    "canopy-sandbox's template for chore commands: runtime.chore_cmd and a chore's own cmd (HOST_ISOLATION §4.2).",
+    "Copy it to ~/.config/canopy/sandbox/chore.json, then fill in your hosts. Keys starting with # are comments;",
+    "@NAME@ strings are the paths canopy-sandbox fills in for each run."
+  ],
+  "network": {
+    "#": [
+      "Everything not listed is refused. Add your model provider's API host and the MCP services your chores read",
+      "from."
+    ],
+    "allowedDomains": [
+      "api.anthropic.com",
+      "api.github.com",
+      "api.githubcopilot.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "#": [
+      "A chore's cwd, by default <workspace>/.canopy/chores/<name>/, is readable and not writable: a chore's only",
+      "output is its result line. For a chore whose own tooling writes there, add @CWD@ to allowWrite. If your",
+      "workspace is outside HOME, add it to denyRead."
+    ],
+    "denyRead": ["~"],
+    "allowRead": [
+      "@CWD@",
+      "@TMPDIR@",
+      "@READ@",
+      "~/.config/opencode",
+      "~/.local/share/opencode",
+      "~/.local/state/opencode",
+      "~/.cache/opencode",
+      "~/.opencode",
+      "~/.local/bin"
+    ],
+    "allowWrite": [
+      "@TMPDIR@",
+      "~/.local/share/opencode",
+      "~/.local/state/opencode",
+      "~/.cache/opencode"
+    ],
+    "denyWrite": []
+  }
+}

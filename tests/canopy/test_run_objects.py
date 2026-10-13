@@ -2,7 +2,7 @@
 
 A sandboxed worker cannot write the git directory its slot shares, so its new objects go to the run's own directory,
 which a sandbox wrapper names to git. These tests play that wrapper in the fake worker's commands: they set git's
-variables from `CANOPY_GIT_OBJECTS`, as `examples/sandbox/canopy-sandbox` will.
+variables from `CANOPY_GIT_OBJECTS`, as `examples/sandbox/canopy-sandbox` does (`test_sandbox_wrapper.py`).
 """
 
 import os
