@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -288,40 +289,39 @@ def test_churn_is_a_change_with_nothing_new_to_see(canopy_env: CanopyEnv, case: 
     assert churn_of(context(canopy_env), case) == lines
 
 
-def test_a_gate_that_opened_since_the_previous_tick_is_something_new(
-    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_gate_that_opened_since_the_previous_tick_is_something_new(canopy_env: CanopyEnv) -> None:
     # A gate (a fix-ci cooldown's end, a chore's due time) half way between the two ticks' reads.
     def gate(_ctx: Context, now: datetime) -> datetime:
         return now + BACK / 2
 
-    monkeypatch.setattr(pacing, "gate", gate)
-    assert churn_of(context(canopy_env), Case(setup=seen_ticket, during=RELABELLED)) == []
+    with mock.patch.object(pacing, "gate", autospec=True, side_effect=gate):
+        assert churn_of(context(canopy_env), Case(setup=seen_ticket, during=RELABELLED)) == []
 
 
 def test_the_loop_waits_line_says_what_a_tick_churned(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     ctx = context(canopy_env)
-    overseer_does(monkeypatch, canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running"))
     time = FakeTime()
-
-    def relabel_at_the_first_wait() -> None:
-        if len(time.slept) == 1:
-            overseer_does(monkeypatch, canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red"))
-
-    time.on_sleep = relabel_at_the_first_wait
     term, _ = console()
-    repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=15,
-        max_ticks=3,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")))
+
+        def relabel_at_the_first_wait() -> None:
+            if len(time.slept) == 1:
+                stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")))
+
+        time.on_sleep = relabel_at_the_first_wait
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=3,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
 
     # The first tick sees the ticket first; the second relabels it with nothing new to see; the third leaves it.
     assert [line["churn"] for line in log_lines(canopy_env, "loop waits")] == [
