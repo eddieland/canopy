@@ -18,7 +18,7 @@
     html {
         /* Inherited, so every scroller (the page, a panel's list, a textarea) has the same thumb in both themes. */
         scrollbar-color: var(--scrollbar) transparent;
-        /* On the root, so it paints the whole canvas, the reserved gutter included. */
+        /* On the root, so it paints the whole canvas. */
         background-color: var(--background);
         -webkit-font-smoothing: antialiased;
         /*
