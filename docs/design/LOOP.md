@@ -61,12 +61,12 @@ in order:
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
-   `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The session id and cost
-   the runtime reported (§13) go on the `ticks` row, whether or not the run succeeded. The run succeeded if it
-   exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
-   `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
-   closes the tick as `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise
-   every item.
+   `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
+   the journal. The session id and cost the runtime reported (§13) go on the `ticks` row, whether or not the run
+   succeeded. The run succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`;
+   otherwise the tick closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
+   (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention list standing,
+   so an outage does not resolve and re-raise every item.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch

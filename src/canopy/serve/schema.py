@@ -387,7 +387,7 @@ class TickDetail(_Model):
     # In the order they were recorded.
     decisions: list[Decision]
     # Where the overseer's stdout and stderr are, from the workspace root, if the file exists. Its session's events are
-    # served as the tick's transcript (DESIGN §22); the file itself is not.
+    # served as the tick's transcript, and its end as the tick's output (DESIGN §22).
     output_path: str | None = None
 
 
@@ -457,6 +457,21 @@ class Transcript(_Model):
     entries: list[TranscriptEntry] = []
     truncated: bool = False
     unreadable: int = 0
+
+
+class TickOutput(_Model):
+    """The end of a tick's overseer output as written: its stdout, a `--- stderr ---` line, its stderr (DESIGN §22).
+
+    Agent output: untrusted, rendered as text, its control characters dropped. `truncated` says the file holds more
+    than its last `text`, which starts at a whole line; `size` is the whole file's, in bytes.
+    """
+
+    # `read`: the file was read. `no_output`: it is missing (none kept, or the tick is still running), a symlink, or
+    # not a regular file.
+    status: Literal["read", "no_output"]
+    text: str = ""
+    size: int = 0
+    truncated: bool = False
 
 
 class LastTick(_Model):

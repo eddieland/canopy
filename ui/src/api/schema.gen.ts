@@ -446,6 +446,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/ticks/{tick_id}/output": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tick Output */
+        get: operations["getTickOutput"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ticks/{tick_id}/transcript": {
         parameters: {
             query?: never;
@@ -1320,6 +1337,35 @@ export type components = {
              * @enum {string}
              */
             type: "tickets.updated";
+        };
+        /**
+         * TickOutput
+         * @description The end of a tick's overseer output as written: its stdout, a `--- stderr ---` line, its stderr (DESIGN §22).
+         *
+         *     Agent output: untrusted, rendered as text, its control characters dropped. `truncated` says the file holds more
+         *     than its last `text`, which starts at a whole line; `size` is the whole file's, in bytes.
+         */
+        TickOutput: {
+            /**
+             * Size
+             * @default 0
+             */
+            size: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "read" | "no_output";
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * TickUpdated
@@ -2323,6 +2369,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickDetail"];
+                };
+            };
+            /** @description No such tick. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTickOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tick_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickOutput"];
                 };
             };
             /** @description No such tick. */

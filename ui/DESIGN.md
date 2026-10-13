@@ -253,6 +253,10 @@ tabs.
   all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
   overseer's under its decisions.
+- **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
+  line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
+  wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
+  at its end, where stderr is; the file's size is in the header, and a cut says so above the block.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.

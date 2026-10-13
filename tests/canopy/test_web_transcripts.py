@@ -124,3 +124,19 @@ def test_a_ticks_transcript_is_its_overseers_session(backend: Backend) -> None:
     assert c.get("/api/ticks/1/transcript").json()["status"] == "no_log"
     missing = c.get("/api/ticks/99/transcript")
     assert (missing.status_code, missing.json()["detail"]) == (404, "no tick 99")
+
+
+def test_a_ticks_output_is_the_end_of_its_file_as_written_stderr_included(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/ticks/2/output").json()
+    with backend.open() as ctx:
+        written = (ctx.state_dir / "ticks" / "2.log").read_text()
+    assert found == {"status": "read", "text": written, "size": len(written.encode()), "truncated": False}
+    # What the transcript leaves out: the runtime's own lines on stderr.
+    assert "--- stderr ---\nINFO  " in found["text"]
+    assert "WARN  " not in json.dumps(c.get("/api/ticks/2/transcript").json())
+    # Tick 1 kept no output; no such tick is a 404.
+    assert c.get("/api/ticks/1/output").json() == {"status": "no_output", "text": "", "size": 0, "truncated": False}
+    missing = c.get("/api/ticks/99/output")
+    assert (missing.status_code, missing.json()["detail"]) == (404, "no tick 99")
+    assert c.get("/api/ticks/0/output").status_code == 422

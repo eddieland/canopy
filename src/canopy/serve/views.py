@@ -38,6 +38,7 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
+    TickOutput,
     Transcript,
     TranscriptEntry,
     TranscriptError,
@@ -179,6 +180,16 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     if row is None:
         return None
     return session_transcript(tick_output(ctx, tick_id), row["session_id"])
+
+
+def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
+    """The end of a tick's output as written, or None if there is no such tick."""
+    if db.get_tick(ctx.conn, tick_id) is None:
+        return None
+    found = transcript.tail(tick_output(ctx, tick_id))
+    if found is None:
+        return TickOutput(status="no_output")
+    return TickOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:

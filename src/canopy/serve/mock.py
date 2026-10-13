@@ -618,6 +618,11 @@ _SEARCH_BOX = """\
 6\t}
 """
 
+_TICK_STDERR = """\
+INFO  2026-10-08T11:00:00 +210ms service=default version=1.19.0 args=["run","--format","json"] opencode
+WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 1000ms listing prompts
+"""
+
 
 def _transcripts(state_dir: Path) -> None:
     """Write the events of run 39's, run 40's, and tick 2's sessions where the loop would have written them."""
@@ -751,5 +756,6 @@ def _transcripts(state_dir: Path) -> None:
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
         else:
-            text = f"{stdout}\n--- stderr ---\n"
+            # What OpenCode printed on stderr, which only the tick's output shows.
+            text = f"{stdout}\n--- stderr ---\n{_TICK_STDERR}"
         logs.write_private(state_dir / directory / f"{name}.log", text)
