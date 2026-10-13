@@ -77,6 +77,20 @@ export type SearchResults = Schemas['SearchResults']
 export type SearchHit = Schemas['SearchHit']
 /** Where a search hit is (DESIGN §22, Search), in the order the search reads them. */
 export type SearchSource = Schemas['SearchSource']
+/** One review run of a PR at a commit (DESIGN §21): canopy's own review, never on the PR (D114). */
+export type ReviewSummary = Schemas['ReviewSummary']
+/** One review run in full: its summary, findings anchored on its diff, the diff, and the PR's other runs. */
+export type ReviewDetail = Schemas['ReviewDetail']
+/** One finding, with the file and new-side line it falls on in the diff, when the diff shows them. */
+export type ReviewFinding = Schemas['ReviewFinding']
+/** How much a finding holds the merge: `blocking`, `major`, or `minor`. */
+export type FindingSeverity = Schemas['FindingSeverity']
+/** The reviewed commit's diff: the PR's own text, untrusted and bounded. */
+export type ReviewDiff = Schemas['ReviewDiff']
+/** One file the reviewed commit changes, with its hunks. */
+export type DiffFile = Schemas['DiffFile']
+/** One line of a hunk, with its number on each side it is on. */
+export type DiffLine = Schemas['DiffLine']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

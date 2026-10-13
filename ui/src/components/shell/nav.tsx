@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import {
     Activity,
     CalendarClock,
+    FileSearch,
     FolderTree,
     History,
     Inbox,
@@ -22,6 +23,7 @@ const ITEMS: { to: Section; label: string; icon: LucideIcon }[] = [
     { to: '/runs', label: 'Runs', icon: Activity },
     { to: '/worktrees', label: 'Worktrees', icon: FolderTree },
     { to: '/tickets', label: 'Tickets', icon: MessagesSquare },
+    { to: '/reviews', label: 'Reviews', icon: FileSearch },
     { to: '/chores', label: 'Chores', icon: CalendarClock },
     { to: '/ticks', label: 'Ticks', icon: History },
     { to: '/settings', label: 'Settings', icon: SlidersHorizontal },
@@ -30,8 +32,8 @@ const ITEMS: { to: Section; label: string; icon: LucideIcon }[] = [
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
- * ticket's page keeps Tickets active, a chore's Chores, and a tick's Ticks. Attention shows how many items it lists, on
- * every page, split as its counter splits them.
+ * ticket's page keeps Tickets active, a review's Reviews, a chore's Chores, and a tick's Ticks. Attention shows how
+ * many items it lists, on every page, split as its counter splits them.
  */
 export function Nav() {
     const attention = useQuery(attentionQuery)

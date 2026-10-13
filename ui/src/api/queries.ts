@@ -26,6 +26,9 @@ export const keys = {
     spend: ['spend'] as const,
     tick: ['tick'] as const,
     search: (q: string) => ['search', q] as const,
+    // The reviews list and each review's page share a prefix, so one invalidation marks both stale.
+    reviews: ['reviews'] as const,
+    review: (id: number) => ['reviews', id] as const,
     loop: ['loop'] as const,
 }
 
@@ -182,5 +185,21 @@ export function searchQuery(q: string) {
         queryKey: keys.search(q),
         queryFn: async ({ signal }) => unwrap(await api.GET('/api/search', { params: { query: { q } }, signal })),
         placeholderData: keepPreviousData,
+    })
+}
+
+/** canopy's latest review runs, newest first. Marked stale with the ticks: a review ends between two of them. */
+export const reviewsQuery = queryOptions({
+    queryKey: keys.reviews,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/reviews', { signal })),
+})
+
+/** One review run in full: its findings, and the diff they sit on, read back from beside its log on every fetch. */
+export function reviewQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.review(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reviews/{run_id}', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
     })
 }

@@ -79,7 +79,8 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
 ## Daily surface
 
 Leave `canopy loop` running (tmux works) and work from the web UI it serves at `http://127.0.0.1:8765/`: the attention
-list, runs, worktrees, every ticket's conversation, and your chores, with a search box (`/`) over the whole journal.
+list, runs, worktrees, every ticket's conversation, canopy's reviews with their findings on the diff, and your chores,
+with a search box (`/`) over the whole journal.
 Label tickets with your queue label, answer the agents' questions on the ticket, and review their PRs. Humans approve
 and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR on their own;
 anyone else's comments wait on the attention list as `untrusted_review` until you reply.
