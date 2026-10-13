@@ -179,9 +179,8 @@ function PullRequestOut({ url }: { url: string }) {
                 className="max-w-full gap-1.5 font-mono text-xs font-normal text-accent"
             >
                 <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
-                    <GitPullRequest aria-hidden />
+                    <LinkOutIcon href={url} icon={GitPullRequest} className="size-4" />
                     <span className="truncate">{url.replace(/^https:\/\//u, '')}</span>
-                    <LinkOutIcon href={url} />
                 </a>
             </Button>
         </nav>

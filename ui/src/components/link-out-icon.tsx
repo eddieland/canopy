@@ -1,4 +1,5 @@
 import { ExternalLink } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 import { onGitHub } from '@/lib/links'
 import { cn } from '@/lib/utils'
@@ -14,12 +15,23 @@ const GITHUB_MARK = [
 ].join(' ')
 
 /**
- * The icon that ends a link out: GitHub's mark when it goes to github.com, so a PR or branch reads as GitHub's at a
- * glance, and `ExternalLink` anywhere else.
+ * The one icon a link out wears: GitHub's mark when it goes to github.com, so a PR or branch reads as GitHub's at a
+ * glance, and `icon` anywhere else, `ExternalLink` unless the link says what it opens.
  */
-export function LinkOutIcon({ href, className }: { href: string; className?: string }) {
+export function LinkOutIcon({
+    href,
+    icon: Icon = ExternalLink,
+    className,
+}: {
+    /** Where the link goes. */
+    href: string
+    /** The icon for a link off GitHub. */
+    icon?: LucideIcon
+    /** Classes for the icon, over its default `size-3`. */
+    className?: string
+}) {
     if (!onGitHub(href)) {
-        return <ExternalLink aria-hidden className={cn('size-3', className)} />
+        return <Icon aria-hidden className={cn('size-3', className)} />
     }
     // Lucide no longer ships brand icons; the mark is bundled, so nothing loads from GitHub.
     return (
