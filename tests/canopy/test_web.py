@@ -13,14 +13,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db
+from canopy.core import config, conversation, db, pause
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.loop import repeat, web
-from canopy.serve import secret, views
+from canopy.serve import live, secret, views
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
+from canopy.serve.schema import LoopUpdated
 from tests.canopy.test_loop import FakeTime, console, context, overseer_does
 from tests.conftest import CanopyEnv, user_toml
 
@@ -171,6 +172,71 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     assert (ticket["branch"], ticket["phase"], ticket["forgotten_run_id"]) == (None, None, run_id)
     assert db.units(ctx.conn, KEY) == []
     assert db.get_run(ctx.conn, run_id) is not None
+
+
+def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_do(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    assert c.get("/api/loop").json() == {"paused": None}
+    # A write without the session's token is refused, as every other write is.
+    assert c.post("/api/loop/pause", headers={"origin": ORIGIN}).status_code == 403
+    assert pause.paused(ctx.conn) is None
+
+    paused = c.post("/api/loop/pause", headers=headers).json()
+    assert paused["already"] is False
+    assert paused["loop"]["paused"]["channel"] == "web"
+    held = pause.paused(ctx.conn)
+    assert held is not None
+    assert held.channel == "web"
+    again = c.post("/api/loop/pause", headers=headers).json()
+    assert again == {**paused, "already": True}
+    assert c.get("/api/loop").json() == paused["loop"]
+
+    assert c.post("/api/loop/resume", headers=headers).json() == {"already": False, "loop": {"paused": None}}
+    assert pause.paused(ctx.conn) is None
+    assert c.post("/api/loop/resume", headers=headers).json()["already"] is True
+
+
+def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
+    backend = web.backend(ctx)
+    sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+    first = [e.root for e in sent.changes(backend, ctx)]
+    assert LoopUpdated(paused=None) in first
+    assert sent.changes(backend, ctx) == []
+    pause.pause(ctx.conn, channel="cli")
+    [event] = [e.root for e in sent.changes(backend, ctx)]
+    assert isinstance(event, LoopUpdated)
+    assert event.paused is not None
+    assert event.paused.channel == "cli"
+
+
+def test_a_web_pause_holds_the_loops_wait_until_the_web_resumes_it(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    c, headers = signed_in_client(ctx)
+    overseer_does(monkeypatch)
+    time_ = FakeTime()
+
+    def browser() -> None:
+        if len(time_.slept) == 1:
+            assert c.post("/api/loop/pause", headers=headers).status_code == 200
+        elif len(time_.slept) == 300:  # 150 seconds in, past the one-minute wait's deadline
+            assert c.post("/api/loop/resume", headers=headers).status_code == 200
+
+    time_.on_sleep = browser
+    statuses = repeat.run(
+        ctx,
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=console()[0],
+        stop=repeat.Stop(),
+        sleep=time_.sleep,
+        clock=time_.clock,
+    )
+    assert statuses == {"ok": 2}
+    assert sum(time_.slept) == 150
 
 
 def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:

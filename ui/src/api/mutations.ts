@@ -2,12 +2,12 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 import { keys } from './queries'
-import type { Forgot, Replied, Session, Started, Stopped } from './types'
+import type { Forgot, LoopState, PauseChanged, Replied, Session, Started, Stopped } from './types'
 
 /**
- * The operator's actions: sign in and out, the CLI's verbs on a ticket, and a note to a chore. Each goes through the
- * same function on the server as `canopy start`, `stop`, `reply`, and `forget`, with the same guards; a refusal is an
- * ApiError naming its guard.
+ * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, and pausing the loop. Each
+ * goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`, `pause`, and `resume`,
+ * with the same guards; a refusal is an ApiError naming its guard.
  */
 
 export async function signIn(secret: string): Promise<Session> {
@@ -42,6 +42,21 @@ export async function replyChore(name: string, body: string, submission: string)
     return unwrap(
         await api.POST('/api/chores/{name}/replies', { params: { path: { name } }, body: { body, submission } }),
     )
+}
+
+/** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
+export async function pauseLoop(): Promise<PauseChanged> {
+    return unwrap(await api.POST('/api/loop/pause'))
+}
+
+/** `canopy resume`: the loop ticks when its wait runs out, at once if it already has. */
+export async function resumeLoop(): Promise<PauseChanged> {
+    return unwrap(await api.POST('/api/loop/resume'))
+}
+
+/** After a pause or a resume: show the state it left now, rather than wait for the stream. */
+export function showLoop(client: QueryClient, loop: LoopState): void {
+    client.setQueryData(keys.loop, loop)
 }
 
 /** After a note to a chore: read it again now, rather than wait for the stream. */

@@ -54,6 +54,16 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
     })
 
+    it('writes the pause whole, and lifts it', () => {
+        const client = new QueryClient()
+        const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
+
+        applyStreamEvent(client, { type: 'loop.updated', paused })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused })
+        applyStreamEvent(client, { type: 'loop.updated', paused: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused: null })
+    })
+
     it('marks the ticks and the tickets stale when the latest tick changes', () => {
         const client = new QueryClient()
         client.setQueryData(keys.ticks, [])
@@ -165,6 +175,14 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent(tick)).toEqual({ type: 'tick.updated', tick: null, acknowledged: 7 })
         expect(parseStreamEvent('{"type":"tick.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"tick.updated","tick":null,"acknowledged":"7"}')).toBeNull()
+        const paused = { type: 'loop.updated', paused: { since: '2026-10-08T11:50:00Z', channel: 'web' } }
+        expect(parseStreamEvent(JSON.stringify(paused))).toEqual(paused)
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toEqual({
+            type: 'loop.updated',
+            paused: null,
+        })
+        expect(parseStreamEvent('{"type":"loop.updated"}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":"yes"}')).toBeNull()
         expect(parseStreamEvent('null')).toBeNull()
     })
 })

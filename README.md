@@ -75,8 +75,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
-  attention list. Press `t` while it waits to tick now. `canopy loop --defer 30` starts it waiting: the first tick runs
-  in 30 minutes, or when you press `t`.
+  attention list. Press `t` while it waits to tick now, and `p` to pause it: no tick starts until you press `p` again,
+  run `canopy resume`, or resume it in the web UI's header; `canopy pause` pauses it from another shell. Workers
+  already running keep going. `canopy loop --defer 30` starts it waiting: the first tick runs in 30 minutes, or when
+  you press `t`.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
   every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
   finding with a note. Sign in once per browser with the
