@@ -45,6 +45,7 @@ def state_block(
     private: Mapping[str, dict[str, object]] | None = None,
     operator: Mapping[str, dict[str, object]] | None = None,
     mirror_delimiter: str,
+    attention: list[dict[str, object]] | None = None,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
@@ -57,6 +58,8 @@ def state_block(
     (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages newer than
     its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `mirror_delimiter` ends
     the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
+    `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one out
+    drops (ROADMAP M28).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -181,6 +184,8 @@ def state_block(
     # With reviews off, nothing about them reaches the overseer (DESIGN §21).
     if reviews is not None:
         state["reviews"] = reviews
+    # What the overseer keeps on the attention list by recording it again: leaving one out resolves it (§14).
+    state["attention"] = attention or []
     # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
     # (DESIGN §6).
     state.update(

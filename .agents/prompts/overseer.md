@@ -100,7 +100,7 @@ Re-read the tracker and GitHub before every decision that matters.
 3. Decide exactly one action per ticket, except one in `stopped`. Record every decision with
    `canopy decide`, including waits and skips, with a one-sentence rationale.
    Dispatches and attention items also count as decisions; the CLI records
-   them.
+   them. Record again every item in the state block's `attention` whose cause still holds (see "The attention list").
 4. Dispatch in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
    waiting; an operator's go-ahead on untrusted review feedback is `human_replied`), then `conflicted` and `ci_red`,
    then `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a blocker before the tickets it blocks, and never
@@ -114,6 +114,23 @@ If the tracker or GitHub MCP is unavailable or returns errors, record one `decid
 `mcp_unavailable: <which>`, and end as step 6 says. Do not decide on partial data. If the tracker works but cannot do
 something you need (find tickets, read labels, read comment authors), record `skip` with rationale
 `tracker_unsupported: <what>` and end as step 6 says.
+
+## The attention list
+
+The state block's `attention` lists the items open now that you recorded: each one's ticket (or `pr`, for a PR with no
+ticket), repository, reason, and since when. An item stays on the list only while every tick records it again, so
+leaving one out tells the operator its cause is gone, and notifies them so; recording it a tick later notifies them
+again as new.
+
+- For each listed item about a ticket you read this tick, record it again with the same reason and repository unless
+  you saw this tick that its cause is gone: the PR merged or closed, the reviewer approved, a human answered the
+  comment, the ticket left the queue. When you drop one, the ticket's decision rationale says what ended it.
+- Do not drop an item because nothing about it is new. A cursor that has not moved means nothing changed, not that
+  the cause went away: a PR waiting on a reviewer (`needs_reviewer`) still waits until someone reviews it.
+- When you cannot read what raised an item this tick (its PR, its comments), the tick is on partial data: end it with
+  the tick-wide `mcp_unavailable` skip below rather than recording a list without it.
+- The harness re-raises its own items (run failures, `awaiting_reply`, `repo_missing`, chores'); they are not in
+  `attention`, and you never record them.
 
 ## Phase table
 
