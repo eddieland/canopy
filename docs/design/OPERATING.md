@@ -105,7 +105,7 @@ to do instead.
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
-| `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whom the operator's commits credit (§8) |
+| `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whether and whom the operator's commits credit (§8) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
@@ -174,6 +174,7 @@ authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, .
 trusted_reviewers = ["github-login", "canopy:review"]   # whose PR feedback a worker addresses unasked (§7)
 comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
 comment_suffix = ""          # and ends with this, if set
+commit_trailer = true                            # a worker adds this trailer when the runtime adds none (§8)
 commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
 commit_trailer_email = "noreply@canopy.invalid"  # at this address
 
@@ -210,7 +211,10 @@ characters, with a letter or digit, no backtick or angle bracket, and no surroun
 characters, with one `@` and no whitespace, backtick, or angle bracket. They are user-only because the commits are the
 operator's: a shared file must not credit agent work to a person. Set them to name agent work the way the team's
 tooling expects, such as a team's bot address, and never to a person: the trailer is how a reader tells the work is
-an agent's.
+an agent's. `trust.commit_trailer = false` turns the trailer off, for a runtime whose own attribution suffices or a
+team whose tooling rejects it: a worker still keeps the runtime's trailer, but adds none of its own, so with a runtime
+that adds none the commits carry no trailer, and only the branch prefix and the PR mark the work. It is user-only for
+the same reason.
 
 Rules:
 

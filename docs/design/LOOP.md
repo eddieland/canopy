@@ -513,10 +513,13 @@ dispatch names at least one, in a workspace of one repository too.
      cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
      worker without it would work as if the operator had never written it. It is the operator's own text, an
      instruction like their messages, and the prompt's obligations come before it.
-   - Every `implement`, `fix-ci`, and `resume` prompt carries `{{COMMIT_TRAILER}}`, the trailer rendered from
-     `trust.commit_trailer_name` and `trust.commit_trailer_email` (§12). With either changed from its default, a
-     prompt for those kinds without the placeholder is `bad_prompt`, so an older override cannot keep crediting the
-     default; with both at their defaults, it still renders.
+   - Every `implement`, `fix-ci`, and `resume` prompt carries `{{COMMIT_ATTRIBUTION}}`, the instruction for its
+     commits' attribution: keep the runtime's trailer, or add the one rendered from `trust.commit_trailer_name` and
+     `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off, keep the runtime's and add none.
+     `{{COMMIT_TRAILER}}`, the trailer alone, still renders for older overrides. With the name or address changed
+     from its default, a prompt for those kinds without either placeholder is `bad_prompt`, so an older override
+     cannot keep crediting the default; with the trailer off, one without `{{COMMIT_ATTRIBUTION}}` is, so it cannot
+     keep adding it. With every default kept, it still renders.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
@@ -623,9 +626,10 @@ Worker obligations, stated in every worker prompt:
 - Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
   repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A resume
   that merges its base merges `origin/<base>`, which step 2 fetched, and does not fetch.
-- Keep the runtime's attribution trailer on commits, or add `{{COMMIT_TRAILER}}`: `Co-authored-by: canopy worker
+- Keep the runtime's attribution trailer on commits, or add canopy's: `Co-authored-by: canopy worker
   <noreply@canopy.invalid>` by default, with the name and address from `trust.commit_trailer_name` and
-  `trust.commit_trailer_email` (§12, TRUST_MODEL T5).
+  `trust.commit_trailer_email` (§12, TRUST_MODEL T5). With `trust.commit_trailer` off, add none: the operator chose
+  the runtime's attribution, or none, over canopy's.
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
   default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
 - Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).

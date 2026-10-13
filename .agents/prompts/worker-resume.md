@@ -86,8 +86,8 @@ commit message.
 
 Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, with
 `git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
-merge or approve, never transition the ticket directly or through closing keywords. Keep the agent runtime's attribution
-trailer on commits, or add `{{COMMIT_TRAILER}}`. The tracker is
+merge or approve, never transition the ticket directly or through closing keywords. {{COMMIT_ATTRIBUTION}}
+The tracker is
 {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it before touching the ticket.
 If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in the
 title. {{OPEN_PR}} Then add the label `{{PR_LABEL}}` to it if you have a GitHub tool that sets labels, passing nothing
