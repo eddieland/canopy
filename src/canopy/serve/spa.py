@@ -63,7 +63,12 @@ class SinglePageApp:
         self.base_path = base_path
 
     async def respond(self, request: Request) -> Response:
-        """Answer a GET or HEAD for `{base_path}/{path}`. A Starlette endpoint, so FastAPI injects nothing."""
+        """Answer a GET or HEAD for `{base_path}/{path}`. A Starlette endpoint, so FastAPI injects nothing.
+
+        Returns:
+            A 404 under `api/`, a 503 placeholder page when the UI is not built, the file for an asset or a path with
+            an extension (404 if there is none), and index.html for any other path.
+        """
         path = str(request.path_params.get("path", ""))
         parts = PurePosixPath(path).parts
         if parts[:1] == ("api",):

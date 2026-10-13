@@ -47,7 +47,11 @@ class Pace:
         return self.cap_seconds > self.base_seconds
 
     def after(self, idle_count: int) -> float:
-        """The wait after the `idle_count`-th idle tick in a row, before any gate shortens it."""
+        """The wait after the `idle_count`-th idle tick in a row, before any gate shortens it.
+
+        Returns:
+            Seconds: `base` with pacing off or no idle tick, else `base * 2^idle_count` held between `base` and `cap`.
+        """
         if not self.on or idle_count <= 0:
             return self.base_seconds
         return max(self.base_seconds, min(self.base_seconds * 2**idle_count, self.cap_seconds))
@@ -62,7 +66,11 @@ class Before:
 
 
 def before(ctx: Context) -> Before:
-    """Read the attention list and every ticket's and unit's state, before a tick."""
+    """Read the attention list and every ticket's and unit's state, before a tick.
+
+    Returns:
+        What `idle` compares the journal with after the tick.
+    """
     return Before(attention.listed(ctx), db.tickets_snapshot(ctx.conn))
 
 
@@ -72,6 +80,9 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     It closed `ok`; it decided nothing but waits, skips, attention items, and refusals that lift by themselves; the
     attention list and every ticket and unit are as `seen` before it; and no run started or ended and no operator
     message was recorded after the previous tick read the journal. Without a previous tick that read it, not idle.
+
+    Returns:
+        True if the tick was idle.
     """
     if outcome.status != "ok" or outcome.tick_id is None:
         return False
@@ -100,6 +111,9 @@ def gate(ctx: Context, now: datetime) -> datetime | None:
     """The earliest harness gate still ahead of `now`: a `fix-ci` cooldown's end or a configured chore's `due_at`.
 
     One already open sets none, so a chore the overseer passed over cannot make the loop spin.
+
+    Returns:
+        The time the earliest gate opens, or None if none is still ahead.
     """
     cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, now).values()
     dues = [d for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if (d := s.due_at(now)) is not None]
@@ -107,7 +121,11 @@ def gate(ctx: Context, now: datetime) -> datetime | None:
 
 
 def wait(ctx: Context, pace: Pace, idle_count: int, now: datetime) -> float:
-    """Seconds to wait after a tick ending at `now`: `pace` after `idle_count`, ended sooner by a gate when it is on."""
+    """Seconds to wait after a tick ending at `now`: `pace` after `idle_count`, ended sooner by a gate when it is on.
+
+    Returns:
+        The wait in seconds, at most `pace`'s and no later than the next gate opens when pacing is on.
+    """
     chosen = pace.after(idle_count)
     if not pace.on:
         return chosen
@@ -116,7 +134,11 @@ def wait(ctx: Context, pace: Pace, idle_count: int, now: datetime) -> float:
 
 
 def read_at(ctx: Context, outcome: tick.Outcome) -> str | None:
-    """When the tick read the journal, if it got that far; a run ending after it wakes the wait."""
+    """When the tick read the journal, if it got that far; a run ending after it wakes the wait.
+
+    Returns:
+        The journal's timestamp of the read, or None if the tick recorded none.
+    """
     if outcome.tick_id is None:
         return None
     row = db.get_tick(ctx.conn, outcome.tick_id)

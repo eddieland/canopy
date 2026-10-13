@@ -63,7 +63,12 @@ __all__ = [
 
 
 def decided_about(decision: sqlite3.Row) -> str:
-    """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick."""
+    """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick.
+
+    Returns:
+        The chore with its prefix, else the PR with its prefix when there is no ticket, else the ticket key, else the
+        repository, else `-`.
+    """
     if decision["chore"] is not None:
         return f"{CHORE_PREFIX}{decision['chore']}"
     if decision["ticket_key"] is None and decision["pr"] is not None:
@@ -76,7 +81,11 @@ _ItemId = tuple[str | None, str, str | None]
 
 
 def keys(items: list[Item]) -> set[_ItemId]:
-    """Each item's identity, as two lists are compared: its ticket, its reason, and its repository."""
+    """Each item's identity, as two lists are compared: its ticket, its reason, and its repository.
+
+    Returns:
+        The set of `(ticket_key, reason, repo)` tuples, one per distinct item.
+    """
     return {(i.ticket_key, i.reason, i.repo) for i in items}
 
 
@@ -196,7 +205,11 @@ def _detail(run: sqlite3.Row) -> str:
 
 
 def awaiting_detail(waiting: conversation.Awaiting) -> str:
-    """The `awaiting_reply` item's detail: the question, and how to answer it (DESIGN §22)."""
+    """The `awaiting_reply` item's detail: the question, and how to answer it (DESIGN §22).
+
+    Returns:
+        The message id and the question on one line, cut to 1800 characters, then the `canopy reply` to answer it.
+    """
     text = f"message {waiting.message_id}: {one_line(waiting.question)}"
     return f"{text[:1800]}; answer with `canopy reply {waiting.key}`"
 

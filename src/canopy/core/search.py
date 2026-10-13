@@ -61,7 +61,15 @@ class Found:
 
 
 def words(query: str) -> tuple[str, ...]:
-    """The query's distinct words, in order, with control characters dropped. Raises BadQueryError."""
+    """The query's distinct words, in order, with control characters dropped.
+
+    Returns:
+        The words, whitespace collapsed, each once in the order it first appears.
+
+    Raises:
+        BadQueryError: The query is shorter than `MIN_QUERY` or longer than `MAX_QUERY` characters, or has more than
+            `MAX_WORDS` words.
+    """
     text = " ".join(conversation.printable(query).split())
     if not MIN_QUERY <= len(text) <= MAX_QUERY:
         raise BadQueryError(f"a search is {MIN_QUERY} to {MAX_QUERY} characters")
@@ -72,7 +80,11 @@ def words(query: str) -> tuple[str, ...]:
 
 
 def search(conn: sqlite3.Connection, query: str) -> Found:
-    """Every source's newest rows holding each of the query's words in one field. Raises BadQueryError."""
+    """Every source's newest rows holding each of the query's words in one field. Raises BadQueryError.
+
+    Returns:
+        The words, at most `PER_SOURCE` hits from each source, newest first, and the sources that had more.
+    """
     terms = words(query)
     hits: list[Hit] = []
     more: list[Source] = []
@@ -85,7 +97,11 @@ def search(conn: sqlite3.Connection, query: str) -> Found:
 
 
 def snippet(text: str, terms: tuple[str, ...]) -> str:
-    """`text` on one line, cut to SNIPPET characters around the first match of any of `terms`."""
+    """`text` on one line, cut to SNIPPET characters around the first match of any of `terms`.
+
+    Returns:
+        The text, whitespace collapsed and control characters dropped, with "…" where it was cut at either end.
+    """
     line = " ".join(conversation.printable(text).split())
     if len(line) <= SNIPPET:
         return line
@@ -99,7 +115,11 @@ def snippet(text: str, terms: tuple[str, ...]) -> str:
 
 
 def like(term: str) -> str:
-    """A `LIKE` pattern matching `term` anywhere, its wildcards and the escape character taken literally."""
+    """A `LIKE` pattern matching `term` anywhere, its wildcards and the escape character taken literally.
+
+    Returns:
+        `term` with each `%`, `_`, and backslash escaped by a backslash, between two `%`.
+    """
     escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
 

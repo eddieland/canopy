@@ -112,6 +112,9 @@ def standing_instructions(config: Config) -> str:
 
     A file that cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES` is an error, not an empty section: the
     operator set it for every worker, and a worker without it would work as if it had never been written.
+
+    Raises:
+        PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
     """
     path = config.paths.worker_instructions
     if path is None:
@@ -170,6 +173,9 @@ def render(config: Config, name: str, values: Mapping[str, str], *, required: Se
     """Return prompt file `name` with every `{{NAME}}` replaced from `values`, in one pass.
 
     A placeholder with no value is an error, and so is a prompt that lacks one of `required`.
+
+    Raises:
+        PromptError: The prompt has a placeholder `values` has no value for, or lacks one of `required`.
     """
     path = prompt_path(config, name)
     text = path.read_text(encoding="utf-8")

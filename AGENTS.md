@@ -52,8 +52,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
   not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts and `actionlint` the GitHub workflows.
   All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
-- ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow
-  `select`.
+- ruff selects every stable rule, and the preview pydoclint rules (D018): a public module, class, or function has a
+  Google docstring, with Returns, Yields, and Raises sections that match its body. Opt out with a commented `ignore`
+  entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, except on a pull request
   that changes only docs, where every check passes without running; run `make all` before pushing one anyway.

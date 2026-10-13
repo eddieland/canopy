@@ -25,12 +25,20 @@ MAX_PR_URL = 300
 
 
 def valid_key(value: str) -> bool:
-    """Keys reach branch names, lease holders, paths, and argv (DESIGN §17)."""
+    """Keys reach branch names, lease holders, paths, and argv (DESIGN §17).
+
+    Returns:
+        True when `value` matches `KEY_RE` in full.
+    """
     return KEY_RE.fullmatch(value) is not None
 
 
 def valid_review_cursor(value: str) -> bool:
-    """A review cursor names a real moment in one fixed form, so cursors compare as strings (DESIGN §7)."""
+    """A review cursor names a real moment in one fixed form, so cursors compare as strings (DESIGN §7).
+
+    Returns:
+        True when `value` is in the form `YYYY-MM-DDTHH:MM:SSZ` and names a real time.
+    """
     if REVIEW_CURSOR_RE.fullmatch(value) is None:
         return False
     try:
@@ -41,12 +49,20 @@ def valid_review_cursor(value: str) -> bool:
 
 
 def plain_pr_url(value: str) -> bool:
-    """A PR's URL as the overseer passes it: a plain https:// URL, at most 300 characters (DESIGN §21)."""
+    """A PR's URL as the overseer passes it: a plain https:// URL, at most 300 characters (DESIGN §21).
+
+    Returns:
+        True when `value` is a plain https:// URL within `MAX_PR_URL`.
+    """
     return contract.plain_url(value, MAX_PR_URL)
 
 
 def truncate(value: str) -> str:
-    """Bound free text the overseer writes to the journal."""
+    """Bound free text the overseer writes to the journal.
+
+    Returns:
+        `value` unchanged when it fits in `MAX_TEXT`, else cut to it and ended with "...".
+    """
     return value if len(value) <= MAX_TEXT else value[: MAX_TEXT - 3] + "..."
 
 

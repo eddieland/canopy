@@ -71,7 +71,11 @@ class Backend:
 
     @contextmanager
     def open(self) -> Iterator[Context]:
-        """A Context on a journal connection of its own, closed when the block ends. One per request or stream."""
+        """A Context on a journal connection of its own, closed when the block ends. One per request or stream.
+
+        Yields:
+            A Context with the config and workspace served when the block started.
+        """
         with self._lock:
             cfg, ws = self.config, self.workspace
         conn = db.connect(db_path(ws))
