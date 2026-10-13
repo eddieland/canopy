@@ -1,9 +1,11 @@
 """A chore's `days` and `hours` (DESIGN §19): when a run may start, checked in code."""
 
 import json
+import os
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from pydantic import ValidationError
@@ -61,15 +63,14 @@ def test_days_alone_open_at_midnight_and_hours_alone_every_day() -> None:
     assert window.describe(nightly) == "every day 01:00-24:00 UTC"
 
 
-def test_without_a_time_zone_the_window_is_local_time(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("TZ", "Asia/Tokyo")
-    time.tzset()
+def test_without_a_time_zone_the_window_is_local_time() -> None:
     try:
-        morning = chore(hours="09:00-10:00")
-        assert window.next_open(morning, utc("2026-10-08T12:00")) == utc("2026-10-09T00:00")
-        assert window.describe(morning) == "every day 09:00-10:00 local time"
+        with mock.patch.dict(os.environ, {"TZ": "Asia/Tokyo"}):
+            time.tzset()
+            morning = chore(hours="09:00-10:00")
+            assert window.next_open(morning, utc("2026-10-08T12:00")) == utc("2026-10-09T00:00")
+            assert window.describe(morning) == "every day 09:00-10:00 local time"
     finally:
-        monkeypatch.undo()
         time.tzset()
 
 
@@ -113,19 +114,21 @@ def next_midnight() -> str:
 
 
 def test_outside_its_window_a_chore_is_refused_and_not_due(
-    canopy_env: CanopyEnv, closed: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, closed: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
-    [section] = state_block(agent_log)["chores"]
-    assert (section["due"], section["due_at"]) == (False, next_midnight())
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+        [section] = state_block(agent_log)["chores"]
+        assert (section["due"], section["due_at"]) == (False, next_midnight())
 
-    conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
-    [(name, action, rationale)] = decisions(conn, tick_id)
-    assert (name, action) == ("build-health", "refused:outside_hours")
-    assert rationale == f"build-health starts only {','.join(closed_today())} all day UTC; next at {next_midnight()}"
+        conn = journal(canopy_env)
+        with in_tick(conn) as tick_id:
+            assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
+            [(name, action, rationale)] = decisions(conn, tick_id)
+            assert (name, action) == ("build-health", "refused:outside_hours")
+            assert rationale == (
+                f"build-health starts only {','.join(closed_today())} all day UTC; next at {next_midnight()}"
+            )
 
 
 def test_a_run_waits_out_every_minutes_and_then_its_window(canopy_env: CanopyEnv, closed: Path) -> None:
