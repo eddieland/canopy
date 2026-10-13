@@ -11,6 +11,8 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
+from canopy.notify import journal as notify_journal
+from canopy.notify import message
 from tests.canopy.helpers import InlineRunner, in_tick, journal, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
@@ -480,3 +482,11 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
     tick()
     [message] = messages(out)
     assert "< chore:check run 1 ended ok (0 findings): all clear\n" in message
+
+
+def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None:
+    gone = notify_journal.Diff([], [("chore:deps", "lodash")], ["fp"], [("chore:deps", "lodash", None)], [True])
+    sent = message.Message("log", "/r", Path("/r/attention.md"), gone, 0)
+    assert "- chore:deps lodash (dismissed)\n" in sent.text()
+    [resolved] = json.loads(sent.json())["attention"]["resolved"]
+    assert resolved["dismissed"] is True

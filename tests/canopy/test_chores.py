@@ -560,12 +560,16 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
 
     assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 0
     assert "is dismissed: it is off the attention list" in capsys.readouterr().out
+    # `attention.md` is rewritten at once, not at the next tick; a sink hears why the finding left at the next one.
+    assert "Nothing needs you." in page.read_text()
     tick(monkeypatch)
     assert "Nothing needs you." in page.read_text()
-    assert f"- chore:build-health {FINDING['id']}\n" in notified.read_text().split("--\n")[1]
+    assert f"- chore:build-health {FINDING['id']} (dismissed)\n" in notified.read_text().split("--\n")[1]
     assert main(["show", "chore:build-health"]) == 0
     assert f"{FINDING['id']}  " in (shown := capsys.readouterr().out)
     assert "(dismissed)" in shown
+    assert main(["status"]) == 0
+    assert "; 1 finding dismissed" in capsys.readouterr().out
 
     # A later run still reporting it leaves it dismissed.
     backdate(conn, 120)
