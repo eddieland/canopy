@@ -269,12 +269,12 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 
 | Group | Kind | When | Fields |
 |---|---|---|---|
-| `attention` | `attention.opened` | a listed item the sink was not told of | ticket, reason, detail (500), since |
-| `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, reason |
-| `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
-| `runs` | `run.ended` | a run's row closed | ticket, run, kind, status, branch, pr, prs, summary, question, message |
+| `attention` | `attention.opened` | a listed item the sink was not told of | ticket, title, reason, detail (500), since |
+| `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, title, reason |
+| `runs` | `run.started` | dispatch started a worker | ticket, title, run, kind, branch, attempt, limit |
+| `runs` | `run.ended` | a run's row closed | ticket, title, run, kind, status, branch, pr, prs, summary, question, message |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
-| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, how many findings |
+| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, title, run, status, verdict, impact, how many findings |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
 | `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
 | `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
@@ -341,20 +341,25 @@ run or chore run ended, `!` for the loop's own events, `*` for a test.
 
 ```json
 {"version": 1, "sink": "slack", "repo": "/home/me/src/api", "sent_at": "2026-09-24T19:00:00Z",
- "attention": {"added": [{"ticket": "PROJ-3", "reason": "needs_reviewer", "detail": "https://...", "since": "..."}],
-               "resolved": [{"ticket": "PROJ-4", "reason": "ready_to_merge"}],
+ "attention": {"added": [{"ticket": "PROJ-3", "title": "Retry failed checkouts", "reason": "needs_reviewer",
+                          "detail": "https://...", "since": "..."}],
+               "resolved": [{"ticket": "PROJ-4", "title": null, "reason": "ready_to_merge"}],
                "open": 4, "path": "/home/me/.canopy/attention.md"},
- "events": [{"id": 88, "kind": "run.ended", "at": "...", "ticket": "PROJ-12", "run": 41, "run_kind": "implement",
-             "status": "done", "branch": "agent/PROJ-12-add-retry", "pr": "https://...", "summary": "..."}],
+ "events": [{"id": 88, "kind": "run.ended", "at": "...", "ticket": "PROJ-12", "title": "Add retries", "run": 41,
+             "run_kind": "implement", "status": "done", "branch": "agent/PROJ-12-add-retry", "pr": "https://...",
+             "summary": "..."}],
  "omitted": 0,
  "digest": null,
  "text": "the same message in the text format"}
 ```
 
 `attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`. Each
-event carries its fields and `line` (its text-format line); the digest its counts and `lines`. `omitted` counts what
-the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown fields. `text` serves a
-sink that only forwards a string.
+event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every ticket key, in
+`added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside it: the
+ticket's title as it is at delivery (§13), or null before the overseer names it. It is for display, so a reader knows
+a ticket without looking its key up; `text` and `line` show the key alone, keeping §14's message as it was.
+`omitted` counts what the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown
+fields. `text` serves a sink that only forwards a string.
 
 Presentation is the sink's. The fields are the contract, and a sink that can show more than lines builds its own
 message from them in its channel's native form, as the Slack sink does with Block Kit; `line`, `lines`, and `text`
@@ -421,7 +426,8 @@ exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
 - Message: Block Kit built from the fields (Formats, above): a header with the repository directory name, a line of
   counts, a section per attention item (ticket, reason, detail, and since when, as a Slack date in the reader's time
   zone), the resolved items together, a section per event led by an emoji for its status (ticket, kind, run, its PRs,
-  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. At most Slack's
+  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. A ticket shows
+  as its key in bold, then its title when canopy sent one. At most Slack's
   50 blocks, the last counting what was left out. The `text` the post also carries is the message as at most 45 lines,
   which Slack shows in notifications and where blocks cannot be shown.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
