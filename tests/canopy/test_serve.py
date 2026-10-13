@@ -199,7 +199,8 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     paths = ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events")
     # A transcript is agent output from a file, and a review's diff the PR's text: as much the operator's as the rest.
     files = ("/api/runs/39", "/api/runs/39/transcript", "/api/ticks/2/transcript", "/api/reviews", "/api/reviews/4")
-    for path in (*paths, *files):
+    chores = ("/api/chores/deps/runs/2", "/api/chores/deps/runs/2/transcript")
+    for path in (*paths, *files, *chores):
         assert c.get(path).status_code == 401, path
     assert c.post("/api/tickets/ABC-102/start", headers={"origin": ORIGIN}).status_code == 401
 
@@ -472,6 +473,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "Tick",
         "ChoreSummary",
         "ChoreDetail",
+        "ChoreRunDetail",
         "TickDetail",
         "Decision",
         "Transcript",
@@ -502,6 +504,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/chores",
         "/api/chores/{name}",
         "/api/chores/{name}/replies",
+        "/api/chores/{name}/runs/{run_id}",
+        "/api/chores/{name}/runs/{run_id}/transcript",
         "/api/ticks",
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
