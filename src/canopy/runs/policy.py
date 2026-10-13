@@ -2,7 +2,8 @@
 
 Both are derived from `runs` and `run_slots` (D030), per unit: a ticket's work in one repository. Every run dispatched
 for a ticket is an attempt of its kind in each repository it leased a slot in, whatever it ended as, and the counts
-never reset: a unit at its limit waits for a human. The fix-ci cooldown runs from the end of the latest fix-ci run that
+never reset: a unit at its limit waits for a human, who raises the limit in config or grants that unit more runs of
+the kind with `canopy grant` (DESIGN §22). The fix-ci cooldown runs from the end of the latest fix-ci run that
 covered the unit. `dispatch.py` enforces these; the overseer's state block shows them.
 
 A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Its runs are counted per
@@ -13,10 +14,11 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.core import conversation, db
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
@@ -41,6 +43,12 @@ def limits(config: Config) -> dict[str, int]:
     }
 
 
+def unit_limits(config: Config, granted: Mapping[str, int]) -> dict[str, int]:
+    """Return the most runs of each kind one unit may have: the policy's limit plus the runs granted it of that kind."""
+    base = limits(config)
+    return {kind: base[kind] + granted.get(kind, 0) for kind in KINDS}
+
+
 def unit(key: str, repo: str | None) -> Unit:
     """Return how the counts below name `key`'s unit in `repo`."""
     return (key, repo)
@@ -58,6 +66,60 @@ def attempts(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
         counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
         counts_of[str(row[2])] += int(row[3])
     return counts
+
+
+def grants(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
+    """Return the runs of each kind the operator granted each unit past its policy limit. Units without are missing."""
+    granted: dict[Unit, dict[str, int]] = {}
+    rows = conn.execute("SELECT ticket_key, repo, kind, sum(runs) FROM attempt_grants GROUP BY ticket_key, repo, kind")
+    for row in rows:
+        granted.setdefault(unit(str(row[0]), str(row[1])), {})[str(row[2])] = int(row[3])
+    return granted
+
+
+@dataclass(frozen=True)
+class Granted:
+    """What `grant` recorded: the unit's repository, and its runs and limit of the kind now."""
+
+    repo: str
+    runs: int
+    limit: int
+
+
+def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo: str | None, runs: int) -> Granted:
+    """Grant `key`'s unit in `repo` `runs` more runs of `kind` than the policy allows (DESIGN §22). Operator only.
+
+    `repo` may be omitted when the ticket has had runs in one repository only. Every run still counts (D030): a grant
+    raises the unit's limit, and the next dispatch of that kind sees it.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_kind` for a kind with no unit limit (a
+            split's is the ticket's, and only config raises it), `unknown` for a ticket canopy has no record of,
+            `unknown_repo` for a repository the ticket has had no runs in, or none named when it has had them in
+            several.
+    """
+    conversation.check_operator()
+    if kind not in KINDS:
+        raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(KINDS)}")
+    if db.get_ticket(conn, key) is None:
+        raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
+    # Every repository the ticket has had runs in, including those `canopy forget` dropped the units of.
+    worked = sorted(str(r) for k, r in attempts(conn) if k == key and r is not None)
+    if repo is None:
+        if len(worked) != 1:
+            where = f"it has had runs in {', '.join(worked)}" if worked else "it has had no runs"
+            raise conversation.Refused("unknown_repo", f"name the repository with --repo: {where}")
+        repo = worked[0]
+    elif repo not in worked:
+        raise conversation.Refused("unknown_repo", f"{key} has had no runs in {repo}")
+    with db.transaction(conn):
+        conn.execute(
+            "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, ?, ?)",
+            (key, repo, kind, runs, db.now()),
+        )
+    name = unit(key, repo)
+    limit = unit_limits(config, grants(conn).get(name, {}))[kind]
+    return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
 
 
 def split_attempts(conn: sqlite3.Connection) -> dict[str, int]:

@@ -25,8 +25,9 @@ Everything below is for an agent helping the operator in their own session.
 - `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
   tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
   ticket worked is its queue label, or `canopy start` (below).
-- `canopy start`, `stop`, `reply`, `forget`, `pause`, and `resume` are the operator's own: they authorize work, answer
-  workers, and hold the loop. Suggest them; run one only when the operator asks you to, with the words they gave you.
+- `canopy start`, `stop`, `reply`, `forget`, `grant`, `pause`, and `resume` are the operator's own: they authorize work,
+  answer workers, and hold the loop. Suggest them; run one only when the operator asks you to, with the words they gave
+  you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -45,6 +46,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
+| `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
@@ -97,10 +99,10 @@ Work through these in order and stop at the first that explains it.
    - `wait` or `skip`: the rationale says why. `blocked_by: <KEY>` means an open blocker.
    - `refused:<guard>`: the harness refused the dispatch. `unauthorized` (the overseer named no label from
      `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
-     `attempt_limit` (the kind's `policy.max_<kind>_attempts` is used up; this never resets), `cooldown` (fix-ci waits
-     `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had no free worktree, or the pool is
-     at its declared size), `bad_slug`, `bad_base`, `no_branch` (nothing to continue in that repository yet),
-     `unknown_repo` (no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
+     `attempt_limit` (the kind's `policy.max_<kind>_attempts`, plus any `canopy grant`, is used up; no count
+     resets), `cooldown` (fix-ci waits `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had
+     no free worktree, or the pool is at its declared size), `bad_slug`, `bad_base`, `no_branch` (nothing to continue
+     in that repository yet), `unknown_repo` (no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
      worker prompt did not render; an override may lack `{{LABELS}}`, or for a run over several repositories
      `{{REPOSITORIES}}` and `{{PRS}}`), `spawn_failed`. Attempt limits and the fix-ci cooldown count per repository
      of the ticket. A run that ends `failed` with a summary starting `not authorized:` is the worker finding
@@ -133,7 +135,7 @@ no dismissing. Reasons:
 | `ready_to_merge` | The PR is approved: merge it. canopy never merges. |
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
 | `untrusted_review` | Feedback from a reviewer not in `trust.trusted_reviewers`: say what to do with `canopy reply`. |
-| `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
+| `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or `canopy grant KEY KIND` for another run. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists reviews. |

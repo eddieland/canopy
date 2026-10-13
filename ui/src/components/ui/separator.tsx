@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react'
 
 import { cn } from '@/lib/utils'
 
+/** A thin rule between groups. Decorative by default, so assistive technology skips it. */
 function Separator({
     className,
     orientation = 'horizontal',

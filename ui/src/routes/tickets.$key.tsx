@@ -7,6 +7,7 @@ import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
 import { Decisions } from '@/components/decisions'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
@@ -16,10 +17,12 @@ import { TrackerLink } from '@/components/tracker-link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
 
+/** One ticket: the operator's actions on it, its work, its recent runs and decisions, and its conversation. */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
 })
@@ -55,12 +58,28 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, runs, messages, decisions } = detail
     const now = useNow()
     const tracker = useTicketUrl(ticket.key)
+    const runsOrder = useListOrder('ticket-runs')
+    const decisionsOrder = useListOrder('ticket-decisions')
+    const conversationOrder = useListOrder('conversation')
     const how = ticket.private
         ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
         : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
     return (
         <>
-            <PageHeader label={ticket.private ? 'Private ticket' : 'Public ticket'} title={ticket.key}>
+            <PageHeader
+                label={ticket.private ? 'Private ticket' : 'Public ticket'}
+                title={
+                    ticket.title === null ? (
+                        ticket.key
+                    ) : (
+                        // The key in its data face, quieter, so the title reads as the page's name (DESIGN §7).
+                        <>
+                            <span className="font-mono font-normal text-muted-foreground">{ticket.key}</span>{' '}
+                            {ticket.title}
+                        </>
+                    )
+                }
+            >
                 {how}
             </PageHeader>
             {/* On a wide screen the conversation sits beside what the ticket is and did, as in the inbox. */}
@@ -104,39 +123,53 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     </Panel>
                     <Panel>
                         <PanelHeader label="Recent runs">
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                            <span className="flex items-center gap-2">
+                                {runs.length > 1 && <OrderToggle list="ticket-runs" />}
+                                <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                            </span>
                         </PanelHeader>
                         {runs.length === 0 ? (
                             <Placeholder className="min-h-20">none</Placeholder>
                         ) : (
                             <PanelScroll label="Recent runs">
-                                <RunsTable runs={runs} ticket={false} />
+                                <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
                             </PanelScroll>
                         )}
                     </Panel>
                     <Panel data-testid="ticket-decisions">
                         <PanelHeader label="Decisions">
-                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                            <span className="flex items-center gap-2">
+                                {decisions.length > 1 && <OrderToggle list="ticket-decisions" />}
+                                <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                            </span>
                         </PanelHeader>
                         {decisions.length === 0 ? (
                             <Placeholder className="min-h-20">no tick has decided anything about it yet</Placeholder>
                         ) : (
                             <PanelScroll label="Decisions">
-                                <Decisions decisions={decisions} byTick />
+                                <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
                             </PanelScroll>
                         )}
                     </Panel>
                 </div>
                 <Panel>
                     <PanelHeader label="Conversation">
-                        <span className="readout text-xs text-muted-foreground">{messages.length}</span>
+                        <span className="flex items-center gap-2">
+                            {messages.length > 1 && <OrderToggle list="conversation" />}
+                            <span className="readout text-xs text-muted-foreground">{messages.length}</span>
+                        </span>
                     </PanelHeader>
+                    {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
+                    {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
                     {messages.length === 0 ? (
                         <Placeholder className="min-h-20">no messages yet</Placeholder>
                     ) : (
-                        <Conversation messages={messages} waiting={ticket.awaiting} />
+                        <Conversation
+                            messages={ordered('conversation', conversationOrder, messages)}
+                            waiting={ticket.awaiting}
+                        />
                     )}
-                    <WorkingNow ticketKey={ticket.key} />
+                    {conversationOrder === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
                     <ReplyForm
                         key={ticket.key}
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}

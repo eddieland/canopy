@@ -157,22 +157,6 @@ def holder_for(key: str) -> str:
     return f"{HOLDER_PREFIX}{key}"
 
 
-def _run(runner: procs.Runner, args: list[str], pool: Pool) -> procs.Result:
-    env = {ROOT_ENV: str(pool.root)} if pool.root is not None else None
-    try:
-        result = runner.run(["treehouse", *args], cwd=pool.cwd, env=env, timeout=_TIMEOUT_SECONDS)
-    except procs.ProcError as e:
-        raise TreehouseError(str(e)) from e
-    if result.timed_out:
-        raise TreehouseError(f"treehouse {args[0]} timed out")
-    return result
-
-
-def _fail(result: procs.Result) -> TreehouseError:
-    detail = result.stderr.strip() or result.stdout.strip()
-    return TreehouseError(f"treehouse {result.args[1]} exited {result.returncode}: {detail}")
-
-
 def status(runner: procs.Runner, *, pool: Pool = DEFAULT_POOL) -> list[Slot]:
     """Return every slot in the pool."""
     result = _run(runner, ["status", "--json"], pool)
@@ -211,17 +195,6 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None, pool: Pool
     )
 
 
-def _undo(runner: procs.Runner, leased: Lease, pool: Pool) -> str:
-    """Return and destroy a slot `lease` made past the pool's size, and say how far that got, for the error."""
-    outcome = return_slot(runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool)
-    if outcome is not ReturnOutcome.RETURNED:
-        return f"returning the new slot {leased.path} said {outcome.value}; the next tick's reconcile returns it"
-    kept = destroy(runner, leased.path, pool=pool)
-    if kept is not None:
-        return f"treehouse kept the new slot {leased.path} ({kept}); `canopy workspace sync` removes it once it can"
-    return f"the new slot {leased.path} was removed"
-
-
 def lease_as(
     runner: procs.Runner, holder: str, *, base: str | None = None, pool: Pool = DEFAULT_POOL, fetch: bool = True
 ) -> Lease:
@@ -249,21 +222,6 @@ def lease_as(
     except ValidationError as e:
         returned = _return_unparsed(runner, result.stdout, pool)
         raise TreehouseError(f"treehouse get: unexpected output: {e}; {returned}") from e
-
-
-def _return_unparsed(runner: procs.Runner, stdout: str, pool: Pool) -> str:
-    """Return the slot a `get` with unparseable output leased, and say what happened for the error."""
-    try:
-        held = _Held.model_validate_json(stdout)
-    except ValidationError:
-        return "could not tell which slot was leased; the next tick's reconcile returns it"
-    try:
-        outcome = return_slot(runner, held.path, lease_id=held.lease_id, lease_holder=held.lease_holder, pool=pool)
-    except TreehouseError as e:
-        return f"returning {held.path} failed ({e}); the next tick's reconcile returns it"
-    if outcome is ReturnOutcome.RETURNED:
-        return f"returned {held.path}"
-    return f"returning {held.path} said {outcome.value}; the next tick's reconcile returns it"
 
 
 def return_slot(
@@ -294,3 +252,45 @@ def destroy(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> s
     if result.ok:
         return None
     return (result.stderr.strip() or result.stdout.strip() or f"exited {result.returncode}")[:500]
+
+
+def _run(runner: procs.Runner, args: list[str], pool: Pool) -> procs.Result:
+    env = {ROOT_ENV: str(pool.root)} if pool.root is not None else None
+    try:
+        result = runner.run(["treehouse", *args], cwd=pool.cwd, env=env, timeout=_TIMEOUT_SECONDS)
+    except procs.ProcError as e:
+        raise TreehouseError(str(e)) from e
+    if result.timed_out:
+        raise TreehouseError(f"treehouse {args[0]} timed out")
+    return result
+
+
+def _fail(result: procs.Result) -> TreehouseError:
+    detail = result.stderr.strip() or result.stdout.strip()
+    return TreehouseError(f"treehouse {result.args[1]} exited {result.returncode}: {detail}")
+
+
+def _undo(runner: procs.Runner, leased: Lease, pool: Pool) -> str:
+    """Return and destroy a slot `lease` made past the pool's size, and say how far that got, for the error."""
+    outcome = return_slot(runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool)
+    if outcome is not ReturnOutcome.RETURNED:
+        return f"returning the new slot {leased.path} said {outcome.value}; the next tick's reconcile returns it"
+    kept = destroy(runner, leased.path, pool=pool)
+    if kept is not None:
+        return f"treehouse kept the new slot {leased.path} ({kept}); `canopy workspace sync` removes it once it can"
+    return f"the new slot {leased.path} was removed"
+
+
+def _return_unparsed(runner: procs.Runner, stdout: str, pool: Pool) -> str:
+    """Return the slot a `get` with unparseable output leased, and say what happened for the error."""
+    try:
+        held = _Held.model_validate_json(stdout)
+    except ValidationError:
+        return "could not tell which slot was leased; the next tick's reconcile returns it"
+    try:
+        outcome = return_slot(runner, held.path, lease_id=held.lease_id, lease_holder=held.lease_holder, pool=pool)
+    except TreehouseError as e:
+        return f"returning {held.path} failed ({e}); the next tick's reconcile returns it"
+    if outcome is ReturnOutcome.RETURNED:
+        return f"returned {held.path}"
+    return f"returning {held.path} said {outcome.value}; the next tick's reconcile returns it"

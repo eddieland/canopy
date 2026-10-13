@@ -4,8 +4,8 @@ name = "canopy"
 dynamic = ["version"]
 description = "Unattended, local agent loop driven by your issue tracker."
 readme = "README.md"
-# Proprietary for now (D046). The classifier makes PyPI refuse an upload, where `canopy` is another project's name.
-license = "LicenseRef-Proprietary"
+# The classifier makes PyPI refuse an upload, where `canopy` is another project's name (D046).
+license = "MIT"
 license-files = ["LICENSE"]
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
@@ -146,9 +146,6 @@ strict = true
 # Later entries win.
 filterwarnings = [
     "error",
-    # Leaked journal connections and files are shown, not failed, until the tests close what they open.
-    "default::ResourceWarning",
-    "default::pytest.PytestUnraisableExceptionWarning",
     # procs.spawn detaches its child on purpose, so Popen warns that it is still running.
     "ignore:subprocess \\d+ is still running:ResourceWarning",
 ]

@@ -6,16 +6,13 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import agent_output, db
-from canopy.infra import resources
 from canopy.loop import attention
 from tests.conftest import CanopyEnv
 
 
 @pytest.fixture
 def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    c = db.connect(canopy_env.state_dir / "canopy.db")
-    db.migrate(c, resources.migrations_dir())
-    return c
+    return canopy_env.journal()
 
 
 def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = True) -> int:
@@ -267,6 +264,42 @@ def test_ticket_set_outside_a_tick_advances_cursors(canopy_env: CanopyEnv, conn:
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["last_review_id"]) == ("repo", "2026-10-07T20:58:50Z")
+
+
+def test_a_ticket_is_named_on_one_line_and_renamed(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def title() -> object:
+        return conn.execute("SELECT title FROM tickets WHERE key = 'PROJ-1'").fetchone()["title"]
+
+    assert main(["ticket", "set", "PROJ-1", "--title", "  Fix the\n\tlogin\x1b[2J loop "]) == 0
+    assert title() == "Fix the login [2J loop"
+    assert main(["ticket", "set", "PROJ-1", "--title", "x" * 100]) == 0
+    assert title() == "x" * 77 + "..."
+    assert main(["ticket", "set", "PROJ-1", "--title", " \n "]) == 2
+    assert main(["ticket", "set", "PROJ-1", "--phase", "ready"]) == 0
+    assert title() == "x" * 77 + "..."  # a set without --title keeps it
+    assert main(["ticket", "set", "PROJ-1", "--title", "Fix the login loop"]) == 0
+    capsys.readouterr()
+
+    tick_id = db.start_tick(conn, dry_run=False)
+    run_id = db.insert_run(
+        conn,
+        tick_id=tick_id,
+        key="PROJ-1",
+        kind="implement",
+        branch="agent/PROJ-1-login",
+        slots=[],
+        runs_dir=canopy_env.state_dir / "runs",
+    )
+    conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (run_id,))
+    db.finish_tick(conn, tick_id, "ok", "test")
+    assert main(["status"]) == 0
+    assert "\n  PROJ-1: Fix the login loop  implement  done  " in capsys.readouterr().out
+    assert main(["show", "PROJ-1"]) == 0
+    assert "\n  title Fix the login loop\n" in capsys.readouterr().out
+    assert main(["show", f"run:{run_id}"]) == 0
+    assert f"run:{run_id}: implement of PROJ-1: Fix the login loop, done" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(

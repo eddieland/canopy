@@ -16,10 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, treehouse
+from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, review_diff, treehouse
+from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.infra import logs, procs, stopping
-from canopy.reviews import result, start
+from canopy.reviews import start
 
 if TYPE_CHECKING:
     import sqlite3
@@ -96,6 +97,38 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     return outcome
 
 
+def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
+    """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
+    if parsed.status != "done":
+        return Outcome("failed", parsed)
+    if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
+        note = "reported low impact, but review.low_impact is not set; recorded as normal"
+        return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
+    return Outcome("done", parsed)
+
+
+def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
+    """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
+    with contextlib.suppress(OSError):
+        shutil.rmtree(start.run_dir(ctx, int(run["id"])))
+    if run["slot_path"] is None:
+        return
+    fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
+    try:
+        outcome = treehouse.return_slot(
+            ctx.runner,
+            Path(str(run["slot_path"])),
+            lease_id=str(run["lease_id"]),
+            lease_holder=str(run["lease_holder"]),
+            pool=ctx.workspace.pool(run["repo"]),
+        )
+    except treehouse.TreehouseError as e:
+        # The next tick's reconcile returns a canopy lease no running run holds.
+        log.error("review slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
+        return
+    log.info("review slot returned", extra={**fields, "outcome": outcome.value})
+
+
 def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
     slot = Path(str(run["slot_path"]))
     sha = str(run["sha"])
@@ -103,6 +136,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     dropped = _drop_escaping_links(ctx.runner, slot)
     if dropped:
         log.warning("removed links that leave the checkout", extra={"review_run_id": run["id"], "links": dropped})
+    _save_diff(ctx.runner, slot, run, log)
     cwd = start.run_dir(ctx, int(run["id"]))
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
@@ -111,7 +145,12 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    argv = render_command(ctx.config.runtime.review_cmd, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+    argv = render_command(
+        ctx.config.runtime.review_cmd,
+        prompt,
+        definitions.ensure(ctx.state_dir, ctx.config),
+        f"review {run['pr_url']}",
+    )
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
@@ -143,16 +182,6 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     return judged(ctx, parsed)
 
 
-def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
-    """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
-    if parsed.status != "done":
-        return Outcome("failed", parsed)
-    if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
-        note = "reported low impact, but review.low_impact is not set; recorded as normal"
-        return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
-    return Outcome("done", parsed)
-
-
 def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:
     """Fetch `sha` from origin and check it out, detached. A commit origin does not have fails the run."""
     for args in (("fetch", "--quiet", "origin", sha), ("checkout", "--quiet", "--detach", sha)):
@@ -180,6 +209,44 @@ def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
     return dropped
 
 
+def _save_diff(runner: procs.Runner, slot: Path, run: sqlite3.Row, log: logs.TickAdapter) -> None:
+    """Write the commit's diff against where it leaves its base branch beside the run's log, for the web UI.
+
+    Best effort: the review does not need it, so a failure is logged and the page shows no diff. Diff drivers and
+    textconv filters are off, since the commit's `.gitattributes` can name them; for a PR stacked on another branch,
+    the diff holds that branch's commits too.
+    """
+    base = run["base_branch"]
+    if not base:
+        return
+    fields = {"review_run_id": run["id"], "base": base}
+    sha = str(run["sha"])
+    fetched = _git_or_none(runner, slot, log, fields, "fetch", "--quiet", "origin", f"refs/heads/{base}")
+    fork = None if fetched is None else _git_or_none(runner, slot, log, fields, "merge-base", "FETCH_HEAD", sha)
+    if fork is None:
+        return
+    args = ("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", fork.strip(), sha)
+    diff = _git_or_none(runner, slot, log, fields, *args)
+    if diff is not None:
+        # Cut at the bound the reader reads, plus one character, so a cut diff reads as truncated.
+        logs.write_private(review_diff.path_for(str(run["log_path"])), diff[: review_diff.MAX_BYTES + 1])
+
+
+def _git_or_none(
+    runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: dict[str, object], *args: str
+) -> str | None:
+    """`git <args>`'s stdout, or None, logged, if it fails: for steps the review can do without."""
+    try:
+        done = runner.run(hostgit.argv(*args), cwd=slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
+    except procs.ProcError as e:
+        log.warning("review diff not saved", extra={**fields, "step": args[0], "error": str(e)})
+        return None
+    if not done.ok:
+        log.warning("review diff not saved", extra={**fields, "step": args[0], "error": done.stderr[:500]})
+        return None
+    return done.stdout
+
+
 def _git(runner: procs.Runner, slot: Path, *args: str) -> str:
     try:
         done = runner.run(hostgit.argv(*args), cwd=slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
@@ -190,25 +257,3 @@ def _git(runner: procs.Runner, slot: Path, *args: str) -> str:
         # A PR of another repository fails here: its commit is not on this origin (DESIGN §21).
         raise _Unreviewable(f"git {args[0]} failed: {detail}")
     return done.stdout.strip()
-
-
-def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
-    """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
-    with contextlib.suppress(OSError):
-        shutil.rmtree(start.run_dir(ctx, int(run["id"])))
-    if run["slot_path"] is None:
-        return
-    fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
-    try:
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            Path(str(run["slot_path"])),
-            lease_id=str(run["lease_id"]),
-            lease_holder=str(run["lease_holder"]),
-            pool=ctx.workspace.pool(run["repo"]),
-        )
-    except treehouse.TreehouseError as e:
-        # The next tick's reconcile returns a canopy lease no running run holds.
-        log.error("review slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
-        return
-    log.info("review slot returned", extra={**fields, "outcome": outcome.value})

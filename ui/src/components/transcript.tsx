@@ -2,10 +2,12 @@ import { ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 
 import type { Transcript, TranscriptEntry, TranscriptTool } from '@/api/types'
+import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { localTime } from '@/lib/time'
 import { duration, elapsed, hint, startOf, tally, tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
@@ -22,10 +24,18 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
     const tools = entries.some((e) => e.kind === 'tool')
+    const order = useListOrder('transcript')
+    // Each entry with its place in the log, which is its identity: a log only ever grows at the end.
+    const numbered = ordered(
+        'transcript',
+        order,
+        entries.map((entry, i) => ({ entry, i })),
+    )
     return (
         <Panel className="min-h-40" data-testid="transcript">
             <PanelHeader label="Transcript">
                 <span className="flex items-center gap-3">
+                    {entries.length > 1 && <OrderToggle list="transcript" />}
                     {transcript?.session_id && (
                         <span
                             className="readout hidden text-xs text-muted-foreground sm:inline"
@@ -62,7 +72,11 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                     <p className="flex flex-wrap gap-x-4 border-b px-3 py-1.5 font-mono text-xs text-muted-foreground">
                         <span>
                             {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
-                            {counts.failed > 0 && <span className="text-status-failed">, {counts.failed} failed</span>}
+                            {counts.failed > 0 && (
+                                <>
+                                    , <span className="text-status-failed">{counts.failed} failed</span>
+                                </>
+                            )}
                         </span>
                         <span>
                             {counts.calls} model {counts.calls === 1 ? 'call' : 'calls'}
@@ -76,9 +90,8 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                         {transcript.unreadable > 0 && <span>{transcript.unreadable} events could not be read</span>}
                     </p>
                     <ol className="divide-y" data-testid="transcript-entries">
-                        {entries.map((entry, i) => (
+                        {numbered.map(({ entry, i }) => (
                             <Entry
-                                // An entry's place in its log is its identity: a log only ever grows at the end.
                                 key={`${i}-${opened.round}`}
                                 entry={entry}
                                 start={startOf(entries)}

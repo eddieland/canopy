@@ -9,7 +9,6 @@ import os
 import sqlite3
 import sys
 from collections.abc import Callable
-from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -60,8 +59,8 @@ def waits(env: CanopyEnv) -> list[tuple[object, object]]:
 
 def recorded(env: CanopyEnv) -> list[tuple[object, object]]:
     """Each tick's row: whether the loop found it idle, and what ended the wait before it."""
-    with closing(db.connect(env.state_dir / db.DB_FILE_NAME)) as conn:
-        return [(r["idle"], r["woken_by"]) for r in conn.execute("SELECT idle, woken_by FROM ticks ORDER BY id")]
+    conn = env.journal(migrate=False)
+    return [(r["idle"], r["woken_by"]) for r in conn.execute("SELECT idle, woken_by FROM ticks ORDER BY id")]
 
 
 def review_run(conn: sqlite3.Connection, tick_id: int) -> int:

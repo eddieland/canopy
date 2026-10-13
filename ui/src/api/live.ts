@@ -54,9 +54,11 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             if (event.tick && (before?.id !== event.tick.id || before.status !== event.tick.status)) {
                 void client.invalidateQueries({ queryKey: keys.tickTranscript(event.tick.id) })
             }
-            // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions.
+            // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions. A
+            // review run ends between two ticks, so the reviews go with them.
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
+            void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
             break
         }
         case 'loop.updated':

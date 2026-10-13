@@ -1,5 +1,7 @@
-// A tick that failed or was cut short is shown in the failure color; a running one in the running color. Written out so
-// Tailwind finds them.
+/**
+ * Each tick status's text color, for those that have one: a tick that failed or was cut short is shown in the failure
+ * color; a running one in the running color. Written out so Tailwind finds them.
+ */
 export const TICK_TONE: Record<string, string> = {
     running: 'text-status-running',
     overseer_failed: 'text-status-failed',

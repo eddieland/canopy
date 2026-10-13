@@ -6,6 +6,7 @@ import type { ComponentProps } from 'react'
 
 import { cn } from '@/lib/utils'
 
+/** The button's classes for a `variant` and a `size`, for an element that looks like a button but is not one. */
 const buttonVariants = cva(
     [
         'group/button inline-flex shrink-0 items-center justify-center',
@@ -50,6 +51,7 @@ const buttonVariants = cva(
     },
 )
 
+/** A button in one of its variants and sizes. With `asChild`, its styles go on its one child, such as a link. */
 function Button({
     className,
     variant = 'default',

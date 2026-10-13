@@ -80,6 +80,7 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy stop REF [--now]` | no new dispatches; a running run finishes unless `--now` ends it |
 | `canopy reply REF [TEXT]` | answer it, with TEXT or stdin |
 | `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
+| `canopy grant REF KIND [--repo NAME] [--runs N]` | allow one unit N more runs of KIND, default 1 (below); public tickets too |
 | `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
 
 `canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
@@ -152,8 +153,8 @@ separate `list`.
   repliers' comments on the ticket still work as before (§7). `show` drops control characters from every message.
 - A public worker can write to the ticket and its PRs, so keeping the operator's messages off them is its prompt's
   rule, not a guard (TRUST_MODEL T6). Text the ticket's readers must never see belongs on a private ticket.
-- `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`, `_chore`,
-  and `_review` set `CANOPY_RUN_ID` for their agents.
+- `start`, `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. `_run`,
+  `_chore`, and `_review` set `CANOPY_RUN_ID` for their agents.
 - The private worker runs with `runtime.private_worker_cmd`, a template of its own as `split_cmd` is. Its prompt
   carries `{{CONVERSATION}}`: the ticket's latest 20 messages, oldest first, at most 30,000 characters, each labeled
   the operator's (an instruction) or an earlier worker's (data). That is how a resumed worker reads the operator's
@@ -208,7 +209,8 @@ private, from the operator's shell or the web UI's Forget (below), and:
   (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it answers
   nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
 - keeps the rest. `runs` and `run_slots` stay, so the attempt limits and the fix-ci cooldown count every run, before
-  and after (D030); a ticket at its implement limit needs the limit raised in config, and `forget` says so. The comment
+  and after (D030); a ticket at its implement limit needs `canopy grant` (below) or the limit raised in config, and
+  `forget` says so. The comment
   and mirror cursors stay, so tracker comments already handled stay handled. The message cursor stays, and the boundary
   overrules it. The start record stays: a started ticket stays started, a stopped one stopped. `show` prints the whole
   history and when the work was forgotten.
@@ -218,6 +220,25 @@ private, from the operator's shell or the web UI's Forget (below), and:
   the command names them: until they are gone the overseer still finds the `agent/<KEY>-*` branch (§7's `ready` needs
   none on origin) and dispatches to continue it, refused `no_branch`. A ticket stacked on the old branch (§10) loses
   its base when that branch is deleted, so forget a blocker only once nothing is stacked on it.
+
+### Granting attempts
+
+`canopy grant REF KIND` lets the loop keep working a ticket one of whose units is at its attempt limit (§8),
+without raising the limit for every ticket. It takes a ticket, public or private, from the operator's shell only, and:
+
+- takes `implement`, `fix-ci`, or `resume`. A split's limit is the ticket's, and only config raises it.
+- names the unit with `--repo`, which may be left out when the ticket has had runs in one repository only. A repository
+  it has had no runs in is refused `unknown_repo`, as is a ticket with no runs, and a ticket with no journal row
+  `unknown`. A forgotten ticket's runs still name their repositories, so it can be granted though it has no units.
+- adds a row to `attempt_grants`: the unit, the kind, `--runs` (default 1), and when. Rows are never changed or
+  deleted. The unit's limit for the kind is `policy.max_<kind>_attempts` plus the sum of its grants of that kind, so
+  lowering the policy lowers it too.
+- resets no count: every run, before and after, still counts (D030). The command prints the unit's runs and its new
+  limit. The state block shows the unit's `granted` counts beside its `attempts`, and the overseer compares against
+  their sum (§6 step 4); a dispatch's attempt limit and the worker's `{{MAX_ATTEMPTS}}` include them.
+- dispatches nothing. The next tick decides from the ticket's phase as usual, so the trigger a refused dispatch left
+  (§8: cursors advance only once a worker starts) is still new, and a ticket whose last run failed still waits for a
+  reply (§14).
 
 ### References
 
@@ -286,7 +307,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
 | web (M20) | reply, start, stop, forget; notes to chores (M23); pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
@@ -316,9 +337,11 @@ Served by `canopy loop` from a thread (D073):
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
-  the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
-  ended last, each with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets,
-  each with its conversation and the decisions about it, chores (below), ticks (below), and search (below).
+  and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
+  transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
+  it, chores (below), ticks (below), and search (below). The side rail shows the runs working now and the spend of the
+  last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in
+  view wherever the operator is.
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
@@ -372,7 +395,7 @@ The API, under `{base}/api`:
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
 | `GET /meta` | canopy's version, whether the data is mock, and `tracker.ticket_url` (or none) |
 | `GET /attention` | the attention list, as `canopy status` shows it |
-| `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
 | `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
@@ -380,7 +403,7 @@ The API, under `{base}/api`:
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
-| `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
+| `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
@@ -389,6 +412,8 @@ The API, under `{base}/api`:
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
 | `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
+| `GET /reviews` | canopy's latest 100 review runs, newest first: PR, commit, ticket, status, verdict, impact, findings, cost (§21) |
+| `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, the diff, and the PR's other runs; 404 for no such run |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
@@ -592,6 +617,7 @@ the operator's approval note.
   elsewhere; the overseer's `--context` holds 2000 characters.
 - Whether a private ticket's PR body and branch should name the ticket key.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
+- `grant` in the web UI. It is the CLI's only; the web channel would call the same function, as Forget does.
 - A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a
   limit from the `attempt_limit` refusal rather than before dispatching.
 - Mirrored comments edited or deleted after the mirror.

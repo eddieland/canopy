@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db
+from canopy.core import review_result as result
 from canopy.core.conversation import printable
-from canopy.reviews import result
 
 if TYPE_CHECKING:
     import sqlite3

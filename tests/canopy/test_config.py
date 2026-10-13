@@ -251,15 +251,21 @@ def test_ticket_url_is_refused_unless_a_plain_https_template(canopy_env: CanopyE
 
 def test_render_command_keeps_the_prompt_in_one_argument() -> None:
     prompt = "it's a `prompt` with $HOME; rm -rf / && echo {prompt} {definitions_dir}"
-    argv = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt, Path("/defs"))
+    argv = render_command("opencode run --agent 'canopy overseer' {prompt}", prompt, Path("/defs"), "tick 1")
     assert argv == ["opencode", "run", "--agent", "canopy overseer", prompt]
 
 
 def test_render_command_fills_in_the_definitions_dir() -> None:
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker {prompt}"
-    argv = render_command(template, "do {definitions_dir}", Path("/state/runtime/abc"))
+    argv = render_command(template, "do {definitions_dir}", Path("/state/runtime/abc"), "tick 1")
     assert argv[:2] == ["env", "OPENCODE_CONFIG_DIR=/state/runtime/abc"]
     assert argv[-1] == "do {definitions_dir}"
+
+
+def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> None:
+    template = "agent run --title={title} {prompt}"
+    argv = render_command(template, "do {title}", Path("/defs"), "PROJ-1 implement: {prompt}")
+    assert argv == ["agent", "run", "--title=PROJ-1 implement: {prompt}", "do {title}"]
 
 
 @pytest.mark.parametrize("key", ["overseer_cmd", "worker_cmd"])
@@ -280,6 +286,16 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     for template in (runtime.overseer_cmd, runtime.worker_cmd):
         assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
+    # One word, so even a title that read as an option could not be taken for one (DESIGN §13).
+    for template in (
+        runtime.overseer_cmd,
+        runtime.worker_cmd,
+        runtime.private_worker_cmd,
+        runtime.split_cmd,
+        runtime.chore_cmd,
+        runtime.review_cmd,
+    ):
+        assert template.endswith(" --title={title} {prompt}")
 
 
 def test_xdg_config_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

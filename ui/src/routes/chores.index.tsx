@@ -12,6 +12,7 @@ import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+/** Each configured chore, as `canopy status` lists it. */
 export const Route = createFileRoute('/chores/')({
     component: ChoresPage,
 })

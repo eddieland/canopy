@@ -162,7 +162,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D030. Attempt limits and cooldowns are derived from `runs`, with no reset
 
 - An attempt is a `runs` row of that kind, however it ended. The overseer can run any `canopy` command, and a guard it
-  can reset is not a guard; a human raises a limit in config.
+  can reset is not a guard; a human raises a limit in config, or one unit's with `canopy grant` (DESIGN §22).
 - `--cursor` advances only once the worker starts, so a refused dispatch leaves its trigger for the next tick.
 - Revisit: if limits routinely hit healthy tickets; then count per PR.
 
@@ -210,10 +210,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - OpenCode deep-merges definitions keeping first-loaded key order, so a repository could put an `allow` before
   canopy's rules. JSONC and substitutions are not parsed (a T7 residual).
 
-## D046. Proprietary, installed from git, never from PyPI under this name
+## D046. MIT, installed from git, never from PyPI under this name
 
 - `canopy` on PyPI is unrelated; `Private :: Do Not Upload` blocks an upload. `make install-check` checks the install.
-- Revisit: before any public release, together with the name.
+- MIT since 2026-10-13, when the repository went public; proprietary before. Unsupported: outside issues and PRs may
+  go unanswered.
+- Revisit the name before a release meant for others to run.
 
 ## D050. Build canopy rather than adopt Symphony, agent-orchestrator, or Hermes Kanban
 

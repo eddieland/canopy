@@ -51,8 +51,9 @@ in order:
    pool's leased slots, §18); tracker config (provider, query, labels, needs-human label); trust config (authorized
    repliers, branch prefix, PR label); capacity; policy (limits and stacking); running workers and their repositories;
    and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment, message, and mirror cursors
-   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, and
-   when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in
+   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind,
+   the runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next
+   run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in
    with its starting base, start and end). A ticket the operator started has a `private` object (§22): its start
    record's status, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if
    any. `chores` (§19) is present only when chores are configured. `mirror` holds the per-tick mirror limit and this
@@ -234,6 +235,14 @@ decision since the ticket was last forgotten (`not recorded, last decision wait`
 only when there is none. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18), recorded in
 `ticket_units.phase`: `canopy ticket set` needs `--repo` for one.
 
+A ticket's title, `tickets.title`, is its name in canopy, for display only like its phase. The overseer gives it with
+`canopy ticket set <KEY> --title '<title>'`, a few words from the ticket's own title, the first tick the state block
+shows the ticket with no title, and again only when the ticket's own title changes. The CLI drops control characters,
+collapses whitespace to one line, refuses an empty title, and cuts it at 80 characters; a dry run records it, as it
+records a phase. It is shown beside the key (`PROJ-1: <title>`) in `canopy status`, `canopy show`, and the web UI, and
+it is the session title of the ticket's runs (§13). It never reaches `attention.md` or a notification: those go to
+sinks the operator may share (§20), and a title is model-written text. `canopy forget` keeps it.
+
 | Phase | Derived from | Next action |
 |---|---|---|
 | `ready` | one of `tracker.labels` present, not closed, no run active, no branch, no open blocker | dispatch `implement` |
@@ -359,9 +368,10 @@ dispatch names at least one, in a workspace of one repository too.
    - `bad_base`: a `--base` that is not `<trust.branch_prefix>` plus one plain ref component (letters, digits, `_`,
      `-`, starting with a letter or digit, at most 200 characters), or that is the run's own branch (§10).
    - `running`: a run for KEY is running.
-   - `attempt_limit`: a named unit has already had `policy.max_<kind>_attempts` runs of this kind. A run counts against
-     every unit it covered, whatever it ended as; the count never resets (D030). A split's count is the ticket's. The
-     refusal also records the `attempt_limit` attention item (§14), about that unit.
+   - `attempt_limit`: a named unit has already had as many runs of this kind as its limit: `policy.max_<kind>_attempts`
+     plus the runs the operator granted that unit with `canopy grant` (§22). A run counts against every unit it
+     covered, whatever it ended as; the count never resets (D030). A split's count and limit are the ticket's, and
+     only config raises it. The refusal also records the `attempt_limit` attention item (§14), about that unit.
    - `cooldown`: `fix-ci` only, less than `policy.fix_ci_cooldown_minutes` after the latest fix-ci run covering a named
      unit ended.
    - `capacity`: `max_workers` runs and review runs, together, are running (§21).
@@ -380,7 +390,7 @@ dispatch names at least one, in a workspace of one repository too.
    id, holder, and base branch: `--base` if given, else treehouse's). Each repository becomes a unit of the ticket, with
    the run's branch.
 3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
-   the attempt number (one more than the most runs of the kind in any unit covered) and the kind's limit, a
+   the attempt number (one more than the most runs of the kind in any unit covered) and that unit's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
    repliers, the trusted reviewers and, on a public ticket, the operator's latest messages (§7), the queue labels,
    whether the run is stacked on another ticket's branch (§10), how to open a PR (`{{OPEN_PR}}`, below), the context,

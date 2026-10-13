@@ -9,8 +9,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import config, db
-from canopy.infra import resources
-from tests.conftest import CanopyEnv, GitPool, git, pool_state
+from tests.conftest import CanopyEnv, GitPool, Journals, git, pool_state
 
 
 def map_text(*repos: tuple[str, str], extra: str = "") -> str:
@@ -32,12 +31,12 @@ class Ws:
     root: Path
     origins: dict[str, Path]
     state_dir: Path
+    journals: Journals
 
     def journal(self) -> sqlite3.Connection:
+        """Open this workspace's journal, closed when the test ends."""
         self.state_dir.mkdir(mode=0o700, exist_ok=True)  # as canopy creates it; anything wider is refused
-        conn = db.connect(self.state_dir / "canopy.db")
-        db.migrate(conn, resources.migrations_dir())
-        return conn
+        return self.journals.open(self.state_dir / db.DB_FILE_NAME)
 
     def clone(self, name: str) -> Path:
         return self.root / "repos" / name
@@ -74,7 +73,7 @@ def ws(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, monkeypatch
         git("clone", "--quiet", str(origin), str(root / "repos" / name), cwd=tmp_path)
     (root / config.WORKSPACE_FILE_NAME).write_text(map_text(*((n, str(o)) for n, o in origins.items())))
     monkeypatch.chdir(root)
-    return Ws(root, origins, root / ".canopy")
+    return Ws(root, origins, root / ".canopy", canopy_env.journals)
 
 
 def seed_pools(ws: Ws, treehouse_state: Path) -> None:

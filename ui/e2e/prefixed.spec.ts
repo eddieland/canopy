@@ -68,9 +68,13 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     await form.getByRole('textbox').fill('Use your judgement on the review bot.')
     await form.getByRole('button', { name: 'Reply' }).click()
     await expect(form.getByRole('status')).toContainText('Recorded message')
-    await expect(page.getByTestId('conversation').locator('[data-source=operator]').last()).toContainText(
-        'Use your judgement on the review bot.',
-    )
+    // Other tests reply to the same ticket at the same time, so find this reply by its text, not as the last one.
+    await expect(
+        page
+            .getByTestId('conversation')
+            .locator('[data-source=operator]')
+            .filter({ hasText: 'Use your judgement on the review bot.' }),
+    ).toHaveCount(1)
     const comment = page.getByTestId('message-6')
     // The fixture's comment holds markup: it must arrive as the characters, never as an element.
     await expect(comment).toContainText('<b>Thanks!</b>')
@@ -91,7 +95,7 @@ test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) =
     await expect(form.getByRole('status')).toContainText('Recorded message')
     await expect(box).toHaveValue('')
     // toContainText collapses whitespace, so read the text itself: the line break must arrive as one.
-    const mine = page.getByTestId('conversation').locator('[data-source=operator]').last()
+    const mine = page.getByTestId('conversation').locator('[data-source=operator]').filter({ hasText: 'Second line.' })
     await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
 })
 

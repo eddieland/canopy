@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
  * A page's title block: a small panel label in its section's color (the accent on a page in no section), the title,
  * and one line of description.
  */
-export function PageHeader({ label, title, children }: { label: string; title: string; children?: ReactNode }) {
+export function PageHeader({ label, title, children }: { label: string; title: ReactNode; children?: ReactNode }) {
     const section = useSection()
     return (
         <header className="flex flex-col gap-1">

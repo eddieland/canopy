@@ -1,0 +1,111 @@
+"""The reviews canopy keeps, as the web UI shows them (DESIGN §21): a shadow PR review, posted nowhere (D114).
+
+Reads only. Everything a review holds is untrusted: the reviewer read the PR, and the diff is the PR's own text. Text
+goes out with control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from canopy.core import contract, db, review_diff
+from canopy.core import review_result as result
+from canopy.serve.schema import (
+    DiffFile,
+    DiffHunk,
+    DiffLine,
+    ReviewDetail,
+    ReviewDiff,
+    ReviewFinding,
+    ReviewSummary,
+    RunState,
+)
+from canopy.serve.views import lines
+
+if TYPE_CHECKING:
+    import sqlite3
+
+    from canopy.core.context import Context
+
+# How many review runs the reviews list carries, newest first.
+RECENT_REVIEWS = 100
+_STATES: dict[str, RunState] = {"running": "running", "done": "done"}
+
+
+def reviews(ctx: Context) -> list[ReviewSummary]:
+    """The latest review runs, newest first."""
+    return [summary(r) for r in db.recent_review_runs(ctx.conn, RECENT_REVIEWS)]
+
+
+def review(ctx: Context, run_id: int) -> ReviewDetail | None:
+    """One review run in full, or None if there is no such run."""
+    row = db.get_review_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    stored = result.stored(row["result_json"])
+    note = contract.stored_object(row["result_json"]).get("harness")
+    found = review_diff.read(review_diff.path_for(str(row["log_path"])))
+    diff = _diff(found) if found is not None else None
+    return ReviewDetail(
+        review=summary(row),
+        summary=lines(stored.summary) or None if stored is not None else None,
+        note=lines(note) or None if isinstance(note, str) else None,
+        base_branch=str(row["base_branch"]) if row["base_branch"] else None,
+        findings=[_finding(f, found) for f in stored.findings] if stored is not None else [],
+        diff=diff,
+        runs=[summary(r) for r in db.review_runs_of(ctx.conn, str(row["pr_url"]))],
+    )
+
+
+def summary(row: sqlite3.Row) -> ReviewSummary:
+    """One review run's row, as the reviews list shows it."""
+    stored = result.stored(row["result_json"])
+    status = str(row["status"])
+    return ReviewSummary(
+        id=int(row["id"]),
+        pr_url=str(row["pr_url"]),
+        sha=str(row["sha"]),
+        ticket_key=str(row["ticket_key"]) if row["ticket_key"] else None,
+        repo=str(row["repo"]) if row["repo"] else None,
+        status=status,
+        state=_STATES.get(status, "failed"),
+        verdict=stored.verdict if stored is not None else None,
+        impact=stored.impact if stored is not None else None,
+        findings=len(stored.findings) if stored is not None else 0,
+        started_at=db.parse_time(str(row["started_at"])),
+        ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
+        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+    )
+
+
+def _finding(f: result.Finding, diff: review_diff.Diff | None) -> ReviewFinding:
+    file, line = review_diff.anchor(diff, f.location) if diff is not None else (None, None)
+    return ReviewFinding(
+        severity=f.severity,
+        title=lines(f.title),
+        location=lines(f.location),
+        detail=lines(f.detail),
+        file=file,
+        line=line,
+    )
+
+
+def _diff(diff: review_diff.Diff) -> ReviewDiff:
+    return ReviewDiff(
+        files=[
+            DiffFile(
+                path=f.path,
+                old_path=f.old_path,
+                binary=f.binary,
+                hunks=[
+                    DiffHunk(
+                        header=h.header,
+                        lines=[DiffLine(kind=ln.kind, old=ln.old, new=ln.new, text=ln.text) for ln in h.lines],
+                    )
+                    for h in f.hunks
+                ],
+            )
+            for f in diff.files
+        ],
+        truncated=diff.truncated,
+    )

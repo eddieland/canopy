@@ -1,7 +1,9 @@
 import { useEffect, useEffectEvent, useState } from 'react'
 
+/** Where a stream is: opening, open, reconnecting after a drop, or closed for good (or never opened). */
 export type StreamStatus = 'connecting' | 'open' | 'reconnecting' | 'closed'
 
+/** What useEventStream does with the stream's messages. */
 export interface EventStreamOptions<T> {
     /** Turns one message's `data` into a value, or null to drop it. */
     parse: (data: string) => T | null
@@ -9,6 +11,7 @@ export interface EventStreamOptions<T> {
     onEvent: (event: T) => void
     /** Called when the stream opens again after a drop: events may have been missed, so refetch what they feed. */
     onReconnect?: () => void
+    /** Whether to connect at all. Off closes the stream. Defaults to on. */
     enabled?: boolean
 }
 

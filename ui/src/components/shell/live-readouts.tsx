@@ -23,11 +23,12 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
     const meta = useQuery(metaQuery)
     const last = useQuery(tickQuery)
     return (
-        <div className="flex items-center gap-5" data-testid="live-readouts">
+        // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
+        <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
             {last.data?.tick && <LastTick tick={last.data.tick} />}
             <span
                 className={cn(
-                    'readout inline-flex w-28 items-center justify-end gap-1.5 text-[0.6875rem] uppercase',
+                    'readout inline-flex items-center gap-1.5 text-[0.6875rem] uppercase',
                     stream === 'open' ? 'text-accent' : 'text-muted-foreground',
                 )}
                 data-testid="stream-status"

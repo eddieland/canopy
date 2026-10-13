@@ -34,6 +34,7 @@ def state_block(
     last_runs: Mapping[str, sqlite3.Row],
     run_slots: Mapping[int, list[sqlite3.Row]],
     attempts: Mapping[policy.Unit, Mapping[str, int]],
+    grants: Mapping[policy.Unit, Mapping[str, int]],
     fix_ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
     split_attempts: Mapping[str, int],
@@ -46,14 +47,14 @@ def state_block(
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
-    `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts` and
-    `fix_ci_cooldowns` are per unit (`policy.unit`). `split_attempts` are per ticket, and `split_children` are the
-    children of splits not yet done, with their split run's end (DESIGN §18). `chores` are the configured chores
-    (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed. `private` holds each
-    private ticket's conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a
-    public ticket's operator messages newer than its message cursor, by key; a ticket without any has no `operator`
-    key (DESIGN §7, D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the
-    tick's own, so no comment can predict it.
+    `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`,
+    and `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key
+    (DESIGN §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with
+    their split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no
+    `chores` key, exactly as before chores existed. `private` holds each private ticket's conversation state, by key
+    (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages newer than
+    its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `mirror_delimiter` ends
+    the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
 
     With `tracker.private_only`, the block carries only the tickets the operator started, and none of what finds or
     authorizes a public one: no query, labels, operator messages on a public ticket, or split children; and no `mirror`,
@@ -62,16 +63,13 @@ def state_block(
     private = private or {}
     operator = operator or {}
     private_only = config.tracker.private_only
-    if private_only:
-        tickets = [t for t in tickets if str(t["key"]) in private]
-        operator = {}
-        split_children = []
+    tickets, operator, split_children = _queue(tickets, private, operator, split_children, private_only=private_only)
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
         name = str(u["repo"])
         unit = policy.unit(key, name)
-        return {
+        summary: dict[str, object] = {
             "repo": name,
             "branch": u["branch"],
             "pr_url": u["pr_url"],
@@ -80,6 +78,9 @@ def state_block(
             "attempts": dict(attempts.get(unit, no_attempts)),
             "fix_ci_cooldown_until": _stamp(fix_ci_cooldowns.get(unit)),
         }
+        if unit in grants:
+            summary["granted"] = dict(grants[unit])
+        return summary
 
     def run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
         if run is None:
@@ -98,6 +99,7 @@ def state_block(
         key = str(t["key"])
         summary: dict[str, object] = {
             "key": key,
+            "title": t["title"],
             "phase": t["phase"],
             "branch": t["branch"],
             # The mirror cursor is moved by `canopy mirror` itself, never by `--cursor` (DESIGN §22).
@@ -141,14 +143,7 @@ def state_block(
             }
             for r in workspace.repos
         ],
-        "tracker": {"provider": config.tracker.provider, "private_only": True}
-        if private_only
-        else {
-            "provider": config.tracker.provider,
-            "query": config.tracker.query,
-            "labels": list(config.tracker.labels),
-            "needs_human_label": config.tracker.needs_human_label,
-        },
+        "tracker": _tracker(config),
         "trust": {
             "authorized_repliers": list(config.trust.authorized_repliers),
             "trusted_reviewers": list(config.trust.trusted_reviewers),
@@ -227,6 +222,35 @@ def state_block(
             "",
         ]
     )
+
+
+def _queue(
+    tickets: list[sqlite3.Row],
+    private: Mapping[str, dict[str, object]],
+    operator: Mapping[str, dict[str, object]],
+    split_children: list[sqlite3.Row],
+    *,
+    private_only: bool,
+) -> tuple[list[sqlite3.Row], Mapping[str, dict[str, object]], list[sqlite3.Row]]:
+    """Return the tickets, public operator messages, and split children the overseer sees.
+
+    A private-only queue sees only started tickets, and none of a public one's (DESIGN §22).
+    """
+    if not private_only:
+        return tickets, operator, split_children
+    return [t for t in tickets if str(t["key"]) in private], {}, []
+
+
+def _tracker(config: Config) -> dict[str, object]:
+    """Return the tracker config the overseer finds and authorizes tickets with: none in a private-only queue."""
+    if config.tracker.private_only:
+        return {"provider": config.tracker.provider, "private_only": True}
+    return {
+        "provider": config.tracker.provider,
+        "query": config.tracker.query,
+        "labels": list(config.tracker.labels),
+        "needs_human_label": config.tracker.needs_human_label,
+    }
 
 
 def _stamp(moment: datetime | None) -> str | None:
