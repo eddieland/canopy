@@ -249,11 +249,16 @@ tabs.
   colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
   with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
-  breaks, its reasoning muted and italic under a `thinking` label. A tool call is one line, a native `<details>`: a
-  `RunDot` in `done` or `failed`, the tool's name, its title or its input's first value, and how long it took; it
-  opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
-  call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
-  all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
+  breaks, its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line
+  says what it did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name, and
+  in monospace a shell call's command (the agent's description of it on hover), else the runtime's title, else its
+  input's short values as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of
+  one short line that is not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a
+  `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented, in
+  monospace blocks at most 24rem tall. A model call is a muted line with its tokens and cost, and its reason only when
+  it is not `tool-calls`, as every call but the last is; a runtime error is tinted `status-failed`. Open all and Close
+  all are in the header, with the session id; above the rows, how many tool calls, failed and refused ones, and model
+  calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's

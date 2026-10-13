@@ -751,6 +751,25 @@ def _transcripts(state_dir: Path) -> None:
     tick_2 = [
         _text(s2, -60, "Reading the journal's state first."),
         _done(s2, -59.9, "Read the loop's state", "canopy state", "## Tickets\n- ABC-101 implementing (run 41)\n"),
+        _tool(
+            s2,
+            -59.8,
+            "github_pull_request_read",
+            {
+                "status": "completed",
+                "input": {"method": "get_status", "owner": "acme", "repo": "web", "pullNumber": 88},
+                "output": '{"state": "pending", "statuses": [{"context": "ci/build", "state": "success"}]}',
+                "title": "",
+            },
+        ),
+        # canopy prints a refusal on stderr and exits 1; the runtime still reports the call completed.
+        _done(
+            s2,
+            -59.7,
+            "Dispatch ABC-104",
+            "canopy dispatch ABC-104 --label canopy --kind implement --repo web",
+            "Error: dispatch refused (running): run 43 is still working ABC-104; the refusal was recorded\n",
+        ),
         _done(
             s2,
             -59.5,

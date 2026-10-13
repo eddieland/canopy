@@ -9,14 +9,14 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { localTime } from '@/lib/time'
-import { duration, elapsed, hint, startOf, tally, tokenCount } from '@/lib/transcript'
+import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 /**
- * A session's transcript (DESIGN §22): the agent's text, each tool call (its input and output open on a click),
- * each model call's cost, and the runtime's errors, in the order the runtime printed them. All of it is agent
- * output, rendered as text. `running` says the session's events have not reached the log yet: they do when its run
- * or tick ends.
+ * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
+ * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
+ * printed them. All of it is agent output, rendered as text. `running` says the session's events have not reached the
+ * log yet: they do when its run or tick ends.
  */
 export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
     // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own.
@@ -75,6 +75,11 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                             {counts.failed > 0 && (
                                 <>
                                     , <span className="text-status-failed">{counts.failed} failed</span>
+                                </>
+                            )}
+                            {counts.refused > 0 && (
+                                <>
+                                    , <span className="text-status-failed">{counts.refused} refused</span>
                                 </>
                             )}
                         </span>
@@ -139,9 +144,10 @@ function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string |
             return <Tool entry={entry} start={start} open={open} />
         case 'step':
             return (
-                <Row at={entry.at} start={start} className="py-1.5 font-mono text-xs text-muted-foreground">
+                <Row at={entry.at} start={start} className="py-1 font-mono text-xs text-muted-foreground">
                     <span>model call</span>
-                    {entry.reason && <Chip word={entry.reason} />}
+                    {/* Every call but the last ends in tool calls: only another reason says something. */}
+                    {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
                     <span className="readout ml-auto">
                         {entry.tokens === null ? '' : `${tokenCount(entry.tokens)} tokens`}
                     </span>
@@ -191,9 +197,14 @@ function When({ at, start }: { at: string | null; start: string | null }) {
     )
 }
 
-/** A tool call: one line, its name and what it was about, that opens to its input and its output or error. */
+/**
+ * A tool call: one line, its name, what it did, and how it ended (refused, or what it printed when that is short),
+ * that opens to its input and its output or error.
+ */
 function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | null; open: boolean }) {
-    const failed = entry.status === 'error'
+    const { verdict, guard, line } = outcome(entry)
+    const failed = verdict !== 'done'
+    const did = summary(entry)
     return (
         <li data-testid="transcript-tool">
             <details open={open} className="group">
@@ -205,12 +216,26 @@ function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | n
                 >
                     <When at={entry.at} start={start} />
                     <RunDot state={failed ? 'failed' : 'done'} />
-                    <span className="w-44 shrink-0 truncate font-mono text-xs" title={entry.tool}>
+                    <span className="w-32 shrink-0 truncate font-mono text-xs sm:w-56" title={entry.tool}>
                         {entry.tool}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                        {entry.title ?? hint(entry.input)}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                        {/* A shell call's title is what the agent said it was for: the command is what it did. */}
+                        <span className="truncate font-mono text-xs" title={entry.title ?? did}>
+                            {did}
+                        </span>
+                        {line !== null && (
+                            <span
+                                className={cn('truncate text-xs text-muted-foreground', failed && 'text-status-failed')}
+                                title={line}
+                            >
+                                {line}
+                            </span>
+                        )}
                     </span>
+                    {verdict === 'refused' && (
+                        <Chip className="border-status-failed/40 text-status-failed" word={`refused:${guard ?? ''}`} />
+                    )}
                     {entry.cut && <Chip>cut</Chip>}
                     <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">
                         {entry.duration_ms === null ? '' : duration(entry.duration_ms)}
@@ -224,8 +249,8 @@ function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | n
                 </summary>
                 <div className="flex flex-col gap-2 pr-3 pb-3 pl-[5.25rem]">
                     <Block label="input">{entry.input}</Block>
-                    <Block label={failed ? 'error' : 'output'} failed={failed}>
-                        {entry.output || 'no output'}
+                    <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed}>
+                        {entry.output ? pretty(entry.output) : 'no output'}
                     </Block>
                 </div>
             </details>

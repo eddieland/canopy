@@ -119,8 +119,13 @@ def test_a_ticks_transcript_is_its_overseers_session(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/ticks/2/transcript").json()
     assert (found["status"], found["session_id"]) == ("read", "ses_tick2")
-    commands = [json.loads(e["input"])["command"] for e in found["entries"] if e["kind"] == "tool"]
-    assert commands == ["canopy state", "canopy decide ABC-101 wait 'run 41 is implementing it.'"]
+    tools = [json.loads(e["input"]) for e in found["entries"] if e["kind"] == "tool"]
+    assert [t.get("command", t.get("method")) for t in tools] == [
+        "canopy state",
+        "get_status",
+        "canopy dispatch ABC-104 --label canopy --kind implement --repo web",
+        "canopy decide ABC-101 wait 'run 41 is implementing it.'",
+    ]
     # Tick 1 kept no output; no such tick is a 404.
     assert c.get("/api/ticks/1/transcript").json()["status"] == "no_log"
     missing = c.get("/api/ticks/99/transcript")
