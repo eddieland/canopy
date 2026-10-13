@@ -150,12 +150,24 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     )
 })
 
-test("a ticket's page links to it in the tracker, from tracker.ticket_url", async ({ page }) => {
+test("a ticket's page links to it in the tracker, from tracker.ticket_url, under its title", async ({ page }) => {
     await page.goto('tickets/ABC-102')
-    const link = page.getByRole('link', { name: 'jira.example/browse/ABC-102' })
+    // In the page's header, by its title, not down in a panel.
+    const links = page.locator('main header').getByRole('navigation', { name: 'Links out' })
+    const link = links.getByRole('link', { name: 'jira.example/browse/ABC-102' })
     await expect(link).toHaveAttribute('href', 'https://jira.example/browse/ABC-102')
     await expect(link).toHaveAttribute('target', '_blank')
     await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+})
+
+test("a ticket's page links to its PR under its title, beside the tracker", async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    const links = page.locator('main header').getByRole('navigation', { name: 'Links out' })
+    await expect(links.getByRole('link')).toHaveText(['jira.example/browse/ABC-103', 'github.com/acme/web/pull/91'])
+    await expect(links.getByRole('link', { name: 'github.com/acme/web/pull/91' })).toHaveAttribute(
+        'href',
+        'https://github.com/acme/web/pull/91',
+    )
 })
 
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({
