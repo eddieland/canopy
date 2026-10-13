@@ -88,6 +88,33 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     return outcome
 
 
+def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str]]:
+    """Return where chore `name` runs and the command that runs it with `prompt`.
+
+    Raises:
+        SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
+    """
+    cwd = _cwd(ctx, name, chore)
+    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
+    # reads project config from the directories above it too.
+    here = cwd.resolve()
+    shadowing = [found for d in (here, *here.parents) for found in definitions.shadowing(d)]
+    if shadowing:
+        raise SetupError(definitions.shadowing_message(shadowing))
+    template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
+    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+
+
+def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:
+    """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
+    if done.timed_out:
+        return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes")
+    parsed = result.parse(output.text)
+    if parsed is None:
+        return Outcome("unknown", None, "the chore's last line was not a valid result; its findings are not recorded")
+    return Outcome(parsed.status, parsed)
+
+
 def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
     name = str(run["chore"])
     # Read the config this process loaded: a chore deleted since `chore run` started it does not run.
@@ -118,33 +145,6 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
     return outcome_of(done, output, chore)
-
-
-def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str]]:
-    """Return where chore `name` runs and the command that runs it with `prompt`.
-
-    Raises:
-        SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
-    """
-    cwd = _cwd(ctx, name, chore)
-    # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
-    # reads project config from the directories above it too.
-    here = cwd.resolve()
-    shadowing = [found for d in (here, *here.parents) for found in definitions.shadowing(d)]
-    if shadowing:
-        raise SetupError(definitions.shadowing_message(shadowing))
-    template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
-
-
-def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:
-    """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
-    if done.timed_out:
-        return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes")
-    parsed = result.parse(output.text)
-    if parsed is None:
-        return Outcome("unknown", None, "the chore's last line was not a valid result; its findings are not recorded")
-    return Outcome(parsed.status, parsed)
 
 
 def _cwd(ctx: Context, name: str, chore: Chore) -> Path:
