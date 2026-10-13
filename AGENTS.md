@@ -160,3 +160,4 @@ If code and the design disagree, the design doc wins until a decision entry says
 - Docs updated: the design for behavior and why it is that way, `README.md` if the install path or daily surface
   changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.
+- A PR that changes the web UI shows it: screenshots in its description, as `ui/AGENTS.md` says.
