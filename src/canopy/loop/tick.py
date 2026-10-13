@@ -166,7 +166,7 @@ def _run_overseer(
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e), None
-    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions_dir)
+    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions_dir, f"tick {tick_id}")
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     try:

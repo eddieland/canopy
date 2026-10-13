@@ -6,6 +6,7 @@ export const mockRuns: Run[] = [
     {
         id: 41,
         ticket_key: 'ABC-101',
+        ticket_title: 'Sign in with SSO',
         kind: 'implement',
         status: 'running',
         state: 'running',
@@ -24,6 +25,7 @@ export const mockRuns: Run[] = [
     {
         id: 42,
         ticket_key: 'ABC-102',
+        ticket_title: 'Export reports as CSV',
         kind: 'implement',
         status: 'blocked',
         state: 'blocked',
@@ -58,6 +60,7 @@ export const mockAttention: AttentionItem[] = [
 export const mockTickets: TicketSummary[] = [
     {
         key: 'ABC-102',
+        title: 'Export reports as CSV',
         private: true,
         start: 'started',
         phase: 'needs_human',

@@ -8,6 +8,7 @@ import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { phaseLabel } from '@/lib/phase'
 
@@ -52,7 +53,8 @@ function TicketsPage() {
 function Row({ ticket }: { ticket: TicketSummary }) {
     return (
         <li className="flex items-center gap-3 px-3 py-2.5" data-testid={`ticket-${ticket.key}`}>
-            <TicketLink ticketKey={ticket.key} className="w-24 truncate" />
+            <TicketLink ticketKey={ticket.key} className="w-24 shrink-0 truncate" />
+            <TicketTitle title={ticket.title} className="flex-1" />
             <span className="flex w-32">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
@@ -60,7 +62,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                 {phaseLabel(ticket)}
                 {ticket.done ? ', done' : ''}
             </span>
-            <span className="ml-auto flex items-center gap-4">
+            <span className="flex items-center gap-4">
                 {ticket.running_run !== null && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
                         <RunDot state="running" />

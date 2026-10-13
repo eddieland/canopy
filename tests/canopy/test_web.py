@@ -243,6 +243,7 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
     run_id = running_run(ctx, KEY)
+    db.set_ticket(ctx.conn, KEY, ctx.repo, title="Pick a color")
     run = db.get_run(ctx.conn, run_id)
     assert run is not None
     result = {"status": "blocked", "summary": "half done\x1b[2J", "question": "Red <b>or</b> blue?"}
@@ -261,8 +262,9 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     [listed] = c.get("/api/runs").json()
     assert (listed["id"], listed["state"], listed["private"]) == (run_id, "blocked", True)
     assert listed["summary"] == "half done [2J"  # control characters dropped
+    assert listed["ticket_title"] == "Pick a color"
 
-    assert [t["key"] for t in c.get("/api/tickets").json()] == [KEY]
+    assert [(t["key"], t["title"]) for t in c.get("/api/tickets").json()] == [(KEY, "Pick a color")]
     detail = c.get(f"/api/tickets/{KEY}").json()
     question = detail["messages"][-1]
     assert (question["kind"], question["body"]) == ("question", "Red <b>or</b> blue?")

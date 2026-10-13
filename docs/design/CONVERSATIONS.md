@@ -344,7 +344,7 @@ The API, under `{base}/api`:
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
 | `GET /meta` | canopy's version, whether the data is mock, and `tracker.ticket_url` (or none) |
 | `GET /attention` | the attention list, as `canopy status` shows it |
-| `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
 | `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
@@ -352,7 +352,7 @@ The API, under `{base}/api`:
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
-| `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
+| `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |

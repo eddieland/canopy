@@ -147,9 +147,12 @@ mcp_server = ""         # optional; the tracker's MCP server as OpenCode names i
 max_workers = 2
 
 [runtime]
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
-split_cmd    = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json {prompt}'
+overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
+    --title={title} {prompt}'''
+worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
+    --title={title} {prompt}'''
+split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
+    --title={title} {prompt}'''
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
@@ -292,6 +295,8 @@ From events the harness also reads, each validated (D026):
 
 - the session id: the first `sessionID` of at most 100 letters, digits, `_`, and `-`. The operator opens the
   transcript with OpenCode's own tools (`opencode export <id>`, or `opencode --session <id>` in the run's directory).
+- the session title is not among them: OpenCode titles a session in the background, with a model call over the first
+  message, and `run --format json` prints no event for it. canopy names the session instead (below).
 - the cost: the sum over `step_finish` events, one per model call, of `part.cost` in dollars and `part.tokens` (input,
   output, reasoning, cache read, cache write), each call's cost at most $1,000,000 and each count at most 10^12. If one
   does not validate, the run reports no cost rather than too little. Events with no model call cost nothing. A run
@@ -304,6 +309,23 @@ chore reports on its chore run (§19), and `_review` what a reviewer reports on 
 canopy starts records what it cost, and the web UI's spend (§22) sums them all. A template of the operator's that asks
 for no events records nothing, and its runs are missing from the spend. A tick's output file and a run log hold the
 events as printed, and the web UI reads one session's back from them as its transcript (§22).
+
+### Session titles
+
+Every runtime template may name `{title}`, the run's session title, and the defaults pass it as
+`opencode run --title={title}`, so OpenCode's session list names each session as canopy does:
+
+- a worker or split run: `<KEY> <kind>: <the ticket's title>` (§7), or `<KEY> <kind>` before the overseer names it;
+- a tick's overseer: `tick <id>`; a chore: `chore:<name>`; a review: `review <PR URL>`.
+
+The title is read when the run starts, so a rename shows in canopy at once and in the runtime from the ticket's next
+run. canopy names sessions rather than reading OpenCode's own titles because those are not in the events (above):
+reading one back would take an OpenCode-only command after every run, where the runtime is otherwise only a command
+template (§12), and its model writes it from canopy's prompt, which is mostly the same for every run of a kind.
+
+Like `{prompt}`, `{title}` is replaced inside a word, after the template is split, in the same pass as the other
+placeholders. The defaults keep `--title=` and the title in one word, so a title is never read as an option, and every
+title starts with a letter or digit (a key, `tick`, `chore:`, `review`), so not even as a word of its own.
 
 ### Where the runtime finds canopy's definitions
 
@@ -326,8 +348,10 @@ canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split
 `review_cmd`):
 
 ```toml
-overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json {prompt}'
-worker_cmd   = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json {prompt}'
+overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
+    --title={title} {prompt}'''
+worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
+    --title={title} {prompt}'''
 ```
 
 Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
@@ -368,11 +392,11 @@ only by the operator: grouped by reason, one line per item with ticket key, age,
 its overseer's cost when the runtime reported it. Items disappear when their cause is gone; there is no manual
 dismissal.
 
-`canopy status` also lists the tickets the operator started (§22), each with its status, phase, and the message it
-awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket, kind,
-status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line with control
-characters dropped and cut at 160 characters; and its session id, its cost and tokens when the runtime reported them
-(§13), and its run log.
+`canopy status` also lists the tickets the operator started (§22), each with its title (§7), status, phase, and the
+message it awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket and its
+title, kind, status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line
+with control characters dropped and cut at 160 characters; and its session id, its cost and tokens when the runtime
+reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
 `attempt_limit`, a private ticket's `awaiting_reply` (§22), and in a workspace `repo_missing` and the overseer's

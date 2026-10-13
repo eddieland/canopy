@@ -143,7 +143,12 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    argv = render_command(ctx.config.runtime.review_cmd, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+    argv = render_command(
+        ctx.config.runtime.review_cmd,
+        prompt,
+        definitions.ensure(ctx.state_dir, ctx.config),
+        f"review {run['pr_url']}",
+    )
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
