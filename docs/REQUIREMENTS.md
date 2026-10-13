@@ -38,7 +38,8 @@ code or text of their own in step with canopy:
   and Slack destinations the operator wants (N2) ship with canopy (M10).
 - Prompt overrides (§12) are copies the operator maintains, and an override must keep what canopy's guards rely on
   (D051). Prefer a skill; treat an override as a last resort. Opening PRs, which an operator's employer may need done
-  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8).
+  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8), and a habit every
+  worker should keep, such as how to commit review fixes, takes a few lines in `paths.worker_instructions` (§12).
 
 ## Must have
 

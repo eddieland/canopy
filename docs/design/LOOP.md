@@ -439,6 +439,11 @@ dispatch names at least one, in a workspace of one repository too.
      `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed. A public
      ticket's prompt without `{{OPERATOR_MESSAGES}}` is `bad_prompt` once the operator has written to the ticket in
      canopy (§22, D093), and still renders for a ticket the operator never wrote to.
+   - Every prompt but a split's carries `{{STANDING_INSTRUCTIONS}}`, the operator's file `paths.worker_instructions`
+     (§12), or `None.` without one. With it set, a prompt without the placeholder is `bad_prompt`, so an override
+     cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
+     worker without it would work as if the operator had never written it. It is the operator's own text, an
+     instruction like their messages, and the prompt's obligations come before it.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
