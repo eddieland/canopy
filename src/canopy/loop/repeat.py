@@ -379,6 +379,8 @@ def _ticks(
         # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it. A reload
         # before it is the operator's act, as a message is, and the journal does not hold it.
         idle = pacing.idle(ctx, outcome, before) and not reloaded
+        # Measured for the prompt, not acted on (ROADMAP M28): what the tick changed with nothing new to see.
+        churn: list[str] = [] if reloaded else pacing.churn(ctx, outcome, before)
         idle_count = idle_count + 1 if pace.on and idle else 0
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
@@ -386,7 +388,8 @@ def _ticks(
         wait = None if last or stop.requested else pacing.wait(ctx, pace, idle_count, datetime.now(UTC))
         if wait is not None:
             logs.for_tick(outcome.tick_id).info(
-                "loop waits", extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait)}
+                "loop waits",
+                extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait), "churn": churn},
             )
         # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
         _report(console, ctx, outcome, before.attention, elapsed=ended - started, wait=wait, idle_count=idle_count)

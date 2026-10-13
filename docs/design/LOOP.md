@@ -259,7 +259,19 @@ tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks f
 trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
 the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h 00m at 03:41` (no count after a
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
-records whether it was idle, the count, and the wait chosen, in seconds.
+records whether it was idle, the count, the wait chosen, in seconds, and `churn`, below.
+
+Churn (ROADMAP M28) is a tick that changes what the overseer records with nothing new to see: it relabels a phase, or
+adds or drops an attention item, when nothing reached the journal since the tick before read it. A churned tick is not
+idle, so it resets idle pacing's count (MEASUREMENTS 2026-10-12 F5, 2026-10-13 F17). It is measured before it is fixed:
+the `loop waits` line's `churn` lists, for an `ok` tick, each ticket's or unit's phase it changed
+(`PROJ-1 (api) phase ci_running -> ci_red`) and each attention item it added (`+PROJ-1 needs_reviewer`) or dropped
+(`-`), when, since the previous tick read the journal, no run, chore run, or review run started or ended, the operator
+recorded no message, start, stop, or grant, the loop applied no reload, and no gate came due (the earliest gate ahead of
+that read is not before this tick's). Otherwise, and on a tick that changed neither, it is empty. A ticket seen for the
+first time is new, not churn. The list cannot tell a flap from the world changing (a review the tracker's MCP read, CI
+going red): the `decisions` table can, by the rationales either side, and prompt changes follow only when it shows a
+pattern.
 
 The journal records the same on each tick the loop ran, for spend (ROADMAP M33): `ticks.idle`, whether the tick was idle
 by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any

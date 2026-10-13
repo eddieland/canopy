@@ -15,10 +15,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, db
+from canopy.core.items import subject
 from canopy.loop import attention
 from canopy.runs import policy
 
 if TYPE_CHECKING:
+    import sqlite3
     from datetime import datetime
 
     from canopy.core.context import Context
@@ -63,15 +65,16 @@ class Before:
 
     attention: list[attention.Item]
     tickets: frozenset[tuple[object, ...]]
+    phases: dict[tuple[str, str | None], str | None]
 
 
 def before(ctx: Context) -> Before:
     """Read the attention list and every ticket's and unit's state, before a tick.
 
     Returns:
-        What `idle` compares the journal with after the tick.
+        What `idle` and `churn` compare the journal with after the tick.
     """
-    return Before(attention.listed(ctx), db.tickets_snapshot(ctx.conn))
+    return Before(attention.listed(ctx), db.tickets_snapshot(ctx.conn), db.phases(ctx.conn))
 
 
 def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
@@ -94,10 +97,62 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
         all(_quiet(str(d["action"])) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id))
         and attention.keys(attention.listed(ctx)) == attention.keys(seen.attention)
         and db.tickets_snapshot(ctx.conn) == seen.tickets
-        and not db.runs_moved_after(ctx.conn, str(previous["read_at"]))
+        and _nothing_since(ctx, previous)
+    )
+
+
+def churn(ctx: Context, outcome: tick.Outcome, seen: Before) -> list[str]:
+    """What the tick changed with nothing new in the journal to change it for (DESIGN §6, Idle pacing; ROADMAP M28).
+
+    Measured, not acted on: an `ok` tick that changed a ticket's or unit's phase, or the attention list, when no run
+    started or ended, the operator neither wrote, started, stopped, nor granted anything, and no gate opened since the
+    previous tick read the journal. The world may still have changed: only the decisions table tells a flap from a
+    real change. A config reload is the loop's to rule out.
+
+    Returns:
+        A line per phase changed and per attention item added (`+`) or dropped (`-`); none when the tick is not churn.
+    """
+    if outcome.status != "ok" or outcome.tick_id is None:
+        return []
+    previous, row = db.previous_tick(ctx.conn, outcome.tick_id), db.get_tick(ctx.conn, outcome.tick_id)
+    if previous is None or previous["read_at"] is None or previous["message_id"] is None or row is None:
+        return []
+    if not _nothing_since(ctx, previous) or row["read_at"] is None:
+        return []
+    opens = gate(ctx, db.parse_time(str(previous["read_at"])))
+    if opens is not None and opens <= db.parse_time(str(row["read_at"])):
+        return []
+    now = db.phases(ctx.conn)
+    lines = [
+        f"{subject(key, repo)} phase {seen.phases[key, repo]} -> {phase}"
+        for (key, repo), phase in sorted(now.items(), key=lambda kv: (kv[0][0], kv[0][1] or ""))
+        if (key, repo) in seen.phases and seen.phases[key, repo] != phase
+    ]
+    after, earlier = attention.keys(attention.listed(ctx)), attention.keys(seen.attention)
+    lines += [f"+{subject(k, repo)} {reason}" for k, reason, repo in sorted(after - earlier, key=_item_order)]
+    lines += [f"-{subject(k, repo)} {reason}" for k, reason, repo in sorted(earlier - after, key=_item_order)]
+    return lines
+
+
+def _item_order(item: tuple[str | None, str, str | None]) -> tuple[str, str, str]:
+    return (item[0] or "", item[1], item[2] or "")
+
+
+def _nothing_since(ctx: Context, previous: sqlite3.Row) -> bool:
+    """Whether nothing the journal holds for a tick to act on happened after `previous` read it.
+
+    No run, chore run, or review run started or ended, and the operator recorded no message, started or stopped no
+    ticket, and granted nothing.
+
+    Returns:
+        True if nothing did.
+    """
+    since = str(previous["read_at"])
+    return (
+        not db.runs_moved_after(ctx.conn, since)
         and db.latest_message_id(ctx.conn, source="operator") <= int(previous["message_id"])
-        and not db.starts_moved_after(ctx.conn, str(previous["read_at"]))
-        and not db.granted_after(ctx.conn, str(previous["read_at"]))
+        and not db.starts_moved_after(ctx.conn, since)
+        and not db.granted_after(ctx.conn, since)
     )
 
 
