@@ -83,6 +83,9 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: your own .worktreeinclude, passed to every `treehouse get`. It replaces the committed one: copy in its lines
 # to keep them. It selects gitignored files in the primary clone to copy into each slot (DESIGN §9).
 # worktree_include = "~/.config/canopy/worktreeinclude"
+# Optional: a few lines every worker should follow, such as "commit review fixes with `git commit --fixup`". They go
+# into every worker's prompt, at most 4 KiB, so you need not copy a prompt to add them (DESIGN §12).
+# worker_instructions = "~/.config/canopy/worker-instructions.md"
 
 [notify]
 # Optional. Receives the attention-list diff on stdin after each tick, as text: the sink named `default`.

@@ -553,6 +553,8 @@ class Paths(Section):
     # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
     # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
     worktree_include: Annotated[UserPath | None, Scope.USER] = None
+    # The operator's standing instructions, rendered into every worker prompt but a split's (DESIGN §12).
+    worker_instructions: Annotated[UserPath | None, Scope.USER] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).

@@ -175,6 +175,7 @@ comment_suffix = ""          # and ends with this, if set
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
 # worktree_include = "~/.config/canopy/worktreeinclude"   # optional; replaces the committed .worktreeinclude (§9)
+# worker_instructions = "~/.config/canopy/worker-instructions.md"   # optional; in every worker's prompt (below)
 
 [notify]
 cmd = ""   # optional; receives the attention diff on stdin: the sink `default` (§20)
@@ -251,6 +252,14 @@ on: an overseer override must pass `--label` on every `canopy dispatch`, and a w
 says otherwise; an empty value means the default. `paths.*` values must be absolute or start with `~`, since canopy
 runs from the workspace root and a relative path would let a shared workspace supply them (TRUST_MODEL T7). There is
 no key for the state directory: it is always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
+
+`paths.worker_instructions` names a file of the operator's standing instructions, a few habits every worker should
+keep, such as how to commit review fixes. canopy renders it into every worker prompt but a split's, as
+`{{STANDING_INSTRUCTIONS}}` under its own heading, before the obligations, which come first (§8). It adds to the shipped
+prompts without copying them, so prefer it to an override for anything a few lines can say; a skill is still the place
+for know-how a worker loads when it needs it (§13). It is at most 4 KiB of UTF-8, and a file canopy cannot use refuses
+the dispatch as `bad_prompt` rather than running a worker without it. Like every `paths.*` key it is user-only and
+serves every workspace the user file does.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, and every shipped skill is in the definitions directory (§13). `tracker.query` is how the
