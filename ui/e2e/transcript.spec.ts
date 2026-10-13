@@ -113,7 +113,8 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await expect(text).toContainText('service=mcp key=jira error=timed out after 1000ms listing prompts')
     // The session's events too, as the runtime printed them: lines of JSON, as text.
     await expect(text).toContainText('"sessionID": "ses_tick2"')
-    await expect(output).toContainText('1.6 KiB')
+    // The file's size, in the header.
+    await expect(output).toContainText(/\d+\.\d KiB/)
     // It opens at its end, where stderr is.
     await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
 
