@@ -27,6 +27,7 @@ interface AttentionSearch {
     item?: string | undefined
 }
 
+/** The attention list: what needs the operator, most severe first, with `?item=` selecting one. */
 export const Route = createFileRoute('/attention')({
     // `?item=<id>` selects an item by its fingerprint. Every key is returned, undefined when invalid (see runs.tsx).
     validateSearch: (search: Record<string, unknown>): AttentionSearch => {

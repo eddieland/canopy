@@ -1,7 +1,10 @@
-/** How a decision's action is shown (DESIGN.md): a refusal in the failure color, an attention item in the color of what
- * waits on the operator, anything else plain. */
+/**
+ * How a decision's action is shown (DESIGN.md): a refusal in the failure color, an attention item in the color of what
+ * waits on the operator, anything else plain.
+ */
 export type ActionTone = 'refused' | 'attention' | 'other'
 
+/** An action's tone, from its prefix: `refused:` or `attention:`. */
 export function actionTone(action: string): ActionTone {
     if (action.startsWith('refused:')) return 'refused'
     if (action.startsWith('attention:')) return 'attention'

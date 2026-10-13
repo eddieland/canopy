@@ -14,6 +14,7 @@ import { localTime } from '@/lib/time'
 import { TICK_TONE, tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
+/** One tick: the decisions it recorded, and the overseer's transcript. */
 export const Route = createFileRoute('/ticks/$id')({
     component: TickPage,
 })

@@ -6,9 +6,12 @@ import { useSyncExternalStore } from 'react'
  * the theme, and synced across tabs.
  */
 
+/** Which key sends: Enter, Ctrl+Enter (⌘+Enter on a Mac), or none, only the button. */
 export type SendKey = 'enter' | 'mod-enter' | 'button'
 
+/** Where localStorage keeps the setting. */
 export const STORAGE_KEY = 'canopy-send-key'
+/** The setting until the operator picks one: Enter, as a chat does. */
 export const DEFAULT: SendKey = 'enter'
 
 const SEND_KEYS = new Set<string>(['enter', 'mod-enter', 'button'])
@@ -20,9 +23,13 @@ export function parseSendKey(raw: string | null): SendKey {
 
 /** The parts of a key press that decide whether it sends. */
 export interface KeyPress {
+    /** The key's name, as `KeyboardEvent.key` gives it. */
     key: string
+    /** Whether Shift was held. */
     shiftKey: boolean
+    /** Whether Ctrl was held. */
     ctrlKey: boolean
+    /** Whether ⌘ (or the Windows key) was held. */
     metaKey: boolean
     /** An Enter that ends an IME composition only commits it. */
     isComposing: boolean

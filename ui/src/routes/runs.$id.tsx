@@ -20,6 +20,7 @@ import { localTime } from '@/lib/time'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
+/** One run: what it worked on, how it ended, and its session's transcript. */
 export const Route = createFileRoute('/runs/$id')({
     component: RunPage,
 })

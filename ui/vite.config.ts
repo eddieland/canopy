@@ -29,6 +29,7 @@ function preloadFonts(): Plugin {
     }
 }
 
+/** The SPA's build and dev server: file-based routes, the React Compiler, Tailwind, and `/api` proxied in dev. */
 export default defineConfig({
     // Relative URLs: FastAPI writes a <base href> into index.html, so one build serves under any path prefix.
     base: './',

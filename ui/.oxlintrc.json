@@ -5,6 +5,12 @@
     {
       "name": "react-compiler",
       "specifier": "eslint-plugin-react-hooks"
+    },
+    // Every exported name, and each field of an exported interface, carries a JSDoc comment with no types in it:
+    // TypeScript has the types. oxlint's own jsdoc plugin has no rule that requires a comment.
+    {
+      "name": "jsdoc-js",
+      "specifier": "eslint-plugin-jsdoc"
     }
   ],
   "categories": {
@@ -50,6 +56,21 @@
         ]
       }
     ],
+    "jsdoc-js/require-jsdoc": [
+      "error",
+      {
+        "publicOnly": true,
+        "require": { "FunctionDeclaration": true, "ClassDeclaration": true },
+        "contexts": [
+          "ExportNamedDeclaration > VariableDeclaration",
+          "ExportNamedDeclaration > TSTypeAliasDeclaration",
+          "ExportNamedDeclaration > TSInterfaceDeclaration",
+          "ExportNamedDeclaration > TSInterfaceDeclaration > TSInterfaceBody > TSPropertySignature",
+          "ExportDefaultDeclaration"
+        ]
+      }
+    ],
+    "jsdoc-js/no-types": "error",
     "import/no-cycle": "error",
     "typescript/consistent-type-imports": "error",
     "typescript/no-explicit-any": "error",

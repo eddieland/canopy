@@ -12,6 +12,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { phaseLabel } from '@/lib/phase'
 
+/** Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. */
 export const Route = createFileRoute('/tickets/')({
     component: TicketsPage,
 })

@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TICK_TONE } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
+/** The latest ticks, newest first, as `canopy decisions` prints them. */
 export const Route = createFileRoute('/ticks/')({
     component: TicksPage,
 })
