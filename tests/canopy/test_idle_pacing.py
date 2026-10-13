@@ -490,7 +490,6 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     act: str,
     woken: str,
     message: str,
@@ -500,7 +499,6 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
     ctx = context(canopy_env)
     if act == "stop":
         assert main(["start", KEY]) == 0  # before the loop: its first tick sees it
-    overseer_does(monkeypatch)
     time = FakeTime()
 
     def at_first_wait() -> None:
@@ -515,16 +513,17 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
 
     time.on_sleep = at_first_wait
     term, out = console()
-    repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=None,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
+    with overseer_does():
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
 
     # Woken at once, but no sooner than a minute after the tick began, whatever the pacing; and the tick it woke is
     # not idle.
