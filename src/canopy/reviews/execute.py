@@ -96,6 +96,38 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     return outcome
 
 
+def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
+    """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
+    if parsed.status != "done":
+        return Outcome("failed", parsed)
+    if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
+        note = "reported low impact, but review.low_impact is not set; recorded as normal"
+        return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
+    return Outcome("done", parsed)
+
+
+def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
+    """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
+    with contextlib.suppress(OSError):
+        shutil.rmtree(start.run_dir(ctx, int(run["id"])))
+    if run["slot_path"] is None:
+        return
+    fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
+    try:
+        outcome = treehouse.return_slot(
+            ctx.runner,
+            Path(str(run["slot_path"])),
+            lease_id=str(run["lease_id"]),
+            lease_holder=str(run["lease_holder"]),
+            pool=ctx.workspace.pool(run["repo"]),
+        )
+    except treehouse.TreehouseError as e:
+        # The next tick's reconcile returns a canopy lease no running run holds.
+        log.error("review slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
+        return
+    log.info("review slot returned", extra={**fields, "outcome": outcome.value})
+
+
 def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
     slot = Path(str(run["slot_path"]))
     sha = str(run["sha"])
@@ -143,16 +175,6 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     return judged(ctx, parsed)
 
 
-def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
-    """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
-    if parsed.status != "done":
-        return Outcome("failed", parsed)
-    if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
-        note = "reported low impact, but review.low_impact is not set; recorded as normal"
-        return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
-    return Outcome("done", parsed)
-
-
 def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:
     """Fetch `sha` from origin and check it out, detached. A commit origin does not have fails the run."""
     for args in (("fetch", "--quiet", "origin", sha), ("checkout", "--quiet", "--detach", sha)):
@@ -190,25 +212,3 @@ def _git(runner: procs.Runner, slot: Path, *args: str) -> str:
         # A PR of another repository fails here: its commit is not on this origin (DESIGN §21).
         raise _Unreviewable(f"git {args[0]} failed: {detail}")
     return done.stdout.strip()
-
-
-def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
-    """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
-    with contextlib.suppress(OSError):
-        shutil.rmtree(start.run_dir(ctx, int(run["id"])))
-    if run["slot_path"] is None:
-        return
-    fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
-    try:
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            Path(str(run["slot_path"])),
-            lease_id=str(run["lease_id"]),
-            lease_holder=str(run["lease_holder"]),
-            pool=ctx.workspace.pool(run["repo"]),
-        )
-    except treehouse.TreehouseError as e:
-        # The next tick's reconcile returns a canopy lease no running run holds.
-        log.error("review slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
-        return
-    log.info("review slot returned", extra={**fields, "outcome": outcome.value})
