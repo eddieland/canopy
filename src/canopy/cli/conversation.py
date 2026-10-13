@@ -1,8 +1,9 @@
-"""The operator's verbs on a subject (DESIGN §22, D075): `canopy start`, `stop`, `reply`, `forget`, and `show`.
+"""The operator's verbs (DESIGN §22, D075): `canopy start`, `stop`, `reply`, `forget`, `show`, `pause`, and `resume`.
 
-Each takes a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, or `run:ID`. A
-kind refuses a verb it does not take. `start`, `stop`, `reply`, and `forget` write through `canopy.core.conversation`,
-which every channel shares, and refuse inside canopy's own ticks and runs.
+`pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
+or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, and
+`forget` write through `canopy.core.conversation`, which every channel shares, and `pause` and `resume` through
+`canopy.core.pause`; all six refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.loop import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, conversation, db
+from canopy.core import chore_view, conversation, db, pause
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.runs import halt, policy
@@ -46,6 +47,40 @@ def _operator(verb: str) -> None:
         conversation.check_operator()
     except conversation.Refused as r:
         raise CliError(f"{verb} refused ({r.guard}): {r.reason}") from None
+
+
+@click.command("pause")
+@click.pass_context
+def cmd_pause(click_ctx: click.Context) -> int:
+    """Pause the loop: `canopy loop` starts no tick until you resume it. A tick already running finishes.
+
+    Workers already dispatched keep going. `canopy tick` by hand, and t at the loop's terminal, still tick.
+    """
+    _operator("pause")
+    ctx = open_context(click_ctx)
+    already = pause.pause(ctx.conn, channel=CLI)
+    if already:
+        held = pause.paused(ctx.conn)
+        since = f" {attention.age(held.since)} ago ({held.channel})" if held is not None else ""
+        click.echo(f"The loop was already paused{since}.")
+        return 0
+    logs.for_tick(None).info("loop paused", extra={"channel": CLI})
+    click.echo("Paused: the loop starts no tick until `canopy resume`.")
+    return 0
+
+
+@click.command("resume")
+@click.pass_context
+def cmd_resume(click_ctx: click.Context) -> int:
+    """Resume a paused loop. If its wait has run out, it ticks at once."""
+    _operator("resume")
+    ctx = open_context(click_ctx)
+    if pause.resume(ctx.conn):
+        click.echo("The loop was not paused.")
+        return 0
+    logs.for_tick(None).info("loop resumed", extra={"channel": CLI})
+    click.echo("Resumed: the loop ticks when its wait runs out.")
+    return 0
 
 
 @click.command("start")

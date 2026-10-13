@@ -102,7 +102,14 @@ def test_worker_that_pushes_is_done(
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
     # CANOPY_RUN_ID: the operator's commands refuse inside the run (DESIGN §22).
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
-    assert w["env"] == {"CANOPY_RUN_ID": str(run["id"]), "OPENCODE_CONFIG_DIR": str(snapshot)}
+    # CANOPY_GIT_OBJECTS: the run's object directory, for a sandbox wrapper (DESIGN §8).
+    objects = canopy_env.state_dir / "runs" / f"{run['id']}.objects"
+    assert w["env"] == {
+        "CANOPY_RUN_ID": str(run["id"]),
+        "CANOPY_GIT_OBJECTS": str(objects),
+        "OPENCODE_CONFIG_DIR": str(snapshot),
+    }
+    assert not objects.exists()  # removed once the run was over
     argv = w["argv"]
     assert isinstance(argv, list)
     assert argv[:3] == ["run", "--agent", "canopy-worker"]

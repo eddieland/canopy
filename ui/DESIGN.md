@@ -1,14 +1,19 @@
 # canopy web UI: design
 
-The visual and interaction rules for `ui/`. Normative, like `docs/DESIGN.md`: if a component and this file disagree,
+The visual and interaction rules for `ui/`. Normative, like `docs/design/`: if a component and this file disagree,
 this file wins until it is changed in the same PR. How to work in `ui/` is in `AGENTS.md`; why it exists is D079.
 
 ## Direction
 
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
-marks what is live, selected, or the action to take. Status color is reserved for state; nothing is colored for
-decoration, but the header ticker's flair. Dark is a cool slate, light is grey and white; neither is the lesser theme.
+marks what is live, selected, or the action to take; what is selected in a page sits on its tint. Each section of
+the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
+label over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
+counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
+decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
+color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
+neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
@@ -25,13 +30,15 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `border` | Every hairline. Applied by default to `border`, so `border-b` needs no color. |
 | `foreground` | Primary text. |
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
-| `accent`, `accent-foreground` | The one accent: active nav hairline, live indicator, links, primary buttons, focus. |
+| `accent`, `accent-foreground` | The one accent: active nav item, page labels, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
+| `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
+| `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
@@ -48,6 +55,10 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
+- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Chores orange,
+  Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go on the nav's
+  icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data: there a color
+  is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -89,10 +100,24 @@ Rules:
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
   headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
   of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
-- The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
-  was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
-  the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page.
+- The header carries the loop's pause (`LoopPause`), the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in
+  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
+  `mock`), and the theme toggle; the counters are the attention page's, and the nav's Attention item shows how many
+  items it lists, on every page, split by severity as the Attention counter splits them: broken in `status-failed`,
+  waiting on the operator's answer in `status-blocked`, the rest muted, each only when there is one. Never in the
+  section's rose, too near the failure color to tell apart at that size.
+- **The pause** is the one action in the header, since it is about the loop, not a page's subject: a ghost Pause
+  button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
+  from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
+  did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
+  the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
+  The page header's label is in its section's color; a panel's stays in `muted-foreground`.
+- **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
+  with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
+  the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Runs'
+  violet to Worktrees' teal. It is static.
 
 ## Motion
 
@@ -108,7 +133,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
-- The nav's highlight (its tint and accent hairline) is one element that slides to the active item.
+- The nav's highlight (its tint and hairline) is one element that slides to the active item, changing into that
+  item's section color as it goes.
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
   a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
@@ -147,12 +173,22 @@ inline script and checks it against the store's key. The ticker's speed and gap 
 - **Lists are rows in a panel**, divided by hairlines: a fixed-width key column (a ticket key, a state), then the
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
-- **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
+- **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
+  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
+  scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
+  so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
+  not: the page scrolls instead.
+- **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
+  the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
+  spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
+  the CLI's spelling stays on hover, so it can still be found in `attention.md` or typed into the CLI
+  (`src/lib/words.ts`).
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
-  attention, and spent in the last 24 hours from `GET /api/spend`, on the stream) and the worktrees page (working,
-  held, needs a look, free, across every pool). Each is a label, the value, and one line under it, with a 2px top
-  rule in the state color it counts: `status-running`, `status-stopped` for held, `status-blocked`, `status-failed`
-  while something is broken, the accent for spend.
+  attention, and spent in the last 24 hours and in the last 30 days from `GET /api/spend`, on the stream) and the
+  worktrees page (working, held, needs a look, free, across every pool). Each is a label, the value, and one line
+  under it, with a 2px top rule in the state color it counts: `status-running`, `status-stopped` for held,
+  `status-blocked`, `status-failed` while something is broken, the accent for spend. The same color washes down from
+  the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
@@ -173,7 +209,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
-  at the next tick; Waiting on you counts neither.
+  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it, on the
+  worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`, `working now` in
+  `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the runs on the
+  stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
@@ -182,9 +221,25 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
   (on a ticket's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale under
-  them on one line. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
+  them as rich text. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
   (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
   colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
+- **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
+  with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
+  breaks, its reasoning muted and italic under a `thinking` label. A tool call is one line, a native `<details>`: a
+  `RunDot` in `done` or `failed`, the tool's name, its title or its input's first value, and how long it took; it
+  opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
+  call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
+  all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
+  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
+  overseer's under its decisions.
+- **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
+  summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
+  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
+  It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
+  its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
+  shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
+  A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
@@ -197,9 +252,19 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
   label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **A choice of a few fixed options** (a theme, the ticker's speed, the send key) is a segmented control
+  (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
+  `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
+  them, Space picks one, and Tab leaves the group.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
+- **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
+  from anywhere but a text field. The search page has a panel per source with hits, in the server's order, its count
+  in the header (`newest 20` when the source has more). A hit is a row: where it opens (its ticket or chore with the
+  run that said it, or the tick that decided it), its label as a chip, the snippet with the query's words marked on
+  the accent's tint (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL
+  short. While the next query's hits load, the last ones stay, dimmed to 60%.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.

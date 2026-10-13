@@ -1,11 +1,11 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09), and
-where canopy stands on each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two
-disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
-doc stays normative until then (AGENTS.md).
+where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it must meet. Where
+the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the
+design doc stays normative until then (AGENTS.md).
 
-A bare § is a section of `DESIGN.md`. Status words:
+A bare § is a section of the design (`design/`). Status words:
 
 - **Built**: in code with fakes-based tests; live acceptance may still be the operator's to run (ROADMAP).
 - **Planned**: designed, in a ROADMAP milestone, not built.
@@ -97,8 +97,9 @@ Partial; the rest is M15.
 
 - See: built. `canopy status` shows the attention list, running workers, the last tick, and the ten runs that ended
   most recently with their outcome, PR, summary, cost, run log, and OpenCode session id, which opens the run's
-  transcript with OpenCode's own tools (§13); `canopy decisions` shows what a tick decided. A running worker's
-  session id is known only once it ends: it is read from what `opencode run` printed.
+  transcript with OpenCode's own tools (§13); `canopy decisions` shows what a tick decided. The web UI shows an
+  ended run's or tick's transcript, its tool calls included, read back from its log (M27). A running worker's
+  session id and events are known only once it ends: they are read from what `opencode run` printed.
 - Prompt an idle ticket: built. An authorized reply on the ticket, or a review comment on the PR, is picked up by the
   next tick and resumes the work (§7). This keeps the operator's daily surface where coworkers' already is.
 - Prompt a running session: not possible today; M15 runs workers against OpenCode's server so the operator can

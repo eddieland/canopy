@@ -1,4 +1,4 @@
-"""Journal rows as the API's models: the attention list, runs, tickets and their conversations, chores, and ticks.
+"""Journal rows as the API's models: attention, runs, tickets and their conversations, chores, ticks, search hits.
 
 Reads only. Every text that came from an agent or the tracker stays untrusted: control characters are dropped from
 message bodies as `canopy show` drops them, run summaries are cut to one line, and the UI renders all of it as text.
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_result, chore_view, contract, conversation, db, items
+from canopy.core import chore_result, chore_view, contract, conversation, db, items, pause, search, transcript
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
@@ -21,17 +21,29 @@ from canopy.serve.schema import (
     Comment,
     Decision,
     LastTick,
+    LoopState,
     Message,
     MessageKind,
     MessageSource,
+    Pause,
+    PauseChannel,
     Run,
     RunState,
+    SearchHit,
+    SearchResults,
     Spend,
+    SpendWindow,
     StartStatus,
     Tick,
     TickDetail,
     TicketDetail,
     TicketSummary,
+    Transcript,
+    TranscriptEntry,
+    TranscriptError,
+    TranscriptStep,
+    TranscriptText,
+    TranscriptTool,
     Unit,
 )
 
@@ -54,14 +66,16 @@ CHORE_RUNS = 10
 TICKS = 50
 TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
-# The window the spend figure covers.
-SPEND_HOURS = 24
+# The windows the spend figures cover: the last day and the last 30.
+SPEND_DAY_HOURS = 24
+SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
 _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
 # A chore run that checked is done; every other ending raises `chore_failed` (DESIGN §19).
 _CHORE_STATES: dict[str, RunState] = {"running": "running", "ok": "done"}
 _SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
+_PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
 _KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "reply": "reply", "comment": "comment"}
 
 
@@ -89,14 +103,27 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last SPEND_HOURS hours cost, by the backend's clock."""
-    since = backend.clock() - timedelta(hours=SPEND_HOURS)
-    return Spend(since=since, hours=SPEND_HOURS, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+    """What the last day and the last 30 days cost, by the backend's clock."""
+    now = backend.clock()
+    return Spend(day=_spent(ctx, now, SPEND_DAY_HOURS), month=_spent(ctx, now, SPEND_MONTH_HOURS))
+
+
+def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
+    since = now - timedelta(hours=hours)
+    return SpendWindow(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
 
 
 def last_tick(ctx: Context) -> LastTick:
     """The latest tick, and the newest message the latest `ok` tick read."""
     return LastTick(tick=tick(ctx), acknowledged=db.acknowledged_message_id(ctx.conn))
+
+
+def loop_state(ctx: Context) -> LoopState:
+    """Whether the operator paused the loop, since when, and through which channel."""
+    held = pause.paused(ctx.conn)
+    if held is None:
+        return LoopState()
+    return LoopState(paused=Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop")))
 
 
 def tick(ctx: Context) -> Tick | None:
@@ -115,7 +142,7 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         dry_run=bool(row["dry_run"]),
         started_at=db.parse_time(row["started_at"]),
         ended_at=db.parse_time(row["ended_at"]) if row["ended_at"] else None,
-        summary=conversation.printable(row["summary"]) if row["summary"] else None,
+        summary=lines(str(row["summary"] or "")) or None,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         decisions=decisions,
@@ -133,16 +160,85 @@ def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
     if row is None:
         return None
     rows = db.decisions_for_tick(ctx.conn, tick_id)
-    output = ctx.state_dir / "ticks" / f"{tick_id}.log"
+    output = tick_output(ctx, tick_id)
     return TickDetail(
         tick=tick_of(row, len(rows)),
         decisions=[decision(d) for d in rows],
-        output_path=str(output) if output.exists() else None,
+        output_path=shown_path(str(output), ctx.workspace.root) if output.exists() else None,
     )
 
 
+def tick_output(ctx: Context, tick_id: int) -> Path:
+    """Where a tick's overseer output is (DESIGN §6)."""
+    return ctx.state_dir / "ticks" / f"{tick_id}.log"
+
+
+def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
+    """The overseer's session in a tick's output, or None if there is no such tick."""
+    row = db.get_tick(ctx.conn, tick_id)
+    if row is None:
+        return None
+    return session_transcript(tick_output(ctx, tick_id), row["session_id"])
+
+
+def run_detail(ctx: Context, run_id: int) -> Run | None:
+    """One run, with the worktrees it holds if it is running, or None if there is no such run."""
+    row = db.get_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    root = ctx.workspace.root
+    held = db.all_run_slots(ctx.conn, [run_id] if row["status"] == "running" else []).get(run_id, [])
+    return run(row, root, [shown_path(str(s["slot_path"]), root) for s in held])
+
+
+def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
+    """A run's session in its log, or None if there is no such run."""
+    row = db.get_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    return session_transcript(Path(str(row["log_path"])), row["session_id"])
+
+
+def session_transcript(path: Path, session: object) -> Transcript:
+    """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22)."""
+    if not isinstance(session, str) or not session:
+        return Transcript(status="no_session")
+    found = transcript.read(path, session)
+    if found is None:
+        return Transcript(status="no_log", session_id=session)
+    return Transcript(
+        status="read",
+        session_id=session,
+        entries=[transcript_entry(e) for e in found.entries],
+        truncated=found.truncated,
+        unreadable=found.unreadable,
+    )
+
+
+def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
+    """One entry of a transcript as the API sends it."""
+    match entry:
+        case transcript.Text():
+            return TranscriptText(at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut)
+        case transcript.ToolCall():
+            return TranscriptTool(
+                at=entry.at,
+                tool=entry.tool,
+                status=entry.status,
+                title=entry.title,
+                input=entry.input,
+                output=entry.output,
+                duration_ms=entry.duration_ms,
+                cut=entry.cut,
+            )
+        case transcript.Step():
+            return TranscriptStep(at=entry.at, reason=entry.reason, cost_usd=entry.cost_usd, tokens=entry.tokens)
+        case transcript.Error():
+            return TranscriptError(at=entry.at, name=entry.name, message=entry.message)
+
+
 def decision(row: sqlite3.Row) -> Decision:
-    """One decision, named as `canopy decisions` names it, its rationale on one line as it prints it."""
+    """One decision, named as `canopy decisions` names it, its rationale with its line breaks."""
     chore = str(row["chore"]) if row["chore"] is not None else None
     pr = str(row["pr"]) if row["pr"] is not None else None
     key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
@@ -163,7 +259,7 @@ def decision(row: sqlite3.Row) -> Decision:
         chore=chore,
         pr=pr,
         action=str(row["action"]),
-        rationale=" ".join(conversation.printable(str(row["rationale"])).split()),
+        rationale=lines(str(row["rationale"])),
     )
 
 
@@ -173,8 +269,8 @@ def runs(ctx: Context) -> list[Run]:
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
     return [
-        *(run(r, [shown_path(str(s["slot_path"]), root) for s in slots[int(r["id"])]]) for r in running),
-        *(run(r) for r in db.recent_runs(ctx.conn, RECENT_RUNS)),
+        *(run(r, root, [shown_path(str(s["slot_path"]), root) for s in slots[int(r["id"])]]) for r in running),
+        *(run(r, root) for r in db.recent_runs(ctx.conn, RECENT_RUNS)),
     ]
 
 
@@ -187,8 +283,8 @@ def shown_path(path: str, root: Path) -> str:
     return str(found.relative_to(root)) if found.is_relative_to(root) else path
 
 
-def run(row: sqlite3.Row, worktrees: list[str] | None = None) -> Run:
-    """One run's row, with the worktrees it holds if it is running."""
+def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run:
+    """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`."""
     result = contract.stored_object(row["result_json"])
     status = str(row["status"])
     return Run(
@@ -208,7 +304,7 @@ def run(row: sqlite3.Row, worktrees: list[str] | None = None) -> Run:
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         tokens=tokens(row),
         worktrees=worktrees or [],
-        log_path=str(row["log_path"]),
+        log_path=shown_path(str(row["log_path"]), root),
     )
 
 
@@ -221,10 +317,14 @@ def tokens(row: sqlite3.Row) -> int | None:
 
 
 def said(row: sqlite3.Row) -> str | None:
-    """What a run's or a chore run's result says, the harness's note first, on one line and cut."""
+    """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut."""
     result = contract.stored_object(row["result_json"])
-    text = " ".join(conversation.printable(str(result.get("harness") or result.get("summary") or "")).split())
-    return text[:SUMMARY_LENGTH] or None
+    return lines(str(result.get("harness") or result.get("summary") or ""))[:SUMMARY_LENGTH].rstrip() or None
+
+
+def lines(text: str) -> str:
+    """Agent-written text as a page lays it out: control characters dropped, line breaks kept, trailing space cut."""
+    return "\n".join(line.rstrip() for line in conversation.printable(text).splitlines()).strip("\n")
 
 
 def _title(value: object) -> str | None:
@@ -278,7 +378,7 @@ def ticket(ctx: Context, key: str) -> TicketDetail | None:
             )
             for u in db.units(ctx.conn, key)
         ],
-        runs=[run(r) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
+        runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
     )
@@ -377,4 +477,26 @@ def chore_run(row: sqlite3.Row) -> ChoreRun:
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         tokens=tokens(row),
         log_path=str(row["log_path"]),
+    )
+
+
+def found(ctx: Context, query: str) -> SearchResults:
+    """The journal's rows holding every word of `query` (DESIGN §22, Search). Raises search.BadQueryError."""
+    result = search.search(ctx.conn, query)
+    return SearchResults(
+        words=list(result.words),
+        hits=[
+            SearchHit(
+                source=h.source,
+                at=db.parse_time(h.at),
+                snippet=h.snippet,
+                ticket_key=h.ticket_key,
+                chore=h.chore,
+                run_id=h.run_id,
+                tick_id=h.tick_id,
+                label=h.label,
+            )
+            for h in result.hits
+        ],
+        more=list(result.more),
     )

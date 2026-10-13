@@ -14,7 +14,7 @@ interface RunsSearch {
     state?: RunState | undefined
 }
 
-export const Route = createFileRoute('/runs')({
+export const Route = createFileRoute('/runs/')({
     // Typed search params: `?state=blocked` filters; anything else is dropped, never trusted. Return every key, even
     // when undefined: the router merges this over the raw search, so an omitted key would keep the raw value.
     validateSearch: (search: Record<string, unknown>): RunsSearch => ({
@@ -70,7 +70,7 @@ function FilterLink({ search, children }: { search: RunsSearch; children: ReactN
             className={cn(
                 'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
                 'hover:bg-surface-raised hover:text-foreground',
-                'data-[selected=true]:bg-surface-raised data-[selected=true]:text-foreground',
+                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
             )}
         >
             {children}

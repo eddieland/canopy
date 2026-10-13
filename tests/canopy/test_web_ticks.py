@@ -22,7 +22,11 @@ def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(
     latest, first = c.get("/api/ticks").json()
     assert (latest["id"], latest["status"], latest["dry_run"], latest["decisions"]) == (2, "ok", False, 5)
     assert (latest["session_id"], latest["cost_usd"], latest["summary"]) == ("ses_tick2", 0.31, "mock tick")
-    assert (first["id"], first["decisions"], first["summary"]) == (1, 5, "dispatched 2, waiting on 1")
+    assert (first["id"], first["decisions"], first["summary"]) == (
+        1,
+        5,
+        "dispatched 2, waiting on 1:\n- ABC-099 implement\n- ABC-103 implement",
+    )
     # The header's tick carries the count too, so the stream sends it again as a running tick records decisions.
     assert c.get("/api/tick").json()["tick"]["decisions"] == 5
 
@@ -31,7 +35,9 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
     c = client(None, backend)
     page = c.get("/api/ticks/2").json()
     assert page["tick"]["id"] == 2
-    assert page["output_path"] is None
+    # Where the overseer's output is, from the workspace root; tick 1 kept none. Its session is the transcript's.
+    assert page["output_path"] == ".canopy/ticks/2.log"
+    assert c.get("/api/ticks/1").json()["output_path"] is None
     shown = [(d["subject"], d["action"]) for d in page["decisions"]]
     assert shown == [
         ("ABC-102", "wait"),
@@ -40,28 +46,20 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
         ("ABC-099 (web)", "attention:needs_reviewer"),
         ("pr:https://github.com/acme/api/pull/12", "wait"),
     ]
-    # The overseer's text on one line, as the CLI prints it; its markup is characters for the UI to show as text.
+    # The overseer's text with its line breaks, for the UI to lay out; its markup is characters to show as text.
     assert page["decisions"][2]["rationale"] == (
-        "run 41 is implementing it. The ticket says <b>keep</b> the old route: left for the worker."
+        "run 41 is implementing it.\n  The ticket says <b>keep</b> the old route: left for the worker."
     )
     assert page["decisions"][3]["pr"] == "https://github.com/acme/web/pull/88"
 
     # Each subject is the CLI's, with a unit's repository after its ticket.
     with backend.open() as ctx:
         rows = db.decisions_for_tick(ctx.conn, 2)
-        output = ctx.state_dir / "ticks" / "2.log"
     for row, shown_row in zip(rows, page["decisions"], strict=True):
         assert shown_row["subject"].startswith(attention.decided_about(row))
 
     first = c.get("/api/ticks/1").json()["decisions"]
     assert [d["subject"] for d in first] == ["ABC-102", "ABC-100 (web)", "ABC-099 (web)", "chore:deps", "api"]
-
-    # The overseer's output is named where it is, as `canopy decisions` names it, and never served.
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("the overseer's own words\n")
-    named = c.get("/api/ticks/2").json()
-    assert named["output_path"] == str(output)
-    assert "the overseer's own words" not in str(named)
 
 
 def test_no_such_tick_is_a_404_and_a_tick_id_is_a_positive_integer(backend: Backend) -> None:

@@ -6,12 +6,13 @@ Instructions for any agent working in this repository. Humans should read it too
 
 1. `README.md`: what we are building and for whom.
 2. `docs/REQUIREMENTS.md`: what the primary operator needs, where canopy stands on each, and open conflicts.
-3. `docs/DESIGN.md`: target shape. Normative.
+3. `docs/design/README.md`: target shape. Normative. It holds the overview and maps the rest of the design, in the
+   same directory; read the sections your work touches.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
 6. `docs/DECISIONS.md`: the few choices every agent must know, whatever it works on. Read it whole; add to it rarely.
 
-If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entry says otherwise.
+If code and the design disagree, the design doc wins until a decision entry says otherwise.
 
 ## How to work
 
@@ -19,16 +20,21 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Keep the milestone's `Status:` line in `docs/ROADMAP.md` current. The PR that meets the acceptance criteria marks it
   done with the date, what was learned, and how that changes next steps. The format is at the top of that file. Read
   earlier milestones' `Learned` and `Next` before starting a new one.
+- A live measurement a milestone cites goes in `docs/MEASUREMENTS.md`: one dated section each, not edited after, so a
+  re-measurement is a new section.
+- A live check worth running again, against real systems, goes in `docs/SCENARIOS.md`, naming the milestone it came
+  from. A milestone the operator closes on real use, before every live check in its Accept has run, moves the
+  unrun ones there.
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
-  `docs/DESIGN.md` is incomplete.
+  the design is incomplete.
 - Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
   linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
 - Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
   the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, a runtime
   dependency, or a direction the operator settled. The test: could an agent working on an unrelated part of canopy
   break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature behaves as it does, and
-  what was rejected for it, goes in `docs/DESIGN.md` next to the behavior; why a line of code is so goes in a comment
+  what was rejected for it, goes in the design next to the behavior; why a line of code is so goes in a comment
   there; the story of a change goes in its PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new
   feature, command, config key, or default is not a decision by itself. When in doubt, leave it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
@@ -49,7 +55,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow
   `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
-- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
+- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, except on a pull request
+  that changes only docs, where every check passes without running; run `make all` before pushing one anyway.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - `make binary` builds `dist/canopy`, the single executable a release ships (D067), and
@@ -96,6 +103,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
+  A new migration adds its hash to `SHIPPED` in `tests/canopy/test_db.py`, and a row to `SEED` for each table it
+  creates; a test there applies every migration to a journal with data in it and fails on any row lost.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every
@@ -124,7 +133,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- A web UI beyond what ROADMAP M20, M23, and M24 list. `canopy status` and a markdown file stay the CLI's surface.
+- A web UI beyond what ROADMAP M20, M23, M24, M27, and M32 list. `canopy status` and a markdown file stay the CLI's
+  surface.
 - Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
@@ -139,6 +149,6 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - `make all` passes.
 - New behavior has a test using the fakes.
-- Docs updated: `DESIGN.md` for behavior and why it is that way, `README.md` if the install path or daily surface
+- Docs updated: the design for behavior and why it is that way, `README.md` if the install path or daily surface
   changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

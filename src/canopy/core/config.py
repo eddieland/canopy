@@ -456,7 +456,8 @@ class Runtime(Section):
     )
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
     review_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --title={title} {prompt}"
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json "
+        "--title={title} {prompt}"
     )
     review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15

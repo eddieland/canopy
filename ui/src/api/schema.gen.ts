@@ -87,6 +87,57 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loop */
+        get: operations["getLoop"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Loop */
+        post: operations["pauseLoop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Loop */
+        post: operations["resumeLoop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meta": {
         parameters: {
             query?: never;
@@ -113,6 +164,57 @@ export type paths = {
         };
         /** Runs */
         get: operations["listRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run */
+        get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Run Transcript */
+        get: operations["getRunTranscript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find */
+        get: operations["search"];
         put?: never;
         post?: never;
         delete?: never;
@@ -302,6 +404,23 @@ export type paths = {
         };
         /** Tick */
         get: operations["showTick"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ticks/{tick_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tick Transcript */
+        get: operations["getTickTranscript"];
         put?: never;
         post?: never;
         delete?: never;
@@ -558,6 +677,25 @@ export type components = {
             tick: components["schemas"]["Tick"] | null;
         };
         /**
+         * LoopState
+         * @description Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes.
+         */
+        LoopState: {
+            paused: components["schemas"]["Pause"] | null;
+        };
+        /**
+         * LoopUpdated
+         * @description The loop was paused or resumed. The payload is what `GET /loop` returns.
+         */
+        LoopUpdated: {
+            paused: components["schemas"]["Pause"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "loop.updated";
+        };
+        /**
          * Message
          * @description One message in a ticket's conversation.
          */
@@ -597,6 +735,29 @@ export type components = {
             /** Version */
             version: string;
         };
+        /**
+         * Pause
+         * @description The operator paused the loop (DESIGN §6): since when, and through which channel.
+         */
+        Pause: {
+            channel: components["schemas"]["PauseChannel"];
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+        };
+        /**
+         * PauseChanged
+         * @description What a pause or a resume did: whether the loop was already so, and the state it left.
+         */
+        PauseChanged: {
+            /** Already */
+            already: boolean;
+            loop: components["schemas"]["LoopState"];
+        };
+        /** @enum {string} */
+        PauseChannel: "loop" | "cli" | "web";
         /**
          * Pool
          * @description One repository's treehouse pool, read when asked for.
@@ -742,6 +903,44 @@ export type components = {
             type: "runs.updated";
         };
         /**
+         * SearchHit
+         * @description One row holding every word of a search, and where it opens.
+         */
+        SearchHit: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Chore */
+            chore: string | null;
+            /** Label */
+            label: string | null;
+            /** Run Id */
+            run_id: number | null;
+            /** Snippet */
+            snippet: string;
+            source: components["schemas"]["SearchSource"];
+            /** Tick Id */
+            tick_id: number | null;
+            /** Ticket Key */
+            ticket_key: string | null;
+        };
+        /**
+         * SearchResults
+         * @description A search: the words it looked for, its hits by source and newest first, and the sources that had more.
+         */
+        SearchResults: {
+            /** Hits */
+            hits: components["schemas"]["SearchHit"][];
+            /** More */
+            more: components["schemas"]["SearchSource"][];
+            /** Words */
+            words: string[];
+        };
+        /** @enum {string} */
+        SearchSource: "ticket" | "message" | "chore_run" | "decision" | "tick";
+        /**
          * Session
          * @description Whether this browser is signed in, and if so the token its writes must carry.
          */
@@ -761,11 +960,31 @@ export type components = {
         };
         /**
          * Spend
-         * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
-         *
-         *     Worker, split, and chore runs and each tick's overseer, by when they started. Reviews record nothing yet.
+         * @description What the last day and the last 30 days cost, read together, so a month never shows less than its day.
          */
         Spend: {
+            day: components["schemas"]["SpendWindow"];
+            month: components["schemas"]["SpendWindow"];
+        };
+        /**
+         * SpendUpdated
+         * @description What a window cost changed. The payload is both windows, as `GET /spend` returns them.
+         */
+        SpendUpdated: {
+            spend: components["schemas"]["Spend"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "spend.updated";
+        };
+        /**
+         * SpendWindow
+         * @description What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
+         *
+         *     Worker, split, chore, and review runs and each tick's overseer, by when they started.
+         */
+        SpendWindow: {
             /** Cost Usd */
             cost_usd: number | null;
             /** Hours */
@@ -775,18 +994,6 @@ export type components = {
              * Format: date-time
              */
             since: string;
-        };
-        /**
-         * SpendUpdated
-         * @description What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it.
-         */
-        SpendUpdated: {
-            spend: components["schemas"]["Spend"];
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            type: "spend.updated";
         };
         /**
          * Started
@@ -832,7 +1039,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"];
         /**
          * Tick
          * @description A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded.
@@ -960,6 +1167,130 @@ export type components = {
              * @enum {string}
              */
             type: "tick.updated";
+        };
+        /**
+         * Transcript
+         * @description What a run's log or a tick's output holds of its session, read back from the events as printed (DESIGN §22).
+         *
+         *     Agent output: untrusted, rendered as text, and bounded. `truncated` says a bound left something out; `unreadable`
+         *     counts events that did not validate.
+         */
+        Transcript: {
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["TranscriptEntry"][];
+            /** Session Id */
+            session_id: string | null;
+            status: components["schemas"]["TranscriptStatus"];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /**
+             * Unreadable
+             * @default 0
+             */
+            unreadable: number;
+        };
+        TranscriptEntry: components["schemas"]["TranscriptText"] | components["schemas"]["TranscriptTool"] | components["schemas"]["TranscriptStep"] | components["schemas"]["TranscriptError"];
+        /**
+         * TranscriptError
+         * @description The runtime reported an error in the session.
+         */
+        TranscriptError: {
+            /** At */
+            at: string | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "error";
+            /** Message */
+            message: string;
+            /** Name */
+            name: string;
+        };
+        /** @enum {string} */
+        TranscriptStatus: "read" | "no_session" | "no_log";
+        /**
+         * TranscriptStep
+         * @description One model call ended: why, and what it cost, when the runtime said.
+         */
+        TranscriptStep: {
+            /** At */
+            at: string | null;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "step";
+            /** Reason */
+            reason: string | null;
+            /** Tokens */
+            tokens: number | null;
+        };
+        /**
+         * TranscriptText
+         * @description A finished piece of the agent's text, or of its reasoning.
+         */
+        TranscriptText: {
+            /** At */
+            at: string | null;
+            /**
+             * Cut
+             * @default false
+             */
+            cut: boolean;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "text";
+            /**
+             * Reasoning
+             * @default false
+             */
+            reasoning: boolean;
+            /** Text */
+            text: string;
+        };
+        /**
+         * TranscriptTool
+         * @description One tool call, once it ended: its input as indented JSON, and its output, or its error when `error`.
+         */
+        TranscriptTool: {
+            /** At */
+            at: string | null;
+            /**
+             * Cut
+             * @default false
+             */
+            cut: boolean;
+            /** Duration Ms */
+            duration_ms: number | null;
+            /** Input */
+            input: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "tool";
+            /** Output */
+            output: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "error";
+            /** Title */
+            title: string | null;
+            /** Tool */
+            tool: string;
         };
         /**
          * Unit
@@ -1174,6 +1505,66 @@ export interface operations {
             };
         };
     };
+    getLoop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopState"];
+                };
+            };
+        };
+    };
+    pauseLoop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseChanged"];
+                };
+            };
+        };
+    };
+    resumeLoop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseChanged"];
+                };
+            };
+        };
+    };
     getMeta: {
         parameters: {
             query?: never;
@@ -1211,6 +1602,111 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Run"][];
                 };
+            };
+        };
+    };
+    getRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description No such run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getRunTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
+                };
+            };
+            /** @description No such run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description Too short, too long, or too many words. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1602,6 +2098,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TickDetail"];
+                };
+            };
+            /** @description No such tick. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getTickTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tick_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
                 };
             };
             /** @description No such tick. */

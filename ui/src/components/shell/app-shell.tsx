@@ -10,8 +10,10 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
 import { LiveReadouts } from './live-readouts'
+import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
 import { Nav } from './nav'
+import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
 
@@ -40,12 +42,21 @@ export function AppShell() {
                     'border-b bg-surface/85 px-4 backdrop-blur',
                 )}
             >
+                {/* The aurora: a hairline through the sections' colors along the header's foot, over its border. */}
+                <span
+                    aria-hidden
+                    className={cn(
+                        'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
+                        'bg-linear-to-r from-section-attention via-section-runs to-section-worktrees',
+                    )}
+                />
                 <div className="flex items-center gap-2.5">
                     <LiveMark stream={stream} />
                     <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                 </div>
                 <Ticker />
                 <div className="flex items-center gap-4">
+                    <LoopPause />
                     <LiveReadouts stream={stream} />
                     <span aria-hidden className="h-5 w-px bg-border" />
                     <ThemeToggle />
@@ -54,6 +65,7 @@ export function AppShell() {
             {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav sticks. */}
             <aside className="border-r bg-surface/60">
                 <div className="sticky top-12">
+                    <SearchBox />
                     <Nav />
                 </div>
             </aside>

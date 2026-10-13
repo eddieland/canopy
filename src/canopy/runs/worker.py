@@ -16,8 +16,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
@@ -27,7 +27,7 @@ from canopy.core import agent_output, contract, conversation, db, definitions, h
 from canopy.core.config import render_command, setup_words
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import desks, dispatch, policy
+from canopy.runs import desks, dispatch, policy, tidy
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -163,6 +163,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     if not db.claim_run(ctx.conn, run_id, os.getpid()):
         raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
     slots = [_Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
+    for slot in slots:
+        # Before any git step: reconcile checks it for a `_run` that dies before putting a changed link back.
+        db.set_slot_link(ctx.conn, run_id, slot.repo, slot.link)
     log = logs.for_tick(int(run["tick_id"]))
     fields = {"run_id": run_id, "ticket": run["ticket_key"], "kind": run["kind"]}
     where = {"slots": [str(s.path) for s in slots], "repos": [s.repo for s in slots]}
@@ -173,6 +176,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         try:
             if not slots:
                 raise _SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
+            tidy.make_objects(_objects(ctx, run))
             work = _split if run["kind"] == policy.SPLIT else _work
             outcome = work(ctx, run, slots, out, log)
         except stopping.Stopped as e:
@@ -214,6 +218,14 @@ class _Slot:
     def link_moved(self) -> bool:
         """Whether the `.git` file no longer holds what it did when the run started."""
         return self.link is not None and hostgit.read_link(self.path) != self.link
+
+    def reading(self, ctx: Context, objects: Path) -> _Slot:
+        """The slot, with its git reading the run's object directory as well as the slot's own objects."""
+        try:
+            env = tidy.reading(ctx.runner, self.path, objects)
+        except tidy.GitError as e:
+            raise _SetupError(f"{self.git.where}{e}") from e
+        return replace(self, git=_Git(ctx.runner, self.path, self.repo, env))
 
     @classmethod
     def of(cls, ctx: Context, row: sqlite3.Row) -> _Slot:
@@ -275,8 +287,9 @@ def _run_agent(
     result = ctx.runner.run(
         argv,
         cwd=cwd,
-        # The operator's commands refuse inside canopy's own runs (DESIGN §22).
-        env={conversation.RUN_ID_ENV: str(run_id)},
+        # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the
+        # object directory; an unsandboxed worker ignores it (DESIGN §8).
+        env={conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))},
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
     )
@@ -388,6 +401,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
             f"{s.git.where}the worker rewrote {s.path / hostgit.LINK}; nothing was checked or pushed" for s in moved
         ]
         return Outcome("crashed", parsed, "; ".join(notes))
+    objects = _objects(ctx, run)
+    if tidy.used(objects):
+        # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
+        slots = [slot.reading(ctx, objects) for slot in slots]
 
     # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
     unpushed = [
@@ -437,7 +454,12 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
             argv,
             cwd=slot.path,
             # The run's id, as the worker gets it: the operator's commands refuse inside canopy's runs (DESIGN §22).
-            env={conversation.RUN_ID_ENV: str(run_id), SETUP_REPO_ENV: slot.repo, SETUP_BRANCH_ENV: str(run["branch"])},
+            env={
+                conversation.RUN_ID_ENV: str(run_id),
+                SETUP_REPO_ENV: slot.repo,
+                SETUP_BRANCH_ENV: str(run["branch"]),
+                tidy.OBJECTS_ENV: str(_objects(ctx, run)),
+            },
             timeout=timeout_minutes * 60,
         )
     except procs.ProcError as e:
@@ -463,7 +485,7 @@ def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapte
     # A HEAD that holds nothing past the start is no work of the worker's; whatever is on origin is its doing.
     if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
         log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
-        pushed = git.result("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+        pushed = _push(git, branch)
         remote = _remote_head(git, branch)
         if not pushed.ok or remote != local:
             detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
@@ -475,6 +497,23 @@ def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapte
             "nothing was pushed for them"
         )
     return ""
+
+
+def _push(git: _Git, branch: str) -> procs.Result:
+    """Push HEAD to `branch` on origin, and leave the shared refs as they were if git reads the run's objects.
+
+    A push also moves origin's remote-tracking ref, which every slot of the pool shares. Pointed at a commit only the
+    run's object directory holds, it would break git in every slot, and in the primary clone, once that directory goes
+    (DESIGN §8). The next fetch moves it, from origin's own objects.
+    """
+    tracking = f"refs/remotes/origin/{branch}"
+    before = git.result("rev-parse", "--verify", "--quiet", tracking).stdout.strip() if git.reads_run else ""
+    pushed = git.result("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+    if git.reads_run and before:
+        git.result("update-ref", tracking, before)
+    elif git.reads_run:
+        git.result("update-ref", "-d", tracking)
+    return pushed
 
 
 def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str]:
@@ -489,7 +528,8 @@ def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str
         return []
     keep = ["HEAD"]
     if remote and not git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
-        git.result("fetch", "--quiet", "origin", f"refs/heads/{branch}")  # writes FETCH_HEAD alone
+        # --refmap=: no remote-tracking ref moves, only the slot's own FETCH_HEAD, which tidying drops.
+        git.result("fetch", "--quiet", "--refmap=", "origin", f"refs/heads/{branch}")
     if remote and git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
         keep.append(remote)
     return git.run("rev-list", *held, "--not", *keep, "--remotes=origin").split()
@@ -507,30 +547,26 @@ def _remote_head(git: _Git, branch: str) -> str:
 
 
 def _release(ctx: Context, run: sqlite3.Row, slots: list[_Slot], log: logs.TickAdapter) -> None:
-    """Remove a joint run's desk, put back any `.git` link the run changed, and return the slots."""
+    """Remove a joint run's desk, tidy each slot, return the ones tidied, and remove the run's object directory.
+
+    A slot that could not be tidied is not returned, and the object directory is kept, so its objects can still be read.
+    """
     if len(slots) > 1:
         _remove_desk(ctx, str(run["ticket_key"]), log)
+    objects = _objects(ctx, run)
+    tidied = True
     for slot in slots:
-        if _restore_link(slot, log):
+        fields = {"run_id": run["id"], "slot": str(slot.path), "repo": slot.repo}
+        ok = tidy.tidy(ctx.runner, slot.path, link=slot.link, base=slot.base, objects=objects, log=log, fields=fields)
+        if ok:
             _return_slot(ctx, run, slot, log)
+        tidied = tidied and ok
+    if tidied:
+        tidy.remove_objects(objects, log)
 
 
-def _restore_link(slot: _Slot, log: logs.TickAdapter) -> bool:
-    """Put back the slot's `.git` file if anything in the run changed it. Returns whether the slot may be returned.
-
-    treehouse runs git in a slot it takes back, so a slot whose link cannot be put back is not returned: the next tick's
-    reconcile tries again.
-    """
-    if slot.link is None or not slot.link_moved():
-        return True
-    fields = {"slot": str(slot.path), "repo": slot.repo}
-    try:
-        hostgit.restore_link(slot.path, slot.link)
-    except OSError as e:
-        log.error("slot's .git link changed and could not be put back; not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
-        return False
-    log.warning("slot's .git link changed during the run; put back", extra=fields)
-    return True
+def _objects(ctx: Context, run: sqlite3.Row) -> Path:
+    return tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
 
 
 def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
@@ -574,14 +610,17 @@ def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
 class _Git:
     """git in one slot, through the runner. `name` is the slot's repository, for errors, or "" to leave it unnamed."""
 
-    def __init__(self, runner: procs.Runner, slot: Path, name: str = "") -> None:
+    def __init__(self, runner: procs.Runner, slot: Path, name: str = "", env: Mapping[str, str] = hostgit.ENV) -> None:
         self.runner = runner
         self.slot = slot
         self.where = f"{name}: " if name else ""
+        self.env = env
+        # Whether git here reads the run's object directory, and so must write no shared ref (DESIGN §8).
+        self.reads_run = "GIT_OBJECT_DIRECTORY" in env
 
     def result(self, *args: str) -> procs.Result:
         try:
-            result = self.runner.run(hostgit.argv(*args), cwd=self.slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
+            result = self.runner.run(hostgit.argv(*args), cwd=self.slot, env=self.env, timeout=_GIT_TIMEOUT_SECONDS)
         except procs.ProcError as e:
             raise _SetupError(f"{self.where}git {args[0]}: {e}") from e
         if result.timed_out:

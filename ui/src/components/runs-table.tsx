@@ -2,15 +2,16 @@ import { ExternalLink } from 'lucide-react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
-import { LinkedText } from '@/components/linked-text'
+import { RunLink } from '@/components/run-link'
+import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 /**
- * Runs, one row each: state, id, ticket, kind, the ticket's title, when, cost, and what it said. `ticket` leaves out
- * the ticket column and its title, for a ticket's own page.
+ * Runs, one row each: state, id (opening the run's page), ticket, kind, the ticket's title, when, cost, and what it
+ * said. `ticket` leaves out the ticket column and its title, for a ticket's own page.
  */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
@@ -30,9 +31,9 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                     <RunDot state={run.state} />
                     {run.status}
                 </span>
-                <span className="readout w-14 text-xs text-muted-foreground">run:{run.id}</span>
+                <RunLink id={run.id} className="w-14" />
                 {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
-                <Chip>{run.kind}</Chip>
+                <Chip word={run.kind} />
                 {run.private && <Chip>private</Chip>}
                 {ticket && (
                     <span className="min-w-0 flex-1 truncate text-sm" title={run.ticket_title ?? undefined}>
@@ -50,11 +51,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                     </span>
                 </span>
             </div>
-            {run.summary && (
-                <p className="pl-[6.75rem] text-sm break-words">
-                    <LinkedText text={run.summary} />
-                </p>
-            )}
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className="pl-[6.75rem]" />}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[6.75rem] font-mono text-xs">
                     {run.prs.map((pr) => (
@@ -75,7 +72,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                         </span>
                     ))}
                     {run.session_id && (
-                        <span className="text-muted-foreground" title="open its transcript with the runtime's tools">
+                        <span className="text-muted-foreground" title="its transcript is on the run's page">
                             session {run.session_id}
                         </span>
                     )}

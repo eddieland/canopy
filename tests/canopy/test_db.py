@@ -1,43 +1,151 @@
+import hashlib
 import os
 import sqlite3
+from collections import Counter
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
 from canopy.core import db
 from canopy.infra import resources
+from tests.canopy.helpers import journal_at, shipped_through, versions_after
 from tests.canopy.test_reconcile import DEAD_PID
+
+# Each shipped migration's sha256, over LF line endings. A journal applies a migration once, so an edit to a shipped
+# one reaches only fresh journals and the two drift apart: a change to the schema is a new migration (AGENTS.md). A
+# new migration adds its line here.
+SHIPPED = {
+    1: "29a6d9dc889e6665b59c3275c33cef6b110c91e5e91012bbeb54128ee247dfcc",
+    2: "57a7f7c2c1c4a5ba3f1b2a6758fcfdc436300022f8d42ea9dcf448c0f28ac230",
+    3: "2c6304b3bbd58ae42d99a556d89ce45f92a918a5928938eae6f0e03d4d82d077",
+    4: "de8cac71aaac4d1b1519936ad84bee2c09892b64284f7b574d7adefb2d68884a",
+    5: "dbfef8c285bc0ee62593db11e8ab5c6d2cff51ed4890244858a401f28772c8fd",
+    6: "fe189eed7922fdf0e190d704d291171bfd5eb520ae06b77ff5f602b4bb0d5706",
+    7: "7411e79251a21c3b9b0c27ec5b6760a12a99d6dae115a07e98c4b5e6fe504090",
+    8: "d111db1b5b24bd675ec5f85155e070bcc0622347c35c8467b486d7fecf2bbb56",
+    9: "a1ffa27d0c8256f924f9010f501f512bca480197c5797dd8afa105421367bbd1",
+    10: "cf297c7f2eb5a217a1b326da730a56fb71b246241191fb6009592fc867c713e1",
+    11: "b5f91649b20c6783e4f915816ba930c0ff986cee619acce6f03c313d398ce941",
+    12: "04410ef0faf97f97e28ffdfb7c8a6c0f86ec7878222ef10336fad518f89196f7",
+    13: "764761a8223991f778163245e702688715f2d9144de5573244c4fee8c74f533e",
+}
+
+# A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
+# against a journal with something in it: a rebuilt table or a new constraint fails on rows, not on an empty journal.
+# A migration that creates a table adds its row here, in an order the foreign keys allow.
+SEED: Mapping[str, str] = {
+    "ticks": "INSERT INTO ticks (id, started_at, ended_at, status) VALUES (1, 'x', 'y', 'ok')",
+    "tickets": (
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase) VALUES ('OLD-1', '/r', 'x', 'y', 'ci_red')"
+    ),
+    "runs": (
+        "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status, result_json) "
+        """VALUES (1, 1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'y', 'l', 'done', '{"summary": "did it"}')"""
+    ),
+    "decisions": "INSERT INTO decisions (tick_id, ticket_key, action, rationale) VALUES (1, 'OLD-1', 'wait', 'r')",
+    "notifications": (
+        "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, sent_at) "
+        "VALUES ('log', 'f', 'OLD-1', 'r', 'x')"
+    ),
+    "ticket_units": "INSERT INTO ticket_units (ticket_key, repo, branch, phase) VALUES ('OLD-1', 'api', 'b', 'ci_red')",
+    "run_slots": (
+        "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder) VALUES (1, 'api', '/s', 'l', 'h')"
+    ),
+    "split_children": (
+        "INSERT INTO split_children (child_key, parent_key, repo, run_id) VALUES ('OLD-2', 'OLD-1', 'api', 1)"
+    ),
+    "chore_runs": (
+        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path) VALUES (1, 'nightly', 'x', 'ok', 'l')"
+    ),
+    "notify_events": "INSERT INTO notify_events (grp, kind, at, fields) VALUES ('runs', 'run.ended', 'x', '{}')",
+    "notify_sinks": "INSERT INTO notify_sinks (name, cursor, created_at) VALUES ('log', 1, 'x')",
+    "review_runs": (
+        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path) "
+        "VALUES (1, 'https://e.test/pr/7', 'abc', 'x', 'done', 'l')"
+    ),
+    "messages": (
+        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+        "VALUES ('ticket', 'OLD-1', 'x', 'operator', 'reply', 'cli', 'Blue.')"
+    ),
+    "starts": (
+        "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) "
+        "VALUES ('ticket', 'OLD-1', 'started', 'x', 'cli')"
+    ),
+    "pause": "INSERT INTO pause (id, paused_at, channel) VALUES (1, 'x', 'cli')",
+}
 
 
 def fresh(tmp_path: Path) -> sqlite3.Connection:
     return db.connect(tmp_path / "canopy.db")
 
 
+def tables(conn: sqlite3.Connection) -> list[str]:
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    )
+    return [r[0] for r in rows if r[0] != "schema_migrations"]
+
+
+def contents(conn: sqlite3.Connection) -> dict[str, tuple[list[str], Counter[tuple[object, ...]]]]:
+    """Every table's columns and rows, the rows as a multiset, since a rebuilt table may not keep their order."""
+    found: dict[str, tuple[list[str], Counter[tuple[object, ...]]]] = {}
+    for table in tables(conn):
+        columns = [r["name"] for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))]
+        # The table name comes from sqlite_master, never from input.
+        rows = conn.execute(f"SELECT * FROM {table}")  # noqa: S608
+        found[table] = (columns, Counter(tuple(r) for r in rows))
+    return found
+
+
+def test_shipped_migrations_are_never_edited() -> None:
+    shipped = db.discover(resources.migrations_dir())
+    found = {m.version: hashlib.sha256(m.path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() for m in shipped}
+    assert found == SHIPPED
+
+
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
+    shipped = db.discover(resources.migrations_dir())
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    assert db.migrate(conn, resources.migrations_dir()) == [m.version for m in shipped]
     assert db.migrate(conn, resources.migrations_dir()) == []
-    rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
-    assert rows == [
-        (1, "init"),
-        (2, "run_sessions"),
-        (3, "conversations"),
-        (4, "mirrored_comments"),
-        (5, "forget"),
-        (6, "tick_cost"),
-        (7, "tick_messages"),
-        (8, "chore_cost"),
-        (9, "tick_read_at"),
-        (10, "ticket_title"),
-    ]
+    rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations ORDER BY version")]
+    assert rows == [(m.version, m.name) for m in shipped]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
-def test_new_migration_is_applied_and_recorded(tmp_path: Path) -> None:
+def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path) -> None:
+    """Applied one at a time to a journal with a row in every table, no migration loses a row, a column, or a value.
+
+    A migration may add rows, as 0003's backfill does, and columns. One that means to drop or rewrite what it finds
+    says so here.
+    """
     migrations = tmp_path / "migrations"
     migrations.mkdir()
-    (migrations / "0001_init.sql").write_text((resources.migrations_dir() / "0001_init.sql").read_text())
+    conn = fresh(tmp_path)
+    for m in db.discover(resources.migrations_dir()):
+        before = contents(conn)
+        (migrations / m.path.name).write_text(m.path.read_text())
+        assert db.migrate(conn, migrations) == [m.version]
+        after = contents(conn)
+        for table, (columns, rows) in before.items():
+            assert table in after, f"{m.path.name} dropped {table}"
+            now_columns, now_rows = after[table]
+            assert set(columns) <= set(now_columns), f"{m.path.name} dropped columns of {table}"
+            kept = Counter(tuple(row[now_columns.index(c)] for c in columns) for row in now_rows.elements())
+            assert rows - kept == Counter(), f"{m.path.name} lost or changed rows of {table}"
+        assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        unseeded = [t for t in tables(conn) if t not in SEED]
+        assert unseeded == [], f"{m.path.name} created tables with no row in SEED"
+        for table, insert in SEED.items():
+            if table in after and conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0:  # noqa: S608
+                conn.execute(insert)
+
+
+def test_new_migration_is_applied_and_recorded(tmp_path: Path) -> None:
+    migrations = shipped_through(tmp_path / "migrations", 1)
     conn = fresh(tmp_path)
     db.migrate(conn, migrations)
     (migrations / "0002_extra.sql").write_text("CREATE TABLE extra (id INTEGER PRIMARY KEY);\n")
@@ -46,14 +154,26 @@ def test_new_migration_is_applied_and_recorded(tmp_path: Path) -> None:
 
 
 def test_failed_migration_rolls_back(tmp_path: Path) -> None:
-    migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    (migrations / "0001_init.sql").write_text((resources.migrations_dir() / "0001_init.sql").read_text())
+    migrations = shipped_through(tmp_path / "migrations", 1)
     (migrations / "0002_bad.sql").write_text("CREATE TABLE half (id INTEGER);\nNOT SQL;\n")
     conn = fresh(tmp_path)
     with pytest.raises(sqlite3.Error):
         db.migrate(conn, migrations)
     assert conn.execute("SELECT name FROM sqlite_master WHERE name IN ('ticks', 'half')").fetchall() == []
+
+
+def test_a_failed_migration_rolls_back_every_pending_one(tmp_path: Path) -> None:
+    conn = journal_at(tmp_path, 1)
+    migrations = tmp_path / "migrations"
+    (migrations / "0002_extra.sql").write_text("ALTER TABLE runs ADD COLUMN extra TEXT;\n")
+    (migrations / "0003_bad.sql").write_text("NOT SQL;\n")
+    with pytest.raises(sqlite3.Error):
+        db.migrate(conn, migrations)
+    # Pending migrations apply in one transaction: the good one before the bad one rolls back with it.
+    assert [r[0] for r in conn.execute("SELECT version FROM schema_migrations")] == [1]
+    assert "extra" not in [r["name"] for r in conn.execute("SELECT name FROM pragma_table_info('runs')")]
+    (migrations / "0003_bad.sql").write_text("SELECT 1;\n")
+    assert db.migrate(conn, migrations) == [2, 3]
 
 
 @pytest.mark.parametrize("names", [["0001_a.sql", "0003_b.sql"], ["1_a.sql"], ["0002_a.sql"]])
@@ -120,11 +240,8 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
 
 def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
     """A live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
+    conn = journal_at(tmp_path, 1)
     migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    (migrations / "0001_init.sql").write_text((resources.migrations_dir() / "0001_init.sql").read_text())
-    conn = fresh(tmp_path)
-    db.migrate(conn, migrations)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     for key in ("OLD-1", "OLD-2", "OLD-3"):
         db.touch_ticket(conn, key, "/r")
@@ -149,11 +266,7 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
 
 
 def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: Path) -> None:
-    migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    (migrations / "0001_init.sql").write_text((resources.migrations_dir() / "0001_init.sql").read_text())
-    conn = fresh(tmp_path)
-    db.migrate(conn, migrations)
+    conn = journal_at(tmp_path, 1)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute(
@@ -163,7 +276,14 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     conn.execute(
         "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path) VALUES (1, 'nightly', 'x', 'ok', 'l')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4, 5, 6, 7, 8, 9, 10]
+    conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path) "
+        "VALUES (1, 'https://github.com/acme/api/pull/7', 'abc', 'x', 'done', 'l')"
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(1)
+    review_run = db.get_review_run(conn, 1)
+    assert review_run is not None
+    assert (review_run["session_id"], review_run["cost_usd"], review_run["tokens_input"]) == (None, None, None)
     chore_run = db.get_chore_run(conn, 1)
     assert chore_run is not None
     assert (chore_run["session_id"], chore_run["cost_usd"], chore_run["tokens_input"]) == (None, None, None)

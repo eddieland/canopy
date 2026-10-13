@@ -62,7 +62,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   to `POST /api/session`.
 - **Never blank content.** A skeleton only when `data` is `undefined`. Reserve space for anything async.
 - **Typed search params.** Validate in the route's `validateSearch` and return every key, `undefined` when invalid:
-  the router merges the result over the raw search, so an omitted key keeps the raw string (see `routes/runs.tsx`).
+  the router merges the result over the raw search, so an omitted key keeps the raw string (see
+  `routes/runs.index.tsx`).
 - **URLs are relative to the base path.** The app may be served under a prefix. Use `apiUrl()` and `basePath` from
   `src/lib/base.ts` and router `Link`s; never write `/api/...` or `/assets/...` as an absolute path.
 - **No requests to another origin** at run time: no CDN fonts, icon fonts, analytics, or remote images. Bundle them.
@@ -78,7 +79,7 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 
 ## Python side
 
-Keep it to serving and wiring, in `src/canopy/serve/` (`docs/DESIGN.md` §5, §22). The SPA fallback, caching, CSP,
+Keep it to serving and wiring, in `src/canopy/serve/` (DESIGN §5, §22). The SPA fallback, caching, CSP,
 Host and Origin checks, sign-in, and base path are there and tested in `tests/canopy/test_serve.py`; the API over a
 real journal and `canopy loop` serving it in `tests/canopy/test_web.py`. A new route under `/api` goes on the
 signed-in router in `api.py` and needs no change to the rest; a write goes through `canopy.core.conversation`, never
@@ -94,8 +95,12 @@ SQL of its own.
   new image before it merges. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch,
   then run the Screenshots workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or
   an agent's GitHub tools). It pushes a commit with the images that changed and starts CI on it; pull before going
-  on. `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not
-  match.
+  on. It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold
+  (a token's small shift) leaves the old images in place: run it with `update` set to `all`
+  (`-f update=all`) to rewrite every one. `npx playwright test --update-snapshots=changed` does the same locally, on
+  a machine whose rendering may not match.
+- Playwright hides scrollbars in headless Chromium, so those screenshots never show one. `e2e/scrollbars.spec.ts`
+  keeps them, for what a scrollbar is part of: a long list scrolling in its panel.
 
 ## Done for a UI pull request
 

@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 
@@ -11,6 +11,10 @@ export const keys = {
     meta: ['meta'] as const,
     attention: ['attention'] as const,
     runs: ['runs'] as const,
+    run: (id: number) => ['run', id] as const,
+    // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
+    runTranscript: (id: number) => ['transcript', 'run', id] as const,
+    tickTranscript: (id: number) => ['transcript', 'tick', id] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
     chores: ['chores'] as const,
@@ -21,6 +25,8 @@ export const keys = {
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
     tick: ['tick'] as const,
+    search: (q: string) => ['search', q] as const,
+    loop: ['loop'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -46,7 +52,42 @@ export const runsQuery = queryOptions({
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
 })
 
-/** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
+/** One run, as the runs list shows it. The stream writes a run it lists into this key when a page holds it. */
+export function runQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.run(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/{run_id}', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/**
+ * A run's session, read back from its log by the server on every fetch (DESIGN §22). Its events reach the log when the
+ * run ends, so it never goes stale on its own: the stream marks it stale when the run's status changes (live.ts).
+ */
+export function runTranscriptQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.runTranscript(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/{run_id}/transcript', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** A tick's overseer session, read back from its output file. Marked stale when the stream says that tick changed. */
+export function tickTranscriptQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.tickTranscript(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/ticks/{tick_id}/transcript', { params: { path: { tick_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** What the last 24 hours and the last 30 days cost. The stream sends them again whenever a cost changes. */
 export const spendQuery = queryOptions({
     queryKey: keys.spend,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
@@ -56,6 +97,12 @@ export const spendQuery = queryOptions({
 export const tickQuery = queryOptions({
     queryKey: keys.tick,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/tick', { signal })),
+})
+
+/** Whether the operator paused the loop (docs/DESIGN.md §6). The stream sends it again whenever it changes. */
+export const loopQuery = queryOptions({
+    queryKey: keys.loop,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/loop', { signal })),
 })
 
 export const ticketsQuery = queryOptions({
@@ -120,3 +167,15 @@ export const worktreesQuery = queryOptions({
     refetchInterval: WORKTREES_REFRESH_MS,
     refetchIntervalInBackground: false,
 })
+
+/**
+ * The journal's rows holding every word of `q` (DESIGN §22, Search). Not on the stream: read when the query changes.
+ * The previous query's hits stay on screen while the next one's load, so typing never blanks the page.
+ */
+export function searchQuery(q: string) {
+    return queryOptions({
+        queryKey: keys.search(q),
+        queryFn: async ({ signal }) => unwrap(await api.GET('/api/search', { params: { query: { q } }, signal })),
+        placeholderData: keepPreviousData,
+    })
+}

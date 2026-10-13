@@ -1,8 +1,9 @@
 """The JSON and SSE API under `{base_path}/api` (DESIGN §6, §19, §22).
 
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
-functions the CLI's verbs call (`canopy.core.conversation`), with channel `web`, so the guards are the same ones; a
-guard's refusal is a 409 naming it. A forget also carries the ticket's key as the operator typed it.
+functions the CLI's verbs call (`canopy.core.conversation`, and `canopy.core.pause` for the loop's pause), with channel
+`web`, so the guards are the same ones; a guard's refusal is a 409 naming it. A forget also carries the ticket's key as
+the operator typed it.
 """
 
 from __future__ import annotations
@@ -12,10 +13,10 @@ from collections.abc import AsyncIterator
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import chore_view, conversation
+from canopy.core import chore_view, conversation, pause, search
 from canopy.infra import logs
 from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
@@ -26,12 +27,15 @@ from canopy.serve.schema import (
     ForgetRequest,
     Forgot,
     LastTick,
+    LoopState,
     Meta,
+    PauseChanged,
     Pool,
     RefusalResponse,
     Replied,
     ReplyRequest,
     Run,
+    SearchResults,
     Session,
     SignIn,
     Spend,
@@ -43,6 +47,7 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
+    Transcript,
 )
 
 if TYPE_CHECKING:
@@ -92,6 +97,9 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _write_routes(signed_in, backend)
     _chore_routes(signed_in, backend)
     _tick_routes(signed_in, backend)
+    _loop_routes(signed_in, backend)
+    _run_routes(signed_in, backend)
+    _search_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
 
@@ -290,7 +298,10 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
 
 
 def _tick_routes(api: APIRouter, backend: Backend) -> None:
-    """The ticks (DESIGN §6): what `canopy decisions` prints. Reads only; a rationale is untrusted text."""
+    """The ticks (DESIGN §6): what `canopy decisions` prints, and the overseer's transcript.
+
+    Reads only; a rationale and a transcript are untrusted text.
+    """
 
     @api.get("/ticks", operation_id="listTicks")
     def ticks() -> list[Tick]:
@@ -304,3 +315,81 @@ def _tick_routes(api: APIRouter, backend: Backend) -> None:
         if found is None:
             raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
         return found
+
+    # The overseer's output, read back from the tick's output file on each request (DESIGN §22).
+    @api.get(
+        "/ticks/{tick_id}/transcript",
+        operation_id="getTickTranscript",
+        responses={404: {"description": "No such tick."}},
+    )
+    def tick_transcript(tick_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
+        with backend.open() as ctx:
+            found = views.tick_transcript(ctx, tick_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
+        return found
+
+
+def _loop_routes(api: APIRouter, backend: Backend) -> None:
+    """The loop's pause (DESIGN §6): `canopy pause` and `canopy resume`. The loop reads it at every step of its wait."""
+    log = logs.for_tick(None)
+
+    @api.get("/loop", operation_id="getLoop")
+    def loop() -> LoopState:
+        with backend.open() as ctx:
+            return views.loop_state(ctx)
+
+    @api.post("/loop/pause", operation_id="pauseLoop")
+    def pause_loop() -> PauseChanged:
+        with backend.open() as ctx:
+            already = pause.pause(ctx.conn, channel=WEB)
+            state = views.loop_state(ctx)
+        if not already:
+            log.info("loop paused", extra={"channel": WEB})
+        return PauseChanged(already=already, loop=state)
+
+    @api.post("/loop/resume", operation_id="resumeLoop")
+    def resume_loop() -> PauseChanged:
+        with backend.open() as ctx:
+            already = pause.resume(ctx.conn)
+            state = views.loop_state(ctx)
+        if not already:
+            log.info("loop resumed", extra={"channel": WEB})
+        return PauseChanged(already=already, loop=state)
+
+
+def _run_routes(api: APIRouter, backend: Backend) -> None:
+    """One run (DESIGN §8), and its session's transcript. Reads only; a transcript is untrusted text."""
+
+    @api.get("/runs/{run_id}", operation_id="getRun", responses={404: {"description": "No such run."}})
+    def run(run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Run:
+        with backend.open() as ctx:
+            found = views.run_detail(ctx, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no run {run_id}")
+        return found
+
+    # Agent output, read back from the run's log on each request; never on the stream (DESIGN §22).
+    @api.get(
+        "/runs/{run_id}/transcript", operation_id="getRunTranscript", responses={404: {"description": "No such run."}}
+    )
+    def run_transcript(run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
+        with backend.open() as ctx:
+            found = views.run_transcript(ctx, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no run {run_id}")
+        return found
+
+
+def _search_routes(api: APIRouter, backend: Backend) -> None:
+    """The search over the journal (DESIGN §22, Search). Reads only; every snippet is untrusted text."""
+
+    @api.get(
+        "/search", operation_id="search", responses={422: {"description": "Too short, too long, or too many words."}}
+    )
+    def find(q: Annotated[str, Query(min_length=search.MIN_QUERY, max_length=search.MAX_QUERY)]) -> SearchResults:
+        with backend.open() as ctx:
+            try:
+                return views.found(ctx, q)
+            except search.BadQueryError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from None

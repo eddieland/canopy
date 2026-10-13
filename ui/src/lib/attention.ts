@@ -3,7 +3,7 @@ import type { AttentionItem } from '@/api/types'
 /** How urgent an attention item is: the order the attention list shows it in, and its chip's color (DESIGN.md). */
 export type Severity = 'failed' | 'waiting' | 'other' | 'finding'
 
-// Reasons raised because something broke: a run, a chore, or a review (docs/DESIGN.md §14). A reason not named here
+// Reasons raised because something broke: a run, a chore, or a review (DESIGN §14). A reason not named here
 // or below, the overseer's phase-table reasons included, is `other`.
 const FAILED = new Set([
     'crashed',
@@ -13,7 +13,6 @@ const FAILED = new Set([
     'attempt_limit',
     'chore_failed',
     'review_failed',
-    'review_unposted',
     'review_limit',
 ])
 
@@ -27,6 +26,13 @@ export function severity(item: AttentionItem): Severity {
     if (FAILED.has(item.reason)) return 'failed'
     if (WAITING.has(item.reason)) return 'waiting'
     return 'other'
+}
+
+/** How many of the items are of each severity. */
+export function countBySeverity(items: AttentionItem[]): Record<Severity, number> {
+    const counts: Record<Severity, number> = { failed: 0, waiting: 0, other: 0, finding: 0 }
+    for (const item of items) counts[severity(item)] += 1
+    return counts
 }
 
 /** The items, most severe first; within a severity, the one open longest first. */

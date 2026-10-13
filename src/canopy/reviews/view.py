@@ -66,9 +66,15 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
             "status": latest["status"],
             "verdict": stored.verdict if stored is not None else None,
             "impact": stored.impact if stored is not None else None,
-            "comment": stored.comment if stored is not None else None,
             "findings": [f.title for f in stored.findings] if stored is not None else [],
             "started_at": latest["started_at"],
             "ended_at": latest["ended_at"],
+            # The review's time for the `review` cursor, which takes whole seconds only (DESIGN §7).
+            "reviewed_at": _to_second(latest["ended_at"]),
         },
     }
+
+
+def _to_second(stamp: str | None) -> str | None:
+    """A time the journal wrote, `...T12:00:00.123Z`, as the `review` cursor's `...T12:00:00Z`."""
+    return f"{stamp[:19]}Z" if stamp else None

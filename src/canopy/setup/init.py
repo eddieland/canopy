@@ -91,7 +91,7 @@ def user_config_text(label: str) -> str:
     return f"""\
 # canopy user config: personal, never committed. Overrides each workspace's canopy-workspace.toml key by key.
 # Only what is yours to decide is here; every other key keeps its default, and gets new ones as canopy changes. Keys
-# marked user-only in DESIGN.md §12 may be set only here. Every key, with its default:
+# marked user-only in DESIGN §12 may be set only here. Every key, with its default:
 # https://github.com/eddieland/canopy/blob/main/examples/config.toml
 
 [tracker]

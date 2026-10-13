@@ -25,8 +25,8 @@ Everything below is for an agent helping the operator in their own session.
 - `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
   tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
   ticket worked is its queue label, or `canopy start` (below).
-- `canopy start`, `stop`, `reply`, and `forget` are the operator's own: they authorize work and answer workers.
-  Suggest them; run one only when the operator asks you to, with the words they gave you.
+- `canopy start`, `stop`, `reply`, `forget`, `pause`, and `resume` are the operator's own: they authorize work, answer
+  workers, and hold the loop. Suggest them; run one only when the operator asks you to, with the words they gave you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -45,6 +45,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
+| `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and prints its result. Records nothing. |
@@ -135,7 +136,7 @@ no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or raise the limit in the user config. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
-| `review_failed`, `review_unposted`, `review_limit` | A PR's review failed, lost its comment, or hit its limit. |
+| `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists reviews. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |

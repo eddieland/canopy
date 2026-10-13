@@ -1,14 +1,15 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { keys } from './queries'
-import type { Run, StreamEvent } from './types'
+import type { LastTick, Run, StreamEvent } from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
  * read again, only if a page shows it, and so is a chore's page whenever the chores change, and the ticks and the
  * ticket shown whenever the latest tick does. The worktrees are not on the stream: a run starting or ending, or
- * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. Unknown event
- * types are ignored, so the server can add some.
+ * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A transcript
+ * is read again when its run's status or its tick changes, the only times its log can. The loop's pause arrives whole,
+ * as a list does. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -20,6 +21,16 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             client.setQueryData(keys.runs, event.runs)
             if (before !== undefined && holding(before) !== holding(event.runs)) {
                 void client.invalidateQueries({ queryKey: keys.worktrees, refetchType: 'active' })
+            }
+            // A run a page holds is written whole; its transcript is read again only when its status moves, since a
+            // run's events reach its log when it ends and its cost moves more often than that.
+            for (const run of event.runs) {
+                const shown = client.getQueryData<Run>(keys.run(run.id))
+                if (shown === undefined) continue
+                client.setQueryData(keys.run(run.id), run)
+                if (shown.status !== run.status) {
+                    void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
+                }
             }
             break
         }
@@ -36,11 +47,20 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         case 'spend.updated':
             client.setQueryData(keys.spend, event.spend)
             break
-        case 'tick.updated':
+        case 'tick.updated': {
+            const before = client.getQueryData<LastTick>(keys.tick)?.tick
             client.setQueryData(keys.tick, { tick: event.tick, acknowledged: event.acknowledged })
+            // Only the latest tick's output can still change, and only as it ends.
+            if (event.tick && (before?.id !== event.tick.id || before.status !== event.tick.status)) {
+                void client.invalidateQueries({ queryKey: keys.tickTranscript(event.tick.id) })
+            }
             // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions.
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
+            break
+        }
+        case 'loop.updated':
+            client.setQueryData(keys.loop, { paused: event.paused })
             break
     }
 }
@@ -81,6 +101,11 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         const { tick, acknowledged } = value as { tick?: unknown; acknowledged?: unknown }
         const known = tick === null || (typeof tick === 'object' && tick !== undefined)
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
+    }
+    if (type === 'loop.updated') {
+        const paused = (value as { paused?: unknown }).paused
+        // `typeof null` is 'object' too: running is `paused: null`, and a missing key is no event.
+        return typeof paused === 'object' ? (value as StreamEvent) : null
     }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend
