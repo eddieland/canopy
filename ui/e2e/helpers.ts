@@ -55,6 +55,19 @@ export async function settled(page: Page): Promise<void> {
 }
 
 /**
+ * Screenshots the whole page as `name`. The page scrolls under the header, not the window (AppShell), so a full-page
+ * capture would stop at the window's foot: the window grows to the page's height first.
+ */
+export async function screenshotWhole(page: Page, name: string): Promise<void> {
+    const scroller = page.locator('[data-scroll-restoration-id=page]')
+    const height = await scroller.evaluate((el) => el.getBoundingClientRect().top + el.scrollHeight)
+    const viewport = page.viewportSize()
+    if (viewport === null) throw new Error('the page has no viewport to grow')
+    await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
+    await expect(page).toHaveScreenshot(name)
+}
+
+/**
  * Pads a ticket's decisions to `count`, cycling through the ones the mock records, as a long-lived ticket collects
  * them: the mock's are too few to fill a panel past its height.
  */
