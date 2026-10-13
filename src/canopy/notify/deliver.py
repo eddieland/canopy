@@ -161,7 +161,9 @@ def _deliver(
         first = db.format_time(now - timedelta(minutes=sink.digest_every_minutes))
         since = str(row["last_digest_at"] or first)
         digest = message.digest(ctx.conn, items, since=since, now=now)
-    msg = message.Message(name, ctx.repo, path, change, len(items), events, digest, now)
+    msg = message.Message(
+        name, ctx.repo, path, change, len(items), events, digest, now, titles=message.titles(ctx.conn)
+    )
     if msg.is_empty():
         # Nothing to say; the cursor still moves past events of groups this sink does not take.
         ctx.conn.execute("UPDATE notify_sinks SET cursor = max(cursor, ?) WHERE name = ?", (cursor, name))
