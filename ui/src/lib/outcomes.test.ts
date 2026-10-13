@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { forgotText, notedText, reloadedText, repliedText, startedText, stoppedText } from './outcomes'
+import { dismissedText, forgotText, notedText, reloadedText, repliedText, startedText, stoppedText } from './outcomes'
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {
@@ -56,6 +56,15 @@ describe('outcomes', () => {
         )
         expect(notedText('deps', { message_id: 9, answers: null, new: false })).toBe(
             'Message 9 on chore:deps already says this; nothing new recorded.',
+        )
+    })
+
+    it('say what a dismissal did, as canopy dismiss does', () => {
+        expect(dismissedText({ chore: 'deps', finding: 'lodash-advisory', dismissed: true })).toBe(
+            'chore:deps lodash-advisory is dismissed: it is off the attention list until the chore stops reporting it.',
+        )
+        expect(dismissedText({ chore: 'deps', finding: 'lodash-advisory', dismissed: false })).toBe(
+            'chore:deps lodash-advisory is listed again while the chore reports it.',
         )
     })
 

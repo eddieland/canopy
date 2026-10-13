@@ -324,6 +324,8 @@ class ChoreFinding(_Model):
     """A URL the agent gave for it: untrusted."""
     since: datetime
     """When the unbroken run of `ok` runs reporting it began."""
+    dismissed: bool = False
+    """Whether the operator dismissed it since then: it is off the attention list until it clears."""
 
 
 class ChoreSummary(_Model):
@@ -455,6 +457,26 @@ class Replied(_Model):
     """The question it answers, if it answers one."""
     new: bool
     """Whether it was recorded now, rather than by an earlier submission with the same id."""
+
+
+class DismissRequest(_Model):
+    """A dismissal of one of a chore's open findings, by its id, or with `undo` the taking back of one (DESIGN §19)."""
+
+    finding: Annotated[str, Field(max_length=200)]
+    """The finding's id, as the chore reported it; checked again in code against the finding id's pattern."""
+    undo: bool = False
+    """Take the dismissal back, as `--undo` does: the finding is listed again."""
+
+
+class Dismissed(_Model):
+    """What a dismissal left: the finding, and whether it is now dismissed."""
+
+    chore: str
+    """The chore's name."""
+    finding: str
+    """The finding's id."""
+    dismissed: bool
+    """Whether it is now dismissed: false after an `undo`."""
 
 
 class Process(_Model):
