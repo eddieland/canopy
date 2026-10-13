@@ -235,6 +235,9 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
   there is the same ticket's.
+- **The tickets list** keeps every column but the title at a fixed width: the key, the title in the free width, then
+  the `public` or `private, started` chip, the phase (cut to fit, the whole on hover), the running run or `waiting on
+  you`, and the age. So each row's chip, phase, and run line up whatever the others say.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
