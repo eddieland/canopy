@@ -57,6 +57,24 @@ test('slash focuses the box from anywhere but a text field, and Escape leaves it
     await expect(box).not.toBeFocused()
 })
 
+test('the clear button empties the box and keeps the focus there, leaving the page as it is', async ({ page }) => {
+    await page.goto('search?q=web')
+    await settled(page)
+    const box = page.getByRole('searchbox', { name: 'Search the journal' })
+    const clear = page.getByRole('button', { name: 'Clear search' })
+    await expect(box).toHaveValue('web')
+
+    await clear.click()
+    await expect(box).toHaveValue('')
+    await expect(box).toBeFocused()
+    await expect(clear).toBeHidden()
+    await expect(page).toHaveURL(/\/search\?q=web$/)
+
+    await box.fill('stale requests')
+    await expect(clear).toBeVisible()
+    await expect(page).toHaveURL(/\/search\?q=stale(\+|%20)requests$/)
+})
+
 test('a query the server would refuse asks for one, and one nothing holds says so', async ({ page }) => {
     await page.goto('search?q=a')
     await expect(page.getByText('type at least 2 characters in the search box')).toBeVisible()
