@@ -455,8 +455,8 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   overseer decides when one runs (§19), and `canopy chore try` stays in the CLI.
 - `POST /chores/{name}/dismissals` takes a finding's id and `undo`, behind the same checks, and dismisses the finding
   as `canopy dismiss` does, or takes the dismissal back, with channel `web` (§19). A finding selected on the attention
-  list has Dismiss under its detail; on the chore's page each open finding has Dismiss, or, dismissed, a mark and
-  List again.
+  list has a small `dismiss` beside its age; on the chore's page each open finding has one in its head line, or,
+  dismissed, a mark and `list again`.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
   detail are the agent's: untrusted text, rendered as text with control characters dropped.
 - A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its
