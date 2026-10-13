@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 
 import type { TranscriptEntry, TranscriptTool } from '@/api/types'
 
-import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from './transcript'
+import {
+    duration,
+    elapsed,
+    findQueryOf,
+    hitsIn,
+    outcome,
+    pretty,
+    shownOutput,
+    startOf,
+    summary,
+    tally,
+    tokenCount,
+} from './transcript'
 
 describe('elapsed', () => {
     it('counts from the start, with hours only when there are some', () => {
@@ -146,5 +158,52 @@ describe('pretty', () => {
         expect(pretty('{"id":12345678901234567890,"n":1.10}')).toBe('{\n  "id": 12345678901234567890,\n  "n": 1.10\n}')
         expect(pretty('["caf\\u00e9"]')).toBe('[\n  "caf\\u00e9"\n]')
         expect(pretty('{\n    "a": {}\n}')).toBe('{\n  "a": {}\n}')
+    })
+})
+
+describe('findQueryOf', () => {
+    it('trims the ends, keeping what is between them as typed', () => {
+        expect(findQueryOf('  gh pr  view ')).toBe('gh pr  view')
+        expect(findQueryOf(' \t ')).toBeNull()
+        expect(findQueryOf('')).toBeNull()
+    })
+})
+
+describe('hitsIn', () => {
+    it('counts the lines of a row that hold the query, in either case, each line once', () => {
+        const text: TranscriptEntry = {
+            kind: 'text',
+            at: null,
+            text: 'Reading the box.\nthe BOX and the box\nnothing here',
+            reasoning: false,
+            cut: false,
+        }
+        expect(hitsIn(text, 'box')).toEqual({ row: 2, body: 0 })
+        expect(hitsIn(text, 'box.\nthe')).toEqual({ row: 0, body: 0 })
+    })
+
+    it("reads a tool call's row as shown, and its input and output as it opens to them", () => {
+        const call = shell('gh pr view 88', '{"number": 88,\n"title": "Debounce search"}')
+        // The row's command, and the output's pretty lines.
+        expect(hitsIn(call, 'gh pr')).toEqual({ row: 1, body: 1 })
+        expect(hitsIn(call, 'debounce')).toEqual({ row: 0, body: 1 })
+        expect(hitsIn(call, '"number": 88')).toEqual({ row: 0, body: 1 })
+        expect(hitsIn(tool('completed', { tool: 'github_get_pr' }), 'GET_PR')).toEqual({ row: 1, body: 0 })
+        expect(hitsIn(tool('completed'), 'no output')).toEqual({ row: 0, body: 1 })
+    })
+
+    it('takes regex characters literally, and finds nothing in a model call', () => {
+        const error: TranscriptEntry = { kind: 'error', at: null, name: 'APIError', message: 'retry (after 60s)' }
+        expect(hitsIn(error, '(after')).toEqual({ row: 1, body: 0 })
+        expect(hitsIn(error, 'a.i')).toEqual({ row: 0, body: 0 })
+        const step: TranscriptEntry = { kind: 'step', at: null, reason: 'stop', cost_usd: 0.1, tokens: 10, split: null }
+        expect(hitsIn(step, 'stop')).toEqual({ row: 0, body: 0 })
+    })
+})
+
+describe('shownOutput', () => {
+    it('is the output laid out, or says there is none', () => {
+        expect(shownOutput(tool('completed', { output: '{"a":1}' }))).toBe(pretty('{"a":1}'))
+        expect(shownOutput(tool('completed'))).toBe('no output')
     })
 })

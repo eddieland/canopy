@@ -306,7 +306,12 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
   same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
   is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
-  tool calls, failed and refused ones, and model calls. A
+  tool calls, failed and refused ones, and model calls, and at that line's end a search field (`Find lines`) on
+  `surface-raised`, as the nav's is. A search keeps only the rows with a line that holds it, letters in either case and
+  every character taken literally, and says how many lines and rows that is in the field; its matches are marked on the
+  accent's tint as the search page's are (`MarkedText`), inside a block's colored JSON too (`markedTokens`). A tool
+  call whose input or output holds it opens to it; a model call is numbers alone and is never kept. Escape or the
+  clear button empties it, and a search nothing matches says so in place of the rows. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted

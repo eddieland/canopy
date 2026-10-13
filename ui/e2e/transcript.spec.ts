@@ -34,7 +34,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await expect(output).toBeHidden()
     await read.locator('summary').click()
     await expect(output).toBeVisible()
-    await expect(transcript.locator('input')).toHaveCount(0)
+    await expect(transcript.getByTestId('transcript-entries').locator('input')).toHaveCount(0)
     // Its input is JSON, colored by what each piece is; its output, a file, stays plain.
     await expect(read.locator('.text-syntax-key', { hasText: '"filePath"' })).toBeVisible()
     await expect(output.locator('span')).toHaveCount(0)
@@ -50,6 +50,37 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
 
     await page.getByRole('link', { name: 'ABC-099' }).first().click()
     await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
+})
+
+test('a search keeps the rows with a line that holds it, marked, and opens the calls it is in', async ({ page }) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const rows = transcript.getByTestId('transcript-entries').locator(':scope > li')
+    const all = await rows.count()
+    const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
+
+    await find.fill('DEBOUNCE')
+    // The agent's text twice, and two calls: the test run's output, and the pull request's line and input.
+    await expect(transcript.getByTestId('transcript-found')).toHaveText('5 lines, 4 rows')
+    await expect(rows).toHaveCount(4)
+    await expect(transcript.locator('mark').first()).toHaveText('debounce')
+    // A call whose input or output holds the query opens to it, its match marked inside the colored JSON.
+    await expect(transcript.locator('details[open]')).toHaveCount(2)
+    const pr = rows.filter({ hasText: 'github_create_pull_request' })
+    await expect(pr.locator('pre mark')).toHaveText('debounce')
+    await expect(pr.locator('pre mark .text-syntax-string')).toHaveText('debounce')
+
+    // Characters, never a pattern: a dot matches only a dot.
+    await find.fill('push.origin')
+    await expect(transcript).toContainText('no line holds “push.origin”')
+    await expect(rows).toHaveCount(0)
+
+    await find.press('Escape')
+    await expect(find).toHaveValue('')
+    await expect(rows).toHaveCount(all)
+    await expect(transcript.locator('mark')).toHaveCount(0)
+    await expect(transcript.locator('details[open]')).toHaveCount(0)
 })
 
 test("a failed run's transcript ends in the runtime's error, and a running one's waits for it to end", async ({
