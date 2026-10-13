@@ -157,6 +157,46 @@ def test_an_interrupted_run_kills_its_child_and_closes_its_pipes() -> None:
     assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
 
 
+def test_on_line_gets_each_line_of_stdout_as_it_is_printed(tmp_path: Path) -> None:
+    """The child waits for a file `on_line` makes on its first line: it ends only if lines arrive before it does."""
+    flag = tmp_path / "flag"
+    script = f"echo one; echo noise >&2; while [ ! -e {flag} ]; do sleep 0.01; done; printf 'two\\nthree'"
+    seen: list[str] = []
+
+    def on_line(line: str) -> None:
+        seen.append(line)
+        flag.touch()
+
+    result = SubprocessRunner().run(["sh", "-c", script], timeout=10, on_line=on_line)
+    assert result.ok
+    assert seen == ["one\n", "two\n", "three"]
+    assert (result.stdout, result.stderr) == ("one\ntwo\nthree", "noise\n")
+
+
+def test_on_line_with_stdin_and_a_timeout(tmp_path: Path) -> None:
+    seen: list[str] = []
+    result = SubprocessRunner().run(["sh", "-c", "cat; sleep 30"], stdin="the diff\n", timeout=0.5, on_line=seen.append)
+    assert result.timed_out
+    assert not result.ok
+    assert seen == ["the diff\n"]
+    assert result.stdout == "the diff\n"
+
+
+def test_an_on_line_that_raises_kills_the_child_and_closes_its_pipes() -> None:
+    pids: list[int] = []
+
+    def on_line(_line: str) -> None:
+        raise KeyboardInterrupt
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(KeyboardInterrupt):
+            SubprocessRunner().run(["sh", "-c", "echo hi; exec sleep 30"], on_start=pids.append, on_line=on_line)
+        gc.collect()
+    assert not procs.alive(pids[0])
+    assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
+
+
 def test_spawn_detaches_and_logs(agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FAKE_AGENT_RESULT", "spawned result")
     log = tmp_path / "run.log"

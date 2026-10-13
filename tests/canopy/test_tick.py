@@ -191,6 +191,24 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
     assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 11.5k tokens)")
 
 
+def test_a_running_tick_shows_its_overseer_session(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The session is on the tick from the overseer's first event, so a page or `canopy decisions` shows it mid-tick."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    monkeypatch.setenv("FAKE_OVERSEER_SESSION", "ses_o1")
+    overseer_does(monkeypatch, ["decisions"])
+    assert main(["tick", "--dry-run"]) == 0
+
+    [run] = agent_runs(agent_log)
+    commands = run["commands"]
+    assert isinstance(commands, list)
+    [decisions] = commands
+    assert "Tick 1: running (dry run)" in decisions["stdout"]
+    assert "overseer session ses_o1\n" in decisions["stdout"]  # no cost yet: the overseer has not ended
+
+
 def test_a_tick_whose_overseer_reports_nothing_records_no_cost(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
@@ -231,11 +249,14 @@ class TimingOutAgent:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> procs.Result:
         if "agent" in args[:3]:
             assert timeout == 15 * 60
             return procs.Result(tuple(args), -9, "fake agent: starting\n", "", timed_out=True)
-        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+        return procs.SubprocessRunner().run(
+            args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line
+        )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         return procs.SubprocessRunner().spawn(args, cwd=cwd, log_path=log_path)

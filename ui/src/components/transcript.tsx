@@ -115,7 +115,10 @@ function empty(transcript: Transcript, running: boolean): string {
         case 'no_session':
             return 'the runtime reported no session: a template without --format json prints no events'
         case 'no_log':
-            return 'its log is gone, or is not a file canopy reads'
+            // A running tick knows its session before its output is written.
+            return running
+                ? 'the session’s events reach the log when it ends'
+                : 'its log is gone, or is not a file canopy reads'
         case 'read':
             return running
                 ? 'the session’s events reach the log when it ends'
