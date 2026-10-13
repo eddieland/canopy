@@ -81,13 +81,14 @@ Re-read the tracker and GitHub before every decision that matters.
    skill says which form). The CLI accepts keys matching `[A-Za-z0-9][A-Za-z0-9_-]*` only.
 2. For each candidate, mirror its comments newer than its `mirror` cursor (see "Mirroring comments"). Then derive its
    phase from live state using the table below. Use cursors from the state block to know what is new since last tick.
-   Each unit's `attempts` count every run of each kind that covered it. When the count for the kind you would dispatch
-   has reached its limit in `policy` (`max_implement_attempts`, `max_fix_ci_attempts`, `max_resume_attempts`) in any
-   unit the dispatch would name, or a ticket's `split_attempts` has reached `max_split_attempts`, do not dispatch:
-   record `canopy attention <KEY> attempt_limit --repo <that unit>` with the kind
-   and the count, every tick the ticket still needs that work. When a unit's `fix_ci_cooldown_until` is set, it is later
-   than `now` and fix-ci for that unit must wait: record `wait`. If the ticket's `last_run` in the state block ended
-   `crashed`, `unpushed`, `unknown`, `timeout`, or `failed`, the harness has already put it on the attention list.
+   Each unit's `attempts` count every run of each kind that covered it. A unit's limit for a kind is its limit in
+   `policy` (`max_implement_attempts`, `max_fix_ci_attempts`, `max_resume_attempts`) plus the unit's `granted` count
+   for that kind, when it has one: runs the operator allowed past the policy. When the count for the kind you would
+   dispatch has reached that limit in any unit the dispatch would name, or a ticket's `split_attempts` has reached
+   `max_split_attempts`, do not dispatch: record `canopy attention <KEY> attempt_limit --repo <that unit>` with the
+   kind and the count, every tick the ticket still needs that work. When a unit's `fix_ci_cooldown_until` is set, it
+   is later than `now` and fix-ci for that unit must wait: record `wait`. If the ticket's `last_run` in the state block
+   ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed`, the harness has already put it on the attention list.
    Record `wait` and do not dispatch it, unless an authorized replier has commented on the ticket since that run's
    `ended_at`, in a comment that is not a worker's (see "Workers' comments"), or an `operator` message is dated after
    it (see "Reviewers and the operator's go-ahead"); then decide from its phase as usual.

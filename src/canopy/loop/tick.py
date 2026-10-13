@@ -96,6 +96,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
         attempts=policy.attempts(ctx.conn),
+        grants=policy.grants(ctx.conn),
         fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
         now=now,
         split_attempts=policy.split_attempts(ctx.conn),
