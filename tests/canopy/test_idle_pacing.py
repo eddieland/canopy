@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -86,6 +87,22 @@ class Case:
 
 def was_idle(ctx: Context, case: Case) -> bool:
     """Write `case`'s two ticks, and say whether the second was idle."""
+    outcome, seen = two_ticks(ctx, case)
+    return pacing.idle(ctx, outcome, seen)
+
+
+def churn_of(ctx: Context, case: Case) -> list[str]:
+    """Write `case`'s two ticks, and say what the second changed with nothing new to see."""
+    outcome, seen = two_ticks(ctx, case)
+    return pacing.churn(ctx, outcome, seen)
+
+
+def two_ticks(ctx: Context, case: Case) -> tuple[tick.Outcome, pacing.Before]:
+    """Write `case`'s two ticks.
+
+    Returns:
+        How the second ended, and what the loop read before it.
+    """
     setup, during, status, previous_read = case.setup, case.during, case.status, case.previous_read
     conn = ctx.conn
     db.migrate(conn, resources.migrations_dir())
@@ -103,7 +120,7 @@ def was_idle(ctx: Context, case: Case) -> bool:
     if during is not None:
         during(conn, tick_id)
     db.finish_tick(conn, tick_id, status, "")
-    return pacing.idle(ctx, tick.Outcome(tick_id, status, ""), seen)
+    return tick.Outcome(tick_id, status, ""), seen
 
 
 def decided(action: str) -> Step:
@@ -223,6 +240,94 @@ def test_a_run_that_ended_before_the_previous_tick_read_does_not_count(canopy_en
         conn.execute("UPDATE review_runs SET started_at = ?, ended_at = ?", (ago(hours=1), ago(minutes=30)))
 
     assert was_idle(context(canopy_env), Case(setup=setup))
+
+
+# Churn: what a tick changed with nothing new to see (ROADMAP M28), measured on the same journals.
+
+
+def both(*steps: Step) -> Step:
+    def run(conn: sqlite3.Connection, tick_id: int) -> None:
+        for step in steps:
+            step(conn, tick_id)
+
+    return run
+
+
+RELABELLED = both(seen_ticket, sets_ticket(phase="ci_red"))
+
+
+@pytest.mark.parametrize(
+    ("case", "lines"),
+    [
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED), ["PROJ-1 phase ci_running -> ci_red"], id="phase"),
+        pytest.param(
+            Case(
+                setup=seen_ticket,
+                during=both(seen_ticket, lambda c, _t: db.set_unit(c, KEY, "/r", "r", phase="ci_red")),
+            ),
+            ["PROJ-1 (r) phase ci_running -> ci_red"],
+            id="a unit's phase",
+        ),
+        pytest.param(Case(during=listed), ["+PROJ-1 needs_reviewer"], id="item added"),
+        pytest.param(Case(setup=listed), ["-PROJ-1 needs_reviewer"], id="item dropped"),
+        pytest.param(Case(setup=seen_ticket, during=seen_ticket), [], id="nothing changed"),
+        pytest.param(Case(during=seen_ticket), [], id="a ticket first seen"),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, chore_starts)), [], id="a run started"),
+        pytest.param(
+            Case(setup=both(seen_ticket, review_started_long_ago), during=both(RELABELLED, review_ends)),
+            [],
+            id="a run ended",
+        ),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, operator_reply)), [], id="an operator message"),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, ticket_started)), [], id="a start"),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, attempts_granted)), [], id="a grant"),
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED, status="overseer_failed"), [], id="not ok"),
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED, previous_read=False), [], id="no previous read"),
+    ],
+)
+def test_churn_is_a_change_with_nothing_new_to_see(canopy_env: CanopyEnv, case: Case, lines: list[str]) -> None:
+    assert churn_of(context(canopy_env), case) == lines
+
+
+def test_a_gate_that_opened_since_the_previous_tick_is_something_new(canopy_env: CanopyEnv) -> None:
+    # A gate (a fix-ci cooldown's end, a chore's due time) half way between the two ticks' reads.
+    def gate(_ctx: Context, now: datetime) -> datetime:
+        return now + BACK / 2
+
+    with mock.patch.object(pacing, "gate", autospec=True, side_effect=gate):
+        assert churn_of(context(canopy_env), Case(setup=seen_ticket, during=RELABELLED)) == []
+
+
+def test_the_loop_waits_line_says_what_a_tick_churned(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    ctx = context(canopy_env)
+    time = FakeTime()
+    term, _ = console()
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")))
+
+        def relabel_at_the_first_wait() -> None:
+            if len(time.slept) == 1:
+                stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")))
+
+        time.on_sleep = relabel_at_the_first_wait
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=3,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    # The first tick sees the ticket first; the second relabels it with nothing new to see; the third leaves it.
+    assert [line["churn"] for line in log_lines(canopy_env, "loop waits")] == [
+        [],
+        [f"{KEY} (repo) phase ci_running -> ci_red"],
+    ]
 
 
 # The wait after a tick.
