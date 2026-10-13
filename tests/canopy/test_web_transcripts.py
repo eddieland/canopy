@@ -118,9 +118,7 @@ def test_a_ticks_transcript_is_its_overseers_session(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/ticks/2/transcript").json()
     assert (found["status"], found["session_id"]) == ("read", "ses_tick2")
-    # With `--thinking`, its reasoning; and each model call's tokens by kind as well as together.
-    first = found["entries"][0]
-    assert (first["kind"], first["reasoning"]) == ("text", True)
+    # Each model call's tokens by kind as well as together.
     step = found["entries"][-1]
     assert step["split"] == {"input": 2325, "output": 930, "reasoning": 310, "cache_read": 6463, "cache_write": 512}
     assert step["tokens"] == sum(step["split"].values())

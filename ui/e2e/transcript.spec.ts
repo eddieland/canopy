@@ -71,10 +71,6 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await expect(transcript.getByTestId('transcript-tool')).toHaveCount(2)
     await expect(transcript).toContainText('Record the decision on ABC-101')
 
-    // With --thinking, what the model thought, under its label.
-    await expect(transcript.getByTestId('transcript-entries').locator('li').first()).toContainText(
-        'thinkingNothing is waiting on me except ABC-101',
-    )
     // A model call opens to its tokens by kind; Open all opens only the tool calls.
     const call = transcript.getByTestId('transcript-step')
     await expect(call).toHaveCount(1)

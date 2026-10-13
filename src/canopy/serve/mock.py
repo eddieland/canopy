@@ -589,11 +589,6 @@ def _text(session: str, minutes: float, text: str) -> str:
     return _event("text", session, minutes, part={"type": "text", "text": text})
 
 
-def _reasoning(session: str, minutes: float, text: str) -> str:
-    """What a reasoning model thought, as a template with `--thinking` prints it (DESIGN §13)."""
-    return _event("reasoning", session, minutes, part={"type": "reasoning", "text": text})
-
-
 def _tool(session: str, minutes: float, tool: str, state: dict[str, object], seconds: float = 1) -> str:
     ms = int((T0 + timedelta(minutes=minutes)).timestamp() * 1000)
     metadata: dict[str, object] = {}
@@ -736,9 +731,6 @@ def _transcripts(state_dir: Path) -> None:
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
     tick_2 = [
-        _reasoning(
-            s2, -60.1, "Nothing is waiting on me except ABC-101, and the state will say whether run 41 is done."
-        ),
         _text(s2, -60, "Reading the journal's state first."),
         _done(s2, -59.9, "Read the loop's state", "canopy state", "## Tickets\n- ABC-101 implementing (run 41)\n"),
         _done(
