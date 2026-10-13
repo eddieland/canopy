@@ -9,7 +9,7 @@ kind of thing each was.
 
 What a tick's overseer costs, what it spends it on, and whether a deterministic probe (a script that fingerprints
 tickets and PRs and wakes the overseer only on a change) would save enough to be worth building. Cited by M11, M21,
-and M27 to M29.
+and M28 to M30.
 
 ### Setup
 
@@ -62,43 +62,43 @@ operator event.**
 
 - **F1. Five ticks paid full price with no working CLI.** Two found no `canopy` on the overseer's PATH; three found
   the launcher's cached environment gone (ENOENT) while the loop kept running. Each read the whole world and could
-  record nothing; two still closed `ok`. A $0 check before the overseer runs would have saved all five. → M27.
+  record nothing; two still closed `ok`. A $0 check before the overseer runs would have saved all five. → M28.
 - **F2. Five of eight `overseer_failed` ticks did their work.** They recorded their decisions and then wrote a summary
   after `tick complete`, so the last line was not the done line. Each raised a failing-loop notification and, not
-  being `ok`, cannot count as idle. The prompt already says to print only that line. → M27.
+  being `ok`, cannot count as idle. The prompt already says to print only that line. → M28.
 - **F3. A ticket started from the web UI does not wake the loop.** Only operator messages and runs ending do
-  (`loop/repeat.py`). Three starts waited for a manual "tick now"; one waited 11 minutes for the timer. → M27.
+  (`loop/repeat.py`). Three starts waited for a manual "tick now"; one waited 11 minutes for the timer. → M28.
 - **F4. All seven review runs ended `unknown`** within about 15 seconds: the reviewer's last line was not a valid
   result. The overseer's retry and give-up ticks for them cost $2.21. Not diagnosed. → M11.
 - **F5. The overseer churns.** With nothing external changed, one tick relabelled three phases, one dropped an
   attention item, and one re-added an item an earlier tick dropped. A tick that changes a phase or the attention list is
-  not idle, so churn resets idle pacing's count. → M27.
+  not idle, so churn resets idle pacing's count. → M28.
 - **F6. Most tool-result volume is re-reading unchanged things.** PR reads were 35% of tool-result characters (119
   calls, mostly PR bodies), tracker searches 29%, and PR status lists 19% (30 or more CI contexts each). The approved
   PR was read 79 times over 23 ticks with no change after its approval. The provider skill was loaded by a tool call
-  on every tick: 8.5% of the volume. → M29.
+  on every tick: 8.5% of the volume. → M30.
 - **F7. Idle pacing was never tested by this session.** Only ticks 2 to 5 were idle by the loop's rule. The analysis
   read that as re-recorded `wait` and attention decisions resetting the count; they do not (`loop/pacing.py` counts
   both as quiet). Every later tick followed a run ending, an operator message, or a failed overseer, each of which is
   not idle by design (DESIGN §6). Reaching the cap in a steady state, about 13 cold ticks or $6 a day, is still M21's
-  overnight check. → M21, M28.
+  overnight check. → M21, M29.
 - **F8. A probe gate would have saved little in an active session.** Gating the overseer on a fingerprint change or a
   harness event would have skipped 0 to 5 of the 40 ticks, $0 to $1.94 (up to 14%), with no action delayed. It would
   have seen two PRs go green about 12 minutes before the timer tick did. Its value is latency and the steady state,
-  where it matches idle pacing's cost at the cap and polls cheaply in between. → M28.
+  where it matches idle pacing's cost at the cap and polls cheaply in between. → M29.
 - **F9. What a probe must and must not fingerprint.** GitHub's combined status `state` stayed `pending` on every green
   PR: two contexts on this repository stay pending until a human acts, and the combined list stops at 30 contexts, so
   some reads dropped the main CI context. A probe on the combined state would have missed every transition to green.
   CI needs named contexts per repository. Draft to ready is worth a field. PR issue comments are not: a bot edited its
   summary comment repeatedly, and the overseer read issue comments 7 times without acting. Private tickets never
-  appear in the tracker query, so a start is a harness wake (F3), not a probe field. → M28.
+  appear in the tracker query, so a start is a harness wake (F3), not a probe field. → M29.
 - **F10. Latency from an external event to the first tick that saw it:** median about 2 minutes, because events rode
   along on run-ending wakes; worst about 13 minutes (the timer). A probe polled every 2 minutes, one GraphQL call for
-  all open PRs plus one tracker search, matches the median. → M28.
+  all open PRs plus one tracker search, matches the median. → M29.
 
 ### Re-measuring
 
-Re-run after M27, and after M21's overnight run, with the same prompt in a plain OpenCode session at the workspace
+Re-run after M28, and after M21's overnight run, with the same prompt in a plain OpenCode session at the workspace
 root (not one canopy started). It is read-only and calls no MCP tool. The idle classification it asks for should
 follow `loop/pacing.py`, not its own reading of the log (F7).
 

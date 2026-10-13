@@ -645,7 +645,7 @@ the build follows DESIGN: a shorter `--every` keeps idle pacing from that base. 
 run above, and whether `--every` should turn it off instead. A two-hour live session on 2026-10-12 does not settle
 it: after its first ticks, every tick followed a run ending, an operator message, or a failed overseer, each not idle
 by design. It did find what can keep a quiet night from backing off: ticks that fail after doing their work, and
-overseer churn (MEASUREMENTS 2026-10-12, F2, F5, F7; M27).
+overseer churn (MEASUREMENTS 2026-10-12, F2, F5, F7; M28).
 
 ## M22. Trusted reviewers
 
@@ -794,7 +794,7 @@ tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 
 Status: not started.
 
-## M27. Overseer reliability from the first live session
+## M28. Overseer reliability from the first live session
 
 MEASUREMENTS 2026-10-12, F1 to F3 and F5. Needs M12 and M21's code. Asked for by the operator (2026-10-12): a quarter
 of the first session's overseer spend bought nothing, mostly for reasons a check in code can catch, and the same
@@ -823,9 +823,9 @@ within about a minute.
 
 Status: not started.
 
-## M28. Probe-gated overseer
+## M29. Probe-gated overseer
 
-MEASUREMENTS 2026-10-12, F7 to F10; D003's revisit. Needs M27 and M21's overnight acceptance. Sketch only; the design
+MEASUREMENTS 2026-10-12, F7 to F10; D003's revisit. Needs M28 and M21's overnight acceptance. Sketch only; the design
 comes first. Taken only if a re-measurement after both shows that the steady state's spend or its latency (up to
 `loop.idle_max_minutes` on a teammate's comment or a CI result) is still worth the trust change. The first session
 says a gate saves little while the operator is active (F8).
@@ -854,9 +854,9 @@ Accept: written with the design, before work starts.
 
 Status: not started.
 
-## M29. Fewer re-reads per tick
+## M30. Fewer re-reads per tick
 
-MEASUREMENTS 2026-10-12, F6. Needs M28's probe. Sketch only; the design comes first. Re-reading the tracker and GitHub
+MEASUREMENTS 2026-10-12, F6. Needs M29's probe. Sketch only; the design comes first. Re-reading the tracker and GitHub
 was 29% of every tick's cost, productive ticks included, and most of it was things that had not changed.
 
 - The probe's facts in the state block: per unit, head SHA, named CI results, latest review id, mergeable, and draft;
