@@ -9,6 +9,7 @@ import { Notice } from '@/components/notice'
 import { Input } from '@/components/input'
 import { Mark } from '@/components/shell/mark'
 import { Button } from '@/components/ui/button'
+import { pageTitle } from '@/lib/page-title'
 
 /**
  * Asks for the listener secret once (DESIGN §22). A right one sets a session cookie for 30 days; the secret itself is
@@ -33,6 +34,7 @@ export function SignIn() {
     const wrong = mutation.error instanceof ApiError && mutation.error.status === 401
     return (
         <main className="grid min-h-dvh place-items-center p-6">
+            <title>{pageTitle('Sign in', undefined)}</title>
             <form
                 onSubmit={submit}
                 aria-label="Sign in"

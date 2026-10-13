@@ -50,6 +50,10 @@ def _check_new_root(root: Path, *, in_checkout: bool) -> None:
     `.canopy/` is an earlier canopy's journal. Not a directory with a `.canopy/` already, which a new workspace would
     take over as its own. Not inside a code checkout, unless --workspace says the checkout holds only the workspace; a
     repository at the home directory is the operator's dotfiles, not code canopy works on.
+
+    Raises:
+        click.UsageError: `root` is the home directory, has a `.canopy/` but no workspace file, or is inside a git
+            repository other than one at the home directory and `in_checkout` is false.
     """
     home = Path.home().resolve()
     new_dir = (
@@ -76,7 +80,11 @@ def _check_new_root(root: Path, *, in_checkout: bool) -> None:
 
 
 def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:
-    """Return the tracker provider for a new shared file, asking for it on a terminal. None if the file exists."""
+    """Return the tracker provider for a new shared file, asking for it on a terminal. None if the file exists.
+
+    Raises:
+        click.UsageError: No provider is given for a new file and stdin is not a terminal, or the provider is invalid.
+    """
     if provider is None and not shared_file.exists():
         if not sys.stdin.isatty():
             raise click.UsageError(f"the {what} has no {shared_file.name}; pass --provider (jira, github, linear, ...)")

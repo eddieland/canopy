@@ -177,7 +177,7 @@ jobs:
           python-version: "3.12"
           enable-cache: false
 
-      # The wheel's build hook builds the UI with npm; without it the install would quietly have no UI.
+      # The wheel's build hook builds the UI with npm, and fails without it.
       - name: Set up Node
         if: needs.changes.outputs.code != 'false'
         uses: actions/setup-node@v7.0.0
@@ -186,6 +186,4 @@ jobs:
 
       - name: Install with uv tool install and run a dry tick
         if: needs.changes.outputs.code != 'false'
-        env:
-          CANOPY_UI_REQUIRED: "1"
         run: make install-check

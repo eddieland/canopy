@@ -20,6 +20,35 @@ export const RUN_TEXT: Record<RunState, string> = {
     failed: 'text-status-failed',
 }
 
+/** One ticket's runs on the runs page: the latest, which says where the ticket stands, over the ones before it. */
+export interface TicketRuns {
+    /** The ticket's latest run: its running one, else the one that ended last. */
+    latest: Run
+    /** Its runs before that, newest first. */
+    earlier: Run[]
+}
+
+/**
+ * `runs`, in the order the server sends them, one entry per ticket, in the order of each ticket's latest run. A ticket
+ * that asked a question, got its answer, and asked again is one entry, not two blocked ones.
+ */
+export function byTicket(runs: Run[]): TicketRuns[] {
+    // The server sends the running runs first, then the rest newest first, and runs one worker per ticket at a time:
+    // a ticket's first run in the list is its latest.
+    const groups = new Map<string, TicketRuns>()
+    for (const run of runs) {
+        const group = groups.get(run.ticket_key)
+        if (group === undefined) groups.set(run.ticket_key, { latest: run, earlier: [] })
+        else group.earlier.push(run)
+    }
+    return [...groups.values()]
+}
+
+/** Each ticket's latest run, so a question a later run took up no longer counts as waiting. */
+export function latestRuns(runs: Run[]): Run[] {
+    return byTicket(runs).map((g) => g.latest)
+}
+
 /** A ticket's runs working now, oldest first. The harness runs one worker per ticket, so there is at most one. */
 export function workingOn(runs: Run[], ticketKey: string): Run[] {
     return runs
@@ -28,16 +57,17 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
 }
 
 /**
- * The runs the rail lists, at most `limit`: those waiting on the operator's answer first, then those running, each
- * oldest first, so the one waiting longest leads. `more` counts the ones left out.
+ * The runs the rail lists, at most `limit`: those running first, then those waiting on the operator's answer, each
+ * oldest first, so the work in progress leads and holds the slots. `more` counts the ones left out. Only each ticket's
+ * latest run counts: a blocked run a later one followed waits on nothing.
  */
 export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: number } {
-    const working = runs
+    const working = latestRuns(runs)
         .filter((r) => r.state === 'blocked' || r.state === 'running')
         .toSorted((a, b) => rank(a) - rank(b) || a.started_at.localeCompare(b.started_at))
     return { shown: working.slice(0, limit), more: Math.max(working.length - limit, 0) }
 }
 
 function rank(run: Run): number {
-    return run.state === 'blocked' ? 0 : 1
+    return run.state === 'running' ? 0 : 1
 }

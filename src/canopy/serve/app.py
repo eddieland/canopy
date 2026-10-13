@@ -6,12 +6,14 @@ import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from canopy.serve import api, mock
+from canopy.serve.api import deps
 from canopy.serve.guard import Guard
 from canopy.serve.spa import SinglePageApp
 
@@ -41,12 +43,17 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     # openapi` prints it without a server.
     app = FastAPI(
         title="canopy",
+        summary="The web UI's API: what canopy's journal holds, and the operator's verbs on it.",
+        description=api.__doc__,
+        version=version("canopy"),
+        openapi_tags=api.TAGS,
         docs_url=None,
         redoc_url=None,
         openapi_url=f"{base}/api/openapi.json" if backend.mock else None,
         lifespan=lifespan,
     )
-    app.include_router(api.router(options, backend, sessions))
+    app.include_router(api.router, prefix=f"{base}/api")
+    deps.bind(app, backend, sessions)
     if base:
 
         @app.get(base, include_in_schema=False)

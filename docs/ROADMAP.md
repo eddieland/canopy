@@ -383,7 +383,8 @@ last line not a valid result, and the overseer's retries for them cost $2.21 (ME
 diagnosed yet; next is a failed review run's log. On 2026-10-13 the operator decided that reviews post nothing on the
 PR (D114): the comment, its marker, and `review_unposted` are gone, the reviewer needs no write tool (so the
 `add_issue_comment` grant the 2026-10-07 check needed is moot), and findings reach a worker through `--review-run` and
-the operator through `canopy review show`.
+the operator through `canopy review show`. Over the first day 8 of 11 review runs ended `unknown` within seconds
+(MEASUREMENTS 2026-10-13, F18).
 
 ## M12. The loop
 
@@ -406,6 +407,9 @@ Learned:
   (exit 0). The loop has been the operator's daily surface since. A working session's legibility is SCENARIOS S26.
 - Pausing joined it on request (2026-10-13): `p` at the loop's terminal, `canopy pause` and `canopy resume`, and the
   web UI's header write one journal row that holds the wait (DESIGN §6), tested against the fakes.
+- Reloading config joined it on request (2026-10-13): SIGHUP or the web UI's settings page reads the config again
+  once the running tick ends (DESIGN §6), tested against the fakes; a terminal hanging up still ends the loop, tested
+  on a pseudo-terminal. A live check is SCENARIOS S31.
 Next: the closing line does not say a signal stopped it; a small follow-up, not a milestone.
 
 ## M13. Spend-paced loop
@@ -484,7 +488,8 @@ each ticket (`canopy ticket set --title`), the name shows beside the key in `can
 UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title
 (`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event with OpenCode's own title,
 so canopy names sessions rather than reading them back. Next: workers renaming their ticket through their result line,
-once real runs show whether the overseer's names hold up.
+once real runs show whether the overseer's names hold up. On request (2026-10-13), a `json` notification carries the
+title beside each ticket key and the Slack sink shows it (DESIGN §20); `attention.md` and the `text` format do not.
 
 ## M16. Worktree setup for large monorepos
 
@@ -748,7 +753,7 @@ shows it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
 - Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it; M27 serves its
-  session's events.
+  session's events. Reopened on request (2026-10-13): the page serves its end (DESIGN §22).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
@@ -864,43 +869,50 @@ Next: watching a run live needs the worker's stdout streamed to its log.
 
 ## M28. Overseer reliability from the first live session
 
-MEASUREMENTS 2026-10-12, F1 to F3 and F5. Needs M12 and M21's code. Asked for by the operator (2026-10-12): a quarter
-of the first session's overseer spend bought nothing, mostly for reasons a check in code can catch, and the same
-reasons keep idle pacing from counting a quiet tick as idle.
+MEASUREMENTS 2026-10-12, F1 to F3 and F5; 2026-10-13, F15, F17, and F20. Needs M12 and M21's code. Asked for by
+the operator (2026-10-12): a quarter of the first session's overseer spend bought nothing, mostly for reasons a check
+in code can catch, and the same reasons keep idle pacing from counting a quiet tick as idle.
 
 - The overseer's `canopy` works before the overseer is paid for. The tick either puts this canopy's own launcher
   first on the overseer's PATH, or checks, through `procs`, that `canopy --version` runs from the overseer's
   environment. When it cannot, the tick closes without running the overseer, with a status of its own, and raises an
   attention item saying why. Settle which in DESIGN §6; the release launcher (`SCIE_BOOT`) and a source install both
   have to work.
-- `tick complete`: the overseer prompt's last step made harder to miss, with the operator's approval note in the PR.
-  Open: whether the harness should also accept a run that exited 0, recorded its decisions, and printed the done line
-  on its own line before a summary. That loosens DESIGN §6's contract, so it is a design change, not a prompt one.
-- A ticket started or stopped from the web UI or the CLI (`starts`) ends the loop's wait as an operator message does,
-  with the same one-minute floor, and counts against idleness the same way. DESIGN §6 (The loop, Idle pacing) and §22
-  (Waking the loop).
+- The done line: the overseer ends its final message with a line `CANOPY_TICK_DONE`, and may summarize before or after
+  it; the harness accepts it as a line anywhere in that message, never in an earlier one. DESIGN §6, with the
+  operator's approval note in the PR for the prompt.
+- A ticket started or stopped from the web UI or the CLI (`starts`), attempts granted (`canopy grant`), and a config
+  reload each end the loop's wait as an operator message does, with the same one-minute floor, count against
+  idleness the same way, and are recorded as what woke the tick (`ticks.woken_by`). DESIGN §6 (The loop, Idle pacing)
+  and §22 (Waking the loop).
 - Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
   attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
-  `decisions` table shows a pattern.
+  `decisions` table shows a pattern. The first day shows one (2026-10-13 F17): the overseer leaves out an attention
+  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Open: whether that is a
+  prompt fix, or the harness keeps an item until the overseer resolves it or a tick that could see the world drops
+  it.
 - Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
-  the wait; a fake overseer that prints a summary after `tick complete` is handled as the contract settles.
+  the wait; a fake overseer that prints a summary after `CANOPY_TICK_DONE` closes the tick `ok`.
 
 Accept: the tests above pass. Live: a working session re-measured (MEASUREMENTS) has no tick that ran the overseer
 without a working `canopy`, no `overseer_failed` tick that recorded its decisions, and every web-UI start picked up
 within about a minute.
 
-Status: not started.
+Status: in progress.
 
 ## M29. Probe-gated overseer
 
 MEASUREMENTS 2026-10-12, F7 to F10; D003's revisit. Needs M28 and M21's overnight run (SCENARIOS S27). Sketch only;
 the design comes first. Taken only if a re-measurement after both shows that the steady state's spend or its latency
 (up to `loop.idle_max_minutes` on a teammate's comment or a CI result) is still worth the trust change. The first
-session says a gate saves little while the operator is active (F8).
+session says a gate saves little while the operator is active (F8), and the first day agrees: 6 to 9% (2026-10-13
+F13). The day's case for a probe is as M30's source of facts, not as a gate; take M34 first, which changes both
+milestones' arithmetic.
 
 - A `probe_cmd` command template, run through `procs`, prints one JSON line of fingerprints. Per ticket: updated
   time, latest comment id, labels, open or closed, and the keys the tracker query returns. Per PR: head SHA, the
-  result of each named CI context, latest review or review-comment id, mergeable, draft, and open, merged, or closed.
+  result and latest build or check-run id of each named CI context (a re-run at the same head, 2026-10-13 F16), latest
+  review or review-comment id, mergeable, draft, and open, merged, or closed.
   canopy validates the line, keeps the last one per subject in the journal, and runs the overseer only when a
   fingerprint changed, a harness wake event happened, a gate came due, or `loop.idle_max_minutes` passed since the
   last overseer run. In between, the loop polls the probe, not the overseer.
@@ -911,8 +923,9 @@ session says a gate saves little while the operator is active (F8).
   its own credentials (`gh`'s login, or an operator-only file as the Slack sink does).
 - CI is fingerprinted by contexts the repository's config names, never by GitHub's combined status, which some
   repositories hold at `pending` forever (F9). PR issue comments are not fingerprinted.
-- An example GitHub probe: one GraphQL query through `gh` for every open PR the journal knows. A Jira one if the
-  operator's setup allows it without a new token.
+- An example GitHub probe: one GraphQL query through `gh` for every PR the journal records on an unfinished unit,
+  merged and closed included, never a list of open PRs, which drops a merged one (2026-10-13 F16). A Jira one if the
+  operator's setup allows it without a new token. A reload that changes the tracker query changes what it lists.
 - TRUST_MODEL T2 with the operator's approval note, D003, and DESIGN §6 and §12.
 - Open: how the probe learns which subjects to watch (argv, stdin, or reading nothing and listing by query); how often
   it polls (2 minutes matched the first session's median latency, F10); whether a cold-cache overseer run after a
@@ -924,15 +937,19 @@ Status: not started.
 
 ## M30. Fewer re-reads per tick
 
-MEASUREMENTS 2026-10-12, F6. Needs M29's probe. Sketch only; the design comes first. Re-reading the tracker and GitHub
-was 29% of every tick's cost, productive ticks included, and most of it was things that had not changed.
+MEASUREMENTS 2026-10-12, F6; 2026-10-13, F14. Needs M29's probe and M34. Sketch only; the design comes first.
+Re-reading the tracker and GitHub was 29% of every tick's cost in the first session, productive ticks included, and
+most of it was things that had not changed: over the first day, one approved PR was read 170 times and a stopped
+ticket was in the search on 92 ticks. The day's analysis models this milestone at up to 40% of overseer spend, an
+upper bound until measured.
 
 - The probe's facts in the state block: per unit, head SHA, named CI results, latest review id, mergeable, and draft;
   per ticket, labels, state, and latest comment id with its author's account id. Ids, states, and account ids only; no
   comment, review, or PR text enters the state block.
 - The overseer prompt reads a PR or a ticket in full only when a fact changed since its cursor, with the operator's
   approval note in the PR.
-- The provider skill reaches the overseer without a tool call on every tick, inside the cached part of its prompt.
+- A ticket the operator stopped is not read: the state block says it is stopped, and the overseer records its wait
+  from that.
 - TRUST_MODEL T1 and T2: what canopy now asserts about the world, and that the tracker and GitHub stay the source of
   authority (DESIGN §22), with the operator's approval note.
 - Open: whether canopy should then check `trust.authorized_repliers` against comment authors in code, which would close
@@ -984,10 +1001,12 @@ off the PR (D114), so canopy shows them itself, as a PR review of its own that o
   (DESIGN §21, The diff). Open: how a finding is followed from one commit's review to the next.
 
 Status: in progress. Migration 0016 records a review run's base branch, and `_review` keeps the diff, which
-`core/review_diff.py` reads back and anchors each finding on (2026-10-13). `GET /reviews` and `GET /reviews/{id}`
-serve them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note.
-The Reviews pages show them, findings on the diff. Next: what the operator does from a finding, through the journal's
-channels; then the live check, a real review's page against its PR's diff on GitHub.
+`core/review_diff.py` reads back and anchors each finding on (2026-10-13). `GET /reviews` and `GET /reviews/{id}` serve
+them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note. The
+Reviews pages show them, findings on the diff. The pull requests pages make the PR the subject: each PR the journal
+knows, the loop's own included before any review, with its page of the runs that pushed to it, its reviews, and the
+decisions naming it. Next: what the operator does from
+a finding, through the journal's channels; then the live check, a real review's page against its PR's diff on GitHub.
 
 ## M33. Spend by what it bought
 
@@ -1015,7 +1034,32 @@ ticks' share of overseer spend from `canopy spend` and from the web UI, and both
 Status: in progress. Each tick the loop runs records `idle` and `woken_by` (2026-10-13). What keeps it open:
 `canopy spend` and the web UI's spend page.
 
-## M34. A private-only queue
+## M34. A cacheable overseer prompt
+
+MEASUREMENTS 2026-10-13, F11 and F12. Needs M13's recorded cost. Taken before M29 and M30, whose arithmetic it
+changes. The first step was 41% of the first day's overseer spend, because the fixed prompt travels in the same
+message as the state block, which changes every tick, and so is written to the cache fresh on every tick.
+
+- Measured first: two dry ticks a minute apart, before and after, comparing the first step's cache write and cache
+  read. The change is kept only if the fixed prompt moves from one to the other. Each tick is its own session; the
+  provider's cache is by content and lasts minutes, so only a tick that starts soon after another gains, which the
+  first day's ticks mostly did (2026-10-13: 103 of 158 gaps under 2 minutes).
+- The fixed prompt reaches the runtime where it caches across ticks, such as the overseer's agent definition body
+  in canopy's definitions snapshot (D040), and the message carries only the state block. A prompt override (§12)
+  still works and still wins. The provider skill goes the same way, instead of a tool call on most ticks.
+- The order of what changes inside the state block: what changes rarely (config, the workspace, repositories) before
+  what changes every tick (time, tick id, running runs), if the runtime caches part of a message.
+- DESIGN §6 step 4 and §13, with the operator's approval note in the PR for the agent definition and the prompt.
+- Tests with the fakes: the overseer's message is the state block alone, the snapshot carries the prompt, and an
+  override reaches the snapshot.
+
+Accept: the tests above pass. Live: a re-measurement (MEASUREMENTS) shows the first step's fresh cache write at the
+state block's size, not the prompt's plus the state block's, on ticks that start within the cache's lifetime of the
+one before, and a median such tick at least 15% cheaper at the same price, with no change in what the ticks decided.
+
+Status: not started.
+
+## M35. A private-only queue
 
 REQUIREMENTS R11, DESIGN §22 (A private-only queue), MEASUREMENTS 2026-10-12 (F6). Needs M18. Asked for by the
 operator (2026-10-13): an optional mode that works only the tickets they start, and does not check the tracker for

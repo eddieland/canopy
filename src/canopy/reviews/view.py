@@ -76,5 +76,9 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
 
 
 def _to_second(stamp: str | None) -> str | None:
-    """A time the journal wrote, `...T12:00:00.123Z`, as the `review` cursor's `...T12:00:00Z`."""
+    """A time the journal wrote, `...T12:00:00.123Z`, as the `review` cursor's `...T12:00:00Z`.
+
+    Returns:
+        `stamp` cut to whole seconds, or None when there is no `stamp`.
+    """
     return f"{stamp[:19]}Z" if stamp else None

@@ -1,9 +1,10 @@
-"""The operator's verbs (DESIGN §22, D075): `start`, `stop`, `reply`, `forget`, `grant`, `show`, `pause`, and `resume`.
+"""The operator's verbs (DESIGN §22, D075): on tickets, chores, and runs, and pausing and resuming the loop.
 
 `pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
-or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, and
-`forget` write through `canopy.core.conversation`, which every channel shares, `grant` through `canopy.runs.policy`,
-and `pause` and `resume` through `canopy.core.pause`; all seven refuse inside canopy's own ticks and runs.
+or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`,
+and `dismiss` write through `canopy.core.conversation`, which every channel shares, `grant` through
+`canopy.runs.policy`, and `pause` and `resume` through `canopy.core.pause`; all eight refuse inside canopy's own ticks
+and runs.
 """
 
 from __future__ import annotations
@@ -241,6 +242,42 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     return 0
 
 
+@click.command("dismiss")
+@click.argument("ref", metavar="REF")
+@click.argument("finding")
+@click.option("--undo", is_flag=True, help="Take the dismissal back: the finding is listed again.")
+@click.pass_context
+def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool) -> int:
+    """Keep chore REF's open FINDING (its id) off the attention list until the chore stops reporting it.
+
+    The chore still reports it, and `canopy show chore:NAME` still lists it, marked dismissed. Once a run leaves it out
+    the dismissal is spent: if it comes back, it is listed again. To have the chore stop reporting it, write the chore
+    a note with `canopy reply chore:NAME`.
+    """
+    _operator("dismiss")
+    subject = _ref(ref, "dismiss")
+    ctx = open_context(click_ctx)
+    try:
+        conversation.dismiss(
+            ctx.conn, subject, finding, channel=CLI, chores=chore_view.defined(ctx.config, ctx.workspace), undo=undo
+        )
+    except conversation.Refused as r:
+        raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
+    log = logs.for_tick(None)
+    log.info(
+        "finding dismissal taken back" if undo else "finding dismissed",
+        extra={"chore": subject.id, "finding": finding, "channel": CLI},
+    )
+    attention.write(ctx, log)
+    if undo:
+        click.echo(f"{subject} {finding} is listed again while the chore reports it.")
+    else:
+        click.echo(
+            f"{subject} {finding} is dismissed: it is off the attention list until the chore stops reporting it."
+        )
+    return 0
+
+
 @click.command("show")
 @click.argument("ref", metavar="REF")
 @click.pass_context
@@ -376,8 +413,11 @@ def _show_chore(ctx: Context, name: str) -> None:
     click.echo(f"\nOpen findings ({len(findings)}):")
     for f in findings:
         title = one_line(f.finding.title)
+        mark = "  (dismissed)" if f.dismissed else ""
         click.echo(
-            f"  {f.finding.id}  {attention.age(f.since)}  {title}" + (f"  {f.finding.link}" if f.finding.link else "")
+            f"  {f.finding.id}  {attention.age(f.since)}  {title}"
+            + (f"  {f.finding.link}" if f.finding.link else "")
+            + mark
         )
     if not findings:
         click.echo("  none")

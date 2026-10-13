@@ -1,11 +1,15 @@
 """The web UI's server (canopy.serve): the guard, the SPA fallback and caching, base paths, signing in, the stream, and
 the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
 
+import asyncio
 import json
+import re
+import sqlite3
 import stat
 import threading
 import time
 from collections.abc import Iterator
+from importlib.metadata import version
 from pathlib import Path
 
 import httpx2
@@ -14,7 +18,9 @@ import uvicorn
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from canopy.serve import mock, secret
+from canopy.core import db
+from canopy.core.context import Context
+from canopy.serve import live, mock, secret, views
 from canopy.serve.__main__ import main
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
@@ -29,6 +35,7 @@ from canopy.serve.schema import (
     SpendUpdated,
     StreamEvent,
     TicketChanged,
+    TicketSummary,
     TicketsUpdated,
     TickUpdated,
 )
@@ -132,6 +139,19 @@ def test_a_base_path_prefixes_everything(ui: Path, backend: Backend) -> None:
     assert c.get("/api/meta").status_code == 404
 
 
+def test_each_app_serves_its_own_backend_and_sessions(ui: Path, tmp_path: Path) -> None:
+    # The routers are shared by every app in the process; what a route is handed is bound per app.
+    first = client(ui, mock.seed(tmp_path / "first"))
+    second = client(ui, mock.seed(tmp_path / "second"), key=SECRET, base_path="/canopy")
+    assert second.get("/canopy/api/meta").status_code == 401
+    headers = signed_in(second, base="/canopy")
+    before = second.get("/canopy/api/loop", headers=headers).json()
+    paused = first.post("/api/loop/pause", headers={"origin": ORIGIN}).json()
+    assert paused["already"] is False
+    assert first.get("/api/loop").json() == paused["loop"] != before
+    assert second.get("/canopy/api/loop", headers=headers).json() == before
+
+
 @pytest.mark.parametrize("base_path", ["/", "canopy", "/canopy/", "/a/../b", '/"><script>'])
 def test_a_bad_base_path_is_refused(base_path: str) -> None:
     with pytest.raises(ValidationError):
@@ -197,7 +217,8 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     paths = ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events")
     # A transcript is agent output from a file, and a review's diff the PR's text: as much the operator's as the rest.
     files = ("/api/runs/39", "/api/runs/39/transcript", "/api/ticks/2/transcript", "/api/reviews", "/api/reviews/4")
-    for path in (*paths, *files):
+    chores = ("/api/chores/deps/runs/2", "/api/chores/deps/runs/2/transcript")
+    for path in (*paths, *files, *chores):
         assert c.get(path).status_code == 401, path
     assert c.post("/api/tickets/ABC-102/start", headers={"origin": ORIGIN}).status_code == 401
 
@@ -205,7 +226,7 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
 def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(
     ui: Path, backend: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("canopy.serve.api.FAILED_SIGN_IN_SECONDS", 0.2)
+    monkeypatch.setattr("canopy.serve.api.session.FAILED_SIGN_IN_SECONDS", 0.2)
     c = client(ui, backend, key=SECRET)
     began = time.monotonic()
     response = c.post("/api/session", json={"secret": SECRET + "x"})
@@ -376,6 +397,53 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
         assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
 
 
+def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
+    recent = db.recent_tickets
+    replied: list[bool] = []
+
+    def then_a_reply(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
+        rows = recent(conn, limit, key=key)
+        if not replied:
+            replied.append(True)
+            with backend.open() as other:
+                other.conn.execute(
+                    "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+                    "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')"
+                )
+        return rows
+
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        monkeypatch.setattr(db, "recent_tickets", then_a_reply)
+        # The reply commits after the tickets' order is read: the rest of this read does not see it either, so no
+        # ticket's summary changes beside an order from before it.
+        assert sent.changes(backend, ctx) == []
+        assert replied == [True]
+        # The next read sees it whole: the order and the summary.
+        events = [e.root for e in sent.changes(backend, ctx)]
+    [tickets] = [e for e in events if isinstance(e, TicketsUpdated)]
+    assert tickets.tickets[0].key == "ABC-103"
+    assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
+
+
+def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
+    async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
+        stream = live.events(backend, poll_seconds=0.01)
+        first = [await anext(stream) for _ in range(7)]
+        # A reload commits nothing to the journal: the stream sees it in the config it serves.
+        chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
+        backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
+        after = await asyncio.wait_for(anext(stream), timeout=5)
+        return first, after
+
+    first, after = asyncio.run(first_and_after_a_reload())
+    [before] = [e.root for e in first if isinstance(e.root, ChoresUpdated)]
+    assert [c.name for c in before.chores] == ["build-health", "deps"]
+    assert isinstance(after.root, ChoresUpdated)
+    assert [c.name for c in after.root.chores] == ["deps"]
+
+
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:
     def reply_soon() -> None:
         time.sleep(0.3)
@@ -398,6 +466,29 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     lists = [e.root for e in found if isinstance(e.root, TicketsUpdated)]
     assert len(lists) == 2
     assert lists[1].tickets[0].key == "ABC-103"
+
+
+def test_a_streams_read_never_holds_up_a_request(served: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stream reads the lists on a thread of its own: a request is answered while a read is still under way."""
+    reading, answered = threading.Event(), threading.Event()
+    tickets = views.tickets
+
+    def slow(ctx: Context) -> list[TicketSummary]:
+        reading.set()
+        answered.wait(timeout=10)
+        return tickets(ctx)
+
+    monkeypatch.setattr(views, "tickets", slow)
+    stream = threading.Thread(target=read_events, args=(served, 1), daemon=True)
+    stream.start()
+    assert reading.wait(timeout=10)
+    try:
+        response = httpx2.get(f"http://127.0.0.1:{served}/api/loop", timeout=5)
+    finally:
+        answered.set()
+    assert response.status_code == 200
+    stream.join(timeout=10)
+    assert not stream.is_alive()
 
 
 # The development server and the schema
@@ -440,6 +531,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "Tick",
         "ChoreSummary",
         "ChoreDetail",
+        "ChoreRunDetail",
         "TickDetail",
         "Decision",
         "Transcript",
@@ -449,6 +541,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "LoopState",
         "Pause",
         "PauseChanged",
+        "ConfigReload",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -469,16 +562,64 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/chores",
         "/api/chores/{name}",
         "/api/chores/{name}/replies",
+        "/api/chores/{name}/dismissals",
+        "/api/chores/{name}/runs/{run_id}",
+        "/api/chores/{name}/runs/{run_id}/transcript",
         "/api/ticks",
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
+        "/api/ticks/{tick_id}/output",
         "/api/worktrees",
         "/api/search",
         "/api/events",
         "/api/loop",
         "/api/reviews",
         "/api/reviews/{run_id}",
+        "/api/pull-requests",
+        "/api/pull-request",
         "/api/loop/pause",
         "/api/loop/resume",
+        "/api/loop/reload",
     }
     assert set(schema["paths"]) == paths
+
+
+def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.CaptureFixture[str]) -> None:
+    main(["openapi"])
+    schema = json.loads(capsys.readouterr().out)
+    assert schema["info"]["version"] == version("canopy")
+    assert schema["info"]["description"]
+    tags = {t["name"] for t in schema["tags"] if t["description"]}
+    assert len(tags) == len(schema["tags"])
+    used: set[str] = set()
+    operation_ids: list[str] = []
+    for path, operations in schema["paths"].items():
+        for method, operation in operations.items():
+            where = f"{method.upper()} {path}"
+            operation_ids.append(operation["operationId"])
+            assert operation["summary"], where
+            assert operation["description"], where
+            [tag] = operation["tags"]
+            assert tag in tags, where
+            used.add(tag)
+            assert all(p["description"] for p in operation.get("parameters", [])), where
+            responses = operation["responses"]
+            # Every error names the shape of its body.
+            assert all("content" in r for code, r in responses.items() if code != "200"), where
+            assert "403" in responses, where
+            if path != "/api/session":
+                assert "401" in responses, where
+            if "{key}" in path or "{name}" in path:
+                assert "409" in responses, where
+            if path.endswith(("_id}", "{key}", "{name}")) and method == "get":
+                assert "404" in responses, where
+    assert used == tags
+    assert len(set(operation_ids)) == len(operation_ids)
+    assert all(re.fullmatch(r"[a-z]+(?:[A-Z][a-z]+)*", o) for o in operation_ids), operation_ids
+    fastapis = {"HTTPValidationError", "ValidationError"}
+    for name, model in schema["components"]["schemas"].items():
+        if name in fastapis:
+            continue
+        assert model.get("description"), name
+        undescribed = [field for field, s in model.get("properties", {}).items() if not s.get("description")]
+        assert not undescribed, name

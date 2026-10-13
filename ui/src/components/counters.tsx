@@ -5,6 +5,7 @@ import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
 import { countBySeverity, type Severity } from '@/lib/attention'
+import { latestRuns } from '@/lib/run-state'
 
 /**
  * The loop at a glance, above the attention list: what runs, what waits on you, and what needs you. What it cost is
@@ -16,6 +17,8 @@ export function Counters() {
     const attention = useQuery(attentionQuery)
 
     const running = runs.data?.filter((r) => r.state === 'running').length
+    // A ticket counts once, by its latest run: an earlier question a later run took up waits on nothing.
+    const blocked = runs.data === undefined ? undefined : latestRuns(runs.data).filter((r) => r.state === 'blocked')
     const waiting = tickets.data?.filter((t) => t.awaiting !== null).length
     // An answered question stays on the list until the next tick; it waits on the loop now, not on you.
     const questions = attention.data
@@ -28,7 +31,7 @@ export function Counters() {
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="counters">
             <Counter label="Running" value={running} tone="running">
-                {running === undefined ? null : `${runs.data?.filter((r) => r.state === 'blocked').length} blocked`}
+                {blocked === undefined ? null : `${blocked.length} blocked`}
             </Counter>
             <Counter label="Waiting on you" value={waiting} tone="blocked">
                 {oldest === undefined ? (

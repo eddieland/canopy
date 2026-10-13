@@ -24,7 +24,7 @@ function TicksPage() {
     const order = useListOrder('ticks')
     return (
         <>
-            <PageHeader label="Overseer" title="Ticks">
+            <PageHeader title="Ticks">
                 The latest ticks, newest first: what each found, what its overseer cost, and how many decisions it
                 recorded, as <code className="font-mono text-xs">canopy decisions</code> prints them.
             </PageHeader>

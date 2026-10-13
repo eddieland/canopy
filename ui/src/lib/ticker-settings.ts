@@ -1,8 +1,11 @@
 import { useSyncExternalStore } from 'react'
 
+import { TICKER_TOPICS, type TickerTopic } from '@/lib/headlines'
+
 /**
- * The header ticker's settings (src/components/shell/ticker.tsx): how fast a headline crawls, and how many seconds
- * the window stays empty before the next one. Kept in localStorage like the theme, and synced across tabs.
+ * The header ticker's settings (src/components/shell/ticker.tsx): how fast a headline crawls, how many seconds the
+ * window stays empty before the next one, and which topics it leaves out. Kept in localStorage like the theme, and
+ * synced across tabs.
  */
 
 /** How fast a headline crawls, or `off` for no ticker. */
@@ -14,12 +17,17 @@ export interface TickerSettings {
     speed: TickerSpeed
     /** Seconds between one headline leaving and the next arriving. */
     gap: number
+    /**
+     * The topics turned off, in TICKER_TOPICS order. Kept as those left out, not those shown, so a topic added later
+     * shows until the operator turns it off.
+     */
+    hidden: TickerTopic[]
 }
 
 /** Where localStorage keeps the settings, as JSON. */
 export const STORAGE_KEY = 'canopy-ticker'
-/** The settings until the operator changes them: a normal crawl, and the next headline right after the last. */
-export const DEFAULTS: TickerSettings = { speed: 'normal', gap: 0 }
+/** The settings until the operator changes them: a normal crawl, no gap between headlines, and every topic. */
+export const DEFAULTS: TickerSettings = { speed: 'normal', gap: 0, hidden: [] }
 /** The longest gap, in seconds: ten minutes. */
 export const MAX_GAP = 600
 
@@ -38,6 +46,17 @@ export function clampGap(value: unknown): number | undefined {
     return Math.min(MAX_GAP, Math.max(0, Math.round(value)))
 }
 
+/** Topics as stored: the known ones among `value`, once each, in TICKER_TOPICS order; none for a non-list. */
+export function parseTopics(value: unknown): TickerTopic[] {
+    if (!Array.isArray(value)) return []
+    return TICKER_TOPICS.filter((topic) => value.includes(topic))
+}
+
+/** The hidden topics once `topic` is shown, or hidden when `shown` is false. */
+export function withTopic(hidden: readonly TickerTopic[], topic: TickerTopic, shown: boolean): TickerTopic[] {
+    return TICKER_TOPICS.filter((t) => (t === topic ? !shown : hidden.includes(t)))
+}
+
 /** Settings from their stored JSON, each field falling back to its default when missing or invalid. */
 export function parseSettings(raw: string | null): TickerSettings {
     let stored: unknown = null
@@ -47,8 +66,12 @@ export function parseSettings(raw: string | null): TickerSettings {
         // Not JSON: the defaults.
     }
     if (typeof stored !== 'object' || stored === null) return DEFAULTS
-    const { speed, gap } = stored as Record<string, unknown>
-    return { speed: isSpeed(speed) ? speed : DEFAULTS.speed, gap: clampGap(gap) ?? DEFAULTS.gap }
+    const { speed, gap, hidden } = stored as Record<string, unknown>
+    return {
+        speed: isSpeed(speed) ? speed : DEFAULTS.speed,
+        gap: clampGap(gap) ?? DEFAULTS.gap,
+        hidden: parseTopics(hidden),
+    }
 }
 
 function read(): TickerSettings {
@@ -64,7 +87,8 @@ let snapshot = read()
 const listeners = new Set<() => void>()
 
 function announce(next: TickerSettings): void {
-    if (next.speed === snapshot.speed && next.gap === snapshot.gap) return
+    const same = next.hidden.join() === snapshot.hidden.join()
+    if (next.speed === snapshot.speed && next.gap === snapshot.gap && same) return
     snapshot = next
     for (const listener of listeners) listener()
 }
@@ -94,7 +118,7 @@ export function useTickerSettings(): TickerSettings {
     return useSyncExternalStore(subscribe, getSnapshot)
 }
 
-/** Stores a change to one or both settings and applies it now. */
+/** Stores a change to any of the settings and applies it now. */
 export function setTickerSettings(change: Partial<TickerSettings>): void {
     const next = { ...snapshot, ...change }
     try {

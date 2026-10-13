@@ -29,7 +29,11 @@ class SecretError(Exception):
 
 
 def path() -> Path:
-    """`listener-secret` in the user config directory, next to `config.toml`."""
+    """`listener-secret` in the user config directory, next to `config.toml`.
+
+    Returns:
+        The file's path. It may not exist.
+    """
     return config.user_config_dir() / FILE_NAME
 
 

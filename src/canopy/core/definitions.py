@@ -53,6 +53,9 @@ def render_private(text: str, tools: TrackerTools | None) -> str:
 
     Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
     (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run then (`no_read_tools`).
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the tracker's tools at.
     """
     if _TOOLS_MARKER not in text:
         raise DefinitionsError(
@@ -108,6 +111,7 @@ def ensure(state_dir: Path, config: Config | None = None) -> Path:
 
     Raises:
         DefinitionsError: the snapshot's directory exists and is not private to the operator.
+        OSError: the snapshot could not be written, and no other process put one in its place.
     """
     files = sources(config)
     runtime = state_dir / RUNTIME_DIR
@@ -144,6 +148,9 @@ def prune(state_dir: Path, keep: Path) -> list[Path]:
     """Remove snapshots other than `keep`, and temporary directories a dead process left. Returns what was removed.
 
     Call it only when no run is live: a run of an earlier canopy may still be loading its snapshot.
+
+    Returns:
+        The directories removed, in name order; empty when there is no runtime directory.
     """
     runtime = state_dir / RUNTIME_DIR
     if not runtime.is_dir():
@@ -183,7 +190,11 @@ def shadowing(root: Path, names: list[str] | None = None) -> list[Path]:
 
 
 def shadowing_message(found: list[Path]) -> str:
-    """Explain what `shadowing` found and what to do about it."""
+    """Explain what `shadowing` found and what to do about it.
+
+    Returns:
+        A message for the operator naming every file in `found`.
+    """
     files = ", ".join(str(p) for p in found)
     return (
         f"OpenCode config here defines one of canopy's agents ({files}). canopy's agents come from its own definitions "
@@ -209,7 +220,11 @@ def naming_tools(root: Path, server: str) -> list[Path]:
 
 
 def naming_tools_message(server: str, found: list[Path]) -> str:
-    """Explain what `naming_tools` found and what to do about it."""
+    """Explain what `naming_tools` found and what to do about it.
+
+    Returns:
+        A message for the operator naming `server` and every file in `found`.
+    """
     files = ", ".join(str(p) for p in found)
     return (
         f"OpenCode config here names tools of the tracker's MCP server {server!r} ({files}). A private ticket's worker "

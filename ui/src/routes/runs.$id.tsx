@@ -41,7 +41,7 @@ function Loaded({ id }: { id: number }) {
     if (data === undefined) {
         return (
             <>
-                <PageHeader label="Run" title={`run:${id}`} />
+                <PageHeader title={`run:${id}`} />
                 <Panel className="min-h-72 p-3">
                     <Skeleton className="h-4 w-1/2" />
                 </Panel>
@@ -50,7 +50,7 @@ function Loaded({ id }: { id: number }) {
     }
     return (
         <>
-            <PageHeader label={data.private ? 'Run, private' : 'Run'} title={`run:${data.id}`}>
+            <PageHeader title={`run:${data.id}`} chips={data.private && <Chip>private</Chip>}>
                 What the worker did, from its session's events in the run's log: its text, each tool call with its input
                 and output, and what each model call cost.
             </PageHeader>
@@ -65,7 +65,7 @@ function Loaded({ id }: { id: number }) {
 function NoRun({ title, children }: { title: string; children: string }) {
     return (
         <>
-            <PageHeader label="Run" title={title} />
+            <PageHeader title={title} />
             <Panel>
                 <Placeholder className="min-h-40">{children}</Placeholder>
             </Panel>

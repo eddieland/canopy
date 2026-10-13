@@ -24,13 +24,14 @@ MESSAGE: dict[str, Any] = {
         "added": [
             {
                 "ticket": "PROJ-3",
+                "title": "Retry <@U1> checkout",
                 "repo": None,
                 "reason": "needs_reviewer",
                 "detail": "<!channel> https://x.test/1",
                 "since": "2026-09-24T18:00:00Z",
             }
         ],
-        "resolved": [{"ticket": "PROJ-4", "repo": "web", "reason": "ready_to_merge"}],
+        "resolved": [{"ticket": "PROJ-4", "title": None, "repo": "web", "reason": "ready_to_merge"}],
         "open": 4,
         "path": "/home/me/.canopy/attention.md",
     },
@@ -39,6 +40,7 @@ MESSAGE: dict[str, Any] = {
             "id": 88,
             "kind": "run.ended",
             "ticket": "PROJ-12",
+            "title": "Add retries",
             "run": 41,
             "run_kind": "implement",
             "status": "done",
@@ -159,8 +161,8 @@ def test_the_slack_sink_posts_one_escaped_message(hook: str, tmp_path: Path) -> 
     assert posted["blocks"] == slack.blocks(MESSAGE)
     assert posted["text"].splitlines() == [
         "*canopy* · api: 1 new, 1 resolved, 4 open, 1 event",
-        "+ *PROJ-3* needs_reviewer: &lt;!channel&gt; https://x.test/1",
-        "- *PROJ-4 (web)* ready_to_merge",
+        "+ *PROJ-3* Retry &lt;@U1&gt; checkout · needs_reviewer: &lt;!channel&gt; https://x.test/1",
+        "- *PROJ-4 (web)* · ready_to_merge",
         "&lt; PROJ-12 run 41 implement ended done: &lt;https://evil|click&gt;",
     ]
 
@@ -249,18 +251,29 @@ def _texts(blocks: list[dict[str, Any]]) -> list[str]:
     return out
 
 
+def test_slack_marks_a_finding_the_operator_dismissed() -> None:
+    attention: dict[str, Any] = {
+        **MESSAGE["attention"],
+        "added": [],
+        "resolved": [{"ticket": "chore:deps", "title": None, "repo": None, "reason": "lodash", "dismissed": True}],
+    }
+    message: dict[str, Any] = {**MESSAGE, "attention": attention, "events": []}
+    assert "- *chore:deps* · lodash (dismissed)" in slack.render(message).splitlines()
+    assert "*Resolved*\n:heavy_check_mark: ~chore:deps~ lodash (dismissed)" in _texts(slack.blocks(message))
+
+
 def test_slack_blocks_are_built_from_the_fields() -> None:
     blocks = slack.blocks(MESSAGE)
     assert blocks[0] == {"type": "header", "text": {"type": "plain_text", "text": "canopy · api"}}
     assert _texts(blocks) == [
         "1 new · 1 resolved · 4 open · 1 event",
         (
-            ":bell: *PROJ-3* · needs_reviewer\n&lt;!channel&gt; <https://x.test/1>\n"
+            ":bell: *PROJ-3* Retry &lt;@U1&gt; checkout · needs_reviewer\n&lt;!channel&gt; <https://x.test/1>\n"
             "_open since <!date^1790272800^{date_short_pretty} {time}|2026-09-24T18:00:00Z>_"
         ),
         "*Resolved*\n:heavy_check_mark: ~PROJ-4 (web)~ ready_to_merge",
         (
-            ":white_check_mark: *PROJ-12* · implement run 41 ended *done*\n<https://x.test/pr/7>\n"
+            ":white_check_mark: *PROJ-12* Add retries · implement run 41 ended *done*\n<https://x.test/pr/7>\n"
             "&lt;https://evil|click&gt;"
         ),
     ]
@@ -284,6 +297,7 @@ def test_slack_blocks_for_each_event_kind() -> None:
         {
             "kind": "run.started",
             "ticket": "P-1",
+            "title": "Fix the build",
             "run": 2,
             "run_kind": "fix_ci",
             "branch": "agent/P-1",
@@ -317,7 +331,7 @@ def test_slack_blocks_for_each_event_kind() -> None:
         {"kind": "kind.from.a.newer.canopy", "line": "x <y>"},
     ]
     assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
-        ":arrow_forward: *P-1* · fix_ci run 2 started\nattempt 1 of 3 on `agent/P-1`",
+        ":arrow_forward: *P-1* Fix the build · fix_ci run 2 started\nattempt 1 of 3 on `agent/P-1`",
         ":raising_hand: *P-2* · implement run 3 ended *blocked*\n> *Question:* Which table?",
         ":x: *chore:deps* · run 4 ended *failed* · 1 finding",
         ":white_check_mark: review run 5 ended *done*: findings low · 2 findings\n<https://x.test/pr/9>",
@@ -338,7 +352,7 @@ def test_a_slack_digest_is_fields() -> None:
         "ticks": {"ok": 23, "error": 1},
         "runs_started": {"implement": 2},
         "runs_ended": {},
-        "done": [{"ticket": "P-1", "run": 1, "pr": "https://x.test/pr/1"}],
+        "done": [{"ticket": "P-1", "title": "Fix the build", "run": 1, "pr": "https://x.test/pr/1"}],
         "blocked": [{"ticket": "P-2", "run": 2}],
         "attention": {"open": 3, "by_reason": {"needs_reviewer": 3}, "oldest": "3h"},
         "running": 2,
@@ -351,7 +365,7 @@ def test_a_slack_digest_is_fields() -> None:
         "*Runs started*\nimplement 2",
         "*Runs ended*\nnone",
         "*Needs you*\n3 open (needs_reviewer 3), oldest 3h",
-        ":white_check_mark: *P-1* <https://x.test/pr/1>\n:raising_hand: *P-2*",
+        ":white_check_mark: *P-1* Fix the build <https://x.test/pr/1>\n:raising_hand: *P-2*",
     ]
 
 
@@ -430,7 +444,9 @@ def test_the_slack_sink_posts_with_a_bot_token(api: str, tmp_path: Path) -> None
     assert authorization == "Bearer xoxb-1-2-secret"
     assert set(posted) == {"channel", "text", "blocks"}
     assert posted["channel"] == "C0123ABCD"
-    assert posted["text"].splitlines()[1] == "+ *PROJ-3* needs_reviewer: &lt;!channel&gt; https://x.test/1"
+    assert posted["text"].splitlines()[1] == (
+        "+ *PROJ-3* Retry &lt;@U1&gt; checkout · needs_reviewer: &lt;!channel&gt; https://x.test/1"
+    )
 
 
 def test_the_slack_sink_posts_with_a_name_and_an_icon(api: str, tmp_path: Path) -> None:

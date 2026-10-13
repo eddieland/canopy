@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { forgotText, notedText, repliedText, startedText, stoppedText } from './outcomes'
+import { dismissedText, forgotText, notedText, reloadedText, repliedText, startedText, stoppedText } from './outcomes'
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {
@@ -9,6 +9,25 @@ describe('outcomes', () => {
         )
         expect(startedText('A-1', { already: true, running_run: 4, running_private: false })).toContain(
             'Run 4 (public, dispatched before this start, so it may write to the ticket) is still working it.',
+        )
+    })
+
+    it('say what a reload found, when the loop runs on it, and what waits for a restart', () => {
+        expect(reloadedText({ changed: [], restart: [], after_tick: false })).toBe(
+            'Nothing changed. The loop runs on it from now on.',
+        )
+        expect(reloadedText({ changed: ['capacity.max_workers'], restart: [], after_tick: true })).toBe(
+            'capacity.max_workers changed. The loop reads it again once the running tick ends.',
+        )
+        expect(
+            reloadedText({
+                changed: ['serve.port', 'serve.bind'],
+                restart: ['serve.port', 'serve.bind'],
+                after_tick: false,
+            }),
+        ).toContain('serve.port, serve.bind take effect on a restart.')
+        expect(reloadedText({ changed: ['serve.port'], restart: ['serve.port'], after_tick: false })).toContain(
+            'serve.port takes effect on a restart.',
         )
     })
 
@@ -37,6 +56,15 @@ describe('outcomes', () => {
         )
         expect(notedText('deps', { message_id: 9, answers: null, new: false })).toBe(
             'Message 9 on chore:deps already says this; nothing new recorded.',
+        )
+    })
+
+    it('say what a dismissal did, as canopy dismiss does', () => {
+        expect(dismissedText({ chore: 'deps', finding: 'lodash-advisory', dismissed: true })).toBe(
+            'chore:deps lodash-advisory is dismissed: it is off the attention list until the chore stops reporting it.',
+        )
+        expect(dismissedText({ chore: 'deps', finding: 'lodash-advisory', dismissed: false })).toBe(
+            'chore:deps lodash-advisory is listed again while the chore reports it.',
         )
     })
 

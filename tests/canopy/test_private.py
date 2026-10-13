@@ -24,6 +24,7 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
+from tests.canopy.test_mirror import state_block
 from tests.conftest import CanopyEnv, GitPool, Journals
 
 KEY = "PROJ-1"
@@ -183,7 +184,7 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
         with pytest.raises(conversation.Refused, match="bad_ref"):
             conversation.parse_ref(bad)
     conversation.check_verb(conversation.parse_ref("run:7"), "show")
-    with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, show"):
+    with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, dismiss, show"):
         conversation.check_verb(conversation.parse_ref("chore:build-health"), "start")
     with pytest.raises(conversation.Refused, match=r"unsupported.*M14"):
         conversation.check_verb(conversation.parse_ref("api#42"), "show")
@@ -317,7 +318,7 @@ def test_a_private_only_state_block_carries_only_started_tickets_and_nothing_to_
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     # A public ticket the operator wrote to: without private_only, the block would carry it and its message.
     assert main(["reply", "PROJ-2", "go"]) == 0
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
     state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
@@ -412,9 +413,10 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     assert dispatch(conn, monkeypatch, "--kind", "implement", runner=InlineRunner()) == 0
     run = last_run(conn)
     # Stand-ins for `_run` and its worker, each leading its own process group as the real ones do.
-    log = canopy_env.state_dir / "sleep.log"
-    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=log)
-    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=log)
+    # Each has a log, and so a lifelock, of its own.
+    state = canopy_env.state_dir
+    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "run.log")
+    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "worker.log")
     conn.execute("UPDATE runs SET pid = ?, worker_pid = ? WHERE id = ?", (run_pid, worker_pid, run["id"]))
     assert {s["status"] for s in pool(treehouse_state)} == {"available", "leased"}
 
@@ -543,14 +545,13 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     assert main(["reply", KEY, "B"]) == 0
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
     state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
     tickets = {t["key"]: t for t in state["tickets"]}
     assert "private" not in tickets["PROJ-2"]
     private = tickets[KEY]["private"]
-    assert private["status"] == "started"
     assert private["message_cursor"] is None
     assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
         (question + 1, "B", question)
@@ -565,6 +566,30 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
         "message_cursor": question + 1,
         "new_operator_messages": [],
     }
+
+
+def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    agent_log: Path,
+    treehouse_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Listed with the other tickets, it would be owed a decision every tick it stays stopped.
+    assert main(["start", KEY]) == 0
+    assert main(["stop", KEY]) == 0
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
+    assert main(["tick", "--dry-run"]) == 0
+    stopped = state_block(agent_log)
+    assert stopped["stopped"] == [KEY]
+    assert [t["key"] for t in stopped["tickets"]] == ["PROJ-2"]
+    # Started again, it is a private ticket like any other.
+    assert main(["start", KEY]) == 0
+    assert main(["tick", "--dry-run"]) == 0
+    started = state_block(agent_log)
+    assert started["stopped"] == []
+    assert {t["key"]: "private" in t for t in started["tickets"]} == {KEY: True, "PROJ-2": False}
 
 
 def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

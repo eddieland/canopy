@@ -3,13 +3,31 @@ import { describe, expect, it } from 'vitest'
 import { mockRuns } from '@/api/mocks'
 import type { Run } from '@/api/types'
 
-import { railRuns, workingOn } from './run-state'
+import { byTicket, railRuns, workingOn } from './run-state'
 
 const running = mockRuns[0] as Run
 
-function at(id: number, state: Run['state'], started_at: string): Run {
-    return { ...running, id, state, started_at }
+function at(id: number, state: Run['state'], started_at: string, ticket_key = `T-${id}`): Run {
+    return { ...running, id, state, started_at, ticket_key }
 }
+
+describe('byTicket', () => {
+    it("makes one entry per ticket, its latest run over the earlier ones, in the order of each ticket's latest", () => {
+        const runs = [
+            at(5, 'running', '2026-10-08T12:00:00Z', 'A'),
+            at(4, 'blocked', '2026-10-08T11:00:00Z', 'B'),
+            at(3, 'blocked', '2026-10-08T10:00:00Z', 'A'),
+            at(2, 'blocked', '2026-10-08T09:00:00Z', 'B'),
+            at(1, 'done', '2026-10-08T08:00:00Z', 'C'),
+        ]
+        const groups = byTicket(runs).map((g) => [g.latest.id, g.earlier.map((r) => r.id)])
+        expect(groups).toEqual([
+            [5, [3]],
+            [4, [2]],
+            [1, []],
+        ])
+    })
+})
 
 describe('workingOn', () => {
     it("lists the ticket's running runs, oldest first", () => {
@@ -25,19 +43,29 @@ describe('workingOn', () => {
 })
 
 describe('railRuns', () => {
-    it('puts the runs waiting on an answer first, then the running ones, each oldest first', () => {
+    it('puts the running runs first, then the ones waiting on an answer, each oldest first', () => {
         const runs = [
             at(1, 'running', '2026-10-08T12:10:00Z'),
             at(2, 'blocked', '2026-10-08T12:20:00Z'),
             at(3, 'running', '2026-10-08T12:00:00Z'),
             at(4, 'blocked', '2026-10-08T11:00:00Z'),
         ]
-        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([4, 2, 3, 1])
+        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([3, 1, 4, 2])
     })
 
     it('leaves out the runs that ended', () => {
         const runs = [at(1, 'done', '2026-10-08T12:00:00Z'), at(2, 'failed', '2026-10-08T12:00:00Z')]
-        expect(railRuns([...runs, ...mockRuns], 10).shown.map((r) => r.id)).toEqual([42, 41])
+        expect(railRuns([...runs, ...mockRuns], 10).shown.map((r) => r.id)).toEqual([41, 42])
+    })
+
+    it("leaves out a blocked run a later run of its ticket followed, and lists each ticket's latest once", () => {
+        const runs = [
+            at(3, 'running', '2026-10-08T12:00:00Z', 'A'),
+            at(2, 'blocked', '2026-10-08T11:00:00Z', 'A'),
+            at(4, 'blocked', '2026-10-08T10:30:00Z', 'B'),
+            at(1, 'blocked', '2026-10-08T10:00:00Z', 'B'),
+        ]
+        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([3, 4])
     })
 
     it('counts the runs past the limit', () => {

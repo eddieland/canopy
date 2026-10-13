@@ -1,13 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
 import { choreQuery } from '@/api/queries'
-import type { ChoreDetail, ChoreFinding, ChoreRun } from '@/api/types'
+import type { ChoreDetail, ChoreRun } from '@/api/types'
 import { Age } from '@/components/age'
+import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreNotes } from '@/components/chore-notes'
-import { LinkedText } from '@/components/linked-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
@@ -30,7 +29,7 @@ function ChorePage() {
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         return (
             <>
-                <PageHeader label="Chore" title={`chore:${name}`} />
+                <PageHeader title={`chore:${name}`} />
                 <Panel>
                     <Placeholder className="min-h-40">{error.message}</Placeholder>
                 </Panel>
@@ -40,7 +39,7 @@ function ChorePage() {
     if (data === undefined) {
         return (
             <>
-                <PageHeader label="Chore" title={`chore:${name}`} />
+                <PageHeader title={`chore:${name}`} />
                 <Panel className="min-h-72 p-3">
                     <Skeleton className="h-4 w-1/2" />
                 </Panel>
@@ -56,7 +55,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
     const runsOrder = useListOrder('chore-runs')
     return (
         <>
-            <PageHeader label="Chore" title={`chore:${chore.name}`}>
+            <PageHeader title={`chore:${chore.name}`}>
                 Recurring work the overseer runs when it is due. What it finds reaches the attention list; your notes
                 reach its next runs.
             </PageHeader>
@@ -93,7 +92,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             <PanelScroll label="Open findings">
                                 <ul className="divide-y">
                                     {chore.findings.map((finding) => (
-                                        <Finding key={finding.id} finding={finding} />
+                                        <ChoreFindingRow key={finding.id} finding={finding} chore={chore.name} />
                                     ))}
                                 </ul>
                             </PanelScroll>
@@ -112,7 +111,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             <PanelScroll label="Recent runs">
                                 <ul className="divide-y" data-testid="chore-runs">
                                     {ordered('chore-runs', runsOrder, runs).map((run) => (
-                                        <RunRow key={run.id} run={run} />
+                                        <RunRow key={run.id} name={chore.name} run={run} />
                                     ))}
                                 </ul>
                             </PanelScroll>
@@ -127,40 +126,8 @@ function Chore({ detail }: { detail: ChoreDetail }) {
     )
 }
 
-/** A finding: its id, its title and link, and below them its detail. All of it is the agent's: text, never markup. */
-function Finding({ finding }: { finding: ChoreFinding }) {
-    return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`finding-${finding.id}`}>
-            <div className="flex items-center gap-3">
-                <Chip>{finding.id}</Chip>
-                <span className="min-w-0 truncate text-sm">{finding.title}</span>
-                <Age at={finding.since} className="ml-auto" />
-            </div>
-            {finding.detail && (
-                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} />
-                </p>
-            )}
-            {finding.link && (
-                <a
-                    href={finding.link}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className={cn(
-                        'inline-flex items-center gap-1 self-start font-mono text-xs text-accent underline-offset-4',
-                        'hover:underline',
-                    )}
-                >
-                    {finding.link.replace(/^https:\/\//, '')}
-                    <ExternalLink className="size-3" />
-                </a>
-            )}
-        </li>
-    )
-}
-
-/** A chore run: its state, id, findings, cost, and when; what it said; its session. */
-function RunRow({ run }: { run: ChoreRun }) {
+/** A chore run: its state, id (opening its page), findings, cost, and when; what it said; its session. */
+function RunRow({ name, run }: { name: string; run: ChoreRun }) {
     return (
         <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`chore-run-${run.id}`}>
             <div className="flex items-center gap-3">
@@ -168,7 +135,13 @@ function RunRow({ run }: { run: ChoreRun }) {
                     <RunDot state={run.state} />
                     {run.status}
                 </span>
-                <span className="readout w-14 text-xs text-muted-foreground">#{run.id}</span>
+                <Link
+                    to="/chores/$name/runs/$id"
+                    params={{ name, id: String(run.id) }}
+                    className="readout w-14 text-xs text-accent underline-offset-4 hover:underline"
+                >
+                    #{run.id}
+                </Link>
                 {run.status === 'ok' && <Chip>{run.findings === 1 ? '1 finding' : `${run.findings} findings`}</Chip>}
                 <span className="ml-auto flex items-center gap-4">
                     <span className="readout w-16 text-right text-xs text-muted-foreground">

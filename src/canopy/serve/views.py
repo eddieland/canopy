@@ -17,6 +17,8 @@ from canopy.serve.schema import (
     ChoreDetail,
     ChoreFinding,
     ChoreRun,
+    ChoreRunDetail,
+    ChoreRunFinding,
     ChoreSummary,
     Comment,
     Decision,
@@ -38,11 +40,13 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
+    TickOutput,
     Transcript,
     TranscriptEntry,
     TranscriptError,
     TranscriptStep,
     TranscriptText,
+    TranscriptTokens,
     TranscriptTool,
     Unit,
 )
@@ -80,7 +84,12 @@ _KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "r
 
 
 def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
-    """The attention list, as `canopy status` shows it."""
+    """The attention list, as `canopy status` shows it.
+
+    Returns:
+        One item per entry, its subject split into a ticket key or a chore name and its detail without control
+        characters.
+    """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
         key = item.ticket_key
@@ -103,7 +112,11 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last day and the last 30 days cost, by the backend's clock."""
+    """What the last day and the last 30 days cost, by the backend's clock.
+
+    Returns:
+        The cost the journal recorded in each window, with the window's start.
+    """
     now = backend.clock()
     return Spend(day=_spent(ctx, now, SPEND_DAY_HOURS), month=_spent(ctx, now, SPEND_MONTH_HOURS))
 
@@ -114,12 +127,20 @@ def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
 
 
 def last_tick(ctx: Context) -> LastTick:
-    """The latest tick, and the newest message the latest `ok` tick read."""
+    """The latest tick, and the newest message the latest `ok` tick read.
+
+    Returns:
+        The latest tick, None before the first, and the message's id, None before an `ok` tick recorded one.
+    """
     return LastTick(tick=tick(ctx), acknowledged=db.acknowledged_message_id(ctx.conn))
 
 
 def loop_state(ctx: Context) -> LoopState:
-    """Whether the operator paused the loop, since when, and through which channel."""
+    """Whether the operator paused the loop, since when, and through which channel.
+
+    Returns:
+        No pause while the loop runs. A channel the schema does not know reads as `loop`.
+    """
     held = pause.paused(ctx.conn)
     if held is None:
         return LoopState()
@@ -127,7 +148,11 @@ def loop_state(ctx: Context) -> LoopState:
 
 
 def tick(ctx: Context) -> Tick | None:
-    """The latest tick, or None before the first."""
+    """The latest tick, or None before the first.
+
+    Returns:
+        The tick, with how many decisions it recorded.
+    """
     row = db.last_tick(ctx.conn)
     if row is None:
         return None
@@ -135,7 +160,11 @@ def tick(ctx: Context) -> Tick | None:
 
 
 def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
-    """A tick's row, and how many decisions it recorded."""
+    """A tick's row, and how many decisions it recorded.
+
+    Returns:
+        The tick as the API sends it, its summary laid out as a page shows it and None when empty.
+    """
     return Tick(
         id=int(row["id"]),
         status=str(row["status"]),
@@ -150,12 +179,20 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
 
 
 def ticks(ctx: Context) -> list[Tick]:
-    """The latest ticks, newest first."""
+    """The latest ticks, newest first.
+
+    Returns:
+        At most `TICKS` ticks, each with how many decisions it recorded.
+    """
     return [tick_of(row, int(row["decisions"])) for row in db.recent_ticks(ctx.conn, TICKS)]
 
 
 def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
-    """One tick and its decisions, as `canopy decisions ID` prints them, or None if there is no such tick."""
+    """One tick and its decisions, as `canopy decisions ID` prints them, or None if there is no such tick.
+
+    Returns:
+        The tick, its decisions, and its output's path from the workspace root, None when the file is missing.
+    """
     row = db.get_tick(ctx.conn, tick_id)
     if row is None:
         return None
@@ -169,20 +206,46 @@ def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
 
 
 def tick_output(ctx: Context, tick_id: int) -> Path:
-    """Where a tick's overseer output is (DESIGN §6)."""
+    """Where a tick's overseer output is (DESIGN §6).
+
+    Returns:
+        The path under the state directory. The file may not exist.
+    """
     return ctx.state_dir / "ticks" / f"{tick_id}.log"
 
 
 def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
-    """The overseer's session in a tick's output, or None if there is no such tick."""
+    """The overseer's session in a tick's output, or None if there is no such tick.
+
+    Returns:
+        The transcript, its status saying whether the tick recorded a session and whether its output could be read.
+    """
     row = db.get_tick(ctx.conn, tick_id)
     if row is None:
         return None
     return session_transcript(tick_output(ctx, tick_id), row["session_id"])
 
 
+def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
+    """The end of a tick's output as written, or None if there is no such tick.
+
+    Returns:
+        The tail, without control characters, or a `no_output` status when the file is missing or not a regular file.
+    """
+    if db.get_tick(ctx.conn, tick_id) is None:
+        return None
+    found = transcript.tail(tick_output(ctx, tick_id))
+    if found is None:
+        return TickOutput(status="no_output")
+    return TickOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
+
+
 def run_detail(ctx: Context, run_id: int) -> Run | None:
-    """One run, with the worktrees it holds if it is running, or None if there is no such run."""
+    """One run, with the worktrees it holds if it is running, or None if there is no such run.
+
+    Returns:
+        The run, the worktrees' paths from the workspace root.
+    """
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
@@ -192,7 +255,11 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
 
 
 def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
-    """A run's session in its log, or None if there is no such run."""
+    """A run's session in its log, or None if there is no such run.
+
+    Returns:
+        The transcript, its status saying whether the run recorded a session and whether its log could be read.
+    """
     row = db.get_run(ctx.conn, run_id)
     if row is None:
         return None
@@ -200,7 +267,12 @@ def run_transcript(ctx: Context, run_id: int) -> Transcript | None:
 
 
 def session_transcript(path: Path, session: object) -> Transcript:
-    """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22)."""
+    """The events of the session the journal recorded, read back from the file they were printed to (DESIGN §22).
+
+    Returns:
+        The entries read, with status `no_session` when the journal recorded no session, or `no_log` when the file is
+        missing or not a regular file.
+    """
     if not isinstance(session, str) or not session:
         return Transcript(status="no_session")
     found = transcript.read(path, session)
@@ -216,7 +288,11 @@ def session_transcript(path: Path, session: object) -> Transcript:
 
 
 def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
-    """One entry of a transcript as the API sends it."""
+    """One entry of a transcript as the API sends it.
+
+    Returns:
+        The model for the entry's kind: text, a tool call, a step, or an error.
+    """
     match entry:
         case transcript.Text():
             return TranscriptText(at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut)
@@ -232,13 +308,24 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 cut=entry.cut,
             )
         case transcript.Step():
-            return TranscriptStep(at=entry.at, reason=entry.reason, cost_usd=entry.cost_usd, tokens=entry.tokens)
+            t = entry.tokens
+            return TranscriptStep(
+                at=entry.at,
+                reason=entry.reason,
+                cost_usd=entry.cost_usd,
+                tokens=t.total if t is not None else None,
+                split=TranscriptTokens(**vars(t)) if t is not None else None,
+            )
         case transcript.Error():
             return TranscriptError(at=entry.at, name=entry.name, message=entry.message)
 
 
 def decision(row: sqlite3.Row) -> Decision:
-    """One decision, named as `canopy decisions` names it, its rationale with its line breaks."""
+    """One decision, named as `canopy decisions` names it, its rationale with its line breaks.
+
+    Returns:
+        The decision, its subject `chore:NAME` for a chore, `pr:URL` for a PR with no ticket, else the ticket's.
+    """
     chore = str(row["chore"]) if row["chore"] is not None else None
     pr = str(row["pr"]) if row["pr"] is not None else None
     key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
@@ -264,7 +351,11 @@ def decision(row: sqlite3.Row) -> Decision:
 
 
 def runs(ctx: Context) -> list[Run]:
-    """Running runs, oldest first, then the ones that ended most recently, newest first."""
+    """Running runs, oldest first, then the ones that ended most recently, newest first.
+
+    Returns:
+        The running runs with the worktrees they hold, then at most `RECENT_RUNS` that ended.
+    """
     running = db.running_runs(ctx.conn)
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
@@ -278,13 +369,20 @@ def shown_path(path: str, root: Path) -> str:
     """A worktree's path as a page shows it: from the workspace root when under it, else whole.
 
     A workspace's pool paths then read as `.treehouse/web-3f9c2a1b/1/web`.
+
+    Returns:
+        `path` relative to `root`, or unchanged when it is outside it.
     """
     found = Path(path)
     return str(found.relative_to(root)) if found.is_relative_to(root) else path
 
 
 def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run:
-    """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`."""
+    """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
+
+    Returns:
+        The run as the API sends it. A status it does not know reads as `failed`.
+    """
     result = contract.stored_object(row["result_json"])
     status = str(row["status"])
     return Run(
@@ -309,7 +407,11 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
 
 
 def tokens(row: sqlite3.Row) -> int | None:
-    """A run's or a chore run's tokens of every kind, or None when the runtime reported none."""
+    """A run's or a chore run's tokens of every kind, or None when the runtime reported none.
+
+    Returns:
+        The sum of the counts the runtime reported, a missing one counting as none.
+    """
     found = [
         row[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     ]
@@ -317,28 +419,48 @@ def tokens(row: sqlite3.Row) -> int | None:
 
 
 def said(row: sqlite3.Row) -> str | None:
-    """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut."""
+    """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut.
+
+    Returns:
+        At most `SUMMARY_LENGTH` characters, or None when the result says nothing.
+    """
     result = contract.stored_object(row["result_json"])
     return lines(str(result.get("harness") or result.get("summary") or ""))[:SUMMARY_LENGTH].rstrip() or None
 
 
 def lines(text: str) -> str:
-    """Agent-written text as a page lays it out: control characters dropped, line breaks kept, trailing space cut."""
+    """Agent-written text as a page lays it out: control characters dropped, line breaks kept, trailing space cut.
+
+    Returns:
+        The text, without blank lines at its start or end.
+    """
     return "\n".join(line.rstrip() for line in conversation.printable(text).splitlines()).strip("\n")
 
 
 def _title(value: object) -> str | None:
-    """A ticket's title on one line. `canopy ticket set` stored it so; this keeps a page from relying on that."""
+    """A ticket's title on one line. `canopy ticket set` stored it so; this keeps a page from relying on that.
+
+    Returns:
+        The title, its whitespace collapsed and control characters dropped, or None when it is missing or empty.
+    """
     return " ".join(conversation.printable(str(value)).split()) or None if value else None
 
 
 def tickets(ctx: Context) -> list[TicketSummary]:
-    """The journal's tickets, most recent activity first."""
+    """The journal's tickets, most recent activity first.
+
+    Returns:
+        At most `TICKETS` tickets, as the tickets list shows them.
+    """
     return [summary(ctx.conn, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
 
 
 def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
-    """A ticket row, with `active_at` as `db.recent_tickets` adds it, as the tickets list shows it."""
+    """A ticket row, with `active_at` as `db.recent_tickets` adds it, as the tickets list shows it.
+
+    Returns:
+        The ticket, with whether it was started privately, the question it awaits, and its running run, if any.
+    """
     key = str(row["key"])
     record = conversation.start_of(conn, key)
     status: StartStatus | None = None
@@ -363,7 +485,11 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
 
 
 def ticket(ctx: Context, key: str) -> TicketDetail | None:
-    """One ticket, as `canopy show` prints it, or None if the journal has no record of it."""
+    """One ticket, as `canopy show` prints it, or None if the journal has no record of it.
+
+    Returns:
+        The ticket, its units, and its latest runs, messages, and decisions.
+    """
     rows = db.recent_tickets(ctx.conn, 1, key=key)
     if not rows:
         return None
@@ -385,7 +511,12 @@ def ticket(ctx: Context, key: str) -> TicketDetail | None:
 
 
 def message(row: sqlite3.Row) -> Message:
-    """One message, its body without control characters."""
+    """One message, its body without control characters.
+
+    Returns:
+        The message as the API sends it, with the tracker comment it came from, if any. A source or kind the schema
+        does not know reads as a tracker comment.
+    """
     source = str(row["source"])
     kind = str(row["kind"])
     comment = None
@@ -411,29 +542,41 @@ def message(row: sqlite3.Row) -> Message:
 
 
 def chores(backend: Backend, ctx: Context) -> list[ChoreSummary]:
-    """Each configured chore, as `canopy status` lists it: none when `capacity.max_chores` is 0 (DESIGN §19)."""
+    """Each configured chore, as `canopy status` lists it: none when `capacity.max_chores` is 0 (DESIGN §19).
+
+    Returns:
+        Each chore's summary, by name, as of the backend's clock.
+    """
     now = backend.clock()
-    return [chore_summary(ctx.conn, s, now) for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace)]
+    root = ctx.workspace.root
+    return [chore_summary(ctx.conn, s, now, root) for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace)]
 
 
 def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
     """One chore, as `canopy show chore:NAME` prints it, or None if it is not defined for this workspace.
 
     A chore defined while `capacity.max_chores` is 0 has a page, as `canopy reply chore:NAME` takes a note to it.
+
+    Returns:
+        The chore's summary, its latest runs, and its notes.
     """
     defined = chore_view.defined(ctx.config, ctx.workspace)
     if name not in defined:
         return None
     state = chore_view.state_of(ctx.conn, name, defined[name])
     return ChoreDetail(
-        chore=chore_summary(ctx.conn, state, backend.clock()),
-        runs=[chore_run(r) for r in state.runs[:CHORE_RUNS]],
+        chore=chore_summary(ctx.conn, state, backend.clock(), ctx.workspace.root),
+        runs=[chore_run(r, ctx.workspace.root) for r in state.runs[:CHORE_RUNS]],
         notes=[message(m) for m in db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)],
     )
 
 
-def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: datetime) -> ChoreSummary:
-    """A chore's state as its line in `canopy status` and the head of `canopy show chore:NAME` say it."""
+def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: datetime, root: Path) -> ChoreSummary:
+    """A chore's state as its line in `canopy status` and the head of `canopy show chore:NAME` say it.
+
+    Returns:
+        The chore's schedule, its running and latest ended runs, when it is next due, and its open findings.
+    """
     defined = state.chore
     running = state.running
     latest = state.latest_ended
@@ -444,8 +587,8 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
         hours=defined.hours,
         timezone=defined.timezone,
         when=defined.when or None,
-        running=chore_run(running) if running is not None else None,
-        latest=chore_run(latest) if latest is not None else None,
+        running=chore_run(running, root) if running is not None else None,
+        latest=chore_run(latest, root) if latest is not None else None,
         due_at=state.due_at(now),
         findings=[
             ChoreFinding(
@@ -454,6 +597,7 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
                 detail=conversation.printable(f.finding.detail),
                 link=f.finding.link,
                 since=db.parse_time(f.since),
+                dismissed=f.dismissed,
             )
             for f in state.findings()
         ],
@@ -461,8 +605,12 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
     )
 
 
-def chore_run(row: sqlite3.Row) -> ChoreRun:
-    """One chore run's row."""
+def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
+    """One chore run's row, its log's path from the workspace `root`.
+
+    Returns:
+        The run as the API sends it, `done` only when it ended `ok`, with its findings counted then.
+    """
     status = str(row["status"])
     parsed = chore_result.stored(row["result_json"]) if status == "ok" else None
     return ChoreRun(
@@ -476,12 +624,61 @@ def chore_run(row: sqlite3.Row) -> ChoreRun:
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         tokens=tokens(row),
-        log_path=str(row["log_path"]),
+        log_path=shown_path(str(row["log_path"]), root),
     )
 
 
+def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | None:
+    """One run of chore `name`, or None if it has no such run. A chore deleted from the config keeps its runs.
+
+    Returns:
+        The run, its summary, the harness's note, and its findings, the findings only when it ended `ok`.
+    """
+    row = _chore_run_of(ctx.conn, name, run_id)
+    if row is None:
+        return None
+    stored = contract.stored_object(row["result_json"])
+    parsed = chore_result.stored(row["result_json"]) if row["status"] == "ok" else None
+    return ChoreRunDetail(
+        chore=name,
+        run=chore_run(row, ctx.workspace.root),
+        summary=lines(str(stored.get("summary") or "")) or None,
+        note=lines(str(stored.get("harness") or "")) or None,
+        findings=[
+            ChoreRunFinding(
+                id=f.id,
+                title=conversation.printable(f.title),
+                detail=conversation.printable(f.detail),
+                link=f.link,
+            )
+            for f in (parsed.findings if parsed is not None else [])
+        ],
+    )
+
+
+def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | None:
+    """A chore run's session in its log, or None if chore `name` has no such run.
+
+    Returns:
+        The transcript, its status saying whether the run recorded a session and whether its log could be read.
+    """
+    row = _chore_run_of(ctx.conn, name, run_id)
+    if row is None:
+        return None
+    return session_transcript(Path(str(row["log_path"])), row["session_id"])
+
+
+def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> sqlite3.Row | None:
+    row = db.get_chore_run(conn, run_id)
+    return row if row is not None and row["chore"] == name else None
+
+
 def found(ctx: Context, query: str) -> SearchResults:
-    """The journal's rows holding every word of `query` (DESIGN §22, Search). Raises search.BadQueryError."""
+    """The journal's rows holding every word of `query` (DESIGN §22, Search). Raises search.BadQueryError.
+
+    Returns:
+        The words searched for, the hits, and the sources that had more hits than were read.
+    """
     result = search.search(ctx.conn, query)
     return SearchResults(
         words=list(result.words),

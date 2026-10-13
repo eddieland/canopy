@@ -78,6 +78,12 @@ def load_both(root: Path, user_file: Path) -> None:
         ('[repos.api]\nurl = "--upload-pack=touch x"\n', "repos.api.url"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nsummary = "' + "x" * 201 + '"\n', "repos.api.summary"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nowner = "me"\n', "repos.api.owner"),
+        (
+            '[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/a/tree/main"\n',
+            "repos.api.branch_url",
+        ),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "http://x.test/a/tree/{branch}"\n', "plain https://"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/{repo}/tree/{branch}"\n', "braces"),
         ("[desks]\nx = 1\n", "unknown key desks.x"),
     ],
 )
@@ -85,6 +91,45 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text() + "\n" + table)
     with pytest.raises(config.ConfigError, match=error):
         load_both(ws.root, canopy_env.user_file)
+
+
+def test_a_repositorys_branch_url_comes_from_its_github_url_unless_the_map_sets_one(ws: Ws) -> None:
+    template = "https://git.example/api/-/tree/{branch}"
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "git@github.com:acme/web.git"), ("docs", "https://github.com/acme/docs"))
+        + f'\n[repos.api]\nurl = "https://github.com/acme/api.git"\nbranch_url = "{template}"\n'
+        + '\n[repos.ops]\nurl = "https://github.com/acme/ops.git"\nbranch_url = ""\n'
+    )
+    assert [(r.name, r.branch_url) for r in workspace.load(ws.root).repos] == [
+        ("api", template),
+        ("docs", "https://github.com/acme/docs/tree/{branch}"),
+        # Empty turns the link off, even for a GitHub URL.
+        ("ops", ""),
+        ("web", "https://github.com/acme/web/tree/{branch}"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://github.com/acme/api", "https://github.com/acme/api/tree/{branch}"),
+        ("https://github.com/acme/api.git", "https://github.com/acme/api/tree/{branch}"),
+        ("https://github.com/acme/api/", "https://github.com/acme/api/tree/{branch}"),
+        ("https://GitHub.com/acme/my.repo.git", "https://github.com/acme/my.repo/tree/{branch}"),
+        # A credential in the clone URL never reaches the link.
+        ("https://x-access-token:secret@github.com/acme/api.git", "https://github.com/acme/api/tree/{branch}"),
+        ("git@github.com:acme/api.git", "https://github.com/acme/api/tree/{branch}"),
+        ("ssh://git@github.com/acme/api.git", "https://github.com/acme/api/tree/{branch}"),
+        ("http://github.com/acme/api.git", ""),
+        ("https://github.example.com/acme/api.git", ""),
+        ("https://gitlab.com/acme/api.git", ""),
+        ("https://github.com/acme/api/tree/main", ""),
+        ("https://github.com/acme/..", ""),
+        ("/srv/git/api.git", ""),
+    ],
+)
+def test_only_a_github_clone_url_implies_a_branch_url(url: str, expected: str) -> None:
+    assert workspace.github_branch_url(url) == expected
 
 
 def test_canopy_runs_only_in_a_workspace_and_reads_no_repository_file(tmp_path: Path) -> None:
@@ -139,7 +184,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         "FAKE_AGENT_COMMANDS",
         json.dumps([["canopy", *dispatch("PROJ-1", "--repo", "api")], ["canopy", *dispatch("PROJ-2")]]),
     )
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
 
     [run] = [json.loads(line) for line in agent_log.read_text().splitlines()]
@@ -184,7 +229,7 @@ def test_items_about_two_repositories_are_two_items(
     notified = tmp_path / "notified.txt"
     user = Path(os.environ["XDG_CONFIG_HOME"]) / "canopy" / "config.toml"
     user.write_text(user.read_text() + f"\n[notify]\ncmd = 'sh -c \"cat >> {notified}\"'\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert [(i.subject, i.reason) for i in attention.current(ws.journal())] == [
         ("a", "repo_missing"),
@@ -297,7 +342,7 @@ def test_reconcile_returns_leases_in_each_pool(
     ).ok
     conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
     monkeypatch.delenv("CANOPY_TICK_ID")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
 
     run = db.get_run(conn, 1)

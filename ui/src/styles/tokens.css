@@ -37,6 +37,7 @@
     --section-runs: oklch(0.54 0.21 302);
     --section-worktrees: oklch(0.54 0.11 182);
     --section-tickets: oklch(0.55 0.15 242);
+    --section-pull-requests: oklch(0.6 0.13 95);
     --section-reviews: oklch(0.55 0.2 330);
     --section-chores: oklch(0.6 0.16 50);
     --section-ticks: oklch(0.57 0.15 135);
@@ -53,6 +54,11 @@
     --flair-cyan: oklch(0.58 0.11 205);
     --flair-blue: oklch(0.5 0.2 262);
     --flair-purple: oklch(0.52 0.2 315);
+
+    /* Sprig, the helper in the corner: its googly eyes, white and black in both themes, and its leaf. */
+    --buddy-eye: oklch(0.99 0 0);
+    --buddy-pupil: oklch(0.2 0.01 277);
+    --buddy-leaf: oklch(0.6 0.15 145);
 
     --radius: 0.5rem;
 }
@@ -82,6 +88,7 @@
     --section-runs: oklch(0.75 0.16 302);
     --section-worktrees: oklch(0.8 0.12 182);
     --section-tickets: oklch(0.77 0.13 242);
+    --section-pull-requests: oklch(0.86 0.15 100);
     --section-reviews: oklch(0.76 0.17 330);
     --section-chores: oklch(0.8 0.14 55);
     --section-ticks: oklch(0.84 0.16 130);
@@ -96,6 +103,10 @@
     --flair-cyan: oklch(0.85 0.13 200);
     --flair-blue: oklch(0.65 0.18 262);
     --flair-purple: oklch(0.72 0.2 315);
+
+    --buddy-eye: oklch(0.97 0.005 260);
+    --buddy-pupil: oklch(0.163 0.012 261);
+    --buddy-leaf: oklch(0.74 0.16 145);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -121,6 +132,7 @@
     --color-section-runs: var(--section-runs);
     --color-section-worktrees: var(--section-worktrees);
     --color-section-tickets: var(--section-tickets);
+    --color-section-pull-requests: var(--section-pull-requests);
     --color-section-reviews: var(--section-reviews);
     --color-section-chores: var(--section-chores);
     --color-section-ticks: var(--section-ticks);
@@ -135,6 +147,10 @@
     --color-flair-cyan: var(--flair-cyan);
     --color-flair-blue: var(--flair-blue);
     --color-flair-purple: var(--flair-purple);
+
+    --color-buddy-eye: var(--buddy-eye);
+    --color-buddy-pupil: var(--buddy-pupil);
+    --color-buddy-leaf: var(--buddy-leaf);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names

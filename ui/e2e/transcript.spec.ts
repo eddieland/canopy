@@ -68,8 +68,93 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await settled(page)
     const transcript = page.getByTestId('transcript')
     await expect(transcript).toContainText('session ses_tick2')
-    await expect(transcript.getByTestId('transcript-tool')).toHaveCount(2)
-    await expect(transcript).toContainText('Record the decision on ABC-101')
+    const tools = transcript.getByTestId('transcript-tool')
+    await expect(tools).toHaveCount(4)
+    await expect(transcript).toContainText('4 tool calls, 1 refused')
+
+    // A shell call's line is its command, with what it printed when that is one short line.
+    const decide = tools.filter({ hasText: "canopy decide ABC-101 wait 'run 41 is implementing it.'" })
+    await expect(decide).toContainText('recorded decision 8')
+    // An untitled call's line is its input's short values.
+    await expect(tools.nth(1)).toContainText('method=get_status owner=acme repo=web pullNumber=88')
+    // canopy's refusal is marked so, though the runtime says the call completed.
+    const dispatch = tools.filter({ hasText: 'canopy dispatch ABC-104' })
+    await expect(dispatch).toContainText('refused: running')
+    await expect(dispatch).toContainText('dispatch refused (running): run 43 is still working ABC-104')
+
+    // JSON output opens indented.
+    await tools.nth(1).locator('summary').click()
+    await expect(tools.nth(1).locator('pre').last()).toContainText('{\n  "state": "pending",')
+
+    // A model call opens to its tokens by kind; Open all opens only the tool calls.
+    const call = transcript.getByTestId('transcript-step')
+    await expect(call).toHaveCount(1)
+    const split = call.locator('dl')
+    await expect(split).toBeHidden()
+    await call.locator('summary').click()
+    await expect(split).toHaveText('input2.3kcache read6.5kcache write512output930reasoning310')
+    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await expect(transcript.locator('details[open]')).toHaveCount(4)
+    await expect(split).toBeHidden()
+})
+
+test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so", async ({
+    page,
+}) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    const output = page.getByTestId('tick-output')
+    await expect(output).toContainText('.canopy/ticks/2.log as written: stdout, then stderr')
+    const text = output.getByTestId('tick-output-text')
+    await expect(text).toHaveCount(0)
+
+    await output.getByRole('button', { name: 'Show' }).click()
+    await expect(text).toContainText('--- stderr ---')
+    await expect(text).toContainText('service=mcp key=jira error=timed out after 1000ms listing prompts')
+    // The session's events too, as the runtime printed them: lines of JSON, as text.
+    await expect(text).toContainText('"sessionID": "ses_tick2"')
+    // The file's size, in the header.
+    await expect(output).toContainText(/\d+\.\d KiB/)
+    // It opens at its end, where stderr is.
+    await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
+
+    await output.getByRole('button', { name: 'Hide' }).click()
+    await expect(text).toHaveCount(0)
+
+    await page.goto('ticks/1')
+    await settled(page)
+    await expect(page.getByTestId('tick-output')).toContainText('none kept')
+    await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
+})
+
+test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
+    await page.goto('chores/deps')
+    await settled(page)
+    await page.getByTestId('chore-run-2').getByRole('link', { name: '#2' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps #2')
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chores' })).toHaveAttribute(
+        'data-status',
+        'active',
+    )
+    await expect(page.getByTestId('chore-run-findings')).toContainText('lodash 4.17.20 has a prototype pollution')
+
+    const transcript = page.getByTestId('transcript')
+    await expect(transcript).toContainText('session ses_chore2')
+    const tools = transcript.getByTestId('transcript-tool')
+    await expect(tools).toHaveCount(2)
+    const web = tools.filter({ hasText: "Audit web's dependencies" })
+    await web.locator('summary').click()
+    await expect(web).toContainText('1 high severity vulnerability')
+
+    await page.locator('dl').getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps$/)
+
+    await page.goto('chores/build-health/runs/4')
+    await settled(page)
+    await expect(page.getByTestId('transcript')).toContainText('the session’s events reach the log when it ends')
+    await page.goto('chores/deps/runs/4')
+    await expect(page.getByText("chore 'deps' has no run 4")).toBeVisible()
 })
 
 test('a run that does not exist, or a path that names none, says so', async ({ page }) => {

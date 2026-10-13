@@ -31,6 +31,8 @@ export type Stopped = Schemas['Stopped']
 export type Replied = Schemas['Replied']
 /** What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete. */
 export type Forgot = Schemas['Forgot']
+/** What a dismissal left: the chore's finding, and whether it is now dismissed. */
+export type Dismissed = Schemas['Dismissed']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
 /** One repository's treehouse pool, read when asked for. */
@@ -49,6 +51,8 @@ export type LoopState = Schemas['LoopState']
 export type Pause = Schemas['Pause']
 /** What a pause or a resume did: whether the loop was already so, and the state it left. */
 export type PauseChanged = Schemas['PauseChanged']
+/** What asking the loop to read its config again found: the keys that change, and whether a tick must end first. */
+export type ConfigReload = Schemas['ConfigReload']
 /** One tick: what `canopy decisions ID` prints. */
 export type TickDetail = Schemas['TickDetail']
 /** One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals. */
@@ -65,12 +69,20 @@ export type ChoreDetail = Schemas['ChoreDetail']
 export type ChoreRun = Schemas['ChoreRun']
 /** An open finding: one the chore's latest `ok` run reported (DESIGN §19). */
 export type ChoreFinding = Schemas['ChoreFinding']
-/** What a run's log or a tick's output holds of its session, read back from its events (DESIGN §22). */
+/** One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22). */
+export type ChoreRunDetail = Schemas['ChoreRunDetail']
+/** A finding as one chore run reported it (DESIGN §19). */
+export type ChoreRunFinding = Schemas['ChoreRunFinding']
+/** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
 export type TranscriptEntry = Transcript['entries'][number]
 /** One tool call, once it ended: its input as indented JSON, and its output, or its error. */
 export type TranscriptTool = Schemas['TranscriptTool']
+/** One model call's end: why, what it cost, and its tokens together and by kind. */
+export type TranscriptStep = Schemas['TranscriptStep']
+/** The end of a tick's overseer output as written, stdout then stderr: what the transcript leaves out too. */
+export type TickOutput = Schemas['TickOutput']
 /** A search: the words it looked for, its hits by source and newest first, and the sources that had more. */
 export type SearchResults = Schemas['SearchResults']
 /** One row holding every word of a search, and where it opens. */
@@ -79,6 +91,10 @@ export type SearchHit = Schemas['SearchHit']
 export type SearchSource = Schemas['SearchSource']
 /** One review run of a PR at a commit (DESIGN §21): canopy's own review, never on the PR (D114). */
 export type ReviewSummary = Schemas['ReviewSummary']
+/** A PR the journal knows (DESIGN §22): one of the loop's own, by its ticket's unit, or one canopy reviewed. */
+export type PullRequest = Schemas['PullRequest']
+/** One PR: its review runs, newest first, and the decisions that name it. */
+export type PullRequestDetail = Schemas['PullRequestDetail']
 /** One review run in full: its summary, findings anchored on its diff, the diff, and the PR's other runs. */
 export type ReviewDetail = Schemas['ReviewDetail']
 /** One finding, with the file and new-side line it falls on in the diff, when the diff shows them. */

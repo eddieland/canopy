@@ -117,6 +117,9 @@ def start(
     asked for it with `request`, and works no unit. A `resume` for a canopy review's findings carries them in `review`,
     read from the journal (DESIGN §21).
 
+    Returns:
+        The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
+
     Raises:
         Refusal: a guard refused, or a slot could not be leased or the worker started. Nothing is left running and
             no slot is left leased: leases are all or nothing.
@@ -164,6 +167,9 @@ def check(
     they would have started, so the `running` and `capacity` guards refuse what a live tick would. The leases, prompt,
     and spawn are not tried, so `no_slot`, `bad_prompt`, and `spawn_failed` never appear in a dry run.
 
+    Returns:
+        The plan: the run's branch, base, the queue label it was dispatched under, and its repositories.
+
     Raises:
         Refusal: a guard refused.
     """
@@ -181,7 +187,11 @@ def check(
 
 
 def runs_dir(ctx: Context) -> Path:
-    """Where run logs and rendered worker prompts live, readable only by the operator (TRUST_MODEL T2)."""
+    """Where run logs and rendered worker prompts live, readable only by the operator (TRUST_MODEL T2).
+
+    Returns:
+        `<state_dir>/runs`, created if it is missing.
+    """
     path = ctx.state_dir / RUNS_DIR
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
@@ -198,7 +208,11 @@ def desk_path(ctx: Context, key: str) -> Path:
 
 
 def valid_slug(value: str) -> bool:
-    """Slugs reach branch names and argv, like keys."""
+    """Slugs reach branch names and argv, like keys.
+
+    Returns:
+        True if `value` is lowercase words joined by single hyphens, at most 40 characters.
+    """
     return SLUG_RE.fullmatch(value) is not None
 
 
@@ -328,6 +342,13 @@ def _check_start(ctx: Context, key: str, kind: str) -> bool:
 
     A started ticket is private whatever labels it carries. A stopped one is dispatched by nothing until the operator
     starts it again, and a split, which creates tickets in the tracker, is never run for a private one.
+
+    Returns:
+        True if the ticket has a start record and is started, False if it has none.
+
+    Raises:
+        Refusal: the ticket was stopped (`stopped`), a split was asked for a private ticket (`private`), or no tracker
+            tools are known for a private worker (`no_read_tools`).
     """
     record = conversation.start_of(ctx.conn, key)
     if record is None:
@@ -352,6 +373,12 @@ def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
     label it read for every dispatch, a claim recorded with the decision, instead of a check it can skip. Labels match
     case-insensitively, as GitHub's do; the configured spelling is returned. The refusal never lists the configured
     labels, so an overseer cannot copy one from it without reading the ticket.
+
+    Returns:
+        The configured label `label` names.
+
+    Raises:
+        Refusal: `unauthorized`, when no label is named or it is not a configured queue label.
     """
     if label is None:
         raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
@@ -366,6 +393,12 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
 
     Every `--repo` must name a repository in the map with a primary clone; naming one the ticket has no unit in yet adds
     that unit. A repository named twice is one unit.
+
+    Returns:
+        Each repository's name once, in the order first named.
+
+    Raises:
+        Refusal: `unknown_repo`, when none is named, or one is not in the map or has no primary clone.
     """
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
@@ -386,7 +419,12 @@ def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...
 
 
 def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | None, base: str | None) -> None:
-    """Refuse a split that cannot make one child per repository from a ticket nobody has started (DESIGN §18)."""
+    """Refuse a split that cannot make one child per repository from a ticket nobody has started (DESIGN §18).
+
+    Raises:
+        Refusal: a slug (`bad_slug`) or a base (`bad_base`) is given, or (`bad_split`) fewer than two repositories are
+            named, the ticket is itself a split's child, or it already has a branch.
+    """
     if slug is not None:
         raise Refusal("bad_slug", "a split creates tickets and names no branch; leave out --slug")
     if base is not None:
@@ -402,7 +440,11 @@ def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | No
 
 
 def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
-    """Refuse any repository for a split's child other than the one the split recorded for it (DESIGN §18)."""
+    """Refuse any repository for a split's child other than the one the split recorded for it (DESIGN §18).
+
+    Raises:
+        Refusal: `unknown_repo`, when `key` is a split's child and `repos` is not just its recorded repository.
+    """
     child = db.split_child(ctx.conn, key)
     if child is None:
         return
@@ -415,7 +457,13 @@ def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
 
 
 def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence[str]) -> str:
-    """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D058)."""
+    """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D058).
+
+    Raises:
+        Refusal: a slug is invalid, names another branch than the recorded one, or is given for a kind other than
+            implement (`bad_slug`); or a kind other than implement has no recorded branch to continue, for the ticket
+            or in one of `repos` (`no_branch`).
+    """
     ticket = db.get_ticket(ctx.conn, key)
     recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
     if kind == "implement":
@@ -442,7 +490,11 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
 
 
 def _check_base(prefix: str, branch: str, base: str) -> None:
-    """Refuse a base that is not another ticket's agent branch, so a PR cannot target a release branch (DESIGN §10)."""
+    """Refuse a base that is not another ticket's agent branch, so a PR cannot target a release branch (DESIGN §10).
+
+    Raises:
+        Refusal: `bad_base`, when `base` is not the branch prefix and one plain ref component, or is `branch` itself.
+    """
     tail = base.removeprefix(prefix)
     if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
         raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
@@ -457,6 +509,14 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
     in its cooldown. A unit's limit is the policy's plus the runs the operator granted it (DESIGN §22). The run's
     attempt number and limit are those of the unit with the most runs of the kind. `planned` holds the tickets a dry
     run has already dispatched this tick; each counts as a running run.
+
+    Returns:
+        The run's attempt number and attempt limit.
+
+    Raises:
+        Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit or a split is at its
+            attempt limit (`attempt_limit`) or a unit in its fix-ci cooldown (`cooldown`), or the workers are at
+            capacity (`capacity`). A refusal about one unit names its repository.
     """
     running = db.running_runs(ctx.conn)
     for run in running:
@@ -494,7 +554,11 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
 
 
 def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str]) -> None:
-    """Refuse when `max_workers` runs and review runs are running: a review holds a slot too (DESIGN §21)."""
+    """Refuse when `max_workers` runs and review runs are running: a review holds a slot too (DESIGN §21).
+
+    Raises:
+        Refusal: `capacity`, when running runs, review runs, and those in `planned` number `max_workers` or more.
+    """
     max_workers = ctx.config.capacity.max_workers
     busy = len(running) + len(db.running_review_runs(ctx.conn)) + len(planned)
     if busy >= max_workers:
@@ -503,7 +567,14 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
 
 
 def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, treehouse.Lease]]:
-    """Lease a slot in each repository's pool, or none: a lease that fails returns those already made (DESIGN §18)."""
+    """Lease a slot in each repository's pool, or none: a lease that fails returns those already made (DESIGN §18).
+
+    Returns:
+        Each repository's name and its lease, in the order of `repos`.
+
+    Raises:
+        Refusal: `no_slot`, when a repository's pool could not lease a slot.
+    """
     leases: list[tuple[str, treehouse.Lease]] = []
     for repo in repos:
         try:

@@ -1,11 +1,10 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, and the web UI) calls the
-functions here, so the guards live in one place: the subject is valid and supports the verb, the command does not run
-inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is within
-its bound. Agents never write a
-message: `_run` records a run's report and question from its result line (`close_run`), and nothing else a worker can
-call does.
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, and the web UI)
+calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the command does
+not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is
+within its bound. Agents never write a message: `_run` records a run's report and question from its result line
+(`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). The overseer records the one other kind of message, a tracker comment it
@@ -24,14 +23,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, outbox
+from canopy.core import chore_view, contract, db, outbox
+from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.infra import lock
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from canopy.core.config import Config
+    from canopy.core.config import Chore, Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
 # other kind of reference can be read as one.
@@ -72,7 +72,7 @@ RUN = "run"
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
     PR: (),
-    CHORE: ("reply", "show"),
+    CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
 }
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
@@ -97,12 +97,19 @@ class Ref:
     id: str
 
     def __str__(self) -> str:
-        """The reference as the operator writes it."""
+        """The reference as the operator writes it.
+
+        Returns:
+            A ticket's key or a PR's reference as is, any other kind as `kind:id`.
+        """
         return self.id if self.kind in (TICKET, PR) else f"{self.kind}:{self.id}"
 
 
 def parse_ref(text: str) -> Ref:
     """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, or `run:ID`.
+
+    Returns:
+        The subject, its kind read from the reference's shape. A run id is normalized to plain digits.
 
     Raises:
         Refused: (`bad_ref`) it is none of them.
@@ -130,7 +137,11 @@ def parse_ref(text: str) -> Ref:
 
 
 def check_verb(ref: Ref, verb: str) -> None:
-    """Refuse a verb `ref`'s kind does not take (`unsupported`), naming the verbs it does."""
+    """Refuse a verb `ref`'s kind does not take (`unsupported`), naming the verbs it does.
+
+    Raises:
+        Refused: (`unsupported`) `ref`'s kind does not take `verb`.
+    """
     verbs = VERBS[ref.kind]
     if verb in verbs:
         return
@@ -144,6 +155,10 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
 
     `canopy pause` and `canopy resume` check it too: an agent that could pause the loop could hold off every tick
     after its own, and one that could resume it could undo the operator's pause.
+
+    Raises:
+        Refused: (`inside_run`) CANOPY_TICK_ID or CANOPY_RUN_ID is set in `environ`, or in the process's environment
+            when `environ` is None.
     """
     env = os.environ if environ is None else environ
     for name in (TICK_ID_ENV, RUN_ID_ENV):
@@ -151,7 +166,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, pauses, or resumes",
+                "stops, replies, forgets, grants attempts, dismisses findings, pauses, or resumes",
             )
 
 
@@ -161,7 +176,11 @@ def start_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
 
 
 def is_started(record: sqlite3.Row | None) -> bool:
-    """Whether a start record says the ticket is being worked: started and not stopped."""
+    """Whether a start record says the ticket is being worked: started and not stopped.
+
+    Returns:
+        True for a record whose status is `started`; False for a stopped one or None.
+    """
     return record is not None and record["status"] == "started"
 
 
@@ -178,6 +197,9 @@ class Started:
 
 def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, channel: str) -> Started:
     """Start a ticket privately (DESIGN §22): write its start record, or mark a stopped one started again.
+
+    Returns:
+        Whether the ticket was already started, and the run working it, if one is.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `no_read_tools` when no tracker tools are known for
@@ -213,6 +235,9 @@ def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
 
     A dispatch checks the record and inserts its run in one transaction too, so whichever commits first wins, and the
     run returned here is any run a dispatch committed first.
+
+    Returns:
+        Whether the ticket was already stopped, and the run still working it, if one is.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `not_started` for a public ticket.
@@ -256,6 +281,10 @@ def reply(
     channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one the id is
     derived from the subject, the message it answers, and the body. Either way the same reply sent again after an
     uncertain result records nothing new.
+
+    Returns:
+        The message's id, the question it answers, if any, and whether it was new. A repeated submission returns the
+        message it recorded first, with what that answered.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket or a chore, `unknown` for a ticket that was neither
@@ -304,6 +333,42 @@ def reply(
     return Replied(message_id=message_id, answers=answers, new=new)
 
 
+def dismiss(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    finding_id: str,
+    *,
+    channel: str,
+    chores: Mapping[str, Chore],
+    undo: bool = False,
+) -> None:
+    """Dismiss one of a chore's open findings, keeping it off the attention list until it clears (DESIGN §19).
+
+    The chore's runs still report it and its page still shows it, marked dismissed. Once an `ok` run leaves it out the
+    dismissal is spent, so the finding is listed again if it comes back. Dismissing it again records the time anew.
+    `undo` takes a dismissal back, listing the finding again at once.
+
+    Raises:
+        Refused: `unsupported` for a subject that is not a chore, `unknown` for a chore not in `chores`, `bad_finding`
+            for an id no finding can have, `unknown` for a finding the chore does not have open, or, with `undo`, one
+            the operator has not dismissed.
+    """
+    check_verb(ref, "dismiss")
+    if ref.id not in chores:
+        raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
+    if len(finding_id) > MAX_ID or not FINDING_ID_RE.fullmatch(finding_id):
+        raise Refused("bad_finding", f"a finding id matches {FINDING_ID_RE.pattern}, at most {MAX_ID} characters")
+    with db.transaction(conn):
+        if undo:
+            if not db.delete_dismissal(conn, ref.id, finding_id):
+                raise Refused("unknown", f"{ref} has no dismissed finding {finding_id!r}")
+            return
+        state = chore_view.state_of(conn, ref.id, chores[ref.id])
+        if not any(f.finding.id == finding_id for f in state.findings()):
+            raise Refused("unknown", f"{ref} has no open finding {finding_id!r}")
+        db.set_dismissal(conn, ref.id, finding_id, channel=channel)
+
+
 @dataclass(frozen=True)
 class Forgot:
     """What `forget` cleared: the ticket's branch and its units' PRs, as the journal had them."""
@@ -320,6 +385,9 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot
     worker's conversation skip its earlier messages. The runs stay, so attempt limits still count them (D030), and the
     cursors stay, so what was handled stays handled. It holds the dispatch lock, so a dispatch that read the old branch
     cannot record it again afterwards.
+
+    Returns:
+        The ticket's branch and its units' PRs, as the journal had them before they were cleared.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket canopy has no record of,
@@ -382,6 +450,10 @@ def mirror(
     cursor to the comment; a dry run records the comment and moves no cursor. Records a `mirror` decision in the same
     transaction, which is what the per-tick bound counts.
 
+    Returns:
+        The message's id, whether it was new, and its source and truncation. A comment mirrored before keeps the source
+        and truncation it was recorded with.
+
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `bad_comment` for a malformed comment id,
             `bad_author` for a malformed account id, `bad_time` for a time that is not ISO 8601, `bad_body` for an empty
@@ -436,6 +508,9 @@ def worker_marked(body: str, prefix: str, suffix: str) -> bool:
     """Whether a comment carries every mark workers put on theirs (D069).
 
     It starts with the prefix and ends with the suffix, whichever are set, and its last line is not a quote.
+
+    Returns:
+        True if it carries them all; False for an empty body, or when neither prefix nor suffix is set.
     """
     text = body.strip()
     if not text or (not prefix and not suffix):
@@ -509,6 +584,14 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
     return found
 
 
+def stopped(conn: sqlite3.Connection) -> list[str]:
+    """Return every ticket the operator stopped, by key: what the overseer decides nothing about (DESIGN §22)."""
+    rows = conn.execute(
+        "SELECT subject_id FROM starts WHERE subject_kind = ? AND status = 'stopped' ORDER BY subject_id", (TICKET,)
+    ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
 def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[sqlite3.Row]:
     """Return a ticket's operator messages newer than message id `after`, oldest first."""
     return conn.execute(
@@ -519,10 +602,11 @@ def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> l
 
 
 def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, object] | None:
-    """Return a private ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
+    """Return a started ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
-    Messages from before the operator forgot the ticket's work are not new, whatever the cursor says.
+    Messages from before the operator forgot the ticket's work are not new, whatever the cursor says. A stopped ticket
+    is not asked for: the block names it only by key (`stopped`).
     """
     key = str(ticket["key"])
     record = start_of(conn, key)
@@ -532,7 +616,6 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
     forgotten = int(ticket["forgotten_message_id"] or 0)
     question = latest_question(conn, key)
     return {
-        "status": record["status"],
         "started_at": record["started_at"],
         "message_cursor": cursor or None,
         "new_operator_messages": [
@@ -569,7 +652,11 @@ def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str,
 
 
 def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
-    """Whether the operator has written to a ticket in canopy since any forget: what its worker must hear (D093)."""
+    """Whether the operator has written to a ticket in canopy since any forget: what its worker must hear (D093).
+
+    Returns:
+        True if the ticket has an operator message newer than its last forget.
+    """
     return bool(operator_messages_after(conn, key, db.forgotten_message_id(conn, key)))
 
 
@@ -660,7 +747,8 @@ def run_messages(status: str, result_json: str | None) -> list[tuple[str, str]]:
 def close_run(conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> bool:
     """Close a running run as `status`, recording its messages and its `run.ended` event with it, in one transaction.
 
-    Returns False if it was already closed: nothing is recorded.
+    Returns:
+        True if this closed the run. False if it was already closed: nothing is recorded.
     """
     return db.finish_run(
         conn,
@@ -673,7 +761,11 @@ def close_run(conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status
 
 
 def printable(text: str) -> str:
-    """`text` without control characters, line breaks kept: a message shown on a terminal cannot move the cursor."""
+    """`text` without control characters, line breaks kept: a message shown on a terminal cannot move the cursor.
+
+    Returns:
+        `text` with CRLF made LF and every other unprintable character made a space.
+    """
     return "".join(c if c.isprintable() or c == "\n" else " " for c in text.replace("\r\n", "\n"))
 
 

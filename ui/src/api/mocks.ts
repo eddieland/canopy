@@ -98,7 +98,7 @@ export const mockChores: ChoreSummary[] = [
             session_id: 'ses_chore2',
             cost_usd: 0.26,
             tokens: 11960,
-            log_path: '/home/op/.canopy/chores/2.log',
+            log_path: '/home/op/.canopy/chore-runs/deps/2.log',
         },
         due_at: '2026-10-08T14:00:00Z',
         findings: [
@@ -108,6 +108,7 @@ export const mockChores: ChoreSummary[] = [
                 detail: "web's lockfile pins lodash 4.17.20 through an old date picker; 4.17.21 fixes it.",
                 link: 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm',
                 since: '2026-10-08T08:00:00Z',
+                dismissed: false,
             },
         ],
         latest_note_id: 8,

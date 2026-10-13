@@ -71,19 +71,31 @@ class Sessions:
         return self._key is None
 
     def secret_matches(self, given: str) -> bool:
-        """Whether `given` is the listener secret, compared in constant time."""
+        """Whether `given` is the listener secret, compared in constant time.
+
+        Returns:
+            True if it is. An open server takes any secret.
+        """
         if self._key is None:
             return True
         return hmac.compare_digest(hashlib.sha256(given.encode()).digest(), hashlib.sha256(self._key).digest())
 
     def issue(self) -> str:
-        """A new session cookie's value."""
+        """A new session cookie's value.
+
+        Returns:
+            The format version, the issue time, a random nonce, and their signature, joined by dots.
+        """
         issued = int(self._clock())
         nonce = secrets.token_urlsafe(16)
         return f"{_VERSION}.{issued}.{nonce}.{self._sign('session', issued, nonce)}"
 
     def check(self, value: str | None) -> Signed | None:
-        """The session a cookie value names, or None if it is missing, malformed, forged, or older than 30 days."""
+        """The session a cookie value names, or None if it is missing, malformed, forged, or older than 30 days.
+
+        Returns:
+            When the session was issued, and its nonce. Always None on an open server.
+        """
         if value is None or self._key is None:
             return None
         parts = value.split(".")
@@ -97,7 +109,11 @@ class Sessions:
         return Signed(issued, nonce)
 
     def token(self, session: Signed) -> str:
-        """The token `session`'s writes carry."""
+        """The token `session`'s writes carry.
+
+        Returns:
+            A signature over the session's issue time and nonce, under a label of its own, in URL-safe base64.
+        """
         return self._sign("write", session.issued, session.nonce)
 
     def _sign(self, label: str, issued: int, nonce: str) -> str:
@@ -107,7 +123,11 @@ class Sessions:
         return base64.urlsafe_b64encode(digest).decode().rstrip("=")
 
     def of(self, request: Request) -> Signed | None:
-        """The session `request`'s cookie names, if it is a valid one."""
+        """The session `request`'s cookie names, if it is a valid one.
+
+        Returns:
+            The session, or None without a valid cookie.
+        """
         return self.check(request.cookies.get(self.cookie_name))
 
     def require(self, request: Request) -> None:

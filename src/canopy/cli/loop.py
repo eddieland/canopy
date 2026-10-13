@@ -12,8 +12,8 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import chore_view, contract, conversation, db, pause
-from canopy.infra import keys, lock
-from canopy.loop import attention, repeat, tick
+from canopy.infra import hangup, keys, lock
+from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ SUMMARY_WIDTH = 160
     "--every",
     type=click.IntRange(min=1),
     metavar="MINUTES",
-    help="Minutes to wait after each tick ends. Default: loop.interval_minutes.",
+    help="Minutes to wait after each tick ends, kept on a reload. Default: loop.interval_minutes.",
 )
 @click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
 @click.option(
@@ -52,20 +52,29 @@ def cmd_loop(
     defer: int | None,
     no_serve: bool,
 ) -> int:
-    """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to."""
+    """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to.
+
+    SIGHUP reads the config again, once the running tick ends.
+    """
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
     stop = repeat.Stop()
+    reload = reread.Reload()
     console = Console(highlight=False)
     # Keys only when the countdown is drawn: with output to a file, there is no one at the terminal to tell about them.
-    with repeat.signals(stop), keys.listen(sys.stdin if console.is_terminal else None) as pressed:
+    with (
+        hangup.watch() as hung_up,
+        repeat.signals(stop, reload, hung_up=hung_up),
+        keys.listen(sys.stdin if console.is_terminal else None) as pressed,
+    ):
         try:
             repeat.run(
                 ctx,
                 dry_run=dry_run,
-                interval_minutes=every or ctx.config.loop.interval_minutes,
+                interval_minutes=every,
                 max_ticks=max_ticks,
                 console=console,
                 stop=stop,
+                reload=reload,
                 serve=ctx.config.serve.enabled and not no_serve,
                 keys=pressed,
                 defer_minutes=defer,
@@ -162,7 +171,11 @@ def _print_started(ctx: Context) -> None:
 
 
 def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
-    """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen."""
+    """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen.
+
+    Returns:
+        The phase to print. When none is recorded, a note naming the last decision about the ticket, if there is one.
+    """
     if ticket["phase"]:
         return str(ticket["phase"])
     decided = db.last_decision_of(conn, str(ticket["key"]))
@@ -206,45 +219,71 @@ def _print_recent_runs(ctx: Context) -> None:
 
 
 def result_of(run: sqlite3.Row) -> dict[str, object]:
-    """A run's stored result as an object; {} when it has none or it does not parse."""
+    """A run's stored result as an object; {} when it has none or it does not parse.
+
+    Returns:
+        The parsed `result_json`, its values still untrusted, or {} when it is empty, not JSON, or not an object.
+    """
     return contract.stored_object(run["result_json"])
 
 
 def prs_of(result: dict[str, object]) -> list[str]:
-    """The PRs a run's result named, each a plain https:// URL; anything else is not printed."""
+    """The PRs a run's result named, each a plain https:// URL; anything else is not printed.
+
+    Returns:
+        The plain URLs among the result's `prs` values, or its `pr` when `prs` is not an object.
+    """
     return contract.stored_prs(result)
 
 
 def named(key: object, title: object) -> str:
-    """A ticket as a line names it: `PROJ-1: <its title>`, or its key alone before the overseer names it."""
+    """A ticket as a line names it: `PROJ-1: <its title>`, or its key alone before the overseer names it.
+
+    Returns:
+        The key and its title fit for one line, or the key alone when `title` is empty or None.
+    """
     return f"{key}: {one_line(str(title))}" if title else str(key)
 
 
 def one_line(text: str) -> str:
-    """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut."""
+    """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut.
+
+    Returns:
+        The flattened text, cut to `SUMMARY_WIDTH` characters and ended with "..." when longer.
+    """
     flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
     return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
 
 
 def spent(row: sqlite3.Row) -> str:
-    """What a run or a tick cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing."""
+    """What a run or a tick cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing.
+
+    Returns:
+        The cost with two leading spaces, to append to a line, or "" when `row` records no usage.
+    """
     usage = db.usage_of(row)
     return f"  {usage.describe()}" if usage is not None else ""
 
 
 def _print_chores(ctx: Context) -> None:
-    """A line per configured chore; nothing at all when there are none (DESIGN §19)."""
+    """A line per configured chore, with how many findings the operator dismissed; nothing when there are none (§19)."""
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     if not states:
         return
     click.echo(f"\nChores ({len(db.running_chore_runs(ctx.conn))}/{ctx.config.capacity.max_chores} running):")
     now = datetime.now(UTC)
     for state in states:
-        click.echo(f"  {state.name}  {chore_line(state, now)}")
+        dismissed = sum(f.dismissed for f in state.findings())
+        note = f"; {dismissed} finding{'s' if dismissed != 1 else ''} dismissed" if dismissed else ""
+        click.echo(f"  {state.name}  {chore_line(state, now)}{note}")
 
 
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
-    """A chore's state on one line: running, or its last run and when it is due."""
+    """A chore's state on one line: running, or its last run and when it is due.
+
+    Returns:
+        How long the chore has been running, or its last run's status and age and when it is next due, as of `now`.
+    """
     if state.running is not None:
         return f"running for {attention.age(str(state.running['started_at']), now)}"
     latest = state.latest

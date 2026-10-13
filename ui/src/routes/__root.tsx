@@ -19,7 +19,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 function NotFound() {
     return (
         <>
-            <PageHeader label="404" title="Nothing here" />
+            <PageHeader root="404" title="Nothing here" />
             <Panel>
                 <Placeholder>
                     <Link to="/attention" className="text-accent underline-offset-4 hover:underline">

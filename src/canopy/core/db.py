@@ -93,22 +93,38 @@ class Migration:
 
 
 def format_time(moment: datetime) -> str:
-    """UTC, millisecond precision, the same shape as the schema's own defaults."""
+    """UTC, millisecond precision, the same shape as the schema's own defaults.
+
+    Returns:
+        `moment` in UTC as `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+    """
     return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 def parse_time(stamp: str) -> datetime:
-    """Read a timestamp the journal wrote, as an aware UTC datetime."""
+    """Read a timestamp the journal wrote, as an aware UTC datetime.
+
+    Returns:
+        The moment `stamp` names, with its timezone set to UTC.
+    """
     return datetime.fromisoformat(stamp).astimezone(UTC)
 
 
 def now() -> str:
-    """The current time as the journal stores it."""
+    """The current time as the journal stores it.
+
+    Returns:
+        Now, in the shape `format_time` writes.
+    """
     return format_time(datetime.now(UTC))
 
 
 def connect(path: Path) -> sqlite3.Connection:
-    """Open the journal at `path` in WAL mode with foreign keys on, creating its directory."""
+    """Open the journal at `path` in WAL mode with foreign keys on, creating its directory.
+
+    Returns:
+        An autocommit connection whose rows are `sqlite3.Row`. The caller closes it.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, autocommit=True, timeout=10)
     conn.row_factory = sqlite3.Row
@@ -119,7 +135,11 @@ def connect(path: Path) -> sqlite3.Connection:
 
 
 def discover(migrations_dir: Path) -> list[Migration]:
-    """Return the migrations in `migrations_dir`, checking names and numbering."""
+    """Return the migrations in `migrations_dir`, checking names and numbering.
+
+    Raises:
+        MigrationError: A file name is not `NNNN_name.sql`, or the versions are not 1, 2, 3, ... with no gaps.
+    """
     found: list[Migration] = []
     for path in sorted(migrations_dir.glob("*.sql")):
         m = _MIGRATION_RE.fullmatch(path.name)
@@ -145,7 +165,15 @@ def transaction(conn: sqlite3.Connection) -> Generator[None]:
 
 
 def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
-    """Apply pending migrations in order, in one transaction. Returns the versions applied."""
+    """Apply pending migrations in order, in one transaction. Returns the versions applied.
+
+    Returns:
+        The versions this call applied, in order; empty when the journal was already current.
+
+    Raises:
+        MigrationError: The migration files are misnamed or misnumbered, the journal has migrations this canopy does
+            not know, or a run an earlier canopy started is still alive while there is something to apply.
+    """
     known = discover(migrations_dir)
     applied_now: list[int] = []
     # IMMEDIATE takes the write lock before reading what is applied, so two processes cannot both apply a migration.
@@ -177,6 +205,9 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     """Refuse to migrate while a `_run` is alive: it was started by an earlier canopy, which wrote the old schema.
 
     A run whose `_run` is gone does not count; the next tick's reconcile closes it (DESIGN §6).
+
+    Raises:
+        MigrationError: A run, chore run, or review run is `running` and its process is alive.
     """
     live: list[str] = []
     # Every table of detached runs: each process writes its own row when it ends.
@@ -185,9 +216,9 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
         if not exists:
             continue
         # The table name comes from the fixed list above, never from input.
-        sql = f"SELECT id, pid FROM {table} WHERE status = 'running' AND pid IS NOT NULL ORDER BY id"  # noqa: S608
+        sql = f"SELECT id, pid, log_path FROM {table} WHERE status = 'running' ORDER BY id"  # noqa: S608
         rows = conn.execute(sql)
-        live += [f"{what} {r['id']}" for r in rows if procs.alive(int(r["pid"]))]
+        live += [f"{what} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
     if live:
         runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(
@@ -197,7 +228,11 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
 
 
 def record_event(conn: sqlite3.Connection, event: Event) -> int:
-    """Add `event` to the outbox and return its id. Inside a transaction, it commits or rolls back with the fact."""
+    """Add `event` to the outbox and return its id. Inside a transaction, it commits or rolls back with the fact.
+
+    Returns:
+        The new `notify_events` row's id.
+    """
     cur = conn.execute(
         "INSERT INTO notify_events (grp, kind, at, fields) VALUES (?, ?, ?, ?)",
         (event.group, event.kind, now(), json.dumps(dict(event.fields))),
@@ -215,7 +250,11 @@ def _rowid(cur: sqlite3.Cursor) -> int:
 
 
 def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
-    """Insert a `running` tick row and return its id."""
+    """Insert a `running` tick row and return its id.
+
+    Returns:
+        The new tick's id.
+    """
     cur = conn.execute("INSERT INTO ticks (started_at, dry_run) VALUES (?, ?)", (now(), int(dry_run)))
     return _rowid(cur)
 
@@ -257,7 +296,11 @@ _RUN_TABLES = ("runs", "chore_runs", "review_runs")
 
 
 def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
-    """Whether any run, chore run, or review run started or ended after `since`, a time the journal wrote (§6)."""
+    """Whether any run, chore run, or review run started or ended after `since`, a time the journal wrote (§6).
+
+    Returns:
+        True if at least one did.
+    """
     return any(
         conn.execute(
             f"SELECT 1 FROM {table} WHERE started_at > ? OR ended_at > ? LIMIT 1",  # noqa: S608
@@ -268,7 +311,11 @@ def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
 
 
 def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
-    """Whether any run, chore run, or review run ended after `since`, a time the journal wrote (§6)."""
+    """Whether any run, chore run, or review run ended after `since`, a time the journal wrote (§6).
+
+    Returns:
+        True if at least one did.
+    """
     return any(
         conn.execute(f"SELECT 1 FROM {table} WHERE ended_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
         for table in _RUN_TABLES
@@ -276,7 +323,11 @@ def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
 
 
 def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
-    """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6)."""
+    """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6).
+
+    Returns:
+        One tuple per ticket and per unit. Two snapshots are equal when nothing in them changed.
+    """
     tickets = conn.execute(
         "SELECT 'ticket', key, phase, branch, last_comment_id, last_message_id, last_mirrored_id, done FROM tickets"
     )
@@ -287,13 +338,21 @@ def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
 
 
 def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:
-    """The newest message the latest `ok` tick read, or None before the first `ok` tick that recorded one (§22)."""
+    """The newest message the latest `ok` tick read, or None before the first `ok` tick that recorded one (§22).
+
+    Returns:
+        That message's id, or None.
+    """
     row = conn.execute("SELECT message_id FROM ticks WHERE status = 'ok' ORDER BY id DESC LIMIT 1").fetchone()
     return None if row is None or row[0] is None else int(row[0])
 
 
 def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
-    """Close ticks left `running` by a tick process that died. Call only while holding the tick lock."""
+    """Close ticks left `running` by a tick process that died. Call only while holding the tick lock.
+
+    Returns:
+        The ids of the ticks marked `abandoned`.
+    """
     ids = [int(r[0]) for r in conn.execute("SELECT id FROM ticks WHERE status = 'running'")]
     conn.executemany(
         "UPDATE ticks SET ended_at = ?, status = 'abandoned', summary = 'the tick process exited without finishing' "
@@ -445,6 +504,9 @@ def insert_run(
     pushes nothing (DESIGN §18). `started` builds the `run.started` event from the run's id, recorded in the same
     transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check` runs
     first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
+
+    Returns:
+        The new run's id.
     """
     with transaction(conn):
         if check is not None:
@@ -506,6 +568,9 @@ def claim_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
 
     `canopy dispatch` claims with the pid it spawned, and `canopy _run` claims with its own, which is the same pid; a
     second `_run` for the same run has a different one and is refused.
+
+    Returns:
+        True if `pid` now holds the run; False if the run is not running or another pid holds it.
     """
     cur = conn.execute(
         "UPDATE runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
@@ -538,6 +603,9 @@ def finish_run(
     `messages` are the run's `(kind, body)` messages about its ticket (DESIGN §22), recorded in order. `event` builds
     the `run.ended` event from the id of the last of them, or None if there are none. Nothing changes for a run already
     closed.
+
+    Returns:
+        True if this call closed the run.
     """
     with transaction(conn):
         ended = now()
@@ -570,6 +638,11 @@ def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | No
     _set_report(conn, "ticks", tick_id, session_id, usage)
 
 
+def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
+    """Record a tick's overseer session while it runs, before what it cost is known (§6, §13)."""
+    conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
+
+
 def set_chore_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
     """Record what the agent runtime reported about a chore run: its session, and what it cost (§13, §19)."""
     _set_report(conn, "chore_runs", run_id, session_id, usage)
@@ -581,7 +654,11 @@ def set_review_run_report(conn: sqlite3.Connection, run_id: int, session_id: str
 
 
 def usage_of(row: sqlite3.Row) -> Usage | None:
-    """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing."""
+    """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
+
+    Returns:
+        The row's cost and token counts, a missing count read as 0, or None when it has no cost.
+    """
     if row["cost_usd"] is None:
         return None
     return agent_output.Usage(
@@ -617,6 +694,9 @@ def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
     """What every agent run that started at or after `since` cost; None when none of them reported one (§13).
 
     Worker and split runs, chore runs, review runs, and each tick's overseer: every table an agent run records on.
+
+    Returns:
+        The total cost in US dollars, or None when no such run reported one.
     """
     row = conn.execute(
         "SELECT (SELECT SUM(cost_usd) FROM runs WHERE started_at >= ?), "
@@ -662,6 +742,9 @@ def record_decision(
 
     `repo` is set for an item about a repository, `chore` for a decision about a chore, which has no ticket key, and
     `pr` for a decision about a PR the loop reviews, which has a ticket key only for one of the loop's own PRs.
+
+    Returns:
+        The new decision's id.
     """
     cur = conn.execute(
         "INSERT INTO decisions (tick_id, ticket_key, action, rationale, repo, chore, pr) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -673,8 +756,14 @@ def record_decision(
 # Chore runs (DESIGN §19)
 
 
-def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int, chore: str, logs_dir: Path) -> int:
-    """Insert a `running` chore run with no pid yet, logging to `<logs_dir>/<id>.log`, and return its id."""
+def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: str, logs_dir: Path) -> int:
+    """Insert a `running` chore run with no pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
+
+    `tick_id` is the tick whose overseer started the run, or None for one the operator started with `canopy chore try`.
+
+    Returns:
+        The new chore run's id.
+    """
     with transaction(conn):
         cur = conn.execute(
             "INSERT INTO chore_runs (tick_id, chore, started_at, log_path) VALUES (?, ?, ?, '')",
@@ -692,7 +781,11 @@ def get_chore_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
 
 
 def claim_chore_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running chore run; only the first process to claim it gets it."""
+    """Record `pid` as the process working a running chore run; only the first process to claim it gets it.
+
+    Returns:
+        True if `pid` now holds the chore run; False if it is not running or another pid holds it.
+    """
     cur = conn.execute(
         "UPDATE chore_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
         (pid, run_id, pid),
@@ -708,7 +801,11 @@ def set_chore_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None
 def finish_chore_run(
     conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
 ) -> bool:
-    """Close a running chore run, recording `event` with it. Returns False if it was already closed."""
+    """Close a running chore run, recording `event` with it. Returns False if it was already closed.
+
+    Returns:
+        True if this call closed the chore run.
+    """
     with transaction(conn):
         cur = conn.execute(
             "UPDATE chore_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
@@ -735,6 +832,32 @@ def chore_runs(
     ).fetchall()
 
 
+def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
+    """Return when the operator dismissed each of `chore`'s findings it dismissed, by finding id (DESIGN §19)."""
+    rows = conn.execute("SELECT finding_id, dismissed_at FROM finding_dismissals WHERE chore = ?", (chore,))
+    return {str(r["finding_id"]): str(r["dismissed_at"]) for r in rows}
+
+
+def set_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str, *, channel: str) -> None:
+    """Record that the operator dismissed `chore`'s finding `finding_id` now, replacing an earlier dismissal of it."""
+    conn.execute(
+        "INSERT INTO finding_dismissals (chore, finding_id, dismissed_at, channel) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (chore, finding_id) DO UPDATE SET "
+        "dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+        (chore, finding_id, now(), channel),
+    )
+
+
+def delete_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str) -> bool:
+    """Take back the operator's dismissal of `chore`'s finding `finding_id`.
+
+    Returns:
+        Whether there was one to take back.
+    """
+    cur = conn.execute("DELETE FROM finding_dismissals WHERE chore = ? AND finding_id = ?", (chore, finding_id))
+    return cur.rowcount > 0
+
+
 # Review runs (DESIGN §21)
 
 
@@ -748,7 +871,11 @@ def insert_review_run(
     repo: str | None,
     logs_dir: Path,
 ) -> int:
-    """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id."""
+    """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
+
+    Returns:
+        The new review run's id.
+    """
     with transaction(conn):
         cur = conn.execute(
             "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, repo, started_at, log_path) "
@@ -782,7 +909,11 @@ def get_review_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
 
 
 def claim_review_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running review run; only the first process to claim it gets it."""
+    """Record `pid` as the process working a running review run; only the first process to claim it gets it.
+
+    Returns:
+        True if `pid` now holds the review run; False if it is not running or another pid holds it.
+    """
     cur = conn.execute(
         "UPDATE review_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
         (pid, run_id, pid),
@@ -798,7 +929,11 @@ def set_review_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> Non
 def finish_review_run(
     conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
 ) -> bool:
-    """Close a running review run, recording `event` with it. Returns False if it was already closed."""
+    """Close a running review run, recording `event` with it. Returns False if it was already closed.
+
+    Returns:
+        True if this call closed the review run.
+    """
     with transaction(conn):
         cur = conn.execute(
             "UPDATE review_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
@@ -828,6 +963,38 @@ def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row
 def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
     """Return the review runs started at or after `since`, newest first."""
     return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
+
+
+def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[sqlite3.Row]]:
+    """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
+    found: dict[str, list[sqlite3.Row]] = {}
+    marks = ", ".join("?" * len(pr_urls))
+    query = f"SELECT * FROM review_runs WHERE pr_url IN ({marks}) ORDER BY id DESC"  # noqa: S608  (only `?`s)
+    # SQLite takes an empty list, `IN ()`, as matching nothing.
+    for row in conn.execute(query, tuple(pr_urls)):
+        found.setdefault(str(row["pr_url"]), []).append(row)
+    return found
+
+
+def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
+    """Return the `limit` PRs with the most recent activity, newest first; with `url`, only that one (DESIGN §22).
+
+    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, or by a review run, whose activity
+    is its start or end. Each row has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`,
+    and the ticket's `title`, all NULL for a PR no unit records. Decisions are not a source: they are many, and not
+    indexed by PR.
+    """
+    return conn.execute(
+        "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title "
+        "FROM ("
+        "  SELECT u.pr_url AS url, t.last_seen_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
+        "  WHERE u.pr_url IS NOT NULL"
+        "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
+        ") k "
+        "LEFT JOIN ticket_units u ON u.pr_url = k.url LEFT JOIN tickets t ON t.key = u.ticket_key "
+        "WHERE ? IS NULL OR k.url = ? GROUP BY k.url ORDER BY active_at DESC, k.url LIMIT ?",
+        (url, url, limit),
+    ).fetchall()
 
 
 # Split children
@@ -879,6 +1046,11 @@ def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqli
     return conn.execute(
         "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
     ).fetchall()
+
+
+def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` decisions that name the PR at `url`, across ticks, newest first."""
+    return conn.execute("SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)).fetchall()
 
 
 def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
@@ -935,6 +1107,9 @@ def insert_message(
 
     A submission already recorded for the subject records nothing new: its message's id is returned instead. So does a
     tracker comment already mirrored for the subject.
+
+    Returns:
+        The id of the new message, or of the one already recorded for the submission or comment.
     """
     if submission is not None:
         found = conn.execute(

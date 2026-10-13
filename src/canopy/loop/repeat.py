@@ -16,6 +16,10 @@ While the operator has paused the loop (`core.pause`), the wait does not end at 
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
 `canopy pause` and `canopy resume` write the same journal row, which the wait reads at every step.
 
+SIGHUP, or the web UI's settings page, asks the loop to read its config again (`reread`). The wait applies it at its
+next step; a tick running when it is asked for finishes first, on the config it started with. A config that does not
+load leaves the loop on the one it had, and says why. A terminal hanging up still ends the loop (`signals`).
+
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
 terminal; with output sent to a file, the loop prints one block per tick and nothing in between. Each tick's block ends
 with what its overseer cost, when the runtime reported it.
@@ -23,12 +27,13 @@ with what its overseer cost, when the runtime reported it.
 
 from __future__ import annotations
 
+import os
 import signal
 import time
 from collections import Counter
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
@@ -37,17 +42,19 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from canopy.core import db, pause
+from canopy.core import config, db, pause
 from canopy.infra import lock, logs, resources
-from canopy.loop import attention, pacing, tick
+from canopy.loop import attention, pacing, reread, tick
 
 if TYPE_CHECKING:
     from types import FrameType
 
     from rich.console import Console
 
+    from canopy.core.config import Config
     from canopy.core.context import Context
     from canopy.loop import web
+    from canopy.serve.backend import Backend
 
 LOCK_FILE_NAME = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
@@ -95,12 +102,22 @@ class Stop:
 
 
 @contextmanager
-def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Generator[None]:
+def signals(
+    stop: Stop,
+    reload: reread.Reload | None = None,
+    *,
+    clock: Callable[[], float] = time.monotonic,
+    hung_up: Callable[[], bool] = lambda: False,
+) -> Generator[None]:
     """Make SIGINT and SIGTERM ask the loop to stop once the current tick ends, instead of killing it.
 
     A second signal raises KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process
     group, and the next tick closes the tick row as `abandoned`. Workers already dispatched are detached and keep going.
     A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
+
+    With `reload`, SIGHUP asks the loop to read its config again instead of ending it. A terminal hanging up sends
+    SIGHUP too: when `hung_up()` says it did, the loop ends as SIGHUP always ended it, unless SIGHUP was ignored on
+    entry, as under `nohup`, where the loop is meant to outlive its terminal and a reload does no harm.
     """
 
     def handle(_signum: int, _frame: FrameType | None) -> None:
@@ -110,7 +127,14 @@ def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Gener
         elif now - stop.requested_at >= SAME_SIGNAL_SECONDS:
             raise KeyboardInterrupt
 
-    previous = {s: signal.signal(s, handle) for s in (signal.SIGINT, signal.SIGTERM)}
+    handlers: dict[signal.Signals, Callable[[int, FrameType | None], None]] = {
+        signal.SIGINT: handle,
+        signal.SIGTERM: handle,
+    }
+    if reload is not None:
+        ignored = signal.getsignal(signal.SIGHUP) is signal.SIG_IGN
+        handlers[signal.SIGHUP] = _on_hangup(reload, hung_up, ignored=ignored)
+    previous = {s: signal.signal(s, handler) for s, handler in handlers.items()}
     try:
         yield
     finally:
@@ -118,34 +142,59 @@ def signals(stop: Stop, *, clock: Callable[[], float] = time.monotonic) -> Gener
             signal.signal(s, handler)
 
 
+def _on_hangup(
+    reload: reread.Reload, hung_up: Callable[[], bool], *, ignored: bool
+) -> Callable[[int, FrameType | None], None]:
+    """SIGHUP's handler: a reload, unless the terminal hung up and SIGHUP was not `ignored` before the loop started.
+
+    Returns:
+        The handler, to install with `signal.signal`.
+    """
+
+    def handle(_signum: int, _frame: FrameType | None) -> None:
+        if not ignored and hung_up():
+            # No one is left to read the loop's output. End at once, as SIGHUP did before the loop handled it.
+            signal.signal(signal.SIGHUP, signal.SIG_DFL)
+            os.kill(os.getpid(), signal.SIGHUP)
+            return
+        reload.request()
+
+    return handle
+
+
 def run(
     ctx: Context,
     *,
     dry_run: bool,
-    interval_minutes: int,
+    interval_minutes: int | None,
     max_ticks: int | None,
     console: Console,
     stop: Stop,
+    reload: reread.Reload | None = None,
     serve: bool = False,
     keys: Callable[[], str] | None = None,
     defer_minutes: int | None = None,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> Counter[str]:
-    """Run ticks until `stop` is requested or `max_ticks` have run. Returns how many ticks ended in each status.
+    """Run ticks until `stop` is requested or `max_ticks` have run.
 
-    With `serve`, the web UI is served from a thread for as long as the loop runs (DESIGN §22). `keys` returns the keys
-    pressed since it was last called (`infra.keys.listen`); with it, `TICK_NOW_KEY` during the wait ticks at once and
-    `PAUSE_KEY` pauses or resumes. With `defer_minutes`, the first tick waits that long, as the wait between ticks does.
-    While the loop is paused, no tick starts but one `TICK_NOW_KEY` asks for.
+    `interval_minutes` is `--every`'s; None waits `loop.interval_minutes`. With `serve`, the web UI is served from a
+    thread for as long as the loop runs (DESIGN §22). `keys` returns the keys pressed since it was last called
+    (`infra.keys.listen`); with it, `TICK_NOW_KEY` during the wait ticks at once and `PAUSE_KEY` pauses or resumes. With
+    `defer_minutes`, the first tick waits that long, as the wait between ticks does. While the loop is paused, no tick
+    starts but one `TICK_NOW_KEY` asks for. A reload asked for through `reload`, by `signals` or the web UI, reads the
+    config again between ticks: the next tick, the pace, and the web UI run on it, and `--every` still holds.
+
+    Returns:
+        How many ticks ended in each status.
 
     Raises:
         lock.LockBusyError: another loop holds `<state_dir>/loop.lock`.
     """
     log = logs.for_tick(None)
     statuses: Counter[str] = Counter()
-    idle_max_minutes = ctx.config.loop.idle_max_minutes
-    pace = pacing.Pace(base_seconds=interval_minutes * 60, cap_seconds=idle_max_minutes * 60)
+    settings = _Settings(ctx, _pace(ctx.config, interval_minutes), interval_minutes, reload or reread.Reload(), console)
     with lock.hold(ctx.state_dir / LOCK_FILE_NAME):
         # The loop reads the journal before its first tick, which is what would otherwise migrate it.
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -153,10 +202,11 @@ def run(
             "loop started",
             extra={
                 "dry_run": dry_run,
-                "interval_minutes": interval_minutes,
-                "idle_max_minutes": idle_max_minutes,
+                "interval_minutes": round(settings.pace.base_seconds / 60),
+                "idle_max_minutes": ctx.config.loop.idle_max_minutes,
                 "defer_minutes": defer_minutes,
                 "repo": ctx.repo,
+                "pid": os.getpid(),
             },
         )
         serving = None
@@ -165,23 +215,23 @@ def run(
             # other `canopy` command, the ones the overseer and workers run included.
             from canopy.loop import web  # noqa: PLC0415
 
-            serving = web.start(ctx, log)
+            serving = web.start(ctx, log, settings.reload)
+            settings.backend = serving.backend
         try:
             _header(
                 console,
                 ctx,
                 dry_run=dry_run,
-                pace=pace,
+                pace=settings.pace,
                 max_ticks=max_ticks,
                 serving=serving,
                 keys=keys is not None,
                 defer_seconds=(defer_minutes or 0) * 60,
             )
             _ticks(
-                ctx,
+                settings,
                 statuses,
                 dry_run=dry_run,
-                pace=pace,
                 max_ticks=max_ticks,
                 console=console,
                 stop=stop,
@@ -201,12 +251,70 @@ def run(
     return statuses
 
 
+def _pace(cfg: Config, every: int | None) -> pacing.Pace:
+    """What the loop waits after a tick: `--every`, else `loop.interval_minutes`, and the idle cap.
+
+    Returns:
+        The base wait and the idle cap, in seconds.
+    """
+    return pacing.Pace(
+        base_seconds=(every or cfg.loop.interval_minutes) * 60,
+        cap_seconds=cfg.loop.idle_max_minutes * 60,
+    )
+
+
+@dataclass
+class _Settings:
+    """What the loop runs on, its context and its pace, replaced when the operator asks it to read its config again."""
+
+    ctx: Context
+    pace: pacing.Pace
+    every: int | None  # `--every`, which a reload keeps
+    reload: reread.Reload
+    console: Console
+    backend: Backend | None = None  # the web UI's, which serves the new config too
+
+    def apply(self) -> None:
+        """Read the config again, if asked to. A config that does not load leaves everything as it was, and says why."""
+        if not self.reload.requested:
+            return
+        self.reload.requested = False
+        log = logs.for_tick(None)
+        try:
+            found = reread.load(self.ctx)
+        except config.ConfigError as e:
+            log.warning("config not reloaded", extra={"error": str(e)})
+            self.console.print(_stamped(Text("config not reloaded", style="bold red"), f"; kept the one it had: {e}"))
+            return
+        pace = _pace(found.config, self.every)
+        self.ctx = replace(self.ctx, config=found.config, ws=found.ws)
+        if self.backend is not None:
+            self.backend.use(found.config, found.ws)
+        log.info("config reloaded", extra={"changed": list(found.changed), "restart": list(found.restart)})
+        what = f"{', '.join(found.changed)} changed" if found.changed else "nothing changed"
+        self.console.print(_stamped(Text("config reloaded", style="bold green"), f"  {what}"))
+        if found.restart:
+            later = f"  {', '.join(found.restart)} take{'s' if len(found.restart) == 1 else ''} effect on a restart"
+            self.console.print(Text(later, style="yellow"))
+        if pace != self.pace:
+            self.console.print(Text(f"  pace  {_pace_note(pace)}", style="dim"))
+        self.pace = pace
+
+
+def _stamped(label: Text, rest: str) -> Text:
+    """A line of the loop's own, outside any tick's block: the time, `label`, and `rest` as plain text.
+
+    Returns:
+        The line, the local time dimmed.
+    """
+    return Text.assemble((datetime.now(UTC).astimezone().strftime("%H:%M:%S"), "dim"), "  ", label, rest)
+
+
 def _ticks(
-    ctx: Context,
+    settings: _Settings,
     statuses: Counter[str],
     *,
     dry_run: bool,
-    pace: pacing.Pace,
     max_ticks: int | None,
     console: Console,
     stop: Stop,
@@ -216,24 +324,51 @@ def _ticks(
     clock: Callable[[], float],
     log: logs.TickAdapter,
 ) -> None:
-    """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status."""
+    """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status.
+
+    The context and the pace are `settings`', read at the start of each tick: a reload during the wait applies to the
+    next tick and the waits after it, not to the wait it happens in.
+    """
+    ctx = settings.ctx
+    conn = ctx.conn  # a reload keeps the journal's connection
     woken_by: WokenBy = "start"
     if defer_seconds:
-        woken_by = _defer(console, ctx, stop, defer_seconds, keys=keys, sleep=sleep, clock=clock, log=log) or "start"
+        woken_by = (
+            _defer(
+                console,
+                ctx,
+                stop,
+                defer_seconds,
+                keys=keys,
+                sleep=sleep,
+                clock=clock,
+                log=log,
+                each_step=settings.apply,
+            )
+            or "start"
+        )
     elif pause.paused(ctx.conn) is not None:
         # Paused before the loop started: hold the first tick as a wait already due holds.
-        woken = _wait(console, ctx, stop, clock(), sleep=sleep, clock=clock, keys=keys, log=log)
+        woken = _wait(
+            console, ctx, stop, clock(), sleep=sleep, clock=clock, keys=keys, log=log, each_step=settings.apply
+        )
         _log_woken(log, woken, seen=0, read_at=None)
         woken_by = woken or "start"
     idle_count = 0
     while not stop.requested:
+        settings.apply()
+        ctx, pace = settings.ctx, settings.pace
         before = pacing.before(ctx)
         # Operator messages to a ticket newer than this wake the wait after this tick: every channel records one the
         # same way. A note to a chore waits for the chore's next run.
         seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
         started = clock()
-        with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
-            outcome = _tick(ctx, dry_run=dry_run, log=log)
+        settings.reload.ticking = True
+        try:
+            with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
+                outcome = _tick(ctx, dry_run=dry_run, log=log)
+        finally:
+            settings.reload.ticking = False
         ended = clock()
         if keys is not None:
             # Keys pressed during the tick are dropped, all but a pause, which holds the next tick.
@@ -258,9 +393,9 @@ def _ticks(
         read_at = pacing.read_at(ctx, outcome) if pace.on else None
 
         def wake(seen: int = seen, read_at: str | None = read_at) -> Woken | None:
-            if db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen:
+            if db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen:
                 return "message"
-            return "run" if read_at is not None and db.runs_ended_after(ctx.conn, read_at) else None
+            return "run" if read_at is not None and db.runs_ended_after(conn, read_at) else None
 
         woken = _wait(
             console,
@@ -273,6 +408,7 @@ def _ticks(
             earliest=started + WAKE_MIN_SECONDS,
             keys=keys,
             log=log,
+            each_step=settings.apply,
         )
         _log_woken(log, woken, seen=seen, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
@@ -288,10 +424,12 @@ def _defer(
     sleep: Callable[[float], None],
     clock: Callable[[], float],
     log: logs.TickAdapter,
+    each_step: Callable[[], None],
 ) -> Woken | None:
     """Wait `seconds` before the first tick. An operator message or `TICK_NOW_KEY` ends it early, as between ticks.
 
-    Returns what ended it early, if anything did.
+    Returns:
+        What ended it early, if anything did.
     """
     seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
     started = clock()
@@ -316,6 +454,7 @@ def _defer(
         keys=keys,
         log=log,
         note="first tick in ",
+        each_step=each_step,
     )
     _log_woken(log, woken, seen=seen, read_at=None)
     return woken
@@ -331,7 +470,11 @@ def _log_woken(log: logs.TickAdapter, woken: Woken | None, *, seen: int, read_at
 
 
 def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
-    """Run one tick. An unexpected error ends that tick, not the loop, as with a scheduler that starts each tick."""
+    """Run one tick. An unexpected error ends that tick, not the loop, as with a scheduler that starts each tick.
+
+    Returns:
+        The tick's outcome, or an `error` outcome naming the exception when the tick raised one.
+    """
     try:
         return tick.run(ctx, dry_run=dry_run)
     # Logged with its traceback. The journal is in autocommit mode, so the next tick starts clean.
@@ -370,18 +513,23 @@ def _wait(
     keys: Callable[[], str] | None = None,
     log: logs.TickAdapter,
     note: str = "next tick in ",
+    each_step: Callable[[], None] = lambda: None,
 ) -> Woken | None:
     """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
 
     Once `wake()` names a reason, the wait ends at `earliest` instead, or at once if that has passed: an operator
     message or a run ending runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor:
     the operator asked for this tick, as they could with `canopy tick`. While the loop is paused, the wait does not end
-    at its deadline but holds until the pause is lifted; `PAUSE_KEY` pauses and resumes. Returns what ended the wait
-    early, if anything did.
+    at its deadline but holds until the pause is lifted; `PAUSE_KEY` pauses and resumes. `each_step` runs first at
+    every step, as a reload does.
+
+    Returns:
+        What ended the wait early, if anything did.
     """
     woken: Woken | None = None
     with Live(console=console, transient=True, auto_refresh=False) as live:
         while not stop.requested:
+            each_step()
             pressed = keys() if keys is not None else ""
             _toggle_pause(ctx, pressed, log)
             if TICK_NOW_KEY in pressed.lower():
@@ -467,6 +615,7 @@ def _header(
         grid.add_row("paused", Text(since, style="yellow"))
     console.print(grid)
     console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
+    console.print(Text(f"kill -HUP {os.getpid()} reads the config again; a running tick finishes first.", style="dim"))
     if keys:
         console.print(
             Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim")
@@ -572,12 +721,20 @@ def _attention_rows(rows: Table, before: list[attention.Item], after: list[atten
 
 
 def _detail(text: str) -> Text:
-    """A last-column cell: one line, whitespace collapsed, cut with an ellipsis when the terminal is too narrow."""
+    """A last-column cell: one line, whitespace collapsed, cut with an ellipsis when the terminal is too narrow.
+
+    Returns:
+        The cell's text, set not to wrap.
+    """
     return Text(" ".join(text.split()), no_wrap=True, overflow="ellipsis")
 
 
 def duration(seconds: float) -> str:
-    """Render a length of time for a person: `45s`, `3m 05s`, `2h 10m`."""
+    """Render a length of time for a person: `45s`, `3m 05s`, `2h 10m`.
+
+    Returns:
+        Hours and minutes, minutes and seconds, or seconds alone, rounded to the second. A negative length is `0s`.
+    """
     total = max(0, round(seconds))
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
@@ -593,5 +750,9 @@ def _clock_time(seconds_from_now: float) -> str:
 
 
 def _local_time(stamp: str) -> str:
-    """A time the journal wrote, as the terminal's clock shows it."""
+    """A time the journal wrote, as the terminal's clock shows it.
+
+    Returns:
+        The local time as `HH:MM`.
+    """
     return db.parse_time(stamp).astimezone().strftime("%H:%M")

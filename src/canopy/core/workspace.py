@@ -6,7 +6,8 @@ for one repository: it reads no config from a code repository (D016).
 
 The map's `[workspace]` and `[repos]` tables are read here; its `[tracker]`, `[policy]`, and `[trust]` tables are the
 shared config layer, read by `config.load`. Summaries and `MAP.md` are data, like ticket text: they help choose a
-repository and authorize nothing. Clone URLs are read only by `canopy workspace sync`, never by a tick.
+repository and authorize nothing. Clone URLs are read only by `canopy workspace sync`, never by a tick, and to make the
+web UI's branch links. A branch URL is only ever a link.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from canopy.core.config import (
     WORKSPACE_STATE_DIR,
     ConfigError,
     RepoName,
+    link_template,
 )
 from canopy.infra import logs
 
@@ -37,6 +39,14 @@ REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
 MAX_SUMMARY = 200
+# Where a repository's `branch_url` puts a branch's name.
+BRANCH_NAME = "{branch}"
+# A GitHub clone URL as `git clone` takes it: https (credentials allowed, and dropped), scp-style SSH, or ssh://, with
+# an optional `.git` and trailing slash. Its owner and repository name make the default `branch_url` (D115).
+GITHUB_URL_RE = re.compile(
+    r"(?:https://(?:[^@/\s]+@)?|ssh://git@|git@)github\.com[/:]([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
+    re.IGNORECASE,
+)
 
 
 def _summary(value: str) -> str:
@@ -46,7 +56,11 @@ def _summary(value: str) -> str:
 
 
 def url_error(value: str) -> str | None:
-    """Say why `value` cannot be a map's clone URL, or None if it can."""
+    """Say why `value` cannot be a map's clone URL, or None if it can.
+
+    Returns:
+        The reason, for an error message, or None.
+    """
     # The URL reaches `git clone`'s argv after `--`; refusing a leading "-" and blanks keeps it one plain argument.
     if not value.strip() or value.startswith("-") or any(c.isspace() for c in value):
         return "must be a clone URL: not empty, no whitespace, not starting with '-'"
@@ -71,6 +85,9 @@ class _WorkspaceTable(_Table):
 class _RepoTable(_Table):
     url: Annotated[StrictStr, AfterValidator(_url)]
     summary: Annotated[StrictStr, AfterValidator(_summary)] = ""
+    # A branch's page on the repository's host, with {branch} where its name goes: the web UI links branches there
+    # (DESIGN §18). Unset means the one `url` gives on GitHub, if any; empty means no link.
+    branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] | None = None
 
 
 class _Map(_Table):
@@ -80,12 +97,13 @@ class _Map(_Table):
 
 @dataclass(frozen=True)
 class Repo:
-    """One repository in the map: its name, primary clone, clone URL, and summary."""
+    """One repository in the map: its name, primary clone, clone URL, summary, and where its branches' pages are."""
 
     name: str
     path: Path
     url: str | None = None
     summary: str = ""
+    branch_url: str = ""
 
     @property
     def cloned(self) -> bool:
@@ -132,12 +150,20 @@ class Workspace:
 
 
 def default_name(root: Path) -> str:
-    """Name a workspace after its directory, reduced to a valid repository name, when its map names none."""
+    """Name a workspace after its directory, reduced to a valid repository name, when its map names none.
+
+    Returns:
+        The directory's name reduced by `reduce_name`, or `workspace` if nothing of it is left.
+    """
     return reduce_name(root.name) or "workspace"
 
 
 def reduce_name(text: str) -> str:
-    """Reduce `text` to a valid repository name: lowercased, other characters made hyphens. Empty if nothing is left."""
+    """Reduce `text` to a valid repository name: lowercased, other characters made hyphens. Empty if nothing is left.
+
+    Returns:
+        The name, with no leading digits or hyphens and no trailing hyphens, or an empty string.
+    """
     reduced = re.sub(r"[^a-z0-9-]+", "-", text.lower()).strip("-")
     return reduced.lstrip("0123456789-")
 
@@ -164,7 +190,11 @@ def find(start: Path) -> Workspace:
 
 
 def no_workspace_message(start: Path) -> str:
-    """Say there is no workspace at or above `start`, and how to make one."""
+    """Say there is no workspace at or above `start`, and how to make one.
+
+    Returns:
+        The error message, with a hint to move an old `canopy.toml`'s keys when the checkout has one.
+    """
     message = (
         f"no {WORKSPACE_FILE_NAME} here or above; canopy runs from a workspace. In an empty directory, run "
         f"`canopy init --provider <tracker> <clone URL>...` to make one."
@@ -176,20 +206,31 @@ def no_workspace_message(start: Path) -> str:
 
 
 def old_repo_file(start: Path) -> Path | None:
-    """The `canopy.toml` at the root of the checkout `start` is in, if there is one. It is never read (D016)."""
+    """The `canopy.toml` at the root of the checkout `start` is in, if there is one. It is never read (D016).
+
+    Returns:
+        The file's path, or None if `start` is in no checkout or its root has no such file.
+    """
     checkout = git_root(start)
     path = checkout / OLD_REPO_FILE_NAME if checkout is not None else None
     return path if path is not None and path.is_file() else None
 
 
 def git_root(start: Path) -> Path | None:
-    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None."""
+    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None.
+
+    Returns:
+        The checkout's root, resolved, or None if `start` is in no checkout.
+    """
     start = start.resolve()
     return next((d for d in (start, *start.parents) if (d / ".git").exists()), None)
 
 
 def load(root: Path) -> Workspace:
     """Read the map of the workspace at `root`.
+
+    Returns:
+        The workspace, named by its map or after its directory, with each repository the map lists.
 
     Raises:
         ConfigError: the workspace file is missing, not TOML, or its map is invalid. The message names the file.
@@ -208,10 +249,28 @@ def load(root: Path) -> Workspace:
         errors = [f"{path}: {'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in e.errors()]
         raise ConfigError("\n".join(errors)) from e
     repos = tuple(
-        Repo(name=name, path=root / REPOS_DIR / name, url=table.url, summary=table.summary)
+        Repo(
+            name=name,
+            path=root / REPOS_DIR / name,
+            url=table.url,
+            summary=table.summary,
+            branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
+        )
         for name, table in sorted(parsed.repos.items())
     )
     return Workspace(root=root, name=parsed.workspace.name or default_name(root), repos=repos, map_file=path)
+
+
+def github_branch_url(url: str) -> str:
+    """The branch link template a GitHub clone URL implies, for a repository whose map sets no `branch_url` (D115).
+
+    Returns:
+        `https://github.com/OWNER/REPO/tree/{branch}`, or an empty string, meaning no link, for any other URL.
+    """
+    match = GITHUB_URL_RE.fullmatch(url)
+    if match is None or match[2] in {".", ".."}:
+        return ""
+    return f"https://github.com/{match[1]}/{match[2]}/tree/{BRANCH_NAME}"
 
 
 def ensure_state_dir(state_dir: Path) -> None:

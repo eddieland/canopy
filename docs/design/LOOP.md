@@ -22,18 +22,16 @@ in order:
    with migrations this canopy does not know (D068). Until then, the tick and any command that opens the journal fail
    saying so.
 3. **Reconcile local state.**
-   - Each `runs` row with `status='running'` whose pid (the `canopy _run` process) is dead or never recorded: kill what
-     is left of the worker's process group (`runs.worker_pid`), mark the run `crashed`, run
-     `treehouse return --force --if-lease-id` on every slot it leased (`run_slots`), remove its desk if it was a joint
-     run, and log it. A zombie counts as dead. A pid reused by an unrelated process reads as alive, so that run stays
-     running: a residual, not a guard.
+   - Each `runs` row with `status='running'` whose `canopy _run` process is gone (below): kill what is left of the
+     worker's process group (`runs.worker_pid`), mark the run `crashed`, run `treehouse return --force --if-lease-id`
+     on every slot it leased (`run_slots`), remove its desk if it was a joint run, and log it.
    - Each leased slot in `treehouse status --json` with no live `runs` row and `lease_holder` matching our prefix:
      return it and log it. In a workspace this covers every cloned repository's pool, and a run's slots go back to the
      pools of the repositories they record (§18). A desk canopy made whose ticket has no running run is removed;
      anything else under `desks/` is left alone.
-   - Each `chore_runs` row with `status='running'` whose `_chore` is dead or never recorded: kill what is left of its
+   - Each `chore_runs` row with `status='running'` whose `_chore` is gone: kill what is left of its
      agent's process group and mark it `crashed` (§19). Chore runs hold no slot and take no worker capacity.
-   - Each `review_runs` row with `status='running'` whose `_review` is dead or never recorded: kill what is left of its
+   - Each `review_runs` row with `status='running'` whose `_review` is gone: kill what is left of its
      reviewer, remove its directory, return its slot, and mark it `crashed` (§21). This runs before the worker runs'
      reconcile, and a running review's lease is never returned as stale.
    - `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
@@ -47,27 +45,36 @@ in order:
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated `## State` section holding
    one JSON object: tick id, current time, whether it is a dry run, workspace root; the workspace (name, the path of
-   `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its
-   pool's leased slots, §18); tracker config (provider, query, labels, needs-human label); trust config (authorized
-   repliers, branch prefix, PR label); capacity; policy (limits and stacking); running workers and their repositories;
-   and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment, message, and mirror cursors
-   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind,
-   the runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next
-   run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in
-   with its starting base, start and end). A ticket the operator started has a `private` object (§22): its start
-   record's status, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if
-   any. `chores` (§19) is present only when chores are configured. `mirror` holds the per-tick mirror limit and this
-   tick's heredoc delimiter (§22). With `tracker.private_only` (§22), the tracker config is the provider and
-   `private_only` alone, `tickets` holds only started tickets, and there is no `mirror`, `operator`, or split child.
+   `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its pool's leased slots, §18); tracker
+   config (provider, query, labels, needs-human label); trust config (authorized repliers, branch prefix, PR label);
+   capacity; policy (limits and stacking); running workers and their repositories; and the `tickets` rows not marked
+   done, except those the operator stopped. Each ticket has its phase, branch, and comment, message, and mirror
+   cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of
+   each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when
+   fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in
+   with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
+   started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
+   `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
+   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
+   present only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc
+   delimiter (§22). With `tracker.private_only` (§22), the tracker config is the provider and `private_only` alone,
+   `tickets` holds only started tickets, and there is no `mirror`, `operator`, or split child.
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
-   `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The session id and cost
-   the runtime reported (§13) go on the `ticks` row, whether or not the run succeeded. The run succeeded if it
-   exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
-   `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
-   closes the tick as `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise
-   every item.
+   `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
+   the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
+   overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
+   id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
+   succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and backticks, is
+   `CANOPY_TICK_DONE` and nothing else; otherwise the tick closes as `overseer_failed`. Text before or after that line
+   is allowed, because models summarize what they did, and a tick that did its work but failed on a summary is lost to
+   the attention list (MEASUREMENTS 2026-10-12, F2). The check stays on the final message, not the whole transcript,
+   because what it catches is a run that exits 0 short of the procedure's last step: a refused tool call, a cut-off
+   session. The token is a word no model writes by chance, where `tick complete` was ordinary English that a looser
+   check would find in a rationale; a line that only mentions it does not count. A successful run that recorded a
+   tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention
+   list standing, so an outage does not resolve and re-raise every item.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
@@ -89,6 +96,17 @@ in order:
    lock.
 
 Workers dispatched during a tick outlive it, as detached processes owned by `canopy _run`.
+
+A detached process (`_run`, `_chore`, `_review`) is alive exactly while it holds its lifelock: an `flock` on the file
+beside its log, `<id>.lock` beside `<id>.log`. The spawn takes it before the process exists and passes the open file
+to it, so it is held from before the run's pid is recorded; the process keeps it without doing anything, and the
+kernel lets go of it when the process exits, however it exits, before it is a zombie. What the process starts does not
+inherit it, since every process canopy starts gets only the files it is given: a worker left running after its `_run`
+died does not keep the run alive, so reconcile kills it. A second spawn on the same log is refused while the first
+holds the lock. Asking a pid instead could not tell a reused pid from the process it once named, nor a zombie's last
+moments from death, without reading `/proc`. A run started by a canopy from before lifelocks has no lock file, so its
+pid is asked instead, as before: a zombie counts as dead, and a pid reused by an unrelated process reads as alive. A
+run with neither a lock nor a recorded pid is gone.
 
 ### The loop
 
@@ -144,15 +162,40 @@ Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. Duri
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
 as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Dispatched workers are
 unaffected. A signal less than one second (`repeat.SAME_SIGNAL_SECONDS`, monotonic clock) after the first is the same
-keypress. The web UI's server stops with the loop.
+keypress. The web UI's server stops with the loop. SIGHUP does not stop the loop but reloads its config (below), unless
+the terminal hung up.
 
-Config is read once at loop start; restart to apply a change. Prompt files are read every tick.
+Reloading config (taken on request, 2026-10-13): the loop reads its config at start, and again when the operator asks,
+so a change needs no restart. The listener secret is not config: a new one still takes a restart (§22).
+
+- SIGHUP (`kill -HUP`, with the pid the header prints) or Reload on the web UI's settings page asks for it
+  (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
+  loop's own copy: the next tick's limits, the pace, and what the web UI serves. `--every` still holds.
+- A tick running when it is asked for finishes first, on the config it started with; the wait applies it at its next
+  step, so a reload during a wait does not wait for the deadline. The wait it comes in keeps its length, and the waits
+  after it follow the new pace. A reload never starts a tick.
+- The loop prints `config reloaded` with the keys that changed, the new pace if it changed, and any `serve.*` key that
+  changed: the listener started with the loop, so those take effect on a restart. A config that does not load leaves
+  the loop on the one it had, printing why. The web UI reads the files when asked, so it refuses one that does not load
+  (`config_invalid`) and asks nothing of the loop, and says what would change and whether a tick must end first.
+- A terminal hanging up sends SIGHUP too. The loop holds its controlling terminal open from the start and asks it at
+  each SIGHUP (`infra/hangup.py`): one that has hung up is no terminal any more, and the loop then ends as SIGHUP
+  always ended it, at once. Under `nohup`, which ignores SIGHUP, it reloads instead: that loop is meant to outlive its
+  terminal. With no controlling terminal, as under a service manager, every SIGHUP is a reload.
+- Every `canopy` command the overseer and workers run already reads the files when it starts, so a reload changes
+  nothing about what those can do: their guards read the operator's file, as before.
+- Rejected: reading the files before every tick (an edit half saved would apply itself; the operator chooses when),
+  and a journal row for the request, as the pause has (the request is for this process alone, and a signal already
+  reaches it from any shell).
+
+Prompt files are read every tick.
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
 gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
-`loop waits` line per tick, a line when a key, a message, or a run ending ends a wait, and `loop paused` and
-`loop resumed` lines with their channel.
+`loop waits` line per tick, a line when a key, a message, or a run ending ends a wait, `loop paused` and
+`loop resumed` lines with their channel, and `config reloaded` (with the keys that changed) or `config not reloaded`
+(with the error).
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
@@ -240,8 +283,10 @@ A ticket's title, `tickets.title`, is its name in canopy, for display only like 
 shows the ticket with no title, and again only when the ticket's own title changes. The CLI drops control characters,
 collapses whitespace to one line, refuses an empty title, and cuts it at 80 characters; a dry run records it, as it
 records a phase. It is shown beside the key (`PROJ-1: <title>`) in `canopy status`, `canopy show`, and the web UI, and
-it is the session title of the ticket's runs (§13). It never reaches `attention.md` or a notification: those go to
-sinks the operator may share (§20), and a title is model-written text. `canopy forget` keeps it.
+it is the session title of the ticket's runs (§13). A `json` notification carries it beside each ticket key (§20), so
+a Slack channel names the work and not only its key; like a run's summary and question, which sinks already get, it is
+model-written text, and the Slack sink escapes it. It stays out of `attention.md` and the `text` format, which keep
+§14's message as it was. `canopy forget` keeps it.
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -292,6 +337,10 @@ It is empty by default: nobody is trusted until listed, so a review bot's commen
   reviewers, and the newest item, and does not move the `review` cursor past it. It never dispatches for it on its own
   judgment. A trusted reviewer's feedback on the same unit still goes to a worker, with the cursor no further than the
   item before the first untrusted one.
+- An untrusted reviewer's approving review is not feedback, its body included: an approval asks for nothing, so there
+  is nothing for the operator to say yes or no to, and it raised an `untrusted_review` item that only waited to be
+  dismissed. The inline comments posted with it are review comments, and are feedback as any other. The overseer moves
+  the `review` cursor past such an approval when nothing before it waits.
 - The operator answers in canopy, with `canopy reply KEY` or the web UI (§22), never on the ticket. An operator message
   newer than the ticket's message cursor is an instruction, like an authorized reply. When it speaks to the untrusted
   feedback, however loosely ("use your best judgement on the bot's review"), the ticket is `human_replied`: a `resume`
@@ -411,14 +460,19 @@ dispatch names at least one, in a workspace of one repository too.
      `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed. A public
      ticket's prompt without `{{OPERATOR_MESSAGES}}` is `bad_prompt` once the operator has written to the ticket in
      canopy (§22, D093), and still renders for a ticket the operator never wrote to.
+   - Every prompt but a split's carries `{{STANDING_INSTRUCTIONS}}`, the operator's file `paths.worker_instructions`
+     (§12), or `None.` without one. With it set, a prompt without the placeholder is `bad_prompt`, so an override
+     cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
+     worker without it would work as if the operator had never written it. It is the operator's own text, an
+     instruction like their messages, and the prompt's obligations come before it.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
      refuses the dispatch (`stopped`) and its leases are returned.
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
-   stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the workspace root). Record its
-   pid in the run and return immediately.
+   stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the workspace root), holding its lifelock
+   `<state_dir>/runs/<run_id>.lock` (§6). Record its pid in the run and return immediately.
 
 `canopy _run <run_id>` (hidden from `--help`):
 
@@ -448,10 +502,10 @@ dispatch names at least one, in a workspace of one repository too.
    joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
    process group. Its stdout and stderr go to the run log.
-4. Parse the last non-empty line of the worker's text as the result contract: its stdout, or the text of OpenCode's
-   JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`. Record the
-   session id and cost the events reported on the run at once, also after a timeout, so a git failure after this step
-   does not lose them.
+4. Parse the last line of the worker's text that starts with `{` as the result contract: its stdout, or the text of
+   OpenCode's JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`.
+   Record the session id and cost the events reported on the run at once, also after a timeout, so a git failure after
+   this step does not lose them.
 
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch, and runs no setup, since
    the splitter has no shell; step 3 runs `split_cmd` in the desk; step 4 parses and validates the split's result;

@@ -7,7 +7,8 @@ longer records it.
 
 A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
-ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed (`listed`).
+ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed, and no
+finding the operator dismissed (`listed`).
 
 After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the list to the notification sinks
 (`canopy.notify`), each told about each open item once however many ticks it lasts (DESIGN §20).
@@ -63,7 +64,12 @@ __all__ = [
 
 
 def decided_about(decision: sqlite3.Row) -> str:
-    """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick."""
+    """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick.
+
+    Returns:
+        The chore with its prefix, else the PR with its prefix when there is no ticket, else the ticket key, else the
+        repository, else `-`.
+    """
     if decision["chore"] is not None:
         return f"{CHORE_PREFIX}{decision['chore']}"
     if decision["ticket_key"] is None and decision["pr"] is not None:
@@ -76,7 +82,11 @@ _ItemId = tuple[str | None, str, str | None]
 
 
 def keys(items: list[Item]) -> set[_ItemId]:
-    """Each item's identity, as two lists are compared: its ticket, its reason, and its repository."""
+    """Each item's identity, as two lists are compared: its ticket, its reason, and its repository.
+
+    Returns:
+        The set of `(ticket_key, reason, repo)` tuples, one per distinct item.
+    """
     return {(i.ticket_key, i.reason, i.repo) for i in items}
 
 
@@ -128,7 +138,8 @@ def current(conn: sqlite3.Connection) -> list[Item]:
 def listed(ctx: Context) -> list[Item]:
     """Return the attention list as it is shown and notified: `current`, with the chores this workspace runs.
 
-    A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all (DESIGN §19).
+    A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all, nor is a finding
+    the operator dismissed (DESIGN §19).
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
@@ -147,6 +158,7 @@ def listed(ctx: Context) -> list[Item]:
             finding=True,
         )
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        if not f.dismissed
     ]
     return items + findings
 
@@ -196,7 +208,11 @@ def _detail(run: sqlite3.Row) -> str:
 
 
 def awaiting_detail(waiting: conversation.Awaiting) -> str:
-    """The `awaiting_reply` item's detail: the question, and how to answer it (DESIGN §22)."""
+    """The `awaiting_reply` item's detail: the question, and how to answer it (DESIGN §22).
+
+    Returns:
+        The message id and the question on one line, cut to 1800 characters, then the `canopy reply` to answer it.
+    """
     text = f"message {waiting.message_id}: {one_line(waiting.question)}"
     return f"{text[:1800]}; answer with `canopy reply {waiting.key}`"
 
@@ -229,13 +245,30 @@ def publish(ctx: Context, log: logs.TickAdapter) -> None:
 
     Failures are logged, never raised: the tick is already closed. A delivery that fails is tried again next tick.
     """
+    items = write(ctx, log)
+    dismissed = {
+        fingerprint(f"{CHORE_PREFIX}{f.chore}", f.finding.id, None)
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        if f.dismissed
+    }
+    try:
+        deliver.publish(ctx, items, ctx.state_dir / FILE_NAME, log, dismissed=dismissed)
+    except Exception as e:
+        log.exception("notification failed", extra={"error": str(e)})
+
+
+def write(ctx: Context, log: logs.TickAdapter) -> list[Item]:
+    """Rewrite `attention.md` from the journal: after a tick, and after the operator dismisses a finding.
+
+    A failure is logged, never raised.
+
+    Returns:
+        The list as written.
+    """
     items = listed(ctx)
     path = ctx.state_dir / FILE_NAME
     try:
         logs.write_private(path, render(items, datetime.now(UTC)))
     except OSError as e:
         log.error("could not write the attention list", extra={"path": str(path), "error": str(e)})  # noqa: TRY400
-    try:
-        deliver.publish(ctx, items, path, log)
-    except Exception as e:
-        log.exception("notification failed", extra={"error": str(e)})
+    return items

@@ -127,12 +127,15 @@ serializes chore runs with dispatches.
 `canopy chore run` inserts a `chore_runs` row, renders the prompt, and spawns `python -m canopy _chore <run_id>`
 detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOPY_TICK_ID`, runs the command in `cwd`
 with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
-`<state_dir>/chores/<run_id>.log`. No lease, branch, or push, so nothing to return or verify.
+`<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
+kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
+write (HOST_ISOLATION), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
+the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
 run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the
 latest `ok` run's open findings (id, title, link), so ids can be reused, and the result contract. It is written to
-`<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
+`<state_dir>/chore-runs/<name>/<run_id>.prompt`, readable only by the operator.
 
 Result contract, one JSON line, last line of the agent's text (§13):
 
@@ -167,26 +170,60 @@ It is how the operator answers a finding without editing the prompt file: "leave
 - Notes reach neither the overseer's state block nor the attention list, and do not wake the loop.
 - `canopy show chore:<NAME>` lists them after the open findings, and the web UI's chore page beside them.
 
+### Dismissing a finding
+
+`canopy dismiss chore:<NAME> <ID>`, or Dismiss on the finding in the web UI (§22), keeps one open finding off the
+attention list while the chore goes on reporting it (asked for by the operator, 2026-10-13: a note changes what later
+runs are told, not what the latest run reported, so a finding stayed listed until a run left it out).
+
+- A dismissal covers the finding's unbroken sequence of `ok` runs (its age, below): it holds while later runs report
+  the id, and is spent once an `ok` run leaves it out, so a finding that clears and comes back is listed and notified
+  again. Nothing has to be cleaned up, and a dismissal never hides a recurrence the operator has not seen.
+- It changes what the operator is shown, nothing else: the chore's prompt still carries the finding so its id is
+  reused, the overseer's state block still lists it, and `canopy show chore:<NAME>` and the chore's page list it marked
+  dismissed. Leaving the list, it is notified as resolved and marked so: `- chore:<name> <id> (dismissed)`, and
+  `dismissed: true` in the `json` format (§20). To have the chore stop reporting it, write a note.
+- `attention.md` is rewritten at once, from the CLI and the web UI alike, rather than at the next tick; notifications
+  still go at the next tick, with the tick's. `canopy status` counts each chore's dismissed findings on its line.
+- `--undo`, or List again on the chore's page, takes it back. Dismissing it again records the time anew.
+- Refused `unknown` for a chore not defined for this workspace or a finding it does not have open (with `--undo`, one
+  not dismissed), `bad_finding` for an id no finding can have, and `inside_run` as `reply` is: the overseer and
+  agents cannot hide a finding from the operator. A row in `finding_dismissals` per chore and finding id, with its
+  time and channel.
+
 ### Trying a chore
 
-`canopy chore try <NAME> [--context '<text>']` is the operator's, for writing a chore. It renders the prompt a
-run starting now would get, with `run_id` null in its `## Run` section, runs the chore's command in its `cwd` with its
-timeout and the shadowing check, and validates the result line as `_chore` does. It prints the agent's text, its
-stderr and exit code, the validated result, what it cost when the runtime reported it, and the status, and exits 0
-only on `ok`.
+`canopy chore try <NAME> [--context '<text>'] [--no-record]` is the operator's, for writing a chore and for running one
+now. It runs the chore in the foreground, in the `canopy chore try` process itself, through the same code as `_chore`:
+its command in its `cwd` with its timeout and the shadowing check, its result line validated. It prints the agent's
+text, its stderr and exit code, the validated result, what it cost when the runtime reported it, and the status, and
+exits 0 only on `ok`.
 
-- It records nothing: no `chore_runs` row, no decision, no notification, nothing on the attention list. The next tick
-  sees no change, and the `not_due` guard does not count it. Recorded, a test result would clear real findings.
-- No guard applies, so a chore being written does not wait out `every_minutes`, and it works with
-  `capacity.max_chores = 0`, so a chore can be written before the loop runs any.
-  It still needs a chore defined for this workspace.
-- It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-try`. The
-  overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the loop cannot try a chore.
+- It is a real run. It inserts a `chore_runs` row with no tick (`tick_id` NULL), writes its prompt and log files, and
+  closes the row as `_chore` does, so its findings become the open findings, a failure raises `chore_failed`, sinks
+  get its `chore.ended`, its cost counts, and the chore's next run is `not_due` counting from it. It records no
+  decision, as there is no tick.
+- `--no-record` writes nothing: no `chore_runs` row, no prompt file, no notification, no cost. The prompt has `run_id`
+  null, and the next tick sees no change. It is for drafting a prompt of a chore with open findings, which a recorded
+  try of a half-written prompt would clear.
+- Operators expected a run they started by hand to show up where the loop's runs do; one that vanished read as lost.
+  So recording is the default, and leaving the journal alone is what the operator asks for.
+- No guard on time or capacity applies, so a chore being written does not wait out `every_minutes` or its hours, and
+  it works with `capacity.max_chores = 0`, so a chore can be written before the loop runs any; its findings reach the
+  attention list once `max_chores` is above 0 (Off unless configured, above). It still needs a chore defined for this
+  workspace.
+- A recorded try refuses `running` while a run of the chore is running, and takes `dispatch.lock` to insert its row,
+  so it never overlaps one the overseer started. `--no-record` does not refuse. Reconcile treats a try's row as any:
+  the `canopy chore try` process holds the run's lifelock, as `_chore` does (§6), so a try killed with SIGKILL is
+  marked `crashed` at the next tick.
+- It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-<run id>`, or
+  `chore-try` unrecorded. The overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the
+  loop cannot try a chore.
 
 ### Findings on the attention list
 
 - Open findings are those of the chore's latest `ok` run; one disappears when a later `ok` run omits its id (§14). A
-  non-`ok` run leaves them standing.
+  non-`ok` run leaves them standing. One the operator dismissed (above) is not listed.
 - A latest run ended `failed`, `unknown`, `timeout`, or `crashed` also raises a `chore_failed` item, after reconcile
   as for worker runs (§14), cleared by a later `ok` run.
 - `attention.md` gets a section per chore after the ticket items, headed `chore:<name>`, one line per finding: title,
@@ -198,12 +235,14 @@ only on `ok`.
 
 ### Journal
 
-- `chore_runs`: id, tick id, chore name, pid of `_chore`, pid of the agent, started and ended times, status,
-  `result_json` (validated result, text cut to limits), log path, and what the runtime reported (§13): `session_id`,
+- `chore_runs`: id, tick id (NULL for a run `canopy chore try` recorded), chore name, pid of `_chore` (or of the
+  try), pid of the agent, started and ended times, status, `result_json` (validated result, text cut to limits), log
+  path, and what the runtime reported (§13): `session_id`,
   `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported nothing. Separate from `runs`, whose
   ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
   cost, and the web UI's spend counts chore runs.
 - `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
+- `finding_dismissals`: chore, finding id, when dismissed, and channel; at most one row per chore and finding.
 
 ### Trust model changes
 
@@ -227,6 +266,13 @@ Approved with M9:
   candidate, and opt-in per chore.
 - Whether `workspaces` should become a per-workspace table in the user file.
 - Whether a repository should offer chores operators opt into by name, as it offers its tracker query.
+- Whether a chore should get checkouts of the workspace's repositories, for a tool that reads files rather than
+  GitHub (today the operator keeps a checkout current and points `cwd` at it). The parts exist: a review's detached
+  checkout, linked from a private directory so no repository config loads (§21), and a desk for several (§18). Likely
+  first: the chore's table names the repositories, never the overseer, who still decides only when. The cost is
+  slots: a chore holding one in each repository it reads can block a dispatch, so it would count toward `capacity`
+  as a review does, and chores would then affect tickets, which they do not now. Also open: a chore in a workspace
+  whose map lacks one of its repositories.
 
 ## 20. Notifications
 
@@ -269,12 +315,12 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 
 | Group | Kind | When | Fields |
 |---|---|---|---|
-| `attention` | `attention.opened` | a listed item the sink was not told of | ticket, reason, detail (500), since |
-| `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, reason |
-| `runs` | `run.started` | dispatch started a worker | ticket, run, kind, branch, attempt, limit |
-| `runs` | `run.ended` | a run's row closed | ticket, run, kind, status, branch, pr, prs, summary, question, message |
+| `attention` | `attention.opened` | a listed item the sink was not told of | ticket, title, reason, detail (500), since |
+| `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, title, reason |
+| `runs` | `run.started` | dispatch started a worker | ticket, title, run, kind, branch, attempt, limit |
+| `runs` | `run.ended` | a run's row closed | ticket, title, run, kind, status, branch, pr, prs, summary, question, message |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
-| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, run, status, verdict, impact, how many findings |
+| `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, title, run, status, verdict, impact, how many findings |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
 | `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
 | `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
@@ -341,20 +387,27 @@ run or chore run ended, `!` for the loop's own events, `*` for a test.
 
 ```json
 {"version": 1, "sink": "slack", "repo": "/home/me/src/api", "sent_at": "2026-09-24T19:00:00Z",
- "attention": {"added": [{"ticket": "PROJ-3", "reason": "needs_reviewer", "detail": "https://...", "since": "..."}],
-               "resolved": [{"ticket": "PROJ-4", "reason": "ready_to_merge"}],
+ "attention": {"added": [{"ticket": "PROJ-3", "title": "Retry failed checkouts", "reason": "needs_reviewer",
+                          "detail": "https://...", "since": "..."}],
+               "resolved": [{"ticket": "PROJ-4", "title": null, "reason": "ready_to_merge"}],
                "open": 4, "path": "/home/me/.canopy/attention.md"},
- "events": [{"id": 88, "kind": "run.ended", "at": "...", "ticket": "PROJ-12", "run": 41, "run_kind": "implement",
-             "status": "done", "branch": "agent/PROJ-12-add-retry", "pr": "https://...", "summary": "..."}],
+ "events": [{"id": 88, "kind": "run.ended", "at": "...", "ticket": "PROJ-12", "title": "Add retries", "run": 41,
+             "run_kind": "implement", "status": "done", "branch": "agent/PROJ-12-add-retry", "pr": "https://...",
+             "summary": "..."}],
  "omitted": 0,
  "digest": null,
  "text": "the same message in the text format"}
 ```
 
-`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`. Each
-event carries its fields and `line` (its text-format line); the digest its counts and `lines`. `omitted` counts what
-the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown fields. `text` serves a
-sink that only forwards a string.
+`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`, and a
+`resolved` item `dismissed`, true for a chore finding the operator dismissed rather than one whose cause is gone
+(§19). Each event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every
+ticket key, in `added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside
+it: the
+ticket's title as it is at delivery (§13), or null before the overseer names it. It is for display, so a reader knows
+a ticket without looking its key up; `text` and `line` show the key alone, keeping §14's message as it was.
+`omitted` counts what the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown
+fields. `text` serves a sink that only forwards a string.
 
 Presentation is the sink's. The fields are the contract, and a sink that can show more than lines builds its own
 message from them in its channel's native form, as the Slack sink does with Block Kit; `line`, `lines`, and `text`
@@ -421,7 +474,8 @@ exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
 - Message: Block Kit built from the fields (Formats, above): a header with the repository directory name, a line of
   counts, a section per attention item (ticket, reason, detail, and since when, as a Slack date in the reader's time
   zone), the resolved items together, a section per event led by an emoji for its status (ticket, kind, run, its PRs,
-  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. At most Slack's
+  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. A ticket shows
+  as its key in bold, then its title when canopy sent one. At most Slack's
   50 blocks, the last counting what was left out. The `text` the post also carries is the message as at most 45 lines,
   which Slack shows in notifications and where blocks cannot be shown.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
@@ -682,6 +736,9 @@ the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GE
 findings anchored on its diff and the diff itself (§22); both read only. The Reviews pages show them: the list, and
 a review's page with each finding's card under the line it names, under its file's header when the diff does not
 show the line, or in a panel of its own; nothing on them writes yet (Open, below).
+
+A review is also listed on its PR's page, in the web UI's pull requests pages (§22), which open it here; a review's
+page links back to its PR's.
 
 - **Taking it.** After the checkout, `_review` fetches the pool's base branch, the slot's lease's `base_branch`, which
   `review_runs.base_branch` records, as `refs/heads/<base>`, and writes `git diff` from the commit's merge base with it

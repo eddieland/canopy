@@ -25,7 +25,10 @@ NOTE = "the operator stopped the ticket with `canopy stop --now`"
 
 
 def end(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> bool:
-    """Kill run `run`'s processes and close it `stopped`. Returns False if it had already ended: nothing changes.
+    """Kill run `run`'s processes and close it `stopped`.
+
+    Returns:
+        True once the run is closed, or False if it had already ended: nothing changes.
 
     Raises:
         treehouse.TreehouseError: a slot could not be returned; the next tick's reconcile returns it.

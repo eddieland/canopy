@@ -1,21 +1,32 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { LogOut, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
+import { LogOut, Monitor, Moon, RefreshCw, Sun, type LucideIcon } from 'lucide-react'
 
-import { signOut } from '@/api/mutations'
+import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, sessionQuery } from '@/api/queries'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { type BuddySetting, setBuddy, useBuddy } from '@/lib/buddy'
+import type { TickerTopic } from '@/lib/headlines'
+import { reloadedText } from '@/lib/outcomes'
 import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
-import { clampGap, MAX_GAP, setTickerSettings, type TickerSpeed, useTickerSettings } from '@/lib/ticker-settings'
+import {
+    clampGap,
+    MAX_GAP,
+    setTickerSettings,
+    type TickerSpeed,
+    useTickerSettings,
+    withTopic,
+} from '@/lib/ticker-settings'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** The settings kept in this browser: the theme, the ticker, the send key, and the session. */
+/** What this browser keeps (the theme, the ticker, the send key, the session), and reloading the loop's config. */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -33,6 +44,17 @@ const SPEEDS: { value: TickerSpeed; label: string }[] = [
     { value: 'spicy', label: 'Spicy' },
 ]
 
+const TOPICS: { value: TickerTopic; label: string }[] = [
+    { value: 'programming', label: 'Programming' },
+    { value: 'vibes', label: 'Vibe coding' },
+    { value: 'tips', label: 'Tips' },
+]
+
+const BUDDY: { value: BuddySetting; label: string }[] = [
+    { value: 'on', label: 'On' },
+    { value: 'off', label: 'Off' },
+]
+
 const SEND_KEYS: { value: SendKey; label: string }[] = [
     { value: 'enter', label: 'Enter' },
     { value: 'mod-enter', label: 'Ctrl+Enter' },
@@ -43,8 +65,9 @@ function SettingsPage() {
     const { preference } = useTheme()
     return (
         <>
-            <PageHeader label="Preferences" title="Settings">
-                Kept in this browser. Everything else canopy reads from its config file.
+            <PageHeader title="Settings">
+                The theme, the ticker, Sprig, and the send key are kept in this browser. Everything else canopy reads
+                from its config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -69,15 +92,17 @@ function SettingsPage() {
                 </div>
             </Panel>
             <TickerPanel />
+            <BuddyPanel />
             <SendKeyPanel />
+            <ConfigPanel />
             <SessionPanel />
         </>
     )
 }
 
-/** The header ticker's pace and the pause between its headlines. */
+/** The header ticker's pace, the pause between its headlines, and the topics they are drawn from. */
 function TickerPanel() {
-    const { speed, gap } = useTickerSettings()
+    const { speed, gap, hidden } = useTickerSettings()
     return (
         <Panel>
             <PanelHeader label="Ticker" />
@@ -101,7 +126,7 @@ function TickerPanel() {
                     ))}
                 </ToggleGroup>
             </div>
-            <div className="flex items-center justify-between gap-4 p-3">
+            <div className="flex items-center justify-between gap-4 border-b p-3">
                 <label htmlFor="ticker-gap" className="text-sm text-muted-foreground">
                     Seconds the ticker stays empty between one headline and the next.
                 </label>
@@ -130,6 +155,57 @@ function TickerPanel() {
                     />
                     <span className="readout text-xs text-muted-foreground">s</span>
                 </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p id="ticker-topics" className="text-sm text-muted-foreground">
+                    Which headlines it shows. Tips about canopy are mixed in with the jokes.
+                </p>
+                <fieldset aria-labelledby="ticker-topics" className="flex shrink-0 items-center gap-4">
+                    {TOPICS.map(({ value, label }) => (
+                        <label key={value} className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                            <Checkbox
+                                checked={!hidden.includes(value)}
+                                disabled={speed === 'off'}
+                                data-testid={`ticker-topic-${value}`}
+                                onCheckedChange={(checked) =>
+                                    setTickerSettings({ hidden: withTopic(hidden, value, checked === true) })
+                                }
+                            />
+                            {label}
+                        </label>
+                    ))}
+                </fieldset>
+            </div>
+        </Panel>
+    )
+}
+
+/** Whether Sprig sits in the corner offering tips. */
+function BuddyPanel() {
+    const buddy = useBuddy()
+    return (
+        <Panel>
+            <PanelHeader label="Sprig" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    The helper in the bottom-left corner, with a tip for every page. None of them help. Off hides it.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={buddy}
+                    aria-label="Sprig"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = BUDDY.find((b) => b.value === value)
+                        if (picked) setBuddy(picked.value)
+                    }}
+                >
+                    {BUDDY.map(({ value, label }) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`buddy-${value}`}>
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
         </Panel>
     )
@@ -162,6 +238,39 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/** Asks the loop to read its config files again, as SIGHUP does. A tick running then finishes on the config it had. */
+function ConfigPanel() {
+    const mutation = useMutation({ mutationFn: reloadConfig })
+    return (
+        <Panel>
+            <PanelHeader label="Config" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <div className="flex flex-col gap-1">
+                    <p className="text-sm text-muted-foreground">
+                        The loop reads the workspace file and your{' '}
+                        <code className="font-mono text-xs">config.toml</code> when it starts. Reload reads them again,
+                        as <code className="font-mono text-xs">kill -HUP</code> does; a running tick finishes first. A
+                        file that does not load changes nothing.
+                    </p>
+                    {/* A config error names its file and key, a line each. */}
+                    <Notice error={mutation.error} className="whitespace-pre-line">
+                        {mutation.data ? reloadedText(mutation.data) : null}
+                    </Notice>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={() => mutation.mutate()}
+                    disabled={mutation.isPending}
+                    data-testid="config-reload"
+                >
+                    <RefreshCw />
+                    Reload
+                </Button>
             </div>
         </Panel>
     )

@@ -8,6 +8,9 @@ mode: primary
 temperature: 0.1
 permission:
   edit: deny
+  # A path outside the workspace would otherwise `ask`, which ends the run and loses every decision not yet recorded.
+  # `deny` refuses the one call and the overseer goes on.
+  external_directory: deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
   # (TRUST_MODEL T1, D077).
   webfetch: deny

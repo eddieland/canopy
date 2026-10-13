@@ -27,7 +27,14 @@ class Obj:
 
 
 def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
-    """Load config and open the journal. The connection closes when the command finishes."""
+    """Load config and open the journal. The connection closes when the command finishes.
+
+    Returns:
+        The context for the workspace the current directory is in, its journal migrated unless `migrate` is false.
+
+    Raises:
+        RuntimeError: The command was not run through `canopy.cli.main`, so there is no `Obj` to read.
+    """
     obj = click_ctx.find_object(Obj)
     if obj is None:
         raise RuntimeError("canopy commands run through canopy.cli.main")
@@ -45,7 +52,11 @@ def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
 
 
 def optional_tick(ctx: Context) -> sqlite3.Row | None:
-    """Return the tick this command runs inside, named by CANOPY_TICK_ID, or None outside a tick."""
+    """Return the tick this command runs inside, named by CANOPY_TICK_ID, or None outside a tick.
+
+    Raises:
+        CliError: CANOPY_TICK_ID is set but does not name a running tick.
+    """
     raw = os.environ.get(tick.TICK_ID_ENV)
     if not raw:
         return None
@@ -56,7 +67,11 @@ def optional_tick(ctx: Context) -> sqlite3.Row | None:
 
 
 def require_tick(ctx: Context) -> sqlite3.Row:
-    """Return the tick this command runs inside; refuse outside a tick."""
+    """Return the tick this command runs inside; refuse outside a tick.
+
+    Raises:
+        CliError: CANOPY_TICK_ID is not set, or does not name a running tick.
+    """
     row = optional_tick(ctx)
     if row is None:
         raise CliError(f"no tick is running ({tick.TICK_ID_ENV} is not set); this command runs inside a tick")

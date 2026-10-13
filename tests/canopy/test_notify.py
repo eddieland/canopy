@@ -11,6 +11,8 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
+from canopy.notify import journal as notify_journal
+from canopy.notify import message
 from tests.canopy.helpers import InlineRunner, in_tick, journal, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
@@ -45,7 +47,7 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
 def overseer_records(monkeypatch: pytest.MonkeyPatch, *items: tuple[str, str]) -> None:
     commands = [["canopy", "attention", key, reason, "--detail", f"{key} detail"] for key, reason in items]
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(commands))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 def tick(*, ok: bool = True) -> None:
@@ -137,10 +139,11 @@ def test_a_json_sink_hears_about_runs(
 ) -> None:
     out = tmp_path / "slack.txt"
     add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "loop", "runs"]\n')
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()  # the sink's first publish: from here on it hears every event
     conn = journal(canopy_env)
     tick_id = in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
     question = "Should the retry be per request or per session?\nThe ticket says both."
     worker_does(
         monkeypatch,
@@ -161,6 +164,7 @@ def test_a_json_sink_hears_about_runs(
     assert message["attention"]["added"] == [
         {
             "ticket": "PROJ-9",
+            "title": None,  # not named yet
             "repo": None,
             "reason": "needs_reviewer",
             "detail": "PROJ-9 detail",
@@ -177,6 +181,7 @@ def test_a_json_sink_hears_about_runs(
         1,
         2,
     )
+    assert started["title"] == ended["title"] == "Retry failed checkouts"
     assert ended["kind"] == "run.ended"
     assert (ended["status"], ended["question"]) == ("blocked", " ".join(question.split()))
     assert ended["line"].startswith("< PROJ-1 run 1 implement ended blocked: x question: Should the retry")
@@ -258,7 +263,7 @@ def test_loop_failing_and_recovered_are_sent_once_each(
         tick(ok=False)
     [failing] = messages(out)
     assert failing.startswith("canopy: 1 event\n! loop failing: 3 ticks in a row ended other than ok; latest tick 3 ")
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()
     tick()
     listing = f"Full list: {canopy_env.state_dir / 'attention.md'}\n"
@@ -290,7 +295,7 @@ def test_a_long_failing_streak_is_one_streak(
     tick(ok=False)
     tick(ok=False)
     assert len(messages(out)) == 1
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
@@ -305,7 +310,7 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(canopy_env, sink_script, "daily", out, extra='format = "text"\nevents = []\ndigest_every_minutes = 60\n')
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()
     [first] = messages(out)
     assert first.startswith("canopy digest\nDigest since ")
@@ -318,6 +323,33 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
     tick()
     second = messages(out)[1]
     assert f"Digest since {earlier}: 3 ticks (ok 3)" in second
+
+
+def test_a_json_digest_names_each_ticket_by_its_title(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    out = tmp_path / "digest.txt"
+    add_sink(canopy_env, sink_script, "daily", out, extra="events = []\ndigest_every_minutes = 60\n")
+    conn = journal(canopy_env)
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
+    worker_does(monkeypatch, result=json.dumps({"status": "blocked", "summary": "x", "question": "Which?"}))
+    runner = InlineRunner()
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
+    assert main(["_run", "1"], runner=runner) == 0
+    db.finish_tick(conn, tick_id, "ok", "test")
+    monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
+    tick()
+
+    [message] = json_messages(out)
+    assert message["digest"]["blocked"] == [{"ticket": "PROJ-1", "title": "Retry failed checkouts", "run": 1}]
+    assert "  blocked PROJ-1\n" in message["text"]  # the text format shows the key alone
 
 
 def test_bounds_count_what_they_leave_out(
@@ -352,7 +384,7 @@ def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
     conn = journal(canopy_env)
     old = tmp_path / "old.txt"
     add_sink(canopy_env, sink_script, "old", old, extra='events = ["runs"]\n')
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()  # creates the sink's row at the newest event
     day_ago = db.format_time(datetime.now(UTC) - timedelta(hours=25))
     for n in range(3):
@@ -437,7 +469,7 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
     )
     out = tmp_path / "chores.txt"
     add_sink(canopy_env, sink_script, "s", out, extra='format = "text"\nevents = ["chores"]\n')
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()
     conn = journal(canopy_env)
     tick_id = in_tick(conn, monkeypatch)
@@ -446,7 +478,15 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
     assert main(["_chore", "1"], runner=InlineRunner()) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     tick()
     [message] = messages(out)
     assert "< chore:check run 1 ended ok (0 findings): all clear\n" in message
+
+
+def test_a_finding_the_operator_dismissed_is_marked_so_in_both_formats() -> None:
+    gone = notify_journal.Diff([], [("chore:deps", "lodash")], ["fp"], [("chore:deps", "lodash", None)], [True])
+    sent = message.Message("log", "/r", Path("/r/attention.md"), gone, 0)
+    assert "- chore:deps lodash (dismissed)\n" in sent.text()
+    [resolved] = json.loads(sent.json())["attention"]["resolved"]
+    assert resolved["dismissed"] is True

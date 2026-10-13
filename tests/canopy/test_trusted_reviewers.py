@@ -71,7 +71,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     message = reply(conn, monkeypatch, GO_AHEAD)
 
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     state = overseer_state(agent_log)
     trusted = state["trust"]

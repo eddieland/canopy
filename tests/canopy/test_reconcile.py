@@ -11,7 +11,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
-from canopy.infra import procs
+from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, GitPool, pool_state
@@ -27,7 +27,7 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps([["canopy", *c] for c in commands]))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 def lease(treehouse_state: Path, key: str) -> dict[str, str]:
@@ -102,6 +102,30 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
     assert '"running": 1' in prompt
     assert '"available": 1' in prompt
     assert '"status": "crashed"' in prompt  # the ticket's last run, for the overseer
+
+
+def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The lock beside a run's log says whether its `_run` lives; the pid counts only for a run that has none.
+    overseer_does(monkeypatch)
+    holding = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
+    let_go = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=os.getpid())
+    runs = canopy_env.state_dir / "runs"
+    for run_id in (holding, let_go):
+        conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs / f"{run_id}.log"), run_id))
+    os.close(lock.take(procs.lifelock(runs / f"{let_go}.log")))
+    held = lock.take(procs.lifelock(runs / f"{holding}.log"))
+    try:
+        assert main(["tick"]) == 0
+    finally:
+        os.close(held)
+    statuses = {r: (run["status"] if (run := db.get_run(conn, r)) else None) for r in (holding, let_go)}
+    assert statuses == {holding: "running", let_go: "crashed"}
 
 
 def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(

@@ -122,6 +122,7 @@ canopy (harness, Python)
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
     repeat.py      canopy loop: ticks one after another with a wait between them, its own lock, rich output
+    reread.py      reading the config again while the loop runs, on SIGHUP or from the web UI (§6)
     pacing.py      how long the loop waits: idle ticks, gates, and what wakes it early (§6, Idle pacing)
     web.py         the web UI for canopy loop: the listener secret checked, the server's backend wired, started
     state.py       the overseer's state block
@@ -141,7 +142,7 @@ canopy (harness, Python)
   chores/          the operator's recurring chores (§19); what the web UI reads of them is in core (chore_*.py)
     start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
     execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
-    trial.py       canopy chore try: one foreground run outside any tick that records nothing
+    trial.py       canopy chore try: a run outside any tick, in the foreground; recorded unless --no-record
     reconcile.py   chore runs whose _chore is gone marked crashed
 
   notify/          notification sinks (§20)
@@ -160,13 +161,16 @@ canopy (harness, Python)
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
-    api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, and the operator's verbs
+    api/           the JSON and SSE routes, a router per resource: session, tickets and the operator's verbs on
+                   them, runs, ticks, chores, the loop, worktrees, events, search, reviews, pull requests; deps.py the backend
+                   and sessions each app binds for its routes, refs.py what the routes share
     auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
     secret.py      the listener secret's file: read with its checks, written by `canopy secret`
-    backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
-                   request
+    backend.py     what the loop hands the server: config, journal, the attention list, ending a run, a reload; a
+                   Context per request
     views.py       journal rows as the API's models: attention items, runs, tickets, messages, search hits
     reviews.py     review runs as the API's models: each one's findings anchored on its diff (§21)
+    pull_requests.py the PRs the journal knows, each with the runs that pushed to it, its reviews, and its decisions
     live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
@@ -212,6 +216,7 @@ canopy (harness, Python)
                    a child's PWD names its cwd (OpenCode runs tools in PWD); detached spawns and pid liveness
     lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
     stopping.py    SIGTERM, SIGHUP, and SIGINT become an exception the cleanup of _run and _chore catches
+    hangup.py      whether the controlling terminal hung up, to tell that SIGHUP from a reload's
     logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files and
                    directories
     resources.py   finds migrations/, .agents/, and the built UI in a source checkout or bundled in the wheel

@@ -9,6 +9,8 @@ import { Decisions } from '@/components/decisions'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
+import { Chip } from '@/components/status'
+import { TickOutputPanel } from '@/components/tick-output'
 import { TranscriptPanel } from '@/components/transcript'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -16,7 +18,7 @@ import { localTime } from '@/lib/time'
 import { TICK_TONE, tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
-/** One tick: the decisions it recorded, and the overseer's transcript. */
+/** One tick: the decisions it recorded, the overseer's transcript, and its output as written. */
 export const Route = createFileRoute('/ticks/$id')({
     component: TickPage,
 })
@@ -35,7 +37,7 @@ function Loaded({ id }: { id: number }) {
     if (data === undefined) {
         return (
             <>
-                <PageHeader label="Tick" title={`tick ${id}`} />
+                <PageHeader title={`tick ${id}`} />
                 <Panel className="min-h-72 p-3">
                     <Skeleton className="h-4 w-1/2" />
                 </Panel>
@@ -48,7 +50,7 @@ function Loaded({ id }: { id: number }) {
 function NoTick({ title, children }: { title: string; children: string }) {
     return (
         <>
-            <PageHeader label="Tick" title={title} />
+            <PageHeader title={title} />
             <Panel>
                 <Placeholder className="min-h-40">{children}</Placeholder>
             </Panel>
@@ -61,10 +63,11 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
     const decisionsOrder = useListOrder('tick-decisions')
     return (
         <>
-            <PageHeader label={tick.dry_run ? 'Tick, dry run' : 'Tick'} title={`tick ${tick.id}`}>
+            <PageHeader title={`tick ${tick.id}`} chips={tick.dry_run && <Chip>dry run</Chip>}>
                 What the overseer decided in this tick, and why, as{' '}
                 <code className="font-mono text-xs">canopy decisions {tick.id}</code> prints it. Attention items and
-                refusals are the harness's. Under them, the overseer's session: what it read and ran to decide.
+                refusals are the harness's. Under them, the overseer's session: what it read and ran to decide; and
+                under that, its output as written, stderr included.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>
@@ -113,6 +116,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                     )}
                 </Panel>
                 <TranscriptPanel transcript={transcript} running={tick.status === 'running'} />
+                <TickOutputPanel id={tick.id} path={output} running={tick.status === 'running'} />
             </div>
         </>
     )

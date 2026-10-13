@@ -6,9 +6,11 @@ import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
+import { useBuddy } from '@/lib/buddy'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
+import { Buddy } from './buddy'
 import { LiveReadouts } from './live-readouts'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
@@ -19,9 +21,18 @@ import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
 
 /**
+ * The scroll restoration id of the element the page scrolls in, everything under the header: the router restores it
+ * on going back and puts it at the top on going somewhere new (`scrollToTopSelectors` in `main.tsx`).
+ */
+export const PAGE_SCROLLER = 'page'
+
+/**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
- * spend, and a footer), and the routed page. Signed out, the sign-in page instead, whatever the route: every API route
- * but the session's needs a session (DESIGN §22).
+ * spend, and a footer), the routed page, and Sprig in the corner once Settings turns it on. Signed out, the sign-in
+ * page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
+ *
+ * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
+ * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
@@ -33,16 +44,14 @@ export function AppShell() {
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
+    const buddy = useBuddy()
     if (session.data === undefined) return <div className="min-h-dvh" />
     if (!signedIn) return <SignIn />
     return (
-        <div className="grid min-h-dvh grid-cols-[13rem_minmax(0,1fr)] grid-rows-[3rem_minmax(0,1fr)]">
+        <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
             <header
                 data-testid="app-header"
-                className={cn(
-                    'sticky top-0 z-10 col-span-2 flex items-center justify-between gap-4',
-                    'border-b bg-surface/85 px-4 backdrop-blur',
-                )}
+                className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
             >
                 {/* The aurora: a hairline through the sections' colors along the header's foot, over its border. */}
                 <span
@@ -66,26 +75,37 @@ export function AppShell() {
                     <ThemeToggle />
                 </div>
             </header>
-            {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav and what is
-                under it stick, and the footer sits at the rail's foot. */}
-            <aside className="flex flex-col border-r bg-surface/60">
-                <div className="sticky top-12">
-                    <SearchBox />
-                    <Nav />
-                    <RailWorking />
-                    <RailSpend />
-                </div>
-                <div className="mt-auto pt-3">
-                    <RailFooter />
-                </div>
-            </aside>
-            <main className="min-w-0 p-6">
-                <ViewTransition>
-                    <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
-                        <Outlet />
+            <div
+                ref={takeKeys}
+                tabIndex={-1}
+                data-scroll-restoration-id={PAGE_SCROLLER}
+                className="page-scroll grid grid-cols-[13rem_minmax(0,1fr)] outline-none"
+            >
+                {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds sticks,
+                    a column as tall as the window under the header (its 3rem row above), so the footer stays at the
+                    window's foot however long the page; the part above it scrolls on its own in a window too short. */}
+                <aside className="border-r bg-surface/60">
+                    <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
+                        <div className="panel-scroll min-h-0 flex-1">
+                            <SearchBox />
+                            <Nav />
+                            <RailWorking />
+                            <RailSpend />
+                        </div>
+                        <div className="pt-3">
+                            <RailFooter />
+                        </div>
                     </div>
-                </ViewTransition>
-            </main>
+                </aside>
+                <main className="min-w-0 p-6">
+                    <ViewTransition>
+                        <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
+                            <Outlet />
+                        </div>
+                    </ViewTransition>
+                </main>
+            </div>
+            {buddy === 'on' && <Buddy />}
         </div>
     )
 }
@@ -94,6 +114,15 @@ export function AppShell() {
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
     return <Mark live={stream === 'open'} ticking={tick?.status === 'running'} beat={tick?.id} />
+}
+
+/**
+ * Gives the page's scroller the focus when nothing else has it, as on a fresh load: the keys that scroll (Page Down,
+ * Space, the arrows) scroll the focused element's scroller, and with the focus on the body that is the window, which
+ * no longer scrolls. Focus a page's own element took first stays where it is.
+ */
+function takeKeys(scroller: HTMLDivElement | null) {
+    if (scroller !== null && document.activeElement === document.body) scroller.focus({ preventScroll: true })
 }
 
 /** A hairline between the header's groups. */

@@ -38,7 +38,8 @@ code or text of their own in step with canopy:
   and Slack destinations the operator wants (N2) ship with canopy (M10).
 - Prompt overrides (§12) are copies the operator maintains, and an override must keep what canopy's guards rely on
   (D051). Prefer a skill; treat an override as a last resort. Opening PRs, which an operator's employer may need done
-  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8).
+  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8), and a habit every
+  worker should keep, such as how to commit review fixes, takes a few lines in `paths.worker_instructions` (§12).
 
 ## Must have
 
@@ -98,8 +99,9 @@ Partial; the rest is M15.
 - See: built. `canopy status` shows the attention list, running workers, the last tick, and the ten runs that ended
   most recently with their outcome, PR, summary, cost, run log, and OpenCode session id, which opens the run's
   transcript with OpenCode's own tools (§13); `canopy decisions` shows what a tick decided. The web UI shows an
-  ended run's or tick's transcript, its tool calls included, read back from its log (M27). A running worker's
-  session id and events are known only once it ends: they are read from what `opencode run` printed.
+  ended run's or tick's transcript, its tool calls included, read back from its log (M27), and the end of a tick's
+  output as written, stderr included. A running worker's session id and events are known only once it ends:
+  they are read from what `opencode run` printed.
 - Prompt an idle ticket: built. An authorized reply on the ticket, or a review comment on the PR, is picked up by the
   next tick and resumes the work (§7). This keeps the operator's daily surface where coworkers' already is.
 - Prompt a running session: not possible today; M15 runs workers against OpenCode's server so the operator can
@@ -158,7 +160,7 @@ operator answers with `canopy reply` or from the web UI. Its branch and PR title
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
 An operator who works only tickets they started can set `tracker.private_only`, so the overseer runs no tracker query
-and dispatches nothing else (M34).
+and dispatches nothing else (M35).
 
 ### R12. One record of every ticket's conversation
 
