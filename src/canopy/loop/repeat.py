@@ -10,6 +10,10 @@ message recorded since the last tick began, such as a `canopy reply`, ends the w
 §22), and so, with idle pacing on, does a run ending after the tick read the journal. On a terminal, pressing
 `TICK_NOW_KEY` ends it at once. A deferred start waits the same way before the first tick, from when the loop started.
 
+While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
+resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
+`canopy pause` and `canopy resume` write the same journal row, which the wait reads at every step.
+
 Output is for a person at a terminal, drawn with rich (D043). The spinner and the countdown are drawn only on a
 terminal; with output sent to a file, the loop prints one block per tick and nothing in between. Each tick's block ends
 with what its overseer cost, when the runtime reported it.
@@ -31,7 +35,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from canopy.core import db
+from canopy.core import db, pause
 from canopy.infra import lock, logs, resources
 from canopy.loop import attention, pacing, tick
 
@@ -54,6 +58,8 @@ WAKE_MIN_SECONDS = 60.0
 SAME_SIGNAL_SECONDS = 1.0
 # Pressed during the wait, this key runs the next tick now, as `canopy tick` by hand would.
 TICK_NOW_KEY = "t"
+# Pressed during a tick or the wait, this key pauses the loop, or resumes it when paused.
+PAUSE_KEY = "p"
 # Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
 # them.
 _QUIET_ACTIONS = ("wait", "mirror")
@@ -124,8 +130,9 @@ def run(
     """Run ticks until `stop` is requested or `max_ticks` have run. Returns how many ticks ended in each status.
 
     With `serve`, the web UI is served from a thread for as long as the loop runs (DESIGN §22). `keys` returns the keys
-    pressed since it was last called (`infra.keys.listen`); with it, `TICK_NOW_KEY` during the wait ticks at once.
-    With `defer_minutes`, the first tick waits that long, as the wait between ticks does.
+    pressed since it was last called (`infra.keys.listen`); with it, `TICK_NOW_KEY` during the wait ticks at once and
+    `PAUSE_KEY` pauses or resumes. With `defer_minutes`, the first tick waits that long, as the wait between ticks does.
+    While the loop is paused, no tick starts but one `TICK_NOW_KEY` asks for.
 
     Raises:
         lock.LockBusyError: another loop holds `<state_dir>/loop.lock`.
@@ -207,6 +214,10 @@ def _ticks(
     """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status."""
     if defer_seconds:
         _defer(console, ctx, stop, defer_seconds, keys=keys, sleep=sleep, clock=clock, log=log)
+    elif pause.paused(ctx.conn) is not None:
+        # Paused before the loop started: hold the first tick as a wait already due holds.
+        woken = _wait(console, ctx, stop, clock(), sleep=sleep, clock=clock, keys=keys, log=log)
+        _log_woken(log, woken, seen=0, read_at=None)
     idle_count = 0
     while not stop.requested:
         before = pacing.before(ctx)
@@ -217,6 +228,9 @@ def _ticks(
         with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
             outcome = _tick(ctx, dry_run=dry_run, log=log)
         ended = clock()
+        if keys is not None:
+            # Keys pressed during the tick are dropped, all but a pause, which holds the next tick.
+            _toggle_pause(ctx, keys(), log)
         statuses[outcome.status] += 1
         idle = pace.on and pacing.idle(ctx, outcome, before)
         idle_count = idle_count + 1 if idle else 0
@@ -240,6 +254,7 @@ def _ticks(
 
         woken = _wait(
             console,
+            ctx,
             stop,
             ended + wait,
             sleep=sleep,
@@ -247,6 +262,7 @@ def _ticks(
             wake=wake,
             earliest=started + WAKE_MIN_SECONDS,
             keys=keys,
+            log=log,
         )
         _log_woken(log, woken, seen=seen, read_at=read_at)
 
@@ -276,6 +292,7 @@ def _defer(
 
     woken = _wait(
         console,
+        ctx,
         stop,
         started + seconds,
         sleep=sleep,
@@ -283,6 +300,7 @@ def _defer(
         wake=wake,
         earliest=started + WAKE_MIN_SECONDS,
         keys=keys,
+        log=log,
         note="first tick in ",
     )
     _log_woken(log, woken, seen=seen, read_at=None)
@@ -326,6 +344,7 @@ class _Ticking:
 
 def _wait(
     console: Console,
+    ctx: Context,
     stop: Stop,
     deadline: float,
     *,
@@ -334,36 +353,71 @@ def _wait(
     wake: Callable[[], Woken | None] = lambda: None,
     earliest: float = 0.0,
     keys: Callable[[], str] | None = None,
+    log: logs.TickAdapter,
     note: str = "next tick in ",
 ) -> Woken | None:
     """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
 
     Once `wake()` names a reason, the wait ends at `earliest` instead, or at once if that has passed: an operator
     message or a run ending runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor:
-    the operator asked for this tick, as they could with `canopy tick`. Returns what ended the wait early, if anything
-    did.
+    the operator asked for this tick, as they could with `canopy tick`. While the loop is paused, the wait does not end
+    at its deadline but holds until the pause is lifted; `PAUSE_KEY` pauses and resumes. Returns what ended the wait
+    early, if anything did.
     """
     woken: Woken | None = None
-    hint = f"  ·  {TICK_NOW_KEY} to tick now  ·  Ctrl-C to stop" if keys is not None else "  ·  Ctrl-C to stop"
-    if keys is not None:
-        keys()  # keys pressed during the tick were not meant for this wait
     with Live(console=console, transient=True, auto_refresh=False) as live:
-        while not stop.requested and (remaining := deadline - clock()) > 0:
-            if keys is not None and TICK_NOW_KEY in keys().lower():
+        while not stop.requested:
+            pressed = keys() if keys is not None else ""
+            _toggle_pause(ctx, pressed, log)
+            if TICK_NOW_KEY in pressed.lower():
                 return "key"
+            held = pause.paused(ctx.conn)
+            remaining = deadline - clock()
+            if remaining <= 0 and held is None:
+                break
             if woken is None and (woken := wake()) is not None:
                 deadline = min(deadline, max(earliest, clock()))
                 continue
-            live.update(
-                Text.assemble(
-                    (_WOKEN_NOTES.get(woken, note), "dim"),
-                    (duration(remaining), "bold"),
-                    (f" at {_clock_time(remaining)}{hint}", "dim"),
-                ),
-                refresh=True,
+            shown = (
+                _held(held, keys=keys is not None)
+                if held
+                else _countdown(note, woken, remaining, keys=keys is not None)
             )
-            sleep(min(_WAIT_STEP_SECONDS, remaining))
+            live.update(shown, refresh=True)
+            sleep(_WAIT_STEP_SECONDS if held else min(_WAIT_STEP_SECONDS, remaining))
     return woken
+
+
+def _toggle_pause(ctx: Context, pressed: str, log: logs.TickAdapter) -> None:
+    """Pause the loop, or resume it, once for each `PAUSE_KEY` in `pressed`."""
+    if pressed.lower().count(PAUSE_KEY) % 2 == 0:
+        return
+    if pause.paused(ctx.conn) is None:
+        pause.pause(ctx.conn, channel=pause.LOOP)
+        log.info("loop paused", extra={"channel": pause.LOOP})
+    else:
+        pause.resume(ctx.conn)
+        log.info("loop resumed", extra={"channel": pause.LOOP})
+
+
+def _countdown(note: str, woken: Woken | None, remaining: float, *, keys: bool) -> Text:
+    hint = f"  ·  {TICK_NOW_KEY} to tick now  ·  {PAUSE_KEY} to pause" if keys else ""
+    return Text.assemble(
+        (_WOKEN_NOTES.get(woken, note), "dim"),
+        (duration(remaining), "bold"),
+        (f" at {_clock_time(remaining)}{hint}  ·  Ctrl-C to stop", "dim"),
+    )
+
+
+def _held(held: pause.Paused, *, keys: bool) -> Text:
+    hint = f"{PAUSE_KEY} to resume  ·  {TICK_NOW_KEY} to tick once" if keys else "`canopy resume` or the web UI resumes"
+    return Text.assemble(
+        ("paused", "bold yellow"),
+        (
+            f" since {_local_time(held.since)} ({held.channel}); no tick until resumed  ·  {hint}  ·  Ctrl-C to stop",
+            "dim",
+        ),
+    )
 
 
 def _header(
@@ -393,10 +447,15 @@ def _header(
     grid.add_row("log", Text(str(ctx.state_dir / logs.LOG_FILE_NAME)))
     if serving is not None:
         grid.add_row("web UI", Text(serving.note, style="" if serving.server is not None else "yellow"))
+    if (held := pause.paused(ctx.conn)) is not None:
+        since = f"since {_local_time(held.since)} ({held.channel}); no tick until resumed"
+        grid.add_row("paused", Text(since, style="yellow"))
     console.print(grid)
     console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
     if keys:
-        console.print(Text(f"Press {TICK_NOW_KEY} during the wait to tick now.", style="dim"))
+        console.print(
+            Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim")
+        )
     console.print()
 
 
@@ -456,7 +515,9 @@ def _report(
     footer.append(f"attention {len(after)}", style="bold yellow" if after else "dim")
     if outcome.usage is not None:
         footer.append(f"  ·  cost {outcome.usage.describe()}")
-    if wait is not None:
+    if wait is not None and pause.paused(ctx.conn) is not None:
+        footer.append("  ·  paused: no tick until resumed", style="yellow")
+    elif wait is not None:
         idle = f"idle {idle_count}, " if idle_count else ""
         footer.append(f"  ·  {idle}next tick in {duration(wait)} at {_clock_time(wait)}")
     console.print(footer)
@@ -514,3 +575,8 @@ def duration(seconds: float) -> str:
 
 def _clock_time(seconds_from_now: float) -> str:
     return (datetime.now(UTC).astimezone() + timedelta(seconds=seconds_from_now)).strftime("%H:%M")
+
+
+def _local_time(stamp: str) -> str:
+    """A time the journal wrote, as the terminal's clock shows it."""
+    return db.parse_time(stamp).astimezone().strftime("%H:%M")

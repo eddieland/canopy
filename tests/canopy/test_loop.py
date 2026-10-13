@@ -19,7 +19,7 @@ import pytest
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, workspace
+from canopy.core import config, conversation, db, pause, workspace
 from canopy.core.context import Context
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import repeat
@@ -508,7 +508,10 @@ def test_the_tick_now_key_ends_the_wait_at_once(
     assert statuses == {"ok": 2}
     # Two steps of the wait, then the second tick: no one-minute floor, unlike an operator message.
     assert time.slept == [0.5, 0.5]
-    assert f"Press {repeat.TICK_NOW_KEY} during the wait to tick now." in out.getvalue()
+    assert (
+        f"Press {repeat.TICK_NOW_KEY} during the wait to tick now, {repeat.PAUSE_KEY} to pause or resume."
+        in out.getvalue()
+    )
     log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
     assert any(line["msg"] == "the operator asked for a tick now" for line in log_lines)
 
@@ -626,6 +629,204 @@ def test_loop_passes_defer_through(monkeypatch: pytest.MonkeyPatch, canopy_env: 
     assert main(["loop", "--defer", "30", "--no-serve"]) == 0
     assert seen["defer_minutes"] == 30
     assert main(["loop", "--defer", "0"]) == 2  # at least a minute; to tick at once, leave it out
+
+
+def log_messages(env: CanopyEnv) -> list[dict[str, object]]:
+    return [json.loads(line) for line in (env.state_dir / "canopy.log").read_text().splitlines()]
+
+
+def paused(env: CanopyEnv) -> pause.Paused | None:
+    conn = db.connect(env.state_dir / db.DB_FILE_NAME)
+    try:
+        return pause.paused(conn)
+    finally:
+        conn.close()
+
+
+def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    keys = FakeKeys()
+    time = FakeTime()
+    ticks_seen: list[int] = []
+
+    def operator() -> None:
+        ticks_seen.append(len(tick_statuses(canopy_env)))
+        if len(time.slept) == 1:
+            keys.type(repeat.PAUSE_KEY)
+        elif len(time.slept) == 400:  # 200 seconds in, well past the one-minute wait's deadline
+            keys.type(repeat.PAUSE_KEY.upper())
+
+    time.on_sleep = operator
+    term, out = console()
+    statuses = repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=1,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        keys=keys.pressed,
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    assert statuses == {"ok": 2}
+    # Held until resumed, then the second tick at once: the deadline had passed.
+    assert sum(time.slept) == 200
+    assert set(ticks_seen) == {1}
+    assert paused(canopy_env) is None
+    lines = [(line["msg"], line.get("channel")) for line in log_messages(canopy_env)]
+    assert ("loop paused", "loop") in lines
+    assert ("loop resumed", "loop") in lines
+    assert f"{repeat.PAUSE_KEY} to pause or resume" in out.getvalue()
+
+
+def test_a_pause_key_pressed_during_a_tick_holds_the_next_one(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    keys = FakeKeys()
+    keys.type(repeat.PAUSE_KEY)  # read when the first tick ends, unlike the tick-now key
+    time = FakeTime()
+
+    def resume_from_the_shell() -> None:
+        if len(time.slept) == 10:
+            assert main(["resume"]) == 0
+
+    time.on_sleep = resume_from_the_shell
+    term, out = console()
+    statuses = repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        keys=keys.pressed,
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    assert statuses == {"ok": 2}
+    # Resumed five seconds in, before the deadline: the wait then runs out as it would have.
+    assert sum(time.slept) == 15 * 60
+    assert "attention 0  ·  paused: no tick until resumed" in out.getvalue()
+
+
+def test_a_loop_started_paused_holds_its_first_tick_until_resumed(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    assert main(["pause"]) == 0
+    ran: list[bool] = []
+    time = FakeTime()
+
+    def resume_later() -> None:
+        ran.append(agent_log.exists())
+        if len(time.slept) == 3:
+            assert main(["resume"]) == 0
+
+    time.on_sleep = resume_later
+    term, out = console()
+    statuses = repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=1,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    assert statuses == {"ok": 1}
+    assert time.slept == [0.5, 0.5, 0.5]
+    assert not any(ran)  # no overseer ran while paused
+    assert "no tick until resumed" in out.getvalue().split("tick 1  ok")[0]  # the header says so
+    assert ("loop resumed", "cli") in [(line["msg"], line.get("channel")) for line in log_messages(canopy_env)]
+
+
+def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    assert main(["pause"]) == 0
+    keys = FakeKeys()
+    time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY) if len(time.slept) == 2 else None)
+    statuses = repeat.run(
+        context(canopy_env),
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=1,
+        console=console()[0],
+        stop=repeat.Stop(),
+        keys=keys.pressed,
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+    assert statuses == {"ok": 1}
+    assert time.slept == [0.5, 0.5]
+    held = paused(canopy_env)
+    assert held is not None
+    assert held.channel == "cli"
+
+
+def test_ctrl_c_while_paused_stops_the_loop_without_a_tick(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    assert main(["pause"]) == 0
+    time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGINT))
+    stop = repeat.Stop()
+    term, out = console()
+    with repeat.signals(stop):
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=None,
+            console=term,
+            stop=stop,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+    assert statuses == Counter()
+    assert not agent_log.exists()
+    assert "stopped after 0 ticks: none" in out.getvalue()
+
+
+def test_canopy_pause_and_resume_say_what_they_did_and_status_shows_the_pause(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["resume"]) == 0
+    assert "The loop was not paused." in capsys.readouterr().out
+    assert main(["pause"]) == 0
+    assert "Paused: the loop starts no tick until `canopy resume`." in capsys.readouterr().out
+    assert main(["pause"]) == 0
+    assert "The loop was already paused 0s ago (cli)." in capsys.readouterr().out
+    assert main(["status"]) == 0
+    assert "Loop paused " in capsys.readouterr().out
+    assert main(["resume"]) == 0
+    assert "Resumed" in capsys.readouterr().out
+    assert main(["status"]) == 0
+    assert "Loop paused" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
+@pytest.mark.parametrize("verb", ["pause", "resume"])
+def test_an_agent_can_neither_pause_nor_resume_the_loop(
+    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], env: str, verb: str
+) -> None:
+    if verb == "resume":
+        assert main(["pause"]) == 0
+    before = paused(canopy_env) if verb == "resume" else None
+    monkeypatch.setenv(env, "3")
+    assert main([verb]) == 1
+    assert f"{verb} refused (inside_run)" in capsys.readouterr().err
+    if verb == "resume":
+        assert paused(canopy_env) == before
 
 
 @pytest.mark.parametrize(

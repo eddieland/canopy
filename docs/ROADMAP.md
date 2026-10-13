@@ -400,6 +400,8 @@ Learned:
 - Checked live on 2026-10-07: `canopy loop --every 3` ran 6 ticks against the real queue, dispatching, reviewing, and
   resuming; Ctrl-C during a tick stopped it when that tick finished, and Ctrl-C during the wait stopped it at once
   (exit 0). The loop has been the operator's daily surface since. A working session's legibility is SCENARIOS S26.
+- Pausing joined it on request (2026-10-13): `p` at the loop's terminal, `canopy pause` and `canopy resume`, and the
+  web UI's header write one journal row that holds the wait (DESIGN §6), tested against the fakes.
 Next: the closing line does not say a signal stopped it; a small follow-up, not a milestone.
 
 ## M13. Spend-paced loop
