@@ -11,9 +11,9 @@ marks what is live, selected, or the action to take; what is selected in a page 
 the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
 label over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
-decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
-color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
-neither is the lesser theme.
+decoration, but the header ticker's flair and Sprig's leaf. Both themes' neutrals carry the accent's indigo hue, so
+the canvas has color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the
+operator lives in; neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
@@ -40,6 +40,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
+| `buddy-eye`, `buddy-pupil`, `buddy-leaf` | Sprig's googly eyes (white, black, in both themes) and leaf. |
 
 Rules:
 
@@ -100,6 +101,14 @@ Rules:
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
   headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
   of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
+- In the side rail's bottom-left corner, under the nav, sits Sprig (`Buddy`, `src/components/shell/buddy.tsx`): a
+  paperclip's bent wire in `muted-foreground` with a leaf on top and googly eyes, in the spirit of an office
+  assistant nobody asked for. On each page, and on a click, a speech bubble above it offers a tip about that page,
+  as dumb as it is harmless (`TIPS` in `src/lib/buddy.ts`), written here, never journal text. The rail is empty
+  there, so neither covers the page; the bubble is the rail's width and on `surface-raised`, its tail pointing down
+  at Sprig. It closes with its button or after 20 seconds, offers another tip, or turns Sprig off ("Don't show me
+  tips again"). It is off until Settings turns it on, so the pages' screenshots leave it out; it has its own
+  (`e2e/buddy.spec.ts`).
 - The header carries the loop's pause (`LoopPause`), the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
   `mock`), and the theme toggle; the counters are the attention page's, and the nav's Attention item shows how many
@@ -123,7 +132,7 @@ Rules:
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, and the header's ticker. The keyframes and utilities are in `src/index.css`.
+a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -142,6 +151,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
   left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
   rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. The reel starts at a
   different headline each day. At rest the window is empty, between headlines.
+- Sprig's tip pops in a moment after a page arrives, as if it had been waiting, and its brows rise once with each
+  tip. Its eyes blink every few seconds and look toward the pointer.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
@@ -149,8 +160,9 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, pulses, ripples, and the drifting leaf are hidden, and the ticker shows its first headline in place. New
-  motion goes inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
+  in place, pulses, ripples, and the drifting leaf are hidden, the ticker shows its first headline in place, and
+  Sprig's tip is simply there, its eyes still. New motion goes inside a `prefers-reduced-motion: no-preference` block
+  or a `motion-safe:` variant.
 
 ## No layout shift
 
@@ -165,8 +177,8 @@ Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent m
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
-`canopy-ticker` (`src/lib/ticker-settings.ts`), and the key that sends a reply under `canopy-send-key`
-(`src/lib/send-key.ts`), both synced across tabs.
+`canopy-ticker` (`src/lib/ticker-settings.ts`), the key that sends a reply under `canopy-send-key`
+(`src/lib/send-key.ts`), and whether Sprig shows under `canopy-buddy` (`src/lib/buddy.ts`), all synced across tabs.
 
 ## Patterns
 

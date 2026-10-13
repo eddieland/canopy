@@ -9,6 +9,7 @@ import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { type BuddySetting, setBuddy, useBuddy } from '@/lib/buddy'
 import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, type TickerSpeed, useTickerSettings } from '@/lib/ticker-settings'
 import type { ThemePreference } from '@/theme/store'
@@ -30,6 +31,11 @@ const SPEEDS: { value: TickerSpeed; label: string }[] = [
     { value: 'slow', label: 'Slow' },
     { value: 'normal', label: 'Normal' },
     { value: 'spicy', label: 'Spicy' },
+]
+
+const BUDDY: { value: BuddySetting; label: string }[] = [
+    { value: 'on', label: 'On' },
+    { value: 'off', label: 'Off' },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -68,6 +74,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <TickerPanel />
+            <BuddyPanel />
             <SendKeyPanel />
             <SessionPanel />
         </>
@@ -129,6 +136,37 @@ function TickerPanel() {
                     />
                     <span className="readout text-xs text-muted-foreground">s</span>
                 </span>
+            </div>
+        </Panel>
+    )
+}
+
+/** Whether Sprig sits in the corner offering tips. */
+function BuddyPanel() {
+    const buddy = useBuddy()
+    return (
+        <Panel>
+            <PanelHeader label="Sprig" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    The helper in the bottom-left corner, with a tip for every page. None of them help. Off hides it.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={buddy}
+                    aria-label="Sprig"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = BUDDY.find((b) => b.value === value)
+                        if (picked) setBuddy(picked.value)
+                    }}
+                >
+                    {BUDDY.map(({ value, label }) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`buddy-${value}`}>
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
         </Panel>
     )

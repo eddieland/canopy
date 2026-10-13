@@ -6,9 +6,11 @@ import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
+import { useBuddy } from '@/lib/buddy'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
+import { Buddy } from './buddy'
 import { LiveReadouts } from './live-readouts'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
@@ -18,8 +20,9 @@ import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
 
 /**
- * The frame every page renders in: header (with its ticker), side navigation, and the routed page. Signed out, the
- * sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * The frame every page renders in: header (with its ticker), side navigation, the routed page, and Sprig in the
+ * corner unless Settings turned it off. Signed out, the sign-in page instead, whatever the route: every API route but
+ * the session's needs a session (DESIGN §22).
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
@@ -31,6 +34,7 @@ export function AppShell() {
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
+    const buddy = useBuddy()
     if (session.data === undefined) return <div className="min-h-dvh" />
     if (!signedIn) return <SignIn />
     return (
@@ -76,6 +80,7 @@ export function AppShell() {
                     </div>
                 </ViewTransition>
             </main>
+            {buddy === 'on' && <Buddy />}
         </div>
     )
 }

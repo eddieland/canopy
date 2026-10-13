@@ -49,6 +49,11 @@
     --flair-blue: oklch(0.5 0.2 262);
     --flair-purple: oklch(0.52 0.2 315);
 
+    /* Sprig, the helper in the corner: its googly eyes, white and black in both themes, and its leaf. */
+    --buddy-eye: oklch(0.99 0 0);
+    --buddy-pupil: oklch(0.2 0.01 277);
+    --buddy-leaf: oklch(0.6 0.15 145);
+
     --radius: 0.5rem;
 }
 
@@ -87,6 +92,10 @@
     --flair-cyan: oklch(0.85 0.13 200);
     --flair-blue: oklch(0.65 0.18 262);
     --flair-purple: oklch(0.72 0.2 315);
+
+    --buddy-eye: oklch(0.97 0.005 260);
+    --buddy-pupil: oklch(0.163 0.012 261);
+    --buddy-leaf: oklch(0.74 0.16 145);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -122,6 +131,10 @@
     --color-flair-cyan: var(--flair-cyan);
     --color-flair-blue: var(--flair-blue);
     --color-flair-purple: var(--flair-purple);
+
+    --color-buddy-eye: var(--buddy-eye);
+    --color-buddy-pupil: var(--buddy-pupil);
+    --color-buddy-leaf: var(--buddy-leaf);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names
