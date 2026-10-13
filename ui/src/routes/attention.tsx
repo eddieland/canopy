@@ -11,6 +11,7 @@ import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
 import { LinkedText } from '@/components/linked-text'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { Chip, RunDot } from '@/components/status'
@@ -20,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
 
@@ -199,6 +201,7 @@ function ChoreThread({ name }: { name: string }) {
 
 function Thread({ ticketKey }: { ticketKey: string }) {
     const { data, error } = useQuery(ticketQuery(ticketKey))
+    const order = useListOrder('conversation')
     if (error instanceof ApiError) return <Placeholder className="min-h-40">{error.message}</Placeholder>
     if (data === undefined) {
         return (
@@ -212,16 +215,21 @@ function Thread({ ticketKey }: { ticketKey: string }) {
     return (
         <>
             <PanelHeader label="Conversation">
-                <span className="readout text-xs text-muted-foreground">
-                    {phaseLabel(ticket)} · {messages.length}
+                <span className="flex items-center gap-2">
+                    {messages.length > 1 && <OrderToggle list="conversation" />}
+                    <span className="readout text-xs text-muted-foreground">
+                        {phaseLabel(ticket)} · {messages.length}
+                    </span>
                 </span>
             </PanelHeader>
+            {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
+            {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
             {messages.length === 0 ? (
                 <Placeholder className="min-h-20">no messages yet</Placeholder>
             ) : (
-                <Conversation messages={messages} waiting={ticket.awaiting} />
+                <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
             )}
-            <WorkingNow ticketKey={ticket.key} />
+            {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
             <ReplyForm
                 key={ticket.key}
                 target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
