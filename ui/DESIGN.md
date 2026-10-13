@@ -85,8 +85,12 @@ Rules:
 - Radius: `rounded-md` (8px) for panels and buttons, `rounded-sm` (6px) for chips and nav items.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
   blocks.
-  The side rail runs the full height of the page and only its top part is sticky: nothing in the shell is sized
-  to the viewport, so a full-page capture (or print) shows it whole.
+  The header stays put and only what is under it scrolls (`page-scroll`), so the header spans the window's width
+  and a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header: the
+  browser paints the window's own gutter with the canvas color alone, so when the window scrolled, the header
+  stopped short of its edge. The side rail runs the full height of the page and only its top part is sticky. Printed,
+  the shell is not held to the window and shows the page whole; a screenshot test does the same by growing the
+  window to the page (`screenshotWhole` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
@@ -137,6 +141,10 @@ Rules:
   (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
   repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
   links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
+- **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which
+  React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with the attention list's
+  count, when it holds anything, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
+  The name is the header's title when that is plain text, else its `tab`; the sign-in page's is `Sign in`.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
@@ -178,7 +186,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 
 ## No layout shift
 
-- `scrollbar-gutter: stable` on the root, so a page that grows a scrollbar does not move.
+- `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
+  move.
 - Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
 - A skeleton (`Skeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
   screen.

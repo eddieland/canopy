@@ -22,18 +22,16 @@ in order:
    with migrations this canopy does not know (D068). Until then, the tick and any command that opens the journal fail
    saying so.
 3. **Reconcile local state.**
-   - Each `runs` row with `status='running'` whose pid (the `canopy _run` process) is dead or never recorded: kill what
-     is left of the worker's process group (`runs.worker_pid`), mark the run `crashed`, run
-     `treehouse return --force --if-lease-id` on every slot it leased (`run_slots`), remove its desk if it was a joint
-     run, and log it. A zombie counts as dead. A pid reused by an unrelated process reads as alive, so that run stays
-     running: a residual, not a guard.
+   - Each `runs` row with `status='running'` whose `canopy _run` process is gone (below): kill what is left of the
+     worker's process group (`runs.worker_pid`), mark the run `crashed`, run `treehouse return --force --if-lease-id`
+     on every slot it leased (`run_slots`), remove its desk if it was a joint run, and log it.
    - Each leased slot in `treehouse status --json` with no live `runs` row and `lease_holder` matching our prefix:
      return it and log it. In a workspace this covers every cloned repository's pool, and a run's slots go back to the
      pools of the repositories they record (§18). A desk canopy made whose ticket has no running run is removed;
      anything else under `desks/` is left alone.
-   - Each `chore_runs` row with `status='running'` whose `_chore` is dead or never recorded: kill what is left of its
+   - Each `chore_runs` row with `status='running'` whose `_chore` is gone: kill what is left of its
      agent's process group and mark it `crashed` (§19). Chore runs hold no slot and take no worker capacity.
-   - Each `review_runs` row with `status='running'` whose `_review` is dead or never recorded: kill what is left of its
+   - Each `review_runs` row with `status='running'` whose `_review` is gone: kill what is left of its
      reviewer, remove its directory, return its slot, and mark it `crashed` (§21). This runs before the worker runs'
      reconcile, and a running review's lease is never returned as stale.
    - `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
@@ -47,17 +45,18 @@ in order:
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated `## State` section holding
    one JSON object: tick id, current time, whether it is a dry run, workspace root; the workspace (name, the path of
-   `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its
-   pool's leased slots, §18); tracker config (provider, query, labels, needs-human label); trust config (authorized
-   repliers, branch prefix, PR label); capacity; policy (limits and stacking); running workers and their repositories;
-   and the `tickets` rows not marked done. Each ticket has its phase, branch, and comment, message, and mirror cursors
-   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind,
-   the runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next
-   run if still ahead; and its latest run (id, kind, status, branch, each repository it leased in
-   with its starting base, start and end). A ticket the operator started has a `private` object (§22): its start
-   record's status, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if
-   any. `chores` (§19) is present only when chores are configured. `mirror` holds the per-tick mirror limit and this
-   tick's heredoc delimiter (§22).
+   `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its pool's leased slots, §18); tracker
+   config (provider, query, labels, needs-human label); trust config (authorized repliers, branch prefix, PR label);
+   capacity; policy (limits and stacking); running workers and their repositories; and the `tickets` rows not marked
+   done, except those the operator stopped. Each ticket has its phase, branch, and comment, message, and mirror cursors
+   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the
+   runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run
+   if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
+   start and end). A ticket the operator started has a `private` object (§22): when it was started, its message cursor,
+   the operator's messages newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the
+   operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
+   so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is present only when chores are
+   configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
@@ -65,10 +64,15 @@ in order:
    the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
    overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
    id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
-   succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick
-   closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
-   (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention list standing,
-   so an outage does not resolve and re-raise every item.
+   succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and backticks, is
+   `CANOPY_TICK_DONE` and nothing else; otherwise the tick closes as `overseer_failed`. Text before or after that line
+   is allowed, because models summarize what they did, and a tick that did its work but failed on a summary is lost to
+   the attention list (MEASUREMENTS 2026-10-12, F2). The check stays on the final message, not the whole transcript,
+   because what it catches is a run that exits 0 short of the procedure's last step: a refused tool call, a cut-off
+   session. The token is a word no model writes by chance, where `tick complete` was ordinary English that a looser
+   check would find in a rationale; a line that only mentions it does not count. A successful run that recorded a
+   tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention
+   list standing, so an outage does not resolve and re-raise every item.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
@@ -90,6 +94,17 @@ in order:
    lock.
 
 Workers dispatched during a tick outlive it, as detached processes owned by `canopy _run`.
+
+A detached process (`_run`, `_chore`, `_review`) is alive exactly while it holds its lifelock: an `flock` on the file
+beside its log, `<id>.lock` beside `<id>.log`. The spawn takes it before the process exists and passes the open file
+to it, so it is held from before the run's pid is recorded; the process keeps it without doing anything, and the
+kernel lets go of it when the process exits, however it exits, before it is a zombie. What the process starts does not
+inherit it, since every process canopy starts gets only the files it is given: a worker left running after its `_run`
+died does not keep the run alive, so reconcile kills it. A second spawn on the same log is refused while the first
+holds the lock. Asking a pid instead could not tell a reused pid from the process it once named, nor a zombie's last
+moments from death, without reading `/proc`. A run started by a canopy from before lifelocks has no lock file, so its
+pid is asked instead, as before: a zombie counts as dead, and a pid reused by an unrelated process reads as alive. A
+run with neither a lock nor a recorded pid is gone.
 
 ### The loop
 
@@ -454,8 +469,8 @@ dispatch names at least one, in a workspace of one repository too.
      refuses the dispatch (`stopped`) and its leases are returned.
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
-   stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the workspace root). Record its
-   pid in the run and return immediately.
+   stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the workspace root), holding its lifelock
+   `<state_dir>/runs/<run_id>.lock` (§6). Record its pid in the run and return immediately.
 
 `canopy _run <run_id>` (hidden from `--help`):
 

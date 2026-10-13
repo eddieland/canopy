@@ -547,7 +547,7 @@ def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 at(ended) if ended is not None else None,
                 status,
                 json.dumps(result) if result is not None else None,
-                str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chores" / f"{run_id}.log"),
+                str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chore-runs" / name / f"{run_id}.log"),
                 f"ses_chore{run_id}",
                 cost,
                 int(cost * 40_000),
@@ -834,17 +834,17 @@ def _transcripts(state_dir: Path) -> None:
         ("runs", "41", none),
         ("runs", "43", none),
         ("ticks", "2", tick_2),
-        ("chores", "2", chore_2),
-        ("chores", "4", none),
+        ("chore-runs/deps", "2", chore_2),
+        ("chore-runs/build-health", "4", none),
     )
     for directory, name, lines in written:
-        (state_dir / directory).mkdir(mode=0o700, exist_ok=True)
+        (state_dir / directory).mkdir(mode=0o700, parents=True, exist_ok=True)
         stdout = "\n".join(lines)
         if not lines:
             text = ""
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
-        elif directory == "chores":
+        elif directory.startswith("chore-runs/"):
             text = f"--- chore stdout ---\n{stdout}\n--- chore stderr ---\n\n--- chore exit 0 ---\n"
         else:
             # What OpenCode printed on stderr, which only the tick's output shows.

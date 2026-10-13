@@ -88,7 +88,7 @@ def state_block(agent_log: Path) -> dict[str, Any]:
 def test_without_chores_nothing_about_them_reaches_the_overseer(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
@@ -104,7 +104,7 @@ def test_max_chores_zero_turns_every_chore_off(
     canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
@@ -139,7 +139,12 @@ def test_a_chore_run_records_its_findings(
     assert run["previous_run"] is None
     assert run["open_findings"] == []
     assert run["result_contract"] == result.CONTRACT
-    assert (canopy_env.state_dir / "chores" / "1.prompt").stat().st_mode & 0o777 == 0o600
+    # Run files are kept by chore, out of its working directory.
+    runs = canopy_env.state_dir / "chore-runs" / "build-health"
+    assert runs.stat().st_mode & 0o777 == 0o700
+    assert row["log_path"] == str(runs / "1.log")
+    assert (runs / "1.prompt").stat().st_mode & 0o777 == 0o600
+    assert not (cwd / "1.log").exists()
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -236,7 +241,7 @@ def test_long_text_is_cut_to_its_limits() -> None:
 
 
 def tick(monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> None:
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0
 
 

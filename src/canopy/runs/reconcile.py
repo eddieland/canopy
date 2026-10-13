@@ -82,8 +82,7 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     """
     returned: set[str] = set()
     for run in db.running_runs(ctx.conn):
-        pid = run["pid"]
-        if pid is not None and procs.alive(int(pid)):
+        if procs.running(Path(run["log_path"]), run["pid"]):
             continue
         returned |= end_run(ctx, run, "crashed", "the worker process is gone", log)
     return returned

@@ -363,7 +363,7 @@ def test_the_state_block_shows_split_children(
     assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
     run = wait_for_run(conn, 1)
     monkeypatch.delenv("CANOPY_TICK_ID")
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
 
     overseer = json.loads(agent_log.read_text().splitlines()[-1])

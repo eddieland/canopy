@@ -16,11 +16,9 @@
     }
 
     html {
-        /* No layout shift when a page grows a scrollbar. */
-        scrollbar-gutter: stable;
         /* Inherited, so every scroller (the page, a panel's list, a textarea) has the same thumb in both themes. */
         scrollbar-color: var(--scrollbar) transparent;
-        /* On the root, so it paints the whole canvas, the reserved gutter included. */
+        /* On the root, so it paints the whole canvas. */
         background-color: var(--background);
         -webkit-font-smoothing: antialiased;
         /*
@@ -58,6 +56,25 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted-foreground);
+}
+
+/*
+ * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
+ * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
+ */
+@utility page-scroll {
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    @media print {
+        overflow: visible;
+    }
+}
+
+/* Under the shell the window itself never scrolls, so it never shows a scrollbar of its own beside the page's. */
+@media screen {
+    :root:has(.page-scroll) {
+        overflow: hidden;
+    }
 }
 
 /* A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's. */

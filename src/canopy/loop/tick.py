@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 TICK_ID_ENV = conversation.TICK_ID_ENV
-DONE_LINE = "tick complete"
+# A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
+DONE_LINE = "CANOPY_TICK_DONE"
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     running = db.running_runs(ctx.conn)
     last_runs = db.latest_runs(ctx.conn)
-    tickets = db.open_tickets(ctx.conn)
+    # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
+    stopped = conversation.stopped(ctx.conn)
+    tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
     private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {
         str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
@@ -97,6 +100,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         leased=reconciled.leased,
         running=running,
         tickets=tickets,
+        stopped=stopped,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
@@ -198,13 +202,12 @@ def _run_overseer(
 
     output = agent_output.read(result.stdout)
     db.set_tick_report(ctx.conn, tick_id, output.session_id, output.usage)
-    lines = [line.strip().strip("`").strip() for line in output.text.splitlines() if line.strip()]
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:
         failure = f"overseer exited {result.returncode}"
-    elif not lines or lines[-1].lower() != DONE_LINE:
-        failure = f"overseer did not end with {DONE_LINE!r}"
+    elif not _done(output.last):
+        failure = f"overseer's final message has no {DONE_LINE} line"
     else:
         return None, output.usage
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
@@ -230,3 +233,15 @@ class _SessionWatch:
         self.seen = True
         db.set_tick_session(self.ctx.conn, self.tick_id, session)
         self.log.info("overseer session started", extra={"session_id": session})
+
+
+def _done(message: str) -> bool:
+    """Whether `message`, the overseer's final message, has the done line.
+
+    Text around that line is allowed: models summarize what they did. Only the final message is passed, so a run cut
+    off after an earlier message that named the token still fails.
+
+    Returns:
+        True if a line, trimmed of whitespace and backticks, is `DONE_LINE` and nothing else.
+    """
+    return any(line.strip().strip("`").strip() == DONE_LINE for line in message.splitlines())
