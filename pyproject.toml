@@ -4,10 +4,30 @@ name = "canopy"
 dynamic = ["version"]
 description = "Unattended, local agent loop driven by your issue tracker."
 readme = "README.md"
-# The classifier makes PyPI refuse an upload, where `canopy` is another project's name (D046).
 license = "MIT"
 license-files = ["LICENSE"]
-classifiers = ["Private :: Do Not Upload"]
+authors = [{ name = "eddieland" }]
+keywords = ["agents", "automation", "ci", "code-review", "issue-tracker", "jira", "llm", "worktree"]
+# The license is the `license` expression above, so no `License ::` classifier (PEP 639). Python versions are the ones
+# CI runs on.
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    # Makes PyPI refuse an upload, where `canopy` is another project's name (D046).
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Bug Tracking",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Utilities",
+]
 requires-python = ">=3.12"
 dependencies = [
     "canopy-notify-slack",
@@ -24,6 +44,13 @@ canopy = "canopy.cli.main:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
+
+[project.urls]
+Homepage = "https://github.com/eddieland/canopy"
+Documentation = "https://github.com/eddieland/canopy/tree/main/docs"
+Repository = "https://github.com/eddieland/canopy"
+Issues = "https://github.com/eddieland/canopy/issues"
+Releases = "https://github.com/eddieland/canopy/releases"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
