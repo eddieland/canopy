@@ -8,10 +8,19 @@ import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
-import { clampGap, MAX_GAP, setTickerSettings, type TickerSpeed, useTickerSettings } from '@/lib/ticker-settings'
+import {
+    clampGap,
+    MAX_GAP,
+    setTickerSettings,
+    type TickerSpeed,
+    useTickerSettings,
+    withTopic,
+} from '@/lib/ticker-settings'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
@@ -32,6 +41,12 @@ const SPEEDS: { value: TickerSpeed; label: string }[] = [
     { value: 'slow', label: 'Slow' },
     { value: 'normal', label: 'Normal' },
     { value: 'spicy', label: 'Spicy' },
+]
+
+const TOPICS: { value: TickerTopic; label: string }[] = [
+    { value: 'programming', label: 'Programming' },
+    { value: 'vibes', label: 'Vibe coding' },
+    { value: 'tips', label: 'Tips' },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -78,9 +93,9 @@ function SettingsPage() {
     )
 }
 
-/** The header ticker's pace and the pause between its headlines. */
+/** The header ticker's pace, the pause between its headlines, and the topics they are drawn from. */
 function TickerPanel() {
-    const { speed, gap } = useTickerSettings()
+    const { speed, gap, hidden } = useTickerSettings()
     return (
         <Panel>
             <PanelHeader label="Ticker" />
@@ -104,7 +119,7 @@ function TickerPanel() {
                     ))}
                 </ToggleGroup>
             </div>
-            <div className="flex items-center justify-between gap-4 p-3">
+            <div className="flex items-center justify-between gap-4 border-b p-3">
                 <label htmlFor="ticker-gap" className="text-sm text-muted-foreground">
                     Seconds the ticker stays empty between one headline and the next.
                 </label>
@@ -133,6 +148,26 @@ function TickerPanel() {
                     />
                     <span className="readout text-xs text-muted-foreground">s</span>
                 </span>
+            </div>
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p id="ticker-topics" className="text-sm text-muted-foreground">
+                    Which headlines it shows. Tips about canopy are mixed in with the jokes.
+                </p>
+                <fieldset aria-labelledby="ticker-topics" className="flex shrink-0 items-center gap-4">
+                    {TOPICS.map(({ value, label }) => (
+                        <label key={value} className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                            <Checkbox
+                                checked={!hidden.includes(value)}
+                                disabled={speed === 'off'}
+                                data-testid={`ticker-topic-${value}`}
+                                onCheckedChange={(checked) =>
+                                    setTickerSettings({ hidden: withTopic(hidden, value, checked === true) })
+                                }
+                            />
+                            {label}
+                        </label>
+                    ))}
+                </fieldset>
             </div>
         </Panel>
     )
