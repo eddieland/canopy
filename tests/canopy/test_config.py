@@ -1,6 +1,8 @@
+import os
 import re
 import tomllib
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -298,12 +300,11 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         assert template.endswith(" --title={title} {prompt}")
 
 
-def test_xdg_config_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    assert config.user_config_path() == tmp_path / "canopy" / "config.toml"
-    monkeypatch.setenv("XDG_CONFIG_HOME", "")
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    assert config.user_config_path() == tmp_path / "home" / ".config" / "canopy" / "config.toml"
+def test_xdg_config_home(tmp_path: Path) -> None:
+    with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(tmp_path)}):
+        assert config.user_config_path() == tmp_path / "canopy" / "config.toml"
+    with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": "", "HOME": str(tmp_path / "home")}):
+        assert config.user_config_path() == tmp_path / "home" / ".config" / "canopy" / "config.toml"
 
 
 def test_examples_are_valid(tmp_path: Path) -> None:

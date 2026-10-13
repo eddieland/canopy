@@ -5,6 +5,7 @@ import os
 import shutil
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -50,7 +51,7 @@ def test_an_existing_snapshot_is_reused_as_is(tmp_path: Path) -> None:
     assert [p.name for p in (tmp_path / "runtime").iterdir()] == [snapshot.name]
 
 
-def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path) -> None:
     final = tmp_path / "runtime" / definitions.digest()
     real_rename = os.rename
 
@@ -59,8 +60,8 @@ def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path, m
         (final / "winner").touch()
         real_rename(src, dst)  # refused: dst is a directory that is not empty
 
-    monkeypatch.setattr(os, "rename", another_process_wins)
-    assert definitions.ensure(tmp_path) == final
+    with mock.patch.object(os, "rename", autospec=True, side_effect=another_process_wins):
+        assert definitions.ensure(tmp_path) == final
     assert (final / "winner").exists()
     assert [p.name for p in (tmp_path / "runtime").iterdir()] == [final.name]
 
