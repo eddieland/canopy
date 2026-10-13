@@ -71,7 +71,11 @@ class Backend:
 
     @contextmanager
     def open(self) -> Iterator[Context]:
-        """A Context on a journal connection of its own, closed when the block ends. One per request or stream."""
+        """A Context on a journal connection of its own, closed when the block ends. One per request or stream.
+
+        Yields:
+            A Context with the config and workspace served when the block started.
+        """
         with self._lock:
             cfg, ws = self.config, self.workspace
         conn = db.connect(db_path(ws))
@@ -86,10 +90,11 @@ class Backend:
             conn.close()
 
     def current(self, ctx: Context) -> Context:
-        """`ctx` on the config and workspace served now: `ctx` itself unless the loop has read them again since.
+        """`ctx` on the config and workspace served now, for a stream, which holds one Context while a page is open.
 
-        For a stream, which holds one Context for as long as a page is open, where a request holds one for its own
-        length.
+        Returns:
+            `ctx` itself unless the loop has read its config again since; then a Context on the same connection with
+            the config and workspace it read.
         """
         with self._lock:
             cfg, ws = self.config, self.workspace

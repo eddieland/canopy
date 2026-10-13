@@ -77,7 +77,12 @@ class _Reader:
         self._version: int | None = None
 
     def read(self) -> list[StreamEvent]:
-        """The events for whatever changed since the last read: none if neither the journal nor the config has."""
+        """The events for whatever changed since the last read: none if neither the journal nor the config has.
+
+        Returns:
+            One event per list that differs from what this stream last sent; empty when neither the journal nor the
+            config the loop serves has changed.
+        """
         if self._ctx is None:
             self._ctx = self._opened.enter_context(self._backend.open())
         current = _data_version(self._ctx)
@@ -110,7 +115,12 @@ class _Sent:
         self.loop: LoopState | None = None
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
-        """Read the lists again, from one snapshot, and return an event for each that differs from what was sent."""
+        """Read the lists again, from one snapshot, and return an event for each that differs from what was sent.
+
+        Returns:
+            The events in a fixed order, with a `TicketChanged` for each ticket whose summary changed; empty when
+            nothing did.
+        """
         with _snapshot(ctx):
             return self._read(backend, ctx)
 
