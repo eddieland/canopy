@@ -1,0 +1,4 @@
+/* Applied to every screenshot (playwright.config.ts): what changes with the build, not the page, is hidden. */
+[data-testid='rail-version'] {
+    visibility: hidden;
+}

@@ -309,9 +309,11 @@ Served by `canopy loop` from a thread (D073):
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
-  the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
-  ended last, each with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets,
-  each with its conversation and the decisions about it, chores (below), ticks (below), and search (below).
+  and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
+  transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
+  it, chores (below), ticks (below), and search (below). The side rail shows the runs working now and the spend of the
+  last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in
+  view wherever the operator is.
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once

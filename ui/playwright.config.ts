@@ -27,7 +27,13 @@ export default defineConfig({
     reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
     expect: {
         // Fonts are self-hosted and animations are frozen; what is left is antialiasing between Chromium builds.
-        toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled', caret: 'hide' },
+        // The rail's version names the commit it was built from, so every commit would change every image: hidden.
+        toHaveScreenshot: {
+            maxDiffPixelRatio: 0.01,
+            animations: 'disabled',
+            caret: 'hide',
+            stylePath: './e2e/screenshot.css',
+        },
     },
     use: {
         ...devices['Desktop Chrome'],

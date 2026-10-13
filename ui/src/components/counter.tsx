@@ -4,8 +4,8 @@ import { RollingNumber } from '@/components/rolling-number'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
-/** A counter's color: a run state's, the accent, or none. */
-export type Tone = 'running' | 'blocked' | 'failed' | 'stopped' | 'accent' | 'plain'
+/** A counter's color: a run state's, or none. */
+export type Tone = 'running' | 'blocked' | 'failed' | 'stopped' | 'plain'
 
 // Written out so Tailwind finds them: each counter's top rule.
 const RULE: Record<Tone, string> = {
@@ -13,7 +13,6 @@ const RULE: Record<Tone, string> = {
     blocked: 'border-t-status-blocked',
     failed: 'border-t-status-failed',
     stopped: 'border-t-status-stopped',
-    accent: 'border-t-accent',
     plain: 'border-t-border',
 }
 
@@ -23,7 +22,6 @@ const WASH: Record<Tone, string> = {
     blocked: 'from-status-blocked/12',
     failed: 'from-status-failed/12',
     stopped: 'from-status-stopped/12',
-    accent: 'from-accent/12',
     plain: 'from-transparent',
 }
 
