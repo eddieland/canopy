@@ -90,7 +90,13 @@ export function PageHeader({
                 <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{title}</h1>
                 {chips}
             </div>
-            {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
+            {children && (
+                // Balanced, so a two-line description splits evenly rather than leaving a word or two on its last line,
+                // and a command in it never breaks across lines.
+                <p className="max-w-3xl text-sm text-balance text-muted-foreground [&_code]:whitespace-nowrap">
+                    {children}
+                </p>
+            )}
             {links}
         </header>
     )

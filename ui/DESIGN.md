@@ -127,7 +127,9 @@ Rules:
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
   The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
-  query: a pasted URL widened the page.
+  query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
+  a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
+  (`code`) never breaks across lines.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
