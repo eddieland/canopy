@@ -152,8 +152,8 @@ canopy (harness, Python)
 
   reviews/         adversarial reviews of PRs (§21)
     start.py       canopy review run: guards, the slot, the reviewer's prompt, spawn detached _review
-    execute.py     canopy _review: checkout at the commit, the reviewer outside it, result checks, slot return
-    result.py      the result contract, validated with pydantic
+    execute.py     canopy _review: checkout at the commit, its diff kept for the web UI, the reviewer outside it,
+                   result checks, slot return
     view.py        the state block's reviews
     findings.py    a review as a resumed worker and canopy review show read it, from the journal
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
@@ -185,6 +185,8 @@ canopy (harness, Python)
                    (§19), read by the loop, the CLI, chores, and the web UI
     chore_window.py a chore's days and hours: whether a run may start now, and when it next may
     chore_result.py a chore's result contract, validated with pydantic
+    review_result.py a review's result contract, validated with pydantic (§21), read by reviews and the web UI
+    review_diff.py a review run's diff beside its log: read bounded, parsed, and each finding anchored on it (§21)
     search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
     config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner

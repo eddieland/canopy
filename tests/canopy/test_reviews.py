@@ -11,11 +11,11 @@ from typing import Any
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, review_diff
+from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.infra import procs
 from canopy.loop import attention
-from canopy.reviews import result
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -635,3 +635,54 @@ def test_the_operator_reads_reviews_in_canopy(
     assert "\x1b" not in shown
     assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
     assert main(["review", "show", "99"]) == 1
+
+
+def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
+    """Push a commit adding `retry.py` on a branch `feature` off origin's `main`, and return it."""
+    seed = tmp_path / "seed"
+    git("checkout", "--quiet", "-b", "feature", cwd=seed)
+    (seed / "retry.py").write_text("while True:\n    call()\n")
+    git("add", "retry.py", cwd=seed)
+    git("commit", "--quiet", "-m", "retry", cwd=seed)
+    git("push", "--quiet", str(git_pool.origin), "feature", cwd=seed)
+    sha = git_pool.remote_head("feature")
+    assert sha is not None
+    return sha
+
+
+def test_a_review_keeps_its_commits_diff_for_the_web_ui(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The diff against where the commit leaves the pool's base branch, beside the run's log (DESIGN §21)."""
+    sha = feature_commit(git_pool, tmp_path)
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, FINDINGS)
+    run_id = run_inline(conn, monkeypatch, sha=sha)
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert (row["status"], row["base_branch"]) == ("done", "main")
+    path = review_diff.path_for(row["log_path"])
+    assert path.stat().st_mode & 0o777 == 0o600
+    diff = review_diff.read(path)
+    assert diff is not None
+    [changed] = diff.files
+    assert changed.path == "retry.py"
+    assert [(ln.kind, ln.new, ln.text) for ln in changed.hunks[0].lines] == [
+        ("add", 1, "while True:"),
+        ("add", 2, "    call()"),
+    ]
+
+
+def test_a_review_without_its_base_branch_still_runs(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The diff is for the page only: a base origin no longer has leaves the review as it was, without one."""
+    sha = feature_commit(git_pool, tmp_path)
+    git("update-ref", "-d", "refs/heads/main", cwd=git_pool.origin)
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, FINDINGS)
+    run_id = run_inline(conn, monkeypatch, sha=sha)
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "done", Path(row["log_path"]).read_text()
+    assert not review_diff.path_for(row["log_path"]).exists()
