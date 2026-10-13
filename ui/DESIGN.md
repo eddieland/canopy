@@ -289,8 +289,9 @@ tabs.
   how long it has been open.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
-  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per link, in the
-  accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR), what it opens on hover.
+  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per
+  link, in the accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR), what it opens
+  on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR; an unknown
   ticket's page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
