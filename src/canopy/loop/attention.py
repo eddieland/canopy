@@ -45,6 +45,8 @@ RUN_REASONS = {
     "timeout": "unknown_result",
     "failed": "worker_failed",
 }
+# What the harness records itself, every tick the cause holds (`tick._record_harness_items`), so the overseer does not.
+HARNESS_REASONS = frozenset({*RUN_REASONS.values(), "awaiting_reply", chore_view.FAILED_REASON, "repo_missing"})
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
 FILE_NAME = "attention.md"
@@ -133,6 +135,31 @@ def current(conn: sqlite3.Connection) -> list[Item]:
             since = earlier[1]
         items.append(Item(item_id[0], item_id[1], detail, since, item_id[2]))
     return items
+
+
+def for_overseer(conn: sqlite3.Connection) -> list[dict[str, object]]:
+    """The open items the overseer recorded, for its state block (DESIGN §6 step 4, ROADMAP M28).
+
+    An item stays open only while each tick records it again, so the overseer is shown what it would drop by leaving
+    one out. Items the harness raises itself, and chores', are left out: the overseer never records those. So is
+    every detail, which may quote a comment: the item's subject, reason, and age say which one it is.
+
+    Returns:
+        One object per item: its ticket, or its PR when it has no ticket; its repository when it has one; its reason;
+        and since when it has been open.
+    """
+    found: list[dict[str, object]] = []
+    for item in current(conn):
+        key = item.ticket_key
+        if item.reason in HARNESS_REASONS or (key is not None and key.startswith(CHORE_PREFIX)):
+            continue
+        subject: dict[str, object] = (
+            {"pr": key.removeprefix(PR_PREFIX)} if key is not None and key.startswith(PR_PREFIX) else {"ticket": key}
+        )
+        if item.repo is not None:
+            subject["repo"] = item.repo
+        found.append({**subject, "reason": item.reason, "since": item.since})
+    return found
 
 
 def listed(ctx: Context) -> list[Item]:

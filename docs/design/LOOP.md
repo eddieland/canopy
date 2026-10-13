@@ -57,6 +57,16 @@ in order:
    operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
    so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is present only when chores are
    configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
+
+   `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
+   its repository, its reason, and since when, but not its detail, which may quote a comment. The harness's own
+   reasons and chores' items are left out, since the overseer never records them. An item stays open only while every
+   tick records it again, and on the first day the overseer left items out a tick and restored them the next (13
+   ticks, MEASUREMENTS 2026-10-13 F17): it could not see what it was dropping. With the list in front of it, the prompt
+   has it record each again unless it saw this tick that the cause is gone, and end a tick that could not read an
+   item's cause as `mcp_unavailable` rather than record a list without it. Settled (M28, the operator's choice): the
+   prompt, not a harness that keeps an item until the overseer resolves it, which would need a resolve verb in the
+   prompt anyway, and would leave a stale item standing whenever the overseer forgot to resolve one.
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to

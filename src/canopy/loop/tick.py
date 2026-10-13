@@ -115,6 +115,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         private=private,
         operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
+        attention=attention.for_overseer(ctx.conn),
     )
     prompt = prompts.render_overseer(ctx.config, block)
     failure, usage = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
