@@ -87,8 +87,8 @@ user file.
 Work through these in order and stop at the first that explains it.
 
 1. Did a recent tick run at all? `canopy status` shows the last tick. `skipped` usually means the overseer could not
-   reach an MCP server (`mcp_unavailable: <which>`); `overseer_failed` and `reconcile_failed` have a summary, and
-   `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing.
+   reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `overseer_failed`, and `reconcile_failed`
+   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing.
 2. What did the overseer decide about KEY?
 
    ```sh
@@ -143,6 +143,7 @@ no dismissing. Reasons:
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists them; at the limit, `canopy grant URL review`. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
+| `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |
 | `split_self_labeled` | A split child was labeled before its split ended: remove the label, add it again. |

@@ -44,6 +44,7 @@ describe('severity', () => {
     it('ranks broken work, then what waits on the operator, then the rest, then findings', () => {
         expect(severity(item('a', 'worker_failed', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'review_limit', '2026-10-08T12:00:00Z'))).toBe('failed')
+        expect(severity(item('a', 'canopy_unavailable', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'awaiting_reply', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'untrusted_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe('other')

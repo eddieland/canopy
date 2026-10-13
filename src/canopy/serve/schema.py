@@ -603,7 +603,7 @@ class Tick(_Model):
     id: int
     """The tick's id."""
     status: str
-    """running | ok | skipped | overseer_failed | reconcile_failed | abandoned"""
+    """running | ok | skipped | canopy_unavailable | overseer_failed | reconcile_failed | abandoned"""
     dry_run: bool
     """Whether it was a dry run: it recorded decisions and acted on none."""
     started_at: datetime
