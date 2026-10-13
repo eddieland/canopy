@@ -423,11 +423,17 @@ def test_sigterm_returns_the_slot(
     assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
 
 
-def test_parse_result_takes_the_last_non_empty_line() -> None:
+def test_parse_result_takes_the_last_json_object_line() -> None:
     parsed = worker.parse_result('chatter\n{"status": "done"}\n\n  \n')
     assert parsed is not None
     assert parsed.status == "done"
-    assert worker.parse_result('{"status": "done"}\nmore chatter\n') is None
+    # A plugin's notice after the result is passed over (DESIGN §13).
+    parsed = worker.parse_result('{"status": "done"}\n[policy-plugin] session audited\n')
+    assert parsed is not None
+    assert parsed.status == "done"
+    # An invalid last object is no result, even with a valid one before it.
+    assert worker.parse_result('{"status": "done"}\n{"status": "finished"}\nchatter\n') is None
+    assert worker.parse_result("chatter only\n") is None
 
 
 def report_events(canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch) -> None:

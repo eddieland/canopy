@@ -292,8 +292,14 @@ the command templates. No interface.
 Every agent's output is read the same way (`core/agent_output.py`). A template either prints the agent's text on
 stdout, or asks OpenCode for `--format json`, which prints one JSON event per line. If any line of stdout is an event
 (a JSON object with a string `type` and a `sessionID`), the agent's text is the `part.text` of each `text` event, one
-per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is the
-last non-empty line of that text, so a template may switch formats without changing a prompt.
+per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is read
+from that text, so a template may switch formats without changing a prompt.
+
+A JSON contract (§8, §18, §19, §21) is the last line of the text that starts with `{`, and lines after it that do not
+are passed over: a runtime, or a plugin the operator must load, may print a notice after the agent's last word, and a
+plain template, or one that sends stderr to stdout, puts it in the text. A last object that does not validate is no
+result; canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
+The overseer's done line is plain text, so it is still the last non-empty line.
 
 From events the harness also reads, each validated (D026):
 

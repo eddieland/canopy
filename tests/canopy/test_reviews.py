@@ -290,6 +290,24 @@ def test_the_harness_checks_what_it_can_of_a_result(
         assert stored["impact"] == "normal"
 
 
+@pytest.mark.parametrize("events", [False, True])
+def test_a_plugin_notice_after_the_result_does_not_hide_it(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, monkeypatch: pytest.MonkeyPatch, *, events: bool
+) -> None:
+    # A plugin the operator must load prints after the agent's last word; it lands in the text (DESIGN §13).
+    if events:
+        text = reviews.user_file.read_text()
+        reviews.write_user(
+            text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
+        )
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations")
+    row = db.get_review_run(conn, run_inline(conn, monkeypatch, sha=head(git_pool)))
+    assert row is not None
+    assert row["status"] == "done"
+    assert json.loads(row["result_json"])["verdict"] == "findings"
+
+
 def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
     reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
