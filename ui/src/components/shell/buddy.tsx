@@ -2,7 +2,8 @@ import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { setBuddy, tipFor } from '@/lib/buddy'
+import { sectionOf, setBuddy, tipFor } from '@/lib/buddy'
+import type { Section } from '@/lib/buddy'
 import { cn } from '@/lib/utils'
 
 /** How long a tip stays up before Sprig takes the hint. */
@@ -16,29 +17,34 @@ const TIP_SECONDS = 20
  */
 export function Buddy() {
     const pathname = useRouterState({ select: (state) => state.location.pathname })
+    const section = sectionOf(pathname)
     // Read once per page load, as the ticker's reel is: the tip must not change under the reader.
     const [today] = useState(() => Date.now())
-    const [asked, setAsked] = useState(0)
-    // A new page or a click on Sprig opens a new tip: the key remounts the bubble, open, and raises Sprig's brows.
-    const cue = `${pathname}:${asked}`
+    // How many more tips the reader asked for, counted per section: a new section starts at its own first tip.
+    const [asked, setAsked] = useState<{ section: Section | undefined; n: number }>({ section, n: 0 })
+    const n = asked.section === section ? asked.n : 0
+    const another = () => setAsked({ section, n: n + 1 })
+    const tip = tipFor(pathname, n, today)
+    // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
+    // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed.
     return (
         <aside
             aria-label="Sprig"
             data-testid="buddy"
             className="pointer-events-none fixed bottom-12 left-3 z-20 flex w-48 flex-col items-start gap-2"
         >
-            <Bubble key={cue} tip={tipFor(pathname, asked, today)} onAnother={() => setAsked((n) => n + 1)} />
+            <Bubble key={tip} tip={tip} onAnother={another} />
             <button
                 type="button"
                 aria-label="Ask Sprig for a tip"
                 data-testid="buddy-sprig"
-                onClick={() => setAsked((n) => n + 1)}
+                onClick={another}
                 className={cn(
                     'pointer-events-auto rounded-md p-1 transition-transform',
                     'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                 )}
             >
-                <Figure cue={cue} />
+                <Figure cue={tip} />
             </button>
         </aside>
     )
