@@ -262,6 +262,28 @@ class ChoreDetail(_Model):
     notes: list[Message]
 
 
+class ChoreRunFinding(_Model):
+    """A finding as one chore run reported it (DESIGN §19)."""
+
+    id: str
+    title: str
+    detail: str
+    link: str | None = None
+
+
+class ChoreRunDetail(_Model):
+    """One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22)."""
+
+    chore: str
+    run: ChoreRun
+    # The agent's summary, line breaks kept and not cut: its result bounded it at 2000 characters.
+    summary: str | None = None
+    # Why the harness decided the run's status, when it did: a timeout, a crash, a result that did not validate.
+    note: str | None = None
+    # An `ok` run's findings, as it listed them.
+    findings: list[ChoreRunFinding] = []
+
+
 class Started(_Model):
     """What a start did: whether it was already started, and a run already working it."""
 

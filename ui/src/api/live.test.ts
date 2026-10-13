@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { applyStreamEvent, parseStreamEvent } from './live'
 import { mockAttention, mockChores, mockRuns, mockTickets } from './mocks'
 import { keys } from './queries'
-import type { ChoreDetail, Run, TicketDetail } from './types'
+import type { ChoreDetail, ChoreRunDetail, Run, TicketDetail } from './types'
 
 describe('applyStreamEvent', () => {
     it('replaces each list whole', () => {
@@ -52,6 +52,25 @@ describe('applyStreamEvent', () => {
 
         expect(client.getQueryData(keys.chores)).toEqual(mockChores)
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it("reads a chore run's page and transcript again only when its status moves", () => {
+        const client = new QueryClient()
+        const [chore] = mockChores
+        const run = chore?.latest
+        if (!chore || !run) throw new Error('fixtures have no ended chore run')
+        const detail = { chore: chore.name, run, summary: null, note: null, findings: [] } as ChoreRunDetail
+        client.setQueryData(keys.choreRun(chore.name, run.id), detail)
+        client.setQueryData(keys.choreRunTranscript(chore.name, run.id), { status: 'read', entries: [] })
+
+        applyStreamEvent(client, { type: 'chores.updated', chores: mockChores })
+        expect(client.getQueryState(keys.choreRun(chore.name, run.id))?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.choreRunTranscript(chore.name, run.id))?.isInvalidated).toBe(false)
+
+        client.setQueryData(keys.choreRun(chore.name, run.id), { ...detail, run: { ...run, status: 'running' } })
+        applyStreamEvent(client, { type: 'chores.updated', chores: mockChores })
+        expect(client.getQueryState(keys.choreRun(chore.name, run.id))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.choreRunTranscript(chore.name, run.id))?.isInvalidated).toBe(true)
     })
 
     it('writes the pause whole, and lifts it', () => {

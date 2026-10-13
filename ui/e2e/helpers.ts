@@ -16,6 +16,7 @@ export const ROUTES = [
     'reviews/4',
     'chores',
     'chores/deps',
+    'chores/deps/runs/2',
     'ticks',
     'ticks/2',
     'settings',
