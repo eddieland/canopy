@@ -42,6 +42,7 @@ UNIT_PHASES = frozenset(
         "review_pending",
         "review_findings",
         "changes_requested",
+        "untrusted_review",
         "green_unreviewed",
         "approved",
         "merged",
