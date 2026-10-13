@@ -141,4 +141,10 @@ describe('pretty', () => {
         expect(pretty('42')).toBe('42')
         expect(pretty('PASS  2 tests')).toBe('PASS  2 tests')
     })
+
+    it('keeps every value as written: a number past a double, an escape, an output already indented', () => {
+        expect(pretty('{"id":12345678901234567890,"n":1.10}')).toBe('{\n  "id": 12345678901234567890,\n  "n": 1.10\n}')
+        expect(pretty('["caf\\u00e9"]')).toBe('[\n  "caf\\u00e9"\n]')
+        expect(pretty('{\n    "a": {}\n}')).toBe('{\n  "a": {}\n}')
+    })
 })

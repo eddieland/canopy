@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { jsonLines, tokenize } from '@/lib/json-lines'
+import { indent, jsonLines, tokenize } from '@/lib/json-lines'
 
 describe('tokenize', () => {
     it('splits a JSON line into keys, strings, numbers, literals, and punctuation, as written', () => {
@@ -62,6 +62,27 @@ describe('tokenize', () => {
                 .join(''),
         ).toBe(line)
     })
+
+    it('splits a block of indented JSON across its lines, and leaves a cut one whole', () => {
+        const block = '{\n  "filePath": "a.ts",\n  "limit": 20\n}'
+        expect(tokenize(block)).toEqual([
+            { kind: 'punct', text: '{' },
+            { kind: 'text', text: '\n  ' },
+            { kind: 'key', text: '"filePath"' },
+            { kind: 'punct', text: ':' },
+            { kind: 'text', text: ' ' },
+            { kind: 'string', text: '"a.ts"' },
+            { kind: 'punct', text: ',' },
+            { kind: 'text', text: '\n  ' },
+            { kind: 'key', text: '"limit"' },
+            { kind: 'punct', text: ':' },
+            { kind: 'text', text: ' ' },
+            { kind: 'number', text: '20' },
+            { kind: 'text', text: '\n' },
+            { kind: 'punct', text: '}' },
+        ])
+        expect(tokenize('{\n  "filePath": "a.t')).toEqual([{ kind: 'text', text: '{\n  "filePath": "a.t' }])
+    })
 })
 
 describe('jsonLines', () => {
@@ -77,5 +98,45 @@ describe('jsonLines', () => {
             [{ kind: 'text', text: '--- stderr ---' }],
             [],
         ])
+    })
+})
+
+const laid = (line: string) =>
+    indent(tokenize(line))
+        .map((t) => t.text)
+        .join('')
+
+describe('indent', () => {
+    it('lays one JSON value out over lines, two spaces a level, its values as written', () => {
+        expect(laid('{"a":1,"b":[true,{"c":"x, y"}],"big":12345678901234567890}')).toBe(
+            [
+                '{',
+                '  "a": 1,',
+                '  "b": [',
+                '    true,',
+                '    {',
+                '      "c": "x, y"',
+                '    }',
+                '  ],',
+                '  "big": 12345678901234567890',
+                '}',
+            ].join('\n'),
+        )
+    })
+
+    it('keeps an empty object or array on one line, and drops the spaces a line had', () => {
+        expect(laid('  { "a" : {} , "b" : [ ] }')).toBe('{\n  "a": {},\n  "b": []\n}')
+    })
+
+    it('leaves anything that is not JSON as it is', () => {
+        expect(indent(tokenize('--- stderr ---'))).toEqual([{ kind: 'text', text: '--- stderr ---' }])
+        expect(indent([])).toEqual([])
+    })
+})
+
+describe('jsonLines pretty', () => {
+    it('lays out each JSON line and leaves the others', () => {
+        const lines = jsonLines('{"a":[1]}\nWARN x', true).map((tokens) => tokens.map((t) => t.text).join(''))
+        expect(lines).toEqual(['{\n  "a": [\n    1\n  ]\n}', 'WARN x'])
     })
 })

@@ -3,12 +3,14 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { Transcript, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
+import { JsonTokens } from '@/components/json-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { tokenize } from '@/lib/json-lines'
 import { localTime } from '@/lib/time'
 import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
@@ -337,7 +339,7 @@ function Block({ label, failed = false, children }: { label: string; failed?: bo
                     failed && 'border-status-failed/40',
                 )}
             >
-                {children}
+                <JsonTokens tokens={tokenize(children)} />
             </pre>
         </div>
     )

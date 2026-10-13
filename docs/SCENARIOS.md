@@ -126,6 +126,12 @@ relying on a permission they check.
   to finish first, `config reloaded  capacity.max_workers changed` under it, and the next tick's footer to count to the
   new limit. Then close the terminal window: expect the loop gone, as before. Under `nohup`, expect it to outlive the
   window and still reload on `kill -HUP`.
+- **S33. The overseer's prompt from the cache** (M34). Run two `canopy tick --dry-run` a minute apart, and read each
+  tick's first model call from its log: the first `step_finish` event in `<state_dir>/ticks/<id>.log`, its
+  `part.tokens.cache.write` and `part.tokens.cache.read`. Expect the second tick's write near the state block's size,
+  a few thousand tokens, and its read to hold the prompt, the provider skill, and the tools; the first tick, cold,
+  writes them all. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
+  change where OpenCode puts an agent's body. Record the numbers in `MEASUREMENTS.md`.
 
 ## The web UI
 

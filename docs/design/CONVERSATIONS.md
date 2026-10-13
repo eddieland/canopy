@@ -570,7 +570,8 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
   `tick.updated` moves that tick's.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
-- Everything in a transcript is agent output: untrusted, rendered as text. It holds whatever a tool read or printed, a
+- Everything in a transcript is agent output: untrusted, rendered as text; a tool call's input, and an output that is
+  JSON, have their keys, strings, and values colored. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
 - Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
   OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving a run's
@@ -591,7 +592,9 @@ for a tick whose overseer failed.
   has the session from its start.
 - An Output panel under the transcript, hidden until the operator shows it, so a tick's page reads the file only when
   asked. It opens scrolled to its end. Everything in it is agent output, rendered as text; a line of JSON, which is
-  most of it, has its keys, strings, and values colored, as written. Not on the event stream;
+  most of it, has its keys, strings, and values colored, as written. A Pretty toggle lays each line of JSON out over
+  several, indented, changing only the space between its tokens; each tick's panel remembers it, in the browser.
+  Not on the event stream;
   it is marked stale with the tick's transcript, as the tick ends.
 - A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
   until the operator asks for the rest.
