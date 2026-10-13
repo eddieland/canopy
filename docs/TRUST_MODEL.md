@@ -97,12 +97,14 @@ Controls:
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
   harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
   journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
-  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind and resets no count
-  (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is
-  set, which every agent canopy runs has, so no agent can lift a limit that bounds it. So do `pause` and `resume`, the
+  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind, or one PR's review
+  limit, and resets no count (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when
+  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent canopy runs has, so no agent can lift a limit that
+  bounds it. So do `pause` and `resume`, the
   loop's pause (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
   it could undo the operator's pause. So does `dismiss`, which keeps a chore's finding off the attention list until it
-  clears (DESIGN §19): an agent that could dismiss one could hide what it was steered to hide from the operator.
+  clears (DESIGN §19), or holds a review's finding back from workers and the overseer (§21): an agent that could
+  dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -176,7 +178,8 @@ Controls in code, not prompts:
 - One running worker per ticket.
 - Workers push once and exit. They do not poll CI or retry.
 - A tick that cannot acquire the lock exits immediately.
-- Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR, `capacity.max_reviews_per_day`, and
+- Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
+  per PR with `canopy grant`), `capacity.max_reviews_per_day`, and
   `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
@@ -225,8 +228,8 @@ bot identity would require the org review the project is designed to avoid)
 but must be distinguishable:
 
 - Branches under `agent/`.
-- Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>` or
-  the runtime's own attribution. Never hidden.
+- Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
+  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -402,7 +405,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
-  does, dismiss a chore's finding or take that back as `canopy dismiss` does, pause and resume the loop as
+  does, dismiss a chore's or a review's finding or take that back as `canopy dismiss` does, pause and resume the loop as
   `canopy pause` and `canopy resume` do, and ask the loop to read its config files
   again as SIGHUP does, nothing else. It cannot write config: a reload reads only the operator's own files, and a
   `serve.*` change waits for a restart, so the listener's bind and port never change under it. A forget must carry the

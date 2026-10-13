@@ -40,6 +40,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
+| `syntax-key`, `-string`, `-number`, `-literal` | A JSON line's keys, strings, numbers, and literals, in tick output. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
@@ -88,9 +89,9 @@ Rules:
   The header stays put and only what is under it scrolls (`page-scroll`), so the header spans the window's width
   and a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header: the
   browser paints the window's own gutter with the canvas color alone, so when the window scrolled, the header
-  stopped short of its edge. The side rail runs the full height of the page and only its top part is sticky. Printed,
-  the shell is not held to the window and shows the page whole; a screenshot test does the same by growing the
-  window to the page (`screenshotWhole` in `e2e/helpers.ts`).
+  stopped short of its edge. The side rail runs the full height of the page, and what it holds sticks: a column as
+  tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
+  screenshot test does the same by growing the window to the page (`screenshotWhole` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
@@ -99,8 +100,9 @@ Rules:
   `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
   runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
-  is shown nowhere else. The footer (the version) sits at the rail's foot, not the window's: the
-  window's foot on a page that fits it, the page's foot on a longer one.
+  is shown nowhere else. The footer (the version) sits at the foot of the sticky column, so at the window's foot
+  however long the page; in a window too short for the rest, the part above it scrolls on its own. Sprig, when on,
+  stands just above the footer, never on it.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -149,9 +151,12 @@ Rules:
   repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
   links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
 - **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which
-  React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with the attention list's
-  count, when it holds anything, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
-  The name is the header's title when that is plain text, else its `tab`; the sign-in page's is `Sign in`.
+  React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with how many attention
+  items block work, when any do, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
+  The count leaves out what only waits on someone else, a PR's `needs_reviewer` or `ready_to_merge`, and chore
+  findings, which report rather than block (`blocking` in `src/lib/attention.ts`): a count that never falls to zero
+  while PRs sit in review would stop meaning anything. The name is the header's title when that is plain text, else
+  its `tab`; the sign-in page's is `Sign in`.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
@@ -303,7 +308,9 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
   line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
   wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
-  at its end, where stderr is; the file's size is in the header, and a cut says so above the block.
+  at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
+  as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`):
+  keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line stays plain.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
@@ -355,8 +362,10 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
-  text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
-  (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
+  text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
+  its title muted, `keep` in place of `dismiss`, and the same chip in the findings list. The list of reviews is rows:
+  the review's link, its state's dot and verdict in that state's color, its ticket (or `review.query`), the PR as a
+  link out, the commit's first 7 characters, its impact, cost, and age.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
   its page, its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the

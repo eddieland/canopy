@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db
 from canopy.core import review_result as result
+from canopy.reviews import grants
 
 if TYPE_CHECKING:
     import sqlite3
@@ -56,17 +57,24 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
     runs = db.review_runs_of(conn, url)
     latest = runs[0]
     stored = result.stored(latest["result_json"])
+    granted = grants.granted(conn, url)
+    # The operator's dismissals hold a finding back from workers and from the overseer alike (DESIGN §21).
+    dismissed = db.review_dismissals(conn, int(latest["id"]))
+    findings: list[result.Finding] = stored.findings if stored is not None else []
     return {
         "url": url,
         "ticket": next((r["ticket_key"] for r in runs if r["ticket_key"]), None),
         "review_runs": len(runs),
+        # Only a PR the operator granted more reviews has the key: its limit is the policy's plus this.
+        **({"granted": granted} if granted else {}),
         "latest": {
             "run_id": latest["id"],
             "sha": latest["sha"],
             "status": latest["status"],
             "verdict": stored.verdict if stored is not None else None,
             "impact": stored.impact if stored is not None else None,
-            "findings": [f.title for f in stored.findings] if stored is not None else [],
+            "findings": [f.title for i, f in enumerate(findings, 1) if i not in dismissed],
+            "dismissed_findings": len(dismissed),
             "started_at": latest["started_at"],
             "ended_at": latest["ended_at"],
             # The review's time for the `review` cursor, which takes whole seconds only (DESIGN §7).

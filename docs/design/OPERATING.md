@@ -48,6 +48,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   `decisions.pr` names the PR of a decision about a review.
 - `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
   Only added to.
+- `review_grants`: one row per `canopy grant URL review`; the PR's URL, review runs granted, and when (§21, §22).
+  Only added to.
 - `split_children`: one row per ticket a split created; its parent, the repository it covers, and the split run.
   Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
@@ -103,6 +105,7 @@ to do instead.
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
+| `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whom the operator's commits credit (§8) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
@@ -171,6 +174,8 @@ authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, .
 trusted_reviewers = ["github-login", "canopy:review"]   # whose PR feedback a worker addresses unasked (§7)
 comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
 comment_suffix = ""          # and ends with this, if set
+commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
+commit_trailer_email = "noreply@canopy.invalid"  # at this address
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -198,6 +203,14 @@ most 100 characters with no whitespace, colon, or backtick.
 
 `trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter or
 digit, no backtick, and no surrounding spaces, and at least one is set.
+
+`trust.commit_trailer_name` and `trust.commit_trailer_email` make the `Co-authored-by` trailer a worker adds to its
+commits when the agent runtime adds no attribution of its own (§8, TRUST_MODEL T5). The name is one line of at most 80
+characters, with a letter or digit, no backtick or angle bracket, and no surrounding spaces; the address is at most 254
+characters, with one `@` and no whitespace, backtick, or angle bracket. They are user-only because the commits are the
+operator's: a shared file must not credit agent work to a person. Set them to name agent work the way the team's
+tooling expects, such as a team's bot address, and never to a person: the trailer is how a reader tells the work is
+an agent's.
 
 Rules:
 

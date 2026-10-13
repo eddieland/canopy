@@ -9,6 +9,7 @@ import type {
     LoopState,
     PauseChanged,
     Replied,
+    ReviewDismissed,
     Session,
     Started,
     Stopped,
@@ -69,6 +70,19 @@ export async function dismissFinding(name: string, finding: string, undo: boolea
     )
 }
 
+/**
+ * `canopy dismiss review:ID N`: no worker or tick acts on the review's finding number `finding`. With `undo`,
+ * `--undo`.
+ */
+export async function dismissReviewFinding(run: number, finding: number, undo: boolean): Promise<ReviewDismissed> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/dismissals', {
+            params: { path: { run_id: run } },
+            body: { finding, undo },
+        }),
+    )
+}
+
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
 export async function pauseLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/pause'))
@@ -103,6 +117,11 @@ export async function refreshFindings(client: QueryClient, name: string): Promis
         client.invalidateQueries({ queryKey: keys.chore(name) }),
         client.invalidateQueries({ queryKey: keys.attention }),
     ])
+}
+
+/** After a dismissal of a review's finding: read the review again now. */
+export function refreshReview(client: QueryClient, run: number): Promise<void> {
+    return client.invalidateQueries({ queryKey: keys.review(run) })
 }
 
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */

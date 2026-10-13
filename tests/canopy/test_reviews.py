@@ -17,6 +17,7 @@ from canopy.core.config import load
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
+from tests.canopy.test_private import operator
 from tests.conftest import CanopyEnv, GitPool, git
 
 PR = "https://github.com/acme/api/pull/7"
@@ -207,6 +208,100 @@ def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, m
         f"review run 1 already reviewed {sha[:12]} (clean, impact low); one review per commit"
     )
     assert reasons["refused:review_limit"] == "this PR has had 2 review runs and the limit is 2"
+    assert reasons["attention:review_limit"] == (
+        f"this PR has had 2 review runs and the limit is 2; allow it another review with `canopy grant {PR} review`"
+    )
+
+
+def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_still_counts(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reviews.write_user(reviews.user_file.read_text() + "\n[policy]\nmax_reviews_per_pr = 1\n")
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, CLEAN)
+    run_inline(conn, monkeypatch, sha=head(git_pool))
+    run_inline(conn, monkeypatch, sha=head(git_pool), pr=f"{PR}0")
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(review(sha="b" * 40), runner=InlineRunner()) == 1
+    assert [d[2] for d in decisions(conn, tick_id)] == ["refused:review_limit", "attention:review_limit"]
+    db.finish_tick(conn, tick_id, "ok", "test")
+
+    assert operator("grant", PR, "review", monkeypatch=monkeypatch) == 0
+    assert f"{PR} has had 1 review runs, and may now have 2." in capsys.readouterr().out
+    run_id = run_inline(conn, monkeypatch, sha="b" * 40)
+    prompt = " ".join((reviews.state_dir / "reviews" / f"{run_id}.prompt").read_text().split())
+    assert "This is review 2 of at most 2 of this PR." in prompt
+
+    # The granted run counted like any other, and the grant is that PR's only.
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(review(sha="c" * 40), runner=InlineRunner()) == 1
+    assert main(review(sha="c" * 40, pr=f"{PR}0"), runner=InlineRunner()) == 1
+    reasons = [(d[1], d[3]) for d in decisions(conn, tick_id) if d[2] == "refused:review_limit"]
+    assert reasons == [
+        (PR, "this PR has had 2 review runs and the limit is 2"),
+        (f"{PR}0", "this PR has had 1 review runs and the limit is 1"),
+    ]
+    db.finish_tick(conn, tick_id, "ok", "test")
+    assert operator("grant", PR, "review", "--runs", "2", monkeypatch=monkeypatch) == 0
+    assert "has had 2 review runs, and may now have 4." in capsys.readouterr().out
+
+    # The state block shows a granted PR's grants beside its review runs; a PR with none has no key.
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
+    assert main(["tick", "--dry-run"]) == 0
+    prs = {p["url"]: p for p in state_block(agent_log)["reviews"]["prs"]}
+    assert (prs[PR]["review_runs"], prs[PR]["granted"]) == (2, 3)
+    assert "granted" not in prs[f"{PR}0"]
+
+
+@pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
+def test_only_the_operator_grants_reviews(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    env: str,
+) -> None:
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, CLEAN)
+    run_inline(conn, monkeypatch, sha=head(git_pool))
+    capsys.readouterr()
+    tick_id = in_tick(conn, monkeypatch)
+    if env == "CANOPY_RUN_ID":
+        monkeypatch.delenv("CANOPY_TICK_ID")
+        monkeypatch.setenv("CANOPY_RUN_ID", "1")
+    assert main(["grant", PR, "review"]) == 1
+    assert "grant refused (inside_run)" in capsys.readouterr().err
+    db.finish_tick(conn, tick_id, "ok", "test")
+    assert conn.execute("SELECT count(*) FROM review_grants").fetchone()[0] == 0
+
+
+def test_review_grant_refusals(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = journal(reviews)
+    assert operator("grant", PR, "review", monkeypatch=monkeypatch) == 1
+    assert f"grant refused (unknown): canopy has not reviewed {PR}" in capsys.readouterr().err
+    reviewer_reports(monkeypatch, CLEAN)
+    run_inline(conn, monkeypatch, sha=head(git_pool))
+    capsys.readouterr()
+    refusals = [
+        (["repo#7", "review"], "grant refused (bad_ref): name the PR by its URL"),
+        (["PROJ-1", "review"], "grant refused (bad_kind): PROJ-1 is a ticket; `review` takes the PR's URL"),
+        ([PR, "implement"], f"grant refused (bad_kind): {PR} is a PR, which takes only `review`"),
+        ([PR, "review", "--repo", "repo"], "grant refused (bad_repo): a PR's review limit is the PR's own"),
+    ]
+    for args, refusal in refusals:
+        assert operator("grant", *args, monkeypatch=monkeypatch) == 1
+        assert refusal in capsys.readouterr().err
+    assert operator("grant", PR, "review", "--runs", "0", monkeypatch=monkeypatch) == 2
+    assert conn.execute("SELECT count(*) FROM review_grants").fetchone()[0] == 0
 
 
 def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
@@ -458,9 +553,9 @@ def test_attention_about_a_pr_without_a_ticket(
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     conn = journal(reviews)
-    assert [(i.subject, i.reason) for i in attention.current(conn)] == [
-        ("PROJ-1", "review_limit"),
-        (f"pr:{PR}", "review_failed"),
+    assert [(i.subject, i.reason, i.detail) for i in attention.current(conn)] == [
+        ("PROJ-1", "review_limit", f"3 of 3 reviews; allow it another review with `canopy grant {PR}0 review`"),
+        (f"pr:{PR}", "review_failed", "review run 3 ended crashed"),
     ]
     capsys.readouterr()
     assert main(["decisions"]) == 0
@@ -704,3 +799,81 @@ def test_a_review_without_its_base_branch_still_runs(
     assert row is not None
     assert row["status"] == "done", Path(row["log_path"]).read_text()
     assert not review_diff.path_for(row["log_path"]).exists()
+
+
+TWO_FINDINGS = {
+    **FINDINGS,
+    "findings": [
+        *FINDINGS["findings"],
+        {"severity": "minor", "title": "log line is noisy", "location": "src/retry.py:7", "detail": "It logs twice."},
+    ],
+}
+
+
+def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, TWO_FINDINGS)
+    review_id = run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=head(git_pool))
+    ref = f"review:{review_id}"
+
+    # Only the operator dismisses, and only a finding the review has.
+    monkeypatch.setenv("CANOPY_TICK_ID", "1")
+    assert main(["dismiss", ref, "2"]) == 1
+    assert "dismiss refused (inside_run)" in capsys.readouterr().err
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    for args, guard in [
+        ([ref, "3"], "unknown"),
+        ([ref, "0"], "bad_finding"),
+        ([ref, "two"], "bad_finding"),
+        (["review:99", "1"], "unknown"),
+        (["review:x", "1"], "bad_ref"),
+        ([ref, "2", "--undo"], "unknown"),
+    ]:
+        assert main(["dismiss", *args]) == 1
+        assert f"dismiss refused ({guard})" in capsys.readouterr().err
+
+    assert main(["dismiss", ref, "2"]) == 0
+    assert f"{ref} finding 2 is dismissed: no worker or tick acts on it." in capsys.readouterr().out
+    assert main(["review", "show", str(review_id)]) == 0
+    assert "2. **minor** `src/retry.py:7`: log line is noisy (dismissed)" in capsys.readouterr().out
+    assert main(["review", "show"]) == 0
+    assert "findings, 2 findings (1 dismissed), impact normal" in capsys.readouterr().out
+
+    # The overseer reads only the findings the operator kept.
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
+    assert main(["tick", "--dry-run"]) == 0
+    latest = state_block(agent_log)["reviews"]["prs"][0]["latest"]
+    assert (latest["findings"], latest["dismissed_findings"]) == (["retry never stops"], 1)
+
+    # A resume hands the worker the kept one, under its own number.
+    implemented(conn, monkeypatch)
+    in_tick(conn, monkeypatch)
+    assert main(resume("--review-run", str(review_id)), runner=InlineRunner()) == 0
+    prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
+    assert "1. **blocking** `src/retry.py:42`: retry never stops" in prompt
+    assert "log line is noisy" not in prompt
+
+    # With every finding dismissed, there is nothing for a worker to address.
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    assert main(["dismiss", ref, "1"]) == 0
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(resume("--review-run", str(review_id)), runner=InlineRunner()) == 1
+    assert [(d[2], d[3]) for d in decisions(conn, tick_id)] == [
+        (
+            "refused:bad_review",
+            f"the operator dismissed every finding of review run {review_id}: none is left to address",
+        )
+    ]
+
+    # Undo hands it back.
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    capsys.readouterr()
+    assert main(["dismiss", ref, "1", "--undo"]) == 0
+    assert "is no longer dismissed: a resume hands it to the worker again." in capsys.readouterr().out
+    assert db.review_dismissals(conn, review_id) == frozenset({2})

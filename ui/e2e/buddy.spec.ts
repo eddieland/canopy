@@ -76,6 +76,17 @@ test.describe('turned on', () => {
         await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/)
     })
 
+    test('Sprig stands above the rail footer, never on the version', async ({ page }) => {
+        await page.goto('settings')
+        await settled(page)
+        // At the page's foot, where the footer of a rail that scrolled with the page once sat under Sprig.
+        await page.locator('[data-scroll-restoration-id=page]').evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+        const sprig = await page.getByTestId('buddy').boundingBox()
+        const footer = await page.getByTestId('rail-footer').boundingBox()
+        if (sprig === null || footer === null) throw new Error('Sprig or the rail footer is not shown')
+        expect(sprig.y + sprig.height).toBeLessThanOrEqual(footer.y)
+    })
+
     for (const theme of THEMES) {
         test(`Sprig in ${theme}`, async ({ page }) => {
             await page.clock.setFixedTime(NOW)

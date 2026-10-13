@@ -81,6 +81,7 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy reply REF [TEXT]` | answer it, with TEXT or stdin |
 | `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
 | `canopy grant REF KIND [--repo NAME] [--runs N]` | allow one unit N more runs of KIND, default 1 (below); public tickets too |
+| `canopy grant URL review [--runs N]` | allow the PR at URL N more review runs, default 1 (below, §21) |
 | `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
 
 `canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
@@ -215,6 +216,17 @@ without raising the limit for every ticket. It takes a ticket, public or private
   (§8: cursors advance only once a worker starts) is still new, and a ticket whose last run failed still waits for a
   reply (§14).
 
+`canopy grant URL review` does the same for a PR at `policy.max_reviews_per_pr` (§21), whose head the loop may not
+review again. A PR's review limit is the PR's own, not a unit's, so it:
+
+- takes the PR's URL, as `canopy review show` and the `review_limit` item name it, and no `--repo`. Review runs are keyed
+  by that URL, so `REPO#N` is refused `bad_ref`, as is a URL canopy has never reviewed `unknown`. A ticket key with
+  `review`, or a PR with any other kind, is refused `bad_kind`.
+- adds a row to `review_grants`: the URL, `--runs` (default 1), and when. Only added to. The PR's limit is
+  `policy.max_reviews_per_pr` plus the sum of its grants; no other PR's changes.
+- resets no count (D030). The state block shows the PR's `granted` beside its `review_runs`, and `canopy review run`'s
+  `review_limit` guard and the reviewer's `{{MAX_ATTEMPTS}}` include it. It reviews nothing: the next tick decides.
+
 ### References
 
 A reference names a subject by its shape, so no kind needs a flag and no form can be read as another's: a ticket key
@@ -223,9 +235,10 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | Reference | Subject | Verbs |
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
-| `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
+| `api#42`, or the PR's URL | a PR | `grant` (its reviews, by URL); all, once PR-scoped work exists (M14) |
 | `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
+| `review:ID` | a review run (§21) | `dismiss` (one of its findings); `canopy review show ID` shows one |
 
 A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
 by subject (its kind and id), not by ticket key, so a new kind adds a row here, not a table. Every form is parsed and
@@ -283,7 +296,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget; notes to chores (M23), dismissing findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget; notes to chores (M23), dismissing chores' and reviews' findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -397,7 +410,8 @@ The API, under `{base}/api`:
 | `GET /chores/{name}/runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run of that chore |
 | `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
 | `GET /reviews` | canopy's latest 100 review runs, newest first: PR, commit, ticket, status, verdict, impact, findings, cost (§21) |
-| `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, the diff, and the PR's other runs; 404 for no such run |
+| `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, each marked whether dismissed, the diff, and the PR's other runs; 404 for no such run |
+| `POST /reviews/{id}/dismissals` | `canopy dismiss review:ID N`, or with `undo` its `--undo`: no worker or tick acts on finding `N` (§21) |
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
 | `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs, and the latest 20 decisions naming it; 404 for one nothing names |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
@@ -576,7 +590,8 @@ for a tick whose overseer failed.
 - Its end, not its start: stderr and the session's last events are where a failed tick says why, and the transcript
   has the session from its start.
 - An Output panel under the transcript, hidden until the operator shows it, so a tick's page reads the file only when
-  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text. Not on the event stream;
+  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text; a line of JSON, which is
+  most of it, has its keys, strings, and values colored, as written. Not on the event stream;
   it is marked stale with the tick's transcript, as the tick ends.
 - A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
   until the operator asks for the rest.

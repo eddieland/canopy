@@ -180,6 +180,8 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
 
 
 def test_a_finding_dismissed_from_the_web_leaves_the_attention_list_as_the_cli_dismisses_it(backend: Backend) -> None:
+    written: list[str] = []
+    backend = dataclasses.replace(backend, write_attention=lambda ctx: written.append(ctx.repo))
     c = client(None, backend, key=SECRET)
     headers = signed_in(c)
     url = "/api/chores/deps/dismissals"
@@ -204,6 +206,8 @@ def test_a_finding_dismissed_from_the_web_leaves_the_attention_list_as_the_cli_d
         "dismissed": True,
     }
     assert listed() == []
+    # The loop's `attention.md` is rewritten at once, as `canopy dismiss` rewrites it.
+    assert len(written) == 1
     [finding] = c.get("/api/chores/deps").json()["chore"]["findings"]
     assert (finding["id"], finding["dismissed"]) == ("lodash-advisory", True)
     with backend.open() as ctx:

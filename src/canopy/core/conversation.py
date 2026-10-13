@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, contract, db, outbox
+from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.infra import lock
@@ -67,13 +67,16 @@ TICKET = db.SUBJECT_TICKET
 PR = "pr"
 CHORE = "chore"
 RUN = "run"
-# The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
-# `mirror` is the overseer's, not the operator's (DESIGN §22).
+REVIEW = "review"
+# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), and the rest once PR-scoped work
+# exists (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
-    PR: (),
+    PR: ("grant",),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
+    # `canopy review show ID` shows one; a reference to it serves to dismiss its findings (DESIGN §21).
+    REVIEW: ("dismiss",),
 }
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
 _PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
@@ -106,7 +109,7 @@ class Ref:
 
 
 def parse_ref(text: str) -> Ref:
-    """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, or `run:ID`.
+    """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, `run:ID`, or `review:ID`.
 
     Returns:
         The subject, its kind read from the reference's shape. A run id is normalized to plain digits.
@@ -114,10 +117,10 @@ def parse_ref(text: str) -> Ref:
     Raises:
         Refused: (`bad_ref`) it is none of them.
     """
-    if text.startswith("run:"):
-        run_id = text.removeprefix("run:")
+    if text.startswith(("run:", "review:")):
+        kind, run_id = text.split(":", 1)
         if run_id.isascii() and run_id.isdigit() and 0 < len(run_id) <= 18 and int(run_id) > 0:  # noqa: PLR2004
-            return Ref(RUN, str(int(run_id)))
+            return Ref(kind, str(int(run_id)))
     elif text.startswith("chore:"):
         name = text.removeprefix("chore:")
         if CHORE_NAME_RE.fullmatch(name):
@@ -132,7 +135,7 @@ def parse_ref(text: str) -> Ref:
         return Ref(TICKET, text)
     raise Refused(
         "bad_ref",
-        f"{text[:MAX_KEY]!r} is not a reference: a ticket key, REPO#N or a PR's URL, chore:NAME, or run:ID",
+        f"{text[:MAX_KEY]!r} is not a reference: a ticket key, REPO#N or a PR's URL, chore:NAME, run:ID, or review:ID",
     )
 
 
@@ -336,37 +339,61 @@ def reply(
 def dismiss(
     conn: sqlite3.Connection,
     ref: Ref,
-    finding_id: str,
+    finding: str,
     *,
     channel: str,
     chores: Mapping[str, Chore],
     undo: bool = False,
 ) -> None:
-    """Dismiss one of a chore's open findings, keeping it off the attention list until it clears (DESIGN §19).
+    """Dismiss one finding: a chore's, named by its id (DESIGN §19), or a review run's, by its number (§21).
 
-    The chore's runs still report it and its page still shows it, marked dismissed. Once an `ok` run leaves it out the
-    dismissal is spent, so the finding is listed again if it comes back. Dismissing it again records the time anew.
-    `undo` takes a dismissal back, listing the finding again at once.
+    A chore's open finding is kept off the attention list until it clears: the chore's runs still report it and its
+    page still shows it, marked dismissed, and once an `ok` run leaves it out the dismissal is spent, so the finding is
+    listed again if it comes back. A review's finding stays on the review's page, marked, and is left out of what a
+    `resume` hands a worker and of the overseer's state block. Dismissing one again records the time anew; `undo`
+    takes a dismissal back.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a chore, `unknown` for a chore not in `chores`, `bad_finding`
-            for an id no finding can have, `unknown` for a finding the chore does not have open, or, with `undo`, one
-            the operator has not dismissed.
+        Refused: `unsupported` for a subject that is not a chore or a review, `unknown` for a chore not in `chores`, a
+            review run that does not exist or found nothing, or a finding the subject does not have (with `undo`, one
+            not dismissed), and `bad_finding` for an id or number no finding can have.
     """
     check_verb(ref, "dismiss")
+    if ref.kind == REVIEW:
+        _dismiss_review(conn, ref, finding, channel=channel, undo=undo)
+        return
     if ref.id not in chores:
         raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
-    if len(finding_id) > MAX_ID or not FINDING_ID_RE.fullmatch(finding_id):
+    if len(finding) > MAX_ID or not FINDING_ID_RE.fullmatch(finding):
         raise Refused("bad_finding", f"a finding id matches {FINDING_ID_RE.pattern}, at most {MAX_ID} characters")
     with db.transaction(conn):
         if undo:
-            if not db.delete_dismissal(conn, ref.id, finding_id):
-                raise Refused("unknown", f"{ref} has no dismissed finding {finding_id!r}")
+            if not db.delete_dismissal(conn, ref.id, finding):
+                raise Refused("unknown", f"{ref} has no dismissed finding {finding!r}")
             return
         state = chore_view.state_of(conn, ref.id, chores[ref.id])
-        if not any(f.finding.id == finding_id for f in state.findings()):
-            raise Refused("unknown", f"{ref} has no open finding {finding_id!r}")
-        db.set_dismissal(conn, ref.id, finding_id, channel=channel)
+        if not any(f.finding.id == finding for f in state.findings()):
+            raise Refused("unknown", f"{ref} has no open finding {finding!r}")
+        db.set_dismissal(conn, ref.id, finding, channel=channel)
+
+
+def _dismiss_review(conn: sqlite3.Connection, ref: Ref, finding: str, *, channel: str, undo: bool) -> None:
+    if not (finding.isascii() and finding.isdigit() and 0 < len(finding) <= 2 and int(finding) > 0):  # noqa: PLR2004
+        raise Refused("bad_finding", f"a review's finding is its number, from 1 to {review_result.MAX_FINDINGS}")
+    number, run_id = int(finding), int(ref.id)
+    with db.transaction(conn):
+        if undo:
+            if not db.delete_review_dismissal(conn, run_id, number):
+                raise Refused("unknown", f"{ref} has no dismissed finding {number}")
+            return
+        run = db.get_review_run(conn, run_id)
+        if run is None:
+            raise Refused("unknown", f"there is no review run {run_id}")
+        stored = review_result.stored(run["result_json"])
+        found = len(stored.findings) if stored is not None and run["status"] == "done" else 0
+        if number > found:
+            raise Refused("unknown", f"{ref} has no finding {number}: it reported {found}")
+        db.set_review_dismissal(conn, run_id, number, channel=channel)
 
 
 @dataclass(frozen=True)

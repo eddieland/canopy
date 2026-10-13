@@ -42,6 +42,7 @@ UNIT_PHASES = frozenset(
         "review_pending",
         "review_findings",
         "changes_requested",
+        "untrusted_review",
         "green_unreviewed",
         "approved",
         "merged",
@@ -903,6 +904,32 @@ def insert_review_run(
 def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Forget a review run that never started: no slot, or no prompt. It counts toward no limit."""
     conn.execute("DELETE FROM review_runs WHERE id = ? AND pid IS NULL", (run_id,))
+
+
+def review_dismissals(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
+    """Return the numbers, from 1, of review run `run_id`'s findings the operator dismissed (DESIGN §21)."""
+    rows = conn.execute("SELECT finding FROM review_dismissals WHERE review_run_id = ?", (run_id,))
+    return frozenset(int(r[0]) for r in rows)
+
+
+def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *, channel: str) -> None:
+    """Record that the operator dismissed review run `run_id`'s finding number `finding` now."""
+    conn.execute(
+        "INSERT INTO review_dismissals (review_run_id, finding, dismissed_at, channel) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (review_run_id, finding) DO UPDATE SET "
+        "dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+        (run_id, finding, now(), channel),
+    )
+
+
+def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int) -> bool:
+    """Take back the operator's dismissal of review run `run_id`'s finding number `finding`.
+
+    Returns:
+        Whether there was one to take back.
+    """
+    cur = conn.execute("DELETE FROM review_dismissals WHERE review_run_id = ? AND finding = ?", (run_id, finding))
+    return cur.rowcount > 0
 
 
 def set_review_slot(
