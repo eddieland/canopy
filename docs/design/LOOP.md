@@ -72,7 +72,9 @@ in order:
    session. The token is a word no model writes by chance, where `tick complete` was ordinary English that a looser
    check would find in a rationale; a line that only mentions it does not count. A successful run that recorded a
    tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention
-   list standing, so an outage does not resolve and re-raise every item.
+   list standing, so an outage does not resolve and re-raise every item. A skip is tick-wide when it has no ticket key
+   or its rationale starts with `mcp_unavailable:` or `tracker_unsupported:`: an overseer that puts a key on its outage
+   skip still could not see the world, and closing that tick `ok` would clear the list.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch

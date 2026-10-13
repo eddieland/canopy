@@ -162,6 +162,8 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
     assert len(messages(notified)) == 1
 
 
+# An outage skip is tick-wide whether or not the overseer put a ticket key on it.
+@pytest.mark.parametrize("key", [[], ["PROJ-3"]], ids=["no_key", "keyed"])
 def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
@@ -170,10 +172,11 @@ def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
     conn: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    key: list[str],
 ) -> None:
     overseer_records(monkeypatch, ("PROJ-3", "needs_reviewer"))
     assert main(["tick", "--dry-run"]) == 0
-    skip = [["canopy", "decide", "skip", "--rationale", "mcp_unavailable: github"]]
+    skip = [["canopy", "decide", *key, "skip", "--rationale", "mcp_unavailable: github"]]
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(skip))
     capsys.readouterr()
     assert main(["tick", "--dry-run"]) == 1

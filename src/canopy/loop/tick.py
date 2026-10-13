@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 TICK_ID_ENV = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
 DONE_LINE = "CANOPY_TICK_DONE"
+# Rationales of a skip that means the overseer could not see the world, so the skip is tick-wide even when it names a
+# ticket (DESIGN §6).
+OUTAGE_PREFIXES = ("mcp_unavailable:", "tracker_unsupported:")
 
 
 @dataclass(frozen=True)
@@ -124,8 +127,13 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     prefix = "dry run; " if dry_run else ""
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
-    # `ok` would make its empty list the attention list and notify every open item as resolved.
-    skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
+    # `ok` would make its empty list the attention list and notify every open item as resolved. An outage skip that
+    # names a ticket is still tick-wide: the outage is the same whatever key the overseer put on it.
+    skips = [
+        str(d["rationale"])
+        for d in decisions
+        if d["action"] == "skip" and (d["ticket_key"] is None or str(d["rationale"]).startswith(OUTAGE_PREFIXES))
+    ]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
     actions = Counter(str(d["action"]) for d in decisions)
