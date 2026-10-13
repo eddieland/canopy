@@ -1,7 +1,8 @@
 """Prompt files and their overrides: the overseer's prompt (DESIGN §6) and worker prompts (DESIGN §8).
 
 A prompt named `overseer.md` is read from `paths.prompt_overrides` if a file of that name is there, otherwise from the
-prompts canopy ships. Worker prompts name their inputs as `{{NAME}}` placeholders.
+prompts canopy ships. The overseer's goes into its agent definition (`definitions.render_overseer`, DESIGN §13), not a
+tick's message. Worker prompts name their inputs as `{{NAME}}` placeholders.
 """
 
 from __future__ import annotations
@@ -149,12 +150,6 @@ def prompt_path(config: Config, name: str) -> Path:
     if override.is_file():
         return override
     return resources.prompts_dir() / name
-
-
-def render_overseer(config: Config, block: str) -> str:
-    """Return the overseer prompt followed by the state block."""
-    body = prompt_path(config, OVERSEER).read_text(encoding="utf-8").rstrip("\n")
-    return f"{body}\n\n{block}"
 
 
 def render_worker(

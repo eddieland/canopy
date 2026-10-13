@@ -1,14 +1,15 @@
-// A log of JSON lines (an agent runtime's events, with whatever else it printed) as tokens a page can color. A line
-// that parses as a JSON object or array is split into its keys, strings, numbers, literals, and punctuation, exactly
-// as written: nothing is reformatted, so the tokens' text joined is the line. Any other line is one plain token. The
-// result is data that a component renders as React text, never HTML.
+// JSON in agent output as tokens a page can color: a log of JSON lines (an agent runtime's events, with whatever else
+// it printed), or one block of JSON (a tool call's indented input or output). Text that parses as a JSON object or
+// array is split into its keys, strings, numbers, literals, and punctuation, exactly as written: nothing is
+// reformatted, so the tokens' text joined is the text. Anything else is one plain token. The result is data that a
+// component renders as React text, never HTML.
 
-/** What a piece of a line is: a JSON key, string, number, `true`/`false`/`null`, punctuation, or anything else. */
+/** What a piece of text is: a JSON key, string, number, `true`/`false`/`null`, punctuation, or anything else. */
 export type JsonKind = 'key' | 'string' | 'number' | 'literal' | 'punct' | 'text'
 
-/** A piece of a line, its text as written. */
+/** A piece of text, as written. */
 export interface JsonToken {
-    /** What the piece is. `text` for whitespace in a JSON line and for the whole of any other line. */
+    /** What the piece is. `text` for whitespace in JSON, and for the whole of anything else. */
     kind: JsonKind
     /** The piece's characters, as written. */
     text: string
@@ -18,41 +19,94 @@ export interface JsonToken {
 const TOKEN =
     /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/gu
 
-/** `text` as its lines, each as tokens: a line holding a JSON object or array split up, any other line whole. */
-export function jsonLines(text: string): JsonToken[][] {
-    return text.split('\n').map((line) => tokenize(line))
+/**
+ * `text` as its lines, each as tokens: a line holding a JSON object or array split up, any other line whole. `pretty`
+ * lays each JSON line out over several (`indent`).
+ */
+export function jsonLines(text: string, pretty = false): JsonToken[][] {
+    return text.split('\n').map((line) => (pretty ? indent(tokenize(line)) : tokenize(line)))
 }
 
-/** One line as tokens: split up when it is a JSON object or array, else one `text` token (none when empty). */
-export function tokenize(line: string): JsonToken[] {
-    if (line === '') {
+/**
+ * Text as tokens: split up when the whole of it is a JSON object or array, on one line or many, else one `text` token
+ * (none when empty). Used for one line of a log, and for one block of JSON.
+ */
+export function tokenize(text: string): JsonToken[] {
+    if (text === '') {
         return []
     }
-    if (!isJson(line)) {
-        return [{ kind: 'text', text: line }]
+    if (!isJson(text)) {
+        return [{ kind: 'text', text }]
     }
     const tokens: JsonToken[] = []
     let last = 0
-    for (const match of line.matchAll(TOKEN)) {
+    for (const match of text.matchAll(TOKEN)) {
         if (match.index > last) {
-            tokens.push({ kind: 'text', text: line.slice(last, match.index) })
+            tokens.push({ kind: 'text', text: text.slice(last, match.index) })
         }
         tokens.push({ kind: kindOf(match), text: match[0] })
         last = match.index + match[0].length
     }
-    if (last < line.length) {
-        tokens.push({ kind: 'text', text: line.slice(last) })
+    if (last < text.length) {
+        tokens.push({ kind: 'text', text: text.slice(last) })
     }
     return tokens
 }
 
-function isJson(line: string): boolean {
-    const start = line.trimStart()[0]
+/**
+ * One JSON value's tokens laid out over lines, two spaces a level: a break after each opening bracket and comma and
+ * before each closing one, a space after each colon, an empty object or array kept as `{}` or `[]`. Only the space
+ * between tokens changes, so every key, string, and number stays as written. Anything else is returned as it is.
+ */
+export function indent(tokens: JsonToken[]): JsonToken[] {
+    const solid = tokens.filter((token) => token.kind !== 'text')
+    if (solid.length === 0) {
+        return tokens
+    }
+    const out: JsonToken[] = []
+    let depth = 0
+    const brk = () => out.push({ kind: 'text', text: `\n${'  '.repeat(depth)}` })
+    solid.forEach((token, i) => {
+        const text = token.kind === 'punct' ? token.text : ''
+        if (text === '{' || text === '[') {
+            out.push(token)
+            depth += 1
+            if (!closes(solid[i + 1])) {
+                brk()
+            }
+        } else if (closes(token)) {
+            depth -= 1
+            if (!opens(solid[i - 1])) {
+                brk()
+            }
+            out.push(token)
+        } else if (text === ',') {
+            out.push(token)
+            brk()
+        } else if (text === ':') {
+            out.push(token, { kind: 'text', text: ' ' })
+        } else {
+            out.push(token)
+        }
+    })
+    return out
+}
+
+function opens(token: JsonToken | undefined): boolean {
+    return token?.kind === 'punct' && (token.text === '{' || token.text === '[')
+}
+
+function closes(token: JsonToken | undefined): boolean {
+    return token?.kind === 'punct' && (token.text === '}' || token.text === ']')
+}
+
+function isJson(text: string): boolean {
+    const start = text.trimStart()[0]
     if (start !== '{' && start !== '[') {
         return false
     }
     try {
-        JSON.parse(line)
+        JSON.parse(text)
         return true
     } catch {
         return false
