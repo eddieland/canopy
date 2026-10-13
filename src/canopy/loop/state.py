@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -30,6 +30,7 @@ def state_block(
     leased: Mapping[str, list[treehouse.Slot]],
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
+    stopped: Sequence[str],
     units: Mapping[str, list[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
     run_slots: Mapping[int, list[sqlite3.Row]],
@@ -47,8 +48,9 @@ def state_block(
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
-    `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`,
-    and `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key
+    `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22). `units` are each
+    ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`, and
+    `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key
     (DESIGN §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with
     their split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no
     `chores` key, exactly as before chores existed. `private` holds each private ticket's conversation state, by key
@@ -179,6 +181,8 @@ def state_block(
             for r in running
         ],
         "tickets": [ticket_summary(t) for t in tickets],
+        # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
+        "stopped": list(stopped),
         # Tracker comments the overseer copies into the journal (DESIGN §22).
         "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
         # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).

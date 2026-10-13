@@ -83,7 +83,9 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     running = db.running_runs(ctx.conn)
     last_runs = db.latest_runs(ctx.conn)
-    tickets = db.open_tickets(ctx.conn)
+    # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
+    stopped = conversation.stopped(ctx.conn)
+    tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
     private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {
         str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
@@ -98,6 +100,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         leased=reconciled.leased,
         running=running,
         tickets=tickets,
+        stopped=stopped,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
