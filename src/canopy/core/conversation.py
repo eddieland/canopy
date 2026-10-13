@@ -70,7 +70,7 @@ RUN = "run"
 # The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
 # `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "forget", "show", MIRROR_ACTION),
+    TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
     PR: (),
     CHORE: ("reply", "show"),
     RUN: ("show",),
@@ -151,7 +151,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, pauses, or resumes",
+                "stops, replies, forgets, grants attempts, pauses, or resumes",
             )
 
 

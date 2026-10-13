@@ -111,8 +111,8 @@ canopy (harness, Python)
     setup.py       init, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
-    conversation.py start, stop, reply, forget, show: the operator's verbs on a subject (§22); pause and resume, on
-                   the loop (§6)
+    conversation.py start, stop, reply, forget, grant, show: the operator's verbs on a subject (§22); pause and
+                   resume, on the loop (§6)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
@@ -129,7 +129,7 @@ canopy (harness, Python)
 
   runs/            worker runs on tickets (§8)
     dispatch.py    guards, leases (all or nothing), render the worker prompt, spawn detached _run
-    policy.py      attempt limits and the fix-ci cooldown per unit, derived from runs and run_slots
+    policy.py      attempt limits and the fix-ci cooldown per unit, derived from runs, run_slots, and grants
     worker.py      canopy _run: branch setup and the operator's setup command in each slot, the worker, result
                    parsing, push verification, slot return; a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)

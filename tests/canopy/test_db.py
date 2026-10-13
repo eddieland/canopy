@@ -30,6 +30,7 @@ SHIPPED = {
     12: "04410ef0faf97f97e28ffdfb7c8a6c0f86ec7878222ef10336fad518f89196f7",
     13: "995116e0a3010b31af0f183154266a6774a5241972aac2a48ae62be9bf80a49a",
     14: "764761a8223991f778163245e702688715f2d9144de5573244c4fee8c74f533e",
+    15: "91667c9b816fde738ca9809286ad3d2b49dce1db8f6fdc9dc2cb1cac46d200ee",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -74,6 +75,10 @@ SEED: Mapping[str, str] = {
         "VALUES ('ticket', 'OLD-1', 'started', 'x', 'cli')"
     ),
     "pause": "INSERT INTO pause (id, paused_at, channel) VALUES (1, 'x', 'cli')",
+    "attempt_grants": (
+        "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) "
+        "VALUES ('OLD-1', 'api', 'resume', 1, 'x')"
+    ),
 }
 
 

@@ -125,7 +125,7 @@ def start(
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
         plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
-        attempt = _guard(ctx, key, kind, plan.repos)
+        attempt, limit = _guard(ctx, key, kind, plan.repos)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -136,6 +136,7 @@ def start(
                 plan=plan,
                 leases=leases,
                 attempt=attempt,
+                limit=limit,
                 context=context,
                 request=request,
                 review=review,
@@ -445,12 +446,13 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
-def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: Sequence[str] = ()) -> int:
-    """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the attempt number the run would be.
+def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: Sequence[str] = ()) -> tuple[int, int]:
+    """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
     Attempt limits and the fix-ci cooldown are per unit: the run is refused if any unit it covers is at its limit or
-    in its cooldown. `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running
-    run.
+    in its cooldown. A unit's limit is the policy's plus the runs the operator granted it (DESIGN §22). The run's
+    attempt number and limit are those of the unit with the most runs of the kind. `planned` holds the tickets a dry
+    run has already dispatched this tick; each counts as a running run.
     """
     running = db.running_runs(ctx.conn)
     for run in running:
@@ -461,28 +463,30 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
     if kind == policy.SPLIT:
         # A split is the ticket's, not a unit's: its count is per ticket.
         done = policy.split_attempts(ctx.conn).get(key, 0)
-        refused = policy.blocked(
-            key, kind, counts={kind: done}, limit=policy.limits(ctx.config)[kind], cooldown_until=None
-        )
+        split_limit = policy.limits(ctx.config)[kind]
+        refused = policy.blocked(key, kind, counts={kind: done}, limit=split_limit, cooldown_until=None)
         if refused is not None:
             raise Refusal(*refused)
         _check_capacity(ctx, running, planned)
-        return done + 1
+        return done + 1, split_limit
     counts = policy.attempts(ctx.conn)
+    granted = policy.grants(ctx.conn)
     cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC))
-    limit = policy.limits(ctx.config)[kind]
-    attempt = 1
+    # (attempt, -limit) per unit: the unit with the most runs sets both, and of those, the one with the lowest limit.
+    numbered: list[tuple[int, int]] = []
     for repo in repos:
         unit = policy.unit(key, repo)
         unit_counts = counts.get(unit, dict.fromkeys(policy.KINDS, 0))
+        limit = policy.unit_limits(ctx.config, granted.get(unit, {}))[kind]
         refused = policy.blocked(
             f"{key} in {repo}", kind, counts=unit_counts, limit=limit, cooldown_until=cooldowns.get(unit)
         )
         if refused is not None:
             raise Refusal(*refused, repo=repo)
-        attempt = max(attempt, unit_counts[kind] + 1)
+        numbered.append((unit_counts[kind] + 1, -limit))
     _check_capacity(ctx, running, planned)
-    return attempt
+    attempt, negative_limit = max(numbered, default=(1, -policy.limits(ctx.config)[kind]))
+    return attempt, -negative_limit
 
 
 def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[str]) -> None:
@@ -528,6 +532,7 @@ def _spawn(
     plan: Plan,
     leases: Sequence[tuple[str, treehouse.Lease]],
     attempt: int,
+    limit: int,
     context: str | None,
     request: str | None = None,
     review: str | None = None,
@@ -566,7 +571,7 @@ def _spawn(
         "PR_LABEL": cfg.trust.pr_label,
         "TIMEOUT_MINUTES": str(cfg.runtime.worker_timeout_minutes),
         "ATTEMPT": str(attempt),
-        "MAX_ATTEMPTS": str(policy.limits(cfg)[kind]),
+        "MAX_ATTEMPTS": str(limit),
         "PR_URL": JOINT_PR_NOTE if plan.joint else _pr_note(prs.get(first.repo or ""), branch),
         "CONTEXT": context or "None.",
         "REVIEW_FINDINGS": review or "None.",
@@ -614,9 +619,7 @@ def _spawn(
         slots=slots,
         runs_dir=runs_dir(ctx),
         works_units=not split,
-        started=outbox.run_started(
-            cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=policy.limits(cfg)[kind]
-        ),
+        started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
         check=check_start,
     )

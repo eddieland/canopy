@@ -31,7 +31,7 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
   work, when, with its newest run and message then (`forgotten_at`, `forgotten_run_id`, `forgotten_message_id`, §22).
   Cursors make ticks incremental. Attempt counts and the fix-ci cooldown are derived from `runs` and `run_slots`, not
-  stored (D030).
+  stored (D030); a unit's limit adds its `attempt_grants`.
 - `ticket_units`: one row per unit, a ticket's work in one repository (§18); ticket, repository, branch, PR URL, the
   unit's phase, and its cursors (`last_review_id`, which holds a time despite its name (§7), and `last_ci_run_id`).
 - `runs`: one row per worker execution; ticket, kind, branch (empty for a split, which works on none), pid of `canopy
@@ -46,6 +46,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
   pids, times, status, the validated result (§21), and what the runtime reported (§13), as `runs` has it.
   `decisions.pr` names the PR of a decision about a review.
+- `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
+  Only added to.
 - `split_children`: one row per ticket a split created; its parent, the repository it covers, and the split run.
   Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a

@@ -97,6 +97,8 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
 - To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY` (or Forget on
   its page in the web UI): its next implement starts on a new branch. Its earlier runs still count toward the attempt
   limits (DESIGN §22).
+- A ticket on the attention list as `attempt_limit` has used up a kind of run. To let the loop keep at it, run `canopy
+  grant KEY resume` (or `implement`, `fix-ci`): one more run of that kind, for that ticket only (DESIGN §22).
 - Review PRs. Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a
   worker back to a PR on their own; anyone else's comments, a review bot's included, wait on the attention list as
   `untrusted_review` until you say what to do with `canopy reply KEY 'use your judgement on the bot's review'` or the
