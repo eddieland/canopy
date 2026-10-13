@@ -405,8 +405,10 @@ The event stream: each open stream holds its own journal connection and reads SQ
 When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
 spend, the latest tick, and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
-`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with
-every list, the spend, the latest tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
+`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
+read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
+summary in a list still in the order from before it. A new stream starts with every list, the spend, the latest
+tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
