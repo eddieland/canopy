@@ -28,8 +28,8 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
 }
 
 /**
- * The runs the rail lists, at most `limit`: those waiting on the operator's answer first, then those running, each
- * oldest first, so the one waiting longest leads. `more` counts the ones left out.
+ * The runs the rail lists, at most `limit`: those running first, then those waiting on the operator's answer, each
+ * oldest first, so the work in progress leads and holds the slots. `more` counts the ones left out.
  */
 export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: number } {
     const working = runs
@@ -39,5 +39,5 @@ export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: numb
 }
 
 function rank(run: Run): number {
-    return run.state === 'blocked' ? 0 : 1
+    return run.state === 'running' ? 0 : 1
 }
