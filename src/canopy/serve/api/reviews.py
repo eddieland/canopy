@@ -1,16 +1,19 @@
-"""The reviews canopy keeps instead of posting them (DESIGN §21, D114). Reads only; all of it is untrusted."""
+"""The reviews canopy keeps instead of posting them (DESIGN §21, D114), all untrusted, and dismissing a finding."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
+from canopy.core import chore_view, conversation
+from canopy.infra import logs
 from canopy.serve import reviews
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import ReviewId, not_found
-from canopy.serve.schema import ReviewDetail, ReviewSummary
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
+from canopy.serve.schema import ReviewDetail, ReviewDismissed, ReviewDismissRequest, ReviewSummary
 
 TAG = "reviews"
 router = APIRouter(tags=[TAG])
+_log = logs.for_tick(None)
 
 
 @router.get("/reviews", operation_id="listReviews", summary="List the reviews")
@@ -29,3 +32,25 @@ def review(run_id: ReviewId, backend: BackendDep) -> ReviewDetail:
     if found is None:
         raise HTTPException(status_code=404, detail=f"no review run {run_id}")
     return found
+
+
+@router.post(
+    "/reviews/{run_id}/dismissals",
+    operation_id="dismissReviewFinding",
+    summary="Dismiss a review's finding",
+    responses=REFUSED,
+)
+def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -> ReviewDismissed:
+    """`canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21)."""
+    ref = conversation.Ref(conversation.REVIEW, str(run_id))
+    with backend.open() as ctx:
+        try:
+            defined = chore_view.defined(ctx.config, ctx.workspace)
+            conversation.dismiss(ctx.conn, ref, str(body.finding), channel=WEB, chores=defined, undo=body.undo)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "finding dismissal taken back" if body.undo else "finding dismissed",
+        extra={"subject": str(ref), "finding": body.finding, "channel": WEB},
+    )
+    return ReviewDismissed(run=run_id, finding=body.finding, dismissed=not body.undo)

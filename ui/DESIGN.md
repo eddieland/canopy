@@ -357,8 +357,10 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
-  text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
-  (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
+  text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
+  its title muted, `keep` in place of `dismiss`, and the same chip in the findings list. The list of reviews is rows:
+  the review's link, its state's dot and verdict in that state's color, its ticket (or `review.query`), the PR as a
+  link out, the commit's first 7 characters, its impact, cost, and age.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
   its page, its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
