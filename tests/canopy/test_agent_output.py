@@ -46,13 +46,6 @@ def test_events_give_the_text_the_session_and_the_cost() -> None:
     assert output.usage.tokens == 2 * (100 + 20 + 3 + 400 + 50)
 
 
-def test_reasoning_is_never_the_agents_text() -> None:
-    # The default templates pass `--thinking`, so a model that reasons prints its reasoning as events too.
-    reasoning = event("reasoning", {"type": "reasoning", "text": RESULT.replace("did it", "a thought")})
-    output = agent_output.read("\n".join([text("Done."), reasoning, text(RESULT), reasoning]))
-    assert output.text == f"Done.\n{RESULT}"
-
-
 def test_a_result_line_is_not_an_event() -> None:
     # The fake agent and plain-text templates print the result contract alone; it has no type or session.
     assert agent_output.read(RESULT).text == RESULT

@@ -34,17 +34,17 @@ max_chores = 1
 # of canopy's agents must contain it. OpenCode reads it as OPENCODE_CONFIG_DIR, after the repository's own config.
 # {title}, optional, is the session's title: `<KEY> <kind>: <the ticket's title>` for a worker (DESIGN §13).
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 # A ticket you started with `canopy start` runs `private_worker_cmd`: worker_cmd's default with
 # `--agent canopy-worker-private`, an agent that cannot write to the tracker (DESIGN §22).
 # Chores run this unless they set their own `cmd` (DESIGN §19).
 chore_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 # The splitter creates one ticket per repository when an authorized replier asks for a split (DESIGN §18).
 split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 # Optional: a skill of yours that workers open PRs with, and in no other way, instead of the GitHub MCP (DESIGN §8).

@@ -431,32 +431,32 @@ class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
     overseer_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json --thinking "
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json "
         "--title={title} {prompt}"
     )
     worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking "
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json "
         "--title={title} {prompt}"
     )
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
     private_worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json --thinking "
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json "
         "--title={title} {prompt}"
     )
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
     split_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --thinking "
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json "
         "--title={title} {prompt}"
     )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking "
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json "
         "--title={title} {prompt}"
     )
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
     review_cmd: Annotated[AgentTemplate, Scope.USER] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking "
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json "
         "--title={title} {prompt}"
     )
     review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20

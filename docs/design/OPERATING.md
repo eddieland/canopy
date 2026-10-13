@@ -150,11 +150,11 @@ max_workers = 2
 
 [runtime]
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
@@ -314,13 +314,6 @@ canopy starts records what it cost, and the web UI's spend (§22) sums them all.
 for no events records nothing, and its runs are missing from the spend. A tick's output file and a run log hold the
 events as printed, and the web UI reads one session's back from them as its transcript (§22).
 
-The defaults also pass `--thinking`, which makes `run` print each `reasoning` part the model returned as an event, so
-a transcript shows why an agent did what it did. It only prints: whether and how much a model reasons is its own
-setting (OpenCode's `--variant` or the agent's model options), and costs the same with the flag or without. A model
-that does not reason prints no such event. Only `text` events are an agent's text (above), so its reasoning is never
-read as a result line. It adds the reasoning to the log, which is bounded as any log is (§22). A user file from before
-keeps its own templates, which need `--thinking` added by hand.
-
 ### Session titles
 
 Every runtime template may name `{title}`, the run's session title, and the defaults pass it as
@@ -360,9 +353,9 @@ canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split
 
 ```toml
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
-    --thinking --title={title} {prompt}'''
+    --title={title} {prompt}'''
 ```
 
 Nothing is installed into repositories, and a leased worktree always has the definitions its run names. OpenCode merges
