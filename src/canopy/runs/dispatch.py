@@ -133,6 +133,7 @@ def start(
     context: str | None,
     repos: Sequence[str] = (),
     request: str | None = None,
+    review: str | None = None,
 ) -> Started:
     """Check the guards, lease a slot in each repository, record the run, and spawn `canopy _run` for it.
 
@@ -140,7 +141,8 @@ def start(
     ticket's first implement named, in every repository. `base` stacks the run on another ticket's branch (DESIGN §10);
     without it the run starts from each pool's base branch. `repos` names the units the run covers, one repository each.
     A run over several repositories is a joint run (DESIGN §18). A `split` names the authorized replier's comment that
-    asked for it with `request`, and works no unit.
+    asked for it with `request`, and works no unit. A `resume` for a canopy review's findings carries them in `review`,
+    read from the journal (DESIGN §21).
 
     Raises:
         Refusal: a guard refused, or a slot could not be leased or the worker started. Nothing is left running and
@@ -163,6 +165,7 @@ def start(
                 attempt=attempt,
                 context=context,
                 request=request,
+                review=review,
             )
         except BaseException:
             _return_all(ctx, leases)
@@ -451,6 +454,7 @@ def _spawn(
     attempt: int,
     context: str | None,
     request: str | None = None,
+    review: str | None = None,
 ) -> Started:
     cfg = ctx.config
     branch = plan.branch
@@ -489,6 +493,7 @@ def _spawn(
         "MAX_ATTEMPTS": str(policy.limits(cfg)[kind]),
         "PR_URL": JOINT_PR_NOTE if plan.joint else _pr_note(prs.get(first.repo or ""), branch),
         "CONTEXT": context or "None.",
+        "REVIEW_FINDINGS": review or "None.",
         "AUTHORIZED_REPLIERS": repliers or "none (no reply may instruct you)",
         "TRUSTED_REVIEWERS": prompts.trusted_reviewers(cfg.trust.trusted_reviewers),
         "LABELS": ", ".join(f"`{label}`" for label in cfg.tracker.labels),
@@ -510,6 +515,8 @@ def _spawn(
         values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
         if not split and conversation.has_operator_messages(ctx.conn, key):
             required = (*required, *prompts.REQUIRED_OPERATOR)
+    if review is not None:
+        required = (*required, *prompts.REQUIRED_REVIEW)
     try:
         prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
     except (OSError, prompts.PromptError) as e:

@@ -126,7 +126,10 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(
     assert f"Message {message}, the operator's reply, at " in prompt
     assert f"> {GO_AHEAD}" in prompt
     assert context in prompt
-    assert "Trusted reviewers: `octocat`, canopy's own reviewer (a comment canopy's review run posted)." in prompt
+    assert (
+        "Trusted reviewers: `octocat`, canopy's own reviewer (its findings come in this prompt, never on the PR)."
+        in prompt
+    )
     # The dispatch carried the message cursor, so the next tick does not read the go-ahead again.
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None

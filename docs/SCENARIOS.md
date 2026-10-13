@@ -89,10 +89,10 @@ relying on a permission they check.
 ## Reviews
 
 - **S19. A finding, resumed and re-reviewed** (M11). With `review.agent_prs` on, a ticket's PR is reviewed once its
-  checks pass; a finding goes back through `resume`, the new commit is reviewed again, and the ticket reaches
-  `needs_reviewer`, with no review comment counted as a human's.
-- **S20. A review of your own PR** (M11). With a `review.query` that matches a PR you wrote, expect one identified
-  comment per new head commit and nothing else: no push, no ticket, no GitHub review.
+  checks pass; a finding goes back through `resume --review-run`, the new commit is reviewed again, and the ticket
+  reaches `needs_reviewer`, with nothing of the review on the PR.
+- **S20. A review of your own PR** (M11). With a `review.query` that matches a PR you wrote, expect one review per new
+  head commit in `canopy review show` and nothing else: no comment, no push, no ticket, no GitHub review.
 - **S21. A review killed, and the limit** (M11). Kill a review run mid-way: the next tick returns its slot and raises
   `review_failed`. A PR at `policy.max_reviews_per_pr` gets no more reviews.
 

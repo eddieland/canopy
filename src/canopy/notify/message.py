@@ -54,8 +54,8 @@ def event_line(kind: str, fields: dict[str, object]) -> str:  # noqa: PLR0911  (
         ticket = f" ({f.get('ticket')})" if f.get("ticket") else ""
         verdict = " ".join(str(x) for x in (f.get("verdict"), f.get("impact")) if x)
         text = f"< review run {f.get('run')} of {f.get('pr')}{ticket} ended {f.get('status')}"
-        extras = [x for x in (verdict, f.get("comment")) if x]
-        return _line(f"{text}: {' '.join(str(x) for x in extras)}" if extras else text)
+        findings = f.get("findings") or 0
+        return _line(f"{text}: {verdict} ({findings} findings)" if verdict else text)
     if kind == "loop.failing":
         return (
             f"! loop failing: {f.get('count')} ticks in a row ended other than ok; latest tick {f.get('tick')} "

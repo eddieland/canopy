@@ -106,6 +106,7 @@ def review_ended(config: Config, run: sqlite3.Row, status: str, result_json: str
     if not config.notify.takes(REVIEWS):
         return None
     result = _object(result_json)
+    findings = result.get("findings")
     fields: dict[str, object] = {
         "pr": run["pr_url"],
         "ticket": run["ticket_key"],
@@ -113,7 +114,8 @@ def review_ended(config: Config, run: sqlite3.Row, status: str, result_json: str
         "status": status,
         "verdict": result.get("verdict"),
         "impact": result.get("impact"),
-        "comment": cut(result["comment"], DETAIL_LIMIT) if result.get("comment") else None,
+        # How many, not what: the findings stay in the journal (D114).
+        "findings": len(findings) if isinstance(findings, list) else 0,
     }
     return Event(REVIEWS, "review.ended", fields)
 

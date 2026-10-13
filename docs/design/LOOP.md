@@ -236,7 +236,7 @@ is the reference point instead of the label. Anything else on the ticket is data
 **Trusted reviewers** (D089). Review feedback is a PR's reviews, review comments, and requested changes, and canopy's
 own review findings (§21). `trust.trusted_reviewers`, user-only, lists whose feedback a worker may address without the
 operator's go-ahead: VCS host logins, matched in full and case-insensitively, and `canopy:review` for canopy's own
-review runs, which post as the operator and are recognized by their comment URL in the journal (§21), never by author.
+review runs, which post nothing and are known only from the journal (§21).
 It is empty by default: nobody is trusted until listed, so a review bot's comment never starts a fixup on its own.
 
 - A trusted reviewer's feedback newer than the unit's `review` cursor is `changes_requested` (or `review_findings`), and
@@ -273,14 +273,14 @@ items carries their cursors (`--cursor`, §8), so they advance only if the worke
 done, or an attention item advance with `canopy ticket set`. A review comment waiting on a human is not advanced past,
 so its attention item is recorded every tick until a human answers it.
 
-The `review` cursor is the time of the newest review feedback handled, in UTC as `YYYY-MM-DDTHH:MM:SSZ`: a
-review's `submitted_at`, an inline review comment's `created_at`, or, for canopy's own review run (§21), the
-`created_at` of its comment. GitHub numbers reviews and review comments separately, and review runs are canopy's own,
-so no id orders all three. In that one form, times compare as strings; an item at the cursor's own second is handled, as
-a review's inline comments share its second. `--cursor review=` refuses any other form, so a cursor the overseer
-writes is always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the overseer is told to look up
-that item's time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review
-state is as ambiguous as before.
+The `review` cursor is the time of the newest review feedback handled, in UTC as `YYYY-MM-DDTHH:MM:SSZ`: a review's
+`submitted_at`, an inline review comment's `created_at`, or, for canopy's own review run (§21), its `reviewed_at`, the
+run's end to the second. GitHub numbers reviews and review comments separately, and review runs are canopy's own, so no
+id orders all three. In that one form, times compare as strings; an item at the cursor's own second is handled, as a
+review's inline comments share its second. `--cursor review=` refuses any other form, so a cursor the overseer writes is
+always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the overseer is told to look up that item's
+time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review state is as
+ambiguous as before.
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.

@@ -116,7 +116,7 @@ canopy (harness, Python)
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
     notify.py      notify test
-    reviews.py     review run, review wait, _review
+    reviews.py     review run, review wait, review show, _review
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -152,6 +152,7 @@ canopy (harness, Python)
     execute.py     canopy _review: checkout at the commit, the reviewer outside it, result checks, slot return
     result.py      the result contract, validated with pydantic
     view.py        the state block's reviews
+    findings.py    a review as a resumed worker and canopy review show read it, from the journal
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn

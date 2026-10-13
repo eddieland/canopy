@@ -83,7 +83,7 @@ Controls:
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
   about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
   cannot see who wrote a review comment (D003). canopy's own reviewer is trusted only when the list names
-  `canopy:review`, and is recognized by its journal, never by author, since it posts as the operator.
+  `canopy:review`, and is known only from its journal: it posts nothing, so nothing on a PR can claim to be it.
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
@@ -118,8 +118,8 @@ Controls:
   from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
 - The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches. What
   it writes is data wherever it goes: the overseer classifies its findings as it classifies review comments, and a
-  worker reads its comment as it reads any other. `review.query` authorizes a review, and only the operator writes it
-  (user-only, T7). The loop recognizes its reviews by its journal, never by the marker in a comment.
+  resumed worker reads them in its prompt as it reads any review comment. `review.query` authorizes a review, and only
+  the operator writes it (user-only, T7). Reviews live in the journal only (D114): nothing on a PR is one.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -226,8 +226,7 @@ but must be distinguishable:
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
-- Every review comment says what it is in its first line ("an automated adversarial review ... not a human review and
-  not an approval") and carries a machine-readable `canopy-review` marker on its last.
+- canopy's reviews post nothing (D114), so nothing a reviewer writes appears under the operator's name.
 - Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
   `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
   them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
@@ -265,8 +264,9 @@ Controls:
   chore findings) off the machine to wherever a sink sends it. The harness sends only the fields DESIGN §20 lists,
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
-- The reviewer can write one kind of thing, a comment on a PR's conversation. Its definition denies submitting a PR
-  review, pushing, writing files, labels, and edits by name.
+- The reviewer writes nothing outside its result line (D114). Its definition denies commenting or replying anywhere,
+  submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth; the operator's
+  runtime need not grant it a write tool at all.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
   tools, and denies MCP write tools by name.
 Residual: real. Sandboxing and egress controls are the eventual answer;
@@ -274,9 +274,10 @@ until then this risk is accepted and documented. A chore steered by what it read
 choosing in front of the operator and into `notify.cmd`, wherever that sends them, and a finding's link can carry data
 in its URL. A steered agent likewise chooses up to 500 characters per attention item, and 300 per worker summary
 and question, that a sink puts in front of whoever reads its destination. A steered reviewer can put what it read into
-a comment, and the GitHub MCP server cannot limit which PR it comments on, or how many times: the prompt asks for one
-comment, and nothing in code enforces it. Extra comments are noise, not authority, since the loop reads reviews from its
-journal. A repository that gates merges on the review marker trusts every agent the operator runs.
+its findings, which reach the operator and, through `resume`, a worker on that ticket, who can push and comment; the
+worker reads them as data, as it reads any review comment. A write tool the operator's runtime grants anyway, under a
+name the deny patterns miss, would let a steered reviewer post; that is noise, not authority, since the loop reads
+reviews only from its journal.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
@@ -428,8 +429,8 @@ the network (D076), transcripts included: a secret a worker's tool printed into 
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
-- A `review.query` that matches other people's PRs comments on their work in your name; tell them first. A reviewer
-  definition of your own that runs commands runs the PR's code on your machine.
+- A `review.query` that matches other people's PRs runs an agent on their code and text under your account, though it
+  posts nothing. A reviewer definition of your own that runs commands runs the PR's code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
   Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope: the file holds
   whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.

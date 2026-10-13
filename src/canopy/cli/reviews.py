@@ -1,9 +1,10 @@
-"""`canopy review run` and `canopy review wait` for the overseer, and the detached `canopy _review` (DESIGN §21)."""
+"""`canopy review run` and `wait` for the overseer, `show` for the operator, and the detached `_review` (DESIGN §21)."""
 
 from __future__ import annotations
 
 import os
 import sys
+from datetime import UTC, datetime
 
 import click
 
@@ -12,12 +13,12 @@ from canopy.cli.params import REPO, TICKET_KEY, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
-from canopy.reviews import execute, start
+from canopy.reviews import execute, findings, start, view
 
 
 @click.group("review")
 def review_group() -> None:
-    """Review PRs (overseer only)."""
+    """Review PRs: `run` and `wait` are the overseer's; `show` is how you read what canopy's reviews found."""
 
 
 @review_group.command("run")
@@ -78,6 +79,26 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
         raise CliError("reviews are off in this configuration")
     db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr[: start.MAX_PR_URL])
     click.echo(f"recorded wait for {pr}")
+    return 0
+
+
+@review_group.command("show")
+@click.argument("run_id", type=click.IntRange(min=1), required=False)
+@click.pass_context
+def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
+    """List the last 14 days' reviews, newest first, or show review run RUN_ID in full.
+
+    canopy's reviews post nothing on the PR; this, and the state block, are where they are.
+    """
+    ctx = open_context(click_ctx)
+    if run_id is not None:
+        try:
+            click.echo(findings.described(ctx.conn, run_id))
+        except findings.Unusable as e:
+            raise CliError(str(e)) from None
+        return 0
+    lines = findings.listed(ctx.conn, db.format_time(datetime.now(UTC) - view.RECENT))
+    click.echo("\n".join(lines) if lines else "no reviews in the last 14 days")
     return 0
 
 

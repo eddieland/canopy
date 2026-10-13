@@ -57,7 +57,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      project. To upgrade, run the same command with `--reinstall`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
-   Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer, to comment on a PR.
+   Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer needs only read tools.
    Grant nothing more: canopy's definitions deny the dangerous ones by name, but names differ by server. On GitHub
    the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D084).
 4. In an empty directory, which becomes your workspace: `canopy init --provider jira https://github.com/acme/api.git`
@@ -105,7 +105,8 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   `opencode export <id>` turns into its transcript. In the web UI, a run's page shows that transcript, each tool call
   with its input and output, once the run ends.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
-  PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
+  PRs, or of PRs your query names. It posts nothing on the PR: read what it found with `canopy review show`, and the
+  loop's own PRs get a worker for its findings. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
   overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
   one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix

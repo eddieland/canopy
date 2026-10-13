@@ -2,10 +2,11 @@
 # OpenCode agent definition. Agent runs load it from canopy's definitions directory (DESIGN §13, D040).
 # Rules follow D021: the last matching rule wins, and `deny` is enforced under `opencode run`. Scalars are used where a
 # whole tool is denied, since a repository's config cannot loosen a scalar canopy sets (D044).
-# The reviewer reads a PR and posts one comment on it, nothing else (DESIGN §21, TRUST_MODEL T4, T6). It starts in a
-# directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads outside that directory
-# are denied, as for a desk's links (the reviewer canary in tests/canopy/test_opencode_canary.py checks it).
-description: canopy reviewer. Adversarial review of one PR at one commit; posts one comment; never approves or pushes.
+# The reviewer reads a PR and writes nothing anywhere: its result line is the review (DESIGN §21, D114, TRUST_MODEL T4,
+# T6). It starts in a directory of canopy's, outside the checkout, which it reads through the link `checkout`; reads
+# outside that directory are denied, as for a desk's links (the reviewer canary in tests/canopy/test_opencode_canary.py
+# checks it).
+description: canopy reviewer. Adversarial review of one PR at one commit; read-only; posts nothing, never approves.
 mode: primary
 temperature: 0.1
 permission:
@@ -20,9 +21,12 @@ permission:
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
-  # in depth. Denied: submitting a PR review (it can approve), and anything that pushes, writes files, changes labels,
-  # or edits or deletes. Commenting on a PR's conversation stays allowed.
-  "*review_write*": deny
+  # in depth. Denied: commenting or replying anywhere, submitting a PR review (it can approve), and anything that
+  # pushes, writes files, changes labels, or edits or deletes. Reading stays allowed.
+  "*add_*": deny
+  "*addComment*": deny
+  "*reply*": deny
+  "*write*": deny
   "*pending_review*": deny
   "*submit*": deny
   "*approve*": deny

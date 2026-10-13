@@ -362,3 +362,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: workers and trackers write PR and CI URLs into their prose, and copying them out was the common next step.
 - Rejected: rendering Markdown (labelled links hide their target); a linkify library (a regex and `URL.canParse` do it).
 - Revisit: if journal text should link ticket keys or `repo#N` references to their pages as well.
+
+## D114. canopy's reviews post nothing; they live in the journal
+
+- The reviewer has no write tool and reports only its result line. Its findings reach the operator through
+  `canopy review show` and a worker through `resume --review-run`, never the PR or the ticket. Settled by the operator.
+- Why: a review on the PR speaks in the operator's name before they have seen it; kept local it needs no write grant.
+- Rejected: one identified comment per commit with a marker (the M11 design); repository automation on the verdict.
+- Revisit: with a bot identity, or once the operator wants the web UI's shadow review (ROADMAP M32) published.

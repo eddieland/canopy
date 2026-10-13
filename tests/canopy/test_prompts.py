@@ -29,6 +29,7 @@ VALUES = {
     "OPEN_PR": "Open each PR through the GitHub MCP.",
     "TRUSTED_REVIEWERS": "`octocat`",
     "OPERATOR_MESSAGES": "No messages from the operator.",
+    "REVIEW_FINDINGS": "None.",
 }
 UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
 
@@ -119,16 +120,16 @@ def test_the_shipped_reviewer_prompt_renders_completely(canopy_env: CanopyEnv) -
     }
     text = prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
     assert "{{" not in text
-    assert '<!-- canopy-review {"v":1,"run":1,"sha":"' + "a" * 40 + '",' in text
+    assert "Post nothing anywhere" in text
 
 
-def test_a_reviewer_override_must_name_the_commit_and_the_run(canopy_env: CanopyEnv) -> None:
+def test_a_reviewer_override_must_name_the_commit(canopy_env: CanopyEnv) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "reviewer.md").write_text("Review {{PR_URL}} in {{CHECKOUT}}\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
     values = {"PR_URL": "u", "CHECKOUT": "c", "SHA": "s", "RUN_ID": "1"}
-    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{SHA\}\}, \{\{RUN_ID\}\}"):
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{SHA\}\}$"):
         prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
 
 
@@ -214,7 +215,7 @@ def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) 
 
 def test_trusted_reviewers_name_canopys_reviewer_in_words_and_say_when_nobody_is() -> None:
     assert prompts.trusted_reviewers(["octocat", "canopy:review"]) == (
-        "`octocat`, canopy's own reviewer (a comment canopy's review run posted)"
+        "`octocat`, canopy's own reviewer (its findings come in this prompt, never on the PR)"
     )
     assert prompts.trusted_reviewers([]) == "none (every reviewer's feedback needs the operator's go-ahead)"
 

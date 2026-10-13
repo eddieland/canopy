@@ -140,17 +140,13 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     parsed = result.parse(output.text)
     if parsed is None:
         return Outcome("unknown", None, "the reviewer's last line was not a valid result")
-    return judged(ctx, run, parsed)
+    return judged(ctx, parsed)
 
 
-def judged(ctx: Context, run: sqlite3.Row, parsed: result.ReviewResult) -> Outcome:
+def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
     """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
     if parsed.status != "done":
         return Outcome("failed", parsed)
-    if parsed.comment is None or not on_pr(parsed.comment, str(run["pr_url"])):
-        # A comment's link begins with its PR's on GitHub. Without one, the commit's review is lost, not the PR's.
-        note = "the reviewer reported done without the URL of a comment on this PR"
-        return Outcome("failed", parsed, note)
     if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
         note = "reported low impact, but review.low_impact is not set; recorded as normal"
         return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
@@ -164,11 +160,6 @@ def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:
     head = _git(runner, slot, "rev-parse", "HEAD")
     if head != sha:
         raise _Unreviewable(f"HEAD is {head} after checking out {sha}")
-
-
-def on_pr(url: str, pr: str) -> bool:
-    """Whether `url` is `pr` or a link within it, as a comment's is: `.../pull/7#...`, never `.../pull/70`."""
-    return url == pr or url.startswith((f"{pr}#", f"{pr}/"))
 
 
 def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:

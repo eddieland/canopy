@@ -223,3 +223,31 @@ def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None
 )
 def test_the_worker_keeps_the_ticket_tools_it_works_with(tool: str) -> None:
     assert _allowed(_rules("canopy-worker"), tool)
+
+
+@pytest.mark.parametrize(
+    "tool",
+    [
+        "github_add_issue_comment",
+        "github_add_reply_to_pull_request_comment",
+        "github_add_comment_to_pending_review",
+        "github_pull_request_review_write",
+        "github_issue_write",
+        "github_update_pull_request",
+        "github_create_or_update_file",
+        "atlassian_addCommentToJiraIssue",
+        "atlassian_editJiraIssue",
+        "linear_create_comment",
+    ],
+)
+def test_the_reviewer_posts_nothing(tool: str) -> None:
+    # Its result line is the whole review; nothing of it reaches the PR or the ticket (DESIGN §21, D114).
+    assert not _allowed(_rules("canopy-reviewer"), tool)
+
+
+@pytest.mark.parametrize(
+    "tool",
+    ["github_pull_request_read", "github_issue_read", "github_get_pull_request_reviews", "atlassian_getJiraIssue"],
+)
+def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
+    assert _allowed(_rules("canopy-reviewer"), tool)
