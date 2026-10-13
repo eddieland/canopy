@@ -19,9 +19,12 @@ export interface JsonToken {
 const TOKEN =
     /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/g
 
-/** `text` as its lines, each as tokens: a line holding a JSON object or array split up, any other line whole. */
-export function jsonLines(text: string): JsonToken[][] {
-    return text.split('\n').map(tokenize)
+/**
+ * `text` as its lines, each as tokens: a line holding a JSON object or array split up, any other line whole. `pretty`
+ * lays each JSON line out over several (`indent`).
+ */
+export function jsonLines(text: string, pretty = false): JsonToken[][] {
+    return text.split('\n').map((line) => (pretty ? indent(tokenize(line)) : tokenize(line)))
 }
 
 /**
@@ -40,6 +43,47 @@ export function tokenize(text: string): JsonToken[] {
     }
     if (last < text.length) tokens.push({ kind: 'text', text: text.slice(last) })
     return tokens
+}
+
+/**
+ * One JSON value's tokens laid out over lines, two spaces a level: a break after each opening bracket and comma and
+ * before each closing one, a space after each colon, an empty object or array kept as `{}` or `[]`. Only the space
+ * between tokens changes, so every key, string, and number stays as written. Anything else is returned as it is.
+ */
+export function indent(tokens: JsonToken[]): JsonToken[] {
+    const solid = tokens.filter((token) => token.kind !== 'text')
+    if (solid.length === 0) return tokens
+    const out: JsonToken[] = []
+    let depth = 0
+    const brk = () => out.push({ kind: 'text', text: `\n${'  '.repeat(depth)}` })
+    solid.forEach((token, i) => {
+        const text = token.kind === 'punct' ? token.text : ''
+        if (text === '{' || text === '[') {
+            out.push(token)
+            depth += 1
+            if (!closes(solid[i + 1])) brk()
+        } else if (closes(token)) {
+            depth -= 1
+            if (!opens(solid[i - 1])) brk()
+            out.push(token)
+        } else if (text === ',') {
+            out.push(token)
+            brk()
+        } else if (text === ':') {
+            out.push(token, { kind: 'text', text: ' ' })
+        } else {
+            out.push(token)
+        }
+    })
+    return out
+}
+
+function opens(token: JsonToken | undefined): boolean {
+    return token?.kind === 'punct' && (token.text === '{' || token.text === '[')
+}
+
+function closes(token: JsonToken | undefined): boolean {
+    return token?.kind === 'punct' && (token.text === '}' || token.text === ']')
 }
 
 function isJson(text: string): boolean {

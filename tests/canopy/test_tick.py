@@ -57,15 +57,18 @@ def test_dry_run_tick_records_the_overseer_plan(
         argv = run["argv"]
         assert isinstance(argv, list)
         assert argv[:3] == ["run", "--agent", "canopy-overseer"]
+        # The message is the state block alone; the prompt is in the definition, cached across ticks (DESIGN §6).
         prompt = argv[3]
         assert isinstance(prompt, str)
-        assert prompt.startswith("# canopy overseer")
+        assert prompt.startswith("## State\n")
+        assert "# canopy overseer" not in prompt
         assert '"tick_id": 1' in prompt
         assert '"dry_run": true' in prompt
         assert '"labels": [\n      "agent-ready-tester"\n    ]' in prompt
         assert run["cwd"] == str(canopy_env.root)
         snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
         assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
+        assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
         conn = journal(canopy_env)
         [tick] = conn.execute("SELECT * FROM ticks").fetchall()
@@ -352,9 +355,15 @@ def test_prompt_override(canopy_env: CanopyEnv, treehouse_state: Path, agent_log
         overrides.mkdir()
         (overrides / "overseer.md").write_text("# my overseer\n")
         assert main(["tick", "--dry-run"]) == 0
-        argv = agent_runs(agent_log)[0]["argv"]
+        [run] = agent_runs(agent_log)
+        argv, env = run["argv"], run["env"]
         assert isinstance(argv, list)
-        assert argv[-1].startswith("# my overseer\n\n## State\n")
+        assert isinstance(env, dict)
+        # The override still wins, and reaches the run in its definition, not its message (DESIGN §6, §12).
+        assert argv[-1].startswith("## State\n")
+        definition = Path(env["OPENCODE_CONFIG_DIR"]) / "agents" / "canopy-overseer.md"
+        assert "\n---\n\n# my overseer\n\n" in definition.read_text()
+        assert "# canopy overseer" not in definition.read_text()
 
 
 def test_overseer_output_is_private_even_if_the_file_existed(

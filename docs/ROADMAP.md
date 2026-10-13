@@ -887,10 +887,10 @@ in code can catch, and the same reasons keep idle pacing from counting a quiet t
 - The done line: the overseer ends its final message with a line `CANOPY_TICK_DONE`, and may summarize before or after
   it; the harness accepts it as a line anywhere in that message, never in an earlier one. DESIGN §6, with the
   operator's approval note in the PR for the prompt.
-- A ticket started or stopped from the web UI or the CLI (`starts`), attempts granted (`canopy grant`), and a config
-  reload each end the loop's wait as an operator message does, with the same one-minute floor, count against
-  idleness the same way, and are recorded as what woke the tick (`ticks.woken_by`). DESIGN §6 (The loop, Idle pacing)
-  and §22 (Waking the loop).
+- A ticket started or stopped from the web UI or the CLI (`starts`) and attempts granted (`canopy grant`) each end the
+  loop's wait as an operator message does, with the same one-minute floor, count against idleness the same way, and
+  are recorded as what woke the tick (`ticks.woken_by`). DESIGN §6 (The loop, Idle pacing) and §22 (Waking the loop).
+  A config reload does not: the operator declined it (2026-10-13).
 - Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
   attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
   `decisions` table shows a pattern. The first day shows one (2026-10-13 F17): the overseer leaves out an attention
@@ -1071,7 +1071,8 @@ Accept: the tests above pass. Live: a re-measurement (MEASUREMENTS) shows the fi
 state block's size, not the prompt's plus the state block's, on ticks that start within the cache's lifetime of the
 one before, and a median such tick at least 15% cheaper at the same price, with no change in what the ticks decided.
 
-Status: not started.
+Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
+the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
 
 ## Deferred, with the trigger that would unblock each
 

@@ -43,20 +43,31 @@ in order:
    - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
      ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
-4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated `## State` section holding
-   one JSON object: tick id, current time, whether it is a dry run, workspace root; the workspace (name, the path of
-   `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its pool's leased slots, §18); tracker
-   config (provider, query, labels, needs-human label); trust config (authorized repliers, branch prefix, PR label);
-   capacity; policy (limits and stacking); running workers and their repositories; and the `tickets` rows not marked
-   done, except those the operator stopped. Each ticket has its phase, branch, and comment, message, and mirror cursors
-   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the
-   runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run
-   if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
-   start and end). A ticket the operator started has a `private` object (§22): when it was started, its message cursor,
-   the operator's messages newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the
-   operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
-   so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is present only when chores are
-   configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
+4. **Render the state block**, the overseer's whole message: a generated `## State` section holding one JSON object.
+   The overseer's prompt, `prompts/overseer.md` or the operator's override (§12), is not in it: it is the body of the
+   overseer's agent definition in the definitions snapshot (§13), so the runtime sends it as the system prompt, after
+   the tool schemas and before the message. The provider caches by content, not by session, so a tick that starts
+   within the cache's lifetime (minutes) of the one before reads the prompt and tools from the cache, and only the
+   state block, which changes every tick, is written to it fresh. With the prompt in the message, the whole 13k-token
+   prompt was a cache write on every tick (MEASUREMENTS 2026-10-13, F11). The tracker's provider skill rides along in
+   the definition when canopy ships one, which saves the overseer a tool call to load it on every tick.
+
+   The object holds, in order from what changes rarely to what changes every tick, for a runtime that caches part of a
+   message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
+   needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
+   repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
+   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; the
+   overseer's open attention items (below); then capacity, running workers and their repositories, the mirror limit and
+   delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
+   message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
+   runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
+   and when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased
+   in with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
+   started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
+   `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
+   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
+   present only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
+   (§22).
 
    `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
    its repository, its reason, and since when, but not its detail, which may quote a comment. The harness's own
@@ -181,7 +192,8 @@ so a change needs no restart. The listener secret is not config: a new one still
   loop's own copy: the next tick's limits, the pace, and what the web UI serves. `--every` still holds.
 - A tick running when it is asked for finishes first, on the config it started with; the wait applies it at its next
   step, so a reload during a wait does not wait for the deadline. The wait it comes in keeps its length, and the waits
-  after it follow the new pace. A reload never starts a tick.
+  after it follow the new pace. A reload never starts a tick: M28 proposed that it end the wait as an operator message
+  does, and the operator declined (2026-10-13). Editing config is not a request for a tick; "tick now" is.
 - The loop prints `config reloaded` with the keys that changed, the new pace if it changed, and any `serve.*` key that
   changed: the listener started with the loop, so those take effect on a restart. A config that does not load leaves
   the loop on the one it had, printing why. The web UI reads the files when asked, so it refuses one that does not load
@@ -198,12 +210,12 @@ so a change needs no restart. The listener secret is not config: a new one still
 
 Prompt files are read every tick.
 
-Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
-wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
-gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
-`loop waits` line per tick, a line when a key, a message, or a run ending ends a wait, `loop paused` and
-`loop resumed` lines with their channel, and `config reloaded` (with the keys that changed) or `config not reloaded`
-(with the error).
+Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the wait,
+redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log gains
+`loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
+`loop waits` line per tick, a line when a key, a message, a start or stop, a grant, or a run ending ends a wait,
+`loop paused` and `loop resumed` lines with their channel, and `config reloaded` (with the keys that changed) or
+`config not reloaded` (with the error).
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
@@ -227,11 +239,12 @@ A tick is **idle** when all of these hold, each read from the journal by the loo
   `skipped`, which is not idle already.
 - The attention list after it is the list before it, compared as the loop's per-tick block already compares them.
 - No ticket or unit changed its phase, branch, a cursor, or `done`, and no ticket was seen for the first time.
-- No run, chore run, or review run started or ended, and no operator message was recorded, after the previous tick
-  read the journal for the overseer's state (`ticks.read_at` and `ticks.message_id`, §6 step 3). Something the
-  previous tick could not have seen keeps this one from counting as idle, even when it happened while the previous
-  tick was still running. The previous tick is the journal's, whatever ran it; one that never read the journal, such
-  as a `reconcile_failed` tick or the first tick of all, makes this one not idle.
+- No run, chore run, or review run started or ended, and the operator recorded no message, started or stopped no ticket
+  (`starts`), and granted no attempts or reviews, after the previous tick read the journal for the overseer's state
+  (`ticks.read_at` and `ticks.message_id`, §6 step 3). Something the previous tick could not have seen keeps this one
+  from counting as idle, even when it happened while the previous tick was still running. The previous tick is the
+  journal's, whatever ran it; one that never read the journal, such as a `reconcile_failed` tick or the first tick of
+  all, makes this one not idle.
 
 The wait after a tick is then:
 
@@ -239,8 +252,8 @@ The wait after a tick is then:
 - after the n-th idle tick in a row, `max(base, min(base * 2^n, loop.idle_max_minutes))`. With the defaults, 30, 60,
   120, then 120 for as long as nothing changes. It is never shorter than `base`, so idle pacing is off whenever the
   cap is not above `base`: set `loop.idle_max_minutes` to `loop.interval_minutes`, or pass an `--every` at or above
-  it. Off, the loop paces as before M21: `base` after every tick, no gate shortens it, and only an operator message
-  wakes it. A shorter `--every` keeps idle pacing, from that base.
+  it. Off, the loop paces as before M21: `base` after every tick, no gate shortens it, and only the operator's acts
+  wake it (§22). A shorter `--every` keeps idle pacing, from that base.
 
 `loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes` when set; left unset under a
 longer interval, it is no error and idle pacing is off. The count lives in the loop, not the journal: a restarted loop
@@ -252,8 +265,8 @@ the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's 
 on when it opens, even sooner than `base`. One already open, such as a chore the overseer passed over because its `when`
 says not now, sets no deadline, so it cannot make the loop spin.
 
-Besides an operator message, the wait ends early, with the same one-minute floor (`repeat.WAKE_MIN_SECONDS`), when a
-run, chore run, or review run ended after the tick read the journal for the overseer's state (`ticks.read_at`): after
+Besides the operator's acts (§22), the wait ends early, with the same one-minute floor (`repeat.WAKE_MIN_SECONDS`), when
+a run, chore run, or review run ended after the tick read the journal for the overseer's state (`ticks.read_at`): after
 anything that tick could have seen. A run that ends while the overseer is running is picked up a minute after the tick
 began, not a full interval later. The tick that follows is not idle, so the wait after it is `base` again, and the tick
 after that looks for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits on
@@ -269,13 +282,13 @@ records whether it was idle, the count, and the wait chosen, in seconds.
 The journal records the same on each tick the loop ran, for spend (ROADMAP M33): `ticks.idle`, whether the tick was idle
 by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any
 `--defer` ran its length), `timer` (the wait ran its length), `gate` (a gate shortened it and it ran out), `message`,
-`run`, or `key`. A pause does not change it: a tick held past its deadline until the operator resumed records what it
-would have without the pause, and one the operator ran during the pause records `key`. The loop classifies every tick
-with idle pacing off too, though only pacing counts them, so the journal says what the overseer's spend bought whatever
-the pacing; a `loop waits` line's `idle` is then the tick's classification, and its count stays 0. Both are NULL on a
-tick the loop did not run, such as a hand-run `canopy tick`: the rule compares the journal before and after the tick,
-and only the loop reads it before. A tick the loop has no id for (`lock_busy`, or `error`, where tick code raised)
-records nothing.
+`starts` (a ticket started or stopped), `grant`, `run`, or `key`. A pause does not change it: a tick held past its
+deadline until the operator resumed records what it would have without the pause, and one the operator ran during the
+pause records `key`. The loop classifies every tick with idle pacing off too, though only pacing counts them, so the
+journal says what the overseer's spend bought whatever the pacing; a `loop waits` line's `idle` is then the tick's
+classification, and its count stays 0. Both are NULL on a tick the loop did not run, such as a hand-run `canopy tick`:
+the rule compares the journal before and after the tick, and only the loop reads it before. A tick the loop has no id
+for (`lock_busy`, or `error`, where tick code raised) records nothing.
 
 ## 7. Ticket phases and next actions
 

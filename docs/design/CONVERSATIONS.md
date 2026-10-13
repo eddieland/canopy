@@ -285,10 +285,15 @@ place, public or private (D081).
 
 ### Waking the loop
 
-During the wait (§6, the loop), each step checks the journal for an operator message to a ticket recorded since the
-last tick began. A note to a chore (§19) does not wake it: the chore's next run reads it. One ends the wait and runs the
-next tick, at most once a minute. Every channel wakes it the same way, whether the message came from another process
-(`canopy reply`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick.
+During the wait (§6, the loop), each step checks the journal for the operator's acts: a message to a ticket recorded
+since the last tick began; a ticket started or stopped (`starts`), or attempts or a PR's reviews granted
+(`canopy grant`), since the last tick read the journal (or began, when it read nothing). A note to a chore (§19) does
+not wake it: the chore's next run reads it. Nor does a config reload (§6). Any of those acts ends the wait and runs the
+next tick, at most once a minute, whether idle pacing is on or not; the tick records what woke it in `ticks.woken_by`
+(`message`, `starts`, `grant`) and is not idle. Every channel wakes it the same way, whether the act came from another
+process (`canopy start`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any
+tick. Before M28 only a message woke it, so a start from the web UI waited for the timer or a "tick now" (MEASUREMENTS
+2026-10-12, F3).
 
 ### Channels
 
@@ -592,7 +597,9 @@ for a tick whose overseer failed.
   has the session from its start.
 - An Output panel under the transcript, hidden until the operator shows it, so a tick's page reads the file only when
   asked. It opens scrolled to its end. Everything in it is agent output, rendered as text; a line of JSON, which is
-  most of it, has its keys, strings, and values colored, as written. Not on the event stream;
+  most of it, has its keys, strings, and values colored, as written. A Pretty toggle lays each line of JSON out over
+  several, indented, changing only the space between its tokens; each tick's panel remembers it, in the browser.
+  Not on the event stream;
   it is marked stale with the tick's transcript, as the tick ends.
 - A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
   until the operator asks for the rest.
