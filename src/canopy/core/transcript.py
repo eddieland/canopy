@@ -131,13 +131,29 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class Tokens:
+    """One model call's tokens by kind, as the runtime's `step_finish` counted them."""
+
+    input: int
+    output: int
+    reasoning: int
+    cache_read: int
+    cache_write: int
+
+    @property
+    def total(self) -> int:
+        """Every kind together, as the run's spend counts them."""
+        return self.input + self.output + self.reasoning + self.cache_read + self.cache_write
+
+
+@dataclass(frozen=True)
 class Step:
-    """One model call ended: why, and what it cost, when the runtime said."""
+    """One model call ended: why, and what it cost and its tokens by kind, when the runtime said."""
 
     at: datetime | None
     reason: str | None
     cost_usd: float | None
-    tokens: int | None
+    tokens: Tokens | None
 
 
 @dataclass(frozen=True)
@@ -267,7 +283,7 @@ def _entry(event: dict[str, object]) -> Entry | None:
     if kind == "step_finish":
         step = _Step.model_validate(part)
         t = step.tokens
-        tokens = t.input + t.output + t.reasoning + t.cache.read + t.cache.write if t is not None else None
+        tokens = Tokens(t.input, t.output, t.reasoning, t.cache.read, t.cache.write) if t is not None else None
         cost = float(step.cost) if step.cost is not None else None
         return Step(at, _line(step.reason or "") or None, cost, tokens)
     if kind == "error":

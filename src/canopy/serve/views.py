@@ -46,6 +46,7 @@ from canopy.serve.schema import (
     TranscriptError,
     TranscriptStep,
     TranscriptText,
+    TranscriptTokens,
     TranscriptTool,
     Unit,
 )
@@ -245,7 +246,14 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 cut=entry.cut,
             )
         case transcript.Step():
-            return TranscriptStep(at=entry.at, reason=entry.reason, cost_usd=entry.cost_usd, tokens=entry.tokens)
+            t = entry.tokens
+            return TranscriptStep(
+                at=entry.at,
+                reason=entry.reason,
+                cost_usd=entry.cost_usd,
+                tokens=t.total if t is not None else None,
+                split=TranscriptTokens(**vars(t)) if t is not None else None,
+            )
         case transcript.Error():
             return TranscriptError(at=entry.at, name=entry.name, message=entry.message)
 

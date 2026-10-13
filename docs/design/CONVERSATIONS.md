@@ -482,9 +482,13 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   a tick's output (below), never a run's or a chore run's log.
 - Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
   call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
-  long it took; a `step_finish` is one model call's reason, tokens, and cost; an `error` is the runtime's. `step_start`
-  and any type canopy does not know are left out, and an event of a known type that does not validate is counted, not
-  shown.
+  long it took; a `step_finish` is one model call's reason, cost, and tokens, together and by kind (input, cache read,
+  cache write, output, reasoning); an `error` is the runtime's. `step_start` and any type canopy does not know are
+  left out, and an event of a known type that does not validate is counted, not shown.
+- A model call shows what the runtime prints of it. What it wrote and ran are the text and tool calls above it; its
+  reasoning only with OpenCode's `--thinking`, which the default templates leave out. What it was sent, the prompt
+  and the context, is not printed: OpenCode keeps it in its own storage (`opencode export <id>`), and canopy does not
+  read that.
 - Bounded: at most 32 MiB of the file, to its last whole line; at most 2000 entries and 2 million characters in all;
   each text, output, and error cut at 20,000 characters, and an input at 5,000. A cut says so. Control characters are
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
@@ -493,6 +497,13 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8), as a chore
   run's do (§19); a running run's page says so. A subagent's calls are its own session's (§13), so a `task` call
   shows as one tool call with its answer.
+- A tool call's line says what it did and how it ended, so a tick reads without opening each call: a shell call's
+  command, not the description the agent gave it, and the call's other short values when the runtime gave it no title
+  (an MCP read's `owner=acme repo=web pullNumber=88`, where its first value alone was `get`); its error, or an output
+  of one short line, under it. OpenCode reports a shell call completed whatever its exit, so a canopy command the
+  harness refused, which prints `Error: <verb> refused (<guard>)` and exits 1, would show as done: the UI reads that
+  line from a canopy command's output and marks the call refused, with its guard. Only canopy's own lines are read so;
+  another command's output is what it printed.
 - It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
   again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
   `tick.updated` moves that tick's.
