@@ -24,6 +24,7 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
+from tests.canopy.test_mirror import state_block
 from tests.conftest import CanopyEnv, GitPool, Journals
 
 KEY = "PROJ-1"
@@ -501,7 +502,6 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     tickets = {t["key"]: t for t in state["tickets"]}
     assert "private" not in tickets["PROJ-2"]
     private = tickets[KEY]["private"]
-    assert private["status"] == "started"
     assert private["message_cursor"] is None
     assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
         (question + 1, "B", question)
@@ -516,6 +516,30 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
         "message_cursor": question + 1,
         "new_operator_messages": [],
     }
+
+
+def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    agent_log: Path,
+    treehouse_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Listed with the other tickets, it would be owed a decision every tick it stays stopped.
+    assert main(["start", KEY]) == 0
+    assert main(["stop", KEY]) == 0
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    assert main(["tick", "--dry-run"]) == 0
+    stopped = state_block(agent_log)
+    assert stopped["stopped"] == [KEY]
+    assert [t["key"] for t in stopped["tickets"]] == ["PROJ-2"]
+    # Started again, it is a private ticket like any other.
+    assert main(["start", KEY]) == 0
+    assert main(["tick", "--dry-run"]) == 0
+    started = state_block(agent_log)
+    assert started["stopped"] == []
+    assert {t["key"]: "private" in t for t in started["tickets"]} == {KEY: True, "PROJ-2": False}
 
 
 def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

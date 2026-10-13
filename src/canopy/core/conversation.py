@@ -509,6 +509,14 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
     return found
 
 
+def stopped(conn: sqlite3.Connection) -> list[str]:
+    """Return every ticket the operator stopped, by key: what the overseer decides nothing about (DESIGN §22)."""
+    rows = conn.execute(
+        "SELECT subject_id FROM starts WHERE subject_kind = ? AND status = 'stopped' ORDER BY subject_id", (TICKET,)
+    ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
 def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[sqlite3.Row]:
     """Return a ticket's operator messages newer than message id `after`, oldest first."""
     return conn.execute(
@@ -519,10 +527,11 @@ def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> l
 
 
 def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, object] | None:
-    """Return a private ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
+    """Return a started ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
-    Messages from before the operator forgot the ticket's work are not new, whatever the cursor says.
+    Messages from before the operator forgot the ticket's work are not new, whatever the cursor says. A stopped ticket
+    is not asked for: the block names it only by key (`stopped`).
     """
     key = str(ticket["key"])
     record = start_of(conn, key)
@@ -532,7 +541,6 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
     forgotten = int(ticket["forgotten_message_id"] or 0)
     question = latest_question(conn, key)
     return {
-        "status": record["status"],
         "started_at": record["started_at"],
         "message_cursor": cursor or None,
         "new_operator_messages": [

@@ -105,7 +105,10 @@ separate `list`.
   write transaction, and `stop` marks the record stopped in one: whichever commits first wins, and `stop` reports any
   run the other committed. `_run` reads the record again before it starts the worker and ends the run `stopped` if the
   record is stopped.
-- The state block marks each private ticket and carries its operator messages newer than its message cursor.
+- The state block marks each started ticket and carries its operator messages newer than its message cursor. A
+  stopped ticket is not among its tickets: the block names it in `stopped`, by key, and the overseer records no
+  decision for it, where it once recorded a `wait` every tick for as long as the ticket stayed stopped. The key stays
+  in the block so that a queue label left on the ticket does not make the overseer take it for a public one.
 - `canopy dispatch` needs no `--label` for a started ticket. It checks the start record in code, a guard where a public
   ticket's `--label` is a claim (D051). `--kind split` on a private ticket is refused `private`: a split creates tickets
   in the tracker.
