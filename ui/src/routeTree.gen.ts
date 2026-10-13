@@ -16,6 +16,8 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
+import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
+import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
 import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as RunsIdRouteImport } from './routes/runs.$id'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
@@ -58,6 +60,16 @@ const ChoresNameRoute = ChoresNameRouteImport.update({
   path: '/chores/$name',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReviewsIndexRoute = ReviewsIndexRouteImport.update({
+  id: '/reviews/',
+  path: '/reviews/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReviewsIdRoute = ReviewsIdRouteImport.update({
+  id: '/reviews/$id',
+  path: '/reviews/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RunsIndexRoute = RunsIndexRouteImport.update({
   id: '/runs/',
   path: '/runs/',
@@ -96,10 +108,12 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
+  '/reviews/': typeof ReviewsIndexRoute
   '/runs/': typeof RunsIndexRoute
   '/tickets/': typeof TicketsIndexRoute
   '/ticks/': typeof TicksIndexRoute
@@ -111,10 +125,12 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores': typeof ChoresIndexRoute
+  '/reviews': typeof ReviewsIndexRoute
   '/runs': typeof RunsIndexRoute
   '/tickets': typeof TicketsIndexRoute
   '/ticks': typeof TicksIndexRoute
@@ -127,10 +143,12 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
+  '/reviews/': typeof ReviewsIndexRoute
   '/runs/': typeof RunsIndexRoute
   '/tickets/': typeof TicketsIndexRoute
   '/ticks/': typeof TicksIndexRoute
@@ -144,10 +162,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
+    | '/reviews/$id'
     | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores/'
+    | '/reviews/'
     | '/runs/'
     | '/tickets/'
     | '/ticks/'
@@ -159,10 +179,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
+    | '/reviews/$id'
     | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores'
+    | '/reviews'
     | '/runs'
     | '/tickets'
     | '/ticks'
@@ -174,10 +196,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
+    | '/reviews/$id'
     | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores/'
+    | '/reviews/'
     | '/runs/'
     | '/tickets/'
     | '/ticks/'
@@ -190,10 +214,12 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
+  ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicksIdRoute: typeof TicksIdRoute
   ChoresIndexRoute: typeof ChoresIndexRoute
+  ReviewsIndexRoute: typeof ReviewsIndexRoute
   RunsIndexRoute: typeof RunsIndexRoute
   TicketsIndexRoute: typeof TicketsIndexRoute
   TicksIndexRoute: typeof TicksIndexRoute
@@ -250,6 +276,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChoresNameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reviews/': {
+      id: '/reviews/'
+      path: '/reviews'
+      fullPath: '/reviews/'
+      preLoaderRoute: typeof ReviewsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reviews/$id': {
+      id: '/reviews/$id'
+      path: '/reviews/$id'
+      fullPath: '/reviews/$id'
+      preLoaderRoute: typeof ReviewsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/runs/': {
       id: '/runs/'
       path: '/runs'
@@ -302,10 +342,12 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
+  ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicksIdRoute: TicksIdRoute,
   ChoresIndexRoute: ChoresIndexRoute,
+  ReviewsIndexRoute: ReviewsIndexRoute,
   RunsIndexRoute: RunsIndexRoute,
   TicketsIndexRoute: TicketsIndexRoute,
   TicksIndexRoute: TicksIndexRoute,
