@@ -58,7 +58,8 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
      On macOS, a browser download needs `xattr -d com.apple.quarantine canopy` too. To upgrade, replace the file.
    - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
      HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
-     project. To upgrade, run the same command with `--reinstall`.
+     project. To upgrade, run the same command with `--reinstall`. The install builds the web UI, so it needs Node
+     22.12+ and npm on PATH (with nvm: `nvm install 22`); the release binary needs neither.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
    Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer needs only read tools.
