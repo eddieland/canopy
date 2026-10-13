@@ -53,6 +53,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         case 'ticket.changed':
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
+            // A run of the ticket started or ended: the runs a PR's page shows, and the PRs list's run working now.
+            void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
             break
         case 'spend.updated':
             client.setQueryData(keys.spend, event.spend)
@@ -69,6 +71,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
+            // A PR's phase, decisions, and reviews move with the ticks too.
+            void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
             break
         }
         case 'loop.updated':

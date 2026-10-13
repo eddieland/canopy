@@ -3,6 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import type { Decision } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
@@ -60,7 +61,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
     )
 }
 
-/** A ticket or a chore as a link to its page; a repository, a PR, or the whole tick as the CLI names it. */
+/** A ticket, a chore, or a PR no ticket owns as a link to its page; a repository or the whole tick as the CLI says. */
 function Subject({ decision }: { decision: Decision }) {
     const cell = 'w-36 shrink-0 truncate'
     if (decision.chore !== null) return <ChoreLink name={decision.chore} className={cell} />
@@ -72,9 +73,16 @@ function Subject({ decision }: { decision: Decision }) {
             </span>
         )
     }
+    if (decision.pr !== null) {
+        return (
+            <PullRequestLink url={decision.pr} className={cell}>
+                pr
+            </PullRequestLink>
+        )
+    }
     return (
         <span className={cn(cell, 'font-mono text-xs text-muted-foreground')} title={decision.subject}>
-            {decision.pr !== null ? 'pr' : decision.subject}
+            {decision.subject}
         </span>
     )
 }
