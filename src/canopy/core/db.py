@@ -216,9 +216,9 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
         if not exists:
             continue
         # The table name comes from the fixed list above, never from input.
-        sql = f"SELECT id, pid FROM {table} WHERE status = 'running' AND pid IS NOT NULL ORDER BY id"  # noqa: S608
+        sql = f"SELECT id, pid, log_path FROM {table} WHERE status = 'running' ORDER BY id"  # noqa: S608
         rows = conn.execute(sql)
-        live += [f"{what} {r['id']}" for r in rows if procs.alive(int(r["pid"]))]
+        live += [f"{what} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
     if live:
         runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(

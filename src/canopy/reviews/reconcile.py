@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db, outbox
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 
 
 def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
-    """Mark running review runs whose `_review` is dead or never recorded `crashed`, and return their slots.
+    """Mark running review runs whose `_review` is gone `crashed`, and return their slots.
 
     The reviewer leads its own process group, so whatever is left of it is killed before its slot goes back.
 
@@ -24,10 +25,9 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
     """
     closed: list[int] = []
     for row in db.running_review_runs(ctx.conn):
-        pid = row["pid"]
-        if pid is not None and procs.alive(int(pid)):
+        if procs.running(Path(row["log_path"]), row["pid"]):
             continue
-        fields = {"review_run_id": row["id"], "pr": row["pr_url"], "pid": pid}
+        fields = {"review_run_id": row["id"], "pr": row["pr_url"], "pid": row["pid"]}
         if row["agent_pid"] is not None and procs.kill_group(int(row["agent_pid"])):
             log.warning("killed the reviewer `_review` left behind", extra={**fields, "agent_pid": row["agent_pid"]})
         execute.clean_up(ctx, row, log)
