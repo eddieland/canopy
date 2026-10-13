@@ -6,9 +6,11 @@ import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
+import { useBuddy } from '@/lib/buddy'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
+import { Buddy } from './buddy'
 import { LiveReadouts } from './live-readouts'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
@@ -26,8 +28,8 @@ export const PAGE_SCROLLER = 'page'
 
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
- * spend, and a footer), and the routed page. Signed out, the sign-in page instead, whatever the route: every API route
- * but the session's needs a session (DESIGN §22).
+ * spend, and a footer), the routed page, and Sprig in the corner once Settings turns it on. Signed out, the sign-in
+ * page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
  *
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
@@ -42,6 +44,7 @@ export function AppShell() {
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
+    const buddy = useBuddy()
     if (session.data === undefined) return <div className="min-h-dvh" />
     if (!signedIn) return <SignIn />
     return (
@@ -99,6 +102,7 @@ export function AppShell() {
                     </ViewTransition>
                 </main>
             </div>
+            {buddy === 'on' && <Buddy />}
         </div>
     )
 }

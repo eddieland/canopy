@@ -300,6 +300,50 @@
 }
 
 /*
+ * Sprig, the helper in the corner (src/components/shell/buddy.tsx). Its tip pops in a moment after a page arrives, as
+ * if it had been waiting; its brows rise once with each tip; its eyes blink now and then. Each rests where a still
+ * page shows it: the tip in place, the brows down, the eyes open.
+ */
+@keyframes buddy-brows {
+    30%,
+    70% {
+        transform: translateY(-2.5px);
+    }
+}
+
+@keyframes buddy-blink {
+    0%,
+    95%,
+    100% {
+        transform: scaleY(1);
+    }
+    97.5% {
+        transform: scaleY(0.1);
+    }
+}
+
+@utility animate-buddy-tip {
+    transform-origin: bottom left;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: pop 300ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+@utility animate-buddy-brows {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-brows 700ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+@utility animate-buddy-blink {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-blink 6s linear 2s infinite;
+    }
+}
+
+/*
  * The header ticker (src/components/shell/ticker.tsx). The window clips the line and fades it out at both ends; the
  * mask's gradient is alpha only, so its color is irrelevant. The line is padded by the window's width before its text
  * and the gap's distance after it (`--ticker-gap` seconds at `--ticker-rate` a second), and crawls its own width, so
