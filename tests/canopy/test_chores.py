@@ -139,7 +139,12 @@ def test_a_chore_run_records_its_findings(
     assert run["previous_run"] is None
     assert run["open_findings"] == []
     assert run["result_contract"] == result.CONTRACT
-    assert (canopy_env.state_dir / "chores" / "1.prompt").stat().st_mode & 0o777 == 0o600
+    # Run files are kept by chore, out of its working directory.
+    runs = canopy_env.state_dir / "chore-runs" / "build-health"
+    assert runs.stat().st_mode & 0o777 == 0o700
+    assert row["log_path"] == str(runs / "1.log")
+    assert (runs / "1.prompt").stat().st_mode & 0o777 == 0o600
+    assert not (cwd / "1.log").exists()
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch) -> None:

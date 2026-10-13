@@ -127,12 +127,15 @@ serializes chore runs with dispatches.
 `canopy chore run` inserts a `chore_runs` row, renders the prompt, and spawns `python -m canopy _chore <run_id>`
 detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOPY_TICK_ID`, runs the command in `cwd`
 with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
-`<state_dir>/chores/<run_id>.log`. No lease, branch, or push, so nothing to return or verify.
+`<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
+kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
+write (HOST_ISOLATION), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
+the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
 run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the
 latest `ok` run's open findings (id, title, link), so ids can be reused, and the result contract. It is written to
-`<state_dir>/chores/<run_id>.prompt`, readable only by the operator.
+`<state_dir>/chore-runs/<name>/<run_id>.prompt`, readable only by the operator.
 
 Result contract, one JSON line, last line of the agent's text (§13):
 
