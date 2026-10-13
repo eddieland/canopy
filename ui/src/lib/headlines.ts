@@ -67,12 +67,18 @@ export const FLAIR_COLORS = [
 /** RuneScape's chat effects, letter by letter. Its `scroll` is the ticker itself; `slide` happens off screen. */
 export const FLAIR_EFFECTS = ['wave', 'wave2', 'shake'] as const
 
+/** A headline's color flair, one of FLAIR_COLORS. */
 export type FlairColor = (typeof FLAIR_COLORS)[number]
+/** A headline's effect flair, one of FLAIR_EFFECTS. */
 export type FlairEffect = (typeof FLAIR_EFFECTS)[number]
 
+/** One headline for the ticker, its flair read off its front. */
 export interface Headline {
+    /** What the ticker shows. */
     text: string
+    /** Its color, or the ticker's own when absent. */
     color?: FlairColor
+    /** How its letters move, or not at all when absent. */
     effect?: FlairEffect
 }
 

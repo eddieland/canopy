@@ -28,9 +28,12 @@ export function writeToken(token: () => string | null | undefined): Middleware {
 
 /** Thrown for a non-2xx response, so TanStack Query sees a failure. A guard's refusal carries its guard's name. */
 export class ApiError extends Error {
+    /** The response's HTTP status. */
     readonly status: number
+    /** The guard that refused the action, as the CLI names it, or null for any other failure. */
     readonly guard: string | null
 
+    /** An error for a response with `status` and its body's `detail`: a message, a refusal, or anything else. */
     constructor(status: number, detail: unknown) {
         super(message(status, detail))
         this.name = 'ApiError'

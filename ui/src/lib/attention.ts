@@ -21,6 +21,7 @@ const WAITING = new Set(['awaiting_reply', 'untrusted_review'])
 
 const RANK: Record<Severity, number> = { failed: 0, waiting: 1, other: 2, finding: 3 }
 
+/** An item's severity: a finding, a failure, a wait on the operator's answer, or anything else. */
 export function severity(item: AttentionItem): Severity {
     if (item.finding) return 'finding'
     if (FAILED.has(item.reason)) return 'failed'

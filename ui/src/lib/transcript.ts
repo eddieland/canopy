@@ -25,10 +25,15 @@ export function tokenCount(n: number): string {
     return String(n)
 }
 
+/** What a transcript holds, counted. */
 export interface Tally {
+    /** Tool calls. */
     tools: number
+    /** Tool calls that ended in an error. */
     failed: number
+    /** Model calls. */
     calls: number
+    /** Errors the runtime reported. */
     errors: number
 }
 

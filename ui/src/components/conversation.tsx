@@ -28,8 +28,11 @@ const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention 
 
 /** Which of the operator's messages nothing has read yet, and what the chip on each says and explains. */
 export interface Pending {
+    /** The chip's text. */
     label: string
+    /** The chip's tooltip: what the state means for the message. */
     title: string
+    /** Whether a message is in this state. */
     test: (message: Message) => boolean
 }
 
