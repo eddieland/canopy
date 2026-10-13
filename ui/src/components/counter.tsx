@@ -16,6 +16,16 @@ const RULE: Record<Tone, string> = {
     plain: 'border-t-border',
 }
 
+// And the wash under it: the rule's color fading down into the surface, so a counter reads by color at a glance.
+const WASH: Record<Tone, string> = {
+    running: 'from-status-running/12',
+    blocked: 'from-status-blocked/12',
+    failed: 'from-status-failed/12',
+    stopped: 'from-status-stopped/12',
+    accent: 'from-accent/12',
+    plain: 'from-transparent',
+}
+
 /**
  * One counter. Its value keeps a fixed width and rolls when it changes, and it shows a skeleton only until the first
  * data arrives. Its test id is `counter-` and the label's first word, unless `testId` names one.
@@ -37,7 +47,9 @@ export function Counter({
         <div
             className={cn(
                 'flex min-w-0 flex-col gap-1.5 rounded-md border border-t-2 bg-surface px-4 py-3',
+                'bg-linear-to-b to-transparent to-70%',
                 RULE[tone],
+                WASH[tone],
             )}
             data-testid={`counter-${testId ?? label.toLowerCase().split(/[ ,]+/)[0]}`}
         >
