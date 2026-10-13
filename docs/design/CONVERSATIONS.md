@@ -571,7 +571,8 @@ something, without knowing which page holds it.
   It serves only journal text the other pages serve, behind the same session, so T8 is unchanged.
 - The search box sits atop the nav on every page; `/` focuses it from anywhere but a text field, and Escape leaves it.
   Typing opens `/search?q=` once the operator pauses for 250 ms, replacing the history entry as the query grows, and
-  Enter opens it at once. The page groups hits by source, each a row that links to the page holding it.
+  Enter opens it at once. A clear button empties the box without leaving the page. The page groups hits by source,
+  each a row that links to the page holding it.
 
 How it serves, built in M20's foundation and true of every page:
 
