@@ -1,9 +1,10 @@
+import sys
 from importlib.metadata import version
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.infra import resources
+from canopy.infra import procs, resources
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
@@ -18,6 +19,14 @@ def test_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
     assert out.startswith("Usage: canopy")
     for command in ("init", "skill", "tick", "status", "dispatch", "decide", "attention", "ticket"):
         assert f"  {command} " in out
+
+
+def test_the_cli_starts_without_the_web_server() -> None:
+    # The overseer and workers run `canopy` many times a tick; fastapi and uvicorn would double each start-up.
+    code = "import sys, canopy.cli.main; print(sorted({'fastapi', 'uvicorn'} & set(sys.modules)))"
+    result = procs.SubprocessRunner().run([sys.executable, "-c", code])
+    assert result.ok, result.stderr
+    assert result.stdout.strip() == "[]"
 
 
 def test_unknown_argument_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
