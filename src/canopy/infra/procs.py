@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Protocol, cast
 
+from canopy.infra import lock
+
 
 class ProcError(Exception):
     """A process could not be started at all."""
@@ -92,6 +94,7 @@ class Runner(Protocol):
             args: The command and its arguments. Never passed through a shell.
             cwd: Working directory for the child, which its `PWD` also names.
             log_path: File the child's stdout and stderr are appended to, created readable only by the operator.
+                The child holds the lock beside it, `lifelock(log_path)`, for its whole life; `running` asks after it.
 
         Returns:
             The child's pid. The child leads its own session, so it outlives its parent and whatever process group
@@ -99,7 +102,7 @@ class Runner(Protocol):
 
         Raises:
             CommandNotFoundError: The executable is missing or not executable.
-            ProcError: The process could not be started.
+            ProcError: The process could not be started, or another process holds its lifelock.
         """
         ...
 
@@ -184,10 +187,20 @@ class SubprocessRunner:
 
         Raises:
             CommandNotFoundError: The executable is missing.
-            ProcError: The process could not be started.
+            ProcError: The process could not be started, or another process holds its lifelock.
         """
         argv = tuple(args)
-        fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        try:
+            # Taken before the child exists and passed to it, so the lock is held from before its pid is recorded.
+            # The child's own children do not inherit it: `run` and `spawn` close every fd they do not pass.
+            held = lock.take(lifelock(log_path))
+        except lock.LockBusyError as e:
+            raise ProcError(f"cannot start {argv[0]}: {e}") from e
+        try:
+            fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        except BaseException:
+            os.close(held)
+            raise
         try:
             # stdin and stdout are never the caller's: a caller whose output is captured through a pipe (an overseer
             # running `canopy dispatch`) would otherwise wait for the detached child to close it.
@@ -199,13 +212,16 @@ class SubprocessRunner:
                 stdout=fd,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
+                pass_fds=(held,),
             )
         except FileNotFoundError as e:
             raise CommandNotFoundError(f"command not found: {argv[0]}") from e
         except OSError as e:
             raise ProcError(f"cannot start {argv[0]}: {e.strerror}") from e
         finally:
+            # The child's copy of `held` keeps the lock; a child that never started leaves it free.
             os.close(fd)
+            os.close(held)
         # The child is detached on purpose. Popen reaps it later if it exits while this process still runs.
         return proc.pid
 
@@ -239,6 +255,23 @@ def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) ->
             if candidate.is_file():
                 return True
     return False
+
+
+def lifelock(log_path: Path) -> Path:
+    """Return the lock a child `spawn` started with `log_path` holds for its whole life: the log's path, `.lock`."""
+    return log_path.with_suffix(".lock")
+
+
+def running(log_path: Path, pid: int | None) -> bool:
+    """Return whether the child `spawn` started with `log_path` is still running: whether its lifelock is held.
+
+    The lock goes when the process exits, before it is a zombie, and names no pid that could be reused. A process an
+    earlier canopy started holds none, and reads as running while its `pid`, if recorded, is `alive`.
+    """
+    path = lifelock(log_path)
+    if path.exists():
+        return lock.held(path)
+    return pid is not None and alive(pid)
 
 
 def _stream(

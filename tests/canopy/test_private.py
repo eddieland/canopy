@@ -363,9 +363,10 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     assert dispatch(conn, monkeypatch, "--kind", "implement", runner=InlineRunner()) == 0
     run = last_run(conn)
     # Stand-ins for `_run` and its worker, each leading its own process group as the real ones do.
-    log = canopy_env.state_dir / "sleep.log"
-    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=log)
-    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=log)
+    # Each has a log, and so a lifelock, of its own.
+    state = canopy_env.state_dir
+    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "run.log")
+    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "worker.log")
     conn.execute("UPDATE runs SET pid = ?, worker_pid = ? WHERE id = ?", (run_pid, worker_pid, run["id"]))
     assert {s["status"] for s in pool(treehouse_state)} == {"available", "leased"}
 

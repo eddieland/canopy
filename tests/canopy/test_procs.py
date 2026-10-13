@@ -3,13 +3,14 @@ import gc
 import json
 import os
 import signal
+import sys
 import time
 import warnings
 from pathlib import Path
 
 import pytest
 
-from canopy.infra import procs
+from canopy.infra import lock, procs
 from canopy.infra.procs import CommandNotFoundError, ProcError, SubprocessRunner
 
 
@@ -276,6 +277,61 @@ def test_alive_ignores_zombies_it_cannot_reap(agent_log: Path, tmp_path: Path) -
         time.sleep(0.02)
     assert not procs.alive(child)
     procs.kill_group(pid)
+
+
+def test_a_spawned_child_holds_its_lifelock_until_it_exits(tmp_path: Path) -> None:
+    log = tmp_path / "7.log"
+    pid = SubprocessRunner().spawn(["sleep", "30"], cwd=tmp_path, log_path=log)
+    assert procs.lifelock(log) == tmp_path / "7.lock"
+    assert lock.held(procs.lifelock(log))
+    assert procs.running(log, None)
+    os.kill(pid, signal.SIGKILL)
+    with contextlib.suppress(ChildProcessError):
+        os.waitpid(pid, 0)
+    # Released at exit, though the pid still names a process: this one.
+    assert not procs.running(log, os.getpid())
+
+
+def test_what_a_spawned_child_starts_does_not_hold_its_lifelock(tmp_path: Path) -> None:
+    # As `_run` runs its worker: when `_run` dies and its worker lives on, the run reads as gone, so it is reconciled.
+    log, pidfile = tmp_path / "7.log", tmp_path / "worker"
+    script = (
+        "from canopy.infra.procs import SubprocessRunner; "
+        f"SubprocessRunner().run(['sh', '-c', 'echo $$ > {pidfile}.tmp && mv {pidfile}.tmp {pidfile}; exec sleep 30'])"
+    )
+    pid = SubprocessRunner().spawn([sys.executable, "-c", script], cwd=tmp_path, log_path=log)
+    deadline = time.monotonic() + 10
+    while not pidfile.exists() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    worker = int(pidfile.read_text())
+    try:
+        os.kill(pid, signal.SIGKILL)
+        with contextlib.suppress(ChildProcessError):
+            os.waitpid(pid, 0)
+        assert procs.alive(worker)
+        assert not procs.running(log, None)
+    finally:
+        procs.kill_group(worker)
+
+
+def test_spawn_refuses_while_another_process_holds_the_lifelock(tmp_path: Path) -> None:
+    log = tmp_path / "7.log"
+    held = lock.take(procs.lifelock(log))
+    try:
+        with pytest.raises(ProcError, match="held by another process"):
+            SubprocessRunner().spawn(["sleep", "30"], cwd=tmp_path, log_path=log)
+    finally:
+        os.close(held)
+    assert not lock.held(procs.lifelock(log))
+
+
+def test_running_asks_after_the_pid_only_without_a_lifelock(tmp_path: Path) -> None:
+    log = tmp_path / "7.log"
+    # Started by a canopy from before lifelocks: the pid is all there is.
+    assert procs.running(log, os.getpid())
+    assert not procs.running(log, None)
+    os.close(lock.take(procs.lifelock(log)))
+    assert not procs.running(log, os.getpid())
 
 
 def test_alive_reads_a_pid_reaped_after_the_signal_check_as_dead(monkeypatch: pytest.MonkeyPatch) -> None:
