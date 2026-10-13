@@ -218,6 +218,10 @@ def _plan(
     request: str | None = None,
 ) -> Plan:
     private = _check_start(ctx, key, kind)
+    if not private and ctx.config.tracker.private_only:
+        raise Refusal(
+            "private_only", f"{key} was not started in canopy, and tracker.private_only works only started tickets"
+        )
     # A started ticket's start record authorizes it, checked in code; a public ticket's `--label` is a claim (D051).
     configured = "" if private else _check_label(ctx.config.tracker.labels, key, label)
     if kind == policy.SPLIT and request is None:

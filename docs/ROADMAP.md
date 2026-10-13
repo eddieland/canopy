@@ -1005,6 +1005,26 @@ ticks' share of overseer spend from `canopy spend` and from the web UI, and both
 Status: in progress. Each tick the loop runs records `idle` and `woken_by` (2026-10-13). What keeps it open:
 `canopy spend` and the web UI's spend page.
 
+## M34. A private-only queue
+
+REQUIREMENTS R11, DESIGN §22 (A private-only queue), MEASUREMENTS 2026-10-12 (F6). Needs M18. Asked for by the
+operator (2026-10-13): an optional mode that works only the tickets they start, and does not check the tracker for
+others.
+
+- `tracker.private_only`, user-only, off by default.
+- The state block carries only started tickets and none of what finds or authorizes a public one.
+- `canopy dispatch` refuses a ticket with no start record (`private_only`), with or without a queue label.
+- The overseer prompt, with the operator's approval note in the PR: no query, a started ticket read in the tracker
+  only while it has no branch, nothing mirrored.
+- Tests with the fakes: a labeled ticket that was not started is refused and a started one dispatched; the state block
+  holds only the started ticket, with no query, labels, or `mirror`.
+
+Accept: the tests above pass. Live: a day of `canopy loop` with `private_only` on, where no tick's overseer runs a
+tracker search, a newly started ticket is read in the tracker before its first `implement`, and no ticket with a
+branch is read there again.
+
+Status: in progress. Code, tests, and docs are in (2026-10-13). Waiting on the operator: the live day Accept describes.
+
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.
