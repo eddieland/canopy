@@ -12,7 +12,17 @@ from canopy.core import config, conversation, db, definitions, outbox
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    commit_and_push,
+    in_tick,
+    journal,
+    journal_at,
+    pool,
+    versions_after,
+    wait_for_run,
+    worker_does,
+)
 from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
 from tests.conftest import CanopyEnv, GitPool
 
@@ -423,12 +433,7 @@ def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
 
 
 def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path) -> None:
-    migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    for name in ("0001_init.sql", "0002_run_sessions.sql"):
-        (migrations / name).write_text((resources.migrations_dir() / name).read_text())
-    conn = db.connect(tmp_path / "canopy.db")
-    db.migrate(conn, migrations)
+    conn = journal_at(tmp_path, 2)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     results = [
@@ -443,7 +448,7 @@ def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path) 
             "VALUES (1, 'OLD-1', 'implement', 'b', 'x', ?, 'l', ?, ?)",
             (ended, status, result),
         )
-    assert db.migrate(conn, resources.migrations_dir()) == [3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(2)
     found = [(m["run_id"], m["kind"], m["body"], m["source"]) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
     assert found == [
         (2, "report", "ended blocked", "worker"),
