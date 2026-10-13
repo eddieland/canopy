@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import {
     Activity,
     CalendarClock,
+    FileSearch,
     FolderTree,
     History,
     Inbox,
@@ -33,6 +34,12 @@ const ITEMS: { to: Section; label: string; icon: LucideIcon; hint: string }[] = 
         icon: MessagesSquare,
         hint: 'Every ticket canopy has worked, and a form to start one',
     },
+    {
+        to: '/reviews',
+        label: 'Reviews',
+        icon: FileSearch,
+        hint: 'PR reviews canopy keeps instead of posting, with findings on the diff',
+    },
     { to: '/chores', label: 'Chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
     { to: '/ticks', label: 'Ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
     {
@@ -46,8 +53,8 @@ const ITEMS: { to: Section; label: string; icon: LucideIcon; hint: string }[] = 
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
- * ticket's page keeps Tickets active, a chore's Chores, and a tick's Ticks. Attention shows how many items it lists, on
- * every page, split as its counter splits them. Hovering an item says what its page holds.
+ * ticket's page keeps Tickets active, a review's Reviews, a chore's Chores, and a tick's Ticks. Attention shows how
+ * many items it lists, on every page, split as its counter splits them. Hovering an item says what its page holds.
  */
 export function Nav() {
     const attention = useQuery(attentionQuery)

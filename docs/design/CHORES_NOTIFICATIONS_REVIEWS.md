@@ -572,7 +572,7 @@ failed lease deletes the row and refuses as `no_slot`), renders the prompt (`bad
 1. Claims the run by pid and drops `CANOPY_TICK_ID`, as `_run` does.
 2. In the slot: `git fetch origin <SHA>`, `git checkout --detach <SHA>`, and checks that `HEAD` is `SHA`. A failure is
    `failed` with a harness note (a PR in another repository fails here). No branch is created. Then it deletes every
-   symlink the commit tracks that resolves outside the checkout.
+   symlink the commit tracks that resolves outside the checkout, and keeps the commit's diff (The diff, below).
 3. Runs `review_cmd` with cwd `<state_dir>/reviews/<run_id>/`, a directory readable only by the operator, **not the
    checkout**, so the runtime loads no configuration from the PR. It holds one link, `checkout`, to the slot,
    which the prompt names, as a desk's links do (§18). Before it starts, the shadowing check (§13) covers that
@@ -675,6 +675,32 @@ findings, impact, PR, and commit. `canopy review show ID` prints one in full: th
 detail. Text the reviewer wrote is made printable, as any message shown on a terminal is (§22). It reads the journal
 only, and runs outside a tick.
 
+### The diff
+
+For the web UI's review page (ROADMAP M32), which shows each finding on the diff at the line it names, `_review` keeps
+the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GET /reviews/{id}` serves one with its
+findings anchored on its diff and the diff itself (§22); both read only. The Reviews pages show them: the list, and
+a review's page with each finding's card under the line it names, under its file's header when the diff does not
+show the line, or in a panel of its own; nothing on them writes yet (Open, below).
+
+- **Taking it.** After the checkout, `_review` fetches the pool's base branch, the slot's lease's `base_branch`, which
+  `review_runs.base_branch` records, as `refs/heads/<base>`, and writes `git diff` from the commit's merge base with it
+  to the commit beside the run's log, `<id>.diff`, readable only by the operator. Diff drivers and textconv are off
+  (`--no-ext-diff --no-textconv`), since a commit's `.gitattributes` can name them, and git runs as the harness always
+  runs it (D107). It is cut at 4 MiB. It is best effort: a base branch origin does not have, or any other failed step,
+  is logged, the review goes on, and its page has no diff. A PR stacked on another branch shows that branch's commits
+  too, since the pool's base is not the PR's; the PR's own base is not something the harness can read (principle 5).
+- **Why the harness keeps it.** The page cannot ask GitHub (principle 5), and the slot is gone once the review ends.
+  The review's own checkout is the one moment the harness has the commit, so the diff is taken then, of exactly the
+  commit the reviewer read.
+- **Reading it** (`core/review_diff.py`) on each request: only a regular file opened without following links or
+  blocking, at most 4 MiB to its last whole line, at most 500 files and 30,000 lines, each line cut at 1000
+  characters, control characters but tabs made spaces. A cut says so. It is the PR's own text, rendered as text.
+- **Anchoring.** A finding's `location`, `path:line` (also `path:L12` or `path:12-14`, taking the first line), falls on
+  a file whose new or old path is that path, or whose path ends in `/<path>` when only one does, and on the line with
+  that number on the new side, when the diff shows it. A finding on a file the diff shows, but not on a line it shows,
+  sits under the file's header; one on no file in the diff, or with no diff, in a panel of its own.
+
 ### Agent definition
 
 canopy ships `canopy-reviewer` in the definitions directory (§13), not the repository's `.opencode/agent/` (TRUST_MODEL
@@ -690,7 +716,8 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 
 ### Journal
 
-- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), slot, lease id and holder, pid of `_review`, pid of
+- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), slot, lease id and holder, the base branch it was
+  leased on (nullable, 0016), pid of `_review`, pid of
   the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what
   the runtime reported (§13): `session_id`, `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported
   nothing. A timed-out reviewer records what its finished calls cost. Separate from `runs`, which is keyed by ticket
