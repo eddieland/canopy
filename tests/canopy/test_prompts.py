@@ -45,6 +45,7 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
     # worker hears the operator's messages (D093).
     prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_JOINT)
     prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_OPERATOR)
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_STANDING)
 
 
 def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> None:

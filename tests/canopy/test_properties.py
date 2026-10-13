@@ -180,6 +180,7 @@ def test_every_config_key_declares_a_scope() -> None:
         "runtime.worker_cmd",
         "notify.cmd",
         "paths.prompt_overrides",
+        "paths.worker_instructions",
         "capacity.max_workers",
         "tracker.labels",
         "trust.authorized_repliers",
