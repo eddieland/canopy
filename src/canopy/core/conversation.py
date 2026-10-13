@@ -68,11 +68,11 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 REVIEW = "review"
-# The verbs each kind of subject takes. A PR takes all of them once PR-scoped work exists (ROADMAP M14).
-# `mirror` is the overseer's, not the operator's (DESIGN §22).
+# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), and the rest once PR-scoped work
+# exists (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
-    PR: (),
+    PR: ("grant",),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings (DESIGN §21).

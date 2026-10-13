@@ -97,9 +97,10 @@ Controls:
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
   harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
   journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
-  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind and resets no count
-  (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is
-  set, which every agent canopy runs has, so no agent can lift a limit that bounds it. So do `pause` and `resume`, the
+  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind, or one PR's review
+  limit, and resets no count (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when
+  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent canopy runs has, so no agent can lift a limit that
+  bounds it. So do `pause` and `resume`, the
   loop's pause (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
   it could undo the operator's pause. So does `dismiss`, which keeps a chore's finding off the attention list until it
   clears (DESIGN §19), or holds a review's finding back from workers and the overseer (§21): an agent that could
@@ -177,7 +178,8 @@ Controls in code, not prompts:
 - One running worker per ticket.
 - Workers push once and exit. They do not poll CI or retry.
 - A tick that cannot acquire the lock exits immediately.
-- Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR, `capacity.max_reviews_per_day`, and
+- Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
+  per PR with `canopy grant`), `capacity.max_reviews_per_day`, and
   `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).

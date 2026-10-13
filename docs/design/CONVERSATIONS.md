@@ -81,6 +81,7 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy reply REF [TEXT]` | answer it, with TEXT or stdin |
 | `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
 | `canopy grant REF KIND [--repo NAME] [--runs N]` | allow one unit N more runs of KIND, default 1 (below); public tickets too |
+| `canopy grant URL review [--runs N]` | allow the PR at URL N more review runs, default 1 (below, §21) |
 | `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
 
 `canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
@@ -215,6 +216,17 @@ without raising the limit for every ticket. It takes a ticket, public or private
   (§8: cursors advance only once a worker starts) is still new, and a ticket whose last run failed still waits for a
   reply (§14).
 
+`canopy grant URL review` does the same for a PR at `policy.max_reviews_per_pr` (§21), whose head the loop may not
+review again. A PR's review limit is the PR's own, not a unit's, so it:
+
+- takes the PR's URL, as `canopy review show` and the `review_limit` item name it, and no `--repo`. Review runs are keyed
+  by that URL, so `REPO#N` is refused `bad_ref`, as is a URL canopy has never reviewed `unknown`. A ticket key with
+  `review`, or a PR with any other kind, is refused `bad_kind`.
+- adds a row to `review_grants`: the URL, `--runs` (default 1), and when. Only added to. The PR's limit is
+  `policy.max_reviews_per_pr` plus the sum of its grants; no other PR's changes.
+- resets no count (D030). The state block shows the PR's `granted` beside its `review_runs`, and `canopy review run`'s
+  `review_limit` guard and the reviewer's `{{MAX_ATTEMPTS}}` include it. It reviews nothing: the next tick decides.
+
 ### References
 
 A reference names a subject by its shape, so no kind needs a flag and no form can be read as another's: a ticket key
@@ -223,7 +235,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | Reference | Subject | Verbs |
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
-| `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
+| `api#42`, or the PR's URL | a PR | `grant` (its reviews, by URL); all, once PR-scoped work exists (M14) |
 | `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
 | `review:ID` | a review run (§21) | `dismiss` (one of its findings); `canopy review show ID` shows one |
