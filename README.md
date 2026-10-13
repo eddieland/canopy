@@ -81,9 +81,11 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   you press `t`.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
   every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
-  finding with a note. Sign in once per browser with the
-  secret `canopy secret` prints. `[serve]` in your user config moves it, to a private address too, or turns it off; so
-  does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
+  finding with a note. Sign in once per browser with the secret `canopy secret` prints. `[serve]` in your user config
+  moves it, to a private address too, or turns it off; so does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
+- Find anything the journal holds from the search box atop the web UI's nav (`/` focuses it): a ticket by its key or a
+  word of its title, which its branch carries, or the run, chore, decision, or tick that said a phrase. Transcripts and
+  reviews are not searched (DESIGN §22).
 - Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
 - Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
   canopy's copy of its comments.
