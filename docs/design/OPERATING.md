@@ -265,8 +265,10 @@ read its stdout, `opencode run --agent <name>`. MCP connectivity, OAuth, and too
 
 Agent definitions ship in `agents/`; agent runs load them from a directory canopy owns (below):
 
-- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`. MCP: the tracker,
-  GitHub.
+- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
+  workspace (`external_directory: deny`), and one command per bash call, as its prompt says: an `ask`, such as a `cd`
+  out of the workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a
+  `deny` costs only the call. MCP: the tracker, GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
   edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or

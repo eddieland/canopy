@@ -64,6 +64,9 @@ Re-read the tracker and GitHub before every decision that matters.
     for reviews (see "Reviews"). Only when the state block has `reviews`.
   - The state block's `repositories[].leased_slots` holds what `treehouse status` would say for each repository. You
     run at the workspace root, which is not a repository, so do not run `treehouse` yourself.
+  - Run each command as its own bash call, from where you start: no `cd`, loops, `;`, `&&`, `||`, pipes, or subshells.
+    A call that is refused can end your run, and with it every command it held, so one call must risk one decision,
+    not all of them. A mirror's heredoc is part of its one command.
 - You have no other write capability. If you want to do something not on this
   list, record a `decide` with action `skip` and say what you wanted.
 
