@@ -22,6 +22,8 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.trust.trusted_reviewers == ()
     assert cfg.trust.comment_prefix == "CANOPY:"
     assert cfg.trust.comment_suffix == ""
+    assert cfg.trust.commit_trailer_name == "canopy worker"
+    assert cfg.trust.commit_trailer_email == "noreply@canopy.invalid"
     assert cfg.capacity.max_workers == 2
     assert cfg.loop.interval_minutes == 15
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
@@ -61,6 +63,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("trust", 'authorized_repliers = ["mallory"]'),
         ("trust", 'trusted_reviewers = ["review-bot[bot]"]'),
         ("trust", 'comment_prefix = "Please"'),
+        ("trust", 'commit_trailer_name = "Alice Example"'),
+        ("trust", 'commit_trailer_email = "alice@example.com"'),
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
         ("loop", "idle_max_minutes = 1"),
@@ -170,6 +174,15 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[trust]\ncomment_prefix = 'CANOPY: '\n", "no surrounding spaces"),
         ('[trust]\ncomment_suffix = "by\\ncanopy"\n', "one line"),
         (f"[trust]\ncomment_suffix = '{'x' * 81}'\n", "at most 80 characters"),
+        ("[trust]\ncommit_trailer_name = ''\n", "with a letter or digit"),
+        ("[trust]\ncommit_trailer_name = 'bot <x@y>'\n", "no backtick or angle bracket"),
+        ('[trust]\ncommit_trailer_name = "bot\\nSigned-off-by: x"\n', "one line"),
+        ("[trust]\ncommit_trailer_name = ' bot'\n", "no surrounding spaces"),
+        ("[trust]\ncommit_trailer_email = ''\n", "one '@'"),
+        ("[trust]\ncommit_trailer_email = 'bot'\n", "one '@'"),
+        ("[trust]\ncommit_trailer_email = 'a@b@c'\n", "one '@'"),
+        ("[trust]\ncommit_trailer_email = 'bot@x.test> y'\n", "no whitespace"),
+        (f"[trust]\ncommit_trailer_email = 'a@{'x' * 253}'\n", "at most 254 characters"),
         ("[runtime]\npr_skill = 'Acme-PR'\n", "a skill name of at most 64"),
         ("[runtime]\npr_skill = 'acme--pr'\n", "a skill name of at most 64"),
         ("[runtime]\npr_skill = '-acme'\n", "a skill name of at most 64"),
