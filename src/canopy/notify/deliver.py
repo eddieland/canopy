@@ -41,7 +41,11 @@ class Delivery:
 
 
 def publish(ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter) -> list[Delivery]:
-    """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed."""
+    """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed.
+
+    Returns:
+        How each sink's delivery went, in name order.
+    """
     sinks = ctx.config.notify.all_sinks()
     for name in journal.forget_sinks(ctx.conn, sinks):
         log.info("notification sink removed from the config; forgot it", extra={"sink": name})
@@ -54,7 +58,11 @@ def publish(ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter) 
 
 
 def send(ctx: Context, sink: Sink, text: str) -> str | None:
-    """Run the sink's command with `text` on stdin. Returns None on exit 0, else why it failed."""
+    """Run the sink's command with `text` on stdin.
+
+    Returns:
+        None on exit 0, else why it failed: it could not start, timed out, or exited non-zero, with its stderr's tail.
+    """
     argv = notify_words(sink.cmd)
     try:
         result = ctx.runner.run(argv, cwd=ctx.repo_root, stdin=text, timeout=TIMEOUT_SECONDS)
@@ -68,7 +76,11 @@ def send(ctx: Context, sink: Sink, text: str) -> str | None:
 
 
 def test(ctx: Context, names: list[str]) -> list[Delivery]:
-    """Send a test message to each sink in `names` now, outside any tick, changing nothing in the journal."""
+    """Send a test message to each sink in `names` now, outside any tick, changing nothing in the journal.
+
+    Returns:
+        How each sink's delivery went, in the order of `names`: `delivered`, or `failed` with why.
+    """
     sinks = ctx.config.notify.all_sinks()
     results: list[Delivery] = []
     for name in names:
@@ -92,7 +104,11 @@ class SinkStatus:
 
 
 def status(ctx: Context) -> list[SinkStatus]:
-    """Every configured sink as the journal sees it, in name order."""
+    """Every configured sink as the journal sees it, in name order.
+
+    Returns:
+        One status per sink. A sink the journal has no row for yet shows no delivery, no failures, and nothing waiting.
+    """
     found: list[SinkStatus] = []
     for name, sink in ctx.config.notify.all_sinks().items():
         row = journal.sink(ctx.conn, name)
@@ -136,7 +152,11 @@ def _record_loop_events(ctx: Context) -> None:
 
 
 def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
-    """How many ended ticks before `tick_id` failed since the last `ok` one: the whole streak, however long."""
+    """How many ended ticks before `tick_id` failed since the last `ok` one: the whole streak, however long.
+
+    Returns:
+        The count, 0 when the last ended tick before `tick_id` was `ok`.
+    """
     return int(
         conn.execute(
             "SELECT count(*) FROM ticks WHERE id < ? AND status NOT IN ('running', 'ok') "

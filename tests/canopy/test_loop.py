@@ -62,11 +62,14 @@ class RaisingRunner:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> procs.Result:
         if self.raises:
             self.raises -= 1
             raise RuntimeError("a bug in tick code")
-        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+        return procs.SubprocessRunner().run(
+            args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line
+        )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         return procs.SubprocessRunner().spawn(args, cwd=cwd, log_path=log_path)
@@ -83,7 +86,7 @@ def context(env: CanopyEnv, runner: procs.Runner | None = None) -> Context:
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(commands))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 def canopy(*args: str) -> list[str]:
@@ -323,7 +326,7 @@ def test_loop_holds_its_own_lock_and_a_second_loop_is_refused(
     assert "another canopy loop is running" in capsys.readouterr().err
     assert not agent_log.exists()  # no tick ran
 
-    overseer_does(monkeypatch)  # records nothing, ends with "tick complete"
+    overseer_does(monkeypatch)  # records nothing, ends with "CANOPY_TICK_DONE"
     assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
     out = capsys.readouterr().out
     assert "wait 3 minutes after each tick ends" in out

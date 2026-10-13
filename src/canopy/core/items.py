@@ -35,7 +35,12 @@ class Item:
 
 
 def subject(ticket_key: str | None, repo: str | None) -> str:
-    """Name an item's ticket, its repository, or both, for display."""
+    """Name an item's ticket, its repository, or both, for display.
+
+    Returns:
+        The ticket key with the repository in parentheses when both are set, whichever one is set otherwise, or `-`
+        when neither is.
+    """
     if ticket_key is None:
         return repo or "-"
     return f"{ticket_key} ({repo})" if repo else ticket_key
@@ -45,13 +50,20 @@ def fingerprint(ticket_key: str | None, reason: str, repo: str | None = None) ->
     """Identify an item across ticks. The detail is left out: rewording it does not make a new item.
 
     An item without a repository has the fingerprint it had before items could have one, so none is notified again.
+
+    Returns:
+        The hex SHA-256 of the ticket key, reason, and repository.
     """
     text = f"{ticket_key or ''}\0{reason}" + (f"\0{repo}" if repo is not None else "")
     return hashlib.sha256(text.encode()).hexdigest()
 
 
 def age(timestamp: str, now: datetime | None = None) -> str:
-    """Return how long ago `timestamp` was, in its largest whole unit: `3d`, `2h`, `5m`, `40s`."""
+    """Return how long ago `timestamp` was, in its largest whole unit: `3d`, `2h`, `5m`, `40s`.
+
+    Returns:
+        The age as a whole number and a unit. A timestamp in the future is `0s`.
+    """
     seconds = max(0, int(((now or datetime.now(UTC)) - db.parse_time(timestamp)).total_seconds()))
     for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
         if seconds >= size:
@@ -60,5 +72,9 @@ def age(timestamp: str, now: datetime | None = None) -> str:
 
 
 def one_line(text: str) -> str:
-    """`text` with its whitespace, line breaks included, collapsed to single spaces."""
+    """`text` with its whitespace, line breaks included, collapsed to single spaces.
+
+    Returns:
+        `text` on one line, with no leading or trailing whitespace.
+    """
     return " ".join(text.split())

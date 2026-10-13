@@ -65,14 +65,22 @@ class Started:
 
 
 def reviews_dir(ctx: Context) -> Path:
-    """Where review logs and prompts live, and each run's working directory: the operator's only."""
+    """Where review logs and prompts live, and each run's working directory: the operator's only.
+
+    Returns:
+        `<state_dir>/reviews/`, created mode 0700 if it was missing.
+    """
     path = ctx.state_dir / REVIEWS_DIR
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
 
 
 def run_dir(ctx: Context, run_id: int) -> Path:
-    """The reviewer's working directory, `<state_dir>/reviews/<id>/`: outside the checkout, which it links to."""
+    """The reviewer's working directory, `<state_dir>/reviews/<id>/`: outside the checkout, which it links to.
+
+    Returns:
+        The directory's path. It is not created here.
+    """
     return reviews_dir(ctx) / str(run_id)
 
 
@@ -82,14 +90,19 @@ def prompt_file(ctx: Context, run_id: int) -> Path:
 
 
 def holder(run_id: int) -> str:
-    """The lease holder of a review run's slot: `canopy:review:<id>`."""
+    """The lease holder of a review run's slot: `canopy:review:<id>`.
+
+    Returns:
+        The holder string treehouse records on the lease.
+    """
     return treehouse.holder_for(f"{HOLDER_KEY}{run_id}")
 
 
 def check(ctx: Context, *, tick_id: int, request: Request) -> str:
     """Check the guards for a dry run, counting what this dry run already started as running (D036).
 
-    Returns the repository the review would lease in.
+    Returns:
+        The repository the review would lease in.
 
     Raises:
         Refusal: a guard refused.
@@ -101,6 +114,9 @@ def check(ctx: Context, *, tick_id: int, request: Request) -> str:
 
 def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) -> Started:
     """Check the guards, lease a slot, record the review run, render its prompt, and spawn `canopy _review`.
+
+    Returns:
+        The new review run's id, the pid of its `canopy _review`, and the slot it leased.
 
     Raises:
         Refusal: a guard refused, or the slot could not be leased, the prompt rendered, or the run started. Nothing is
@@ -186,6 +202,12 @@ def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None 
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
+
+    Returns:
+        The name of the repository the review leases in.
+
+    Raises:
+        Refusal: reviews are off, or one of the shape, repository, running, and limit checks refused.
     """
     if not ctx.config.reviews_on:
         raise Refusal("reviews_off", "reviews are off: no [review] agent_prs or query, or capacity.max_reviews is 0")
@@ -202,7 +224,11 @@ def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None 
 def _check_running(
     ctx: Context, request: Request, planned_reviews: list[sqlite3.Row], planned_runs: list[sqlite3.Row]
 ) -> None:
-    """`running`: a review of this PR, or a worker on its ticket, is running."""
+    """`running`: a review of this PR, or a worker on its ticket, is running.
+
+    Raises:
+        Refusal: (`running`) a review of the PR is running or planned, or a worker on its ticket is.
+    """
     running = next((r for r in db.running_review_runs(ctx.conn) if r["pr_url"] == request.pr), None)
     if running is not None:
         raise Refusal("running", f"review run {running['id']} of this PR is running")
@@ -219,7 +245,12 @@ def _check_running(
 def _check_limits(
     ctx: Context, request: Request, planned_reviews: list[sqlite3.Row], planned_runs: list[sqlite3.Row]
 ) -> None:
-    """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order."""
+    """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order.
+
+    Raises:
+        Refusal: the commit already has a `done` review, the PR has used its reviews, the day's reviews are used, or
+            the review runs or the workers and reviews together fill their capacity.
+    """
     cfg = ctx.config
     runs = db.review_runs_of(ctx.conn, request.pr)
     done = next((r for r in runs if r["sha"] == request.sha and r["status"] == "done"), None)
@@ -247,7 +278,11 @@ def _check_limits(
 
 
 def _check_shape(request: Request) -> None:
-    """`bad_pr`: the URL, commit, and ticket key reach the prompt, the journal, and git's argv."""
+    """`bad_pr`: the URL, commit, and ticket key reach the prompt, the journal, and git's argv.
+
+    Raises:
+        Refusal: (`bad_pr`) the URL is not a plain https:// URL, the commit is not a full sha, or the key is invalid.
+    """
     if not contract.plain_url(request.pr, MAX_PR_URL):
         raise Refusal("bad_pr", f"--pr must be the PR's plain https:// URL, at most {MAX_PR_URL} characters")
     if SHA_RE.fullmatch(request.sha) is None:
@@ -257,7 +292,14 @@ def _check_shape(request: Request) -> None:
 
 
 def _check_repo(ctx: Context, repo: str | None) -> str:
-    """`unknown_repo`: the PR's repository must be named, in the map, and cloned."""
+    """`unknown_repo`: the PR's repository must be named, in the map, and cloned.
+
+    Returns:
+        The repository's name as the map spells it.
+
+    Raises:
+        Refusal: (`unknown_repo`) `repo` is None, not in the map, or not cloned.
+    """
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if repo is None:

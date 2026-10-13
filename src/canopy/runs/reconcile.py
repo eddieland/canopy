@@ -75,11 +75,14 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
 
 
 def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
-    """Mark running runs whose `_run` is gone `crashed` and return all their slots. Returns the lease ids returned."""
+    """Mark running runs whose `_run` is gone `crashed` and return all their slots.
+
+    Returns:
+        The lease ids returned, or kept for the operator.
+    """
     returned: set[str] = set()
     for run in db.running_runs(ctx.conn):
-        pid = run["pid"]
-        if pid is not None and procs.alive(int(pid)):
+        if procs.running(Path(run["log_path"]), run["pid"]):
             continue
         returned |= end_run(ctx, run, "crashed", "the worker process is gone", log)
     return returned
@@ -91,8 +94,10 @@ def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.Ti
     Its desk and its object directory are removed too. Reconcile closes a crashed run this way, and `canopy stop --now`
     a stopped one (DESIGN §22). Each slot is tidied as `_run` would have (DESIGN §8): its `.git` file checked against
     what `_run` recorded, and the slot moved off the run's own objects. One that cannot be tidied is not returned, and
-    the object directory is kept. Returns the lease ids it dealt with, returned or kept, which reconcile then leaves
-    alone.
+    the object directory is kept.
+
+    Returns:
+        The lease ids it dealt with, returned or kept, which reconcile then leaves alone.
 
     Raises:
         treehouse.TreehouseError: a slot could not be returned.

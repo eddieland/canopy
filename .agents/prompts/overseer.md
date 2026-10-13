@@ -106,12 +106,13 @@ Re-read the tracker and GitHub before every decision that matters.
    dispatch a ticket whose blocker is not resolved unless it can be
    stacked (see "Blockers and stacking").
 5. Update cursors for every ticket you inspected so the next tick is incremental (see "Cursors").
-6. Exit. Do not summarize to stdout beyond a single line `tick complete`.
+6. End your final message with a line containing only `CANOPY_TICK_DONE`, then exit. You may summarize before it. The
+   harness reads only your final message: without that line there, the tick fails and its attention items are lost.
 
 If the tracker or GitHub MCP is unavailable or returns errors, record one `decide` with action `skip` and rationale
-`mcp_unavailable: <which>`, and exit. Do not decide on partial data. If the tracker works but cannot do something you
-need (find tickets, read labels, read comment authors), record `skip` with rationale `tracker_unsupported: <what>` and
-exit.
+`mcp_unavailable: <which>`, and end as step 6 says. Do not decide on partial data. If the tracker works but cannot do
+something you need (find tickets, read labels, read comment authors), record `skip` with rationale
+`tracker_unsupported: <what>` and end as step 6 says.
 
 ## Phase table
 

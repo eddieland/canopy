@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import contextlib
 import os
+import queue
 import signal
 import subprocess
+import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import IO, Protocol, cast
+
+from canopy.infra import lock
 
 
 class ProcError(Exception):
@@ -57,6 +62,7 @@ class Runner(Protocol):
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> Result:
         """Run `args` to completion and capture its output.
 
@@ -68,6 +74,9 @@ class Runner(Protocol):
             stdin: Text written to the child's stdin. When None, stdin is `/dev/null`.
             timeout: Seconds before the child's process group is killed. None waits forever.
             on_start: Called with the child's pid, which is also its process group id, once it has started.
+            on_line: Called with each line of the child's stdout, its newline kept, as the child prints it, on the
+                calling thread. `stdout` in the result holds the same lines. An exception it raises kills the child
+                and propagates.
 
         Returns:
             The exit code and captured output. `timed_out` is set when `timeout` expired.
@@ -85,6 +94,7 @@ class Runner(Protocol):
             args: The command and its arguments. Never passed through a shell.
             cwd: Working directory for the child, which its `PWD` also names.
             log_path: File the child's stdout and stderr are appended to, created readable only by the operator.
+                The child holds the lock beside it, `lifelock(log_path)`, for its whole life; `running` asks after it.
 
         Returns:
             The child's pid. The child leads its own session, so it outlives its parent and whatever process group
@@ -92,7 +102,7 @@ class Runner(Protocol):
 
         Raises:
             CommandNotFoundError: The executable is missing or not executable.
-            ProcError: The process could not be started.
+            ProcError: The process could not be started, or another process holds its lifelock.
         """
         ...
 
@@ -113,8 +123,18 @@ class SubprocessRunner:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> Result:
-        """Run `args` to completion and capture its output. See `Runner.run`."""
+        """Run `args` to completion and capture its output. See `Runner.run`.
+
+        Returns:
+            The exit code and captured output. `timed_out` is set when `timeout` expired.
+
+        Raises:
+            CommandNotFoundError: The executable is missing or not executable.
+            ProcError: `cwd` cannot be used as the working directory.
+            OSError: The process could not be started for any other reason.
+        """
         argv = tuple(args)
         full_env = _child_env(cwd, env)
         try:
@@ -146,6 +166,8 @@ class SubprocessRunner:
             try:
                 if on_start is not None:
                     on_start(proc.pid)
+                if on_line is not None:
+                    return _stream(proc, argv, stdin, timeout, on_line)
                 stdout, stderr = proc.communicate(stdin, timeout=timeout)
             except subprocess.TimeoutExpired:
                 _kill_group(proc.pid)
@@ -158,9 +180,27 @@ class SubprocessRunner:
         return Result(argv, proc.returncode, stdout, stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
-        """Start `args` detached and return its pid. See `Runner.spawn`."""
+        """Start `args` detached and return its pid. See `Runner.spawn`.
+
+        Returns:
+            The child's pid. The child leads its own session.
+
+        Raises:
+            CommandNotFoundError: The executable is missing.
+            ProcError: The process could not be started, or another process holds its lifelock.
+        """
         argv = tuple(args)
-        fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        try:
+            # Taken before the child exists and passed to it, so the lock is held from before its pid is recorded.
+            # The child's own children do not inherit it: `run` and `spawn` close every fd they do not pass.
+            held = lock.take(lifelock(log_path))
+        except lock.LockBusyError as e:
+            raise ProcError(f"cannot start {argv[0]}: {e}") from e
+        try:
+            fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        except BaseException:
+            os.close(held)
+            raise
         try:
             # stdin and stdout are never the caller's: a caller whose output is captured through a pipe (an overseer
             # running `canopy dispatch`) would otherwise wait for the detached child to close it.
@@ -172,13 +212,16 @@ class SubprocessRunner:
                 stdout=fd,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
+                pass_fds=(held,),
             )
         except FileNotFoundError as e:
             raise CommandNotFoundError(f"command not found: {argv[0]}") from e
         except OSError as e:
             raise ProcError(f"cannot start {argv[0]}: {e.strerror}") from e
         finally:
+            # The child's copy of `held` keeps the lock; a child that never started leaves it free.
             os.close(fd)
+            os.close(held)
         # The child is detached on purpose. Popen reaps it later if it exits while this process still runs.
         return proc.pid
 
@@ -196,7 +239,11 @@ def _child_env(cwd: Path | None, env: Mapping[str, str] | None) -> dict[str, str
 
 
 def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) -> bool:
-    """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory."""
+    """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory.
+
+    Returns:
+        True when a regular file is found. A directory that cannot be searched counts as not having it.
+    """
     # The child changes into `cwd` before exec, so a relative or empty PATH entry, like a relative command, resolves
     # against it. An absolute entry replaces `cwd` in the join.
     base = Path(cwd or ".")
@@ -210,11 +257,127 @@ def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) ->
     return False
 
 
+def lifelock(log_path: Path) -> Path:
+    """Return the lock a child `spawn` started with `log_path` holds for its whole life: the log's path, `.lock`."""
+    return log_path.with_suffix(".lock")
+
+
+def running(log_path: Path, pid: int | None) -> bool:
+    """Return whether the child `spawn` started with `log_path` is still running: whether its lifelock is held.
+
+    The lock goes when the process exits, before it is a zombie, and names no pid that could be reused. A process an
+    earlier canopy started holds none, and reads as running while its `pid`, if recorded, is `alive`.
+    """
+    path = lifelock(log_path)
+    if path.exists():
+        return lock.held(path)
+    return pid is not None and alive(pid)
+
+
+def _stream(
+    proc: subprocess.Popen[str],
+    argv: tuple[str, ...],
+    stdin: str | None,
+    timeout: float | None,
+    on_line: Callable[[str], None],
+) -> Result:
+    """What `communicate` does, but each line of stdout goes to `on_line`, on this thread, as the child prints it.
+
+    Threads read the pipes and write stdin, so a child that fills one pipe while canopy waits on another never blocks.
+    Only this thread calls `on_line`, so it may use what this thread owns, such as a journal connection.
+
+    Returns:
+        The exit code and captured output, `timed_out` set when `timeout` expired and the child's group was killed.
+    """
+    # `run` opened both as pipes.
+    out, err = cast("IO[str]", proc.stdout), cast("IO[str]", proc.stderr)
+    lines: queue.SimpleQueue[str | None] = queue.SimpleQueue()
+    stderr: list[str] = []
+    stderr_reader = threading.Thread(target=_read_all, args=(err, stderr), daemon=True)
+    workers = [threading.Thread(target=_read_lines, args=(out, lines), daemon=True), stderr_reader]
+    if stdin is not None:
+        workers.append(threading.Thread(target=_write_all, args=(proc.stdin, stdin), daemon=True))
+    for worker in workers:
+        worker.start()
+    deadline = _Deadline(proc.pid, timeout)
+    try:
+        stdout = _pump(lines, on_line, deadline)
+        stderr_reader.join(deadline.left())
+        if stderr_reader.is_alive():
+            deadline.expire()
+        try:
+            proc.wait(deadline.left())
+        except subprocess.TimeoutExpired:
+            deadline.expire()
+            proc.wait()
+    except BaseException:
+        _kill_group(proc.pid)
+        raise
+    finally:
+        # The readers stop at the pipes' end, which the child's exit or a kill brings, before `run` closes the pipes.
+        for worker in workers:
+            worker.join()
+    return Result(argv, proc.returncode, "".join(stdout), "".join(stderr), timed_out=deadline.expired)
+
+
+class _Deadline:
+    """When a timeout expires, and whether it did: expiring kills the child's group, and leaves no deadline after."""
+
+    def __init__(self, pgid: int, timeout: float | None) -> None:
+        self.pgid = pgid
+        self.at = None if timeout is None else time.monotonic() + timeout
+        self.expired = False
+
+    def left(self) -> float | None:
+        return None if self.at is None else max(0.0, self.at - time.monotonic())
+
+    def expire(self) -> None:
+        _kill_group(self.pgid)
+        self.expired = True
+        self.at = None
+
+
+def _pump(lines: queue.SimpleQueue[str | None], on_line: Callable[[str], None], deadline: _Deadline) -> list[str]:
+    stdout: list[str] = []
+    while True:
+        try:
+            line = lines.get(timeout=deadline.left())
+        except queue.Empty:
+            # What the group printed before the kill is still read, and still passed on.
+            deadline.expire()
+            continue
+        if line is None:
+            return stdout
+        stdout.append(line)
+        on_line(line)
+
+
+def _read_lines(pipe: IO[str], lines: queue.SimpleQueue[str | None]) -> None:
+    for line in pipe:
+        lines.put(line)
+    lines.put(None)
+
+
+def _read_all(pipe: IO[str], into: list[str]) -> None:
+    into.append(pipe.read())
+
+
+def _write_all(pipe: IO[str], text: str) -> None:
+    # A child need not read all of its stdin, as `communicate` allows.
+    with contextlib.suppress(BrokenPipeError):
+        pipe.write(text)
+    with contextlib.suppress(BrokenPipeError):
+        pipe.close()
+
+
 def alive(pid: int) -> bool:
     """Return whether process `pid` exists and has not exited.
 
     A zombie counts as exited: it is reaped here if it is this process's own child, and recognized from `/proc` where
     there is one. A reused pid is not detected; a pid that belongs to some other process reads as alive.
+
+    Returns:
+        True when the process exists and is not a zombie, or when its state cannot be read. False otherwise.
     """
     if pid <= 0:
         return False
@@ -232,8 +395,9 @@ def alive(pid: int) -> bool:
     try:
         # The state is the field after the parenthesized command name, which may itself contain spaces or ")".
         state = stat.read_text().rpartition(")")[2].split()[0]
-    except (OSError, IndexError):
-        return True
+    except (OSError, IndexError) as e:
+        # A zombie whose parent reaped it since the signal check has no entry left, where there is a /proc to have one.
+        return not (isinstance(e, FileNotFoundError) and Path("/proc/self/stat").exists())
     return state not in ("Z", "X")
 
 
@@ -243,6 +407,9 @@ def kill_group(pgid: int) -> bool:
     Every child `SubprocessRunner` starts leads its own group, so its pid is the group id. A pid is not reused while a
     group of that id has members, so this reaches only what is left of that child and its descendants, unless the whole
     group has already exited and the pid has since gone to a new group leader.
+
+    Returns:
+        True when the signal was sent. False when the group had no process left, or `pgid` is 0 or 1.
     """
     if pgid <= 1:
         return False

@@ -21,12 +21,20 @@ _DAY = 24 * 60
 
 
 def limited(chore: Chore) -> bool:
-    """Whether the chore has a window at all."""
+    """Whether the chore has a window at all.
+
+    Returns:
+        True if it sets `days` or `hours`.
+    """
     return bool(chore.days) or chore.hours is not None
 
 
 def is_open(chore: Chore, at: datetime) -> bool:
-    """Whether a run of `chore` may start at `at`, an aware time."""
+    """Whether a run of `chore` may start at `at`, an aware time.
+
+    Returns:
+        True if `at`, in the chore's zone, falls on one of its days and within its hours.
+    """
     local = at.astimezone(_zone(chore))
     if chore.days and CHORE_DAYS[local.weekday()] not in chore.days:
         return False
@@ -35,7 +43,14 @@ def is_open(chore: Chore, at: datetime) -> bool:
 
 
 def next_open(chore: Chore, at: datetime) -> datetime:
-    """The earliest time at or after `at` when a run of `chore` may start, in UTC."""
+    """The earliest time at or after `at` when a run of `chore` may start, in UTC.
+
+    Returns:
+        `at` itself, in UTC, while the window is open, else the start of the next allowed day's hours.
+
+    Raises:
+        AssertionError: No window opens within eight days, which a valid `days` rules out.
+    """
     if is_open(chore, at):
         return at.astimezone(UTC)
     zone = _zone(chore)
@@ -54,7 +69,11 @@ def next_open(chore: Chore, at: datetime) -> datetime:
 
 
 def describe(chore: Chore) -> str:
-    """The window for a person, as `mon,tue 08:00-18:00 America/New_York`."""
+    """The window for a person, as `mon,tue 08:00-18:00 America/New_York`.
+
+    Returns:
+        Its days or `every day`, its hours or `all day`, and its time zone or `local time`.
+    """
     days = ",".join(chore.days) if chore.days else "every day"
     hours = chore.hours or "all day"
     return f"{days} {hours} {chore.timezone or 'local time'}"
@@ -65,12 +84,20 @@ def _hours(chore: Chore) -> tuple[int, int]:
 
 
 def _zone(chore: Chore) -> tzinfo | None:
-    """The chore's zone. None is this machine's local time, which `astimezone` reads with its own DST rules."""
+    """The chore's zone. None is this machine's local time, which `astimezone` reads with its own DST rules.
+
+    Returns:
+        The zone its `timezone` names, or None when it names none.
+    """
     return ZoneInfo(chore.timezone) if chore.timezone is not None else None
 
 
 def _wall(day: date, minutes: int, zone: tzinfo | None) -> datetime:
-    """The UTC time of a wall-clock time on `day` in `zone`, or in local time when `zone` is None."""
+    """The UTC time of a wall-clock time on `day` in `zone`, or in local time when `zone` is None.
+
+    Returns:
+        An aware time in UTC, `minutes` after midnight on `day` as the zone's clocks show it.
+    """
     wall = datetime.combine(day, time(minutes // 60, minutes % 60))
     local = wall.replace(tzinfo=zone) if zone is not None else wall.astimezone()
     return local.astimezone(UTC)

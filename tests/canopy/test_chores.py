@@ -88,7 +88,7 @@ def state_block(agent_log: Path) -> dict[str, Any]:
 def test_without_chores_nothing_about_them_reaches_the_overseer(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
@@ -104,7 +104,7 @@ def test_max_chores_zero_turns_every_chore_off(
     canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
@@ -236,7 +236,7 @@ def test_long_text_is_cut_to_its_limits() -> None:
 
 
 def tick(monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> None:
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0
 
 

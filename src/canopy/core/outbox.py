@@ -26,7 +26,11 @@ DETAIL_LIMIT = 500
 
 
 def cut(text: object, limit: int) -> str:
-    """One line of `text`, at most `limit` characters."""
+    """One line of `text`, at most `limit` characters.
+
+    Returns:
+        `text` with its whitespace collapsed to single spaces, cut to `limit` characters ending in `...` if longer.
+    """
     line = " ".join(str(text).split())
     return line if len(line) <= limit else line[: limit - 3] + "..."
 
@@ -121,17 +125,29 @@ def review_ended(config: Config, run: sqlite3.Row, status: str, result_json: str
 
 
 def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:
-    """The latest ticks all ended other than `ok`."""
+    """The latest ticks all ended other than `ok`.
+
+    Returns:
+        The `loop.failing` event, naming how many ticks failed, the latest one's status and id, and the log.
+    """
     return Event(LOOP, "loop.failing", {"count": count, "status": status, "tick": tick_id, "log": log})
 
 
 def loop_recovered(failed: int) -> Event:
-    """The first `ok` tick after `loop.failing`."""
+    """The first `ok` tick after `loop.failing`.
+
+    Returns:
+        The `loop.recovered` event, naming how many ticks had failed.
+    """
     return Event(LOOP, "loop.recovered", {"failed": failed})
 
 
 def sink_failing(sink: str, error: str) -> Event:
-    """A sink has failed its latest deliveries in a row."""
+    """A sink has failed its latest deliveries in a row.
+
+    Returns:
+        The `loop.sink_failing` event, naming the sink and its latest error.
+    """
     return Event(LOOP, "loop.sink_failing", {"sink": sink, "error": cut(error, DETAIL_LIMIT)})
 
 

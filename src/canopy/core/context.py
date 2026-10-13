@@ -45,6 +45,9 @@ class Context:
         """Where treehouse runs for repository `repo`'s pool, with the size `capacity` declares for it.
 
         Every pool gets the operator's own `.worktreeinclude`, if `paths.worktree_include` names one (DESIGN §9).
+
+        Returns:
+            The workspace's pool for `repo`, sized from `capacity` when `repo` is given.
         """
         pool = dataclasses.replace(self.workspace.pool(repo), include_file=self.config.paths.worktree_include)
         if repo is None:

@@ -40,6 +40,9 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
     """Start the web UI's server for the loop, or say why it serves nothing. Never raises: the loop goes on.
 
     The UI's reload asks through `reload`, as SIGHUP does.
+
+    Returns:
+        The note for the loop's header, with the URL, server, and backend when the server started.
     """
     cfg = ctx.config.serve
     options = ServeOptions(host=cfg.bind, port=cfg.port, base_path=cfg.base_path, ui_dir=resources.ui_dir())
@@ -63,7 +66,11 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
 
 
 def backend(ctx: Context, reload: reread.Reload) -> Backend:
-    """The server's view of the loop's journal: its config and workspace, the attention list, `halt.end`, and reload."""
+    """The server's view of the loop's journal: its config and workspace, the attention list, `halt.end`, and reload.
+
+    Returns:
+        The backend the server calls into, bound to `ctx` and `reload`.
+    """
 
     def end_run(run_ctx: Context, run: sqlite3.Row) -> bool:
         return halt.end(run_ctx, run, logs.for_tick(None))

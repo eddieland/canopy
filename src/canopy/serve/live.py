@@ -1,11 +1,13 @@
 """The event stream (DESIGN §22): the lists a page shows, sent again whole whenever the journal changes.
 
-SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version`
-four times a second: it changes whenever another connection commits. Only then does the stream read the attention
-list, the runs, the tickets, the chores, the last day's and 30 days' spend, the latest tick, and the loop's pause again,
-and it sends each that differs from what it sent last, plus `ticket.changed` for each ticket whose summary changed. The
-stream never writes, so its own reads never move `data_version`. Each such read is one snapshot of the journal, in a
-read transaction, so a commit landing partway through cannot pair one list's old rows with another's new ones.
+SQLite has no change notifications, so each stream holds its own journal connection and reads `PRAGMA data_version` four
+times a second: it changes whenever another connection commits. Only then, or when the loop has read its config again
+(`Backend.use`), does the stream read the attention list, the runs, the tickets, the chores, the last day's and 30 days'
+spend, the latest tick, and the loop's pause again, and it sends each that differs from what it sent last, plus
+`ticket.changed` for each ticket whose summary changed. A reload commits nothing, but the chores and the attention list
+are read through the config: a chore added to it shows without a journal write. The stream never writes, so its own
+reads never move `data_version`. Each such read is one snapshot of the journal, in a read transaction, so a commit
+landing partway through cannot pair one list's old rows with another's new ones.
 
 The connection is opened, read, and closed on a thread of the stream's own, never on the server's event loop: on a
 journal with months of history one read of the lists takes tens of milliseconds, every open stream reads them on each
@@ -75,13 +77,19 @@ class _Reader:
         self._version: int | None = None
 
     def read(self) -> list[StreamEvent]:
-        """The events for whatever changed since the last read: none if no other connection has committed."""
+        """The events for whatever changed since the last read: none if neither the journal nor the config has.
+
+        Returns:
+            One event per list that differs from what this stream last sent; empty when neither the journal nor the
+            config the loop serves has changed.
+        """
         if self._ctx is None:
             self._ctx = self._opened.enter_context(self._backend.open())
         current = _data_version(self._ctx)
-        if current == self._version:
+        served = self._backend.current(self._ctx)
+        if current == self._version and served is self._ctx:
             return []
-        self._version = current
+        self._version, self._ctx = current, served
         return self._sent.changes(self._backend, self._ctx)
 
     def close(self) -> None:
@@ -107,7 +115,12 @@ class _Sent:
         self.loop: LoopState | None = None
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
-        """Read the lists again, from one snapshot, and return an event for each that differs from what was sent."""
+        """Read the lists again, from one snapshot, and return an event for each that differs from what was sent.
+
+        Returns:
+            The events in a fixed order, with a `TicketChanged` for each ticket whose summary changed; empty when
+            nothing did.
+        """
         with _snapshot(ctx):
             return self._read(backend, ctx)
 

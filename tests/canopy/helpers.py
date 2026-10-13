@@ -115,10 +115,13 @@ class InlineRunner:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> procs.Result:
         if self.timeout_agent and "agent" in args[:3]:
             return procs.Result(tuple(args), -9, self.timeout_stdout, "", timed_out=True)
-        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+        return procs.SubprocessRunner().run(
+            args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line
+        )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:  # noqa: ARG002  (starts nothing)
         if self.spawn_error is not None:
