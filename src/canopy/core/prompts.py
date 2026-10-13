@@ -11,7 +11,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core.config import CANOPY_REVIEWER
+from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME
 from canopy.infra import resources
 
 if TYPE_CHECKING:
@@ -61,6 +61,11 @@ REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
 # instead of dropping them. They are in every run's prompt, so they are bounded.
 REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
 MAX_STANDING_BYTES = 4096
+# The kinds whose workers commit, and the trailer they add when the runtime adds none (TRUST_MODEL T5). An override
+# written before it existed still serves an operator who keeps the default; once `trust.commit_trailer_name` or
+# `trust.commit_trailer_email` is changed, it fails to render instead of naming the old one.
+COMMITS = ("implement", "fix-ci", "resume")
+REQUIRED_TRAILER = ("COMMIT_TRAILER",)
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
@@ -91,6 +96,11 @@ def mark_comments(prefix: str, suffix: str) -> str:
     if suffix:
         marks.append(f"end it with `{suffix}`")
     return f"In every comment and reply you post, on the ticket or a PR, {', and '.join(marks)}, without the backticks."
+
+
+def commit_trailer(config: Config) -> str:
+    """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own."""
+    return f"Co-authored-by: {config.trust.commit_trailer_name} <{config.trust.commit_trailer_email}>"
 
 
 def open_pr(skill: str) -> str:
@@ -157,13 +167,23 @@ def render_worker(
     `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
     `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry `REQUIRED_PRIVATE` in place of
     `REQUIRED_WORKER`: it checks no label. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
-    `paths.worker_instructions` set every prompt but a split's must carry it.
+    `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_TRAILER}}` comes from the config
+    too, and with `trust.commit_trailer_*` changed from the default every prompt for a kind that commits must carry it.
     """
     instructed = kind != "split"
-    values = {**values, "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None."}
+    values = {
+        **values,
+        "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
+        "COMMIT_TRAILER": commit_trailer(config),
+    }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     standing = REQUIRED_STANDING if config.paths.worker_instructions is not None and instructed else ()
-    required = (*pr_skill, *standing, *required)
+    custom = (config.trust.commit_trailer_name, config.trust.commit_trailer_email) != (
+        DEFAULT_TRAILER_NAME,
+        DEFAULT_TRAILER_EMAIL,
+    )
+    trailer = REQUIRED_TRAILER if custom and kind in COMMITS else ()
+    required = (*pr_skill, *standing, *trailer, *required)
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required))
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required))

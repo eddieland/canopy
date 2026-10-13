@@ -77,6 +77,10 @@ trusted_reviewers = ["replace-with-your-github-login"]
 # set is never feedback or an instruction.
 comment_prefix = "CANOPY:"
 comment_suffix = ""
+# The Co-authored-by trailer a worker adds to its commits when the agent runtime adds none of its own. Name an agent
+# here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's.
+# commit_trailer_name = "canopy worker"
+# commit_trailer_email = "noreply@canopy.invalid"
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"

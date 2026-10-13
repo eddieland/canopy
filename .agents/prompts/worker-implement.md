@@ -54,7 +54,7 @@ commit message.
 
 - Stay inside {{SLOT}}. Do not touch files outside it.
 - Commit with clear messages. Keep the agent runtime's attribution trailer, or add
-  `Co-authored-by: canopy worker <noreply@canopy.invalid>`: agent work is never disguised as human work.
+  `{{COMMIT_TRAILER}}`: agent work is never disguised as human work.
 - Push only to `{{BRANCH}}`, with `git push origin HEAD:refs/heads/{{BRANCH}}` in each repository you changed. Never
   force. Commit on the detached HEAD as it is: create no local branch.
 - Open a PR for each repository you changed, against that repository's base branch listed above, with the ticket key
