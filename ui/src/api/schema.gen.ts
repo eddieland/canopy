@@ -155,6 +155,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -790,6 +807,44 @@ export type components = {
              */
             type: "runs.updated";
         };
+        /**
+         * SearchHit
+         * @description One row holding every word of a search, and where it opens.
+         */
+        SearchHit: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Chore */
+            chore: string | null;
+            /** Label */
+            label: string | null;
+            /** Run Id */
+            run_id: number | null;
+            /** Snippet */
+            snippet: string;
+            source: components["schemas"]["SearchSource"];
+            /** Tick Id */
+            tick_id: number | null;
+            /** Ticket Key */
+            ticket_key: string | null;
+        };
+        /**
+         * SearchResults
+         * @description A search: the words it looked for, its hits by source and newest first, and the sources that had more.
+         */
+        SearchResults: {
+            /** Hits */
+            hits: components["schemas"]["SearchHit"][];
+            /** More */
+            more: components["schemas"]["SearchSource"][];
+            /** Words */
+            words: string[];
+        };
+        /** @enum {string} */
+        SearchSource: "ticket" | "message" | "chore_run" | "decision" | "tick";
         /**
          * Session
          * @description Whether this browser is signed in, and if so the token its writes must carry.
@@ -1466,6 +1521,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description Too short, too long, or too many words. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

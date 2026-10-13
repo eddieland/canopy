@@ -3,7 +3,7 @@ import { expect, type Page } from '@playwright/test'
 import { E2E_SECRET } from './secret.ts'
 
 export const STORAGE_KEY = 'canopy-theme'
-// Every page, by its path; a screenshot each per theme.
+// Every page, by its path and any query; a screenshot each per theme.
 export const ROUTES = [
     'attention',
     'runs',
@@ -16,6 +16,7 @@ export const ROUTES = [
     'ticks',
     'ticks/2',
     'settings',
+    'search?q=web',
 ] as const
 export const THEMES = ['light', 'dark'] as const
 // Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run.

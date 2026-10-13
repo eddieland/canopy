@@ -1,6 +1,6 @@
 // Typed fixtures for unit tests, a few of the rows canopy/serve/mock.py seeds its journal with. The dev server and the
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
-import type { AttentionItem, ChoreSummary, Run, TicketSummary } from './types'
+import type { AttentionItem, ChoreSummary, Run, SearchHit, TicketSummary } from './types'
 
 export const mockRuns: Run[] = [
     {
@@ -106,3 +106,18 @@ export const mockChores: ChoreSummary[] = [
         latest_note_id: 8,
     },
 ]
+
+/** A search hit: a worker's report on ABC-099, with whatever `fields` replace. */
+export function hit(fields: Partial<SearchHit> = {}): SearchHit {
+    return {
+        source: 'message',
+        at: '2026-10-08T10:59:00Z',
+        snippet: 'Search now debounces input and cancels stale requests.',
+        ticket_key: 'ABC-099',
+        chore: null,
+        run_id: 39,
+        tick_id: null,
+        label: 'report',
+        ...fields,
+    }
+}

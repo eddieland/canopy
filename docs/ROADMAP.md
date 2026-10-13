@@ -908,6 +908,33 @@ tick at half the first session's (about 19k) or less, with no action missed.
 
 Status: not started.
 
+## M31. Search in the web UI
+
+REQUIREMENTS N1, DESIGN §22. Needs M20 and M27. Asked for by the operator (2026-10-13): one box that finds a ticket,
+or the run or tick that said something, without knowing which page holds it. Reasonably efficient, and nothing that
+cannot be done well.
+
+- `core/search.py` reads the journal on each request: tickets by key, branch, and their units' branches and PRs (a
+  branch's slug is the ticket title's words); every message, a run's report and question among them; chore runs'
+  summaries and findings; decisions' rationales; and ticks' summaries. Every word of the query, as a substring, in one
+  field; at most 20 hits a source, newest first, each with a one-line snippet.
+- `GET /search?q=`, 422 for a query under 2 or over 200 characters or of more than 8 words. Reads only, not on the
+  stream.
+- A search box atop the nav, focused by `/`, opening `/search?q=` as the operator types: hits grouped by source, the
+  query's words marked in each snippet, each hit linking to the page that holds it.
+- Not searched, each said in DESIGN §22 with why: ticket titles (the journal holds none), transcripts (a log per run,
+  up to 32 MiB, read whole), and review runs (no page shows them).
+- Tests: the search over a real journal (each source, the bounds, LIKE's wildcards taken literally), the route over
+  the mock journal, and Playwright from the box to a hit's page.
+
+Accept: the tests above pass. Live: on a journal from a week of `canopy loop`, the operator finds a ticket by a word
+of its title and a run by a phrase from its summary, and a search nothing matches answers in under a second.
+
+Status: in progress. Code, tests, and docs are in (2026-10-13). Measured before choosing a plain scan: SQLite's `LIKE`
+reads about 1.6 ms per MB of text when nothing matches (56 MB of messages in 90 ms), and stops at the limit when
+hits are many, so an FTS5 index, with its migration and triggers, waits until a real journal is slow. Waiting on the
+operator: the live search Accept describes.
+
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.

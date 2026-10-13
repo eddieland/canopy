@@ -11,7 +11,7 @@ for (const theme of THEMES) {
             await page.goto(route)
             await settled(page)
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/)
-            await expect(page).toHaveScreenshot(`${route.replace('/', '-')}-${theme}.png`, { fullPage: true })
+            await expect(page).toHaveScreenshot(`${route.replace(/[/?=]/g, '-')}-${theme}.png`, { fullPage: true })
         })
     }
 
