@@ -71,14 +71,20 @@ export function sectionOf(pathname: string): Section | undefined {
 }
 
 /**
- * The `n`th tip for a page: its section's and the ones for anywhere, starting at a different one each day, as the
- * ticker's reel does. The same page, day, and count always give the same tip, so a screenshot is stable.
+ * The `n`th tip for a page: its section's first, then the ones for anywhere, each list starting at a different one
+ * each day, as the ticker's reel does. A page's first tip is its own, so two pages Sprig knows never open on the same
+ * one. The same page, day, and count always give the same tip, so a screenshot is stable.
  */
 export function tipFor(pathname: string, n: number, now: number): string {
     const section = sectionOf(pathname)
-    const tips = [...(section === undefined ? [] : TIPS[section]), ...TIPS.anywhere]
     const day = Math.floor(now / 86_400_000)
-    return tips[(day + n) % tips.length] ?? ''
+    const tips = [...rotated(section === undefined ? [] : TIPS[section], day), ...rotated(TIPS.anywhere, day)]
+    return tips[n % tips.length] ?? ''
+}
+
+function rotated(tips: readonly string[], by: number): string[] {
+    const start = tips.length === 0 ? 0 : by % tips.length
+    return [...tips.slice(start), ...tips.slice(0, start)]
 }
 
 function read(): BuddySetting {
