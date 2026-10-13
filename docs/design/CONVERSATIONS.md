@@ -97,6 +97,10 @@ separate `list`.
 - `stop` does not delete the start record; it marks it stopped. A stopped ticket stays private and is dispatched
   by nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it
   public.
+- A stopped ticket gets no decision each tick. Leaving it stopped is not a choice the overseer makes, so a `wait` saying
+  so would only repeat, tick after tick, what the start record already says. The prompt asks for none, and `canopy
+  decide` records no `wait` or `skip` for it, and does not touch it, saying it recorded nothing. A `done` is still
+  recorded.
 - The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
 - A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
   worker in code: `canopy dispatch` for a started ticket always renders the private prompt and runs the private

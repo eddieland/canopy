@@ -55,7 +55,8 @@ DECIDE_ACTIONS = ("wait", "skip", "done")
 def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str) -> int:
     """Record a decision (overseer only).
 
-    ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip.
+    ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip. A wait or skip for a ticket the
+    operator stopped records nothing: it would only say the ticket is still stopped.
     """
     if len(words) > 2:  # noqa: PLR2004
         raise click.UsageError(f"expected [KEY] ACTION, got {len(words)} arguments", click_ctx)
@@ -68,11 +69,20 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
         raise click.UsageError(f"{action!r} needs a ticket key; only a tick-wide 'skip' may omit it", click_ctx)
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
+    if key is not None and action != "done" and _stopped(ctx, key):
+        click.echo(f"recorded nothing for {key}: it is stopped until the operator starts it again")
+        return 0
     if key is not None:
         db.touch_ticket(ctx.conn, key, ctx.repo)
     db.record_decision(ctx.conn, current["id"], key, action, rationale)
     click.echo(f"recorded {action} for {key or 'this tick'}")
     return 0
+
+
+def _stopped(ctx: Context, key: str) -> bool:
+    """Whether the operator stopped `key` (DESIGN §22): leaving it so is no decision, and is recorded as none."""
+    record = conversation.start_of(ctx.conn, key)
+    return record is not None and record["status"] == "stopped"
 
 
 def _unit(ctx: Context, repo: str | None) -> str | None:

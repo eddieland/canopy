@@ -278,6 +278,21 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(
     assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
 
 
+def test_a_stopped_ticket_gets_no_wait_or_skip_but_can_be_marked_done(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("stop", KEY, monkeypatch=monkeypatch) == 0
+    capsys.readouterr()
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(["decide", KEY, "wait", "--rationale", "stopped"]) == 0
+    assert main(["decide", KEY, "skip", "--rationale", "not_labeled"]) == 0
+    assert f"recorded nothing for {KEY}: it is stopped" in capsys.readouterr().out
+    assert db.decisions_for_tick(conn, tick_id) == []
+    assert main(["decide", KEY, "done", "--rationale", "closed in the tracker"]) == 0
+    assert [d["action"] for d in db.decisions_for_tick(conn, tick_id)] == ["done"]
+
+
 def test_a_private_ticket_is_never_split(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

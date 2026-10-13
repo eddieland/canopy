@@ -77,6 +77,7 @@ in order:
    closes dead runs and returns stale leases, and the tick's attention items become the attention list and are notified.
 
    `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` (such as `mcp_unavailable`) omits the key.
+   A `wait` or `skip` for a ticket the operator stopped is recorded as nothing (§22).
    What the overseer writes is rendered into the next prompt, so the CLI bounds it: keys and attention reasons are
    validated, phases come from §7's table, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales,
    details, and worker context are cut at 2000 characters.
