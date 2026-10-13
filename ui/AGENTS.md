@@ -79,7 +79,7 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 
 ## Python side
 
-Keep it to serving and wiring, in `src/canopy/serve/` (`docs/DESIGN.md` §5, §22). The SPA fallback, caching, CSP,
+Keep it to serving and wiring, in `src/canopy/serve/` (DESIGN §5, §22). The SPA fallback, caching, CSP,
 Host and Origin checks, sign-in, and base path are there and tested in `tests/canopy/test_serve.py`; the API over a
 real journal and `canopy loop` serving it in `tests/canopy/test_web.py`. A new route under `/api` goes on the
 signed-in router in `api.py` and needs no change to the rest; a write goes through `canopy.core.conversation`, never

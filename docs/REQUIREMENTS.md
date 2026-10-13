@@ -1,11 +1,11 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09), and
-where canopy stands on each. `DESIGN.md` is how canopy meets them; this file is what it must meet. Where the two
-disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design
-doc stays normative until then (AGENTS.md).
+where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it must meet. Where
+the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the
+design doc stays normative until then (AGENTS.md).
 
-A bare § is a section of `DESIGN.md`. Status words:
+A bare § is a section of the design (`design/`). Status words:
 
 - **Built**: in code with fakes-based tests; live acceptance may still be the operator's to run (ROADMAP).
 - **Planned**: designed, in a ROADMAP milestone, not built.

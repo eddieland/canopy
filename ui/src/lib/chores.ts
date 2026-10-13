@@ -23,7 +23,7 @@ export function choreLine(chore: Pick<ChoreSummary, 'running' | 'latest' | 'due_
 }
 
 /**
- * Whether a note to a chore came after its latest run started, so no run has read it yet (docs/DESIGN.md §19): the
+ * Whether a note to a chore came after its latest run started, so no run has read it yet (DESIGN §19): the
  * chore's next run does. Notes wake nothing and no tick reads them, so a tick's acknowledgement says nothing here.
  */
 export function awaitsRun(note: Pick<Message, 'at'>, chore: Pick<ChoreSummary, 'running' | 'latest'>): boolean {

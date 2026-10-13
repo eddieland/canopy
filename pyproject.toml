@@ -111,7 +111,7 @@ convention = "google"
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
-# canopy.infra.procs is the only module that runs subprocesses (AGENTS.md, DESIGN.md §5).
+# canopy.infra.procs is the only module that runs subprocesses (AGENTS.md, DESIGN §5).
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "subprocess".msg = "Run external processes through canopy.infra.procs."
 "os.system".msg = "Run external processes through canopy.infra.procs."

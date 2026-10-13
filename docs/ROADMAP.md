@@ -17,14 +17,14 @@ progress is tracked. Keep it current in the same PR that changes it:
   ```
 
   Keep `Learned` and `Next` to a few bullets or sentences each. A lasting
-  rationale for a behavior goes in `DESIGN.md`, next to the behavior; it goes
-  in `DECISIONS.md` only when the choice meets that file's bar, something
+  rationale for a behavior goes in the design (`design/`), next
+  to the behavior; it goes in `DECISIONS.md` only when the choice meets that file's bar, something
   every future developer must know. The entry here just points to it. Edit a
   later milestone's bullets directly when `Next` calls for it.
 
 ## M0. Skeleton
 
-- Repository layout per `DESIGN.md` §5. `pyproject.toml`, `Makefile`,
+- Repository layout per DESIGN §5. `pyproject.toml`, `Makefile`,
   `uv.lock`.
 - `canopy --version`, `canopy --help`.
 - `make check`: ruff format check, ruff lint, pyrefly strict (D017), pytest. All green on an

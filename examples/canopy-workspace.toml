@@ -1,4 +1,4 @@
-# canopy-workspace.toml - the map of a workspace: the repositories that share one queue (DESIGN.md §18), one or more.
+# canopy-workspace.toml - the map of a workspace: the repositories that share one queue (DESIGN §18), one or more.
 # Written by `canopy init`. It is canopy's only shared config; no code repository holds any (D016). Shared keys only:
 # personal settings live in ~/.config/canopy/config.toml. Commit it if the workspace is shared.
 #

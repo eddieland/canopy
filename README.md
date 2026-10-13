@@ -151,11 +151,11 @@ canopy tick
 ```
 
 canopy has no tracker code. Agents reach the tracker through its MCP server, guided by a short provider-neutral contract
-and, where it helps, a provider skill (Jira and GitHub Issues ship). See [docs/DESIGN.md](docs/DESIGN.md) §17.
+and, where it helps, a provider skill (Jira and GitHub Issues ship). See [DESIGN §17](docs/design/WORKSPACES.md#17-trackers).
 
 State lives in a SQLite journal. Facts about the world (ticket status, PRs,
 CI, reviews) are always re-read from their source of truth, never from the DB.
-Details in [docs/DESIGN.md](docs/DESIGN.md). Security posture in
+Details in [docs/design/](docs/design/README.md). Security posture in
 [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
 
 ## Related work

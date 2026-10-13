@@ -5,7 +5,7 @@ way. Surveyed 2026-09-29. Why canopy is built anyway is D050.
 
 The canopy statuses below are as of that date and are not kept current. Check the code before acting on one.
 
-A bare § is a section of `DESIGN.md`; other documents are named, as in TRUST_MODEL §6.
+A bare § is a section of the design (`design/`); other documents are named, as in TRUST_MODEL §6.
 
 ## Overlap
 

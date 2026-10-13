@@ -6,12 +6,13 @@ Instructions for any agent working in this repository. Humans should read it too
 
 1. `README.md`: what we are building and for whom.
 2. `docs/REQUIREMENTS.md`: what the primary operator needs, where canopy stands on each, and open conflicts.
-3. `docs/DESIGN.md`: target shape. Normative.
+3. `docs/design/README.md`: target shape. Normative. It holds the overview and maps the rest of the design, in the
+   same directory; read the sections your work touches.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
 5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
 6. `docs/DECISIONS.md`: the few choices every agent must know, whatever it works on. Read it whole; add to it rarely.
 
-If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entry says otherwise.
+If code and the design disagree, the design doc wins until a decision entry says otherwise.
 
 ## How to work
 
@@ -23,14 +24,14 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
   re-measurement is a new section.
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
-  `docs/DESIGN.md` is incomplete.
+  the design is incomplete.
 - Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
   linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
 - Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
   the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, a runtime
   dependency, or a direction the operator settled. The test: could an agent working on an unrelated part of canopy
   break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature behaves as it does, and
-  what was rejected for it, goes in `docs/DESIGN.md` next to the behavior; why a line of code is so goes in a comment
+  what was rejected for it, goes in the design next to the behavior; why a line of code is so goes in a comment
   there; the story of a change goes in its PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new
   feature, command, config key, or default is not a decision by itself. When in doubt, leave it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
@@ -142,6 +143,6 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 
 - `make all` passes.
 - New behavior has a test using the fakes.
-- Docs updated: `DESIGN.md` for behavior and why it is that way, `README.md` if the install path or daily surface
+- Docs updated: the design for behavior and why it is that way, `README.md` if the install path or daily surface
   changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.
