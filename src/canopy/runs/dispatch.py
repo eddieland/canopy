@@ -94,33 +94,6 @@ class Plan:
         return len(self.repos) > 1
 
 
-def valid_slug(value: str) -> bool:
-    """Slugs reach branch names and argv, like keys."""
-    return SLUG_RE.fullmatch(value) is not None
-
-
-def branch_name(prefix: str, key: str, slug: str) -> str:
-    """Return the branch a ticket's work is pushed to."""
-    return f"{prefix}{key}-{slug}"
-
-
-def runs_dir(ctx: Context) -> Path:
-    """Where run logs and rendered worker prompts live, readable only by the operator (TRUST_MODEL T2)."""
-    path = ctx.state_dir / RUNS_DIR
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    return path
-
-
-def prompt_file(ctx: Context, run_id: int) -> Path:
-    """Return the file holding run `run_id`'s rendered worker prompt."""
-    return runs_dir(ctx) / f"{run_id}.prompt"
-
-
-def desk_path(ctx: Context, key: str) -> Path:
-    """Return where a joint run for `key` links its worktrees: `<workspace>/desks/<KEY>`. One worker per ticket."""
-    return ctx.workspace.root / DESKS_DIR / key
-
-
 def start(
     ctx: Context,
     *,
@@ -206,6 +179,109 @@ def check(
     return plan
 
 
+def runs_dir(ctx: Context) -> Path:
+    """Where run logs and rendered worker prompts live, readable only by the operator (TRUST_MODEL T2)."""
+    path = ctx.state_dir / RUNS_DIR
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return path
+
+
+def prompt_file(ctx: Context, run_id: int) -> Path:
+    """Return the file holding run `run_id`'s rendered worker prompt."""
+    return runs_dir(ctx) / f"{run_id}.prompt"
+
+
+def desk_path(ctx: Context, key: str) -> Path:
+    """Return where a joint run for `key` links its worktrees: `<workspace>/desks/<KEY>`. One worker per ticket."""
+    return ctx.workspace.root / DESKS_DIR / key
+
+
+def valid_slug(value: str) -> bool:
+    """Slugs reach branch names and argv, like keys."""
+    return SLUG_RE.fullmatch(value) is not None
+
+
+def branch_name(prefix: str, key: str, slug: str) -> str:
+    """Return the branch a ticket's work is pushed to."""
+    return f"{prefix}{key}-{slug}"
+
+
+def repositories_note(
+    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: dict[str, str], desk: Path | None
+) -> str:
+    """Return the worker prompt's `{{REPOSITORIES}}` section: each repository the run works in (DESIGN §18)."""
+    if desk is None:
+        lines = ["This run works in one repository:"]
+    else:
+        lines = [
+            (
+                f"This is a joint run over {len(slots)} repositories: one change, held in one context. `{desk}` is a "
+                "desk, a directory holding one link per repository's worktree. Work in each repository through its "
+                "link, and run git inside it (`git -C <name> ...`). Anything else you leave in the desk is discarded."
+            ),
+            "",
+        ]
+    for s in slots:
+        name = s.repo or ""
+        found = ctx.workspace.repo(name)
+        summary = f" {found.summary}" if found is not None and found.summary else ""
+        where = desk / name if desk is not None else s.slot_path
+        pr = prs.get(name) or f"not recorded; look up the PR for `{branch}` in `{name}` through the GitHub MCP"
+        lines.append(f"- `{name}` at `{where}`: branch `{branch}` from `{s.base_branch}`; PR: {pr}.{summary}")
+    if desk is not None:
+        lines += [
+            "",
+            (
+                "Each repository gets its own PR against its own base branch, with the same title prefix. Each PR's "
+                "body links its sibling PRs and says which one merges first. Your ticket comment lists every PR."
+            ),
+        ]
+    return "\n".join(lines)
+
+
+def map_note(ctx: Context) -> str:
+    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18)."""
+    path = ctx.workspace.map_prose
+    if path is None:
+        return "None: this workspace has no MAP.md."
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError as e:
+        return f"None: MAP.md could not be read ({e.strerror})."
+    if len(text) > MAX_MAP:
+        return f"{text[:MAX_MAP]}\n\n[MAP.md is longer than {MAX_MAP} characters; the rest is left out.]"
+    return text or "None: MAP.md is empty."
+
+
+def split_repositories_note(ctx: Context, slots: Sequence[db.RunSlot], desk: Path | None) -> str:
+    """Return a split's `{{REPOSITORIES}}` section: each repository it reads, checked out at its base branch."""
+    lines = [
+        (
+            f"`{desk}` is a desk, a directory holding one link per repository's worktree, each checked out at its base "
+            "branch. Read each repository through its link. Nothing you leave in the desk or the worktrees survives."
+        ),
+        "",
+    ]
+    for s in slots:
+        name = s.repo or ""
+        found = ctx.workspace.repo(name)
+        summary = f" {found.summary}" if found is not None and found.summary else ""
+        where = desk / name if desk is not None else s.slot_path
+        lines.append(f"- `{name}` at `{where}`, at `{s.base_branch}`.{summary}")
+    return "\n".join(lines)
+
+
+def stacking_note(branch: str, base: str | None) -> str:
+    """Return the worker prompt's `{{STACKING}}` paragraph: whether the run builds on another ticket's open PR."""
+    if base is None:
+        return "This ticket is not stacked on another ticket's branch."
+    return (
+        f"This ticket is stacked: `{base}` is the branch of another ticket's open PR, and this work builds on it. "
+        f"Never push to `{base}` or change its PR. The PR for `{branch}` targets `{base}`, so it shows only this "
+        "ticket's commits; its body names the PR it builds on and says it merges after that one."
+    )
+
+
 def _plan(
     ctx: Context,
     key: str,
@@ -264,6 +340,46 @@ def _check_start(ctx: Context, key: str, kind: str) -> bool:
     return True
 
 
+def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
+    """Refuse a dispatch that does not name one of the operator's queue labels (DESIGN §8, D051).
+
+    canopy cannot read the tracker, so this cannot prove the label is on the ticket. It makes the overseer name the
+    label it read for every dispatch, a claim recorded with the decision, instead of a check it can skip. Labels match
+    case-insensitively, as GitHub's do; the configured spelling is returned. The refusal never lists the configured
+    labels, so an overseer cannot copy one from it without reading the ticket.
+    """
+    if label is None:
+        raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
+    for configured in labels:
+        if configured.casefold() == label.casefold():
+            return configured
+    raise Refusal("unauthorized", f"{label!r} is not a configured queue label; name the one you read on {key}")
+
+
+def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...]:
+    """Refuse a repository the run cannot work in, and return the names of the ones it will (DESIGN §18).
+
+    Every `--repo` must name a repository in the map with a primary clone; naming one the ticket has no unit in yet adds
+    that unit. A repository named twice is one unit.
+    """
+    ws = ctx.workspace
+    names = ", ".join(r.name for r in ws.repos) or "none yet"
+    if not repos:
+        raise Refusal("unknown_repo", f"--repo is required: name the repositories for {key} ({names})")
+    chosen: list[str] = []
+    for repo in repos:
+        found = ws.repo(repo)
+        if found is None:
+            raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
+        if not found.cloned:
+            raise Refusal(
+                "unknown_repo", f"{repo} has no clone at {found.path}; the operator runs `canopy workspace sync`"
+            )
+        if found.name not in chosen:
+            chosen.append(found.name)
+    return tuple(chosen)
+
+
 def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | None, base: str | None) -> None:
     """Refuse a split that cannot make one child per repository from a ticket nobody has started (DESIGN §18)."""
     if slug is not None:
@@ -293,55 +409,6 @@ def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
         )
 
 
-def _check_repos(ctx: Context, key: str, repos: Sequence[str]) -> tuple[str, ...]:
-    """Refuse a repository the run cannot work in, and return the names of the ones it will (DESIGN §18).
-
-    Every `--repo` must name a repository in the map with a primary clone; naming one the ticket has no unit in yet adds
-    that unit. A repository named twice is one unit.
-    """
-    ws = ctx.workspace
-    names = ", ".join(r.name for r in ws.repos) or "none yet"
-    if not repos:
-        raise Refusal("unknown_repo", f"--repo is required: name the repositories for {key} ({names})")
-    chosen: list[str] = []
-    for repo in repos:
-        found = ws.repo(repo)
-        if found is None:
-            raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
-        if not found.cloned:
-            raise Refusal(
-                "unknown_repo", f"{repo} has no clone at {found.path}; the operator runs `canopy workspace sync`"
-            )
-        if found.name not in chosen:
-            chosen.append(found.name)
-    return tuple(chosen)
-
-
-def _check_label(labels: Sequence[str], key: str, label: str | None) -> str:
-    """Refuse a dispatch that does not name one of the operator's queue labels (DESIGN §8, D051).
-
-    canopy cannot read the tracker, so this cannot prove the label is on the ticket. It makes the overseer name the
-    label it read for every dispatch, a claim recorded with the decision, instead of a check it can skip. Labels match
-    case-insensitively, as GitHub's do; the configured spelling is returned. The refusal never lists the configured
-    labels, so an overseer cannot copy one from it without reading the ticket.
-    """
-    if label is None:
-        raise Refusal("unauthorized", f"--label is required: name the queue label you read on {key}")
-    for configured in labels:
-        if configured.casefold() == label.casefold():
-            return configured
-    raise Refusal("unauthorized", f"{label!r} is not a configured queue label; name the one you read on {key}")
-
-
-def _check_base(prefix: str, branch: str, base: str) -> None:
-    """Refuse a base that is not another ticket's agent branch, so a PR cannot target a release branch (DESIGN §10)."""
-    tail = base.removeprefix(prefix)
-    if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
-        raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
-    if base == branch:
-        raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
-
-
 def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence[str]) -> str:
     """Return the run's branch: the ticket's, fixed by its first implement and the same in every unit (D058)."""
     ticket = db.get_ticket(ctx.conn, key)
@@ -367,6 +434,15 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
                 f"{key} has no branch in {repo} for {kind} to continue; dispatch implement with --repo {repo}",
             )
     return recorded
+
+
+def _check_base(prefix: str, branch: str, base: str) -> None:
+    """Refuse a base that is not another ticket's agent branch, so a PR cannot target a release branch (DESIGN §10)."""
+    tail = base.removeprefix(prefix)
+    if tail == base or BASE_TAIL_RE.fullmatch(tail) is None:
+        raise Refusal("bad_base", f"--base must be another ticket's branch, {prefix}<KEY>-<slug>")
+    if base == branch:
+        raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
 def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: Sequence[str] = ()) -> int:
@@ -571,79 +647,3 @@ def _unit_prs(ctx: Context, key: str) -> dict[str, str]:
 
 def _pr_note(pr_url: str | None, branch: str) -> str:
     return pr_url or f"not recorded; look up the PR for `{branch}` through the GitHub MCP"
-
-
-def repositories_note(
-    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: dict[str, str], desk: Path | None
-) -> str:
-    """Return the worker prompt's `{{REPOSITORIES}}` section: each repository the run works in (DESIGN §18)."""
-    if desk is None:
-        lines = ["This run works in one repository:"]
-    else:
-        lines = [
-            (
-                f"This is a joint run over {len(slots)} repositories: one change, held in one context. `{desk}` is a "
-                "desk, a directory holding one link per repository's worktree. Work in each repository through its "
-                "link, and run git inside it (`git -C <name> ...`). Anything else you leave in the desk is discarded."
-            ),
-            "",
-        ]
-    for s in slots:
-        name = s.repo or ""
-        found = ctx.workspace.repo(name)
-        summary = f" {found.summary}" if found is not None and found.summary else ""
-        where = desk / name if desk is not None else s.slot_path
-        pr = prs.get(name) or f"not recorded; look up the PR for `{branch}` in `{name}` through the GitHub MCP"
-        lines.append(f"- `{name}` at `{where}`: branch `{branch}` from `{s.base_branch}`; PR: {pr}.{summary}")
-    if desk is not None:
-        lines += [
-            "",
-            (
-                "Each repository gets its own PR against its own base branch, with the same title prefix. Each PR's "
-                "body links its sibling PRs and says which one merges first. Your ticket comment lists every PR."
-            ),
-        ]
-    return "\n".join(lines)
-
-
-def map_note(ctx: Context) -> str:
-    """Return `MAP.md`'s text for a prompt: an agent in a desk may not read files outside it (DESIGN §18)."""
-    path = ctx.workspace.map_prose
-    if path is None:
-        return "None: this workspace has no MAP.md."
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace").strip()
-    except OSError as e:
-        return f"None: MAP.md could not be read ({e.strerror})."
-    if len(text) > MAX_MAP:
-        return f"{text[:MAX_MAP]}\n\n[MAP.md is longer than {MAX_MAP} characters; the rest is left out.]"
-    return text or "None: MAP.md is empty."
-
-
-def split_repositories_note(ctx: Context, slots: Sequence[db.RunSlot], desk: Path | None) -> str:
-    """Return a split's `{{REPOSITORIES}}` section: each repository it reads, checked out at its base branch."""
-    lines = [
-        (
-            f"`{desk}` is a desk, a directory holding one link per repository's worktree, each checked out at its base "
-            "branch. Read each repository through its link. Nothing you leave in the desk or the worktrees survives."
-        ),
-        "",
-    ]
-    for s in slots:
-        name = s.repo or ""
-        found = ctx.workspace.repo(name)
-        summary = f" {found.summary}" if found is not None and found.summary else ""
-        where = desk / name if desk is not None else s.slot_path
-        lines.append(f"- `{name}` at `{where}`, at `{s.base_branch}`.{summary}")
-    return "\n".join(lines)
-
-
-def stacking_note(branch: str, base: str | None) -> str:
-    """Return the worker prompt's `{{STACKING}}` paragraph: whether the run builds on another ticket's open PR."""
-    if base is None:
-        return "This ticket is not stacked on another ticket's branch."
-    return (
-        f"This ticket is stacked: `{base}` is the branch of another ticket's open PR, and this work builds on it. "
-        f"Never push to `{base}` or change its PR. The PR for `{branch}` targets `{base}`, so it shows only this "
-        "ticket's commits; its body names the PR it builds on and says it merges after that one."
-    )
