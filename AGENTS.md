@@ -19,6 +19,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - Keep the milestone's `Status:` line in `docs/ROADMAP.md` current. The PR that meets the acceptance criteria marks it
   done with the date, what was learned, and how that changes next steps. The format is at the top of that file. Read
   earlier milestones' `Learned` and `Next` before starting a new one.
+- A live measurement a milestone cites goes in `docs/MEASUREMENTS.md`: one dated section each, not edited after, so a
+  re-measurement is a new section.
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
   `docs/DESIGN.md` is incomplete.
