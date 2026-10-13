@@ -2,7 +2,7 @@
 
 Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
 Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
-explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107, D108), and
+explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
 so is the half of item 5 that does (D109). The claims about `srt` below were checked against its source at version
 0.0.79 (2026-10-09); re-check them against the version the operator pins.
 
@@ -137,8 +137,8 @@ shared git state:
   A detached worktree keeps HEAD, the index, and the reflog in `worktrees/<slot>/`, which belongs to that slot alone.
 - Built (D109): the worker pushes with `git push origin HEAD:refs/heads/<branch>`, and step 5's verification compares
   the remote branch with HEAD.
-- Built (D113), but used only by the wrapper (§4.1): new objects go to a per-run directory, with the shared object
-  directory as an alternate (below).
+- Built (DESIGN §8), but used only by the wrapper (§4.1): new objects go to a per-run directory, with the shared
+  object directory as an alternate (below).
 
 Checked with bubblewrap and git 2.43, a worktree slot under exactly this policy (the git common directory read-only,
 `worktrees/<slot>/` writable except `config.worktree`, the `.git` link read-only, and a per-run object directory
@@ -160,10 +160,10 @@ The per-run object directory needs two things the first draft of this section mi
   them, `status`, `fsck`, and `gc` are clean in the slot and the primary clone. Step 5 runs before this, with git
   reading the directory too, so it can see and push the worker's commits; and since a host-side push also moves origin's
   remote-tracking ref in the shared directory, which the worker's own push could not, step 5 puts that ref back as it
-  was, or every slot would name the deleted commit. Cleanup runs on every exit path, like D108's, and for a run killed
-  with SIGKILL reconcile does it, from the `.git` link `_run` recorded in `run_slots`, so the directory lives where
-  reconcile finds it from the run, `<state_dir>/runs/<id>.objects/`, which the policy re-allows as it does a chore's
-  `cwd`.
+  was, or every slot would name the deleted commit. Cleanup runs on every exit path, like putting back a changed `.git`
+  file (§5 item 2), and for a run killed with SIGKILL reconcile does it, from the `.git` link `_run` recorded in
+  `run_slots`, so the directory lives where reconcile finds it from the run, `<state_dir>/runs/<id>.objects/`, which the
+  policy re-allows as it does a chore's `cwd`.
 - The variables reach every git the worker's process tree runs, not only git in the slot. A commit in any other
   repository lands in the per-run directory, so that repository reads `bad object HEAD` once it is gone, and a
   repository made with `git init` then `git fetch` (how Go fetches modules into its cache) gets no `objects/` at all.
@@ -175,7 +175,7 @@ The per-run object directory needs two things the first draft of this section mi
   Giving such tools a per-run cache, or keeping them out of sandboxed builds, is open (§7).
 
 A chore gets the same policy. Its default `cwd` is inside the workspace's `.canopy/`, so its policy re-allows that one
-directory: read-only by default, since a chore's only output is its result line (D034), and writable for a chore whose
+directory: read-only by default, since a chore's only output is its result line, and writable for a chore whose
 own tooling writes there. The rest of `.canopy/` stays denied.
 
 ### 4.3 Network policy
@@ -221,16 +221,16 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    none. They do not stop a command the shared config names: a filter driver (with a committed `.gitattributes`) runs
    on checkout, and `remote.<name>.uploadpack` on fetch over a local or SSH remote. Until a worker cannot write that
    config (§4.2), those stay open.
-2. Built (D108). `_run` reads each slot's `.git` file before any git step. If it changed by the time the worker exits,
-   the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the slot
-   is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
+2. Built (DESIGN §8). `_run` reads each slot's `.git` file before any git step. If it changed by the time the worker
+   exits, the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the
+   slot is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
    forgot. Gap: a `_run` killed with SIGKILL leaves the slot to reconcile, which does not know what the file held.
 3. The prompt reaches the runtime byte for byte. D023 keeps ticket text out of a shell. `srt` joins its arguments into
    one `bash -c` string after single-quoting each one, and quotes again at each layer it adds (`sh -c` around
    bubblewrap on Linux, `env ... sandbox-exec` on macOS). That is the POSIX-safe form, but it is a second parser on
    ticket-written text. The inner bash is neither a login nor an interactive shell, so it reads no rc file, but it
    does source `$BASH_ENV` (§4.1 step 3). The canary (§6) proves prompts come through unchanged with a hypothesis
-   property test over quotes, newlines, `$()`, backticks, and arbitrary Unicode text (D027); the harness's half, that
+   property test over quotes, newlines, `$()`, backticks, and arbitrary Unicode text; the harness's half, that
    the prompt is exactly one argument of the template, is `test_properties.py`. `_run` reads the prompt as UTF-8, so
    bytes that are not valid UTF-8 never reach the command line. On Linux the whole quoted command is one argument to
    `sh`, so it must fit in one argument's limit (128 KiB); `srt` refuses a longer one. If either is a problem, D023's
@@ -244,7 +244,7 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    sandbox outlives a timeout. canopy reads the result line, not the exit status, so `srt` exiting 0 when its child
    dies of SIGTERM does not matter: a timeout is canopy's own clock.
 5. Worker git state is private (§4.2). Built (D109): a detached checkout in step 2 and a push by refspec, in `_run`
-   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Built (D113): the per-run object
+   and the worker prompts; a resume merges `origin/<base>` instead of fetching. Built (DESIGN §8): the per-run object
    directory, passed as `CANOPY_GIT_OBJECTS`, read by step 5, and tidied away on every exit path and by reconcile, as
    §4.2 describes. Nothing sets git's variables from it until the wrapper does.
 
@@ -284,7 +284,7 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
   Linux: `srt`'s seccomp filter blocks creating Unix sockets, which includes the agent socket. Its per-path
   `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`, which lifts the block entirely.
-  canopy already recommends HTTPS remotes and `canopy workspace sync` warns about SSH ones (D038). Still open: whether
+  canopy already recommends HTTPS remotes and `canopy workspace sync` warns about SSH ones. Still open: whether
   to support SSH inside the sandbox at all (allow the agent socket, or push from the host in `_run`), or to leave SSH
   to unsandboxed runs.
 - OpenCode's local MCP servers start inside the sandbox and inherit it. Each one's hosts must be on the allowlist, and

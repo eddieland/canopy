@@ -68,6 +68,20 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["ticket_url"] is None
+
+    template = "https://jira.example/browse/{key}"
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    other = context(canopy_env)
+    try:
+        c, _ = signed_in_client(other)
+        assert c.get("/api/meta").json()["ticket_url"] == template
+    finally:
+        other.conn.close()
+
+
 def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
 
@@ -128,6 +142,35 @@ def test_stop_now_from_the_web_ends_the_run_as_canopy_stop_now_does(ctx: Context
     assert run is not None
     assert run["status"] == "stopped"
     assert "canopy stop --now" in str(run["result_json"])
+
+
+def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forget_does(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    pr = "https://example.test/pr/1"
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith("unknown")
+    run_id = running_run(ctx, KEY)
+    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase="in_review")
+    ctx.conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (f"agent/{KEY}-work", KEY))
+    ctx.conn.commit()
+
+    # The challenge is checked before anything is read: a wrong or missing key forgets nothing.
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": "PROJ-2"}, headers=headers)) == (
+        f"not_confirmed: type {KEY} to confirm forgetting its work"
+    )
+    assert c.post(f"/api/tickets/{KEY}/forget", json={}, headers=headers).status_code == 422
+    # The CLI's guards hold: a run still works it.
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith("running")
+    assert db.units(ctx.conn, KEY)
+
+    ctx.conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (run_id,))
+    ctx.conn.commit()
+    forgot = c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)
+    assert forgot.json() == {"branch": f"agent/{KEY}-work", "prs": [pr]}
+    ticket = db.get_ticket(ctx.conn, KEY)
+    assert ticket is not None
+    assert (ticket["branch"], ticket["phase"], ticket["forgotten_run_id"]) == (None, None, run_id)
+    assert db.units(ctx.conn, KEY) == []
+    assert db.get_run(ctx.conn, run_id) is not None
 
 
 def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:

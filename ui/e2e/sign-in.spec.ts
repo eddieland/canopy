@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import { E2E_SECRET } from './secret.ts'
 
-// The root server needs the listener secret (DESIGN §22, D082).
+// The root server needs the listener secret (DESIGN §22).
 
 test('signed out, every route shows the sign-in page and the API refuses', async ({ page, request }) => {
     await page.goto('tickets/ABC-102')

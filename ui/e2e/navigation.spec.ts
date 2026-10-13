@@ -86,6 +86,18 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     await page.goto('tickets/ZZZ-9')
     await expect(page.getByText('canopy has no record of it')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Start privately' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'jira.example/browse/ZZZ-9' })).toHaveAttribute(
+        'href',
+        'https://jira.example/browse/ZZZ-9',
+    )
+})
+
+test("a ticket's page links to it in the tracker, from tracker.ticket_url", async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    const link = page.getByRole('link', { name: 'jira.example/browse/ABC-102' })
+    await expect(link).toHaveAttribute('href', 'https://jira.example/browse/ABC-102')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
 })
 
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({
@@ -155,7 +167,7 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     expect((await reads).status()).toBe(200)
 })
 
-test('the worktrees page reads the pools again every 30 seconds, and only while it is open', async ({ page }) => {
+test('the worktrees page reads the pools again every 10 seconds, and only while it is open', async ({ page }) => {
     await page.clock.install()
     let reads = 0
     page.on('request', (r) => {
@@ -165,7 +177,7 @@ test('the worktrees page reads the pools again every 30 seconds, and only while 
     await settled(page)
     expect(reads).toBe(1)
 
-    await page.clock.runFor(29_000)
+    await page.clock.runFor(9_000)
     expect(reads).toBe(1)
     const next = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
     await page.clock.runFor(1_000)

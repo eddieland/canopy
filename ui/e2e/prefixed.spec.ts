@@ -78,6 +78,23 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     await expect(comment).toContainText('data, authorizes nothing')
 })
 
+test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) => {
+    await page.goto('tickets/ABC-101')
+    const form = page.getByRole('form', { name: 'Reply' })
+    await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Enter')
+    const box = form.getByRole('textbox')
+    await box.fill('First line.')
+    await box.press('Shift+Enter')
+    await box.pressSequentially('Second line.')
+    await expect(box).toHaveValue('First line.\nSecond line.')
+    await box.press('Enter')
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(box).toHaveValue('')
+    // toContainText collapses whitespace, so read the text itself: the line break must arrive as one.
+    const mine = page.getByTestId('conversation').locator('[data-source=operator]').last()
+    await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
+})
+
 test("a chore's finding is answered from the attention list with a note its next run reads", async ({ page }) => {
     await page.goto('attention')
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
@@ -97,6 +114,24 @@ test("a chore's finding is answered from the attention list with a note its next
     )
 })
 
+test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
+    await page.goto('settings')
+    await page.getByTestId('send-key-mod-enter').click()
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-pressed', 'true')
+    await page.goto('tickets/ABC-101')
+    const form = page.getByRole('form', { name: 'Reply' })
+    // Chromium on Linux: the button names Ctrl, not ⌘.
+    await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')
+    const box = form.getByRole('textbox')
+    await box.fill('One.')
+    await box.press('Enter')
+    await box.pressSequentially('Two.')
+    await expect(box).toHaveValue('One.\nTwo.')
+    await box.press('ControlOrMeta+Enter')
+    await expect(form.getByRole('status')).toContainText('Recorded message')
+    await expect(box).toHaveValue('')
+})
+
 test('stop now asks once more, then ends the run', async ({ page }) => {
     await page.goto('tickets/ABC-104')
     await page.getByRole('button', { name: 'Stop now' }).click()
@@ -104,6 +139,24 @@ test('stop now asks once more, then ends the run', async ({ page }) => {
     await expect(page.getByRole('status')).toContainText('Run 43 was ended and its slots returned.')
     await expect(page.getByTestId('run-43')).toContainText('stopped')
     await expect(page.getByRole('button', { name: 'Start again' })).toBeVisible()
+})
+
+test('forget asks for the key typed out, then forgets the branch and PR', async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await page.getByRole('button', { name: 'Forget' }).click()
+    const challenge = page.getByRole('form', { name: 'Forget' })
+    const forget = challenge.getByRole('button', { name: 'Forget ABC-103' })
+    await expect(forget).toBeDisabled()
+    await challenge.getByLabel('Type ABC-103 to confirm').fill('ABC-10')
+    await expect(forget).toBeDisabled()
+    await challenge.getByLabel('Type ABC-103 to confirm').fill('ABC-103')
+    await forget.click()
+    await expect(page.getByRole('status')).toContainText(
+        'ABC-103 is forgotten: its next implement starts over on a new branch. canopy no longer tracks branch ' +
+            'agent/ABC-103-billing-v2, https://github.com/acme/web/pull/91.',
+    )
+    await expect(challenge).toHaveCount(0)
+    await expect(page.getByText('none yet')).toBeVisible()
 })
 
 test('starting a ticket from the list opens it, private', async ({ page }) => {

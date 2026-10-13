@@ -37,6 +37,8 @@ from pydantic import (
     model_validator,
 )
 
+from canopy.core import contract
+
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
 
@@ -243,6 +245,22 @@ def _server_name(value: str) -> str:
 
 ToolPart = Annotated[str, AfterValidator(_tool_part)]
 
+TICKET_KEY = "{key}"
+MAX_TICKET_URL = 500
+
+
+def _ticket_url(value: str) -> str:
+    # Empty means unset. The web UI puts it in an `href`: only a plain https:// URL, with the key's place exactly once.
+    rest = value.replace(TICKET_KEY, "", 1)
+    if value and (
+        not contract.plain_url(value, MAX_TICKET_URL) or TICKET_KEY not in value or "{" in rest or "}" in rest
+    ):
+        raise ValueError(
+            f"must be empty, or a plain https:// URL of at most {MAX_TICKET_URL} characters with {TICKET_KEY} exactly "
+            "once and no other braces"
+        )
+    return value
+
 
 @dataclass(frozen=True)
 class TrackerTools:
@@ -304,6 +322,9 @@ class Tracker(Section):
     provider: Annotated[NonBlank, Scope.SHARED]
     query: Annotated[NonBlank, Scope.SHARED]
     needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
+    # A ticket's page in the tracker, with {key} where its key goes: the web UI links each ticket there (DESIGN §17).
+    # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
+    ticket_url: Annotated[StrictStr, Scope.SHARED, AfterValidator(_ticket_url)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
@@ -332,7 +353,7 @@ class Policy(Section):
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
     # Review runs per PR, whatever they ended as (DESIGN §21).
     max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
-    # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10, D054). Prompt policy, not a guard.
+    # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 
 
@@ -365,7 +386,7 @@ MAX_SKILL_NAME = 64
 
 
 def _skill_name(value: str) -> str:
-    # Empty means unset. The name is quoted in worker prompts, so it is checked as OpenCode would (DESIGN §8, D078).
+    # Empty means unset. The name is quoted in worker prompts, so it is checked as OpenCode would (DESIGN §8).
     if value and (len(value) > MAX_SKILL_NAME or not SKILL_NAME_RE.fullmatch(value)):
         raise ValueError(
             f"must be empty, or a skill name of at most {MAX_SKILL_NAME} lowercase letters and digits in words joined "
@@ -432,11 +453,11 @@ class Runtime(Section):
     review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
-    # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8, D078). User-only: it
+    # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8). User-only: it
     # chooses what workers are told to do, which a shared workspace file must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
     # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
-    # ends the run `crashed` (DESIGN §8, D105). Empty means none. It runs the branch's code on this machine.
+    # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.USER] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.USER] = 30
 
@@ -642,14 +663,14 @@ class Chore(Section):
     cmd: CommandTemplate | None = None
     every_minutes: Annotated[StrictInt, Field(ge=MIN_CHORE_EVERY_MINUTES)]
     when: StrictStr = ""
-    # When a run may start, checked in code (D099): the days of the week, empty for every day; the hours of each, as
+    # When a run may start, checked in code: the days of the week, empty for every day; the hours of each, as
     # `HH:MM-HH:MM`; and the zone they are in, an IANA name, by default this machine's local time.
     days: Annotated[tuple[ChoreDay, ...], AfterValidator(_days)] = ()
     hours: Annotated[StrictStr, AfterValidator(_chore_hours)] | None = None
     timezone: Annotated[StrictStr, AfterValidator(_time_zone)] | None = None
     timeout_minutes: Minutes = 15
     cwd: UserPath | None = None
-    # The workspaces it runs in, by name; empty means every workspace whose loop reads this file (D063).
+    # The workspaces it runs in, by name; empty means every workspace whose loop reads this file.
     workspaces: tuple[NonBlank, ...] = ()
 
 

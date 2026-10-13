@@ -11,6 +11,10 @@ export const keys = {
     meta: ['meta'] as const,
     attention: ['attention'] as const,
     runs: ['runs'] as const,
+    run: (id: number) => ['run', id] as const,
+    // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
+    runTranscript: (id: number) => ['transcript', 'run', id] as const,
+    tickTranscript: (id: number) => ['transcript', 'tick', id] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
     chores: ['chores'] as const,
@@ -45,6 +49,41 @@ export const runsQuery = queryOptions({
     queryKey: keys.runs,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/runs', { signal })),
 })
+
+/** One run, as the runs list shows it. The stream writes a run it lists into this key when a page holds it. */
+export function runQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.run(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/{run_id}', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/**
+ * A run's session, read back from its log by the server on every fetch (DESIGN §22). Its events reach the log when the
+ * run ends, so it never goes stale on its own: the stream marks it stale when the run's status changes (live.ts).
+ */
+export function runTranscriptQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.runTranscript(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/{run_id}/transcript', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** A tick's overseer session, read back from its output file. Marked stale when the stream says that tick changed. */
+export function tickTranscriptQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.tickTranscript(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/ticks/{tick_id}/transcript', { params: { path: { tick_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
 
 /** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
 export const spendQuery = queryOptions({
@@ -106,12 +145,12 @@ export function tickDetailQuery(id: number) {
 }
 
 /** How often the worktrees page reads the pools again while it is open in a visible tab. */
-export const WORKTREES_REFRESH_MS = 30_000
+export const WORKTREES_REFRESH_MS = 10_000
 
 /**
  * Each pool's worktrees, read from treehouse by the server on every fetch. Not on the event stream: the stream marks it
- * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 30 seconds while a page shows
- * it and its tab is visible. That timer is the UI's one refetch on an interval (D090): what runs in a slot,
+ * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 10 seconds while a page shows
+ * it and its tab is visible. That timer is the UI's one refetch on an interval: what runs in a slot,
  * whether it is dirty, and a slot sync adds never reach the journal.
  */
 export const worktreesQuery = queryOptions({

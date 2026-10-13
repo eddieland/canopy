@@ -1,7 +1,7 @@
 """What an agent run printed (DESIGN §13): the text its result line is read from, and what the runtime reported.
 
 A command template either prints the agent's text on stdout, or, with OpenCode's `--format json`, prints one JSON event
-per line. canopy reads two kinds of event and one field of every event, each validated (D026, D071):
+per line. canopy reads two kinds of event and one field of every event, each validated (D026):
 
 - `text`: a finished piece of the agent's text, in `part.text`. Joined one per line they are what stdout holds without
   `--format json`, so every result contract reads the same either way.
@@ -105,7 +105,7 @@ def read(stdout: str) -> AgentOutput:
     events = 0
     complete = True
     for line in stdout.splitlines():
-        event = _event(line)
+        event = parse_event(line)
         if event is None:
             continue
         events += 1
@@ -126,7 +126,7 @@ def read(stdout: str) -> AgentOutput:
     return AgentOutput("\n".join(texts), session, _total(steps) if complete else None)
 
 
-def _event(line: str) -> dict[str, object] | None:
+def parse_event(line: str) -> dict[str, object] | None:
     """Return `line` as an event: a JSON object with a string `type` and a `sessionID`. None if it is not one."""
     line = line.strip()
     if not line.startswith("{"):

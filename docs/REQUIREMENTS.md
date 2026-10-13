@@ -38,7 +38,7 @@ code or text of their own in step with canopy:
   and Slack destinations the operator wants (N2) ship with canopy (M10).
 - Prompt overrides (§12) are copies the operator maintains, and an override must keep what canopy's guards rely on
   (D051). Prefer a skill; treat an override as a last resort. Opening PRs, which an operator's employer may need done
-  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8, D078).
+  with its own tooling, takes a skill of the operator's through `runtime.pr_skill` instead (§8).
 
 ## Must have
 
@@ -60,7 +60,7 @@ records it in `run_slots`, returns it on every exit path, and returns stale leas
 limit is `capacity.max_workers`; treehouse's `max_trees` bounds the pool. In a workspace the operator can declare each
 pool's size (`capacity.slots_per_repo`), which leases stay within and `canopy workspace sync` creates and trims slots
 to match, alongside cloning and removing repositories to match the map (§18, M17). The web UI's worktrees page shows
-every slot: what holds it, its branch, and what runs in it (§22, D090).
+every slot: what holds it, its branch, and what runs in it (§22).
 
 The shape differs from "a worktree per ticket": a ticket holds a slot only while a run is working on it, and its pushed
 branch is its checkpoint between runs (§9). That is what makes R3 possible.
@@ -81,7 +81,7 @@ continue the earlier run's OpenCode session is a question for M15, answered agai
 Known prompt gap that makes routing noisier than it should be (PRIOR_ART "In prompts"): CI newness is keyed on the
 check run id so a re-run counts as new. The worker's own PR replies no longer read back as new feedback: workers mark
 every comment with `trust.comment_prefix` and `trust.comment_suffix`, which only take authority away (§8, D069). A
-merge conflict now has a phase: `conflicted` sends a `resume` to merge the base in (§7, D070).
+merge conflict now has a phase: `conflicted` sends a `resume` to merge the base in (§7).
 
 ### R5. Needs-a-human queue: one view of what is blocked on the operator
 
@@ -97,8 +97,9 @@ Partial; the rest is M15.
 
 - See: built. `canopy status` shows the attention list, running workers, the last tick, and the ten runs that ended
   most recently with their outcome, PR, summary, cost, run log, and OpenCode session id, which opens the run's
-  transcript with OpenCode's own tools (§13, D071); `canopy decisions` shows what a tick decided. A running worker's
-  session id is known only once it ends: it is read from what `opencode run` printed.
+  transcript with OpenCode's own tools (§13); `canopy decisions` shows what a tick decided. The web UI shows an
+  ended run's or tick's transcript, its tool calls included, read back from its log (M27). A running worker's
+  session id and events are known only once it ends: they are read from what `opencode run` printed.
 - Prompt an idle ticket: built. An authorized reply on the ticket, or a review comment on the PR, is picked up by the
   next tick and resumes the work (§7). This keeps the operator's daily surface where coworkers' already is.
 - Prompt a running session: not possible today; M15 runs workers against OpenCode's server so the operator can
@@ -120,7 +121,7 @@ every run (§13). Constraints the operator should know:
 
 Built in code (M4), live acceptance pending. Blockers are read from the tracker's own relations (Jira "is blocked by"
 links) each tick (§10). canopy may start B before A lands by stacking B on A's open, green PR; the operator keeps that
-or turns it off with `policy.stacking` (C1, D054).
+or turns it off with `policy.stacking` (C1).
 
 ### R9. PR-scoped workspaces for "address feedback" and "fix CI on my PR"
 
@@ -136,12 +137,12 @@ Built in M16; its live check is the operator's. Setting up a slot is three steps
   into each slot on every lease. A personal manifest, `paths.worktree_include`, replaces it; canopy passes it to every
   `treehouse get` as `--include-file`.
 - `post_create` hooks in the user-level treehouse config, run in each slot when it is created or reused, on the base.
-- `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run (D105).
+- `runtime.setup_cmd`, run in each slot after `_run` checks out the ticket's branch; a failure fails the run.
 
 For Bazel (§9, and the operator's guide, `docs/BAZEL.md`): slots are reused at fixed paths, and Bazel keys its output
 base on the workspace path, so each slot's output base stays warm across leases. A shared `--disk_cache` and
 `--repository_cache` in the operator's `.bazelrc` share work between slots, `--output_user_root` puts the output bases
-on a fast disk, and `startup --max_idle_secs` ends a slot's idle server (D106). A fast disk otherwise takes the whole
+on a fast disk, and `startup --max_idle_secs` ends a slot's idle server. A fast disk otherwise takes the whole
 workspace, pools and clones together (§18, D033). Unverified until the canary's first real run: that the worker reads
 through `bazel-out/` and its siblings, links into the output base, and is refused the output base by its own path.
 
@@ -151,7 +152,7 @@ Built in M18; its live check is the operator's. When a client files the ticket, 
 without the agent's reports, its questions, or the operator's answers showing on the client's ticket. Today the ticket
 is the only channel for both (§7, §8), and the queue label is itself visible.
 
-Shape (§22, D072, D080): the operator starts the ticket in canopy (`canopy start`) instead of labeling it; its
+Shape (§22, D072): the operator starts the ticket in canopy (`canopy start`) instead of labeling it; its
 workers can only read the tracker; questions reach the attention list (`awaiting_reply`) and `canopy show`, and the
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
@@ -185,7 +186,7 @@ lost runner, a registry outage), canopy should rerun it instead of sending a wor
 Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the repository
 provides, and a CI that is not GitHub Actions is reached through its own MCP server.
 
-Shape (§23, D102, D103): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
+Shape (§23): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
 named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
 edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
 the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
@@ -193,13 +194,13 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 ## Nice to have
 
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
-  behind the listener secret the operator signs in with (D082). The operator expects it to become their main surface
+  behind the listener secret the operator signs in with. The operator expects it to become their main surface
   (C5), served by `canopy loop` with an off switch (D073). OpenCode's own attach (M15) covers sessions first.
 - **N2. Notifications when something needs the operator, desktop first, Slack later.** Built in M10, live acceptance
   pending: canopy ships a desktop sink, `canopy-notify-desktop`, and a Slack sink, `canopy-notify-slack` (DESIGN §20,
-  D064). No wrapper script of the operator's is needed.
+  D035). No wrapper script of the operator's is needed.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
-  request: an authorized replier's comment asks for the split (D061). The split creates child tickets
+  request: an authorized replier's comment asks for the split. The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
@@ -217,12 +218,13 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 
 ## Conflicts
 
-Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, and recorded in `DECISIONS.md`.
+Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, and recorded in `DECISIONS.md` (C1 in
+DESIGN §10).
 
-- **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10, D045), so
-  B starts before A lands. Settled by D054: stacking stays, controlled by `policy.stacking` (`"auto"` or `"never"`),
-  which the overseer prompt follows. No harness guard. Under `"never"`, B waits until A has landed: closed, and its PR
-  merged if it had one (D054).
+- **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10), so
+  B starts before A lands. Settled (DESIGN §10): stacking stays, controlled by `policy.stacking` (`"auto"` or
+  `"never"`), which the overseer prompt follows. No harness guard. Under `"never"`, B waits until A has landed: closed,
+  and its PR merged if it had one.
 - **C2. Local web UI vs no listener (N1, H1).** Settled by D055: listeners are allowed on loopback, or on a private
   network address the operator sets, behind the operator's listener secret (TRUST_MODEL T8). Loopback is the default
   and keeps H1; a private-network address is the operator's choice to relax it. A UI is now deferred, not ruled out.

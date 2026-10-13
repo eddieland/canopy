@@ -5,7 +5,8 @@ the pools' slots are stand-ins, since the first two belong to the loop and there
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
-ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Times
+ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Runs 39 and 40 and tick 2 left
+their sessions' events in their logs, as `--format json` prints them, for their transcripts (DESIGN §22). Times
 are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
-from canopy.infra import resources
+from canopy.infra import logs, resources
 from canopy.serve.backend import Backend
 
 if TYPE_CHECKING:
@@ -51,6 +52,7 @@ summary = "The web app."
 [tracker]
 provider = "jira"
 query = "project = ABC"
+ticket_url = "https://jira.example/browse/{key}"
 """
 
 _USER_TOML = """\
@@ -213,6 +215,7 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+    _transcripts(ws.state_dir)
     return backend
 
 
@@ -347,7 +350,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 at(ended) if ended is not None else None,
                 status,
                 json.dumps(result) if result is not None else None,
-                f"/home/op/.canopy/runs/{run_id}.log",
+                str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
                 private,
                 f"ses_mock{run_id}",
                 cost,
@@ -548,3 +551,186 @@ def _decisions(conn: sqlite3.Connection) -> None:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (tick_id, at(when), key, repo, chore, pr, action, rationale),
         )
+
+
+def _event(kind: str, session: str, minutes: float, **fields: object) -> str:
+    """One event as `opencode run --format json` prints it, `minutes` after T0."""
+    ms = int((T0 + timedelta(minutes=minutes)).timestamp() * 1000)
+    return json.dumps({"type": kind, "timestamp": ms, "sessionID": session, **fields})
+
+
+def _text(session: str, minutes: float, text: str) -> str:
+    return _event("text", session, minutes, part={"type": "text", "text": text})
+
+
+def _tool(session: str, minutes: float, tool: str, state: dict[str, object], seconds: float = 1) -> str:
+    ms = int((T0 + timedelta(minutes=minutes)).timestamp() * 1000)
+    metadata: dict[str, object] = {}
+    timed = {**state, "metadata": metadata, "time": {"start": ms - int(seconds * 1000), "end": ms}}
+    return _event(
+        "tool_use", session, minutes, part={"type": "tool", "callID": f"call_{ms}", "tool": tool, "state": timed}
+    )
+
+
+def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls") -> str:
+    tokens = {
+        "input": int(cost * 30_000),
+        "output": int(cost * 4_000),
+        "reasoning": 0,
+        "cache": {"read": 0, "write": 0},
+    }
+    return _event(
+        "step_finish", session, minutes, part={"type": "step-finish", "reason": reason, "cost": cost, "tokens": tokens}
+    )
+
+
+def _done(session: str, minutes: float, title: str, command: str, output: str, *, seconds: float = 1) -> str:
+    """A bash call that completed."""
+    state = {"status": "completed", "input": {"command": command, "description": title}, "output": output}
+    return _tool(session, minutes, "bash", {**state, "title": title}, seconds)
+
+
+_SEARCH_BOX = """\
+1\timport { useState } from 'react'
+2\t
+3\texport function SearchBox({ onSearch }: { onSearch: (q: string) => void }) {
+4\t    const [query, setQuery] = useState('')
+5\t    return <input value={query} onChange={(e) => { setQuery(e.target.value); onSearch(e.target.value) }} />
+6\t}
+"""
+
+
+def _transcripts(state_dir: Path) -> None:
+    """Write the events of run 39's, run 40's, and tick 2's sessions where the loop would have written them."""
+    # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
+    web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
+    s39, s40, s2 = "ses_mock39", "ses_mock40", "ses_tick2"
+    run_39 = [
+        _event("step_start", s39, -90, part={"type": "step-start"}),
+        _text(s39, -89.9, "I'll read the ticket, then the search box."),
+        _tool(
+            s39,
+            -89.8,
+            "jira_get_issue",
+            {
+                "status": "completed",
+                "input": {"issue_key": "ABC-099"},
+                "output": '{"key": "ABC-099", "summary": "Search fires a request per keystroke", "status": "To Do"}',
+                "title": "",
+            },
+        ),
+        _tool(
+            s39,
+            -89.5,
+            "read",
+            {
+                "status": "completed",
+                "input": {"filePath": f"{web}/src/search/SearchBox.tsx"},
+                "output": _SEARCH_BOX,
+                "title": "src/search/SearchBox.tsx",
+            },
+        ),
+        _tool(
+            s39,
+            -89.4,
+            "read",
+            {
+                "status": "error",
+                "input": {"filePath": f"{web}/src/search/useSearch.ts"},
+                "error": f"File not found: {web}/src/search/useSearch.ts",
+            },
+        ),
+        _step(s39, -89.3, 0.82),
+        _text(s39, -80, "There is no search hook yet. I'll add one that debounces and aborts the stale request."),
+        _tool(
+            s39,
+            -79,
+            "write",
+            {
+                "status": "completed",
+                "input": {"filePath": f"{web}/src/search/useSearch.ts", "content": "export function useSearch() {}"},
+                "output": "Wrote file successfully.",
+                "title": "src/search/useSearch.ts",
+            },
+        ),
+        _done(
+            s39,
+            -70,
+            "Run the search tests",
+            "npm test -- search",
+            "PASS src/search/SearchBox.test.tsx\n  ✓ debounces input (310 ms)\n  ✓ cancels a stale request (12 ms)\n\n"
+            "Tests: 2 passed, 2 total\n",
+            seconds=14,
+        ),
+        _step(s39, -69.9, 0.97),
+        _done(
+            s39,
+            -63,
+            "Push the branch",
+            "git push origin HEAD:refs/heads/agent/ABC-099-search",
+            "To github.com:acme/web.git\n * [new branch]      HEAD -> agent/ABC-099-search\n",
+            seconds=3,
+        ),
+        _tool(
+            s39,
+            -62,
+            "github_create_pull_request",
+            {
+                "status": "completed",
+                "input": {
+                    "owner": "acme",
+                    "repo": "web",
+                    "title": "ABC-099: debounce search and cancel stale requests",
+                    "head": "agent/ABC-099-search",
+                    "base": "main",
+                },
+                "output": '{"number": 88, "url": "https://github.com/acme/web/pull/88"}',
+                "title": "",
+            },
+        ),
+        _text(
+            s39,
+            -61.1,
+            '{"status": "done", "summary": "Search now debounces input and cancels stale requests.", '
+            '"prs": {"web": "https://github.com/acme/web/pull/88"}}',
+        ),
+        _step(s39, -61, 0.52, reason="stop"),
+    ]
+    run_40 = [
+        _text(s40, -74, "Reading the failing job's log first."),
+        _done(s40, -73, "Find the failing job", "gh run list --branch agent/ABC-100-flaky-test", "", seconds=2),
+        _step(s40, -72.5, 0.18),
+        _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
+    ]
+    tick_2 = [
+        _text(s2, -60, "Reading the journal's state first."),
+        _done(s2, -59.9, "Read the loop's state", "canopy state", "## Tickets\n- ABC-101 implementing (run 41)\n"),
+        _done(
+            s2,
+            -59.5,
+            "Record the decision on ABC-101",
+            "canopy decide ABC-101 wait 'run 41 is implementing it.'",
+            "recorded decision 8\n",
+        ),
+        _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
+        _step(s2, -59, 0.31, reason="stop"),
+    ]
+    # The running runs' logs exist, as `canopy dispatch` opens them, and hold no events until their runs end.
+    none: list[str] = []
+    written = (
+        ("runs", "39", run_39),
+        ("runs", "40", run_40),
+        ("runs", "41", none),
+        ("runs", "43", none),
+        ("ticks", "2", tick_2),
+    )
+    for directory, name, lines in written:
+        (state_dir / directory).mkdir(mode=0o700, exist_ok=True)
+        stdout = "\n".join(lines)
+        if not lines:
+            text = ""
+        elif directory == "runs":
+            text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
+        else:
+            text = f"{stdout}\n--- stderr ---\n"
+        logs.write_private(state_dir / directory / f"{name}.log", text)

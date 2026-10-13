@@ -10,6 +10,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
+import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { Chip, RunDot } from '@/components/status'
@@ -153,7 +154,9 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
                     <Subject item={item} />
                     <Age at={item.since} className="ml-auto" />
                 </div>
-                <p className="text-sm break-words whitespace-pre-wrap">{item.detail}</p>
+                <p className="text-sm break-words whitespace-pre-wrap">
+                    <LinkedText text={item.detail} />
+                </p>
                 {done && (
                     <p className="text-sm text-muted-foreground" data-testid="answered-note">
                         You answered it. The item leaves at the next tick, when the loop reads your reply.

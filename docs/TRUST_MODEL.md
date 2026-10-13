@@ -328,9 +328,11 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
-Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, and the branch
-prefix. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs, or agent branches under
-an unexpected prefix, which branch protection (§7) still governs. The provider also picks the default tracker server and
+Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, the branch
+prefix, and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs,
+agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
+leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
+nothing. The provider also picks the default tracker server and
 tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
@@ -377,10 +379,15 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   must name one of them (another site's page). Responses refuse framing and MIME sniffing and send no Referer;
   `index.html` carries a CSP that allows scripts only from the server and the one inline theme script by hash.
 - Journal text, tracker comments and agent output included, is untrusted: it is rendered as text, never as HTML, and
-  no script is built from it.
+  no script is built from it. An http or https URL in it is a link whose text is the URL itself, so a link never
+  shows one destination and opens another, and it opens in a new tab with no referrer (D113).
+- It also serves a run's or tick's transcript (DESIGN §22): its session's events, read back from the run's log or
+  the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
+  command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
+  following links; the file itself is never served, and nothing else under the state directory is read.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
-  and reply to tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME` does,
-  nothing else. It cannot run a chore.
+  reply to, and forget tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME`
+  does, nothing else. A forget must carry the ticket's key typed out, checked in code. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
@@ -388,7 +395,7 @@ shared machine can reach loopback, and is stopped only by the secret. A browser 
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
 cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
-the network (D076).
+the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 
 ## 6. What canopy must never do
 

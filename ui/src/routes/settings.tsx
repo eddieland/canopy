@@ -9,6 +9,7 @@ import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
+import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, type TickerSpeed, useTickerSettings } from '@/lib/ticker-settings'
 import { cn } from '@/lib/utils'
 import type { ThemePreference } from '@/theme/store'
@@ -30,6 +31,12 @@ const SPEEDS: { value: TickerSpeed; label: string }[] = [
     { value: 'slow', label: 'Slow' },
     { value: 'normal', label: 'Normal' },
     { value: 'spicy', label: 'Spicy' },
+]
+
+const SEND_KEYS: { value: SendKey; label: string }[] = [
+    { value: 'enter', label: 'Enter' },
+    { value: 'mod-enter', label: 'Ctrl+Enter' },
+    { value: 'button', label: 'Button only' },
 ]
 
 // A segmented control: a row of buttons, the pressed one raised.
@@ -73,6 +80,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <TickerPanel />
+            <SendKeyPanel />
             <SessionPanel />
         </>
     )
@@ -133,6 +141,37 @@ function TickerPanel() {
                     />
                     <span className="readout text-xs text-muted-foreground">s</span>
                 </span>
+            </div>
+        </Panel>
+    )
+}
+
+/** Which key sends a reply or a note. */
+function SendKeyPanel() {
+    const sendKey = useSendKey()
+    return (
+        <Panel>
+            <PanelHeader label="Replies" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    Which key sends a reply or a note. Shift+Enter always makes a new line. Ctrl+Enter is ⌘+Enter on a
+                    Mac.
+                </p>
+                <fieldset className={cn(SEGMENTS, 'shrink-0')}>
+                    <legend className="sr-only">Send a reply with</legend>
+                    {SEND_KEYS.map(({ value, label }) => (
+                        <button
+                            key={value}
+                            type="button"
+                            aria-pressed={sendKey === value}
+                            data-testid={`send-key-${value}`}
+                            onClick={() => setSendKey(value)}
+                            className={cn(SEGMENT)}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </fieldset>
             </div>
         </Panel>
     )
