@@ -574,7 +574,8 @@ for a tick whose overseer failed.
 - Its end, not its start: stderr and the session's last events are where a failed tick says why, and the transcript
   has the session from its start.
 - An Output panel under the transcript, hidden until the operator shows it, so a tick's page reads the file only when
-  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text. Not on the event stream;
+  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text; a line of JSON, which is
+  most of it, has its keys, strings, and values colored, as written. Not on the event stream;
   it is marked stale with the tick's transcript, as the tick ends.
 - A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
   until the operator asks for the rest.
