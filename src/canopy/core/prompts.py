@@ -56,6 +56,11 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
 # A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
 # override written before they existed still serves every other resume.
 REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
+# The operator's standing instructions (`paths.worker_instructions`, DESIGN §12), in every prompt but a split's. An
+# override written before they existed still serves an operator who sets none; once one is set, it fails to render
+# instead of dropping them. They are in every run's prompt, so they are bounded.
+REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
+MAX_STANDING_BYTES = 4096
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
@@ -102,6 +107,28 @@ def open_pr(skill: str) -> str:
     )
 
 
+def standing_instructions(config: Config) -> str:
+    """Return the operator's standing instructions for `{{STANDING_INSTRUCTIONS}}`, or `None.` without any.
+
+    A file that cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES` is an error, not an empty section: the
+    operator set it for every worker, and a worker without it would work as if it had never been written.
+
+    Raises:
+        PromptError: The file cannot be read, is not UTF-8, or is over `MAX_STANDING_BYTES`.
+    """
+    path = config.paths.worker_instructions
+    if path is None:
+        return "None."
+    try:
+        data = path.read_bytes()
+        text = data.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise PromptError(f"cannot read worker instructions {path}: {e}") from e
+    if len(data) > MAX_STANDING_BYTES:
+        raise PromptError(f"worker instructions {path} are {len(data)} bytes, over {MAX_STANDING_BYTES}")
+    return text.strip() or "None."
+
+
 class PromptError(Exception):
     """A prompt file cannot be rendered."""
 
@@ -129,12 +156,17 @@ def render_worker(
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
     `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
     `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry `REQUIRED_PRIVATE` in place of
-    `REQUIRED_WORKER`: it checks no label.
+    `REQUIRED_WORKER`: it checks no label. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
+    `paths.worker_instructions` set every prompt but a split's must carry it.
     """
+    instructed = kind != "split"
+    values = {**values, "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None."}
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
+    standing = REQUIRED_STANDING if config.paths.worker_instructions is not None and instructed else ()
+    required = (*pr_skill, *standing, *required)
     if private:
-        return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *pr_skill, *required))
-    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *pr_skill, *required))
+        return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required))
+    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required))
 
 
 def render(config: Config, name: str, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
