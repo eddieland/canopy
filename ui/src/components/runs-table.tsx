@@ -2,8 +2,8 @@ import { ExternalLink } from 'lucide-react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
-import { LinkedText } from '@/components/linked-text'
 import { RunLink } from '@/components/run-link'
+import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -46,11 +46,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                     </span>
                 </span>
             </div>
-            {run.summary && (
-                <p className="pl-[6.75rem] text-sm break-words">
-                    <LinkedText text={run.summary} />
-                </p>
-            )}
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className="pl-[6.75rem]" />}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[6.75rem] font-mono text-xs">
                     {run.prs.map((pr) => (

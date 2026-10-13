@@ -2594,11 +2594,15 @@ Served by `canopy loop` from a thread (D073):
 - Every value from the journal is escaped: tracker comments and agent output are untrusted text in a page that holds
   the operator's session. React escapes text it renders, and nothing renders journal text as HTML
   (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Message bodies are sent with control
-  characters dropped, as `canopy show` prints them.
+  characters dropped, as `canopy show` prints them. Run, chore run, and tick summaries and decisions' rationales are
+  sent the same way, their line breaks kept, and a page lays them out (`RichText` in `ui/`): line breaks, lists,
+  headings, `code`, and **strong**, read from the text by a small parser of canopy's own into React elements, not a
+  Markdown library, which would render HTML and labelled links that need switching off. Any other markup, a labelled
+  link's included, stays characters.
 - An http or https URL in journal text (a message body, a run's or tick's summary, a rationale, an attention item's or
   finding's detail) is shown as a link whose text is the URL as written, opening in a new tab with no referrer (D113).
-  No other scheme is linked, and nothing else in the text becomes markup. A row that is itself a link (an attention
-  item in the list) links nothing inside it.
+  No other scheme is linked, and nothing else in the text becomes markup but the layout above; a URL inside `code`
+  stays text. A row that is itself a link (an attention item in the list) links nothing inside it.
 - It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
   `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
   `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
@@ -2688,8 +2692,8 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 - `POST /chores/{name}/replies` takes the reply form's body and submission id, as a ticket's does, behind the same
   session token and `Origin` check, and records a note with channel `web`. Nothing in the web UI runs a chore: the
   overseer decides when one runs (§19), and `canopy chore try` stays in the CLI.
-- A chore run's summary is the harness's note or the agent's summary on one line, and a finding's title and detail are
-  the agent's: untrusted text, rendered as text with control characters dropped.
+- A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
+  detail are the agent's: untrusted text, rendered as text with control characters dropped.
 - The chores page is in the navigation, and each chore has a page. On the attention list, a chore's item, a finding or
   `chore_failed`, opens the chore's notes and the note form beside the list, as a ticket's opens its conversation. A
   note no run of the chore has started since is marked as waiting for its next run: notes wake nothing and no tick
@@ -2704,8 +2708,8 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 - A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
   (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick; with its
   ticket, repository, chore, and PR apart, and its action and rationale.
-- A rationale is the overseer's text: untrusted, rendered as text, its control characters dropped and its whitespace
-  collapsed to one line as `canopy decisions` prints it. It was cut at 2000 characters when recorded (§6).
+- A rationale is the overseer's text: untrusted, its control characters dropped and its line breaks kept, where
+  `canopy decisions` prints it on one line. It was cut at 2000 characters when recorded (§6).
 - A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
 - The tick's page names where the overseer's output is, `.canopy/ticks/<id>.log`, when the file exists, and shows its
   session's transcript under the decisions (below).
