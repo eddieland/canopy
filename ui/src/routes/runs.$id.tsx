@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
@@ -123,7 +123,7 @@ function RunPanel({ run }: { run: Run }) {
                                     )}
                                 >
                                     {pr.replace(/^https:\/\//u, '')}
-                                    <ExternalLink className="size-3" />
+                                    <LinkOutIcon href={pr} />
                                 </a>
                             ))}
                         </span>

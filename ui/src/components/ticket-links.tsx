@@ -1,6 +1,7 @@
-import { ExternalLink, GitBranch, GitPullRequest, Ticket } from 'lucide-react'
+import { GitBranch, GitPullRequest, Ticket } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { Button } from '@/components/ui/button'
 
 // A default that is a fresh array on each render would be a new prop each time.
@@ -55,7 +56,7 @@ function LinkOut({ href, icon: Icon, hint }: { href: string; icon: LucideIcon; h
             <a href={href} target="_blank" rel="noreferrer noopener" title={hint}>
                 <Icon aria-hidden />
                 <span className="truncate">{href.replace(/^https:\/\//u, '')}</span>
-                <ExternalLink aria-hidden className="size-3" />
+                <LinkOutIcon href={href} />
             </a>
         </Button>
     )

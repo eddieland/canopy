@@ -338,14 +338,15 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
-  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
-  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per
-  link, in the accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch`
-  for a branch), what it opens on hover.
+  shows its address without `https://`, and ends in an icon for where it goes (`LinkOutIcon`): GitHub's mark for
+  github.com, bundled since Lucide has no brand icons, and `ExternalLink` anywhere else. A ticket's links out sit in
+  its page's header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline
+  button per link, in the accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR,
+  `GitBranch` for a branch), what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
   page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase. A worktree's branch
-  links the same way, its name in the accent with the `ExternalLink` icon, when its repository has a branch link.
+  links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a branch link.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
