@@ -4,7 +4,8 @@ SQLite has no change notifications, so each stream holds its own journal connect
 four times a second: it changes whenever another connection commits. Only then does the stream read the attention
 list, the runs, the tickets, the chores, the last day's and 30 days' spend, the latest tick, and the loop's pause again,
 and it sends each that differs from what it sent last, plus `ticket.changed` for each ticket whose summary changed. The
-stream never writes, so its own reads never move `data_version`.
+stream never writes, so its own reads never move `data_version`. Each such read is one snapshot of the journal, in a
+read transaction, so a commit landing partway through cannot pair one list's old rows with another's new ones.
 
 The connection is opened and used only by the stream's own coroutine, on the server's event loop: the reads are small
 and quick, and keeping them on one thread is what sqlite3 requires of a connection.
@@ -13,7 +14,8 @@ and quick, and keeping them on one thread is what sqlite3 requires of a connecti
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from canopy.serve import views
@@ -74,7 +76,11 @@ class _Sent:
         self.loop: LoopState | None = None
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
-        """Read the lists again and return an event for each that differs from what was sent, remembering it."""
+        """Read the lists again, from one snapshot, and return an event for each that differs from what was sent."""
+        with _snapshot(ctx):
+            return self._read(backend, ctx)
+
+    def _read(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
         found: list[StreamEvent] = []
         attention = AttentionUpdated(items=views.attention(backend, ctx))
         if attention != self.attention:
@@ -110,6 +116,24 @@ class _Sent:
             self.loop = loop
             found.append(StreamEvent(LoopUpdated(paused=loop.paused)))
         return found
+
+
+@contextmanager
+def _snapshot(ctx: Context) -> Iterator[None]:
+    """Every read in the block sees the journal as its first read did: a deferred transaction, which writes nothing.
+
+    The connection is in autocommit, so without it each query reads its own snapshot: `views.tickets` reads the tickets'
+    order in one and each ticket's summary in more, and a reply committed between them showed a ticket changed in a
+    list still in the order from before it. Held only for the reads, never across an `await`, so it never holds back a
+    checkpoint for longer than one read of the lists.
+    """
+    ctx.conn.execute("BEGIN")
+    try:
+        yield
+    except BaseException:
+        ctx.conn.execute("ROLLBACK")
+        raise
+    ctx.conn.execute("COMMIT")
 
 
 def _costs(spend: Spend) -> tuple[float | None, float | None]:
