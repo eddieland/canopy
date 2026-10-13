@@ -918,6 +918,13 @@ export type components = {
          * @description The server itself: what it runs and whether its data is real.
          */
         Meta: {
+            /**
+             * Branch Urls
+             * @default {}
+             */
+            branch_urls: {
+                [key: string]: string;
+            };
             /** Mock */
             mock: boolean;
             /** Ticket Url */

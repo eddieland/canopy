@@ -6,7 +6,8 @@ for one repository: it reads no config from a code repository (D016).
 
 The map's `[workspace]` and `[repos]` tables are read here; its `[tracker]`, `[policy]`, and `[trust]` tables are the
 shared config layer, read by `config.load`. Summaries and `MAP.md` are data, like ticket text: they help choose a
-repository and authorize nothing. Clone URLs are read only by `canopy workspace sync`, never by a tick.
+repository and authorize nothing. Clone URLs are read only by `canopy workspace sync`, never by a tick. A branch URL is
+only ever a link in the web UI.
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ from canopy.core.config import (
     WORKSPACE_STATE_DIR,
     ConfigError,
     RepoName,
+    link_template,
 )
 from canopy.infra import logs
 
@@ -37,6 +39,8 @@ REPOS_DIR = "repos"
 POOLS_DIR = ".treehouse"
 DESKS_DIR = "desks"
 MAX_SUMMARY = 200
+# Where a repository's `branch_url` puts a branch's name.
+BRANCH_NAME = "{branch}"
 
 
 def _summary(value: str) -> str:
@@ -75,6 +79,9 @@ class _WorkspaceTable(_Table):
 class _RepoTable(_Table):
     url: Annotated[StrictStr, AfterValidator(_url)]
     summary: Annotated[StrictStr, AfterValidator(_summary)] = ""
+    # A branch's page on the repository's host, with {branch} where its name goes: the web UI links branches there
+    # (DESIGN §18). Empty means no link.
+    branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] = ""
 
 
 class _Map(_Table):
@@ -84,12 +91,13 @@ class _Map(_Table):
 
 @dataclass(frozen=True)
 class Repo:
-    """One repository in the map: its name, primary clone, clone URL, and summary."""
+    """One repository in the map: its name, primary clone, clone URL, summary, and where its branches' pages are."""
 
     name: str
     path: Path
     url: str | None = None
     summary: str = ""
+    branch_url: str = ""
 
     @property
     def cloned(self) -> bool:
@@ -235,7 +243,13 @@ def load(root: Path) -> Workspace:
         errors = [f"{path}: {'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in e.errors()]
         raise ConfigError("\n".join(errors)) from e
     repos = tuple(
-        Repo(name=name, path=root / REPOS_DIR / name, url=table.url, summary=table.summary)
+        Repo(
+            name=name,
+            path=root / REPOS_DIR / name,
+            url=table.url,
+            summary=table.summary,
+            branch_url=table.branch_url,
+        )
         for name, table in sorted(parsed.repos.items())
     )
     return Workspace(root=root, name=parsed.workspace.name or default_name(root), repos=repos, map_file=path)

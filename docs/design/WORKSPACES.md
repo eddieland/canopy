@@ -95,6 +95,7 @@ name = "acme"
 [repos.api]
 url = "https://github.com/acme/api.git"
 summary = "Public REST API. Owns the order schema and the generated OpenAPI spec."
+branch_url = "https://github.com/acme/api/tree/{branch}"
 
 [repos.web]
 url = "https://github.com/acme/web.git"
@@ -108,6 +109,12 @@ summary = "Customer web app. Consumes the api's generated client from a release.
 - `summary` is one line, at most 200 characters, rendered into the overseer's state block. `MAP.md` is prose the
   overseer and workers read: ownership, dependency direction, where contracts live, landing order. Both are data, like
   ticket text, and authorize nothing.
+- `branch_url`, optional, is where a branch's page is on the repository's host, with `{branch}` for its name: the web
+  UI links a ticket's branch in each of its repositories there, and a worktree's branch (§22), each `/`-separated part
+  of the name URL-encoded. It is empty (no links) or a plain `https://` URL of at most 500 characters with `{branch}`
+  exactly once and no other braces, checked as `tracker.ticket_url` is (§17), and for the same reasons: a template in
+  the map, not a URL the harness derives from `url`, which would be host code in the harness, and nothing but a
+  browser the operator clicks in follows it. A branch that was never pushed links to the host's not-found page.
 - Config layers: built-in defaults, the workspace file, the user file (§12). The workspace file's policy may only
   tighten. Nothing in the repositories is read as config: one tracker, one queue.
 - A map committed to a shared repository is exposed as any file in it is (TRUST_MODEL T7). `url` is read only by the

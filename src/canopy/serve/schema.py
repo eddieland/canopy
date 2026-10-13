@@ -36,6 +36,9 @@ class Meta(_Model):
     mock: bool
     # `tracker.ticket_url`: a ticket's page in the tracker, with `{key}` where its key goes; None when unset.
     ticket_url: str | None = None
+    # Each repository's `branch_url`, by name: a branch's page on its host, with `{branch}` where its name goes. A
+    # repository without one is left out.
+    branch_urls: dict[str, str] = {}
 
 
 class Session(_Model):

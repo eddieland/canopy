@@ -15,7 +15,12 @@ router = APIRouter()
 
 @router.get("/meta", operation_id="getMeta")
 def meta(backend: BackendDep) -> Meta:
-    return Meta(version=version("canopy"), mock=backend.mock, ticket_url=backend.config.tracker.ticket_url or None)
+    return Meta(
+        version=version("canopy"),
+        mock=backend.mock,
+        ticket_url=backend.config.tracker.ticket_url or None,
+        branch_urls={r.name: r.branch_url for r in backend.workspace.repos if r.branch_url},
+    )
 
 
 @router.get("/attention", operation_id="listAttention")

@@ -17,6 +17,7 @@ import { TicketActions } from '@/components/ticket-actions'
 import { TicketLinks } from '@/components/ticket-links'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
+import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { age, useNow } from '@/lib/time'
@@ -59,6 +60,12 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, runs, messages, decisions } = detail
     const now = useNow()
     const tracker = useTicketUrl(ticket.key)
+    const branchUrl = useBranchUrls()
+    const branch = ticket.branch
+    const branches = units.flatMap((u) => {
+        const href = branch === null ? undefined : branchUrl(u.repo, branch)
+        return u.repo !== null && href !== undefined ? [{ repo: u.repo, href }] : []
+    })
     const runsOrder = useListOrder('ticket-runs')
     const decisionsOrder = useListOrder('ticket-decisions')
     const conversationOrder = useListOrder('conversation')
@@ -80,7 +87,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         </>
                     )
                 }
-                links={<TicketLinks tracker={tracker} units={units} />}
+                links={<TicketLinks tracker={tracker} units={units} branches={branches} />}
             >
                 {how}
             </PageHeader>

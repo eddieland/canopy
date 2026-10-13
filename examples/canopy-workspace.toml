@@ -15,6 +15,9 @@ name = "acme"
 [repos.api]
 url = "https://github.com/acme/api.git"
 summary = "Public REST API. Owns the order schema and the generated OpenAPI spec."
+# Optional: a branch's page on the repository's host, with {branch} where its name goes. The web UI links each branch
+# there. GitLab's is ".../-/tree/{branch}".
+# branch_url = "https://github.com/acme/api/tree/{branch}"
 
 [repos.web]
 url = "https://github.com/acme/web.git"

@@ -1,22 +1,25 @@
-import { ExternalLink, GitPullRequest, type LucideIcon, Ticket } from 'lucide-react'
+import { ExternalLink, GitBranch, GitPullRequest, type LucideIcon, Ticket } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 
 /**
  * A ticket's links out, under its page's title so they are the first thing found: its page in the tracker, then each
- * repository's PR. Renders nothing when there is neither.
+ * repository's PR, then its branch in each repository whose `branch_url` is set. Renders nothing when there are none.
  */
 export function TicketLinks({
     tracker,
     units = [],
+    branches = [],
 }: {
     /** The ticket's page in the tracker, when `tracker.ticket_url` is set. */
     tracker?: string
     /** The ticket's units; each with a PR gets a link. */
     units?: { repo: string | null; pr_url: string | null }[]
+    /** The ticket's branch's page in each repository that has one. */
+    branches?: { repo: string; href: string }[]
 }) {
     const prs = units.flatMap((u) => (u.pr_url ? [{ repo: u.repo, href: u.pr_url }] : []))
-    if (tracker === undefined && prs.length === 0) return null
+    if (tracker === undefined && prs.length === 0 && branches.length === 0) return null
     return (
         <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
             {tracker && <LinkOut href={tracker} icon={Ticket} hint="The ticket in the tracker" />}
@@ -27,6 +30,9 @@ export function TicketLinks({
                     icon={GitPullRequest}
                     hint={pr.repo ? `The PR in ${pr.repo}` : 'The PR'}
                 />
+            ))}
+            {branches.map((b) => (
+                <LinkOut key={b.href} href={b.href} icon={GitBranch} hint={`The branch in ${b.repo}`} />
             ))}
         </nav>
     )

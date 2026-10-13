@@ -78,6 +78,12 @@ def load_both(root: Path, user_file: Path) -> None:
         ('[repos.api]\nurl = "--upload-pack=touch x"\n', "repos.api.url"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nsummary = "' + "x" * 201 + '"\n', "repos.api.summary"),
         ('[repos.api]\nurl = "https://x.test/a.git"\nowner = "me"\n', "repos.api.owner"),
+        (
+            '[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/a/tree/main"\n',
+            "repos.api.branch_url",
+        ),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "http://x.test/a/tree/{branch}"\n', "plain https://"),
+        ('[repos.api]\nurl = "https://x.test/a.git"\nbranch_url = "https://x.test/{repo}/tree/{branch}"\n', "braces"),
         ("[desks]\nx = 1\n", "unknown key desks.x"),
     ],
 )
@@ -85,6 +91,15 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text() + "\n" + table)
     with pytest.raises(config.ConfigError, match=error):
         load_both(ws.root, canopy_env.user_file)
+
+
+def test_a_repositorys_branch_url_is_read_from_the_map_and_optional(ws: Ws) -> None:
+    template = "https://github.com/acme/api/tree/{branch}"
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text(("web", "https://x.test/web.git"))
+        + f'\n[repos.api]\nurl = "https://x.test/api.git"\nbranch_url = "{template}"\n'
+    )
+    assert [(r.name, r.branch_url) for r in workspace.load(ws.root).repos] == [("api", template), ("web", "")]
 
 
 def test_canopy_runs_only_in_a_workspace_and_reads_no_repository_file(tmp_path: Path) -> None:
