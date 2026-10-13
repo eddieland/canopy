@@ -5,16 +5,22 @@ import { useSyncExternalStore } from 'react'
  * the window stays empty before the next one. Kept in localStorage like the theme, and synced across tabs.
  */
 
+/** How fast a headline crawls, or `off` for no ticker. */
 export type TickerSpeed = 'off' | 'slow' | 'normal' | 'spicy'
 
+/** The ticker's settings as stored. */
 export interface TickerSettings {
+    /** How fast a headline crawls. */
     speed: TickerSpeed
     /** Seconds between one headline leaving and the next arriving. */
     gap: number
 }
 
+/** Where localStorage keeps the settings, as JSON. */
 export const STORAGE_KEY = 'canopy-ticker'
+/** The settings until the operator changes them: a normal crawl, and the next headline right after the last. */
 export const DEFAULTS: TickerSettings = { speed: 'normal', gap: 0 }
+/** The longest gap, in seconds: ten minutes. */
 export const MAX_GAP = 600
 
 /** How far a headline crawls each second, in rem, so it keeps its pace as the interface grows on a large screen. */

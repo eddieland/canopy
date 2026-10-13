@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react'
 
 import { cn } from '@/lib/utils'
 
+/** A placeholder the shape of content still loading. Size it to what it stands in for, so nothing moves on arrival. */
 function Skeleton({ className, ...props }: ComponentProps<'div'>) {
     return (
         <div

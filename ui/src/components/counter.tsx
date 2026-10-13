@@ -4,6 +4,7 @@ import { RollingNumber } from '@/components/rolling-number'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
+/** A counter's color: a run state's, the accent, or none. */
 export type Tone = 'running' | 'blocked' | 'failed' | 'stopped' | 'accent' | 'plain'
 
 // Written out so Tailwind finds them: each counter's top rule.

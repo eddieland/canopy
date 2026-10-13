@@ -17,7 +17,7 @@ memory, and do not upgrade in passing.
   `npx shadcn docs <name>`. If the registry is unreachable, port the source from shadcn's repository by hand as
   `src/components/ui/button.tsx` was: style classes inlined, `dark:` overrides replaced with tokens.
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
-- oxlint (with the React Compiler's rules) and oxfmt, Vitest, Playwright.
+- oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's) and oxfmt, Vitest, Playwright.
 
 ## Commands
 
@@ -37,6 +37,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 
 - **Tokens only.** No raw colors and no `dark:` in components; a theme difference is a token change. The lint enforces
   it. See `DESIGN.md`.
+- **Every export has a JSDoc comment**, and so does each field of an exported interface: what it is or does, in
+  prose. No types in it (`@param {string}`): TypeScript has them. The lint enforces both (`jsdoc-js` in
+  `.oxlintrc.json`); a public member of an exported class needs one too, which the lint does not check.
 - **No hand-written memoization.** The compiler memoizes. `useMemo`, `useCallback`, and `memo` are banned by the lint.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
 - **Types come from the server.** API types are generated from `src/canopy/serve/schema.py`. To change a shape,

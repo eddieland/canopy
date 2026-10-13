@@ -2,6 +2,7 @@ import type { Run, RunState } from '@/api/types'
 
 // Full class names, written out, so Tailwind finds them. One entry per state; the types make a missing one an error.
 
+/** Each run state's dot: its status color as a fill. */
 export const RUN_DOT: Record<RunState, string> = {
     running: 'bg-status-running',
     blocked: 'bg-status-blocked',
@@ -10,6 +11,7 @@ export const RUN_DOT: Record<RunState, string> = {
     failed: 'bg-status-failed',
 }
 
+/** Each run state's text color. */
 export const RUN_TEXT: Record<RunState, string> = {
     running: 'text-status-running',
     blocked: 'text-status-blocked',

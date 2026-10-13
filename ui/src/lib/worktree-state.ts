@@ -3,6 +3,7 @@ import type { Pool, Worktree, WorktreeState } from '@/api/types'
 // Full class names, written out, so Tailwind finds them. One entry per state; the types make a missing one an error.
 // An idle slot is a hollow ring: nothing holds it, and no status color claims it.
 
+/** Each worktree state's dot: its status color as a fill, or a hollow ring when idle. */
 export const WORKTREE_DOT: Record<WorktreeState, string> = {
     working: 'bg-status-running',
     held: 'bg-status-stopped',
@@ -11,6 +12,7 @@ export const WORKTREE_DOT: Record<WorktreeState, string> = {
     broken: 'bg-status-failed',
 }
 
+/** Each worktree state's text color. */
 export const WORKTREE_TEXT: Record<WorktreeState, string> = {
     working: 'text-status-running',
     held: 'text-status-stopped',

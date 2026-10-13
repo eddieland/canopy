@@ -9,13 +9,18 @@ export type Inline = { kind: 'text' | 'code' | 'strong'; text: string }
 /** One line of text, as its inline pieces. */
 export type Line = Inline[]
 
+/** One item of a list. */
 export interface Item {
-    // How far it is nested, 0 to 3: two spaces of indent a level. A nested list of the other kind starts a list of its
-    // own at its depth.
+    /**
+     * How far it is nested, 0 to 3: two spaces of indent a level. A nested list of the other kind starts a list of its
+     * own at its depth.
+     */
     depth: number
+    /** Its text: the first line, and any it continues on. */
     lines: Line[]
 }
 
+/** One block of agent-written text: a paragraph, a heading, a list, or a code block's lines as written. */
 export type Block =
     | { kind: 'paragraph'; lines: Line[] }
     | { kind: 'heading'; line: Line }

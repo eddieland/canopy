@@ -15,6 +15,7 @@ import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
+/** The settings kept in this browser: the theme, the ticker, the send key, and the session. */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })

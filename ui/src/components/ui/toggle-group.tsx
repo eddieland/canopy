@@ -20,6 +20,7 @@ function ToggleGroup({ className, ...props }: ComponentProps<typeof ToggleGroupP
     )
 }
 
+/** One option in a ToggleGroup. */
 function ToggleGroupItem({ className, ...props }: ComponentProps<typeof ToggleGroupPrimitive.Item>) {
     return (
         <ToggleGroupPrimitive.Item

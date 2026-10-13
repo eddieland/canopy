@@ -17,6 +17,7 @@ import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+/** One chore: its schedule, its open findings, its recent runs, and the operator's notes to it. */
 export const Route = createFileRoute('/chores/$name')({
     component: ChorePage,
 })
