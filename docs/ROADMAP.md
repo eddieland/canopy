@@ -1067,7 +1067,8 @@ Accept: the tests above pass. Live: a re-measurement (MEASUREMENTS) shows the fi
 state block's size, not the prompt's plus the state block's, on ticks that start within the cache's lifetime of the
 one before, and a median such tick at least 15% cheaper at the same price, with no change in what the ticks decided.
 
-Status: not started.
+Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
+the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
 
 ## Deferred, with the trigger that would unblock each
 
