@@ -7,17 +7,18 @@ import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
 /**
- * A page's title block: the trail to it, the title, any chips that qualify it, and one line of description. The trail
- * starts at the page's section, in the section's color (the accent on a page in no section). On the section's own list
- * that is all it is; on any page under it, the section links to its list, then come `parents`, plain router `Link`s
- * the trail styles, to the pages between it and this one, and every step ends in a chevron. The title is the trail's
- * last step, so the trail never repeats it.
+ * A page's title block: the trail to it, the title, any chips that qualify it, one line of description, and the page
+ * subject's links out. The trail starts at the page's section, in the section's color (the accent on a page in no
+ * section). On the section's own list that is all it is; on any page under it, the section links to its list, then
+ * come `parents`, plain router `Link`s the trail styles, to the pages between it and this one, and every step ends in
+ * a chevron. The title is the trail's last step, so the trail never repeats it.
  */
 export function PageHeader({
     title,
     parents,
     root,
     chips,
+    links,
     children,
 }: {
     /** The page's name. */
@@ -31,6 +32,8 @@ export function PageHeader({
     root?: string
     /** `Chip`s beside the title that qualify the page, such as `private`. */
     chips?: ReactNode
+    /** The page subject's links out, under the description, such as a ticket's `TicketLinks`. */
+    links?: ReactNode
     /** One line of description. */
     children?: ReactNode
 }) {
@@ -88,6 +91,7 @@ export function PageHeader({
                 {chips}
             </div>
             {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
+            {links}
         </header>
     )
 }
