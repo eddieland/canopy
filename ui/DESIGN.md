@@ -301,7 +301,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   input's short values as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of
   one short line that is not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a
   `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented and
-  colored as a tick's output is (below), in monospace blocks at most 24rem tall. A model call is a muted line with
+  colored as a tick's output is with Pretty on (below), every value as written, in monospace blocks at most 24rem
+  tall. A model call is a muted line with
   its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
   same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
   is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
