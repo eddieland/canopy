@@ -7,16 +7,184 @@ import sqlite3
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import conversation, db
 from canopy.runs import policy
 
 if TYPE_CHECKING:
     from canopy.core import treehouse
+    from canopy.core.chore_view import ChoreSummary
     from canopy.core.config import Config
     from canopy.core.workspace import Workspace
+    from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
+
+
+class OverseerState(TypedDict):
+    """The state block's JSON: what the journal knows, the config the overseer decides by, and this tick.
+
+    It has `chores` only when chores are configured, and `reviews` only when reviews are on.
+    """
+
+    repository: str
+    workspace: WorkspaceState
+    tracker: TrackerState
+    trust: TrustState
+    policy: PolicyState
+    repositories: list[RepositoryState]
+    tickets: list[TicketState]
+    stopped: list[str]
+    split_children: list[SplitChild]
+    chores: NotRequired[list[ChoreSummary]]
+    reviews: NotRequired[ReviewsSection]
+    capacity: CapacityState
+    running_workers: list[RunningWorker]
+    mirror: MirrorState
+    tick_id: int
+    now: str
+    dry_run: bool
+
+
+class TicketState(TypedDict):
+    """A ticket the loop knows. `private` is a private ticket's conversation, `operator` a public one's new messages."""
+
+    key: str
+    title: str | None
+    phase: str | None
+    branch: str | None
+    cursors: dict[str, str | int | None]
+    units: list[UnitState]
+    split_attempts: int
+    needs_human_since: str | None
+    last_seen_at: str
+    last_run: RunState | None
+    private: NotRequired[conversation.PrivateSection]
+    operator: NotRequired[conversation.OperatorSection]
+
+
+class UnitState(TypedDict):
+    """One of a ticket's units: a repository's branch and PR. `granted` only when the operator granted it runs."""
+
+    repo: str
+    branch: str | None
+    pr_url: str | None
+    phase: str | None
+    cursors: dict[str, str | int | None]
+    attempts: dict[str, int]
+    fix_ci_cooldown_until: str | None
+    granted: NotRequired[dict[str, int]]
+
+
+class RunState(TypedDict):
+    """A ticket's latest run."""
+
+    run_id: int
+    kind: str
+    status: str
+    branch: str | None
+    repos: list[RunRepo]
+    started_at: str
+    ended_at: str | None
+
+
+class RunRepo(TypedDict):
+    """A repository a run worked in, and the branch its slot was based on."""
+
+    repo: str
+    base: str | None
+
+
+class WorkspaceState(TypedDict):
+    """The workspace's name, and its map's prose file if it has one."""
+
+    name: str
+    map: str | None
+
+
+class TrackerState(TypedDict):
+    """The tracker settings the overseer queries and labels by."""
+
+    provider: str
+    query: str
+    labels: list[str]
+    needs_human_label: str
+
+
+class TrustState(TypedDict):
+    """Whom the overseer trusts, and how canopy's own comments, branches, and PRs are marked."""
+
+    authorized_repliers: list[str]
+    trusted_reviewers: list[str]
+    comment_prefix: str
+    comment_suffix: str
+    branch_prefix: str
+    pr_label: str
+
+
+class PolicyState(TypedDict):
+    """The attempt limits and cooldowns the harness enforces."""
+
+    max_implement_attempts: int
+    max_fix_ci_attempts: int
+    fix_ci_cooldown_minutes: int
+    max_resume_attempts: int
+    max_split_attempts: int
+    stacking: str
+
+
+class RepositoryState(TypedDict):
+    """A repository in the workspace, and its slots leased now."""
+
+    name: str
+    path: str
+    summary: str
+    cloned: bool
+    leased_slots: list[LeasedSlot]
+
+
+class LeasedSlot(TypedDict):
+    """A slot leased from a repository's pool."""
+
+    path: str
+    lease_holder: str
+    leased_at: str | None
+
+
+class SplitChild(TypedDict):
+    """A child of a split not yet done, with its split run's end (DESIGN §18)."""
+
+    child: str
+    parent: str
+    repo: str
+    split_run_id: int
+    split_ended_at: str | None
+
+
+class CapacityState(TypedDict):
+    """How many workers may run, are running, and may still start."""
+
+    max_workers: int
+    running: int
+    available: int
+
+
+class RunningWorker(TypedDict):
+    """A worker run still running."""
+
+    run_id: int
+    ticket: str
+    repos: list[str]
+    kind: str
+    branch: str | None
+    started_at: str
+
+
+class MirrorState(TypedDict):
+    """How many tracker comments one tick may mirror, and the heredoc delimiter for their bodies (DESIGN §22)."""
+
+    max_per_tick: int
+    body_delimiter: str
 
 
 def state_block(
@@ -40,10 +208,10 @@ def state_block(
     now: datetime,
     split_attempts: Mapping[str, int],
     split_children: list[sqlite3.Row],
-    chores: list[dict[str, object]],
-    reviews: dict[str, object] | None,
-    private: Mapping[str, dict[str, object]] | None = None,
-    operator: Mapping[str, dict[str, object]] | None = None,
+    chores: list[ChoreSummary],
+    reviews: ReviewsSection | None,
+    private: Mapping[str, conversation.PrivateSection] | None = None,
+    operator: Mapping[str, conversation.OperatorSection] | None = None,
     mirror_delimiter: str,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
@@ -65,10 +233,10 @@ def state_block(
     operator = operator or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
-    def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
+    def unit_summary(key: str, u: sqlite3.Row) -> UnitState:
         name = str(u["repo"])
         unit = policy.unit(key, name)
-        summary: dict[str, object] = {
+        summary: UnitState = {
             "repo": name,
             "branch": u["branch"],
             "pr_url": u["pr_url"],
@@ -81,7 +249,7 @@ def state_block(
             summary["granted"] = dict(grants[unit])
         return summary
 
-    def run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
+    def run_summary(run: sqlite3.Row | None) -> RunState | None:
         if run is None:
             return None
         return {
@@ -94,9 +262,9 @@ def state_block(
             "ended_at": run["ended_at"],
         }
 
-    def ticket_summary(t: sqlite3.Row) -> dict[str, object]:
+    def ticket_summary(t: sqlite3.Row) -> TicketState:
         key = str(t["key"])
-        summary: dict[str, object] = {
+        summary: TicketState = {
             "key": key,
             "title": t["title"],
             "phase": t["phase"],
@@ -113,12 +281,13 @@ def state_block(
             "last_run": run_summary(last_runs.get(key)),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
-        summary.update(
-            {name: found[key] for name, found in (("private", private), ("operator", operator)) if key in found}
-        )
+        if key in private:
+            summary["private"] = private[key]
+        if key in operator:
+            summary["operator"] = operator[key]
         return summary
 
-    state: dict[str, object] = {
+    state: OverseerState = {
         "repository": str(repo_root),
         "workspace": {
             "name": workspace.name,
@@ -175,39 +344,33 @@ def state_block(
             }
             for c in split_children
         ],
+        **({"chores": chores} if chores else {}),
+        # With reviews off, nothing about them reaches the overseer (DESIGN §21).
+        **({"reviews": reviews} if reviews is not None else {}),
+        # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
+        # (DESIGN §6).
+        "capacity": {
+            "max_workers": capacity.max_workers,
+            "running": capacity.running,
+            "available": capacity.available,
+        },
+        "running_workers": [
+            {
+                "run_id": r["id"],
+                "ticket": r["ticket_key"],
+                "repos": [s["repo"] for s in run_slots.get(int(r["id"]), [])],
+                "kind": r["kind"],
+                "branch": r["branch"],
+                "started_at": r["started_at"],
+            }
+            for r in running
+        ],
+        # Tracker comments the overseer copies into the journal (DESIGN §22).
+        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
+        "tick_id": tick_id,
+        "now": db.format_time(now),
+        "dry_run": dry_run,
     }
-    if chores:
-        state["chores"] = chores
-    # With reviews off, nothing about them reaches the overseer (DESIGN §21).
-    if reviews is not None:
-        state["reviews"] = reviews
-    # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
-    # (DESIGN §6).
-    state.update(
-        {
-            "capacity": {
-                "max_workers": capacity.max_workers,
-                "running": capacity.running,
-                "available": capacity.available,
-            },
-            "running_workers": [
-                {
-                    "run_id": r["id"],
-                    "ticket": r["ticket_key"],
-                    "repos": [s["repo"] for s in run_slots.get(int(r["id"]), [])],
-                    "kind": r["kind"],
-                    "branch": r["branch"],
-                    "started_at": r["started_at"],
-                }
-                for r in running
-            ],
-            # Tracker comments the overseer copies into the journal (DESIGN §22).
-            "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
-            "tick_id": tick_id,
-            "now": db.format_time(now),
-            "dry_run": dry_run,
-        }
-    )
     if dry_run:
         mode = (
             "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "

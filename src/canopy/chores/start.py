@@ -181,7 +181,7 @@ def _guard(ctx: Context, name: str, *, planned: list[str] | None = None) -> Chor
 
 
 def render(
-    body: str, state: view.ChoreState, run_id: int | None, context: str | None, notes: list[dict[str, object]]
+    body: str, state: view.ChoreState, run_id: int | None, context: str | None, notes: list[conversation.ChoreNote]
 ) -> str:
     """Return the chore's prompt: the operator's file, then a `## Run` section the harness writes (DESIGN §19).
 
