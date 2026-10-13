@@ -46,7 +46,11 @@ class Started:
 
 
 def chores_dir(ctx: Context) -> Path:
-    """Where chore run logs and prompts live, and each chore's default working directory: the operator's only."""
+    """Where chore run logs and prompts live, and each chore's default working directory: the operator's only.
+
+    Returns:
+        `<state_dir>/chores/`, created mode 0700 if it was missing.
+    """
     path = ctx.state_dir / CHORES_DIR
     path.mkdir(mode=0o700, parents=True, exist_ok=True)
     return path
@@ -58,12 +62,19 @@ def prompt_file(ctx: Context, run_id: int) -> Path:
 
 
 def default_cwd(ctx: Context, name: str) -> Path:
-    """A chore's own directory, `<state_dir>/chores/<name>/`, where it runs unless its `cwd` says otherwise."""
+    """A chore's own directory, `<state_dir>/chores/<name>/`, where it runs unless its `cwd` says otherwise.
+
+    Returns:
+        The directory's path. It is not created here.
+    """
     return chores_dir(ctx) / name
 
 
 def check(ctx: Context, *, tick_id: int, name: str) -> Chore:
     """Check the guards for a dry run, counting the chore runs this dry run already recorded as running (D036).
+
+    Returns:
+        The configured chore the guards let run.
 
     Raises:
         Refusal: a guard refused.
@@ -82,8 +93,12 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
 
     Serialized with dispatches by the dispatch lock, so two cannot both pass the capacity check.
 
+    Returns:
+        The new chore run's id and the pid of its `canopy _chore`.
+
     Raises:
         Refusal: a guard refused, or the prompt could not be read or the run started. Nothing is left running.
+        RuntimeError: the chore run's row was gone right after it was inserted.
     """
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         chore = _guard(ctx, name)
@@ -113,7 +128,15 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
 
 
 def _guard(ctx: Context, name: str, *, planned: list[str] | None = None) -> Chore:
-    """Refuse unless chore `name` may run now. `planned` holds the chores a dry run already ran this tick."""
+    """Refuse unless chore `name` may run now. `planned` holds the chores a dry run already ran this tick.
+
+    Returns:
+        The configured chore.
+
+    Raises:
+        Refusal: no chore `name` is configured, it is running or this dry run already ran it, it is not due yet, it
+            is outside its hours, or the chore runs running and planned fill `max_chores`.
+    """
     planned = planned or []
     configured = view.configured(ctx.config, ctx.workspace)
     chore = configured.get(name)

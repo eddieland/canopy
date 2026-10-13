@@ -187,7 +187,11 @@ class Tail:
 
 
 def read(path: Path, session_id: str) -> Transcript | None:
-    """Read `session_id`'s events from the log at `path`. None when it is missing, a symlink, or not a regular file."""
+    """Read `session_id`'s events from the log at `path`. None when it is missing, a symlink, or not a regular file.
+
+    Returns:
+        The session's entries, within the bounds, and whether a bound cut any; or None for a file it refuses.
+    """
     fd = _open(path)
     if fd is None:
         return None
@@ -201,7 +205,12 @@ def read(path: Path, session_id: str) -> Transcript | None:
 
 
 def tail(path: Path) -> Tail | None:
-    """Read the end of the file at `path`, from its first whole line. None for any file `read` would refuse."""
+    """Read the end of the file at `path`, from its first whole line. None for any file `read` would refuse.
+
+    Returns:
+        At most `MAX_TAIL` bytes of the file's end as printable text, with the file's size and whether it holds more;
+        or None for a file it refuses.
+    """
     fd = _open(path)
     if fd is None:
         return None
@@ -217,7 +226,11 @@ def tail(path: Path) -> Tail | None:
 
 
 def _open(path: Path) -> int | None:
-    """A descriptor for reading the regular file at `path`, or None when it is missing, a symlink, or anything else."""
+    """A descriptor for reading the regular file at `path`, or None when it is missing, a symlink, or anything else.
+
+    Returns:
+        An open read-only descriptor the caller closes, or None.
+    """
     try:
         # Non-blocking, so a FIFO in the file's place cannot hold the request open; it is refused below.
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -255,7 +268,11 @@ def _parse(lines: list[str], session_id: str, *, truncated: bool) -> Transcript:
 
 
 def _entry(event: dict[str, object]) -> Entry | None:
-    """One event as an entry, or None for a type a transcript leaves out (`step_start`, and any it does not know)."""
+    """One event as an entry, or None for a type a transcript leaves out (`step_start`, and any it does not know).
+
+    Returns:
+        A `Text`, `ToolCall`, `Step`, or `Error` for the event's type, its text cut to the bounds; or None.
+    """
     kind = event["type"]
     at = _at(event.get("timestamp"))
     part = event.get("part")
@@ -300,7 +317,11 @@ def _at(value: object) -> datetime | None:
 
 
 def _cut(text: str, limit: int) -> tuple[str, bool]:
-    """`text` without control characters, line breaks kept, and cut to `limit` characters; and whether it was cut."""
+    """`text` without control characters, line breaks kept, and cut to `limit` characters; and whether it was cut.
+
+    Returns:
+        The printable text, at most `limit` characters, and True if it was longer.
+    """
     shown = conversation.printable(text)
     return (shown[:limit], True) if len(shown) > limit else (shown, False)
 

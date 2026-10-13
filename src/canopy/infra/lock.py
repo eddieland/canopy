@@ -23,6 +23,9 @@ def hold(path: Path, *, wait: bool = False) -> Generator[None]:
     """Hold the lock at `path` for the duration of the block.
 
     If another process holds it, raise LockBusyError at once, or with `wait` block until it is free.
+
+    Raises:
+        LockBusyError: Another process holds the lock and `wait` is not set.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     # Python opens files non-inheritable, so the agents a tick runs do not hold the lock after the tick exits.

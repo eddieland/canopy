@@ -39,6 +39,10 @@ class ServeOptions(BaseModel):
         return self.host in LOOPBACK_NAMES or ipaddress.ip_address(self.host).is_loopback
 
     def url(self) -> str:
-        """The UI's address, for the operator to open."""
+        """The UI's address, for the operator to open.
+
+        Returns:
+            `http://HOST:PORT/` under `base_path`, an IPv6 host in brackets.
+        """
         host = f"[{self.host}]" if ":" in self.host else self.host
         return f"http://{host}:{self.port}{self.base_path}/"

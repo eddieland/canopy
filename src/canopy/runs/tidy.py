@@ -45,7 +45,11 @@ def make_objects(path: Path) -> None:
 
 
 def used(path: Path) -> bool:
-    """Whether anything was written to the object directory at `path`."""
+    """Whether anything was written to the object directory at `path`.
+
+    Returns:
+        True when `path` is a directory with at least one entry.
+    """
     return path.is_dir() and any(True for _ in path.iterdir())
 
 
@@ -79,8 +83,9 @@ def tidy(
     worker started and a sandboxed worker cannot move. Its own refs, `ORIG_HEAD`, `FETCH_HEAD`, and its HEAD reflog,
     which may name the worker's objects, are dropped. Nothing shared is touched: not a branch, not another reflog.
 
-    Returns whether the slot may be returned. treehouse runs git in a slot it takes back, so one this could not put
-    back is left leased, and the object directory kept, for the operator.
+    Returns:
+        Whether the slot may be returned. treehouse runs git in a slot it takes back, so one this could not put back
+        is left leased, and the object directory kept, for the operator.
     """
     if link is not None and hostgit.read_link(slot) != link:
         try:

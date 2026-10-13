@@ -41,7 +41,12 @@ def listen(stream: IO[str] | None) -> Generator[Callable[[], str] | None]:
 
 
 def _terminal_fd(stream: IO[str] | None) -> int | None:
-    """The descriptor of `stream` if it is a terminal this process reads in the foreground."""
+    """The descriptor of `stream` if it is a terminal this process reads in the foreground.
+
+    Returns:
+        The descriptor, or None when `stream` is None, has none, is not a terminal, or this process is in the
+        background on it.
+    """
     if stream is None:
         return None
     try:
@@ -59,7 +64,11 @@ def _terminal_fd(stream: IO[str] | None) -> int | None:
 
 
 def _cbreak(fd: int) -> list[Any] | None:  # termios' own type for a terminal's settings
-    """Put the terminal at `fd` in cbreak mode. Returns its settings before, or None if it could not be changed."""
+    """Put the terminal at `fd` in cbreak mode. Returns its settings before, or None if it could not be changed.
+
+    Returns:
+        The terminal's settings before the change, to put back, or None when they could not be changed.
+    """
     try:
         return tty.setcbreak(fd)
     except termios.error:
@@ -67,7 +76,11 @@ def _cbreak(fd: int) -> list[Any] | None:  # termios' own type for a terminal's 
 
 
 def _pending(fd: int) -> str:
-    """Every key waiting to be read at `fd`, without waiting for one."""
+    """Every key waiting to be read at `fd`, without waiting for one.
+
+    Returns:
+        The keys read, decoded with bad bytes replaced; empty when none was waiting.
+    """
     keys: list[bytes] = []
     while select.select([fd], [], [], 0)[0]:
         chunk = os.read(fd, _READ_BYTES)

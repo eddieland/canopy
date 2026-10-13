@@ -55,6 +55,9 @@ def state_block(
     (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages newer than
     its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `mirror_delimiter` ends
     the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
+
+    Returns:
+        The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
     """
     private = private or {}
     operator = operator or {}

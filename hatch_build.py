@@ -25,7 +25,11 @@ class UIBuildHook(BuildHookInterface):
     PLUGIN_NAME = "canopy-ui"
 
     def initialize(self, version: str, build_data: dict[str, Any]) -> None:
-        """Run before the wheel is assembled."""
+        """Run before the wheel is assembled.
+
+        Raises:
+            RuntimeError: ui/dist/index.html is missing after the build, or with no usable npm to build it.
+        """
         if self.target_name != "wheel" or version == "editable":
             return
         ui = Path(self.root) / "ui"

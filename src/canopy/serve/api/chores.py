@@ -14,7 +14,7 @@ from canopy.core import chore_view, conversation
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, chore_ref, refusal
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, chore_ref
 from canopy.serve.schema import ChoreDetail, ChoreRunDetail, ChoreSummary, Replied, ReplyRequest, Transcript
 
 router = APIRouter()
@@ -78,6 +78,6 @@ def note(name: str, body: ReplyRequest, backend: BackendDep) -> Replied:
                 ctx.conn, ref, body.body, channel=WEB, submission=body.submission, chores=defined
             )
         except conversation.Refused as r:
-            raise refusal(r) from None
+            raise RefusedError(r) from None
     _log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
     return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)

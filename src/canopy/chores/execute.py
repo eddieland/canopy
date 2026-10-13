@@ -55,6 +55,9 @@ class Outcome:
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     """Do chore run `run_id` from claiming it to closing its row. The agent's output is written to `out`, the run log.
 
+    Returns:
+        How the run ended, recorded on its row unless it was already closed. A failure after the claim is `crashed`.
+
     Raises:
         ChoreError: the run does not exist or is not waiting to start, for example because another `_chore` has it.
     """
@@ -148,7 +151,14 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
 
 
 def _cwd(ctx: Context, name: str, chore: Chore) -> Path:
-    """The chore's working directory: its `cwd`, or a directory of its own that only the operator can read."""
+    """The chore's working directory: its `cwd`, or a directory of its own that only the operator can read.
+
+    Returns:
+        The chore's `cwd` when it sets one, else its own directory, made if it is missing.
+
+    Raises:
+        SetupError: its `cwd` is not a directory.
+    """
     if chore.cwd is not None:
         if not chore.cwd.is_dir():
             raise SetupError(f"chore {name}'s cwd {chore.cwd} is not a directory")

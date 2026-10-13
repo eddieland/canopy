@@ -85,7 +85,11 @@ class ChoreState:
         return next((r for r in self.runs if r["status"] != "running"), None)
 
     def earliest(self) -> datetime | None:
-        """The earliest time the `not_due` guard allows a new run: `every_minutes` after the latest start. None: now."""
+        """The earliest time the `not_due` guard allows a new run: `every_minutes` after the latest start. None: now.
+
+        Returns:
+            The latest run's start plus `every_minutes`, or None when the chore has never run.
+        """
         latest = self.latest
         if latest is None:
             return None
@@ -95,6 +99,10 @@ class ChoreState:
         """The earliest time every guard on time allows a new run: `earliest`, moved to when its window next opens.
 
         None, or a time not after `now`, means it may run now.
+
+        Returns:
+            `earliest` when the chore has no window, or its window is open at the later of `earliest` and `now`;
+            else when the window next opens after that.
         """
         earliest = self.earliest()
         if not window.limited(self.chore):
@@ -104,14 +112,22 @@ class ChoreState:
         return earliest if opens <= after else opens
 
     def findings(self) -> list[OpenFinding]:
-        """The findings of the latest `ok` run. A run that ended any other way leaves them standing."""
+        """The findings of the latest `ok` run. A run that ended any other way leaves them standing.
+
+        Returns:
+            Each finding, with when the unbroken sequence of `ok` runs reporting it started; none before an `ok` run.
+        """
         oks = _oks(self.runs)
         if not oks:
             return []
         return [OpenFinding(self.name, f, self._since(f.id, oks)) for f in oks[0][1].findings]
 
     def _since(self, finding_id: str, oks: list[tuple[sqlite3.Row, result.ChoreResult]]) -> str:
-        """When the unbroken sequence of `ok` runs reporting `finding_id` started, reading back page by page."""
+        """When the unbroken sequence of `ok` runs reporting `finding_id` started, reading back page by page.
+
+        Returns:
+            The start time, in the journal's format, of the oldest `ok` run in that sequence.
+        """
         since = str(oks[0][0]["started_at"])
         page, rest = self.runs, oks[1:]
         while True:

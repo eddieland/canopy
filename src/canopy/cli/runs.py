@@ -196,7 +196,12 @@ def cmd_dispatch(
 def _review_findings(
     conn: sqlite3.Connection, key: str, kind: str, repos: tuple[str, ...], run_id: int | None
 ) -> str | None:
-    """Return the worker's `{{REVIEW_FINDINGS}}` for `--review-run`, or None without it (DESIGN §21)."""
+    """Return the worker's `{{REVIEW_FINDINGS}}` for `--review-run`, or None without it (DESIGN §21).
+
+    Raises:
+        dispatch.Refusal: `--review-run` is given for a kind other than `resume`, or its review run is missing, of
+            another ticket or repository, not `done`, or found nothing.
+    """
     if run_id is None:
         return None
     if kind != "resume":

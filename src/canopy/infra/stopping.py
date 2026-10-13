@@ -37,7 +37,11 @@ class StopOnSignal:
             raise Stopped(signum)
 
     def __enter__(self) -> Self:
-        """Install the handlers."""
+        """Install the handlers.
+
+        Returns:
+            This object, so the block can disarm it (`armed = False`) before cleanup it must not interrupt.
+        """
         for s in self.SIGNALS:
             self._previous[s] = signal.signal(s, self._handle)
         return self

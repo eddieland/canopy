@@ -92,7 +92,11 @@ _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 
 
 def at(minutes: int) -> str:
-    """The journal's time `minutes` after T0."""
+    """The journal's time `minutes` after T0.
+
+    Returns:
+        The time as the journal formats it.
+    """
     return db.format_time(T0 + timedelta(minutes=minutes))
 
 
@@ -130,7 +134,11 @@ ATTENTION: tuple[Item, ...] = (
 
 
 def slot_path(root: Path, repo: str, slot: int) -> str:
-    """Where a slot of `repo`'s pool is in the workspace at `root`, in canopy's pinned layout."""
+    """Where a slot of `repo`'s pool is in the workspace at `root`, in canopy's pinned layout.
+
+    Returns:
+        The slot's worktree path, `<root>/.treehouse/<pool>/<slot>/<repo>`.
+    """
     return str(root / ".treehouse" / _POOLS[repo] / str(slot) / repo)
 
 
@@ -139,6 +147,9 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
 
     web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
     size of four. mobile: run 43's other slot, and one idle.
+
+    Returns:
+        Each cloned repository's slots, by repository name, numbered from 1.
     """
     found: dict[str, list[dict[str, object]]] = {
         "web": [
@@ -184,7 +195,12 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
 
 
 def seed(directory: Path) -> Backend:
-    """Write a workspace, a user config, and a seeded journal under `directory`, and return a Backend over them."""
+    """Write a workspace, a user config, and a seeded journal under `directory`, and return a Backend over them.
+
+    Returns:
+        A mock Backend whose clock is T0, with the fixtures' attention list and pools, and stand-ins for ending a run
+        and reloading.
+    """
     root = directory / "acme"
     root.mkdir(parents=True)
     (root / config.WORKSPACE_FILE_NAME).write_text(_MAP_TOML)
@@ -595,7 +611,11 @@ def _decisions(conn: sqlite3.Connection) -> None:
 
 
 def _event(kind: str, session: str, minutes: float, **fields: object) -> str:
-    """One event as `opencode run --format json` prints it, `minutes` after T0."""
+    """One event as `opencode run --format json` prints it, `minutes` after T0.
+
+    Returns:
+        The event as one line of JSON.
+    """
     ms = int((T0 + timedelta(minutes=minutes)).timestamp() * 1000)
     return json.dumps({"type": kind, "timestamp": ms, "sessionID": session, **fields})
 
@@ -628,7 +648,11 @@ def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls")
 
 
 def _done(session: str, minutes: float, title: str, command: str, output: str, *, seconds: float = 1) -> str:
-    """A bash call that completed."""
+    """A bash call that completed.
+
+    Returns:
+        The `tool_use` event as one line of JSON.
+    """
     state = {"status": "completed", "input": {"command": command, "description": title}, "output": output}
     return _tool(session, minutes, "bash", {**state, "title": title}, seconds)
 

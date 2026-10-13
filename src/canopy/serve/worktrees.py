@@ -45,7 +45,12 @@ _SYNC = "held while `canopy workspace sync` makes this pool's slots"
 
 
 def pools(backend: Backend, ctx: Context) -> list[Pool]:
-    """Every pool of the workspace, in map order, each with its slots or why they could not be read."""
+    """Every pool of the workspace, in map order, each with its slots or why they could not be read.
+
+    Returns:
+        One pool per repository in the map. One with no clone, or whose slots treehouse could not read, carries an
+        error instead of worktrees.
+    """
     running = db.running_runs(ctx.conn)
     by_lease: dict[str, sqlite3.Row] = {}
     for run_id, slots in db.all_run_slots(ctx.conn, [int(r["id"]) for r in running]).items():
@@ -77,6 +82,10 @@ def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row 
     """One slot, with the running run or review that holds its lease, if the journal has one.
 
     Its path is shown from workspace `root` when under it.
+
+    Returns:
+        The worktree, `working` while a run or review holds it, with a note when its lease is canopy's but no running
+        run holds it, or `canopy workspace sync` does.
     """
     leased = slot.lease_id != ""
     state: WorktreeState = _STATES.get(slot.status, "broken")
@@ -114,7 +123,11 @@ def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row 
 
 
 def _time(stamp: str | None) -> datetime | None:
-    """When treehouse says a slot was leased, or None if it says nothing a page can show."""
+    """When treehouse says a slot was leased, or None if it says nothing a page can show.
+
+    Returns:
+        The time in UTC, or None for a missing stamp, one that is not ISO 8601, or one with no offset.
+    """
     if stamp is None:
         return None
     try:
@@ -125,5 +138,9 @@ def _time(stamp: str | None) -> datetime | None:
 
 
 def _text(value: str) -> str | None:
-    """A value from treehouse on one line without control characters, or None when it is empty."""
+    """A value from treehouse on one line without control characters, or None when it is empty.
+
+    Returns:
+        `value` with control characters made spaces and whitespace collapsed, or None if nothing is left.
+    """
     return " ".join(conversation.printable(value).split()) or None

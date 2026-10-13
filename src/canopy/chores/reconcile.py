@@ -17,6 +17,9 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
     """Mark running chore runs whose `_chore` is dead or never recorded `crashed`. Returns their ids.
 
     The agent leads its own process group, so whatever is left of it is killed first.
+
+    Returns:
+        The ids of the chore runs this call closed. A run another process closed first is not among them.
     """
     closed: list[int] = []
     for row in db.running_chore_runs(ctx.conn):

@@ -35,7 +35,11 @@ def host_name(host: str) -> str:
 
 
 def allowed_origin(origin: str, hosts: frozenset[str]) -> bool:
-    """Whether an Origin header value names a page on one of `hosts`, served over HTTP(S)."""
+    """Whether an Origin header value names a page on one of `hosts`, served over HTTP(S).
+
+    Returns:
+        True if its scheme is http or https and its host name is in `hosts`.
+    """
     parts = urlsplit(origin)
     return parts.scheme in {"http", "https"} and (parts.hostname or "") in hosts
 

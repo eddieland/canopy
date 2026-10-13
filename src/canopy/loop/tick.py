@@ -34,7 +34,12 @@ class Outcome:
 
 
 def run(ctx: Context, *, dry_run: bool) -> Outcome:
-    """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error."""
+    """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error.
+
+    Returns:
+        How the tick ended: its id, status, summary, and what the overseer cost. A busy lock is `lock_busy`, with no
+        tick id.
+    """
     try:
         with lock.hold(ctx.lock_path):
             outcome = _locked(ctx, dry_run=dry_run)
@@ -152,9 +157,12 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
 def _run_overseer(
     ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter
 ) -> tuple[str | None, agent_output.Usage | None]:
-    """Run `overseer_cmd`. Returns why it failed, None on success, and what it cost if the runtime reported it.
+    """Run `overseer_cmd`.
 
     Output goes to `<state_dir>/ticks/<id>.log`. The session and cost are recorded on the tick, failed or not.
+
+    Returns:
+        Why it failed, None on success, and what it cost if the runtime reported it.
     """
     # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
     shadowing = definitions.shadowing(ctx.repo_root)

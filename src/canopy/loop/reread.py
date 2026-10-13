@@ -33,7 +33,11 @@ class Reload:
     ticking: bool = False
 
     def request(self) -> bool:
-        """Ask for a reload. Returns whether a tick is running, so that the reload waits for it to end."""
+        """Ask for a reload.
+
+        Returns:
+            Whether a tick is running, so that the reload waits for it to end.
+        """
         self.requested = True
         return self.ticking
 
@@ -54,6 +58,10 @@ class Reread:
 
 def load(ctx: Context) -> Reread:
     """Read the workspace file and the user config again, as `canopy` commands do, and compare them with `ctx`'s.
+
+    Returns:
+        The config and workspace map as their files say now, and the keys that differ from `ctx`'s, with
+        `workspace map` among them when the map changed.
 
     Raises:
         ConfigError: either does not load. The message names the file.

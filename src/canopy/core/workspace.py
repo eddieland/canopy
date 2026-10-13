@@ -46,7 +46,11 @@ def _summary(value: str) -> str:
 
 
 def url_error(value: str) -> str | None:
-    """Say why `value` cannot be a map's clone URL, or None if it can."""
+    """Say why `value` cannot be a map's clone URL, or None if it can.
+
+    Returns:
+        The reason, for an error message, or None.
+    """
     # The URL reaches `git clone`'s argv after `--`; refusing a leading "-" and blanks keeps it one plain argument.
     if not value.strip() or value.startswith("-") or any(c.isspace() for c in value):
         return "must be a clone URL: not empty, no whitespace, not starting with '-'"
@@ -132,12 +136,20 @@ class Workspace:
 
 
 def default_name(root: Path) -> str:
-    """Name a workspace after its directory, reduced to a valid repository name, when its map names none."""
+    """Name a workspace after its directory, reduced to a valid repository name, when its map names none.
+
+    Returns:
+        The directory's name reduced by `reduce_name`, or `workspace` if nothing of it is left.
+    """
     return reduce_name(root.name) or "workspace"
 
 
 def reduce_name(text: str) -> str:
-    """Reduce `text` to a valid repository name: lowercased, other characters made hyphens. Empty if nothing is left."""
+    """Reduce `text` to a valid repository name: lowercased, other characters made hyphens. Empty if nothing is left.
+
+    Returns:
+        The name, with no leading digits or hyphens and no trailing hyphens, or an empty string.
+    """
     reduced = re.sub(r"[^a-z0-9-]+", "-", text.lower()).strip("-")
     return reduced.lstrip("0123456789-")
 
@@ -164,7 +176,11 @@ def find(start: Path) -> Workspace:
 
 
 def no_workspace_message(start: Path) -> str:
-    """Say there is no workspace at or above `start`, and how to make one."""
+    """Say there is no workspace at or above `start`, and how to make one.
+
+    Returns:
+        The error message, with a hint to move an old `canopy.toml`'s keys when the checkout has one.
+    """
     message = (
         f"no {WORKSPACE_FILE_NAME} here or above; canopy runs from a workspace. In an empty directory, run "
         f"`canopy init --provider <tracker> <clone URL>...` to make one."
@@ -176,20 +192,31 @@ def no_workspace_message(start: Path) -> str:
 
 
 def old_repo_file(start: Path) -> Path | None:
-    """The `canopy.toml` at the root of the checkout `start` is in, if there is one. It is never read (D016)."""
+    """The `canopy.toml` at the root of the checkout `start` is in, if there is one. It is never read (D016).
+
+    Returns:
+        The file's path, or None if `start` is in no checkout or its root has no such file.
+    """
     checkout = git_root(start)
     path = checkout / OLD_REPO_FILE_NAME if checkout is not None else None
     return path if path is not None and path.is_file() else None
 
 
 def git_root(start: Path) -> Path | None:
-    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None."""
+    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None.
+
+    Returns:
+        The checkout's root, resolved, or None if `start` is in no checkout.
+    """
     start = start.resolve()
     return next((d for d in (start, *start.parents) if (d / ".git").exists()), None)
 
 
 def load(root: Path) -> Workspace:
     """Read the map of the workspace at `root`.
+
+    Returns:
+        The workspace, named by its map or after its directory, with each repository the map lists.
 
     Raises:
         ConfigError: the workspace file is missing, not TOML, or its map is invalid. The message names the file.

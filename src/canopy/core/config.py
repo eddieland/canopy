@@ -146,7 +146,14 @@ def _reviewer(value: str) -> str:
 
 
 def command_words(template: str) -> list[str]:
-    """Split a command template into words, as `render_command` does. It must mention `{prompt}` exactly once."""
+    """Split a command template into words, as `render_command` does. It must mention `{prompt}` exactly once.
+
+    Returns:
+        The template's words, its placeholders not yet replaced.
+
+    Raises:
+        ValueError: The template is empty, has an unclosed quote, or does not contain `{prompt}` exactly once.
+    """
     words = shlex.split(template)
     if not words:
         raise ValueError("must not be empty")
@@ -176,6 +183,12 @@ def notify_words(template: str) -> list[str]:
     """Split `notify.cmd` into argv with shell word rules. No shell runs (D023). Empty means no notify command.
 
     Its input arrives on stdin, so a `{prompt}` would reach the command as a literal word; it is refused.
+
+    Returns:
+        The command's argv, or an empty list when `template` is empty.
+
+    Raises:
+        ValueError: The template contains `{prompt}` or has an unclosed quote.
     """
     if "{prompt}" in template:
         raise ValueError("must not contain {prompt}; the notification arrives on stdin")
@@ -192,6 +205,12 @@ def setup_words(template: str) -> list[str]:
 
     It gets no placeholders: it runs in a slot, as its working directory, and reads its repository from the
     environment (DESIGN §8). A placeholder would reach the command as a literal word, so one is refused.
+
+    Returns:
+        The command's argv, or an empty list when `template` is empty.
+
+    Raises:
+        ValueError: The template contains `{prompt}` or `{definitions_dir}`, or has an unclosed quote.
     """
     if PROMPT in template or DEFINITIONS_DIR in template:
         raise ValueError(f"must not contain {PROMPT} or {DEFINITIONS_DIR}; setup runs no agent")
@@ -336,7 +355,12 @@ class Tracker(Section):
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
 
     def tools(self) -> TrackerTools | None:
-        """The server and tools a private worker gets, or None if neither config nor a default names any."""
+        """The server and tools a private worker gets, or None if neither config nor a default names any.
+
+        Returns:
+            The configured server and read tools, each falling back to the provider's default, or None when either
+            is still missing.
+        """
         default = DEFAULT_TRACKER_TOOLS.get(self.provider)
         server = self.mcp_server or (default.server if default is not None else "")
         allowed = self.read_tools if self.read_tools is not None else (default.allowed if default is not None else ())
@@ -423,7 +447,11 @@ class Capacity(Section):
     repo_slots: Annotated[dict[RepoName, Count], Scope.USER] = {}
 
     def slots_for(self, repo: str) -> int | None:
-        """The slots declared for repository `repo`'s pool, or None if its pool is not managed."""
+        """The slots declared for repository `repo`'s pool, or None if its pool is not managed.
+
+        Returns:
+            The repository's entry in `repo_slots`, else `slots_per_repo`, which is None when pools are unmanaged.
+        """
         return self.repo_slots.get(repo, self.slots_per_repo)
 
 
@@ -512,6 +540,12 @@ def listen_address(value: str) -> str:
 
     Never a wildcard (`0.0.0.0`, `::`), a public address, or a host name other than `localhost`, whose address canopy
     would not know.
+
+    Returns:
+        `value` unchanged.
+
+    Raises:
+        ValueError: `value` is not a loopback name or an IP address, or is a wildcard, multicast, or public address.
     """
     if value in LOOPBACK_NAMES:
         return value
@@ -527,7 +561,14 @@ def listen_address(value: str) -> str:
 
 
 def check_base_path(value: str) -> str:
-    """Refuse a path prefix that is not empty or like `/canopy`, with no trailing slash."""
+    """Refuse a path prefix that is not empty or like `/canopy`, with no trailing slash.
+
+    Returns:
+        `value` unchanged.
+
+    Raises:
+        ValueError: `value` is not empty or `/`-separated segments of URL-safe characters, or a segment is `.` or `..`.
+    """
     if not _BASE_PATH_RE.fullmatch(value) or any(part in {".", ".."} for part in value.split("/")):
         raise ValueError(f"base path {value!r} must be empty or like /canopy, with no trailing slash")
     return value
@@ -609,14 +650,22 @@ class Notify(Section):
         return self
 
     def all_sinks(self) -> dict[str, Sink]:
-        """Every sink by name, in name order, `notify.cmd` included as `default`."""
+        """Every sink by name, in name order, `notify.cmd` included as `default`.
+
+        Returns:
+            The configured sinks, plus a text sink for attention events running `notify.cmd` when it is set.
+        """
         found = dict(self.sinks)
         if self.cmd:
             found[DEFAULT_SINK] = Sink(cmd=self.cmd, format="text", events=("attention",))
         return dict(sorted(found.items()))
 
     def takes(self, group: str) -> bool:
-        """Whether any sink takes `group`: events of a group no sink takes are not recorded."""
+        """Whether any sink takes `group`: events of a group no sink takes are not recorded.
+
+        Returns:
+            True when at least one sink's `events` names `group`.
+        """
         return any(group in sink.events for sink in self.all_sinks().values())
 
 
@@ -628,6 +677,9 @@ _DAY_MINUTES = 24 * 60
 
 def chore_hours(value: str) -> tuple[int, int]:
     """Read a chore's `hours`, `HH:MM-HH:MM`, as minutes after midnight: the start, and the end, which may be 24:00.
+
+    Returns:
+        The start and the end, each in minutes after midnight. The end is after the start and at most 1440.
 
     Raises:
         ValueError: not in that shape, not a time of day, or not ending after it starts.
@@ -753,7 +805,11 @@ SPECS.update({name: _spec(name, Config.model_fields[name]) for name in TABLE_SEC
 
 
 def user_config_dir() -> Path:
-    """`$XDG_CONFIG_HOME/canopy`, or `~/.config/canopy` when XDG_CONFIG_HOME is unset or empty."""
+    """`$XDG_CONFIG_HOME/canopy`, or `~/.config/canopy` when XDG_CONFIG_HOME is unset or empty.
+
+    Returns:
+        The directory the user config file and its prompt overrides are in, with `~` expanded. It may not exist.
+    """
     base = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(base).expanduser() / "canopy"
 
@@ -767,6 +823,13 @@ def load(root: Path, user_file: Path | None = None) -> Config:
     """Read and validate the layered config for the workspace at `root`: its workspace file, then the user file.
 
     No code repository's file is read (D016). The workspace file's map tables are `canopy.core.workspace`'s to read.
+
+    Returns:
+        The validated config, the user file's keys winning over the workspace file's.
+
+    Raises:
+        ConfigError: The workspace file sets a user-only key, the user file is missing, a file cannot be read or is not
+            valid TOML, a key is unknown or removed, or a value does not validate.
     """
     user_file = user_file or user_config_path()
     shared_file = root / WORKSPACE_FILE_NAME
@@ -794,7 +857,12 @@ def load(root: Path, user_file: Path | None = None) -> Config:
 def _merge(
     layers: tuple[tuple[Path, dict[str, object]], ...], shared_file: Path
 ) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
-    """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file."""
+    """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file.
+
+    Returns:
+        The merged keys by section, and the file each key's value came from by `section.key` name. A workspace file's
+        policy value that does not tighten the default is left out of both.
+    """
     merged: dict[str, dict[str, object]] = {section: {} for section in (*SECTIONS, *TABLE_SECTIONS)}
     origin: dict[str, Path] = {}
     for source, values in layers:
@@ -813,7 +881,11 @@ def _merge(
 
 
 def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
-    """Return the file's config keys as `section.key` names. Tables named in `skip` are someone else's to read."""
+    """Return the file's config keys as `section.key` names. Tables named in `skip` are someone else's to read.
+
+    Raises:
+        ConfigError: The file cannot be read or is not valid TOML, or it has a key that is unknown or was removed.
+    """
     try:
         with path.open("rb") as f:
             doc = tomllib.load(f)
@@ -884,6 +956,9 @@ def changed(old: Config, new: Config) -> list[str]:
     """The keys whose values differ from `old` to `new`, as `section.key` names, in the schema's order.
 
     A table section, such as `chores`, is one key: any change to any of its tables names it.
+
+    Returns:
+        The changed keys, empty when nothing changed.
     """
     return [name for name in SPECS if _value(old, name) != _value(new, name)]
 
@@ -901,6 +976,9 @@ def render_command(template: str, prompt: str, definitions_dir: Path, title: str
     each word, in one pass, so no value is searched for another placeholder. The prompt therefore always lands in
     exactly one argument, whatever it contains. Every title starts with a letter or digit, so even as a word of its own
     it is never read as an option.
+
+    Returns:
+        The argv to run, with every placeholder replaced.
     """
     values = {PROMPT: prompt, DEFINITIONS_DIR: str(definitions_dir), TITLE: title}
     return [_PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], w) for w in command_words(template)]

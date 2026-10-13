@@ -18,6 +18,9 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
     """Mark running review runs whose `_review` is dead or never recorded `crashed`, and return their slots.
 
     The reviewer leads its own process group, so whatever is left of it is killed before its slot goes back.
+
+    Returns:
+        The ids of the review runs this call closed. A run another process closed first is not among them.
     """
     closed: list[int] = []
     for row in db.running_review_runs(ctx.conn):

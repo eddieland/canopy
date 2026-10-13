@@ -33,12 +33,21 @@ _STATES: dict[str, RunState] = {"running": "running", "done": "done"}
 
 
 def reviews(ctx: Context) -> list[ReviewSummary]:
-    """The latest review runs, newest first."""
+    """The latest review runs, newest first.
+
+    Returns:
+        At most `RECENT_REVIEWS` runs, each as the reviews list shows it.
+    """
     return [summary(r) for r in db.recent_review_runs(ctx.conn, RECENT_REVIEWS)]
 
 
 def review(ctx: Context, run_id: int) -> ReviewDetail | None:
-    """One review run in full, or None if there is no such run."""
+    """One review run in full, or None if there is no such run.
+
+    Returns:
+        The run with its summary, harness note, findings, the diff it reviewed if that was kept, and every review run
+        of the same PR; or None.
+    """
     row = db.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
@@ -58,7 +67,11 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
 
 
 def summary(row: sqlite3.Row) -> ReviewSummary:
-    """One review run's row, as the reviews list shows it."""
+    """One review run's row, as the reviews list shows it.
+
+    Returns:
+        The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
+    """
     stored = result.stored(row["result_json"])
     status = str(row["status"])
     return ReviewSummary(

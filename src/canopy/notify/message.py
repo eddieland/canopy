@@ -34,7 +34,11 @@ def _line(text: object) -> str:
 
 
 def event_line(kind: str, fields: dict[str, object]) -> str:  # noqa: PLR0911  (one shape per kind)
-    """One line of text for an event, for a person."""
+    """One line of text for an event, for a person.
+
+    Returns:
+        The line, led by `>`, `<`, `!`, or `*` for the event's kind. A kind it does not know shows its fields as JSON.
+    """
     f = fields
     if kind == "run.started":
         return (
@@ -82,7 +86,11 @@ class Event:
 
     @classmethod
     def of(cls, row: sqlite3.Row) -> Event:
-        """Read an outbox row."""
+        """Read an outbox row.
+
+        Returns:
+            The event. Fields that do not parse as a JSON object are read as none.
+        """
         try:
             parsed: object = json.loads(str(row["fields"]))
         except json.JSONDecodeError:
@@ -97,7 +105,11 @@ class Event:
         return event_line(self.kind, self.fields)
 
     def as_json(self, titles: Mapping[str, str] | None = None) -> dict[str, object]:
-        """The event as the `json` format lists it: an event about a ticket also carries its title from `titles`."""
+        """The event as the `json` format lists it: an event about a ticket also carries its title from `titles`.
+
+        Returns:
+            The event's id, kind, time, fields, the ticket's title if it has one, and its `line`.
+        """
         ticket = self.fields.get("ticket")
         named = {"title": (titles or {}).get(str(ticket))} if ticket else {}
         return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, **named, "line": self.line}
@@ -122,7 +134,12 @@ class Digest:
     running: int
 
     def lines(self) -> list[str]:
-        """The digest as lines for a person. Sent even when nothing happened: a missing digest means a dead loop."""
+        """The digest as lines for a person. Sent even when nothing happened: a missing digest means a dead loop.
+
+        Returns:
+            A heading line with the tick counts, then an indented line for each of runs, tickets done and blocked,
+            attention, and workers running.
+        """
         span = f"Digest since {self.since}:"
         ticks = ", ".join(f"{s} {n}" for s, n in sorted(self.ticks.items())) or "none"
         total = sum(self.ticks.values())
@@ -144,7 +161,11 @@ class Digest:
         return out
 
     def as_json(self) -> dict[str, object]:
-        """The digest as the `json` format carries it."""
+        """The digest as the `json` format carries it.
+
+        Returns:
+            The digest's fields, attention as its open count, counts by reason, and oldest age, and its `lines`.
+        """
         return {
             "since": self.since,
             "until": self.until,
@@ -160,12 +181,20 @@ class Digest:
 
 
 def titles(conn: sqlite3.Connection) -> dict[str, str]:
-    """Each named ticket's title by its key (DESIGN §13), for the `json` format to carry beside the key."""
+    """Each named ticket's title by its key (DESIGN §13), for the `json` format to carry beside the key.
+
+    Returns:
+        Titles by ticket key. A ticket with no title is left out.
+    """
     return {str(r[0]): str(r[1]) for r in conn.execute("SELECT key, title FROM tickets WHERE title IS NOT NULL")}
 
 
 def digest(conn: sqlite3.Connection, items: list[Item], *, since: str, now: datetime) -> Digest:
-    """Build the digest for the time since `since`: ticks, runs, the open attention list, workers running now."""
+    """Build the digest for the time since `since`: ticks, runs, the open attention list, workers running now.
+
+    Returns:
+        The digest, read from the journal and `items` only.
+    """
     ticks = Counter(str(r[0]) for r in conn.execute("SELECT status FROM ticks WHERE started_at >= ?", (since,)))
     started = Counter(str(r[0]) for r in conn.execute("SELECT kind FROM runs WHERE started_at >= ?", (since,)))
     ended_rows = conn.execute("SELECT * FROM runs WHERE ended_at >= ? ORDER BY id", (since,)).fetchall()
@@ -230,11 +259,20 @@ class Message:
     titles: dict[str, str] = field(default_factory=dict[str, str])
 
     def is_empty(self) -> bool:
-        """Whether there is nothing to send."""
+        """Whether there is nothing to send.
+
+        Returns:
+            True if the message has no attention change, no event, and no digest.
+        """
         return not self.attention and not self.events and self.digest is None
 
     def _bounded(self) -> tuple[list[Item], list[tuple[str, str]], list[Event], int]:
-        """The attention lines and events to list, and how many are left out."""
+        """The attention lines and events to list, and how many are left out.
+
+        Returns:
+            The items added and resolved and the events to list, together at most `MAX_LINES` attention lines and
+            `MAX_LINES` events, and the count of the rest. Events older than `STALE_EVENTS` are counted, not listed.
+        """
         added: list[Item] = self.attention.added if self.attention else []
         resolved: list[tuple[str, str]] = self.attention.resolved if self.attention else []
         listed_added = added[:MAX_LINES]
@@ -246,7 +284,11 @@ class Message:
         return listed_added, listed_resolved, listed_events, omitted
 
     def text(self) -> str:
-        """The `text` format. With only attention in it, exactly the message `notify.cmd` always got (DESIGN §14)."""
+        """The `text` format. With only attention in it, exactly the message `notify.cmd` always got (DESIGN §14).
+
+        Returns:
+            The message as lines ending in a newline, the last naming the full attention list's path.
+        """
         added, resolved, events, omitted = self._bounded()
         if self.attention:
             total_added, total_resolved = len(self.attention.added), len(self.attention.resolved)
@@ -266,7 +308,11 @@ class Message:
         return "\n".join(lines) + "\n"
 
     def json(self) -> str:
-        """The `json` format: one object (DESIGN §20). `text` holds the same message in the text format."""
+        """The `json` format: one object (DESIGN §20). `text` holds the same message in the text format.
+
+        Returns:
+            The object serialized as one JSON document.
+        """
         added, resolved, events, omitted = self._bounded()
         attention: dict[str, object] | None = None
         if self.attention is not None:
@@ -304,7 +350,11 @@ class Message:
         return json.dumps(body)
 
     def render(self, fmt: str) -> str:
-        """The message in format `fmt`, `json` or `text`."""
+        """The message in format `fmt`, `json` or `text`.
+
+        Returns:
+            The `json` format if `fmt` is `json`, the `text` format otherwise.
+        """
         return self.json() if fmt == "json" else self.text()
 
     def _title(self, key: str | None) -> str | None:

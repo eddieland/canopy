@@ -94,7 +94,11 @@ class SplitResult(BaseModel):
 
 
 def parse_split(stdout: str) -> SplitResult | None:
-    """Parse `stdout`'s result line (DESIGN §13) as a split's result. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as a split's result. None if it is missing or invalid.
+
+    Returns:
+        The split's result, or None.
+    """
     return contract.last_line(SplitResult, stdout)
 
 
@@ -147,16 +151,24 @@ class Outcome:
 
 
 def parse_result(stdout: str) -> WorkerResult | None:
-    """Parse `stdout`'s result line (DESIGN §13) as the result contract. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as the result contract. None if it is missing or invalid.
+
+    Returns:
+        The worker's result, or None.
+    """
     return contract.last_line(WorkerResult, stdout)
 
 
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     """Do run `run_id` from branch setup to closing its row. Worker output is written to `out`, the run log.
 
+    Returns:
+        How the run ended, as its row was closed with. A setup failure, a signal, or an unexpected error is `crashed`,
+        with why in its note.
+
     Raises:
         WorkerError: The run does not exist or is not waiting to start, for example because another `_run` has it.
-    """
+    """  # noqa: DOC501  (the _SetupError raised below is caught below, into a crashed outcome)
     run = db.get_run(ctx.conn, run_id)
     if run is None:
         raise WorkerError(f"no run {run_id}")
@@ -216,11 +228,22 @@ class _Slot:
     link: bytes | None
 
     def link_moved(self) -> bool:
-        """Whether the `.git` file no longer holds what it did when the run started."""
+        """Whether the `.git` file no longer holds what it did when the run started.
+
+        Returns:
+            True if it changed; always False when it was not a file at the start.
+        """
         return self.link is not None and hostgit.read_link(self.path) != self.link
 
     def reading(self, ctx: Context, objects: Path) -> _Slot:
-        """The slot, with its git reading the run's object directory as well as the slot's own objects."""
+        """The slot, with its git reading the run's object directory as well as the slot's own objects.
+
+        Returns:
+            A copy of the slot whose git has the environment that reads `objects` too.
+
+        Raises:
+            _SetupError: git could not be set up to read `objects`.
+        """
         try:
             env = tidy.reading(ctx.runner, self.path, objects)
         except tidy.GitError as e:
@@ -243,7 +266,11 @@ class _Slot:
 
 
 def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
-    """A run's session title: `<KEY> <kind>: <the ticket's title>`, or `<KEY> <kind>` before the overseer names it."""
+    """A run's session title: `<KEY> <kind>: <the ticket's title>`, or `<KEY> <kind>` before the overseer names it.
+
+    Returns:
+        The title.
+    """
     ticket = db.get_ticket(conn, key)
     title = ticket["title"] if ticket is not None else None
     return f"{key} {kind}: {title}" if title else f"{key} {kind}"
@@ -256,8 +283,15 @@ def _run_agent(
 
     A private run's places must also name none of the tracker server's tools (DESIGN §22).
 
-    Returns the agent's process and the text its result line is read from. The session and cost the runtime reported
-    are recorded on the run at once, so a git step after the agent that fails does not lose them (DESIGN §13).
+    The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
+    fails does not lose them (DESIGN §13).
+
+    Returns:
+        The agent's process and the text its result line is read from.
+
+    Raises:
+        _SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run, names
+            one of the tracker server's tools.
     """
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044). A joint run's
@@ -306,7 +340,12 @@ def _run_agent(
 
 
 def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
-    """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid."""
+    """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid.
+
+    Returns:
+        The splitter's status, `timeout` if it timed out, or `unknown` for a missing or invalid result line. A result
+        whose children are refused is kept without them, with why in the note.
+    """
     for slot in slots:
         _check_out(slot)
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
@@ -339,6 +378,12 @@ def _check_out(slot: _Slot, branch: str = "") -> _Start:
     A split reads its base and creates no branch. A worker run passes its branch, which it continues if it was pushed.
     No run makes a local branch: every slot of a pool shares the repository's branch refs, so one would be state other
     slots see. The worker pushes `HEAD` to the branch by refspec (DESIGN §8, D109).
+
+    Returns:
+        HEAD's commit after the checkout, and how many entries HEAD's reflog then had.
+
+    Raises:
+        _SetupError: a git step failed, or the base branch is not on origin.
     """
     git = slot.git
     # --prune: a slot keeps remote-tracking refs from earlier runs, which would hide a branch since deleted on origin.
@@ -442,6 +487,9 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
 
     Unlike treehouse's `post_create`, which runs on the base before the branch is checked out and whose failure leaves
     the lease standing, this sees the branch the worker gets, and a failure stops the run before the worker starts.
+
+    Raises:
+        _SetupError: `setup_cmd` could not start, timed out, or exited non-zero.
     """
     argv = setup_words(ctx.config.runtime.setup_cmd)
     if not argv:
@@ -476,8 +524,11 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
 def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapter) -> str:
     """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
-    Returns why the work is not pushed, or "" if it is, or if the worker committed nothing. Detached, HEAD is the only
-    thing holding the worker's commits, so a worker that moved it off them leaves them behind: that is unpushed too.
+    Detached, HEAD is the only thing holding the worker's commits, so a worker that moved it off them leaves them
+    behind: that is unpushed too.
+
+    Returns:
+        Why the work is not pushed, or "" if it is, or if the worker committed nothing.
     """
     git = slot.git
     local = git.run("rev-parse", "HEAD")
@@ -505,6 +556,9 @@ def _push(git: _Git, branch: str) -> procs.Result:
     A push also moves origin's remote-tracking ref, which every slot of the pool shares. Pointed at a commit only the
     run's object directory holds, it would break git in every slot, and in the primary clone, once that directory goes
     (DESIGN §8). The next fetch moves it, from origin's own objects.
+
+    Returns:
+        The push's result, whether or not it succeeded.
     """
     tracking = f"refs/remotes/origin/{branch}"
     before = git.result("rev-parse", "--verify", "--quiet", tracking).stdout.strip() if git.reads_run else ""
@@ -521,6 +575,9 @@ def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str
 
     Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
     checked something else out, not one that tried to hide its work.
+
+    Returns:
+        The commits left behind, none if HEAD did not move during the run.
     """
     entries = _head_log(git)
     held = list(dict.fromkeys(entries[: max(0, len(entries) - start.moves)]))
@@ -536,7 +593,11 @@ def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str
 
 
 def _head_log(git: _Git) -> list[str]:
-    """The commits in the slot's HEAD reflog, newest first, or none if it has no reflog."""
+    """The commits in the slot's HEAD reflog, newest first, or none if it has no reflog.
+
+    Returns:
+        The commits' full hashes, one per reflog entry.
+    """
     found = git.result("log", "--walk-reflogs", "--format=%H", "HEAD")
     return found.stdout.split() if found.ok else []
 

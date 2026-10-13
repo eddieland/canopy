@@ -61,6 +61,9 @@ class Outcome:
 def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     """Do review run `run_id`, from claiming it to returning its slot and closing its row.
 
+    Returns:
+        How the run ended, as recorded on its row: the reviewer's validated result, if any, and the harness's note.
+
     Raises:
         ReviewError: the run does not exist or is not waiting to start, for example because another `_review` has it.
     """
@@ -98,7 +101,12 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
 
 
 def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
-    """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21)."""
+    """The outcome of a valid result, after the checks the harness can make itself (DESIGN §21).
+
+    Returns:
+        `failed` for a result that is not `done`, else `done`. A low impact with `review.low_impact` unset is recorded
+        as normal, with a note saying so.
+    """
     if parsed.status != "done":
         return Outcome("failed", parsed)
     if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
@@ -183,7 +191,11 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
 
 
 def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:
-    """Fetch `sha` from origin and check it out, detached. A commit origin does not have fails the run."""
+    """Fetch `sha` from origin and check it out, detached. A commit origin does not have fails the run.
+
+    Raises:
+        _Unreviewable: git failed to fetch or check out `sha`, or HEAD is not `sha` afterwards.
+    """
     for args in (("fetch", "--quiet", "origin", sha), ("checkout", "--quiet", "--detach", sha)):
         _git(runner, slot, *args)
     head = _git(runner, slot, "rev-parse", "HEAD")
@@ -195,6 +207,9 @@ def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
     """Remove the commit's symlinks that resolve outside the checkout, and return their paths (DESIGN §21).
 
     A PR can commit a link to any path, such as one of the operator's files, and the reviewer reads through links.
+
+    Returns:
+        The removed links' paths, relative to the checkout.
     """
     root = slot.resolve()
     dropped: list[str] = []
@@ -235,7 +250,11 @@ def _save_diff(runner: procs.Runner, slot: Path, run: sqlite3.Row, log: logs.Tic
 def _git_or_none(
     runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: dict[str, object], *args: str
 ) -> str | None:
-    """`git <args>`'s stdout, or None, logged, if it fails: for steps the review can do without."""
+    """`git <args>`'s stdout, or None, logged, if it fails: for steps the review can do without.
+
+    Returns:
+        git's stdout, or None when git could not start or exited nonzero.
+    """
     try:
         done = runner.run(hostgit.argv(*args), cwd=slot, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS)
     except procs.ProcError as e:

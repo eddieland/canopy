@@ -114,7 +114,16 @@ class SubprocessRunner:
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
     ) -> Result:
-        """Run `args` to completion and capture its output. See `Runner.run`."""
+        """Run `args` to completion and capture its output. See `Runner.run`.
+
+        Returns:
+            The exit code and captured output. `timed_out` is set when `timeout` expired.
+
+        Raises:
+            CommandNotFoundError: The executable is missing or not executable.
+            ProcError: `cwd` cannot be used as the working directory.
+            OSError: The process could not be started for any other reason.
+        """
         argv = tuple(args)
         full_env = _child_env(cwd, env)
         try:
@@ -158,7 +167,15 @@ class SubprocessRunner:
         return Result(argv, proc.returncode, stdout, stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
-        """Start `args` detached and return its pid. See `Runner.spawn`."""
+        """Start `args` detached and return its pid. See `Runner.spawn`.
+
+        Returns:
+            The child's pid. The child leads its own session.
+
+        Raises:
+            CommandNotFoundError: The executable is missing.
+            ProcError: The process could not be started.
+        """
         argv = tuple(args)
         fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
         try:
@@ -196,7 +213,11 @@ def _child_env(cwd: Path | None, env: Mapping[str, str] | None) -> dict[str, str
 
 
 def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) -> bool:
-    """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory."""
+    """Whether `command` names a file, looked up the way exec looks it up: as a path, or in each PATH directory.
+
+    Returns:
+        True when a regular file is found. A directory that cannot be searched counts as not having it.
+    """
     # The child changes into `cwd` before exec, so a relative or empty PATH entry, like a relative command, resolves
     # against it. An absolute entry replaces `cwd` in the join.
     base = Path(cwd or ".")
@@ -215,6 +236,9 @@ def alive(pid: int) -> bool:
 
     A zombie counts as exited: it is reaped here if it is this process's own child, and recognized from `/proc` where
     there is one. A reused pid is not detected; a pid that belongs to some other process reads as alive.
+
+    Returns:
+        True when the process exists and is not a zombie, or when its state cannot be read. False otherwise.
     """
     if pid <= 0:
         return False
@@ -243,6 +267,9 @@ def kill_group(pgid: int) -> bool:
     Every child `SubprocessRunner` starts leads its own group, so its pid is the group id. A pid is not reused while a
     group of that id has members, so this reaches only what is left of that child and its descendants, unless the whole
     group has already exited and the pid has since gone to a new group leader.
+
+    Returns:
+        True when the signal was sent. False when the group had no process left, or `pgid` is 0 or 1.
     """
     if pgid <= 1:
         return False

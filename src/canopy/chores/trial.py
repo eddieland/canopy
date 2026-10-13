@@ -52,6 +52,9 @@ class Trial:
 def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
     """Render chore `name`'s prompt as a run starting now would get it, and the command that runs it.
 
+    Returns:
+        The chore's definition, the directory it runs in, and the command with the rendered prompt.
+
     Raises:
         TrialError: no such chore for this workspace, its prompt cannot be read, or its working directory is unusable.
     """
@@ -72,7 +75,12 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
 
 
 def run(ctx: Context, prepared: Prepared) -> Trial:
-    """Run the prepared chore to the end or its timeout, and read its result as `_chore` would."""
+    """Run the prepared chore to the end or its timeout, and read its result as `_chore` would.
+
+    Returns:
+        The harness's outcome, `timeout` or `unknown` when there is no valid result, with what the agent printed, its
+        stderr, and its exit code.
+    """
     done = ctx.runner.run(
         prepared.argv,
         cwd=prepared.cwd,
