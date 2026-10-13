@@ -11,7 +11,7 @@ from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.core import chore_view, contract, conversation, db
+from canopy.core import chore_view, contract, conversation, db, pause
 from canopy.infra import keys, lock
 from canopy.loop import attention, repeat, tick
 from canopy.notify import deliver
@@ -102,6 +102,9 @@ def cmd_status(click_ctx: click.Context) -> int:
         click.echo(f"Last tick: {last['id']} {last['status']}{dry}, {started}{spent(last)}")
         if last["summary"]:
             click.echo(f"  {last['summary']}")
+    held = pause.paused(ctx.conn)
+    if held is not None:
+        click.echo(f"Loop paused {attention.age(held.since)} ago ({held.channel}): no tick until `canopy resume`.")
 
     _print_attention(attention.listed(ctx))
     _print_started(ctx)

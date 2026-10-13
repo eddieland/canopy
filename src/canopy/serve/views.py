@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_result, chore_view, contract, conversation, db, items, search, transcript
+from canopy.core import chore_result, chore_view, contract, conversation, db, items, pause, search, transcript
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
@@ -21,9 +21,12 @@ from canopy.serve.schema import (
     Comment,
     Decision,
     LastTick,
+    LoopState,
     Message,
     MessageKind,
     MessageSource,
+    Pause,
+    PauseChannel,
     Run,
     RunState,
     SearchHit,
@@ -72,6 +75,7 @@ _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "don
 # A chore run that checked is done; every other ending raises `chore_failed` (DESIGN §19).
 _CHORE_STATES: dict[str, RunState] = {"running": "running", "ok": "done"}
 _SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
+_PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
 _KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "reply": "reply", "comment": "comment"}
 
 
@@ -112,6 +116,14 @@ def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
 def last_tick(ctx: Context) -> LastTick:
     """The latest tick, and the newest message the latest `ok` tick read."""
     return LastTick(tick=tick(ctx), acknowledged=db.acknowledged_message_id(ctx.conn))
+
+
+def loop_state(ctx: Context) -> LoopState:
+    """Whether the operator paused the loop, since when, and through which channel."""
+    held = pause.paused(ctx.conn)
+    if held is None:
+        return LoopState()
+    return LoopState(paused=Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop")))
 
 
 def tick(ctx: Context) -> Tick | None:

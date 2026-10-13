@@ -464,6 +464,30 @@ class LastTick(_Model):
     acknowledged: int | None = None
 
 
+type PauseChannel = Literal["loop", "cli", "web"]
+
+
+class Pause(_Model):
+    """The operator paused the loop (DESIGN §6): since when, and through which channel."""
+
+    since: datetime
+    # `loop` is the `p` key at the loop's terminal.
+    channel: PauseChannel
+
+
+class LoopState(_Model):
+    """Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes."""
+
+    paused: Pause | None = None
+
+
+class PauseChanged(_Model):
+    """What a pause or a resume did: whether the loop was already so, and the state it left."""
+
+    already: bool
+    loop: LoopState
+
+
 class SpendWindow(_Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 
@@ -564,6 +588,13 @@ class TickUpdated(_Model):
     acknowledged: int | None = None
 
 
+class LoopUpdated(_Model):
+    """The loop was paused or resumed. The payload is what `GET /loop` returns."""
+
+    type: Literal["loop.updated"] = "loop.updated"
+    paused: Pause | None = None
+
+
 class StreamEvent(
     RootModel[
         Annotated[
@@ -573,7 +604,8 @@ class StreamEvent(
             | TicketChanged
             | ChoresUpdated
             | SpendUpdated
-            | TickUpdated,
+            | TickUpdated
+            | LoopUpdated,
             Field(discriminator="type"),
         ]
     ]

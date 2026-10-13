@@ -26,6 +26,7 @@ export const keys = {
     spend: ['spend'] as const,
     tick: ['tick'] as const,
     search: (q: string) => ['search', q] as const,
+    loop: ['loop'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -96,6 +97,12 @@ export const spendQuery = queryOptions({
 export const tickQuery = queryOptions({
     queryKey: keys.tick,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/tick', { signal })),
+})
+
+/** Whether the operator paused the loop (docs/DESIGN.md §6). The stream sends it again whenever it changes. */
+export const loopQuery = queryOptions({
+    queryKey: keys.loop,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/loop', { signal })),
 })
 
 export const ticketsQuery = queryOptions({

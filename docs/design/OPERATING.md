@@ -61,6 +61,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   Ids never repeat (`AUTOINCREMENT`). Migration 0003 backfilled every ended run's report and question.
 - `starts`: one row per subject the operator started privately (§22); `started` or `stopped`, with when and through
   which channel. Never deleted: a stopped ticket stays private.
+- `pause`: at most one row, present while the operator has paused the loop (§6), with when and through which channel.
+  A resume deletes it.
 
 Rules: the DB never stores credentials or raw CI logs (token counts are usage, not credentials). `result_json` is a
 summary.
