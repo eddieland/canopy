@@ -169,19 +169,31 @@ It is how the operator answers a finding without editing the prompt file: "leave
 
 ### Trying a chore
 
-`canopy chore try <NAME> [--context '<text>']` is the operator's, for writing a chore. It renders the prompt a
-run starting now would get, with `run_id` null in its `## Run` section, runs the chore's command in its `cwd` with its
-timeout and the shadowing check, and validates the result line as `_chore` does. It prints the agent's text, its
-stderr and exit code, the validated result, what it cost when the runtime reported it, and the status, and exits 0
-only on `ok`.
+`canopy chore try <NAME> [--context '<text>'] [--no-record]` is the operator's, for writing a chore and for running one
+now. It runs the chore in the foreground, in the `canopy chore try` process itself, through the same code as `_chore`:
+its command in its `cwd` with its timeout and the shadowing check, its result line validated. It prints the agent's
+text, its stderr and exit code, the validated result, what it cost when the runtime reported it, and the status, and
+exits 0 only on `ok`.
 
-- It records nothing: no `chore_runs` row, no decision, no notification, nothing on the attention list. The next tick
-  sees no change, and the `not_due` guard does not count it. Recorded, a test result would clear real findings.
-- No guard applies, so a chore being written does not wait out `every_minutes`, and it works with
-  `capacity.max_chores = 0`, so a chore can be written before the loop runs any.
-  It still needs a chore defined for this workspace.
-- It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-try`. The
-  overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the loop cannot try a chore.
+- It is a real run. It inserts a `chore_runs` row with no tick (`tick_id` NULL), writes its prompt and log files, and
+  closes the row as `_chore` does, so its findings become the open findings, a failure raises `chore_failed`, sinks
+  get its `chore.ended`, its cost counts, and the chore's next run is `not_due` counting from it. It records no
+  decision, as there is no tick.
+- `--no-record` writes nothing: no `chore_runs` row, no prompt file, no notification, no cost. The prompt has `run_id`
+  null, and the next tick sees no change. It is for drafting a prompt of a chore with open findings, which a recorded
+  try of a half-written prompt would clear.
+- Operators expected a run they started by hand to show up where the loop's runs do; one that vanished read as lost.
+  So recording is the default, and leaving the journal alone is what the operator asks for.
+- No guard on time or capacity applies, so a chore being written does not wait out `every_minutes` or its hours, and
+  it works with `capacity.max_chores = 0`, so a chore can be written before the loop runs any; its findings reach the
+  attention list once `max_chores` is above 0 (Off unless configured, above). It still needs a chore defined for this
+  workspace.
+- A recorded try refuses `running` while a run of the chore is running, and takes `dispatch.lock` to insert its row,
+  so it never overlaps one the overseer started. `--no-record` does not refuse. Reconcile treats a try's row as any:
+  its pid is the `canopy chore try` process, and a try killed with SIGKILL is marked `crashed` at the next tick.
+- It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-<run id>`, or
+  `chore-try` unrecorded. The overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the
+  loop cannot try a chore.
 
 ### Findings on the attention list
 
@@ -198,8 +210,9 @@ only on `ok`.
 
 ### Journal
 
-- `chore_runs`: id, tick id, chore name, pid of `_chore`, pid of the agent, started and ended times, status,
-  `result_json` (validated result, text cut to limits), log path, and what the runtime reported (§13): `session_id`,
+- `chore_runs`: id, tick id (NULL for a run `canopy chore try` recorded), chore name, pid of `_chore` (or of the
+  try), pid of the agent, started and ended times, status, `result_json` (validated result, text cut to limits), log
+  path, and what the runtime reported (§13): `session_id`,
   `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported nothing. Separate from `runs`, whose
   ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
   cost, and the web UI's spend counts chore runs.

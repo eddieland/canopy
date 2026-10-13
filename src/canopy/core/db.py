@@ -756,8 +756,10 @@ def record_decision(
 # Chore runs (DESIGN §19)
 
 
-def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int, chore: str, logs_dir: Path) -> int:
+def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: str, logs_dir: Path) -> int:
     """Insert a `running` chore run with no pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
+
+    `tick_id` is the tick whose overseer started the run, or None for one the operator started with `canopy chore try`.
 
     Returns:
         The new chore run's id.

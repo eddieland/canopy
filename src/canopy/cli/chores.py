@@ -19,7 +19,7 @@ from canopy.loop import attention, tick
 
 @click.group("chore")
 def chore_group() -> None:
-    """Run or wait on the operator's chores (the overseer), or try one by hand (the operator)."""
+    """Run or wait on the operator's chores (the overseer), or run one now by hand (the operator)."""
 
 
 @chore_group.command("run")
@@ -77,13 +77,15 @@ def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
 @chore_group.command("try")
 @click.argument("name", type=CHORE)
 @click.option("--context", type=TextType(), help="What the chore should look at, as the overseer would say it.")
+@click.option("--no-record", is_flag=True, help="Record nothing: no run, findings, or notification. For drafting.")
 @click.pass_context
-def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None) -> int:
-    """Run chore NAME now, in the foreground, and print its result. Records nothing; no guard applies.
+def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, no_record: bool) -> int:
+    """Run chore NAME now, in the foreground, and print its result. No guard applies.
 
-    For writing a chore: the agent gets the prompt a run starting now would get, and its result line is checked as a
-    real run's is. Works with `capacity.max_chores = 0`, so you can write one before the loop runs any. Exits 0 only
-    when the chore reports `ok`.
+    The run is recorded like one the loop started: its findings go on the attention list and `canopy show`, and the
+    chore's next run is due counting from it. With --no-record nothing is written, so a prompt being drafted cannot
+    clear real findings. Works with `capacity.max_chores = 0`, so you can write a chore before the loop runs any. Exits
+    0 only when the chore reports `ok`.
     """
     try:
         conversation.check_operator()
@@ -92,24 +94,32 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None) -> i
     ctx = open_context(click_ctx)
     try:
         prepared = trial.prepare(ctx, name, context)
+        run_id = None if no_record else trial.record(ctx, prepared)
     except trial.TrialError as e:
-        raise CliError(f"chore try refused: {e}") from None
+        hint = "; --no-record runs it anyway, recording nothing" if isinstance(e, trial.RunningError) else ""
+        raise CliError(f"chore try refused: {e}{hint}") from None
+    recorded = "nothing is recorded" if run_id is None else f"recorded as chore run {run_id}"
     timeout = prepared.chore.timeout_minutes
-    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes); nothing is recorded", err=True)
+    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes); {recorded}", err=True)
     try:
-        tried = trial.run(ctx, prepared)
-    except procs.ProcError as e:
+        outcome = trial.run_unrecorded(ctx, prepared) if run_id is None else trial.run_recorded(ctx, run_id)
+    except (procs.ProcError, execute.ChoreError) as e:
         raise CliError(f"chore try: {e}") from None
-    logs.for_tick(None).info("chore tried", extra={"chore": name, "status": tried.outcome.status})
-    click.echo(f"--- agent text ---\n{tried.output.text.rstrip()}")
-    if tried.stderr.strip():
-        click.echo(f"--- agent stderr ---\n{tried.stderr.rstrip()}")
-    usage = tried.output.usage
-    click.echo(f"--- agent exit {tried.returncode}{f', cost {usage.describe()}' if usage is not None else ''} ---")
-    outcome = tried.outcome
+    logs.for_tick(None).info("chore tried", extra={"chore": name, "chore_run_id": run_id, "status": outcome.status})
+    printed = outcome.printed
+    if printed is not None:
+        click.echo(f"--- agent text ---\n{printed.output.text.rstrip()}")
+        if printed.stderr.strip():
+            click.echo(f"--- agent stderr ---\n{printed.stderr.rstrip()}")
+        usage = printed.output.usage
+        click.echo(
+            f"--- agent exit {printed.returncode}{f', cost {usage.describe()}' if usage is not None else ''} ---"
+        )
     if outcome.result is not None:
         click.echo(json.dumps(outcome.result.model_dump(exclude_none=True), indent=2))
-    click.echo(f"chore try {name}: {outcome.status}{f' ({outcome.note})' if outcome.note else ''}")
+    note = f" ({outcome.note})" if outcome.note else ""
+    where = "; nothing recorded" if run_id is None else f"; run {run_id}, see `canopy show chore:{name}`"
+    click.echo(f"chore try {name}: {outcome.status}{note}{where}")
     return 0 if outcome.status == "ok" else 1
 
 
