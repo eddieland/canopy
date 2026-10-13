@@ -225,8 +225,8 @@ bot identity would require the org review the project is designed to avoid)
 but must be distinguishable:
 
 - Branches under `agent/`.
-- Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>` or
-  the runtime's own attribution. Never hidden.
+- Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
+  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the

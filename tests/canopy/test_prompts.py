@@ -207,6 +207,43 @@ def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyE
     assert text == "Fix CI on PROJ-1 for `agent-ready-alice`\n"
 
 
+def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
+    env.write_user(
+        env.user_file.read_text() + f'\n[trust]\ncommit_trailer_name = "{name}"\ncommit_trailer_email = "{email}"\n'
+    )
+
+
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_shipped_prompts_that_commit_name_the_configured_trailer(
+    canopy_env: CanopyEnv, kind: str, *, private: bool
+) -> None:
+    values = {**VALUES, "CONVERSATION": "None."}
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in text
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "`Co-authored-by: Acme Agent <agent@acme.test>`" in text
+    assert "canopy.invalid" not in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_a_custom_trailer_an_override_must_name_it(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override that still spells out the default trailer would credit commits to it: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_TRAILER\}\}"):
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+
+
+def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+
+
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
     text = prompts.render_overseer(load(canopy_env.root, canopy_env.user_file), "{}")
     assert "## Workers' comments" in text
