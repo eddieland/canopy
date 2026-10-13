@@ -1,7 +1,8 @@
 /**
  * The header ticker's headlines (src/components/shell/ticker.tsx), by topic: light razzing of programming and of vibe
  * coding, in the spirit of a cartoon's title-card caption, and tips for using canopy. Plain strings, written here;
- * nothing from the journal. Settings turns a topic off (src/lib/ticker-settings.ts).
+ * nothing from the journal. The ticker picks each one at random from the topics Settings leaves on
+ * (src/lib/ticker-settings.ts). A new topic is a name in TICKER_TOPICS, its headlines, and its label in Settings.
  *
  * A headline can open with RuneScape chat flair, as a player would type it: a color, then an effect, each ending in a
  * colon (`flash2:wave:Now with...`). Either may be left out. See `parseHeadline`. A tip opens with `Tip: ` instead,
@@ -128,33 +129,17 @@ export function parseHeadline(line: string): Headline {
     return { text: line.slice(match?.[0].length ?? 0), ...(color && { color }), ...(effect && { effect }) }
 }
 
-/** One headline on the reel, and its topic. */
-export interface ReelEntry {
-    /** The topic it is filed under. */
-    topic: TickerTopic
-    /** The headline, flair and all. */
-    line: string
+/** Every headline of the topics not hidden. */
+export function headlinesFor(hidden: readonly TickerTopic[] = []): string[] {
+    return TICKER_TOPICS.filter((topic) => !hidden.includes(topic)).flatMap((topic) => HEADLINES[topic])
 }
 
 /**
- * Every headline once, the topics mixed: each topic's headlines are spread evenly over the reel, in their order here,
- * so a tip turns up every few jokes rather than in a run of tips.
+ * Which of `count` headlines to show next: one at random, but never `last` while there is another, so no headline
+ * follows itself. A `last` out of range picks from them all.
  */
-export const REEL: readonly ReelEntry[] = TICKER_TOPICS.flatMap((topic) =>
-    HEADLINES[topic].map((line, i) => ({ topic, line, at: (i + 0.5) / HEADLINES[topic].length })),
-)
-    .toSorted((a, b) => a.at - b.at)
-    .map(({ topic, line }) => ({ topic, line }))
-
-const DAY_MS = 86_400_000
-
-/**
- * The reel without the hidden topics' headlines, starting at a different place each day, so a regular reader does not
- * always see the same lead.
- */
-export function headlinesFor(now: number, hidden: readonly TickerTopic[] = []): string[] {
-    const start = Math.floor(now / DAY_MS) % REEL.length
-    return [...REEL.slice(start), ...REEL.slice(0, start)]
-        .filter(({ topic }) => !hidden.includes(topic))
-        .map(({ line }) => line)
+export function nextIndex(count: number, last: number, random: () => number = Math.random): number {
+    const skip = last >= 0 && last < count && count > 1
+    const pick = Math.floor(random() * (skip ? count - 1 : count))
+    return skip && pick >= last ? pick + 1 : pick
 }

@@ -109,11 +109,12 @@ Rules:
 - Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding, one
   at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both
   ends. It is the header's one piece of fun: written here, never journal text. Tips for using canopy are mixed in
-  among the jokes, each opening with "Tip:" and without flair: each topic's headlines are spread evenly over the reel
-  (`REEL`), so about one in three is a tip and never two in a row. A tip names a real key, command, or setting, in
-  that command's own words; one that stops being true is fixed or dropped. Settings sets its speed (Off, Slow,
-  Normal, Spicy; Off hides it), the seconds between headlines (0 by default), and its topics (Programming, Vibe
-  coding, Tips), a checkbox each, all on by default. With every topic off the window is gone, as with Off.
+  among the jokes, each opening with "Tip:" and without flair. Each headline is picked at random from the topics
+  turned on, never the one just shown, so a topic turns up as often as its share of the headlines. A tip names a
+  real key, command, or setting, in that command's own words; one that stops being true is fixed or dropped.
+  Settings sets its speed (Off, Slow, Normal, Spicy; Off hides it), the seconds between headlines (0 by default), and
+  its topics (Programming, Vibe coding, Tips), a checkbox each, all on by default. With every topic off the window is
+  gone, as with Off. A new topic is a name in `TICKER_TOPICS`, its headlines, and its label in Settings.
 - A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
   `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
@@ -176,8 +177,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
 - The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
   left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
-  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. The reel starts at a
-  different headline each day. At rest the window is empty, between headlines.
+  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. At rest the window is
+  empty, between headlines.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.

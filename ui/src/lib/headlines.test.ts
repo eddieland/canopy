@@ -1,52 +1,43 @@
 import { describe, expect, it } from 'vitest'
 
-import { HEADLINES, headlinesFor, parseHeadline, REEL, TICKER_TOPICS } from './headlines'
+import { HEADLINES, headlinesFor, nextIndex, parseHeadline, TICKER_TOPICS } from './headlines'
 
 const ALL = TICKER_TOPICS.flatMap((topic) => HEADLINES[topic])
 
 describe('headlinesFor', () => {
-    const day = 86_400_000
-    const now = Date.parse('2026-10-08T12:30:00Z')
-
     it('lists every headline once', () => {
-        expect([...headlinesFor(now)].toSorted()).toEqual([...ALL].toSorted())
+        expect(headlinesFor().toSorted()).toEqual([...ALL].toSorted())
     })
 
-    it("leaves out the hidden topics, and keeps the rest in the reel's order", () => {
-        const jokes = headlinesFor(now, ['tips'])
-        expect(jokes.toSorted()).toEqual([...HEADLINES.programming, ...HEADLINES.vibes].toSorted())
-        expect(jokes).toEqual(headlinesFor(now).filter((line) => !HEADLINES.tips.includes(line)))
-        expect(headlinesFor(now, [...TICKER_TOPICS])).toEqual([])
-    })
-
-    it('keeps one lead all day and moves to the next one the day after', () => {
-        const lead = headlinesFor(now)[0]
-        const start = Math.floor(now / day) * day
-        expect(headlinesFor(start)[0]).toBe(lead)
-        expect(headlinesFor(start + day - 1)[0]).toBe(lead)
-        expect(headlinesFor(start + day)[0]).toBe(headlinesFor(now)[1])
+    it('leaves out the hidden topics', () => {
+        expect(headlinesFor(['tips'])).toEqual([...HEADLINES.programming, ...HEADLINES.vibes])
+        expect(headlinesFor([...TICKER_TOPICS])).toEqual([])
     })
 
     it('has no two headlines alike, since each is its own key', () => {
         expect(new Set(ALL).size).toBe(ALL.length)
     })
-})
-
-describe('REEL', () => {
-    it('mixes the tips in among the jokes, never two in a row', () => {
-        const tips = REEL.map(({ topic }) => topic === 'tips')
-        expect(tips.some((tip, i) => tip && tips[i + 1])).toBe(false)
-        expect(REEL.slice(0, 10).some(({ topic }) => topic === 'tips')).toBe(true)
-    })
-
-    it("keeps each topic's headlines in their order", () => {
-        for (const topic of TICKER_TOPICS) {
-            expect(REEL.filter((entry) => entry.topic === topic).map(({ line }) => line)).toEqual(HEADLINES[topic])
-        }
-    })
 
     it('opens every tip with "Tip: " and no joke with it', () => {
-        for (const { topic, line } of REEL) expect(line.startsWith('Tip: ')).toBe(topic === 'tips')
+        for (const topic of TICKER_TOPICS) {
+            for (const line of HEADLINES[topic]) expect(line.startsWith('Tip: ')).toBe(topic === 'tips')
+        }
+    })
+})
+
+describe('nextIndex', () => {
+    it('never picks the last one while there is another', () => {
+        const rolls = [0, 0.25, 0.5, 0.75, 0.9999]
+        for (const roll of rolls) expect(nextIndex(4, 2, () => roll)).not.toBe(2)
+        expect(rolls.map((roll) => nextIndex(4, 2, () => roll))).toEqual([0, 0, 1, 3, 3])
+        expect(nextIndex(4, 0, () => 0)).toBe(1)
+    })
+
+    it('picks from them all with no last in range, and the only one when there is one', () => {
+        expect(nextIndex(4, -1, () => 0)).toBe(0)
+        expect(nextIndex(4, -1, () => 0.9999)).toBe(3)
+        expect(nextIndex(4, 7, () => 0.5)).toBe(2)
+        expect(nextIndex(1, 0, () => 0.5)).toBe(0)
     })
 })
 

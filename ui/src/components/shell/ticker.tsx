@@ -1,6 +1,13 @@
 import { type CSSProperties, useLayoutEffect, useRef, useState } from 'react'
 
-import { type FlairColor, type FlairEffect, type Headline, headlinesFor, parseHeadline } from '@/lib/headlines'
+import {
+    type FlairColor,
+    type FlairEffect,
+    type Headline,
+    headlinesFor,
+    nextIndex,
+    parseHeadline,
+} from '@/lib/headlines'
 import { SPEED_REM, useTickerSettings } from '@/lib/ticker-settings'
 import { cn } from '@/lib/utils'
 
@@ -27,20 +34,21 @@ const EFFECT: Record<FlairEffect, string> = {
 }
 
 /**
- * The header's news ticker: joke headlines, with tips mixed in, crawling right to left, one at a time. Each enters at
- * the window's right edge and leaves at its left; the window then stays empty for the gap set in Settings before the
- * next arrives. It holds still under the pointer. Off, or with every topic turned off, the space stays and the window
- * is gone. Under reduced motion it shows the first headline in place. A headline may carry RuneScape chat flair
- * (`flash2:wave:`), drawn by `Flair`.
+ * The header's news ticker: joke headlines, with tips mixed in, crawling right to left, one at a time, each picked at
+ * random from the topics turned on. Each enters at the window's right edge and leaves at its left; the window then
+ * stays empty for the gap set in Settings before the next arrives. It holds still under the pointer. Off, or with
+ * every topic turned off, the space stays and the window is gone. Under reduced motion it shows its first headline in
+ * place. A headline may carry RuneScape chat flair (`flash2:wave:`), drawn by `Flair`.
  */
 export function Ticker() {
     const { speed, gap, hidden } = useTickerSettings()
-    // The day is picked once per page load: a re-render mid-crawl must not reorder the reel under the reader.
-    const [loaded] = useState(Date.now)
-    const headlines = headlinesFor(loaded, hidden)
-    const [index, setIndex] = useState(0)
+    const headlines = headlinesFor(hidden)
+    // Picked once per pass, never during render: a re-render mid-crawl must not swap the headline under the reader.
+    // Turning a topic off shrinks the list, and the pick wraps onto what is left.
+    const [pass, setPass] = useState(() => ({ n: 0, pick: nextIndex(headlines.length, -1) }))
     if (speed === 'off' || headlines.length === 0) return <div className="min-w-0 flex-1" />
-    const headline = parseHeadline(headlines[index % headlines.length] ?? '')
+    const index = pass.pick % headlines.length
+    const headline = parseHeadline(headlines[index] ?? '')
     return (
         <div
             role="marquee"
@@ -51,11 +59,11 @@ export function Ticker() {
         >
             {/* Keyed on the settings too: a change restarts the crawl with the new settings rather than jumping. */}
             <Crawl
-                key={`${index}:${speed}:${gap}:${hidden.join()}`}
+                key={`${pass.n}:${speed}:${gap}:${hidden.join()}`}
                 headline={headline}
                 rate={SPEED_REM[speed]}
                 gap={gap}
-                onDone={() => setIndex((i) => i + 1)}
+                onDone={() => setPass({ n: pass.n + 1, pick: nextIndex(headlines.length, index) })}
             />
         </div>
     )
