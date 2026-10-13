@@ -9,7 +9,8 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { RUN_TEXT, type TicketRuns } from '@/lib/run-state'
+import { RUN_TEXT } from '@/lib/run-state'
+import type { TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 // Where a ticket's row starts what goes under its head line, so it lines up with the ticket's title: past the state's
@@ -138,7 +139,7 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                             rel="noreferrer noopener"
                             className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
                         >
-                            {pr.replace(/^https:\/\//, '')}
+                            {pr.replace(/^https:\/\//u, '')}
                             <ExternalLink className="size-3" />
                         </a>
                     ))}

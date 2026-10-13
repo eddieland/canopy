@@ -38,8 +38,11 @@ export function byTicket(runs: Run[]): TicketRuns[] {
     const groups = new Map<string, TicketRuns>()
     for (const run of runs) {
         const group = groups.get(run.ticket_key)
-        if (group === undefined) groups.set(run.ticket_key, { latest: run, earlier: [] })
-        else group.earlier.push(run)
+        if (group === undefined) {
+            groups.set(run.ticket_key, { latest: run, earlier: [] })
+        } else {
+            group.earlier.push(run)
+        }
     }
     return [...groups.values()]
 }

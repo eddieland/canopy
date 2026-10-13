@@ -5,7 +5,10 @@ import { mockChores } from '@/api/mocks'
 import { awaitsRun, choreLine, costText, dueText, runsText, windowText } from './chores'
 
 const [deps] = mockChores
-if (!deps) throw new Error('fixtures are empty')
+if (!deps?.latest) {
+    throw new Error('fixtures are empty')
+}
+const { latest } = deps
 const NOW = Date.parse('2026-10-08T12:30:00Z')
 
 describe('chores', () => {
@@ -25,7 +28,7 @@ describe('chores', () => {
         expect(choreLine(deps, NOW)).toBe('last ok 4h ago, due in 1h')
         expect(choreLine({ ...deps, latest: null, due_at: null }, NOW)).toBe('never run, due now')
         const running = {
-            ...deps.latest!,
+            ...latest,
             status: 'running',
             state: 'running' as const,
             started_at: '2026-10-08T12:20:00Z',
@@ -44,7 +47,7 @@ describe('chores', () => {
     it('mark a note no run has read: one after the latest run started', () => {
         expect(awaitsRun({ at: '2026-10-08T07:00:00Z' }, deps)).toBe(false)
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, deps)).toBe(true)
-        const running = { ...deps.latest!, status: 'running', started_at: '2026-10-08T12:20:00Z' }
+        const running = { ...latest, status: 'running', started_at: '2026-10-08T12:20:00Z' }
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, { ...deps, running })).toBe(false)
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, { running: null, latest: null })).toBe(true)
     })

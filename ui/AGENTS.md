@@ -35,6 +35,10 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 
 ## Rules
 
+- **The lint is strict.** oxlint runs every rule in its correctness, suspicious, pedantic, and perf categories, and
+  the style and restriction rules `.oxlintrc.json` names one by one; a rule turned off there says why. Fix what it
+  finds. A line that must break a rule carries `oxlint-disable-next-line` with the rule's name and a comment saying
+  why.
 - **Tokens only.** No raw colors and no `dark:` in components; a theme difference is a token change. The lint enforces
   it. See `DESIGN.md`.
 - **Every export has a JSDoc comment**, and so does each field of an exported interface: what it is or does, in
@@ -71,8 +75,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   `src/lib/base.ts` and router `Link`s; never write `/api/...` or `/assets/...` as an absolute path.
 - **No requests to another origin** at run time: no CDN fonts, icon fonts, analytics, or remote images. Bundle them.
 - **Untrusted text stays text.** Journal content (tracker comments, agent output) is rendered as React children, never
-  through `dangerouslySetInnerHTML`. Free text goes through `LinkedText` (`src/components/linked-text.tsx`), which
-  links its http and https URLs and nothing else (D113), except inside an element that is already a link.
+  through `dangerouslySetInnerHTML`, which the lint refuses (`react/no-danger`). Free text goes through `LinkedText`
+  (`src/components/linked-text.tsx`), which links its http and https URLs and nothing else (D113), except inside an
+  element that is already a link.
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from

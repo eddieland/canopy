@@ -27,9 +27,15 @@ const RANK: Record<Severity, number> = { failed: 0, waiting: 1, other: 2, findin
 
 /** An item's severity: a finding, a failure, a wait on the operator's answer, or anything else. */
 export function severity(item: AttentionItem): Severity {
-    if (item.finding) return 'finding'
-    if (FAILED.has(item.reason)) return 'failed'
-    if (WAITING.has(item.reason)) return 'waiting'
+    if (item.finding) {
+        return 'finding'
+    }
+    if (FAILED.has(item.reason)) {
+        return 'failed'
+    }
+    if (WAITING.has(item.reason)) {
+        return 'waiting'
+    }
     return 'other'
 }
 
@@ -44,7 +50,9 @@ export function blocking(item: AttentionItem): boolean {
 /** How many of the items are of each severity. */
 export function countBySeverity(items: AttentionItem[]): Record<Severity, number> {
     const counts: Record<Severity, number> = { failed: 0, waiting: 0, other: 0, finding: 0 }
-    for (const item of items) counts[severity(item)] += 1
+    for (const item of items) {
+        counts[severity(item)] += 1
+    }
     return counts
 }
 

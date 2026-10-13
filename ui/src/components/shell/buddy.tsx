@@ -48,10 +48,12 @@ export function Buddy() {
 function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
     const [open, setOpen] = useState(true)
     useEffect(() => {
-        const timer = window.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
-        return () => window.clearTimeout(timer)
+        const timer = globalThis.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
+        return () => globalThis.clearTimeout(timer)
     }, [])
-    if (!open) return null
+    if (!open) {
+        return null
+    }
     return (
         <div
             data-testid="buddy-tip"
@@ -78,7 +80,7 @@ function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
                     className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                     data-testid="buddy-dismiss"
                 >
-                    Don't show me tips again
+                    Don&apos;t show me tips again
                 </button>
             </div>
             <button
@@ -107,7 +109,9 @@ function Figure({ cue }: { cue: string }) {
     const figure = useRef<SVGSVGElement>(null)
     useEffect(() => {
         const svg = figure.current
-        if (svg === null || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        if (svg === null || globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            return
+        }
         const look = (event: PointerEvent) => {
             for (const eye of svg.querySelectorAll<SVGGElement>('[data-eye]')) {
                 const box = eye.getBoundingClientRect()
@@ -121,8 +125,8 @@ function Figure({ cue }: { cue: string }) {
                 eye.querySelector('[data-pupil]')?.setAttribute('transform', `translate(${x} ${y})`)
             }
         }
-        window.addEventListener('pointermove', look, { passive: true })
-        return () => window.removeEventListener('pointermove', look)
+        globalThis.addEventListener('pointermove', look, { passive: true })
+        return () => globalThis.removeEventListener('pointermove', look)
     }, [])
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>

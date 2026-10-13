@@ -18,12 +18,18 @@ export function splitLinks(text: string): Piece[] {
     let plain = 0
     for (const match of text.matchAll(URL_START)) {
         const url = trim(match[0])
-        if (!URL.canParse(url) || new URL(url).hostname === '') continue
-        if (match.index > plain) pieces.push({ text: text.slice(plain, match.index) })
+        if (!URL.canParse(url) || new URL(url).hostname === '') {
+            continue
+        }
+        if (match.index > plain) {
+            pieces.push({ text: text.slice(plain, match.index) })
+        }
         pieces.push({ text: url, href: url })
         plain = match.index + url.length
     }
-    if (plain < text.length) pieces.push({ text: text.slice(plain) })
+    if (plain < text.length) {
+        pieces.push({ text: text.slice(plain) })
+    }
     return pieces
 }
 
@@ -32,9 +38,13 @@ function trim(url: string): string {
     for (;;) {
         const last = url.charAt(end - 1)
         const opening = CLOSING[last]
-        if (TRAILING.has(last)) end -= 1
-        else if (opening !== undefined && count(url.slice(0, end), opening) < count(url.slice(0, end), last)) end -= 1
-        else return url.slice(0, end)
+        if (TRAILING.has(last)) {
+            end -= 1
+        } else if (opening !== undefined && count(url.slice(0, end), opening) < count(url.slice(0, end), last)) {
+            end -= 1
+        } else {
+            return url.slice(0, end)
+        }
     }
 }
 

@@ -104,8 +104,8 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
             ) : (
                 <span>
                     {message.kind}
-                    {message.run_id !== null ? ` (run:${message.run_id})` : ''}
-                    {message.answers !== null ? ` answering #${message.answers}` : ''}
+                    {message.run_id === null ? '' : ` (run:${message.run_id})`}
+                    {message.answers === null ? '' : ` answering #${message.answers}`}
                     {message.source === 'operator' ? ` via ${message.channel}` : ''}
                 </span>
             )}
