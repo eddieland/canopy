@@ -117,7 +117,10 @@ test("a chore's finding is answered from the attention list with a note its next
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
     await page.goto('settings')
     await page.getByTestId('send-key-mod-enter').click()
-    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-checked', 'true')
+    // Pressing the key that is on keeps it on: one is always picked.
+    await page.getByTestId('send-key-mod-enter').click()
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-checked', 'true')
     await page.goto('tickets/ABC-101')
     const form = page.getByRole('form', { name: 'Reply' })
     // Chromium on Linux: the button names Ctrl, not ⌘.
