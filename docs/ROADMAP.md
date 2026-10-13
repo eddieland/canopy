@@ -375,7 +375,10 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), a
 write MCP `add_issue_comment` allowed for `canopy-reviewer`, which README step 3 does not say. Without it, three
 reviews ended `unknown` (the reviewer exited with no result line) and were retried on the same commit, with no
 `review_failed` item until the third. Waiting on the operator: a finding taken through `resume` and re-reviewed to
-`needs_reviewer`, `review.query` on the operator's own PR, a review killed mid-way, and a PR at its limit.
+`needs_reviewer`, `review.query` on the operator's own PR, a review killed mid-way, and a PR at its limit. On
+2026-10-12 all seven review runs of a live session ended `unknown` within about 15 seconds, the reviewer's last line
+not a valid result, and the overseer's retries for them cost $2.21 (MEASUREMENTS 2026-10-12, F4). Not diagnosed yet;
+next is a failed review run's log.
 
 ## M12. The loop
 
@@ -641,7 +644,10 @@ Status: in progress. Code, fakes-based tests (`tests/canopy/test_idle_pacing.py`
 (`chore_capacity`, `not_due`, `outside_hours`) count as quiet, since the overseer skips every unlabeled ticket the
 journal remembers each tick; and idle pacing off is all of it off, gates and run wakes included. On the open bullet,
 the build follows DESIGN: a shorter `--every` keeps idle pacing from that base. Waiting on the operator: the overnight
-run above, and whether `--every` should turn it off instead.
+run above, and whether `--every` should turn it off instead. A two-hour live session on 2026-10-12 does not settle
+it: after its first ticks, every tick followed a run ending, an operator message, or a failed overseer, each not idle
+by design. It did find what can keep a quiet night from backing off: ticks that fail after doing their work, and
+overseer churn (MEASUREMENTS 2026-10-12, F2, F5, F7; M28).
 
 ## M22. Trusted reviewers
 
@@ -819,6 +825,87 @@ milliseconds. A running run's events reach its log only when it ends, because `p
 watching one live needs the worker's stdout streamed to its log. A subagent (`task`) shows as one tool call whose output
 is its answer; its own session is not in the log. T8's change waits on the operator's approval note in the PR. Waiting
 on the operator: the live run Accept describes.
+
+## M28. Overseer reliability from the first live session
+
+MEASUREMENTS 2026-10-12, F1 to F3 and F5. Needs M12 and M21's code. Asked for by the operator (2026-10-12): a quarter
+of the first session's overseer spend bought nothing, mostly for reasons a check in code can catch, and the same
+reasons keep idle pacing from counting a quiet tick as idle.
+
+- The overseer's `canopy` works before the overseer is paid for. The tick either puts this canopy's own launcher
+  first on the overseer's PATH, or checks, through `procs`, that `canopy --version` runs from the overseer's
+  environment. When it cannot, the tick closes without running the overseer, with a status of its own, and raises an
+  attention item saying why. Settle which in DESIGN §6; the release launcher (`SCIE_BOOT`) and a source install both
+  have to work.
+- `tick complete`: the overseer prompt's last step made harder to miss, with the operator's approval note in the PR.
+  Open: whether the harness should also accept a run that exited 0, recorded its decisions, and printed the done line
+  on its own line before a summary. That loosens DESIGN §6's contract, so it is a design change, not a prompt one.
+- A ticket started or stopped from the web UI or the CLI (`starts`) ends the loop's wait as an operator message does,
+  with the same one-minute floor, and counts against idleness the same way. DESIGN §6 (The loop, Idle pacing) and §22
+  (Waking the loop).
+- Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
+  attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
+  `decisions` table shows a pattern.
+- Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
+  the wait; a fake overseer that prints a summary after `tick complete` is handled as the contract settles.
+
+Accept: the tests above pass. Live: a working session re-measured (MEASUREMENTS) has no tick that ran the overseer
+without a working `canopy`, no `overseer_failed` tick that recorded its decisions, and every web-UI start picked up
+within about a minute.
+
+Status: not started.
+
+## M29. Probe-gated overseer
+
+MEASUREMENTS 2026-10-12, F7 to F10; D003's revisit. Needs M28 and M21's overnight acceptance. Sketch only; the design
+comes first. Taken only if a re-measurement after both shows that the steady state's spend or its latency (up to
+`loop.idle_max_minutes` on a teammate's comment or a CI result) is still worth the trust change. The first session
+says a gate saves little while the operator is active (F8).
+
+- A `probe_cmd` command template, run through `procs`, prints one JSON line of fingerprints. Per ticket: updated
+  time, latest comment id, labels, open or closed, and the keys the tracker query returns. Per PR: head SHA, the
+  result of each named CI context, latest review or review-comment id, mergeable, draft, and open, merged, or closed.
+  canopy validates the line, keeps the last one per subject in the journal, and runs the overseer only when a
+  fingerprint changed, a harness wake event happened, a gate came due, or `loop.idle_max_minutes` passed since the
+  last overseer run. In between, the loop polls the probe, not the overseer.
+- The probe fails open: an error, a timeout, or output that does not validate runs the overseer as today. With no
+  `probe_cmd`, nothing changes.
+- The probe's output never reaches the overseer's prompt, so a wrong or steered probe can cost a missed or an extra
+  overseer run and nothing else. canopy still imports no tracker or GitHub client and reads no token: the probe holds
+  its own credentials (`gh`'s login, or an operator-only file as the Slack sink does).
+- CI is fingerprinted by contexts the repository's config names, never by GitHub's combined status, which some
+  repositories hold at `pending` forever (F9). PR issue comments are not fingerprinted.
+- An example GitHub probe: one GraphQL query through `gh` for every open PR the journal knows. A Jira one if the
+  operator's setup allows it without a new token.
+- TRUST_MODEL T2 with the operator's approval note, D003, and DESIGN §6 and §12.
+- Open: how the probe learns which subjects to watch (argv, stdin, or reading nothing and listing by query); how often
+  it polls (2 minutes matched the first session's median latency, F10); whether a cold-cache overseer run after a
+  long gap changes the arithmetic (MEASUREMENTS: Spend).
+
+Accept: written with the design, before work starts.
+
+Status: not started.
+
+## M30. Fewer re-reads per tick
+
+MEASUREMENTS 2026-10-12, F6. Needs M29's probe. Sketch only; the design comes first. Re-reading the tracker and GitHub
+was 29% of every tick's cost, productive ticks included, and most of it was things that had not changed.
+
+- The probe's facts in the state block: per unit, head SHA, named CI results, latest review id, mergeable, and draft;
+  per ticket, labels, state, and latest comment id with its author's account id. Ids, states, and account ids only; no
+  comment, review, or PR text enters the state block.
+- The overseer prompt reads a PR or a ticket in full only when a fact changed since its cursor, with the operator's
+  approval note in the PR.
+- The provider skill reaches the overseer without a tool call on every tick, inside the cached part of its prompt.
+- TRUST_MODEL T1 and T2: what canopy now asserts about the world, and that the tracker and GitHub stay the source of
+  authority (DESIGN §22), with the operator's approval note.
+- Open: whether canopy should then check `trust.authorized_repliers` against comment authors in code, which would close
+  D003's "cannot verify who wrote a comment".
+
+Accept: written with the design, before work starts. Live, once built: a re-measurement shows tool-result tokens per
+tick at half the first session's (about 19k) or less, with no action missed.
+
+Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 
