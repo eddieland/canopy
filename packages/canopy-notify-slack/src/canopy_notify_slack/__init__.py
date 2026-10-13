@@ -163,6 +163,16 @@ def _subject(ticket: object, repo: object) -> str:
     return f"{ticket} ({repo})" if repo else str(ticket)
 
 
+def _named(subject: object, title: object) -> str:
+    """`subject` in bold, then the ticket's `title` if canopy sent one: `*PROJ-1* Add retries to checkout`."""
+    return f"*{escape(subject)}*" + (f" {escape(title)}" if title else "")
+
+
+def _titled(subject: object, title: object) -> str:
+    """`subject`, then the ticket's `title` if canopy sent one, unmarked."""
+    return escape(subject) + (f" {escape(title)}" if title else "")
+
+
 def _dicts(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
@@ -185,9 +195,12 @@ def render(message: dict[str, object]) -> str:
         if added or resolved:
             counts.append(f"{len(added)} new, {len(resolved)} resolved, {attention.get('open', 0)} open")
         for a in added:
-            what = escape(_subject(a.get("ticket"), a.get("repo")))
-            lines.append(f"+ *{what}* {escape(a.get('reason'))}: {escape(a.get('detail'))}")
-        lines += [f"- *{escape(_subject(r.get('ticket'), r.get('repo')))}* {escape(r.get('reason'))}" for r in resolved]
+            what = _named(_subject(a.get("ticket"), a.get("repo")), a.get("title"))
+            lines.append(f"+ {what} · {escape(a.get('reason'))}: {escape(a.get('detail'))}")
+        lines += [
+            f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {escape(r.get('reason'))}"
+            for r in resolved
+        ]
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
@@ -281,7 +294,8 @@ def _counted(counts: object) -> str:
 
 def _run_started(e: dict[str, object]) -> Block:
     return _section(
-        f":arrow_forward: *{escape(e.get('ticket'))}* · {escape(e.get('run_kind'))} run {escape(e.get('run'))} started",
+        f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
+        f"{escape(e.get('run'))} started",
         f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))} on `{escape(e.get('branch') or '-')}`",
     )
 
@@ -290,7 +304,7 @@ def _run_ended(e: dict[str, object]) -> Block:
     prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
     run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
     return _section(
-        _ended(e, f"*{escape(e.get('ticket'))}* · {run}"),
+        _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
         *(_linked(pr) for pr in prs),
         _linked(e.get("summary")) if e.get("summary") else "",
         _quote("Question", e.get("question")),
@@ -307,7 +321,7 @@ def _chore_ended(e: dict[str, object]) -> Block:
 
 
 def _review_ended(e: dict[str, object]) -> Block:
-    ticket = f"*{escape(e.get('ticket'))}* · " if e.get("ticket") else ""
+    ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
     findings = e.get("findings") or 0
     counted = f" · {escape(findings)} finding{'s' if findings != 1 else ''}" if verdict else ""
@@ -359,14 +373,15 @@ def _event(e: dict[str, object]) -> Block:
 def _attention(attention: dict[str, object]) -> list[Block]:
     out = [
         _section(
-            f":bell: *{escape(_subject(a.get('ticket'), a.get('repo')))}* · {escape(a.get('reason'))}",
+            f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}",
             _linked(a.get("detail")) if a.get("detail") else "",
             f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
         )
         for a in _dicts(attention.get("added"))
     ]
     resolved = [
-        f":heavy_check_mark: ~{escape(_subject(r.get('ticket'), r.get('repo')))}~ {escape(r.get('reason'))}"
+        f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
+        f"{escape(r.get('reason'))}"
         for r in _dicts(attention.get("resolved"))
     ]
     if resolved:
@@ -398,10 +413,13 @@ def _digest(digest: dict[str, object]) -> list[Block]:
         }
     ]
     runs = [
-        f"{_STATUS_EMOJI['done']} *{escape(d.get('ticket'))}* {_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
+        f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))} "
+        f"{_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
         for d in _dicts(digest.get("done"))[:_DIGEST_LISTED]
     ]
-    runs += [f"{_STATUS_EMOJI['blocked']} *{escape(b.get('ticket'))}*" for b in _dicts(digest.get("blocked"))]
+    runs += [
+        f"{_STATUS_EMOJI['blocked']} {_named(b.get('ticket'), b.get('title'))}" for b in _dicts(digest.get("blocked"))
+    ]
     if runs:
         out.append(_section(*runs[: 2 * _DIGEST_LISTED]))
     return out

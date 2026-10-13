@@ -141,6 +141,7 @@ def test_a_json_sink_hears_about_runs(
     tick()  # the sink's first publish: from here on it hears every event
     conn = journal(canopy_env)
     tick_id = in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
     question = "Should the retry be per request or per session?\nThe ticket says both."
     worker_does(
         monkeypatch,
@@ -161,6 +162,7 @@ def test_a_json_sink_hears_about_runs(
     assert message["attention"]["added"] == [
         {
             "ticket": "PROJ-9",
+            "title": None,  # not named yet
             "repo": None,
             "reason": "needs_reviewer",
             "detail": "PROJ-9 detail",
@@ -177,6 +179,7 @@ def test_a_json_sink_hears_about_runs(
         1,
         2,
     )
+    assert started["title"] == ended["title"] == "Retry failed checkouts"
     assert ended["kind"] == "run.ended"
     assert (ended["status"], ended["question"]) == ("blocked", " ".join(question.split()))
     assert ended["line"].startswith("< PROJ-1 run 1 implement ended blocked: x question: Should the retry")
@@ -318,6 +321,33 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
     tick()
     second = messages(out)[1]
     assert f"Digest since {earlier}: 3 ticks (ok 3)" in second
+
+
+def test_a_json_digest_names_each_ticket_by_its_title(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    out = tmp_path / "digest.txt"
+    add_sink(canopy_env, sink_script, "daily", out, extra="events = []\ndigest_every_minutes = 60\n")
+    conn = journal(canopy_env)
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
+    worker_does(monkeypatch, result=json.dumps({"status": "blocked", "summary": "x", "question": "Which?"}))
+    runner = InlineRunner()
+    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
+    assert main(["_run", "1"], runner=runner) == 0
+    db.finish_tick(conn, tick_id, "ok", "test")
+    monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    tick()
+
+    [message] = json_messages(out)
+    assert message["digest"]["blocked"] == [{"ticket": "PROJ-1", "title": "Retry failed checkouts", "run": 1}]
+    assert "  blocked PROJ-1\n" in message["text"]  # the text format shows the key alone
 
 
 def test_bounds_count_what_they_leave_out(
