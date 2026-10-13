@@ -113,6 +113,10 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await expect(text).toContainText('service=mcp key=jira error=timed out after 1000ms listing prompts')
     // The session's events too, as the runtime printed them: lines of JSON, as text.
     await expect(text).toContainText('"sessionID": "ses_tick2"')
+    // Colored by what each piece is, while a line that is not JSON stays plain.
+    await expect(text.locator('.text-syntax-key', { hasText: '"sessionID"' }).first()).toBeVisible()
+    await expect(text.locator('.text-syntax-string', { hasText: '"ses_tick2"' }).first()).toBeVisible()
+    await expect(text.locator('span', { hasText: 'service=mcp' })).toHaveCount(0)
     // The file's size, in the header.
     await expect(output).toContainText(/\d+\.\d KiB/)
     // It opens at its end, where stderr is.

@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
 import { tickOutputQuery } from '@/api/queries'
 import type { TickOutput } from '@/api/types'
 import { Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { type JsonKind, jsonLines } from '@/lib/json-lines'
 import { byteSize } from '@/lib/ticks'
 
 /**
@@ -71,8 +72,33 @@ function Body({ output }: { output: TickOutput }) {
                 }}
                 data-testid="tick-output-text"
             >
-                <pre className="p-3 font-mono text-xs break-all whitespace-pre-wrap">{output.text}</pre>
+                <pre className="p-3 font-mono text-xs break-all whitespace-pre-wrap">
+                    {jsonLines(output.text).map((tokens, i) => (
+                        // A line's place is its identity: the text is read whole, never reordered.
+                        <Fragment key={i}>
+                            {i > 0 && '\n'}
+                            {tokens.map((token, j) =>
+                                token.kind === 'text' ? (
+                                    token.text
+                                ) : (
+                                    <span key={j} className={TOKEN_CLASS[token.kind]}>
+                                        {token.text}
+                                    </span>
+                                ),
+                            )}
+                        </Fragment>
+                    ))}
+                </pre>
             </PanelScroll>
         </>
     )
+}
+
+// JSON lines in the output, colored by what each piece is; anything else stays `foreground`.
+const TOKEN_CLASS: Record<Exclude<JsonKind, 'text'>, string> = {
+    key: 'text-syntax-key',
+    string: 'text-syntax-string',
+    number: 'text-syntax-number',
+    literal: 'text-syntax-literal',
+    punct: 'text-muted-foreground',
 }
