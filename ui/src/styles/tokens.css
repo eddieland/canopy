@@ -46,6 +46,12 @@
     --diff-add: oklch(0.55 0.14 150);
     --diff-del: oklch(0.55 0.17 20);
 
+    /* JSON in an agent's output: its keys, strings, numbers, and true/false/null. Syntax only, never state. */
+    --syntax-key: oklch(0.5 0.13 235);
+    --syntax-string: oklch(0.5 0.12 135);
+    --syntax-number: oklch(0.55 0.13 70);
+    --syntax-literal: oklch(0.52 0.17 315);
+
     /* The header ticker's RuneScape chat colors: flair only, never state. Darker here, to read on white. */
     --flair-yellow: oklch(0.62 0.13 85);
     --flair-red: oklch(0.56 0.2 27);
@@ -95,6 +101,11 @@
     --diff-add: oklch(0.78 0.15 150);
     --diff-del: oklch(0.72 0.17 20);
 
+    --syntax-key: oklch(0.78 0.11 235);
+    --syntax-string: oklch(0.8 0.12 135);
+    --syntax-number: oklch(0.82 0.12 75);
+    --syntax-literal: oklch(0.76 0.14 315);
+
     --flair-yellow: oklch(0.9 0.17 100);
     --flair-red: oklch(0.68 0.21 27);
     --flair-green: oklch(0.82 0.2 142);
@@ -137,6 +148,11 @@
 
     --color-diff-add: var(--diff-add);
     --color-diff-del: var(--diff-del);
+
+    --color-syntax-key: var(--syntax-key);
+    --color-syntax-string: var(--syntax-string);
+    --color-syntax-number: var(--syntax-number);
+    --color-syntax-literal: var(--syntax-literal);
 
     --color-flair-yellow: var(--flair-yellow);
     --color-flair-red: var(--flair-red);
