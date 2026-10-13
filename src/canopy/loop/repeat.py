@@ -33,7 +33,7 @@ from rich.text import Text
 
 from canopy.core import db
 from canopy.infra import lock, logs, resources
-from canopy.loop import attention, pacing, tick, web
+from canopy.loop import attention, pacing, tick
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from canopy.core.context import Context
+    from canopy.loop import web
 
 LOCK_FILE_NAME = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
@@ -146,7 +147,13 @@ def run(
                 "repo": ctx.repo,
             },
         )
-        serving = web.start(ctx, log) if serve else None
+        serving = None
+        if serve:
+            # Imported here: the web server pulls in fastapi and uvicorn, which double the start-up time of every
+            # other `canopy` command, the ones the overseer and workers run included.
+            from canopy.loop import web  # noqa: PLC0415
+
+            serving = web.start(ctx, log)
         try:
             _header(
                 console,
