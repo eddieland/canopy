@@ -4,7 +4,7 @@ A tick is idle when the journal shows it found nothing new and changed nothing (
 row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`
 still ahead ends it sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`)
 wakes it, as the operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no
-gate shortens it, and only the operator's acts wake it: a message, a start or stop, a grant, or a config reload.
+gate shortens it, and only the operator's acts wake it: a message, a start or stop, or a grant.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -80,7 +80,7 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     It closed `ok`; it decided nothing but waits, skips, attention items, and refusals that lift by themselves; the
     attention list and every ticket and unit are as `seen` before it; and no run started or ended, and the operator
     recorded no message, started or stopped no ticket, and granted nothing, after the previous tick read the journal.
-    Without a previous tick that read it, not idle. A config reload is the loop's to count: it is in no journal.
+    Without a previous tick that read it, not idle.
 
     Returns:
         True if the tick was idle.

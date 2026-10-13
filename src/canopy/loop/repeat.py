@@ -7,11 +7,11 @@ loops on one state dir would run the overseer twice as often.
 How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
 never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). The
 operator's acts since the last tick read the journal end the wait early, at most once a minute (DESIGN §22): a message
-to a ticket, such as a `canopy reply`; a ticket started or stopped; attempts or reviews granted; a config reload that
-changed something. With idle pacing on, a run ending after the tick read the journal does too. On a terminal, pressing
-`TICK_NOW_KEY` ends it at once. A deferred start waits the same way before the first tick, from when the loop started.
-Each tick's row records whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend
-can be split by what it bought (ROADMAP M33).
+to a ticket, such as a `canopy reply`; a ticket started or stopped; attempts or reviews granted. With idle pacing on, a
+run ending after the tick read the journal does too. A config reload does not: it applies at the wait's next step and
+leaves its deadline as it was. On a terminal, pressing `TICK_NOW_KEY` ends it at once. A deferred start waits the same
+way before the first tick, from when the loop started. Each tick's row records whether it was idle and what ended the
+wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it bought (ROADMAP M33).
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -83,9 +83,9 @@ _STATUS_STYLES = {
 }
 
 
-# What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant, a config
-# reload), a run ending, or the operator pressing `TICK_NOW_KEY`.
-type Woken = Literal["message", "starts", "grant", "reload", "run", "key"]
+# What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant), a run
+# ending, or the operator pressing `TICK_NOW_KEY`.
+type Woken = Literal["message", "starts", "grant", "run", "key"]
 # What started a tick, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its length, one a gate
 # shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
@@ -93,7 +93,6 @@ _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
     "starts": "a ticket started or stopped; next tick in ",
     "grant": "a grant; next tick in ",
-    "reload": "config reloaded; next tick in ",
     "run": "a run ended; next tick in ",
 }
 
@@ -278,14 +277,9 @@ class _Settings:
     reload: reread.Reload
     console: Console
     backend: Backend | None = None  # the web UI's, which serves the new config too
-    # A reload changed what a tick runs on since the last tick began: it wakes the wait, and that tick is not idle.
-    reloaded: bool = False
 
     def apply(self) -> None:
-        """Read the config again, if asked to. A config that does not load leaves everything as it was, and says why.
-
-        A reload that changed a key a tick reads sets `reloaded`; one that changed only keys for a restart does not.
-        """
+        """Read the config again, if asked to. A config that does not load leaves everything as it was, and says why."""
         if not self.reload.requested:
             return
         self.reload.requested = False
@@ -298,7 +292,6 @@ class _Settings:
             return
         pace = _pace(found.config, self.every)
         self.ctx = replace(self.ctx, config=found.config, ws=found.ws)
-        self.reloaded = self.reloaded or bool(set(found.changed) - set(found.restart))
         if self.backend is not None:
             self.backend.use(found.config, found.ws)
         log.info("config reloaded", extra={"changed": list(found.changed), "restart": list(found.restart)})
@@ -358,7 +351,6 @@ def _ticks(
     while not stop.requested:
         settings.apply()
         ctx, pace = settings.ctx, settings.pace
-        reloaded, settings.reloaded = settings.reloaded, False
         before = pacing.before(ctx)
         # Operator messages to a ticket newer than this wake the wait after this tick: every channel records one the
         # same way. A note to a chore waits for the chore's next run.
@@ -376,9 +368,8 @@ def _ticks(
             # Keys pressed during the tick are dropped, all but a pause, which holds the next tick.
             _toggle_pause(ctx, keys(), log)
         statuses[outcome.status] += 1
-        # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it. A reload
-        # before it is the operator's act, as a message is, and the journal does not hold it.
-        idle = pacing.idle(ctx, outcome, before) and not reloaded
+        # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it.
+        idle = pacing.idle(ctx, outcome, before)
         idle_count = idle_count + 1 if pace.on and idle else 0
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
@@ -424,7 +415,7 @@ def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
     A message to a ticket newer than `seen`; a ticket started or stopped, or attempts or reviews granted, after
-    `since`; or a reload that changed the config. A note to a chore waits for the chore's next run.
+    `since`. A note to a chore waits for the chore's next run, and a config reload waits for the next tick.
 
     Returns:
         The first of those that happened, or None.
@@ -434,9 +425,7 @@ def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
         return "message"
     if db.starts_moved_after(conn, since):
         return "starts"
-    if db.granted_after(conn, since):
-        return "grant"
-    return "reload" if settings.reloaded else None
+    return "grant" if db.granted_after(conn, since) else None
 
 
 def _defer(
@@ -488,8 +477,6 @@ def _log_woken(
         log.info("a ticket started or stopped ended the wait", extra={"after": since})
     elif woken == "grant":
         log.info("a grant ended the wait", extra={"after": since})
-    elif woken == "reload":
-        log.info("a config reload ended the wait")
     elif woken == "run":
         log.info("a run ending ended the wait", extra={"after": read_at})
     elif woken == "key":
