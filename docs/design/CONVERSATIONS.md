@@ -297,13 +297,17 @@ Served by `canopy loop` from a thread (D073):
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
   CLI uses: `conversation.start`, `stop`, `reply`, and `forget` with channel `web` (a note to a chore is a `reply`
   on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). A forget
+  `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
+  the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
+  the operator's to edit. A forget
   cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
   `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
   Stop now asks, is too easy to give by mistake. Its outcome
   names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
   `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it that function and the attention list's
-  (`loop.attention.listed`) when it starts the server (`serve.backend`). The one process it runs is
+  (`loop.attention.listed`), and a way to ask for a reload (`loop.reread`), when it starts the server
+  (`serve.backend`); a reload hands the server the new config, which each request reads as it opens. The one process
+  it runs is
   `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
@@ -315,7 +319,8 @@ Served by `canopy loop` from a thread (D073):
   last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in
   view wherever the operator is.
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, and pausing and resuming
-  the loop from the header on every page, which shows how long it has been paused. OpenCode's session attach (M15) is
+  the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
+  from the settings page. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
   M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
@@ -405,15 +410,22 @@ The event stream: each open stream holds its own journal connection and reads SQ
 When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
 spend, the latest tick, and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
-`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with
-every list, the spend, the latest tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
+`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
+read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
+summary in a list still in the order from before it. A new stream starts with every list, the spend, the latest
+tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
 sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,
 each only if a page shows it. The journal has no notifications, so reading one pragma every quarter second is the
 cheapest way to learn of a change, and quick enough that a change shows as it happens; nothing in the browser polls.
-An age on a page (`5m ago`) counts on a clock that ticks every second.
+A browser reconnects a dropped stream itself, but not always: it gives up on a refusal, such as a proxy's 502 while the
+loop restarts, and iOS Safari often stops retrying after the page was in the background. So the UI opens a new stream
+when one has been down 5 seconds, waiting twice as long after each try up to a minute; at once when the device is back
+online or the page is shown with its stream down; and when the page is shown after 30 seconds hidden, since the system
+may have cut the stream without telling it. A new stream starts with every list, so nothing is lost but the ticket a
+page shows, which it reads again. An age on a page (`5m ago`) counts on a clock that ticks every second.
 
 The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
 `canopy reply chore:NAME` does in the terminal.

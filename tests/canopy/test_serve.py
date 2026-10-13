@@ -2,6 +2,7 @@
 the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
 
 import json
+import sqlite3
 import stat
 import threading
 import time
@@ -14,7 +15,8 @@ import uvicorn
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from canopy.serve import mock, secret
+from canopy.core import db
+from canopy.serve import live, mock, secret
 from canopy.serve.__main__ import main
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
@@ -376,6 +378,36 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
         assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
 
 
+def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
+    recent = db.recent_tickets
+    replied: list[bool] = []
+
+    def then_a_reply(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
+        rows = recent(conn, limit, key=key)
+        if not replied:
+            replied.append(True)
+            with backend.open() as other:
+                other.conn.execute(
+                    "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+                    "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')"
+                )
+        return rows
+
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        monkeypatch.setattr(db, "recent_tickets", then_a_reply)
+        # The reply commits after the tickets' order is read: the rest of this read does not see it either, so no
+        # ticket's summary changes beside an order from before it.
+        assert sent.changes(backend, ctx) == []
+        assert replied == [True]
+        # The next read sees it whole: the order and the summary.
+        events = [e.root for e in sent.changes(backend, ctx)]
+    [tickets] = [e for e in events if isinstance(e, TicketsUpdated)]
+    assert tickets.tickets[0].key == "ABC-103"
+    assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
+
+
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:
     def reply_soon() -> None:
         time.sleep(0.3)
@@ -449,6 +481,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "LoopState",
         "Pause",
         "PauseChanged",
+        "ConfigReload",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -480,5 +513,6 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/reviews/{run_id}",
         "/api/loop/pause",
         "/api/loop/resume",
+        "/api/loop/reload",
     }
     assert set(schema["paths"]) == paths
