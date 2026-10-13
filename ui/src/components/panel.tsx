@@ -117,11 +117,20 @@ export function Panel({ className, ...props }: ComponentProps<'section'>) {
     return <section className={cn('rounded-md border bg-surface', className)} {...props} />
 }
 
-/** A panel's title row: a label on the left, anything on the right. */
+/**
+ * A panel's title row: a label on the left, anything on the right. Half a step toward `surface-raised`, with its label
+ * in `foreground`, so it reads as the head of the rows under it; half, so a ghost button's hover in it still shows.
+ */
 export function PanelHeader({ label, children }: { label: string; children?: ReactNode }) {
     return (
-        <div className="flex h-9 items-center justify-between gap-3 border-b px-3">
-            <span className="panel-label">{label}</span>
+        <div
+            className={cn(
+                'flex h-9 items-center justify-between gap-3 border-b bg-surface-raised/50 px-3',
+                // Inside the panel's border, so a radius a pixel smaller than the panel's.
+                'first:rounded-t-[calc(var(--radius-md)-1px)]',
+            )}
+        >
+            <span className="panel-label font-medium text-foreground">{label}</span>
             {children}
         </div>
     )
