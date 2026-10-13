@@ -9,7 +9,7 @@ An operations inbox: a control room's at-a-glance state, kept calm enough to rea
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take; what is selected in a page sits on its tint. Each section of
 the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
-label over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
+trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
 decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
 color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
@@ -30,7 +30,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `border` | Every hairline. Applied by default to `border`, so `border-b` needs no color. |
 | `foreground` | Primary text. |
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
-| `accent`, `accent-foreground` | The one accent: active nav item, page labels, links, primary buttons, focus, live. |
+| `accent`, `accent-foreground` | The one accent: active nav item, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `status-running` | A run working. Pulses. |
@@ -58,8 +58,8 @@ Rules:
   claims it.
 - **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Reviews fuchsia,
   Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go
-  on the nav's icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data:
-  there a color is a state's. A page in no section (the 404) takes the accent.
+  on the nav's icons and highlight, the first step of the page header's trail, and the header's aurora, and nowhere
+  in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -90,9 +90,10 @@ Rules:
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
-  working runs are those running first, then those waiting on the operator's answer, each oldest first: a dot in its
-  state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
-  it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
+  working runs are those running first, then those waiting on the operator's answer, each oldest first, a ticket's
+  latest run alone: a dot in its state's color, the ticket's key, how long it has run (or `asks` in
+  `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
+  runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else. The footer (the version) sits at the rail's foot, not the window's: the
   window's foot on a page that fits it, the page's foot on a longer one.
@@ -124,7 +125,18 @@ Rules:
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
-  The page header's label is in its section's color; a panel's stays in `muted-foreground`.
+  The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
+  Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
+  query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
+  a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
+  (`code`) never breaks across lines.
+- **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
+  section's name in its color, then the pages between it and this one. On the section's own list the name is plain
+  text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
+  section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
+  (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
+  repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
+  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
@@ -197,6 +209,16 @@ tabs.
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
+- **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's latest
+  run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs before it,
+  newest first, each one line in the row's own columns: its state, the first line of what it said in muted text where
+  the title is, its id and chips, cost, and when; the rest is on its run's page. The head line leads with the ticket:
+  the state, the key, and the title, which takes the free width, then the run's id and chips in a fixed-width column, so
+  every row's title and run id line up whatever chips a run has. What goes under it (the summary, the PRs, the toggle)
+  starts under the title. A ticket that asked, got its answer, and asked again is one blocked row, not two. The state
+  filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
+  blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
+  there is the same ticket's.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
@@ -262,6 +284,10 @@ tabs.
   model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
+- **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
+  line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
+  wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
+  at its end, where stderr is; the file's size is in the header, and a cut says so above the block.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
@@ -275,9 +301,12 @@ tabs.
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
-  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
-  its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
-  it in its header; when it is unset, neither shows.
+  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
+  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per
+  link, in the accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR), what it opens
+  on hover.
+  The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR; an unknown
+  ticket's page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its

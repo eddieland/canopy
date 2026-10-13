@@ -6,17 +6,21 @@ import { runsQuery } from '@/api/queries'
 import { RUN_STATES, type RunState } from '@/api/types'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
-import { RunsTable } from '@/components/runs-table'
+import { TicketRunsTable } from '@/components/runs-table'
 import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { byTicket } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 interface RunsSearch {
     state?: RunState | undefined
 }
 
-/** Running runs, then the ones that ended last, with `?state=` filtering to one state. */
+/**
+ * Each ticket's runs as one row, by its latest run: running ones, then the ones that ended last. `?state=` keeps the
+ * tickets whose latest run is in that state.
+ */
 export const Route = createFileRoute('/runs/')({
     // Typed search params: `?state=blocked` filters; anything else is dropped, never trusted. Return every key, even
     // when undefined: the router merges this over the raw search, so an omitted key would keep the raw value.
@@ -29,12 +33,14 @@ export const Route = createFileRoute('/runs/')({
 function RunsPage() {
     const { state } = Route.useSearch()
     const { data } = useQuery(runsQuery)
-    const shown = state === undefined ? data : data?.filter((r) => r.state === state)
+    const groups = data === undefined ? undefined : byTicket(data)
+    const shown = state === undefined ? groups : groups?.filter((g) => g.latest.state === state)
     const order = useListOrder('runs')
     return (
         <>
-            <PageHeader label="Workers" title="Runs">
-                Running runs, then the ones that ended last: what each worked on, what it said, and what it cost.
+            <PageHeader title="Runs">
+                Each ticket's latest run, running ones first, then the ones that ended last: what it worked on, what it
+                said, and what it cost. A ticket's earlier runs open under it.
             </PageHeader>
             <Panel>
                 <PanelHeader label="By state">
@@ -59,7 +65,7 @@ function RunsPage() {
                 ) : shown.length === 0 ? (
                     <Placeholder>{state ? `no ${state} runs` : 'no runs yet'}</Placeholder>
                 ) : (
-                    <RunsTable runs={ordered('runs', order, shown)} />
+                    <TicketRunsTable groups={ordered('runs', order, shown)} />
                 )}
             </Panel>
         </>

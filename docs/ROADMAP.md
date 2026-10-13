@@ -487,7 +487,8 @@ each ticket (`canopy ticket set --title`), the name shows beside the key in `can
 UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title
 (`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event with OpenCode's own title,
 so canopy names sessions rather than reading them back. Next: workers renaming their ticket through their result line,
-once real runs show whether the overseer's names hold up.
+once real runs show whether the overseer's names hold up. On request (2026-10-13), a `json` notification carries the
+title beside each ticket key and the Slack sink shows it (DESIGN §20); `attention.md` and the `text` format do not.
 
 ## M16. Worktree setup for large monorepos
 
@@ -751,7 +752,7 @@ shows it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
 - Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it; M27 serves its
-  session's events.
+  session's events. Reopened on request (2026-10-13): the page serves its end (DESIGN §22).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.

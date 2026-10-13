@@ -61,12 +61,12 @@ in order:
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
-   `<state_dir>/ticks/<tick id>.log`, readable only by the operator, never to the journal. The session id and cost
-   the runtime reported (§13) go on the `ticks` row, whether or not the run succeeded. The run succeeded if it
-   exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick closes as
-   `overseer_failed`. A successful run that recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`)
-   closes the tick as `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise
-   every item.
+   `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
+   the journal. The session id and cost the runtime reported (§13) go on the `ticks` row, whether or not the run
+   succeeded. The run succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`;
+   otherwise the tick closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
+   (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention list standing,
+   so an outage does not resolve and re-raise every item.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
@@ -264,8 +264,10 @@ A ticket's title, `tickets.title`, is its name in canopy, for display only like 
 shows the ticket with no title, and again only when the ticket's own title changes. The CLI drops control characters,
 collapses whitespace to one line, refuses an empty title, and cuts it at 80 characters; a dry run records it, as it
 records a phase. It is shown beside the key (`PROJ-1: <title>`) in `canopy status`, `canopy show`, and the web UI, and
-it is the session title of the ticket's runs (§13). It never reaches `attention.md` or a notification: those go to
-sinks the operator may share (§20), and a title is model-written text. `canopy forget` keeps it.
+it is the session title of the ticket's runs (§13). A `json` notification carries it beside each ticket key (§20), so
+a Slack channel names the work and not only its key; like a run's summary and question, which sinks already get, it is
+model-written text, and the Slack sink escapes it. It stays out of `attention.md` and the `text` format, which keep
+§14's message as it was. `canopy forget` keeps it.
 
 | Phase | Derived from | Next action |
 |---|---|---|
@@ -439,6 +441,11 @@ dispatch names at least one, in a workspace of one repository too.
      `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed. A public
      ticket's prompt without `{{OPERATOR_MESSAGES}}` is `bad_prompt` once the operator has written to the ticket in
      canopy (§22, D093), and still renders for a ticket the operator never wrote to.
+   - Every prompt but a split's carries `{{STANDING_INSTRUCTIONS}}`, the operator's file `paths.worker_instructions`
+     (§12), or `None.` without one. With it set, a prompt without the placeholder is `bad_prompt`, so an override
+     cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
+     worker without it would work as if the operator had never written it. It is the operator's own text, an
+     instruction like their messages, and the prompt's obligations come before it.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first

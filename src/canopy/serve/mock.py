@@ -331,6 +331,21 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             2.31,
         ),
         (
+            37,
+            "ABC-100",
+            "implement",
+            "agent/ABC-100-flaky-test",
+            -200,
+            -170,
+            "done",
+            {
+                "summary": "The checkout test now waits for the payment frame instead of a fixed sleep.",
+                "prs": {"web": "https://github.com/acme/web/pull/86"},
+            },
+            0,
+            1.32,
+        ),
+        (
             40,
             "ABC-100",
             "fix-ci",
@@ -627,6 +642,11 @@ _SEARCH_BOX = """\
 6\t}
 """
 
+_TICK_STDERR = """\
+INFO  2026-10-08T11:00:00 +210ms service=default version=1.19.0 args=["run","--format","json"] opencode
+WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 1000ms listing prompts
+"""
+
 
 def _transcripts(state_dir: Path) -> None:
     """Write the events of run 39's, run 40's, tick 2's, and chore run 2's sessions where the loop would write them."""
@@ -803,5 +823,6 @@ def _transcripts(state_dir: Path) -> None:
         elif directory == "chores":
             text = f"--- chore stdout ---\n{stdout}\n--- chore stderr ---\n\n--- chore exit 0 ---\n"
         else:
-            text = f"{stdout}\n--- stderr ---\n"
+            # What OpenCode printed on stderr, which only the tick's output shows.
+            text = f"{stdout}\n--- stderr ---\n{_TICK_STDERR}"
         logs.write_private(state_dir / directory / f"{name}.log", text)

@@ -409,9 +409,11 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 `web:<id>`, so a retried submission records nothing new.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
-When another connection has committed since, or the loop has read its config again (§6), it reads the attention list,
-the runs, the tickets, the chores, the spend, the latest tick, and the pause again, and sends each that changed, whole:
-`attention.updated`, `runs.updated`,
+It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
+stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,
+held up every other request while the overseer worked. When another connection has committed since, or the loop has
+read its config again (§6), it reads the attention list, the runs, the tickets, the chores, the spend, the latest tick,
+and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
 `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
 read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
@@ -472,7 +474,8 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
   `canopy decisions` prints it on one line. It was cut at 2000 characters when recorded (§6).
 - A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
 - The tick's page names where the overseer's output is, `.canopy/ticks/<id>.log`, when the file exists, and shows its
-  session's transcript under the decisions (below).
+  session's transcript under the decisions (below), and the file's end as written under that (The tick's output,
+  below).
 - The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
 
 The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
@@ -481,7 +484,8 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
 - `GET /runs/{id}/transcript` reads the run's log, `GET /chores/{name}/runs/{id}/transcript` the chore run's, and
   `GET /ticks/{id}/transcript` the tick's output, on each request (`core/transcript.py`). Of the events in it (§13),
   only those of the session the journal recorded for the run or tick are read; any other line (stderr, a setup
-  command's output, the harness's markers, another session's events) is left out, and the file itself is never served.
+  command's output, the harness's markers, another session's events) is left out. The file itself is served only as
+  a tick's output (below), never a run's or a chore run's log.
 - Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
   call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
   long it took; a `step_finish` is one model call's reason, cost, and tokens, together and by kind (input, cache read,
@@ -513,9 +517,27 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
 - Everything in a transcript is agent output: untrusted, rendered as text. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
 - Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
-  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving the file,
-  or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed to its
-  log, or when a second runtime prints another shape.
+  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving a run's
+  log, or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed
+  to its log, or when a second runtime prints another shape.
+
+The tick's output (taken on request, 2026-10-13): the transcript keeps only the overseer's session, so what the
+runtime printed on stderr, and any line that is not one of its events, sent the operator back to the file, most of all
+for a tick whose overseer failed.
+
+- `GET /ticks/{id}/output` reads the end of the tick's output file as written on each request (`transcript.tail`): its
+  stdout, the `--- stderr ---` line the tick writes, and its stderr (§6). The same checks as a transcript's: a
+  regular file, opened without following links and without blocking. At most its last 1 MiB, from the first whole
+  line in it, which is far more than an overseer prints on stderr; control characters dropped, line breaks kept. It
+  says the file's size and whether it was cut, or `no_output` when there is no file (the tick kept none, or is still
+  running). No such tick is a 404.
+- Its end, not its start: stderr and the session's last events are where a failed tick says why, and the transcript
+  has the session from its start.
+- An Output panel under the transcript, hidden until the operator shows it, so a tick's page reads the file only when
+  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text. Not on the event stream;
+  it is marked stale with the tick's transcript, as the tick ends.
+- A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
+  until the operator asks for the rest.
 
 The worktrees page (taken on request, 2026-10-08): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;

@@ -17,7 +17,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from canopy.core import db
-from canopy.serve import live, mock, secret
+from canopy.core.context import Context
+from canopy.serve import live, mock, secret, views
 from canopy.serve.__main__ import main
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
@@ -32,6 +33,7 @@ from canopy.serve.schema import (
     SpendUpdated,
     StreamEvent,
     TicketChanged,
+    TicketSummary,
     TicketsUpdated,
     TickUpdated,
 )
@@ -135,6 +137,19 @@ def test_a_base_path_prefixes_everything(ui: Path, backend: Backend) -> None:
     assert c.get("/api/meta").status_code == 404
 
 
+def test_each_app_serves_its_own_backend_and_sessions(ui: Path, tmp_path: Path) -> None:
+    # The routers are shared by every app in the process; what a route is handed is bound per app.
+    first = client(ui, mock.seed(tmp_path / "first"))
+    second = client(ui, mock.seed(tmp_path / "second"), key=SECRET, base_path="/canopy")
+    assert second.get("/canopy/api/meta").status_code == 401
+    headers = signed_in(second, base="/canopy")
+    before = second.get("/canopy/api/loop", headers=headers).json()
+    paused = first.post("/api/loop/pause", headers={"origin": ORIGIN}).json()
+    assert paused["already"] is False
+    assert first.get("/api/loop").json() == paused["loop"] != before
+    assert second.get("/canopy/api/loop", headers=headers).json() == before
+
+
 @pytest.mark.parametrize("base_path", ["/", "canopy", "/canopy/", "/a/../b", '/"><script>'])
 def test_a_bad_base_path_is_refused(base_path: str) -> None:
     with pytest.raises(ValidationError):
@@ -209,7 +224,7 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
 def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(
     ui: Path, backend: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("canopy.serve.api.FAILED_SIGN_IN_SECONDS", 0.2)
+    monkeypatch.setattr("canopy.serve.api.session.FAILED_SIGN_IN_SECONDS", 0.2)
     c = client(ui, backend, key=SECRET)
     began = time.monotonic()
     response = c.post("/api/session", json={"secret": SECRET + "x"})
@@ -451,6 +466,29 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     assert lists[1].tickets[0].key == "ABC-103"
 
 
+def test_a_streams_read_never_holds_up_a_request(served: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stream reads the lists on a thread of its own: a request is answered while a read is still under way."""
+    reading, answered = threading.Event(), threading.Event()
+    tickets = views.tickets
+
+    def slow(ctx: Context) -> list[TicketSummary]:
+        reading.set()
+        answered.wait(timeout=10)
+        return tickets(ctx)
+
+    monkeypatch.setattr(views, "tickets", slow)
+    stream = threading.Thread(target=read_events, args=(served, 1), daemon=True)
+    stream.start()
+    assert reading.wait(timeout=10)
+    try:
+        response = httpx2.get(f"http://127.0.0.1:{served}/api/loop", timeout=5)
+    finally:
+        answered.set()
+    assert response.status_code == 200
+    stream.join(timeout=10)
+    assert not stream.is_alive()
+
+
 # The development server and the schema
 
 
@@ -527,6 +565,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/ticks",
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
+        "/api/ticks/{tick_id}/output",
         "/api/worktrees",
         "/api/search",
         "/api/events",

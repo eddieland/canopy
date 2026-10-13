@@ -10,6 +10,9 @@ Everything here is agent output: untrusted, and unbounded until it is read. So t
 regular file and not a symlink, at most `MAX_BYTES` of it; each event is validated (D026); control characters are
 dropped; and each text, the transcript's entries, and their characters altogether are cut at a bound, with
 `truncated` saying something was. An event of a known type that does not validate is counted in `unreadable`.
+
+`tail` reads the end of such a file as written, for a tick's output shown whole: stderr and every line the transcript
+leaves out. The same checks hold, at most `MAX_TAIL` of it is read, and its control characters are dropped.
 """
 
 from __future__ import annotations
@@ -38,6 +41,8 @@ MAX_TEXT = 20_000
 MAX_INPUT = 5_000
 # A tool's name, a call's title, a step's reason, and an error's name: one line each.
 MAX_NAME = 200
+# How much of the end of a file `tail` reads: far more than an overseer prints on stderr, and little enough to send.
+MAX_TAIL = 1024 * 1024
 # Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
 _MAX_MS = 253_402_300_799_999
 
@@ -172,15 +177,19 @@ class Transcript:
     unreadable: int = 0
 
 
+@dataclass(frozen=True)
+class Tail:
+    """The end of a file as written: at most `MAX_TAIL` bytes of it, `truncated` when it holds more, of `size` bytes."""
+
+    text: str
+    size: int
+    truncated: bool
+
+
 def read(path: Path, session_id: str) -> Transcript | None:
     """Read `session_id`'s events from the log at `path`. None when it is missing, a symlink, or not a regular file."""
-    try:
-        # Non-blocking, so a FIFO in the log's place cannot hold the request open; it is refused below.
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    except OSError:
-        return None
-    if not stat.S_ISREG(os.fstat(fd).st_mode):
-        os.close(fd)
+    fd = _open(path)
+    if fd is None:
         return None
     with os.fdopen(fd, "rb") as f:
         data = f.read(MAX_BYTES + 1)
@@ -189,6 +198,35 @@ def read(path: Path, session_id: str) -> Transcript | None:
         # The last line read may be cut short; it is not an event then.
         data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
     return _parse(data.decode("utf-8", errors="replace").splitlines(), session_id, truncated=truncated)
+
+
+def tail(path: Path) -> Tail | None:
+    """Read the end of the file at `path`, from its first whole line. None for any file `read` would refuse."""
+    fd = _open(path)
+    if fd is None:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        size = os.fstat(f.fileno()).st_size
+        f.seek(max(0, size - MAX_TAIL))
+        data = f.read(MAX_TAIL)
+    truncated = size > MAX_TAIL
+    if truncated:
+        # The first line read may be cut short, a character too: start at the next whole line.
+        data = data[data.find(b"\n") + 1 :]
+    return Tail(conversation.printable(data.decode("utf-8", errors="replace")), size, truncated)
+
+
+def _open(path: Path) -> int | None:
+    """A descriptor for reading the regular file at `path`, or None when it is missing, a symlink, or anything else."""
+    try:
+        # Non-blocking, so a FIFO in the file's place cannot hold the request open; it is refused below.
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        return None
+    return fd
 
 
 def _parse(lines: list[str], session_id: str, *, truncated: bool) -> Transcript:

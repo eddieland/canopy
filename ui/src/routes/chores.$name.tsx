@@ -29,7 +29,7 @@ function ChorePage() {
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         return (
             <>
-                <PageHeader label="Chore" title={`chore:${name}`} />
+                <PageHeader title={`chore:${name}`} />
                 <Panel>
                     <Placeholder className="min-h-40">{error.message}</Placeholder>
                 </Panel>
@@ -39,7 +39,7 @@ function ChorePage() {
     if (data === undefined) {
         return (
             <>
-                <PageHeader label="Chore" title={`chore:${name}`} />
+                <PageHeader title={`chore:${name}`} />
                 <Panel className="min-h-72 p-3">
                     <Skeleton className="h-4 w-1/2" />
                 </Panel>
@@ -55,7 +55,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
     const runsOrder = useListOrder('chore-runs')
     return (
         <>
-            <PageHeader label="Chore" title={`chore:${chore.name}`}>
+            <PageHeader title={`chore:${chore.name}`}>
                 Recurring work the overseer runs when it is due. What it finds reaches the attention list; your notes
                 reach its next runs.
             </PageHeader>
