@@ -90,9 +90,10 @@ Rules:
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
-  working runs are those running first, then those waiting on the operator's answer, each oldest first: a dot in its
-  state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
-  it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
+  working runs are those running first, then those waiting on the operator's answer, each oldest first, a ticket's
+  latest run alone: a dot in its state's color, the ticket's key, how long it has run (or `asks` in
+  `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
+  runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else. The footer (the version) sits at the rail's foot, not the window's: the
   window's foot on a page that fits it, the page's foot on a longer one.
@@ -126,7 +127,9 @@ Rules:
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
   The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
-  query: a pasted URL widened the page.
+  query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
+  a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
+  (`code`) never breaks across lines.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -206,6 +209,16 @@ tabs.
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
+- **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's latest
+  run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs before it,
+  newest first, each one line in the row's own columns: its state, the first line of what it said in muted text where
+  the title is, its id and chips, cost, and when; the rest is on its run's page. The head line leads with the ticket:
+  the state, the key, and the title, which takes the free width, then the run's id and chips in a fixed-width column, so
+  every row's title and run id line up whatever chips a run has. What goes under it (the summary, the PRs, the toggle)
+  starts under the title. A ticket that asked, got its answer, and asked again is one blocked row, not two. The state
+  filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
+  blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
+  there is the same ticket's.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
@@ -288,9 +301,12 @@ tabs.
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
-  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
-  its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
-  it in its header; when it is unset, neither shows.
+  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
+  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per
+  link, in the accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR), what it opens
+  on hover.
+  The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR; an unknown
+  ticket's page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its

@@ -264,8 +264,10 @@ A ticket's title, `tickets.title`, is its name in canopy, for display only like 
 shows the ticket with no title, and again only when the ticket's own title changes. The CLI drops control characters,
 collapses whitespace to one line, refuses an empty title, and cuts it at 80 characters; a dry run records it, as it
 records a phase. It is shown beside the key (`PROJ-1: <title>`) in `canopy status`, `canopy show`, and the web UI, and
-it is the session title of the ticket's runs (§13). It never reaches `attention.md` or a notification: those go to
-sinks the operator may share (§20), and a title is model-written text. `canopy forget` keeps it.
+it is the session title of the ticket's runs (§13). A `json` notification carries it beside each ticket key (§20), so
+a Slack channel names the work and not only its key; like a run's summary and question, which sinks already get, it is
+model-written text, and the Slack sink escapes it. It stays out of `attention.md` and the `text` format, which keep
+§14's message as it was. `canopy forget` keeps it.
 
 | Phase | Derived from | Next action |
 |---|---|---|

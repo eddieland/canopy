@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -95,9 +96,11 @@ class Event:
         """The event as one line for a person."""
         return event_line(self.kind, self.fields)
 
-    def as_json(self) -> dict[str, object]:
-        """The event as the `json` format lists it."""
-        return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, "line": self.line}
+    def as_json(self, titles: Mapping[str, str] | None = None) -> dict[str, object]:
+        """The event as the `json` format lists it: an event about a ticket also carries its title from `titles`."""
+        ticket = self.fields.get("ticket")
+        named = {"title": (titles or {}).get(str(ticket))} if ticket else {}
+        return {"id": self.id, "kind": self.kind, "at": self.at, **self.fields, **named, "line": self.line}
 
 
 _OWN = ("id", "kind", "at", "line")
@@ -156,18 +159,28 @@ class Digest:
         }
 
 
+def titles(conn: sqlite3.Connection) -> dict[str, str]:
+    """Each named ticket's title by its key (DESIGN §13), for the `json` format to carry beside the key."""
+    return {str(r[0]): str(r[1]) for r in conn.execute("SELECT key, title FROM tickets WHERE title IS NOT NULL")}
+
+
 def digest(conn: sqlite3.Connection, items: list[Item], *, since: str, now: datetime) -> Digest:
     """Build the digest for the time since `since`: ticks, runs, the open attention list, workers running now."""
     ticks = Counter(str(r[0]) for r in conn.execute("SELECT status FROM ticks WHERE started_at >= ?", (since,)))
     started = Counter(str(r[0]) for r in conn.execute("SELECT kind FROM runs WHERE started_at >= ?", (since,)))
     ended_rows = conn.execute("SELECT * FROM runs WHERE ended_at >= ? ORDER BY id", (since,)).fetchall()
     ended = Counter(str(r["status"]) for r in ended_rows)
+    named = titles(conn)
     done = [
-        {"ticket": r["ticket_key"], "run": r["id"], "pr": _pr(r["result_json"])}
+        {"ticket": r["ticket_key"], "title": named.get(r["ticket_key"]), "run": r["id"], "pr": _pr(r["result_json"])}
         for r in ended_rows
         if r["status"] == "done"
     ]
-    blocked = [{"ticket": r["ticket_key"], "run": r["id"]} for r in ended_rows if r["status"] == "blocked"]
+    blocked = [
+        {"ticket": r["ticket_key"], "title": named.get(r["ticket_key"]), "run": r["id"]}
+        for r in ended_rows
+        if r["status"] == "blocked"
+    ]
     oldest = min((i.since for i in items), default=None)
     return Digest(
         since=since,
@@ -213,6 +226,8 @@ class Message:
     events: list[Event] = field(default_factory=list[Event])
     digest: Digest | None = None
     now: datetime | None = None
+    # Ticket titles by key, which the `json` format carries beside each key; the `text` format shows keys alone.
+    titles: dict[str, str] = field(default_factory=dict[str, str])
 
     def is_empty(self) -> bool:
         """Whether there is nothing to send."""
@@ -260,6 +275,7 @@ class Message:
                 "added": [
                     {
                         "ticket": i.ticket_key,
+                        "title": self._title(i.ticket_key),
                         "repo": i.repo,
                         "reason": i.reason,
                         "detail": _line(i.detail)[:500],
@@ -267,7 +283,10 @@ class Message:
                     }
                     for i in added
                 ],
-                "resolved": [{"ticket": k, "repo": r, "reason": reason} for k, reason, r in resolved_items],
+                "resolved": [
+                    {"ticket": k, "title": self._title(k), "repo": r, "reason": reason}
+                    for k, reason, r in resolved_items
+                ],
                 "open": self.open_items,
                 "path": str(self.path),
             }
@@ -277,7 +296,7 @@ class Message:
             "repo": self.repo,
             "sent_at": db.format_time(self.now) if self.now is not None else db.now(),
             "attention": attention,
-            "events": [e.as_json() for e in events],
+            "events": [e.as_json(self.titles) for e in events],
             "omitted": omitted,
             "digest": self.digest.as_json() if self.digest is not None else None,
             "text": self.text(),
@@ -287,3 +306,6 @@ class Message:
     def render(self, fmt: str) -> str:
         """The message in format `fmt`, `json` or `text`."""
         return self.json() if fmt == "json" else self.text()
+
+    def _title(self, key: str | None) -> str | None:
+        return self.titles.get(key) if key is not None else None
