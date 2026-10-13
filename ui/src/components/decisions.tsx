@@ -36,7 +36,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                         ) : (
                             <Subject decision={decision} />
                         )}
-                        <Chip className={TONE[actionTone(decision.action)]}>{decision.action}</Chip>
+                        <Chip className={TONE[actionTone(decision.action)]} word={decision.action} />
                         {decision.pr && (
                             <a
                                 href={decision.pr}
