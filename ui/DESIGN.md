@@ -251,8 +251,8 @@ tabs.
   opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
   call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
   all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
-  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
-  overseer's under its decisions.
+  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
+  (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
@@ -262,7 +262,9 @@ tabs.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
-  run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
+  run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
+  an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
+  how long it has been open.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
   its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names

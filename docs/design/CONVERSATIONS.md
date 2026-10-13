@@ -383,6 +383,8 @@ The API, under `{base}/api`:
 | `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
+| `GET /chores/{name}/runs/{id}` | one run of that chore: its row, its whole summary, the harness's note, and its findings; 404 for no such run of it |
+| `GET /chores/{name}/runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run of that chore |
 | `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
 | `GET /reviews` | canopy's latest 100 review runs, newest first: PR, commit, ticket, status, verdict, impact, findings, cost (§21) |
 | `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, the diff, and the PR's other runs; 404 for no such run |
@@ -409,11 +411,12 @@ spend, the latest tick, and the pause again, and sends each that changed, whole:
 every list, the spend, the latest tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
-newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
-sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,
-each only if a page shows it. The journal has no notifications, so reading one pragma every quarter second is the
-cheapest way to learn of a change, and quick enough that a change shows as it happens; nothing in the browser polls.
-An age on a page (`5m ago`) counts on a clock that ticks every second.
+newest note, so a note changes it, and a chore run's page when that list moves the run's status. The latest tick
+carries how many decisions it has recorded, so `tick.updated` is sent as a running tick records them, and on it the UI
+reads again the ticks list, a tick's page, and a ticket's page, each only if a page shows it. The journal has no
+notifications, so reading one pragma every quarter second is the cheapest way to learn of a change, and quick enough
+that a change shows as it happens; nothing in the browser polls. An age on a page (`5m ago`) counts on a clock
+that ticks every second.
 
 The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
 `canopy reply chore:NAME` does in the terminal.
@@ -431,10 +434,14 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   overseer decides when one runs (§19), and `canopy chore try` stays in the CLI.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
   detail are the agent's: untrusted text, rendered as text with control characters dropped.
-- The chores page is in the navigation, and each chore has a page. On the attention list, a chore's item, a finding or
-  `chore_failed`, opens the chore's notes and the note form beside the list, as a ticket's opens its conversation. A
-  note no run of the chore has started since is marked as waiting for its next run: notes wake nothing and no tick
-  reads them (§19), so a tick's acknowledgement says nothing about them.
+- A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its
+  row, the whole of its summary (a result bounds it at 2000 characters) and the harness's note apart from it, the
+  findings an `ok` run reported, and its session's transcript (below). `GET /chores/{name}/runs/{id}` finds a run only
+  under its own chore, and keeps the runs of a chore since deleted from the config, as the journal does.
+- The chores page is in the navigation, and each chore has a page; each run's id on it opens the run's page. On the
+  attention list, a chore's item, a finding or `chore_failed`, opens the chore's notes and the note form beside the
+  list, as a ticket's opens its conversation. A note no run of the chore has started since is marked as waiting for
+  its next run: notes wake nothing and no tick reads them (§19), so a tick's acknowledgement says nothing about them.
 
 The ticks pages (M24): the `decisions` table is the overseer's reasons for what the loop did and the evaluation corpus
 for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
@@ -455,10 +462,10 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
 `opencode export`.
 
-- `GET /runs/{id}/transcript` reads the run's log, and `GET /ticks/{id}/transcript` the tick's output, on each request
-  (`core/transcript.py`). Of the events in it (§13), only those of the session the journal recorded for the run or tick
-  are read; any other line (stderr, a setup command's output, the harness's markers, another session's events) is left
-  out, and the file itself is never served.
+- `GET /runs/{id}/transcript` reads the run's log, `GET /chores/{name}/runs/{id}/transcript` the chore run's, and
+  `GET /ticks/{id}/transcript` the tick's output, on each request (`core/transcript.py`). Of the events in it (§13),
+  only those of the session the journal recorded for the run or tick are read; any other line (stderr, a setup
+  command's output, the harness's markers, another session's events) is left out, and the file itself is never served.
 - Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
   call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
   long it took; a `step_finish` is one model call's reason, tokens, and cost; an `error` is the runtime's. `step_start`
@@ -469,11 +476,12 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
   without following links and without blocking.
 - A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
-  events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8); a running run's
-  page says so. A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its
-  answer.
+  events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8), as a chore
+  run's do (§19); a running run's page says so. A subagent's calls are its own session's (§13), so a `task` call
+  shows as one tool call with its answer.
 - It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
-  again when `runs.updated` moves that run's status, and a tick's when `tick.updated` moves that tick's.
+  again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
+  `tick.updated` moves that tick's.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
 - Everything in a transcript is agent output: untrusted, rendered as text. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).

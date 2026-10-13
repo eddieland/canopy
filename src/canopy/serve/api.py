@@ -23,6 +23,7 @@ from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECOND
 from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
+    ChoreRunDetail,
     ChoreSummary,
     ForgetRequest,
     Forgot,
@@ -267,7 +268,8 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
 def _chore_routes(api: APIRouter, backend: Backend) -> None:
     """The chores (DESIGN §19): what `canopy status` and `canopy show chore:NAME` print, and the operator's notes.
 
-    Nothing here runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
+    Each run is readable on its own, with its session's transcript: untrusted text, read back from its log. Nothing
+    here runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
     """
     log = logs.for_tick(None)
 
@@ -283,6 +285,33 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
             found = views.chore(backend, ctx, ref.id)
         if found is None:
             raise HTTPException(status_code=404, detail=f"no chore {ref.id!r} is defined for this workspace")
+        return found
+
+    @api.get(
+        "/chores/{name}/runs/{run_id}",
+        operation_id="getChoreRun",
+        responses={404: {"description": "No such run of this chore."}},
+    )
+    def chore_run(name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> ChoreRunDetail:
+        ref = chore_ref(name, "show")
+        with backend.open() as ctx:
+            found = views.chore_run_detail(ctx, ref.id, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"chore {ref.id!r} has no run {run_id}")
+        return found
+
+    # Agent output, read back from the run's log on each request; never on the stream (DESIGN §22).
+    @api.get(
+        "/chores/{name}/runs/{run_id}/transcript",
+        operation_id="getChoreRunTranscript",
+        responses={404: {"description": "No such run of this chore."}},
+    )
+    def chore_run_transcript(name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
+        ref = chore_ref(name, "show")
+        with backend.open() as ctx:
+            found = views.chore_run_transcript(ctx, ref.id, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"chore {ref.id!r} has no run {run_id}")
         return found
 
     @api.post("/chores/{name}/replies", operation_id="replyChore", responses=_REFUSED)

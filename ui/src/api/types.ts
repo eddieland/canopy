@@ -65,7 +65,11 @@ export type ChoreDetail = Schemas['ChoreDetail']
 export type ChoreRun = Schemas['ChoreRun']
 /** An open finding: one the chore's latest `ok` run reported (DESIGN §19). */
 export type ChoreFinding = Schemas['ChoreFinding']
-/** What a run's log or a tick's output holds of its session, read back from its events (DESIGN §22). */
+/** One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22). */
+export type ChoreRunDetail = Schemas['ChoreRunDetail']
+/** A finding as one chore run reported it (DESIGN §19). */
+export type ChoreRunFinding = Schemas['ChoreRunFinding']
+/** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
 export type TranscriptEntry = Transcript['entries'][number]
