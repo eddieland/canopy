@@ -128,12 +128,14 @@ const SUBJECT_FIRST: ReadonlySet<SearchSource> = new Set(['ticket', 'message', '
 /** Where a hit opens: its ticket or chore, then the run that said it or the tick that decided it. */
 function Where({ hit }: { hit: SearchHit }) {
     const subject =
-        hit.ticket_key !== null ? (
+        hit.ticket_key === null ? (
+            hit.chore === null ? null : (
+                <ChoreLink name={hit.chore} />
+            )
+        ) : (
             <TicketLink ticketKey={hit.ticket_key} />
-        ) : hit.chore !== null ? (
-            <ChoreLink name={hit.chore} />
-        ) : null
-    const tick = hit.tick_id !== null ? <TickLink id={hit.tick_id} /> : null
+        )
+    const tick = hit.tick_id === null ? null : <TickLink id={hit.tick_id} />
     // A chore run has no `run:ID` page (DESIGN §22): its chore's page lists it.
     const run = hit.run_id !== null && hit.source === 'message' ? <RunLink id={hit.run_id} /> : null
     if (SUBJECT_FIRST.has(hit.source)) {

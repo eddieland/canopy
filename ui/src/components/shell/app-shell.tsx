@@ -45,8 +45,12 @@ export function AppShell() {
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
     const buddy = useBuddy()
-    if (session.data === undefined) return <div className="min-h-dvh" />
-    if (!signedIn) return <SignIn />
+    if (session.data === undefined) {
+        return <div className="min-h-dvh" />
+    }
+    if (!signedIn) {
+        return <SignIn />
+    }
     return (
         <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
             <header
@@ -122,7 +126,9 @@ function LiveMark({ stream }: { stream: StreamStatus }) {
  * no longer scrolls. Focus a page's own element took first stays where it is.
  */
 function takeKeys(scroller: HTMLDivElement | null) {
-    if (scroller !== null && document.activeElement === document.body) scroller.focus({ preventScroll: true })
+    if (scroller !== null && document.activeElement === document.body) {
+        scroller.focus({ preventScroll: true })
+    }
 }
 
 /** A hairline between the header's groups. */

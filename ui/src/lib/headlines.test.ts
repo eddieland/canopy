@@ -20,7 +20,9 @@ describe('headlinesFor', () => {
 
     it('opens every tip with "Tip: " and no joke with it', () => {
         for (const topic of TICKER_TOPICS) {
-            for (const line of HEADLINES[topic]) expect(line.startsWith('Tip: ')).toBe(topic === 'tips')
+            for (const line of HEADLINES[topic]) {
+                expect(line.startsWith('Tip: ')).toBe(topic === 'tips')
+            }
         }
     })
 })
@@ -28,7 +30,9 @@ describe('headlinesFor', () => {
 describe('nextIndex', () => {
     it('never picks the last one while there is another', () => {
         const rolls = [0, 0.25, 0.5, 0.75, 0.9999]
-        for (const roll of rolls) expect(nextIndex(4, 2, () => roll)).not.toBe(2)
+        for (const roll of rolls) {
+            expect(nextIndex(4, 2, () => roll)).not.toBe(2)
+        }
         expect(rolls.map((roll) => nextIndex(4, 2, () => roll))).toEqual([0, 0, 1, 3, 3])
         expect(nextIndex(4, 0, () => 0)).toBe(1)
     })

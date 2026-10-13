@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT, isApple, type KeyPress, parseSendKey, sends, sendShortcut } from './send-key'
+import { DEFAULT, isApple, parseSendKey, sends, sendShortcut } from './send-key'
+import type { KeyPress } from './send-key'
 
 const ENTER: KeyPress = { key: 'Enter', shiftKey: false, ctrlKey: false, metaKey: false, isComposing: false }
 

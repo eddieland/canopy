@@ -1,4 +1,5 @@
-import createClient, { type Middleware } from 'openapi-fetch'
+import createClient from 'openapi-fetch'
+import type { Middleware } from 'openapi-fetch'
 
 import { basePath } from '@/lib/base'
 
@@ -20,7 +21,9 @@ export function writeToken(token: () => string | null | undefined): Middleware {
     return {
         onRequest({ request }) {
             const value = token()
-            if (!READS.has(request.method) && value) request.headers.set(TOKEN_HEADER, value)
+            if (!READS.has(request.method) && value) {
+                request.headers.set(TOKEN_HEADER, value)
+            }
             return request
         },
     }
@@ -43,8 +46,12 @@ export class ApiError extends Error {
 }
 
 function message(status: number, detail: unknown): string {
-    if (typeof detail === 'string') return detail
-    if (isRefusal(detail)) return detail.reason
+    if (typeof detail === 'string') {
+        return detail
+    }
+    if (isRefusal(detail)) {
+        return detail.reason
+    }
     return `request failed with status ${status}`
 }
 
@@ -63,7 +70,9 @@ function refusalGuard(detail: unknown): string | null {
 
 /** Unwraps an openapi-fetch result: its data, or an ApiError. */
 export function unwrap<T>(result: { data?: T; error?: unknown; response: Response }): T {
-    if (result.data !== undefined) return result.data
+    if (result.data !== undefined) {
+        return result.data
+    }
     const detail = (result.error as { detail?: unknown } | undefined)?.detail
     throw new ApiError(result.response.status, detail)
 }

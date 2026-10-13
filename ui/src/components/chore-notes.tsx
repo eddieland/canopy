@@ -1,5 +1,6 @@
 import type { ChoreDetail } from '@/api/types'
-import { Conversation, type Pending } from '@/components/conversation'
+import { Conversation } from '@/components/conversation'
+import type { Pending } from '@/components/conversation'
 import { OrderToggle } from '@/components/order-toggle'
 import { PanelHeader, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'

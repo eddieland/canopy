@@ -32,7 +32,9 @@ export const Route = createFileRoute('/tickets/$key')({
 function TicketPage() {
     const { key } = Route.useParams()
     const { data, error } = useQuery(ticketQuery(key))
-    if (error instanceof ApiError && error.status === 404) return <Unknown ticketKey={key} />
+    if (error instanceof ApiError && error.status === 404) {
+        return <Unknown ticketKey={key} />
+    }
     if (error instanceof ApiError && error.status === 409) {
         return (
             <>
@@ -195,7 +197,7 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
                         rel="noreferrer noopener"
                         className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
                     >
-                        {pr.replace(/^https:\/\//, '')}
+                        {pr.replace(/^https:\/\//u, '')}
                         <ExternalLink className="size-3" />
                     </a>
                 ) : (

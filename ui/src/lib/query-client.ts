@@ -17,7 +17,9 @@ const SIGNED_OUT: Session = { signed_in: false, token: null }
  */
 export function createQueryClient(): QueryClient {
     const signedOut = (error: unknown) => {
-        if (error instanceof ApiError && error.status === 401) client.setQueryData(keys.session, SIGNED_OUT)
+        if (error instanceof ApiError && error.status === 401) {
+            client.setQueryData(keys.session, SIGNED_OUT)
+        }
     }
     const client: QueryClient = new QueryClient({
         queryCache: new QueryCache({ onError: signedOut }),

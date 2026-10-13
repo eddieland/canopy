@@ -22,7 +22,8 @@ import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
-import { bySeverity, severity, type Severity } from '@/lib/attention'
+import { bySeverity, severity } from '@/lib/attention'
+import type { Severity } from '@/lib/attention'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
@@ -210,15 +211,21 @@ function FindingHead({ item, chore, done }: { item: AttentionItem; chore: string
 }
 
 function Subject({ item }: { item: AttentionItem }) {
-    if (item.ticket_key !== null) return <TicketLink ticketKey={item.ticket_key} />
-    if (item.chore !== null) return <ChoreLink name={item.chore} />
+    if (item.ticket_key !== null) {
+        return <TicketLink ticketKey={item.ticket_key} />
+    }
+    if (item.chore !== null) {
+        return <ChoreLink name={item.chore} />
+    }
     return <span className="font-mono text-xs">{item.subject}</span>
 }
 
 /** A chore's item: the chore's notes, which its next runs read, and the form for another (DESIGN §19). */
 function ChoreThread({ name }: { name: string }) {
     const { data, error } = useQuery(choreQuery(name))
-    if (error instanceof ApiError) return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    if (error instanceof ApiError) {
+        return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    }
     if (data === undefined) {
         return (
             <div className="flex min-h-60 flex-col gap-2 p-3">
@@ -233,7 +240,9 @@ function ChoreThread({ name }: { name: string }) {
 function Thread({ ticketKey }: { ticketKey: string }) {
     const { data, error } = useQuery(ticketQuery(ticketKey))
     const order = useListOrder('conversation')
-    if (error instanceof ApiError) return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    if (error instanceof ApiError) {
+        return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    }
     if (data === undefined) {
         return (
             <div className="flex min-h-60 flex-col gap-2 p-3">

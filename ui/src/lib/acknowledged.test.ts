@@ -21,7 +21,9 @@ describe('awaitsTick', () => {
 describe('answered', () => {
     const [item] = mockAttention
     const [ticket] = mockTickets
-    if (!item || !ticket) throw new Error('fixtures are empty')
+    if (!item || !ticket) {
+        throw new Error('fixtures are empty')
+    }
     const listing = (changes: Partial<TicketSummary>) => [{ ...ticket, ...changes }]
 
     it('is an awaiting_reply item whose started ticket waits on nothing now', () => {

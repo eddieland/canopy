@@ -1,13 +1,8 @@
-import { type CSSProperties, useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 
-import {
-    type FlairColor,
-    type FlairEffect,
-    type Headline,
-    headlinesFor,
-    nextIndex,
-    parseHeadline,
-} from '@/lib/headlines'
+import { headlinesFor, nextIndex, parseHeadline } from '@/lib/headlines'
+import type { FlairColor, FlairEffect, Headline } from '@/lib/headlines'
 import { SPEED_REM, useTickerSettings } from '@/lib/ticker-settings'
 import { cn } from '@/lib/utils'
 
@@ -46,7 +41,9 @@ export function Ticker() {
     // Picked once per pass, never during render: a re-render mid-crawl must not swap the headline under the reader.
     // Turning a topic off shrinks the list, and the pick wraps onto what is left.
     const [pass, setPass] = useState(() => ({ n: 0, pick: nextIndex(headlines.length, -1) }))
-    if (speed === 'off' || headlines.length === 0) return <div className="min-w-0 flex-1" />
+    if (speed === 'off' || headlines.length === 0) {
+        return <div className="min-w-0 flex-1" />
+    }
     const index = pass.pick % headlines.length
     const headline = parseHeadline(headlines[index] ?? '')
     return (
@@ -79,7 +76,9 @@ function Crawl({ headline, rate, gap, onDone }: { headline: Headline; rate: numb
     const line = useRef<HTMLSpanElement>(null)
     useLayoutEffect(() => {
         const element = line.current
-        if (element === null) return
+        if (element === null) {
+            return
+        }
         const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
         element.style.animationDuration = `${element.offsetWidth / (rate * rem)}s`
     }, [rate])
@@ -91,7 +90,9 @@ function Crawl({ headline, rate, gap, onDone }: { headline: Headline; rate: numb
             style={style}
             onAnimationIteration={(event) => {
                 // A flair's letters and colors loop too, and their iterations bubble up here: only the crawl's counts.
-                if (event.target === event.currentTarget) onDone()
+                if (event.target === event.currentTarget) {
+                    onDone()
+                }
             }}
             data-testid="ticker-headline"
         >
@@ -106,7 +107,9 @@ function Crawl({ headline, rate, gap, onDone }: { headline: Headline; rate: numb
  */
 function Flair({ headline: { text, color, effect } }: { headline: Headline }) {
     const tone = color && COLOR[color]
-    if (effect === undefined) return <span className={tone}>{text}</span>
+    if (effect === undefined) {
+        return <span className={tone}>{text}</span>
+    }
     return (
         <>
             <span className="sr-only">{text}</span>

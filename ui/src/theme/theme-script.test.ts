@@ -9,8 +9,10 @@ import { STORAGE_KEY } from './store'
 
 // The blocking script in index.html, run exactly as written.
 const html = readFileSync(resolve(import.meta.dirname, '../../index.html'), 'utf8')
-const script = /<script>([\s\S]*?)<\/script>/.exec(html)?.[1]
-if (!script) throw new Error('index.html has no inline theme script')
+const script = /<script>([\s\S]*?)<\/script>/u.exec(html)?.[1]
+if (!script) {
+    throw new Error('index.html has no inline theme script')
+}
 const run = new Function(script) as () => void
 
 beforeEach(() => {
@@ -32,7 +34,9 @@ describe('index.html theme script', () => {
         { stored: 'garbage', system: true, dark: true },
     ])('stored $stored with a dark system $system: dark is $dark', ({ stored, system, dark }) => {
         stubSystemTheme(system)
-        if (stored) localStorage.setItem(STORAGE_KEY, stored)
+        if (stored) {
+            localStorage.setItem(STORAGE_KEY, stored)
+        }
         run()
         expect(document.documentElement.classList.contains('dark')).toBe(dark)
         expect(document.documentElement.style.colorScheme).toBe(dark ? 'dark' : 'light')

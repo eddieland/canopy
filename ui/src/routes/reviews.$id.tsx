@@ -29,7 +29,9 @@ function ReviewPage() {
     const { id } = Route.useParams()
     // A review run's id is a positive number, as a run's is.
     const parsed = tickId(id)
-    if (parsed === null) return <NoReview title={`review ${id}`}>not a review: its id is a positive number</NoReview>
+    if (parsed === null) {
+        return <NoReview title={`review ${id}`}>not a review: its id is a positive number</NoReview>
+    }
     return <Loaded id={parsed} />
 }
 
@@ -52,8 +54,8 @@ function Loaded({ id }: { id: number }) {
     return (
         <>
             <PageHeader title={`review ${data.review.id}`}>
-                canopy's adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on the
-                diff, at the lines they name.
+                canopy&apos;s adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on
+                the diff, at the lines they name.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <ReviewPanel detail={data} />
@@ -205,7 +207,7 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                         </Link>
                         {f.dismissed && <Chip>dismissed</Chip>}
                         <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
-                            {f.line !== null ? 'on the diff' : f.file !== null ? 'on its file' : 'not in the diff'}
+                            {f.line === null ? (f.file === null ? 'not in the diff' : 'on its file') : 'on the diff'}
                         </span>
                     </li>
                 ))}

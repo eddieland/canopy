@@ -5,7 +5,8 @@ import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
-import { findingAnchor, type Numbered, type Placed, SEVERITY_TEXT } from '@/lib/reviews'
+import { findingAnchor, SEVERITY_TEXT } from '@/lib/reviews'
+import type { Numbered, Placed } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 // Full class names, written out, so Tailwind finds them: a line's tint and its +/- mark.

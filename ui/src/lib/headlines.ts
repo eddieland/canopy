@@ -119,7 +119,7 @@ export interface Headline {
     effect?: FlairEffect
 }
 
-const FLAIR = new RegExp(`^(?:(${FLAIR_COLORS.join('|')}):)?(?:(${FLAIR_EFFECTS.join('|')}):)?`)
+const FLAIR = new RegExp(`^(?:(${FLAIR_COLORS.join('|')}):)?(?:(${FLAIR_EFFECTS.join('|')}):)?`, 'u')
 
 /** A headline's text and its flair, read off its front: a color, then an effect, either one optional. */
 export function parseHeadline(line: string): Headline {

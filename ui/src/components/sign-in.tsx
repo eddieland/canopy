@@ -28,7 +28,9 @@ export function SignIn() {
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const secret = new FormData(event.currentTarget).get('secret')
-        if (typeof secret === 'string' && secret) mutation.mutate(secret)
+        if (typeof secret === 'string' && secret) {
+            mutation.mutate(secret)
+        }
     }
 
     const wrong = mutation.error instanceof ApiError && mutation.error.status === 401

@@ -11,7 +11,7 @@ export function TrackerLink({ href, className }: { href: string; className?: str
             rel="noreferrer noopener"
             className={cn('inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline', className)}
         >
-            {href.replace(/^https:\/\//, '')}
+            {href.replace(/^https:\/\//u, '')}
             <ExternalLink className="size-3" />
         </a>
     )

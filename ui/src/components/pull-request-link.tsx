@@ -20,7 +20,7 @@ export function PullRequestLink({
             title={url}
             className={cn('font-mono text-xs text-accent underline-offset-4 hover:underline', className)}
         >
-            {children ?? url.replace(/^https:\/\//, '')}
+            {children ?? url.replace(/^https:\/\//u, '')}
         </Link>
     )
 }

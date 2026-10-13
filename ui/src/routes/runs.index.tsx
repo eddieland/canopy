@@ -3,7 +3,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import { runsQuery } from '@/api/queries'
-import { RUN_STATES, type RunState } from '@/api/types'
+import { RUN_STATES } from '@/api/types'
+import type { RunState } from '@/api/types'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { TicketRunsTable } from '@/components/runs-table'
@@ -39,8 +40,8 @@ function RunsPage() {
     return (
         <>
             <PageHeader title="Runs">
-                Each ticket's latest run, running ones first, then the ones that ended last: what it worked on, what it
-                said, and what it cost. A ticket's earlier runs open under it.
+                Each ticket&apos;s latest run, running ones first, then the ones that ended last: what it worked on,
+                what it said, and what it cost. A ticket&apos;s earlier runs open under it.
             </PageHeader>
             <Panel>
                 <PanelHeader label="By state">

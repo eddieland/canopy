@@ -13,7 +13,9 @@ test("the operator's own words sit on the right of the thread, everyone else's o
     const mine = await thread.locator('[data-source=operator]').first().boundingBox()
     const theirs = await thread.locator('[data-source=worker]').first().boundingBox()
     const all = await thread.boundingBox()
-    if (!mine || !theirs || !all) throw new Error('the thread did not render')
+    if (!mine || !theirs || !all) {
+        throw new Error('the thread did not render')
+    }
     expect(Math.round(mine.x + mine.width)).toBe(Math.round(all.x + all.width - 12))
     expect(Math.round(theirs.x)).toBe(Math.round(all.x + 12))
 })
@@ -34,7 +36,7 @@ test("a ticket's conversation ends on the run working it now, and only while one
     await expect(working).toContainText('working now')
     await expect(working).toContainText('implement')
     await working.getByRole('link', { name: 'run:41' }).click()
-    await expect(page).toHaveURL(/\/runs\/41$/)
+    await expect(page).toHaveURL(/\/runs\/41$/u)
 
     await page.goto('tickets/ABC-103')
     await settled(page)

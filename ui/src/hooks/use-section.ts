@@ -1,6 +1,7 @@
 import { useMatchRoute } from '@tanstack/react-router'
 
-import { type Section, SECTIONS } from '@/lib/sections'
+import { SECTIONS } from '@/lib/sections'
+import type { Section } from '@/lib/sections'
 
 /**
  * The section the current page belongs to, matched as the nav matches it (a ticket's page is in Tickets, a chore's in

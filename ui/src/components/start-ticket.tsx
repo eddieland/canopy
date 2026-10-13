@@ -23,7 +23,9 @@ export function StartTicket() {
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const key = new FormData(event.currentTarget).get('key')
-        if (typeof key === 'string' && key.trim()) mutation.mutate(key.trim())
+        if (typeof key === 'string' && key.trim()) {
+            mutation.mutate(key.trim())
+        }
     }
 
     return (

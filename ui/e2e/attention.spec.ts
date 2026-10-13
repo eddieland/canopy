@@ -13,7 +13,9 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     // Broken work, what waits on the operator, the rest by how long it has been open, then a chore's finding.
     await expect(rows).toHaveCount(5)
     const reasons = ['worker failed', 'awaiting reply', 'repo missing', 'needs reviewer', 'lodash-advisory']
-    for (const [index, reason] of reasons.entries()) await expect(rows.nth(index)).toContainText(reason)
+    for (const [index, reason] of reasons.entries()) {
+        await expect(rows.nth(index)).toContainText(reason)
+    }
     // A reason reads as words, and keeps the CLI's spelling on hover.
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
 
@@ -29,7 +31,7 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     const list = page.getByTestId('attention-list')
     await list.getByRole('link').filter({ hasText: 'awaiting reply' }).click()
 
-    await expect(page).toHaveURL(/\/attention\?item=/)
+    await expect(page).toHaveURL(/\/attention\?item=/u)
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('link', { name: 'ABC-102' })).toBeVisible()
     await expect(detail.getByTestId('message-5')).toContainText('Should the export button be red or blue?')
@@ -74,7 +76,7 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counter-attention')).toContainText('5')
     await expect(page.getByTestId('counter-attention')).toContainText('1 failed · 1 waiting · 3 more')
 
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/ }).click()
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/u }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1 failed')
     await expect(page.getByTestId('nav-attention-waiting')).toHaveText('1 waiting')
     await expect(page.getByTestId('nav-attention-other')).toHaveText('3 other')

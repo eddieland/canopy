@@ -51,10 +51,14 @@ export function parseOrders(raw: string | null): Orders {
     } catch {
         return {}
     }
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return {}
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return {}
+    }
     const orders: Orders = {}
     for (const [name, order] of Object.entries(value)) {
-        if (Object.hasOwn(LISTS, name) && (order === 'oldest' || order === 'newest')) orders[name as ListName] = order
+        if (Object.hasOwn(LISTS, name) && (order === 'oldest' || order === 'newest')) {
+            orders[name as ListName] = order
+        }
     }
     return orders
 }
@@ -62,8 +66,11 @@ export function parseOrders(raw: string | null): Orders {
 /** The chosen orders with `list` set to `order`, as stored: a list back in its own order is left out. */
 export function withOrder(orders: Orders, list: ListName, order: Order): string {
     const next: Orders = { ...orders }
-    if (order === LISTS[list]) delete next[list]
-    else next[list] = order
+    if (order === LISTS[list]) {
+        delete next[list]
+    } else {
+        next[list] = order
+    }
     return JSON.stringify(next, Object.keys(next).toSorted())
 }
 
@@ -81,7 +88,7 @@ export function useListOrder(list: ListName): Order {
 export function setListOrder(list: ListName, order: Order): void {
     const raw = withOrder(snapshot, list, order)
     try {
-        window.localStorage.setItem(STORAGE_KEY, raw)
+        globalThis.localStorage.setItem(STORAGE_KEY, raw)
     } catch {
         // Not persisted, but still applied for this page.
     }
@@ -90,7 +97,7 @@ export function setListOrder(list: ListName, order: Order): void {
 
 function readRaw(): string | null {
     try {
-        return window.localStorage.getItem(STORAGE_KEY)
+        return globalThis.localStorage.getItem(STORAGE_KEY)
     } catch {
         // Storage can be unavailable (privacy modes).
         return null
@@ -102,25 +109,33 @@ let snapshot = parseOrders(stored)
 const listeners = new Set<() => void>()
 
 function announce(raw: string | null): void {
-    if (raw === stored) return
+    if (raw === stored) {
+        return
+    }
     stored = raw
     snapshot = parseOrders(raw)
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) announce(readRaw())
+    if (event.key === STORAGE_KEY || event.key === null) {
+        announce(readRaw())
+    }
 }
 
 function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
+        globalThis.addEventListener('storage', onStorage)
         announce(readRaw())
     }
     return () => {
         listeners.delete(listener)
-        if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+        if (listeners.size === 0) {
+            globalThis.removeEventListener('storage', onStorage)
+        }
     }
 }
 

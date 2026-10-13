@@ -6,8 +6,10 @@
  */
 export const basePath: string = (() => {
     const href = document.querySelector('base')?.getAttribute('href')
-    if (!href) return ''
-    return new URL(href, window.location.origin).pathname.replace(/\/+$/, '')
+    if (!href) {
+        return ''
+    }
+    return new URL(href, globalThis.location.origin).pathname.replace(/\/+$/u, '')
 })()
 
 /** The URL of an API path, `/events` → `{basePath}/api/events`. */

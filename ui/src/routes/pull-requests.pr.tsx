@@ -45,7 +45,7 @@ function PullRequestPage() {
 
 function Loaded({ url }: { url: string }) {
     const { data, error } = useQuery(pullRequestQuery(url))
-    const title = url.replace(/^https:\/\//, '')
+    const title = url.replace(/^https:\/\//u, '')
     if (error instanceof ApiError && (error.status === 404 || error.status === 422)) {
         return <Missing title={title}>{error.message}</Missing>
     }
@@ -179,7 +179,7 @@ function PullRequestOut({ url }: { url: string }) {
             >
                 <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
                     <GitPullRequest aria-hidden />
-                    <span className="truncate">{url.replace(/^https:\/\//, '')}</span>
+                    <span className="truncate">{url.replace(/^https:\/\//u, '')}</span>
                     <ExternalLink aria-hidden className="size-3" />
                 </a>
             </Button>

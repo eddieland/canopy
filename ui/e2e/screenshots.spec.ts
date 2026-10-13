@@ -10,8 +10,8 @@ for (const theme of THEMES) {
             await signIn(page)
             await page.goto(route)
             await settled(page)
-            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/)
-            await screenshotWhole(page, `${route.replace(/[/?=]/g, '-')}-${theme}.png`)
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
+            await screenshotWhole(page, `${route.replaceAll(/[/?=]/gu, '-')}-${theme}.png`)
         })
     }
 

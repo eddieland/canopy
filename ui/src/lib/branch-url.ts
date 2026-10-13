@@ -7,6 +7,14 @@ const BRANCH = '{branch}'
  * nothing in a part can leave its place in the URL.
  */
 export function branchUrl(template: string | null | undefined, branch: string): string | undefined {
-    if (!template?.includes(BRANCH)) return undefined
-    return template.replace(BRANCH, branch.split('/').map(encodeURIComponent).join('/'))
+    if (!template?.includes(BRANCH)) {
+        return undefined
+    }
+    return template.replace(
+        BRANCH,
+        branch
+            .split('/')
+            .map((part) => encodeURIComponent(part))
+            .join('/'),
+    )
 }

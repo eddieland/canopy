@@ -23,7 +23,9 @@ test.describe('turned on', () => {
     // As if turned on in Settings on an earlier visit; a choice made since, in the page, stands.
     test.beforeEach(async ({ page }) => {
         await page.addInitScript(() => {
-            if (window.localStorage.getItem('canopy-buddy') === null) window.localStorage.setItem('canopy-buddy', 'on')
+            if (globalThis.localStorage.getItem('canopy-buddy') === null) {
+                globalThis.localStorage.setItem('canopy-buddy', 'on')
+            }
         })
     })
 
@@ -73,7 +75,7 @@ test.describe('turned on', () => {
         await settled(page)
         const pupil = page.locator('[data-pupil]').first()
         await page.mouse.move(0, 0)
-        await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/)
+        await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
     })
 
     test('Sprig stands above the rail footer, never on the version', async ({ page }) => {
@@ -83,7 +85,9 @@ test.describe('turned on', () => {
         await page.locator('[data-scroll-restoration-id=page]').evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
         const sprig = await page.getByTestId('buddy').boundingBox()
         const footer = await page.getByTestId('rail-footer').boundingBox()
-        if (sprig === null || footer === null) throw new Error('Sprig or the rail footer is not shown')
+        if (sprig === null || footer === null) {
+            throw new Error('Sprig or the rail footer is not shown')
+        }
         expect(sprig.y + sprig.height).toBeLessThanOrEqual(footer.y)
     })
 

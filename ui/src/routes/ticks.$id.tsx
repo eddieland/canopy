@@ -26,14 +26,18 @@ export const Route = createFileRoute('/ticks/$id')({
 function TickPage() {
     const { id } = Route.useParams()
     const parsed = tickId(id)
-    if (parsed === null) return <NoTick title={`tick ${id}`}>not a tick: a tick's id is a positive number</NoTick>
+    if (parsed === null) {
+        return <NoTick title={`tick ${id}`}>not a tick: a tick&apos;s id is a positive number</NoTick>
+    }
     return <Loaded id={parsed} />
 }
 
 function Loaded({ id }: { id: number }) {
     const { data, error } = useQuery(tickDetailQuery(id))
     const { data: transcript } = useQuery(tickTranscriptQuery(id))
-    if (error instanceof ApiError && error.status === 404) return <NoTick title={`tick ${id}`}>{error.message}</NoTick>
+    if (error instanceof ApiError && error.status === 404) {
+        return <NoTick title={`tick ${id}`}>{error.message}</NoTick>
+    }
     if (data === undefined) {
         return (
             <>
@@ -66,8 +70,8 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
             <PageHeader title={`tick ${tick.id}`} chips={tick.dry_run && <Chip>dry run</Chip>}>
                 What the overseer decided in this tick, and why, as{' '}
                 <code className="font-mono text-xs">canopy decisions {tick.id}</code> prints it. Attention items and
-                refusals are the harness's. Under them, the overseer's session: what it read and ran to decide; and
-                under that, its output as written, stderr included.
+                refusals are the harness&apos;s. Under them, the overseer&apos;s session: what it read and ran to
+                decide; and under that, its output as written, stderr included.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>

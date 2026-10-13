@@ -6,12 +6,11 @@
 // The schema comes from `python -m canopy.serve openapi`, which builds the app without starting a server.
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { resolve } from 'node:path'
 
 import openapiTS, { astToString } from 'openapi-typescript'
 
-const ui = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ui = resolve(import.meta.dirname, '..')
 const out = resolve(ui, 'src/api/schema.gen.ts')
 const check = process.argv.includes('--check')
 

@@ -17,7 +17,7 @@ export interface JsonToken {
 
 // One JSON token: a string (a key when a colon follows it), a number, a literal, or a structural character.
 const TOKEN =
-    /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/g
+    /("(?:[^"\\]|\\.)*")(?=\s*:)|("(?:[^"\\]|\\.)*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(true|false|null)|([{}[\],:])/gu
 
 /**
  * `text` as its lines, each as tokens: a line holding a JSON object or array split up, any other line whole. `pretty`
@@ -32,16 +32,24 @@ export function jsonLines(text: string, pretty = false): JsonToken[][] {
  * (none when empty). Used for one line of a log, and for one block of JSON.
  */
 export function tokenize(text: string): JsonToken[] {
-    if (text === '') return []
-    if (!isJson(text)) return [{ kind: 'text', text }]
+    if (text === '') {
+        return []
+    }
+    if (!isJson(text)) {
+        return [{ kind: 'text', text }]
+    }
     const tokens: JsonToken[] = []
     let last = 0
     for (const match of text.matchAll(TOKEN)) {
-        if (match.index > last) tokens.push({ kind: 'text', text: text.slice(last, match.index) })
+        if (match.index > last) {
+            tokens.push({ kind: 'text', text: text.slice(last, match.index) })
+        }
         tokens.push({ kind: kindOf(match), text: match[0] })
         last = match.index + match[0].length
     }
-    if (last < text.length) tokens.push({ kind: 'text', text: text.slice(last) })
+    if (last < text.length) {
+        tokens.push({ kind: 'text', text: text.slice(last) })
+    }
     return tokens
 }
 
@@ -52,7 +60,9 @@ export function tokenize(text: string): JsonToken[] {
  */
 export function indent(tokens: JsonToken[]): JsonToken[] {
     const solid = tokens.filter((token) => token.kind !== 'text')
-    if (solid.length === 0) return tokens
+    if (solid.length === 0) {
+        return tokens
+    }
     const out: JsonToken[] = []
     let depth = 0
     const brk = () => out.push({ kind: 'text', text: `\n${'  '.repeat(depth)}` })
@@ -61,10 +71,14 @@ export function indent(tokens: JsonToken[]): JsonToken[] {
         if (text === '{' || text === '[') {
             out.push(token)
             depth += 1
-            if (!closes(solid[i + 1])) brk()
+            if (!closes(solid[i + 1])) {
+                brk()
+            }
         } else if (closes(token)) {
             depth -= 1
-            if (!opens(solid[i - 1])) brk()
+            if (!opens(solid[i - 1])) {
+                brk()
+            }
             out.push(token)
         } else if (text === ',') {
             out.push(token)
@@ -88,7 +102,9 @@ function closes(token: JsonToken | undefined): boolean {
 
 function isJson(text: string): boolean {
     const start = text.trimStart()[0]
-    if (start !== '{' && start !== '[') return false
+    if (start !== '{' && start !== '[') {
+        return false
+    }
     try {
         JSON.parse(text)
         return true
@@ -98,9 +114,17 @@ function isJson(text: string): boolean {
 }
 
 function kindOf(match: RegExpMatchArray): JsonKind {
-    if (match[1] !== undefined) return 'key'
-    if (match[2] !== undefined) return 'string'
-    if (match[3] !== undefined) return 'number'
-    if (match[4] !== undefined) return 'literal'
+    if (match[1] !== undefined) {
+        return 'key'
+    }
+    if (match[2] !== undefined) {
+        return 'string'
+    }
+    if (match[3] !== undefined) {
+        return 'number'
+    }
+    if (match[4] !== undefined) {
+        return 'literal'
+    }
     return 'punct'
 }

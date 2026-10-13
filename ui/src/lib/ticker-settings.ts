@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
-import { TICKER_TOPICS, type TickerTopic } from '@/lib/headlines'
+import { TICKER_TOPICS } from '@/lib/headlines'
+import type { TickerTopic } from '@/lib/headlines'
 
 /**
  * The header ticker's settings (src/components/shell/ticker.tsx): how fast a headline crawls, how many seconds the
@@ -42,13 +43,17 @@ function isSpeed(value: unknown): value is TickerSpeed {
 
 /** A gap as stored: whole seconds from 0 to MAX_GAP, or undefined for anything that is not a number. */
 export function clampGap(value: unknown): number | undefined {
-    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+        return undefined
+    }
     return Math.min(MAX_GAP, Math.max(0, Math.round(value)))
 }
 
 /** Topics as stored: the known ones among `value`, once each, in TICKER_TOPICS order; none for a non-list. */
 export function parseTopics(value: unknown): TickerTopic[] {
-    if (!Array.isArray(value)) return []
+    if (!Array.isArray(value)) {
+        return []
+    }
     return TICKER_TOPICS.filter((topic) => value.includes(topic))
 }
 
@@ -65,7 +70,9 @@ export function parseSettings(raw: string | null): TickerSettings {
     } catch {
         // Not JSON: the defaults.
     }
-    if (typeof stored !== 'object' || stored === null) return DEFAULTS
+    if (typeof stored !== 'object' || stored === null) {
+        return DEFAULTS
+    }
     const { speed, gap, hidden } = stored as Record<string, unknown>
     return {
         speed: isSpeed(speed) ? speed : DEFAULTS.speed,
@@ -76,7 +83,7 @@ export function parseSettings(raw: string | null): TickerSettings {
 
 function read(): TickerSettings {
     try {
-        return parseSettings(window.localStorage.getItem(STORAGE_KEY))
+        return parseSettings(globalThis.localStorage.getItem(STORAGE_KEY))
     } catch {
         // Storage can be unavailable (privacy modes).
         return DEFAULTS
@@ -88,24 +95,32 @@ const listeners = new Set<() => void>()
 
 function announce(next: TickerSettings): void {
     const same = next.hidden.join() === snapshot.hidden.join()
-    if (next.speed === snapshot.speed && next.gap === snapshot.gap && same) return
+    if (next.speed === snapshot.speed && next.gap === snapshot.gap && same) {
+        return
+    }
     snapshot = next
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) announce(read())
+    if (event.key === STORAGE_KEY || event.key === null) {
+        announce(read())
+    }
 }
 
 function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
+        globalThis.addEventListener('storage', onStorage)
         announce(read())
     }
     return () => {
         listeners.delete(listener)
-        if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+        if (listeners.size === 0) {
+            globalThis.removeEventListener('storage', onStorage)
+        }
     }
 }
 
@@ -122,7 +137,7 @@ export function useTickerSettings(): TickerSettings {
 export function setTickerSettings(change: Partial<TickerSettings>): void {
     const next = { ...snapshot, ...change }
     try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+        globalThis.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     } catch {
         // Not persisted, but still applied for this page.
     }

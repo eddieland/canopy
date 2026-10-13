@@ -83,7 +83,7 @@ export function tipFor(pathname: string, n: number, now: number): string {
 
 function read(): BuddySetting {
     try {
-        return parseBuddy(window.localStorage.getItem(STORAGE_KEY))
+        return parseBuddy(globalThis.localStorage.getItem(STORAGE_KEY))
     } catch {
         // Storage can be unavailable (privacy modes).
         return DEFAULT
@@ -94,24 +94,32 @@ let snapshot = read()
 const listeners = new Set<() => void>()
 
 function announce(next: BuddySetting): void {
-    if (next === snapshot) return
+    if (next === snapshot) {
+        return
+    }
     snapshot = next
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) announce(read())
+    if (event.key === STORAGE_KEY || event.key === null) {
+        announce(read())
+    }
 }
 
 function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
+        globalThis.addEventListener('storage', onStorage)
         announce(read())
     }
     return () => {
         listeners.delete(listener)
-        if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+        if (listeners.size === 0) {
+            globalThis.removeEventListener('storage', onStorage)
+        }
     }
 }
 
@@ -127,7 +135,7 @@ export function useBuddy(): BuddySetting {
 /** Stores the setting and applies it now. */
 export function setBuddy(next: BuddySetting): void {
     try {
-        window.localStorage.setItem(STORAGE_KEY, next)
+        globalThis.localStorage.setItem(STORAGE_KEY, next)
     } catch {
         // Not persisted, but still applied for this page.
     }

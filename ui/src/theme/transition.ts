@@ -1,6 +1,7 @@
 import { flushSync } from 'react-dom'
 
-import { setPreference, type ThemePreference } from './store'
+import { setPreference } from './store'
+import type { ThemePreference } from './store'
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)'
 const DURATION_MS = 420
@@ -16,7 +17,11 @@ export function switchTheme(preference: ThemePreference, origin?: HTMLElement | 
     const commit = (): void => {
         flushSync(() => setPreference(preference))
     }
-    if (typeof document.startViewTransition !== 'function' || window.matchMedia(REDUCED_MOTION).matches || !origin) {
+    if (
+        typeof document.startViewTransition !== 'function' ||
+        globalThis.matchMedia(REDUCED_MOTION).matches ||
+        !origin
+    ) {
         commit()
         return
     }
@@ -28,7 +33,7 @@ export function switchTheme(preference: ThemePreference, origin?: HTMLElement | 
 
     const transition = document.startViewTransition(commit)
     transition.ready
-        .then(() => {
+        .then(() =>
             document.documentElement.animate(
                 { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
                 {
@@ -36,8 +41,8 @@ export function switchTheme(preference: ThemePreference, origin?: HTMLElement | 
                     easing: 'cubic-bezier(0.2, 0, 0, 1)',
                     pseudoElement: '::view-transition-new(root)',
                 },
-            )
-        })
+            ),
+        )
         .catch(() => {
             // Skipped (another transition started, or the tab is hidden): the theme is already applied.
         })

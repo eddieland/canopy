@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import type { Transcript, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
 import { JsonTokens } from '@/components/json-text'
@@ -114,23 +115,26 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
 
 function empty(transcript: Transcript, running: boolean): string {
     switch (transcript.status) {
-        case 'no_session':
+        case 'no_session': {
             return 'the runtime reported no session: a template without --format json prints no events'
-        case 'no_log':
+        }
+        case 'no_log': {
             // A running tick knows its session before its output is written.
             return running
                 ? 'the session’s events reach the log when it ends'
                 : 'its log is gone, or is not a file canopy reads'
-        case 'read':
+        }
+        case 'read': {
             return running
                 ? 'the session’s events reach the log when it ends'
                 : 'the log holds none of the session’s events'
+        }
     }
 }
 
 function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string | null; open: boolean }) {
     switch (entry.kind) {
-        case 'text':
+        case 'text': {
             return (
                 <Row at={entry.at} start={start}>
                     <p
@@ -145,17 +149,21 @@ function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string |
                     {entry.cut && <Chip>cut</Chip>}
                 </Row>
             )
-        case 'tool':
+        }
+        case 'tool': {
             return <Tool entry={entry} start={start} open={open} />
-        case 'step':
+        }
+        case 'step': {
             return <ModelCall entry={entry} start={start} />
-        case 'error':
+        }
+        case 'error': {
             return (
                 <Row at={entry.at} start={start} className="bg-status-failed/8">
                     <span className="font-mono text-xs text-status-failed">{entry.name}</span>
                     <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">{entry.message}</p>
                 </Row>
             )
+        }
     }
 }
 
