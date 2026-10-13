@@ -232,8 +232,9 @@ def alive(pid: int) -> bool:
     try:
         # The state is the field after the parenthesized command name, which may itself contain spaces or ")".
         state = stat.read_text().rpartition(")")[2].split()[0]
-    except (OSError, IndexError):
-        return True
+    except (OSError, IndexError) as e:
+        # A zombie whose parent reaped it since the signal check has no entry left, where there is a /proc to have one.
+        return not (isinstance(e, FileNotFoundError) and Path("/proc/self/stat").exists())
     return state not in ("Z", "X")
 
 

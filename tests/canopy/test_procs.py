@@ -70,7 +70,8 @@ def test_timeout_leaves_no_descendant_behind(tmp_path: Path) -> None:
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
     reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-    script = f"(echo up; exec sleep 30) > {fifo} 2> /dev/null & wait"
+    # The grandchild says its pid, so a failure can say what state it was left in.
+    script = f"sh -c 'echo $$; exec sleep 30' > {fifo} 2> /dev/null & wait"
 
     def read() -> bytes | None:
         """What the FIFO holds: None while a writer is open with nothing written, b"" once none is."""
@@ -82,7 +83,7 @@ def test_timeout_leaves_no_descendant_behind(tmp_path: Path) -> None:
 
     def await_grandchild(_pid: int) -> None:
         # The timeout starts after this returns, so on a loaded machine it cannot kill the shell before the grandchild
-        # is up. Until a writer opens the FIFO, a read sees no writer and returns b"" too.
+        # has said its pid. Until a writer opens the FIFO, a read sees no writer and returns b"" too.
         deadline = time.monotonic() + 10
         while not said and time.monotonic() < deadline:
             if line := read():
@@ -92,13 +93,22 @@ def test_timeout_leaves_no_descendant_behind(tmp_path: Path) -> None:
     try:
         result = SubprocessRunner().run(["sh", "-c", script], timeout=0.5, on_start=await_grandchild)
         assert result.timed_out
-        assert said == [b"up\n"]
+        [grandchild] = (int(line) for line in said)
         deadline = time.monotonic() + 5
         while (left := read()) != b"" and time.monotonic() < deadline:
             time.sleep(0.05)
-        assert left == b"", "the grandchild outlived the timeout"
+        assert left == b"", f"grandchild {grandchild} outlived the timeout: {_stat(grandchild)}"
     finally:
         os.close(reader)
+
+
+def _stat(pid: int) -> str:
+    """What /proc says of `pid`: its state, parent, and group, which follow its parenthesized command name."""
+    try:
+        state, parent, group = Path(f"/proc/{pid}/stat").read_text().rpartition(")")[2].split()[:3]
+    except OSError as e:
+        return f"no /proc entry ({e.strerror})"
+    return f"state {state}, parent {parent}, group {group}"
 
 
 def test_stdin_is_passed(fakes_on_path: Path, tmp_path: Path) -> None:
@@ -226,3 +236,17 @@ def test_alive_ignores_zombies_it_cannot_reap(agent_log: Path, tmp_path: Path) -
         time.sleep(0.02)
     assert not procs.alive(child)
     procs.kill_group(pid)
+
+
+def test_alive_reads_a_pid_reaped_after_the_signal_check_as_dead(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The window between `kill(pid, 0)` and reading /proc: a zombie's parent reaps it, and its /proc entry goes.
+    if not Path("/proc/self/stat").exists():
+        pytest.skip("needs /proc")
+    result = SubprocessRunner().run(["sh", "-c", "echo $$"])
+    reaped = int(result.stdout)
+
+    def still_there(_pid: int, _signal: int) -> None:
+        pass
+
+    monkeypatch.setattr(procs.os, "kill", still_there)
+    assert not procs.alive(reaped)
