@@ -35,6 +35,7 @@ SHIPPED = {
     16: "d8c8ca63da12108ce7fbca6f9e2baf36c8e6ba028db7598783fda0894d7167c6",
     17: "51c8d5942669378ea5984b9dde80851f26684e7bdefae6a384aaabc2985ed1c1",
     18: "8da85c12a7f48e16cc76fd4be19beafeecfbd7f79b5418d2e86b608abfb4baae",
+    19: "00382891c078ea709d9987a62de8d5cfc493e6985abdf8ccc7884b778366bd46",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -86,6 +87,9 @@ SEED: Mapping[str, str] = {
     "finding_dismissals": (
         "INSERT INTO finding_dismissals (chore, finding_id, dismissed_at, channel) "
         "VALUES ('nightly', 'f/1', 'x', 'cli')"
+    ),
+    "review_dismissals": (
+        "INSERT INTO review_dismissals (review_run_id, finding, dismissed_at, channel) VALUES (1, 1, 'x', 'cli')"
     ),
 }
 

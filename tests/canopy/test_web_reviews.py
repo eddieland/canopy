@@ -1,6 +1,6 @@
 """The web UI's reviews (DESIGN §21, Reading reviews): canopy's shadow PR review, posted nowhere (D114).
 
-Reads only; the findings and the diff are untrusted text.
+The findings and the diff are untrusted text. The one write is dismissing a finding, as `canopy dismiss review:ID`.
 """
 
 from pathlib import Path
@@ -10,7 +10,7 @@ import pytest
 from canopy.core import db, review_diff
 from canopy.serve import mock, mock_reviews
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import client
+from tests.canopy.test_serve import SECRET, client, signed_in
 
 
 @pytest.fixture
@@ -85,3 +85,25 @@ def test_a_diff_that_is_a_link_is_not_followed(backend: Backend, tmp_path: Path)
     path.unlink()
     path.symlink_to(elsewhere)
     assert client(None, backend).get("/api/reviews/2").json()["diff"] is None
+
+
+def test_a_finding_dismissed_from_the_web_is_marked_as_the_cli_marks_it(backend: Backend) -> None:
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+    url = "/api/reviews/4/dismissals"
+
+    assert c.post(url, json={"finding": 2}, headers={"origin": headers["origin"]}).status_code == 403
+    assert c.post(url, json={"finding": 0}, headers=headers).status_code == 422
+    for path, finding, guard in [(url, 4, "unknown"), ("/api/reviews/3/dismissals", 1, "unknown")]:
+        refused = c.post(path, json={"finding": finding}, headers=headers)
+        assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
+
+    assert c.post(url, json={"finding": 2}, headers=headers).json() == {"run": 4, "finding": 2, "dismissed": True}
+    found = c.get("/api/reviews/4").json()
+    assert [f["dismissed"] for f in found["findings"]] == [False, True, False]
+    with backend.open() as ctx:
+        row = ctx.conn.execute("SELECT channel FROM review_dismissals WHERE review_run_id = 4").fetchone()
+        assert row["channel"] == "web"
+
+    assert c.post(url, json={"finding": 2, "undo": True}, headers=headers).json()["dismissed"] is False
+    assert not any(f["dismissed"] for f in c.get("/api/reviews/4").json()["findings"])

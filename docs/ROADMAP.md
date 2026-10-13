@@ -1003,8 +1003,10 @@ off the PR (D114), so canopy shows them itself, as a PR review of its own that o
 Status: in progress. Migration 0016 records a review run's base branch, and `_review` keeps the diff, which
 `core/review_diff.py` reads back and anchors each finding on (2026-10-13). `GET /reviews` and `GET /reviews/{id}`
 serve them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note.
-The Reviews pages show them, findings on the diff. Next: what the operator does from a finding, through the journal's
-channels; then the live check, a real review's page against its PR's diff on GitHub.
+The Reviews pages show them, findings on the diff. The operator dismisses a finding from its card or with
+`canopy dismiss review:ID N` (2026-10-13), which holds it back from a resume's worker and from the overseer, for that
+run only. Next: sending some findings to a worker from the page; then the live check, a real review's page against its
+PR's diff on GitHub.
 
 ## M33. Spend by what it bought
 

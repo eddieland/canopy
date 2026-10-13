@@ -46,6 +46,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy dismiss chore:NAME ID` | Keeps a finding off the attention list until the chore stops reporting it; `--undo`. |
+| `canopy dismiss review:ID N` | Holds a review's finding N back from workers and the overseer; `--undo`. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
