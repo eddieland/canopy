@@ -7,7 +7,9 @@ const MAX_LINE = 200
 
 /** How long after `start` an ISO time was, as a readout: `+0:42`, `+12:05`, `+1:02:09`. Empty without both times. */
 export function elapsed(at: string | null, start: string | null): string {
-    if (at === null || start === null) return ''
+    if (at === null || start === null) {
+        return ''
+    }
     const seconds = Math.max(0, Math.floor((Date.parse(at) - Date.parse(start)) / 1000))
     const h = Math.floor(seconds / 3600)
     const m = Math.floor((seconds % 3600) / 60)
@@ -17,16 +19,24 @@ export function elapsed(at: string | null, start: string | null): string {
 
 /** A duration in milliseconds as a readout: `840ms`, `14s`, `3m 05s`. */
 export function duration(ms: number): string {
-    if (ms < 1000) return `${ms}ms`
+    if (ms < 1000) {
+        return `${ms}ms`
+    }
     const seconds = Math.round(ms / 1000)
-    if (seconds < 60) return `${seconds}s`
+    if (seconds < 60) {
+        return `${seconds}s`
+    }
     return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`
 }
 
 /** A token count as the CLI says it (`agent_output.Usage.describe`): `950`, `12.3k`, `1.2M`. */
 export function tokenCount(n: number): string {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+    if (n >= 1_000_000) {
+        return `${(n / 1_000_000).toFixed(1)}M`
+    }
+    if (n >= 1_000) {
+        return `${(n / 1_000).toFixed(1)}k`
+    }
     return String(n)
 }
 
@@ -51,8 +61,12 @@ export function tally(entries: TranscriptEntry[]): Tally {
         if (entry.kind === 'tool') {
             found.tools += 1
             const { verdict } = outcome(entry)
-            if (verdict === 'failed') found.failed += 1
-            if (verdict === 'refused') found.refused += 1
+            if (verdict === 'failed') {
+                found.failed += 1
+            }
+            if (verdict === 'refused') {
+                found.refused += 1
+            }
         } else if (entry.kind === 'step') {
             found.calls += 1
         } else if (entry.kind === 'error') {
@@ -75,15 +89,27 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 export function summary(entry: TranscriptTool): string {
     const input = parsed(entry.input)
     const command = input?.['command']
-    if (typeof command === 'string') return oneLine(command)
-    if (entry.title !== null) return entry.title
-    if (input === null) return ''
+    if (typeof command === 'string') {
+        return oneLine(command)
+    }
+    if (entry.title !== null) {
+        return entry.title
+    }
+    if (input === null) {
+        return ''
+    }
     const pairs = Object.entries(input).flatMap(([key, value]) => {
-        if (typeof value === 'number' || typeof value === 'boolean') return [`${key}=${value}`]
-        if (typeof value !== 'string') return []
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return [`${key}=${value}`]
+        }
+        if (typeof value !== 'string') {
+            return []
+        }
         const shown = oneLine(value)
-        if (shown === '' || shown.length > MAX_VALUE) return []
-        return [`${key}=${/\s/.test(shown) ? JSON.stringify(shown) : shown}`]
+        if (shown === '' || shown.length > MAX_VALUE) {
+            return []
+        }
+        return [`${key}=${/\s/u.test(shown) ? JSON.stringify(shown) : shown}`]
     })
     return pairs.join(' ').slice(0, MAX_LINE)
 }
@@ -108,19 +134,21 @@ export interface Outcome {
  * long one, has no line: the row opens to it.
  */
 export function outcome(entry: TranscriptTool): Outcome {
-    if (entry.status === 'error') return { verdict: 'failed', guard: null, line: firstLine(entry.output) }
+    if (entry.status === 'error') {
+        return { verdict: 'failed', guard: null, line: firstLine(entry.output) }
+    }
     const input = parsed(entry.input)
     const command = input?.['command']
-    if (typeof command === 'string' && /^\s*canopy\s/.test(command)) {
-        const error = /^Error: (.+)$/m.exec(entry.output)?.[1]
+    if (typeof command === 'string' && /^\s*canopy\s/u.test(command)) {
+        const error = /^Error: (.+)$/mu.exec(entry.output)?.[1]
         if (error !== undefined) {
-            const guard = /\brefused \(([^)]+)\)/.exec(error)?.[1] ?? null
+            const guard = /\brefused \(([^)]+)\)/u.exec(error)?.[1] ?? null
             return { verdict: guard === null ? 'failed' : 'refused', guard, line: oneLine(error).slice(0, MAX_LINE) }
         }
     }
     const lines = entry.output.split('\n').filter((l) => l.trim() !== '')
     const only = lines.length === 1 ? oneLine(lines[0] ?? '') : ''
-    const fits = only !== '' && only.length <= MAX_LINE && !/^[[{]/.test(only)
+    const fits = only !== '' && only.length <= MAX_LINE && !/^[[{]/u.test(only)
     return { verdict: 'done', guard: null, line: fits ? only : null }
 }
 
@@ -136,7 +164,7 @@ export function pretty(output: string): string {
 }
 
 function oneLine(text: string): string {
-    return text.replace(/\s+/g, ' ').trim()
+    return text.replaceAll(/\s+/gu, ' ').trim()
 }
 
 function firstLine(text: string): string | null {

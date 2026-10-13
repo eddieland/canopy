@@ -6,7 +6,9 @@ import type { ConfigReload, Dismissed, Forgot, Replied, ReviewDismissed, Started
 export function startedText(key: string, started: Started): string {
     const state = started.already ? 'was already started' : 'is started'
     const head = `${key} ${state}, privately: workers read it and write nothing to it.`
-    if (started.running_run === null) return `${head} The next tick picks it up.`
+    if (started.running_run === null) {
+        return `${head} The next tick picks it up.`
+    }
     const kind = started.running_private
         ? 'private'
         : 'public, dispatched before this start, so it may write to the ticket'
@@ -16,8 +18,12 @@ export function startedText(key: string, started: Started): string {
 /** What a stop did, as `canopy stop` says it: whether it was already stopped, and with `now`, whether its run ended. */
 export function stoppedText(key: string, stopped: Stopped, now: boolean): string {
     const head = `${key} ${stopped.already ? 'was already stopped' : 'is stopped'}; nothing dispatches it now.`
-    if (stopped.running_run === null) return head
-    if (!now) return `${head} Run ${stopped.running_run} is still working it and will finish.`
+    if (stopped.running_run === null) {
+        return head
+    }
+    if (!now) {
+        return `${head} Run ${stopped.running_run} is still working it and will finish.`
+    }
     return stopped.ended
         ? `${head} Run ${stopped.running_run} was ended and its slots returned.`
         : `${head} Run ${stopped.running_run} had already ended.`
@@ -27,7 +33,9 @@ export function stoppedText(key: string, stopped: Stopped, now: boolean): string
 export function forgotText(key: string, forgot: Forgot): string {
     const head = `${key} is forgotten: its next implement starts over on a new branch.`
     const named = [...(forgot.branch === null ? [] : [`branch ${forgot.branch}`]), ...forgot.prs]
-    if (named.length === 0) return head
+    if (named.length === 0) {
+        return head
+    }
     return (
         `${head} canopy no longer tracks ${named.join(', ')}. ` +
         'Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and the ' +
@@ -37,7 +45,9 @@ export function forgotText(key: string, forgot: Forgot): string {
 
 /** What a note to a chore did, as `canopy reply chore:NAME` says it: its next runs read it, not the next tick. */
 export function notedText(name: string, replied: Replied): string {
-    if (replied.new) return `Recorded message ${replied.message_id} on chore:${name}. Its next run reads it.`
+    if (replied.new) {
+        return `Recorded message ${replied.message_id} on chore:${name}. Its next run reads it.`
+    }
     return `Message ${replied.message_id} on chore:${name} already says this; nothing new recorded.`
 }
 
@@ -53,14 +63,18 @@ export function dismissedText(dismissed: Dismissed): string {
 /** What a dismissal of a review's finding did, as `canopy dismiss review:ID N` says it. */
 export function reviewDismissedText(dismissed: ReviewDismissed): string {
     const head = `review:${dismissed.run} finding ${dismissed.finding}`
-    if (dismissed.dismissed) return `${head} is dismissed: no worker or tick acts on it.`
+    if (dismissed.dismissed) {
+        return `${head} is dismissed: no worker or tick acts on it.`
+    }
     return `${head} is no longer dismissed: a resume hands it to the worker again.`
 }
 
 /** What a reply did, as `canopy reply` says it: the message it recorded, or the one that already said it. */
 export function repliedText(key: string, replied: Replied): string {
-    const answered = replied.answers !== null ? `, answering message ${replied.answers}` : ''
-    if (replied.new) return `Recorded message ${replied.message_id} on ${key}${answered}. The next tick reads it.`
+    const answered = replied.answers === null ? '' : `, answering message ${replied.answers}`
+    if (replied.new) {
+        return `Recorded message ${replied.message_id} on ${key}${answered}. The next tick reads it.`
+    }
     return `Message ${replied.message_id} on ${key} already says this${answered}; nothing new recorded.`
 }
 

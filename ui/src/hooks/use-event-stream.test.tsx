@@ -65,7 +65,7 @@ function show(state: DocumentVisibilityState): void {
     document.dispatchEvent(new Event('visibilitychange'))
 }
 
-function stream(onReconnect = vi.fn()) {
+function stream(onReconnect = vi.fn<() => void>()) {
     const hook = renderHook(() => useEventStream('/api/events', { parse: (d) => d, onEvent: () => {}, onReconnect }))
     act(() => latest().open())
     return { ...hook, onReconnect }
@@ -73,14 +73,16 @@ function stream(onReconnect = vi.fn()) {
 
 function latest(): FakeEventSource {
     const source = FakeEventSource.instances.at(-1)
-    if (!source) throw new Error('no EventSource was created')
+    if (!source) {
+        throw new Error('no EventSource was created')
+    }
     return source
 }
 
 describe('useEventStream', () => {
     it('reports its status, parses messages, and asks for a catch-up after a drop', () => {
-        const onEvent = vi.fn()
-        const onReconnect = vi.fn()
+        const onEvent = vi.fn<(event: string) => void>()
+        const onReconnect = vi.fn<() => void>()
         const { result, unmount } = renderHook(() =>
             useEventStream('/api/events', {
                 parse: (d) => (d === 'skip' ? null : d.toUpperCase()),
@@ -186,10 +188,10 @@ describe('useEventStream', () => {
         expect(FakeEventSource.instances).toHaveLength(2)
 
         act(() => latest().drop())
-        act(() => window.dispatchEvent(new Event('online')))
+        act(() => globalThis.dispatchEvent(new Event('online')))
         expect(FakeEventSource.instances).toHaveLength(3)
         act(() => latest().open())
-        act(() => window.dispatchEvent(new Event('online')))
+        act(() => globalThis.dispatchEvent(new Event('online')))
         expect(FakeEventSource.instances).toHaveLength(3)
     })
 
@@ -198,7 +200,7 @@ describe('useEventStream', () => {
         act(() => latest().drop())
         unmount()
         act(() => vi.advanceTimersByTime(RETRY_FIRST_MS * 10))
-        act(() => window.dispatchEvent(new Event('online')))
+        act(() => globalThis.dispatchEvent(new Event('online')))
         expect(FakeEventSource.instances).toHaveLength(1)
         expect(latest().closed).toBe(true)
     })

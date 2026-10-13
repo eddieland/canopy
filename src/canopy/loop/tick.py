@@ -1,4 +1,4 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, run the overseer, close the tick, publish attention."""
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run the overseer, close, publish."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import agent_output, chore_view, conversation, db, definitions, treehouse
 from canopy.core.config import render_command
+from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, state
 from canopy.reviews import reconcile as review_reconcile
@@ -22,6 +23,11 @@ if TYPE_CHECKING:
 TICK_ID_ENV = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
 DONE_LINE = "CANOPY_TICK_DONE"
+# The overseer acts only through `canopy`, so a tick runs this as the overseer would, for nothing, before paying for
+# the overseer (DESIGN §6). When it fails, the tick closes with this status and raises an item of the same name.
+CANOPY_CHECK = ("canopy", "--version")
+CANOPY_CHECK_TIMEOUT_SECONDS = 60
+CANOPY_UNAVAILABLE = attention.UNAVAILABLE
 
 
 @dataclass(frozen=True)
@@ -29,7 +35,7 @@ class Outcome:
     """How a tick ended."""
 
     tick_id: int | None
-    status: str  # ok | skipped | overseer_failed | reconcile_failed | lock_busy
+    status: str  # ok | skipped | canopy_unavailable | overseer_failed | reconcile_failed | lock_busy
     summary: str
     usage: agent_output.Usage | None = None  # what the overseer cost, when the runtime reported it
 
@@ -117,6 +123,11 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
     )
+    unavailable = _check_canopy(ctx, tick_id, log)
+    if unavailable is not None:
+        detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
+        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{CANOPY_UNAVAILABLE}", detail)
+        return finish(CANOPY_UNAVAILABLE, unavailable)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
     failure, usage = _run_overseer(ctx, tick_id, block, dry_run=dry_run, log=log)
     if failure is not None:
@@ -157,6 +168,32 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
             db.record_decision(
                 ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}repo_missing", detail, repo=repo.name
             )
+
+
+def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | None:
+    """Run `canopy --version` as the overseer would run `canopy`: from its PATH, cwd, and environment (DESIGN §6).
+
+    A launcher whose environment is gone (an uninstall, a cleared cache) fails to start as a missing one does.
+
+    Returns:
+        Why `canopy` does not work for the overseer, or None when it does.
+    """
+    try:
+        result = ctx.runner.run(
+            CANOPY_CHECK, cwd=ctx.repo_root, env={TICK_ID_ENV: str(tick_id)}, timeout=CANOPY_CHECK_TIMEOUT_SECONDS
+        )
+    except procs.ProcError as e:
+        failure = f"`canopy` does not start for the overseer: {e}"
+    else:
+        if result.timed_out:
+            failure = f"`canopy --version` did not finish in {CANOPY_CHECK_TIMEOUT_SECONDS} seconds"
+        elif result.returncode != 0:
+            said = one_line(result.stderr or result.stdout)[-300:]
+            failure = f"`canopy --version` exited {result.returncode}" + (f": {said}" if said else "")
+        else:
+            return None
+    log.error("overseer not started", extra={"reason": failure})
+    return failure
 
 
 def _run_overseer(

@@ -78,7 +78,23 @@ in order:
    item's cause as `mcp_unavailable` rather than record a list without it. Settled (M28, the operator's choice): the
    prompt, not a harness that keeps an item until the overseer resolves it, which would need a resolve verb in the
    prompt anyway, and would leave a stale item standing whenever the overseer forgot to resolve one.
-5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
+5. **Check `canopy`, then run the overseer.** The overseer acts only through `canopy`, so a tick first runs
+   `canopy --version` through `procs` as the overseer would find it: from the tick's PATH, in the workspace root, with
+   `CANOPY_TICK_ID` set, for at most 60 seconds. When it does not start, exits other than 0, or times out, the tick
+   records `attention:canopy_unavailable` with why, closes as `canopy_unavailable`, and the overseer does not run. A
+   tick that cannot record anything would otherwise still pay to read the whole world (MEASUREMENTS 2026-10-12, F1:
+   two ticks found no `canopy` on PATH, three a launcher whose cached environment was gone). That tick leaves the
+   attention list standing, as any tick that is not `ok` does, and adds its one item to it while it is the latest tick
+   (§14), so the operator hears at once rather than after `loop.failing`'s streak. It is not idle (below).
+
+   Settled (M28): a check, not putting this canopy's own launcher first on the overseer's PATH. Prepending catches
+   only a missing `canopy`, not a launcher that is there but whose environment is gone, and it would need the
+   launcher's path for every install: the release's scie (whose `SCIE_BOOT` must stay unset for `canopy`), a
+   `uv tool install` script, `uv run`, and `python -m canopy`, none of which `sys.argv[0]` names reliably. It would
+   also override the operator's PATH. The check runs whatever the overseer would, so every install works as it does
+   for the overseer, and costs a process start (about 0.4 seconds) per tick.
+
+   Then run the overseer with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
@@ -277,7 +293,18 @@ tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks f
 trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
 the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h 00m at 03:41` (no count after a
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
-records whether it was idle, the count, and the wait chosen, in seconds.
+records whether it was idle, the count, the wait chosen, in seconds, and `churn`, below.
+
+Churn (ROADMAP M28) is a tick that changes what the overseer records with nothing new to see: it relabels a phase, or
+adds or drops an attention item, when nothing reached the journal since the tick before read it. A churned tick is not
+idle, so it resets idle pacing's count (MEASUREMENTS 2026-10-12 F5, 2026-10-13 F17). It is measured before it is fixed:
+the `loop waits` line's `churn` lists, for an `ok` tick, each ticket's or unit's phase it changed
+(`PROJ-1 (api) phase ci_running -> ci_red`) and each attention item it added (`+PROJ-1 needs_reviewer`) or dropped
+(`-`), when, since the previous tick read the journal, no run, chore run, or review run started or ended, the operator
+recorded no message, start, stop, or grant, and no gate came due (the earliest gate ahead of that read is not before
+this tick's). Otherwise, and on a tick that changed neither, it is empty. A ticket seen for the first time is new, not
+churn. The list cannot tell a flap from the world or the config changing (a review the tracker's MCP read, CI going
+red): the `decisions` table can, by the rationales either side, and prompt changes follow only when it shows a pattern.
 
 The journal records the same on each tick the loop ran, for spend (ROADMAP M33): `ticks.idle`, whether the tick was idle
 by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any

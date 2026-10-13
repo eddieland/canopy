@@ -17,15 +17,15 @@ The schema is `migrations/0001_init.sql`, the whole schema as of v0.1; a journal
 migrations is not upgraded (D068). Each later change is a new migration. Tables:
 
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary, and what it read up to (`message_id`, `read_at`,
-  §6 step 3). Status is `running`, `ok`, `skipped`, `overseer_failed`, `reconcile_failed`, or `abandoned`. What the
-  runtime reported about its overseer run (§13), in the same columns as `runs`: `session_id`, `cost_usd`, and tokens by
-  kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it dispatched records its
-  own. On a tick `canopy loop` ran, whether it was idle and what ended the wait before it (`idle`, `woken_by`, §6 Idle
-  pacing), so spend can be split by what it bought; NULL on a hand-run tick. `canopy decisions [TICK]` prints a tick
-  (the latest by default), its overseer's session and cost, and its decisions; `--ticket KEY` filters decisions by exact
-  ticket key and reports when none match. This is the way to read a dry run's plan. The web UI shows the same: its ticks
-  page lists the latest 50, a tick's page its decisions, and a ticket's page the latest decisions about it across ticks
-  (§22). A tick that cannot take the lock writes no row.
+  §6 step 3). Status is `running`, `ok`, `skipped`, `canopy_unavailable`, `overseer_failed`, `reconcile_failed`, or
+  `abandoned`. What the runtime reported about its overseer run (§13), in the same columns as `runs`: `session_id`,
+  `cost_usd`, and tokens by kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it
+  dispatched records its own. On a tick `canopy loop` ran, whether it was idle and what ended the wait before it
+  (`idle`, `woken_by`, §6 Idle pacing), so spend can be split by what it bought; NULL on a hand-run tick.
+  `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its decisions;
+  `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a dry run's
+  plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a ticket's page
+  the latest decisions about it across ticks (§22). A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
@@ -445,10 +445,10 @@ with control characters dropped and cut at 160 characters; and its session id, i
 reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-`attempt_limit`, a private ticket's `awaiting_reply` (§22), and in a workspace `repo_missing` and the overseer's
-`multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their findings, listed by
-chore after the ticket items (§19). Reviews add `review_failed` and `review_limit`, about a PR
-(§21). An item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
+`attempt_limit`, a private ticket's `awaiting_reply` (§22), `canopy_unavailable` (§6 step 5), and in a workspace
+`repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
+`chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
+`review_limit`, about a PR (§21). An item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to
@@ -467,13 +467,18 @@ The harness also raises `repo_missing` every tick for each repository in the wor
 `repos/<name>`. It has no ticket key, carries the repository's name, and is shown under that name. Its cause is gone
 once `canopy workspace sync` (or anything else) puts the clone there.
 
+A tick raises `canopy_unavailable` when `canopy --version` fails from the overseer's environment, and runs no overseer
+(§6 step 5). It is about neither a ticket nor a repository, and is shown as `-`. Its detail says why, and its cause is
+gone at the first tick that ends otherwise.
+
 The overseer records an item with `canopy attention <KEY> <reason> [--repo NAME] --detail "<link or text>"`, every tick
 the cause holds. `--repo` names the unit it is about, such as the PR waiting on a reviewer. The item is stored as a
 decision with action `attention:<reason>`, not in a separate table (D020). The current list is the attention decisions
 of the latest `ok` tick: an item disappears the first tick that does not record it, and a failed or `skipped` tick
-leaves the previous list standing. The overseer's state block lists its own open items (`attention`, §6 step 4), so it
-records each again until it sees the cause gone. Dry-run ticks count like live ones. An item's age runs from the first
-tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
+leaves the previous list standing. A `canopy_unavailable` tick adds its one item to that list while it is the latest
+tick to have ended, open since the first such tick after the last `ok` one. The overseer's state block lists its own
+open items (`attention`, §6 step 4), so it records each again until it sees the cause gone. Dry-run ticks count like
+live ones. An item's age runs from the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
 
 `attempt_limit` is raised two ways: the overseer records it when the state block shows a ticket at its limit for the
 work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
@@ -499,10 +504,12 @@ never notified twice, and an item that returns after going away is new again.
   records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.
 - treehouse unavailable or failing in reconcile: tick closes with `reconcile_failed`; the overseer does not run.
+- `canopy --version` fails from the overseer's environment: tick closes with `canopy_unavailable`, the overseer does
+  not run, and the item of that name is on the attention list until a tick ends otherwise (§6 step 5).
 - Overseer timeout or bad output: tick closes with `overseer_failed`; nothing is dispatched; next tick retries. Three
   consecutive ticks that end other than `ok` produce a `loop.failing` notification for sinks that take `loop`, once per
   streak, and `loop.recovered` at the next `ok` tick (§20). There is no attention item for this: the attention list is
-  the latest `ok` tick's, so a failing loop cannot add to it.
+  the latest `ok` tick's, so a failing loop cannot add to it; `canopy_unavailable`, above, is the one exception.
 - MCP unavailable: the overseer reports it with a tick-wide `skip`; the tick closes as `skipped` and `canopy tick`
   exits 1; no decisions are made on partial data, and the attention list stays as it was. The overseer prompt
   says so explicitly.

@@ -10,13 +10,15 @@ import {
     Inbox,
     MessagesSquare,
     SlidersHorizontal,
-    type LucideIcon,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
-import { countBySeverity, type Severity } from '@/lib/attention'
-import { type Section, SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
+import { countBySeverity } from '@/lib/attention'
+import type { Severity } from '@/lib/attention'
+import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
+import type { Section } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
 // Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
@@ -126,7 +128,9 @@ function AttentionCount({ counts }: { counts: Record<Severity, number> }) {
         { kind: 'waiting', count: counts.waiting, tone: 'text-status-blocked' },
         { kind: 'other', count: counts.other + counts.finding, tone: 'text-muted-foreground' },
     ].filter(({ count }) => count > 0)
-    if (parts.length === 0) return null
+    if (parts.length === 0) {
+        return null
+    }
     return (
         <span className="ml-auto flex gap-1.5 readout text-xs" data-testid="nav-attention-count">
             {parts.map(({ kind, count, tone }) => (

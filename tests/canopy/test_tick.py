@@ -13,6 +13,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.infra import lock, procs
+from canopy.loop import attention
 from tests.canopy.test_mirror import state_block
 from tests.conftest import CanopyEnv
 
@@ -330,6 +331,64 @@ def test_treehouse_failure_skips_the_overseer(canopy_env: CanopyEnv, agent_log: 
         assert not agent_log.exists()
 
 
+@contextmanager
+def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
+    """Until the block ends, the `canopy` on PATH, where the overseer would find it, runs `script`, and is the only one.
+
+    The only one: exec reports a missing interpreter as a missing file, so a PATH search goes on to the next `canopy`.
+    """
+    bin_dir = tmp_path / "broken-bin"
+    bin_dir.mkdir()
+    launcher = bin_dir / "canopy"
+    launcher.write_text(script)
+    launcher.chmod(0o755)
+    others = [d for d in os.environ["PATH"].split(os.pathsep) if d and not (Path(d) / "canopy").exists()]
+    with mock.patch.dict(os.environ, {"PATH": os.pathsep.join([str(bin_dir), *others])}):
+        yield
+
+
+@pytest.mark.parametrize(
+    ("script", "summary"),
+    [
+        # A launcher whose environment is gone: its interpreter no longer exists (MEASUREMENTS 2026-10-12, F1).
+        ("#!/nonexistent/venv/bin/python\n", "`canopy` does not start for the overseer: command not found: canopy"),
+        (
+            "#!/bin/sh\necho 'no module named canopy' >&2\nexit 1\n",
+            "`canopy --version` exited 1: no module named canopy",
+        ),
+    ],
+)
+def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    tmp_path: Path,
+    script: str,
+    summary: str,
+) -> None:
+    with overseer_does():
+        assert main(["tick", "--dry-run"]) == 0  # an `ok` tick, whose list the failed one leaves standing
+        with broken_canopy(tmp_path, script):
+            assert main(["tick", "--dry-run"]) == 1
+            assert main(["tick", "--dry-run"]) == 1
+        assert len(agent_runs(agent_log)) == 1  # the overseer ran for the first tick alone
+
+        conn = journal(canopy_env)
+        ticks = conn.execute("SELECT id, status, summary FROM ticks ORDER BY id").fetchall()
+        assert [(t["status"], t["summary"]) for t in ticks[1:]] == [("canopy_unavailable", summary)] * 2
+        [item] = attention.current(conn)
+        assert (item.ticket_key, item.reason) == (None, "canopy_unavailable")
+        assert item.detail.startswith(f"{summary}; the overseer did not run.")
+        first = conn.execute("SELECT created_at FROM decisions WHERE tick_id = ?", (ticks[1]["id"],)).fetchone()[0]
+        assert item.since == first  # open since the first tick of the streak
+        assert "canopy_unavailable" in (canopy_env.state_dir / "attention.md").read_text()
+
+        # Once `canopy` works again, the next tick runs the overseer and the item is gone.
+        assert main(["tick", "--dry-run"]) == 0
+        assert len(agent_runs(agent_log)) == 2
+        assert attention.current(conn) == []
+
+
 def test_busy_lock_exits_zero_without_a_tick(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -407,6 +466,10 @@ def test_the_state_block_lists_the_overseers_open_attention_items(
     db.record_decision(conn, earlier, "PROJ-2", "attention:worker_failed", "run 3 ended failed")
     db.record_decision(conn, earlier, None, "attention:chore_failed", "it failed", chore="nightly")
     db.finish_tick(conn, earlier, "ok", "")
+    # The latest tick found `canopy` broken: its item is listed, but the harness raised it, not the overseer.
+    broken = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, broken, None, "attention:canopy_unavailable", "`canopy --version` exited 1")
+    db.finish_tick(conn, broken, "canopy_unavailable", "")
     since = [r[0] for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
 
     with overseer_does():

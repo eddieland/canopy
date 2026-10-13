@@ -1,4 +1,5 @@
-import { expect, type Locator, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
@@ -6,8 +7,8 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-async function testIds(rows: Locator): Promise<(string | null)[]> {
-    return rows.evaluateAll((elements) => elements.map((e) => e.getAttribute('data-testid')))
+function testIds(rows: Locator): Promise<(string | undefined)[]> {
+    return rows.evaluateAll((elements) => elements.map((e) => e.dataset.testid))
 }
 
 test("a list's order flips from its header, keeps across a reload, and leaves other lists' as they were", async ({

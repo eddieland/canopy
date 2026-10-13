@@ -50,7 +50,7 @@ export function Counter({
                 RULE[tone],
                 WASH[tone],
             )}
-            data-testid={`counter-${testId ?? label.toLowerCase().split(/[ ,]+/)[0]}`}
+            data-testid={`counter-${testId ?? label.toLowerCase().split(/[ ,]+/u)[0]}`}
         >
             <span className="panel-label">{label}</span>
             <span className="readout h-8 text-3xl leading-8 font-medium">

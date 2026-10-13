@@ -6,10 +6,9 @@
 // - No line in ui/ is longer than 120 characters, the repository's limit for every file type (AGENTS.md). A
 //   formatter does not break a long string; split it (cn() and cva() take several).
 import { readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join, relative, resolve } from 'node:path'
 
-const ui = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const ui = resolve(import.meta.dirname, '..')
 const src = join(ui, 'src')
 const GENERATED = new Set(['src/routeTree.gen.ts', 'src/api/schema.gen.ts', 'package-lock.json'])
 const EXEMPT = new Set(['src/styles/tokens.css', ...GENERATED])
@@ -24,20 +23,22 @@ const PREFIXES =
     'placeholder|inset-shadow|drop-shadow'
 
 const RULES = [
-    { name: 'hex color', pattern: /(?<![\w&/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/ },
-    { name: 'color function', pattern: /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/ },
+    { name: 'hex color', pattern: /(?<![\w&/])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/u },
+    { name: 'color function', pattern: /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/u },
     {
         name: 'Tailwind palette color',
-        pattern: new RegExp(`(?<![\\w-])(?:${PREFIXES})-(?:${PALETTE})(?:-\\d{2,3})?\\b`),
+        pattern: new RegExp(`(?<![\\w-])(?:${PREFIXES})-(?:${PALETTE})(?:-\\d{2,3})?\\b`, 'u'),
     },
-    { name: 'dark: variant', pattern: /(?<![\w-])dark:[\w![-]/ },
+    { name: 'dark: variant', pattern: /(?<![\w-])dark:[\w![-]/u },
 ]
 
 function* files(dir, pattern) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = join(dir, entry.name)
         if (entry.isDirectory()) {
-            if (!SKIP_DIRS.has(entry.name)) yield* files(path, pattern)
+            if (!SKIP_DIRS.has(entry.name)) {
+                yield* files(path, pattern)
+            }
         } else if (pattern.test(entry.name)) {
             yield path
         }
@@ -45,27 +46,32 @@ function* files(dir, pattern) {
 }
 
 const found = []
-for (const path of files(src, /\.(?:css|ts|tsx)$/)) {
+for (const path of files(src, /\.(?:css|ts|tsx)$/u)) {
     const name = relative(ui, path)
-    if (EXEMPT.has(name)) continue
+    if (EXEMPT.has(name)) {
+        continue
+    }
     readFileSync(path, 'utf8')
         .split('\n')
         .forEach((line, i) => {
             for (const rule of RULES) {
                 const match = rule.pattern.exec(line)
-                if (match)
+                if (match) {
                     found.push(`${name}:${i + 1}: ${rule.name} \`${match[0]}\`; use a token from src/styles/tokens.css`)
+                }
             }
         })
 }
 
-for (const path of files(ui, /\.(?:css|ts|tsx|mjs|json|html|md|svg)$/)) {
+for (const path of files(ui, /\.(?:css|ts|tsx|mjs|json|html|md|svg)$/u)) {
     const name = relative(ui, path)
-    if (GENERATED.has(name)) continue
+    if (GENERATED.has(name)) {
+        continue
+    }
     readFileSync(path, 'utf8')
         .split('\n')
         .forEach((line, i) => {
-            if (line.length > MAX_LINE && !/https?:\/\//.test(line)) {
+            if (line.length > MAX_LINE && !/https?:\/\//u.test(line)) {
                 found.push(`${name}:${i + 1}: ${line.length} characters; the limit is ${MAX_LINE}`)
             }
         })

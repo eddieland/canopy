@@ -11,7 +11,9 @@ describe('applyStreamEvent', () => {
         const client = new QueryClient()
         client.setQueryData(keys.runs, mockRuns)
         const [first] = mockRuns
-        if (!first) throw new Error('fixtures are empty')
+        if (!first) {
+            throw new Error('fixtures are empty')
+        }
 
         applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, state: 'stopped' }] })
         applyStreamEvent(client, { type: 'attention.updated', items: mockAttention })
@@ -58,7 +60,9 @@ describe('applyStreamEvent', () => {
         const client = new QueryClient()
         const [chore] = mockChores
         const run = chore?.latest
-        if (!chore || !run) throw new Error('fixtures have no ended chore run')
+        if (!chore || !run) {
+            throw new Error('fixtures have no ended chore run')
+        }
         const detail = { chore: chore.name, run, summary: null, note: null, findings: [] } as ChoreRunDetail
         client.setQueryData(keys.choreRun(chore.name, run.id), detail)
         client.setQueryData(keys.choreRunTranscript(chore.name, run.id), { status: 'read', entries: [] })
@@ -99,7 +103,9 @@ describe('applyStreamEvent', () => {
     it('writes a run a page holds, and marks its transcript stale only when its status moves', () => {
         const client = new QueryClient()
         const [first, second] = mockRuns
-        if (!first || !second) throw new Error('fixtures are empty')
+        if (!first || !second) {
+            throw new Error('fixtures are empty')
+        }
         const empty = { status: 'read', session_id: null, entries: [], truncated: false, unreadable: 0 } as const
         client.setQueryData(keys.run(first.id), first)
         client.setQueryData(keys.runTranscript(first.id), empty)
@@ -151,7 +157,9 @@ describe('applyStreamEvent', () => {
     it('marks the worktrees stale when a run starts or ends, not when its cost moves', () => {
         const client = new QueryClient()
         const [first] = mockRuns
-        if (!first) throw new Error('fixtures are empty')
+        if (!first) {
+            throw new Error('fixtures are empty')
+        }
         client.setQueryData(keys.runs, mockRuns)
         client.setQueryData(keys.worktrees, [])
 

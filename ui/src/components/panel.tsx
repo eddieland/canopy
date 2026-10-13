@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
-import { Children, type ComponentProps, type ReactNode } from 'react'
+import { Children } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 
 import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
@@ -82,7 +83,6 @@ export function PageHeader({
                     </li>
                     {steps.map((step, i) => (
                         // The parents never reorder: their place is their identity.
-                        // oxlint-disable-next-line react/no-array-index-key
                         <li
                             key={i}
                             className={cn(

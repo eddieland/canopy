@@ -20,7 +20,9 @@ export function parsePretty(raw: string | null): number[] {
     } catch {
         return []
     }
-    if (!Array.isArray(value)) return []
+    if (!Array.isArray(value)) {
+        return []
+    }
     return value.filter((id): id is number => Number.isSafeInteger(id) && id > 0)
 }
 
@@ -39,7 +41,7 @@ export function usePrettyOutput(tick: number): boolean {
 export function setPrettyOutput(tick: number, pretty: boolean): void {
     const raw = withPretty(snapshot, tick, pretty)
     try {
-        window.localStorage.setItem(STORAGE_KEY, raw)
+        globalThis.localStorage.setItem(STORAGE_KEY, raw)
     } catch {
         // Not persisted, but still applied for this page.
     }
@@ -48,7 +50,7 @@ export function setPrettyOutput(tick: number, pretty: boolean): void {
 
 function readRaw(): string | null {
     try {
-        return window.localStorage.getItem(STORAGE_KEY)
+        return globalThis.localStorage.getItem(STORAGE_KEY)
     } catch {
         // Storage can be unavailable (privacy modes).
         return null
@@ -60,25 +62,33 @@ let snapshot = parsePretty(stored)
 const listeners = new Set<() => void>()
 
 function announce(raw: string | null): void {
-    if (raw === stored) return
+    if (raw === stored) {
+        return
+    }
     stored = raw
     snapshot = parsePretty(raw)
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) announce(readRaw())
+    if (event.key === STORAGE_KEY || event.key === null) {
+        announce(readRaw())
+    }
 }
 
 function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
+        globalThis.addEventListener('storage', onStorage)
         announce(readRaw())
     }
     return () => {
         listeners.delete(listener)
-        if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+        if (listeners.size === 0) {
+            globalThis.removeEventListener('storage', onStorage)
+        }
     }
 }
 

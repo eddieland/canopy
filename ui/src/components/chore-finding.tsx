@@ -14,7 +14,9 @@ import { cn } from '@/lib/utils'
  * operator dismissed it, with a small button in its head line to dismiss it or list it again.
  */
 export function ChoreFindingRow({ finding, chore }: { finding: ChoreFinding | ChoreRunFinding; chore?: string }) {
-    if (chore !== undefined && 'since' in finding) return <OpenFindingRow chore={chore} finding={finding} />
+    if (chore !== undefined && 'since' in finding) {
+        return <OpenFindingRow chore={chore} finding={finding} />
+    }
     return <FindingRow finding={finding} />
 }
 
@@ -57,7 +59,7 @@ function FindingRow({
                         'hover:underline',
                     )}
                 >
-                    {finding.link.replace(/^https:\/\//, '')}
+                    {finding.link.replace(/^https:\/\//u, '')}
                     <ExternalLink className="size-3" />
                 </a>
             )}

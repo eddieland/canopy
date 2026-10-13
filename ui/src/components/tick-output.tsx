@@ -54,17 +54,19 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                 <Placeholder className="min-h-20">
                     {running ? 'the overseer’s output is written when it ends' : 'none kept'}
                 </Placeholder>
-            ) : !shown ? (
+            ) : shown ? (
+                data === undefined ? (
+                    <div className="flex flex-col gap-2 p-3">
+                        <Skeleton className="h-4 w-2/3" />
+                        <Skeleton className="h-4 w-1/2" />
+                    </div>
+                ) : (
+                    <Body output={data} pretty={pretty} />
+                )
+            ) : (
                 <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
                     <span className="break-all">{path}</span> as written: stdout, then stderr
                 </p>
-            ) : data === undefined ? (
-                <div className="flex flex-col gap-2 p-3">
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                </div>
-            ) : (
-                <Body output={data} pretty={pretty} />
             )}
         </Panel>
     )
@@ -74,7 +76,9 @@ function Body({ output, pretty }: { output: TickOutput; pretty: boolean }) {
     if (output.status === 'no_output') {
         return <Placeholder className="min-h-20">its output is gone, or is not a file canopy reads</Placeholder>
     }
-    if (output.text === '') return <Placeholder className="min-h-20">empty</Placeholder>
+    if (output.text === '') {
+        return <Placeholder className="min-h-20">empty</Placeholder>
+    }
     return (
         <>
             {output.truncated && (
@@ -88,7 +92,9 @@ function Body({ output, pretty }: { output: TickOutput; pretty: boolean }) {
                 // pretty: it moves every line, so the place the operator had scrolled to is gone.
                 key={pretty ? 'pretty' : 'compact'}
                 ref={(el) => {
-                    if (el) el.scrollTop = el.scrollHeight
+                    if (el) {
+                        el.scrollTop = el.scrollHeight
+                    }
                 }}
                 data-testid="tick-output-text"
             >
