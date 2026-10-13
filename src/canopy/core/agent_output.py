@@ -4,12 +4,13 @@ A command template either prints the agent's text on stdout, or, with OpenCode's
 per line. canopy reads two kinds of event and one field of every event, each validated (D026):
 
 - `text`: a finished piece of the agent's text, in `part.text`. Joined one per line they are what stdout holds without
-  `--format json`, so every result contract reads the same either way.
+  `--format json`, so every result contract reads the same either way. The last one is the agent's final message.
 - `step_finish`: one model call's `part.cost`, in dollars, and `part.tokens`. Summed, they are what the run cost.
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
-template without `--format json` or another runtime, and reports no session and no cost.
+template without `--format json` or another runtime, and reports no session and no cost. Its final message is all of
+it: plain text does not say where one message ends.
 """
 
 from __future__ import annotations
@@ -94,9 +95,13 @@ def _count(n: int) -> str:
 
 @dataclass(frozen=True)
 class AgentOutput:
-    """`text` is what a result contract is read from. `session_id` and `usage` are None when nothing reported them."""
+    """`text` is what a result contract is read from, and `last` the agent's final message, the end of `text`.
+
+    `session_id` and `usage` are None when nothing reported them.
+    """
 
     text: str
+    last: str
     session_id: str | None = None
     usage: Usage | None = None
 
@@ -105,8 +110,9 @@ def read(stdout: str) -> AgentOutput:
     """Read an agent's stdout: plain text, or OpenCode's JSON events.
 
     Returns:
-        `stdout` as it is when it holds no event. Otherwise the events' text parts joined by newlines, the first valid
-        session id, and the steps' total usage, or None for usage when a step could not be read.
+        `stdout` as it is, as both the text and the final message, when it holds no event. Otherwise the events' text
+        parts joined by newlines, the last of them, the first valid session id, and the steps' total usage, or None for
+        usage when a step could not be read.
     """
     texts: list[str] = []
     steps: list[_StepFinish] = []
@@ -131,8 +137,9 @@ def read(stdout: str) -> AgentOutput:
             # cannot read makes the total wrong, so the run reports no cost rather than too little.
             complete = complete and event["type"] != "step_finish"
     if not events:
-        return AgentOutput(stdout)
-    return AgentOutput("\n".join(texts), session, _total(steps) if complete else None)
+        return AgentOutput(stdout, stdout)
+    last = texts[-1] if texts else ""
+    return AgentOutput("\n".join(texts), last, session, _total(steps) if complete else None)
 
 
 def parse_event(line: str) -> dict[str, object] | None:
