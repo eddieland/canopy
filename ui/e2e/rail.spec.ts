@@ -30,3 +30,18 @@ test('the rail shows the spend of the last day and the last 30, and the version 
     await expect(page.getByTestId('rail-spend-30d')).toHaveText(/^\$\d+\.\d\d$/)
     await expect(page.getByTestId('rail-footer')).toContainText(/canopy \S+/)
 })
+
+test('the version stays at the window foot on a page longer than the window', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 600 })
+    await page.goto('settings')
+    await settled(page)
+    const scroller = page.locator('[data-scroll-restoration-id=page]')
+    expect(await scroller.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+
+    const version = page.getByTestId('rail-version')
+    await expect(version).toBeInViewport()
+    await scroller.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+    await expect(version).toBeInViewport()
+    const box = await page.getByTestId('rail-footer').boundingBox()
+    expect(box === null ? 0 : Math.round(box.y + box.height)).toBe(600)
+})

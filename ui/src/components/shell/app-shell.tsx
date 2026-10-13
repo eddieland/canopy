@@ -81,17 +81,20 @@ export function AppShell() {
                 data-scroll-restoration-id={PAGE_SCROLLER}
                 className="page-scroll grid grid-cols-[13rem_minmax(0,1fr)] outline-none"
             >
-                {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav and what
-                    is under it stick, and the footer sits at the rail's foot. */}
-                <aside className="flex flex-col border-r bg-surface/60">
-                    <div className="sticky top-0">
-                        <SearchBox />
-                        <Nav />
-                        <RailWorking />
-                        <RailSpend />
-                    </div>
-                    <div className="mt-auto pt-3">
-                        <RailFooter />
+                {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds sticks,
+                    a column as tall as the window under the header (its 3rem row above), so the footer stays at the
+                    window's foot however long the page; the part above it scrolls on its own in a window too short. */}
+                <aside className="border-r bg-surface/60">
+                    <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
+                        <div className="panel-scroll min-h-0 flex-1">
+                            <SearchBox />
+                            <Nav />
+                            <RailWorking />
+                            <RailSpend />
+                        </div>
+                        <div className="pt-3">
+                            <RailFooter />
+                        </div>
                     </div>
                 </aside>
                 <main className="min-w-0 p-6">

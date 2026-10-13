@@ -88,9 +88,9 @@ Rules:
   The header stays put and only what is under it scrolls (`page-scroll`), so the header spans the window's width
   and a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header: the
   browser paints the window's own gutter with the canvas color alone, so when the window scrolled, the header
-  stopped short of its edge. The side rail runs the full height of the page and only its top part is sticky. Printed,
-  the shell is not held to the window and shows the page whole; a screenshot test does the same by growing the
-  window to the page (`screenshotWhole` in `e2e/helpers.ts`).
+  stopped short of its edge. The side rail runs the full height of the page, and what it holds sticks: a column as
+  tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
+  screenshot test does the same by growing the window to the page (`screenshotWhole` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
@@ -99,8 +99,9 @@ Rules:
   `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
   runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
-  is shown nowhere else. The footer (the version) sits at the rail's foot, not the window's: the
-  window's foot on a page that fits it, the page's foot on a longer one.
+  is shown nowhere else. The footer (the version) sits at the foot of the sticky column, so at the window's foot
+  however long the page; in a window too short for the rest, the part above it scrolls on its own. Sprig, when on,
+  stands just above the footer, never on it.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
