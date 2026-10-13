@@ -62,6 +62,27 @@ describe('tokenize', () => {
                 .join(''),
         ).toBe(line)
     })
+
+    it('splits a block of indented JSON across its lines, and leaves a cut one whole', () => {
+        const block = '{\n  "filePath": "a.ts",\n  "limit": 20\n}'
+        expect(tokenize(block)).toEqual([
+            { kind: 'punct', text: '{' },
+            { kind: 'text', text: '\n  ' },
+            { kind: 'key', text: '"filePath"' },
+            { kind: 'punct', text: ':' },
+            { kind: 'text', text: ' ' },
+            { kind: 'string', text: '"a.ts"' },
+            { kind: 'punct', text: ',' },
+            { kind: 'text', text: '\n  ' },
+            { kind: 'key', text: '"limit"' },
+            { kind: 'punct', text: ':' },
+            { kind: 'text', text: ' ' },
+            { kind: 'number', text: '20' },
+            { kind: 'text', text: '\n' },
+            { kind: 'punct', text: '}' },
+        ])
+        expect(tokenize('{\n  "filePath": "a.t')).toEqual([{ kind: 'text', text: '{\n  "filePath": "a.t' }])
+    })
 })
 
 describe('jsonLines', () => {

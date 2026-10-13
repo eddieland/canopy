@@ -1,9 +1,11 @@
 """Workspaces (DESIGN §18, ROADMAP M6): the map, its config layer, pools under the root, and `--repo`."""
 
+import contextlib
 import json
 import os
 import sqlite3
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -12,16 +14,10 @@ from canopy.core import config, db, definitions, workspace
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
-from tests.canopy.helpers import InlineRunner, commit_and_push, wait_for_run, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
-
-
-def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> int:
-    tick_id = db.start_tick(conn, dry_run=dry_run)
-    monkeypatch.setenv("CANOPY_TICK_ID", str(tick_id))
-    return tick_id
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
@@ -36,7 +32,7 @@ def dispatch(key: str, *args: str) -> list[str]:
 
 
 def test_the_workspace_is_found_from_below_and_its_repositories_files_are_not_read(
-    ws: Ws, canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch
+    ws: Ws, canopy_env: CanopyEnv
 ) -> None:
     (ws.clone("api") / "canopy.toml").write_text('[tracker]\nprovider = "jira"\nquery = "project = API"\n')
     deep = ws.clone("api") / "src"
@@ -173,19 +169,14 @@ def test_a_definitions_snapshot_canopy_did_not_make_is_refused(tmp_path: Path) -
 # The tick
 
 
-def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
-    ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
         map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
     )
     (ws.root / "MAP.md").write_text("# map\n")
-    monkeypatch.setenv(
-        "FAKE_AGENT_COMMANDS",
-        json.dumps([["canopy", *dispatch("PROJ-1", "--repo", "api")], ["canopy", *dispatch("PROJ-2")]]),
-    )
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
+    commands = json.dumps([["canopy", *dispatch("PROJ-1", "--repo", "api")], ["canopy", *dispatch("PROJ-2")]])
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_COMMANDS": commands, "FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
 
     [run] = [json.loads(line) for line in agent_log.read_text().splitlines()]
     assert run["cwd"] == str(ws.root)
@@ -223,93 +214,94 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
 
 
 def test_items_about_two_repositories_are_two_items(
-    ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ws: Ws, treehouse_state: Path, agent_log: Path, tmp_path: Path
 ) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("a", "https://x.test/a"), ("b", "https://x.test/b")))
     notified = tmp_path / "notified.txt"
     user = Path(os.environ["XDG_CONFIG_HOME"]) / "canopy" / "config.toml"
     user.write_text(user.read_text() + f"\n[notify]\ncmd = 'sh -c \"cat >> {notified}\"'\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
-    assert [(i.subject, i.reason) for i in attention.current(ws.journal())] == [
-        ("a", "repo_missing"),
-        ("b", "repo_missing"),
-    ]
-    assert notified.read_text().startswith("canopy attention: 2 new, 0 resolved\n+ a repo_missing: ")
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+        assert [(i.subject, i.reason) for i in attention.current(ws.journal())] == [
+            ("a", "repo_missing"),
+            ("b", "repo_missing"),
+        ]
+        assert notified.read_text().startswith("canopy attention: 2 new, 0 resolved\n+ a repo_missing: ")
 
-    git("clone", "--quiet", str(ws.origins["api"]), str(ws.root / "repos" / "a"), cwd=ws.root)
-    assert main(["tick", "--dry-run"]) == 0
-    assert "canopy attention: 0 new, 1 resolved\n- a repo_missing\n" in notified.read_text()
+        git("clone", "--quiet", str(ws.origins["api"]), str(ws.root / "repos" / "a"), cwd=ws.root)
+        assert main(["tick", "--dry-run"]) == 0
+        assert "canopy attention: 0 new, 1 resolved\n- a repo_missing\n" in notified.read_text()
 
 
 # Dispatch
 
 
 def test_dispatch_names_one_repository_and_leases_from_its_pool(
-    ws: Ws, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
         map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
     )
     conn = ws.journal()
-    tick_id = in_tick(conn, monkeypatch)
-    runner = InlineRunner()
-    assert main(dispatch("PROJ-1"), runner=runner) == 1
-    assert main(dispatch("PROJ-1", "--repo", "nope"), runner=runner) == 1
-    assert main(dispatch("PROJ-1", "--repo", "docs"), runner=runner) == 1
-    assert main(dispatch("PROJ-1", "--repo", "Bad"), runner=runner) == 2  # not a name at all: a usage error
-    assert main(dispatch("PROJ-1", "--repo", "api", "--slug", "login"), runner=runner) == 0
-    assert "dispatch refused (unknown_repo)" in capsys.readouterr().err
+    with in_tick(conn) as tick_id:
+        runner = InlineRunner()
+        assert main(dispatch("PROJ-1"), runner=runner) == 1
+        assert main(dispatch("PROJ-1", "--repo", "nope"), runner=runner) == 1
+        assert main(dispatch("PROJ-1", "--repo", "docs"), runner=runner) == 1
+        assert main(dispatch("PROJ-1", "--repo", "Bad"), runner=runner) == 2  # not a name at all: a usage error
+        assert main(dispatch("PROJ-1", "--repo", "api", "--slug", "login"), runner=runner) == 0
+        assert "dispatch refused (unknown_repo)" in capsys.readouterr().err
 
-    run = db.get_run(conn, 1)
-    assert run is not None
-    [slot] = db.run_slots(conn, 1)
-    assert (slot["repo"], run["branch"]) == ("api", "agent/PROJ-1-login")
-    assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
-    state = th(treehouse_state)
-    assert state["calls"][-1] == [
-        "get",
-        "--lease",
-        "--lease-holder",
-        "canopy:PROJ-1",
-        "--json",
-        "--worktree-path",
-        "{pool}/{slot}/{repo}",
-    ]
-    assert state["contexts"][-1] == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
-    assert [a for a, _ in decisions(conn, tick_id)] == [
-        "refused:unknown_repo",
-        "refused:unknown_repo",
-        "refused:unknown_repo",
-        "dispatch:implement",
-    ]
-    assert decisions(conn, tick_id)[1][1] == "'nope' is not a repository in this workspace (api, docs, web)"
-    assert decisions(conn, tick_id)[2][1].startswith("docs has no clone at ")
-    assert decisions(conn, tick_id)[3][1] == f"run 1: agent/PROJ-1-login in api at {slot['slot_path']}; label {LABEL}"
+        run = db.get_run(conn, 1)
+        assert run is not None
+        [slot] = db.run_slots(conn, 1)
+        assert (slot["repo"], run["branch"]) == ("api", "agent/PROJ-1-login")
+        assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
+        state = th(treehouse_state)
+        assert state["calls"][-1] == [
+            "get",
+            "--lease",
+            "--lease-holder",
+            "canopy:PROJ-1",
+            "--json",
+            "--worktree-path",
+            "{pool}/{slot}/{repo}",
+        ]
+        assert state["contexts"][-1] == {"cwd": str(ws.clone("api")), "treehouse_root": str(ws.root)}
+        assert [a for a, _ in decisions(conn, tick_id)] == [
+            "refused:unknown_repo",
+            "refused:unknown_repo",
+            "refused:unknown_repo",
+            "dispatch:implement",
+        ]
+        assert decisions(conn, tick_id)[1][1] == "'nope' is not a repository in this workspace (api, docs, web)"
+        assert decisions(conn, tick_id)[2][1].startswith("docs has no clone at ")
+        assert (
+            decisions(conn, tick_id)[3][1] == f"run 1: agent/PROJ-1-login in api at {slot['slot_path']}; label {LABEL}"
+        )
 
-    # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
-    db.finish_run(conn, 1, "done", "{}")
-    resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
-    assert main(resume, runner=runner) == 1
-    assert decisions(conn, tick_id)[-1] == (
-        "refused:no_branch",
-        "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web",
-    )
-    assert main([*resume[:-1], "api"], runner=runner) == 0
+        # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
+        db.finish_run(conn, 1, "done", "{}")
+        resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
+        assert main(resume, runner=runner) == 1
+        assert decisions(conn, tick_id)[-1] == (
+            "refused:no_branch",
+            "PROJ-1 has no branch in web for resume to continue; dispatch implement with --repo web",
+        )
+        assert main([*resume[:-1], "api"], runner=runner) == 0
 
 
-def test_two_tickets_in_two_repositories_end_to_end(
-    ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_two_tickets_in_two_repositories_end_to_end(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    assert main(dispatch("PROJ-1", "--repo", "api")) == 0
-    first = wait_for_run(conn, 1)
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-2-work"))
-    assert main(dispatch("PROJ-2", "--repo", "web")) == 0
-    second = wait_for_run(conn, 2)
+    with in_tick(conn):
+        # A detached run takes the worker's environment when it starts.
+        with worker_does(*commit_and_push("agent/PROJ-1-work")):
+            assert main(dispatch("PROJ-1", "--repo", "api")) == 0
+        first = wait_for_run(conn, 1)
+        with worker_does(*commit_and_push("agent/PROJ-2-work")):
+            assert main(dispatch("PROJ-2", "--repo", "web")) == 0
+        second = wait_for_run(conn, 2)
 
     slots = [db.run_slots(conn, 1)[0], db.run_slots(conn, 2)[0]]
     for run, slot in zip((first, second), slots, strict=True):
@@ -326,24 +318,21 @@ def test_two_tickets_in_two_repositories_end_to_end(
     assert [w["cwd"] for w in workers] == [s["slot_path"] for s in slots]
 
 
-def test_reconcile_returns_leases_in_each_pool(
-    ws: Ws, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_reconcile_returns_leases_in_each_pool(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
     seed_pools(ws, treehouse_state)
     runner = InlineRunner()
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-    assert main(dispatch("PROJ-1", "--repo", "api"), runner=runner) == 0
-    # A lease in web's pool that no run holds, left by a dispatch that died between lease and journal.
-    assert runner.run(
-        ["treehouse", "get", "--lease", "--lease-holder", "canopy:PROJ-9", "--json"],
-        cwd=ws.clone("web"),
-        env={"TREEHOUSE_ROOT": str(ws.root)},
-    ).ok
-    conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
-    monkeypatch.delenv("CANOPY_TICK_ID")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
+    with in_tick(conn):
+        assert main(dispatch("PROJ-1", "--repo", "api"), runner=runner) == 0
+        # A lease in web's pool that no run holds, left by a dispatch that died between lease and journal.
+        assert runner.run(
+            ["treehouse", "get", "--lease", "--lease-holder", "canopy:PROJ-9", "--json"],
+            cwd=ws.clone("web"),
+            env={"TREEHOUSE_ROOT": str(ws.root)},
+        ).ok
+        conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
 
     run = db.get_run(conn, 1)
     assert run is not None
@@ -361,35 +350,35 @@ def test_reconcile_returns_leases_in_each_pool(
 
 
 def test_init_workspace_writes_the_skeleton(
-    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = tmp_path / "acme"
     root.mkdir()
     (root / ".gitignore").write_text("*.pyc")
-    monkeypatch.chdir(root)
-    assert main(["init", "--workspace", "--provider", "github"]) == 0
-    out = capsys.readouterr().out
-    assert f"wrote   {root / config.WORKSPACE_FILE_NAME}" in out
-    assert f"updated {root / '.gitignore'}" in out
-    assert "The map lists no repositories yet." in out
-    assert (root / ".gitignore").read_text() == "*.pyc\n/repos/\n/.treehouse/\n/desks/\n/.canopy/\n"
-    assert (root / "MAP.md").read_text().startswith("# Workspace map")
-    found = workspace.load(root)
-    assert (found.name, found.repos) == ("acme", ())
-    assert config.load(root, canopy_env.user_file).tracker.provider == "github"
-    # Defaults are not written, so a later canopy's reach the workspace.
-    assert "[trust]" not in (root / config.WORKSPACE_FILE_NAME).read_text()
+    with contextlib.chdir(root):
+        assert main(["init", "--workspace", "--provider", "github"]) == 0
+        out = capsys.readouterr().out
+        assert f"wrote   {root / config.WORKSPACE_FILE_NAME}" in out
+        assert f"updated {root / '.gitignore'}" in out
+        assert "The map lists no repositories yet." in out
+        assert (root / ".gitignore").read_text() == "*.pyc\n/repos/\n/.treehouse/\n/desks/\n/.canopy/\n"
+        assert (root / "MAP.md").read_text().startswith("# Workspace map")
+        found = workspace.load(root)
+        assert (found.name, found.repos) == ("acme", ())
+        assert config.load(root, canopy_env.user_file).tracker.provider == "github"
+        # Defaults are not written, so a later canopy's reach the workspace.
+        assert "[trust]" not in (root / config.WORKSPACE_FILE_NAME).read_text()
 
     # Inside a workspace, plain `canopy init` sets up the workspace, and nothing is overwritten.
     (root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", "https://x.test/api.git")))
     (root / "repos" / "api").mkdir(parents=True)
-    monkeypatch.chdir(root / "repos" / "api")
-    assert main(["init"]) == 0
-    out = capsys.readouterr().out
-    assert f"kept    {root / '.gitignore'}" in out
-    assert "  - api\n" in out
-    assert "x.test" not in out  # clone URLs are for `canopy workspace sync` alone
-    assert not (root / "repos" / "api" / "canopy.toml").exists()
+    with contextlib.chdir(root / "repos" / "api"):
+        assert main(["init"]) == 0
+        out = capsys.readouterr().out
+        assert f"kept    {root / '.gitignore'}" in out
+        assert "  - api\n" in out
+        assert "x.test" not in out  # clone URLs are for `canopy workspace sync` alone
+        assert not (root / "repos" / "api" / "canopy.toml").exists()
 
 
 def test_sync_clones_missing_repositories_and_reports_a_different_origin(
@@ -429,10 +418,10 @@ def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(
 
 
 def test_sync_outside_a_workspace_refuses(
-    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    monkeypatch.chdir(elsewhere)
-    assert main(["workspace", "sync"]) == 1
-    assert "run `canopy init` first" in capsys.readouterr().err
+    with contextlib.chdir(elsewhere):
+        assert main(["workspace", "sync"]) == 1
+        assert "run `canopy init` first" in capsys.readouterr().err

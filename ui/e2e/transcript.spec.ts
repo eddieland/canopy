@@ -35,6 +35,9 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await read.locator('summary').click()
     await expect(output).toBeVisible()
     await expect(transcript.locator('input')).toHaveCount(0)
+    // Its input is JSON, colored by what each piece is; its output, a file, stays plain.
+    await expect(read.locator('.text-syntax-key', { hasText: '"filePath"' })).toBeVisible()
+    await expect(output.locator('span')).toHaveCount(0)
     // A failed call shows its error where a call's output goes.
     const missing = tools.filter({ hasText: 'useSearch.ts' }).first()
     await missing.locator('summary').click()

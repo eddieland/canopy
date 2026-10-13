@@ -3,10 +3,12 @@ its pages read what `canopy show` and `canopy status` print, and `canopy loop` s
 
 import dataclasses
 import json
+import os
 import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import httpx2
 import pytest
@@ -248,12 +250,11 @@ def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
 
 
 def test_a_web_pause_holds_the_loops_wait_until_the_web_resumes_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     c, headers = signed_in_client(ctx)
-    overseer_does(monkeypatch)
     time_ = FakeTime()
 
     def browser() -> None:
@@ -263,16 +264,17 @@ def test_a_web_pause_holds_the_loops_wait_until_the_web_resumes_it(
             assert c.post("/api/loop/resume", headers=headers).status_code == 200
 
     time_.on_sleep = browser
-    statuses = repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=1,
-        max_ticks=2,
-        console=console()[0],
-        stop=repeat.Stop(),
-        sleep=time_.sleep,
-        clock=time_.clock,
-    )
+    with overseer_does():
+        statuses = repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=1,
+            max_ticks=2,
+            console=console()[0],
+            stop=repeat.Stop(),
+            sleep=time_.sleep,
+            clock=time_.clock,
+        )
     assert statuses == {"ok": 2}
     assert sum(time_.slept) == 150
 
@@ -417,7 +419,7 @@ def wait_until_up(url: str) -> None:
 
 
 def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     port = free_port()
     serve_on(canopy_env, port)
@@ -426,7 +428,6 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     conversation.start(ctx.conn, ctx.config, conversation.parse_ref(KEY), repo=ctx.repo, channel="cli")
-    overseer_does(monkeypatch)
     base = f"http://127.0.0.1:{port}"
     time_ = FakeTime()
     seen: list[dict[str, object]] = []
@@ -448,17 +449,18 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
     time_.on_sleep = reply_from_the_browser
     term, out = console()
-    statuses = repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=15,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        serve=True,
-        sleep=time_.sleep,
-        clock=time_.clock,
-    )
+    with overseer_does():
+        statuses = repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            serve=True,
+            sleep=time_.sleep,
+            clock=time_.clock,
+        )
 
     assert statuses == {"ok": 2}
     assert [t["key"] for t in seen] == [KEY]
@@ -472,7 +474,7 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
 
 def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     port = free_port()
     serve_on(canopy_env, port)
@@ -480,7 +482,6 @@ def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
     key = secret.read(secret.path())
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
-    overseer_does(monkeypatch)
     base = f"http://127.0.0.1:{port}"
     time_ = FakeTime()
     ticket_urls: list[object] = []
@@ -502,17 +503,18 @@ def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
 
     time_.on_sleep = reload_from_the_browser
     term, out = console()
-    statuses = repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=15,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        serve=True,
-        sleep=time_.sleep,
-        clock=time_.clock,
-    )
+    with overseer_does():
+        statuses = repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            serve=True,
+            sleep=time_.sleep,
+            clock=time_.clock,
+        )
 
     assert statuses == {"ok": 2}
     assert reloads == [{"changed": ["tracker.ticket_url"], "restart": [], "after_tick": False}]
@@ -522,21 +524,21 @@ def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
 
 
 def test_without_a_secret_the_loop_serves_nothing_and_says_how_to_make_one(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     port = free_port()
     serve_on(canopy_env, port)
-    overseer_does(monkeypatch)
     term, out = console()
-    statuses = repeat.run(
-        context(canopy_env),
-        dry_run=True,
-        interval_minutes=1,
-        max_ticks=1,
-        console=term,
-        stop=repeat.Stop(),
-        serve=True,
-    )
+    with overseer_does():
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=1,
+            max_ticks=1,
+            console=term,
+            stop=repeat.Stop(),
+            serve=True,
+        )
     assert statuses == {"ok": 1}
     assert "not served: there is no listener secret at" in out.getvalue()
     assert "canopy secret" in out.getvalue()
@@ -550,7 +552,6 @@ def test_the_loop_serves_unless_told_not_to(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     args: list[str],
     extra: str,
@@ -558,14 +559,14 @@ def test_the_loop_serves_unless_told_not_to(
     serves: bool,
 ) -> None:
     serve_on(canopy_env, free_port(), extra)
-    overseer_does(monkeypatch)
-    assert main(["loop", "--dry-run", "--ticks", "1", *args]) == 0
+    with overseer_does():
+        assert main(["loop", "--dry-run", "--ticks", "1", *args]) == 0
     # No secret: a loop that would serve says so; one told not to says nothing about it.
     assert ("not served" in capsys.readouterr().out) is serves
 
 
 def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
-    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["secret"]) == 0
     first = capsys.readouterr()
@@ -576,8 +577,8 @@ def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
     assert capsys.readouterr().out.strip() == value
     assert main(["secret", "--rotate"]) == 0
     assert capsys.readouterr().out.strip() != value
-    monkeypatch.setenv("CANOPY_RUN_ID", "3")
-    assert main(["secret"]) == 1
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "3"}):
+        assert main(["secret"]) == 1
     assert "inside_run" in capsys.readouterr().err
 
 

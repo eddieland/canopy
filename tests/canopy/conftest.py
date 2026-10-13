@@ -1,15 +1,18 @@
 """Fixtures for tests of workspaces of several repositories (DESIGN §18), and a pool of worktrees."""
 
+import contextlib
 import json
 import os
 import sqlite3
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core import config, db
-from tests.conftest import CanopyEnv, GitPool, Journals, git, pool_state
+from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, Journals, git, pool_state
 
 
 def map_text(*repos: tuple[str, str], extra: str = "") -> str:
@@ -58,22 +61,16 @@ def bare_origin(path: Path, tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def ws(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Ws:
-    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
-        monkeypatch.setenv(var, "canopy test")
-    for var in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
-        monkeypatch.setenv(var, "test@example.test")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-
-    root = tmp_path / "acme"
-    root.mkdir()
-    origins = {name: bare_origin(tmp_path / "origins" / f"{name}.git", tmp_path) for name in ("api", "web")}
-    for name, origin in origins.items():
-        git("clone", "--quiet", str(origin), str(root / "repos" / name), cwd=tmp_path)
-    (root / config.WORKSPACE_FILE_NAME).write_text(map_text(*((n, str(o)) for n, o in origins.items())))
-    monkeypatch.chdir(root)
-    return Ws(root, origins, root / ".canopy", canopy_env.journals)
+def ws(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> Iterator[Ws]:
+    with mock.patch.dict(os.environ, HERMETIC_GIT):
+        root = tmp_path / "acme"
+        root.mkdir()
+        origins = {name: bare_origin(tmp_path / "origins" / f"{name}.git", tmp_path) for name in ("api", "web")}
+        for name, origin in origins.items():
+            git("clone", "--quiet", str(origin), str(root / "repos" / name), cwd=tmp_path)
+        (root / config.WORKSPACE_FILE_NAME).write_text(map_text(*((n, str(o)) for n, o in origins.items())))
+        with contextlib.chdir(root):
+            yield Ws(root, origins, root / ".canopy", canopy_env.journals)
 
 
 def seed_pools(ws: Ws, treehouse_state: Path) -> None:
