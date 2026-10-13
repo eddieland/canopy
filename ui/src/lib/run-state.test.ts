@@ -25,19 +25,19 @@ describe('workingOn', () => {
 })
 
 describe('railRuns', () => {
-    it('puts the runs waiting on an answer first, then the running ones, each oldest first', () => {
+    it('puts the running runs first, then the ones waiting on an answer, each oldest first', () => {
         const runs = [
             at(1, 'running', '2026-10-08T12:10:00Z'),
             at(2, 'blocked', '2026-10-08T12:20:00Z'),
             at(3, 'running', '2026-10-08T12:00:00Z'),
             at(4, 'blocked', '2026-10-08T11:00:00Z'),
         ]
-        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([4, 2, 3, 1])
+        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([3, 1, 4, 2])
     })
 
     it('leaves out the runs that ended', () => {
         const runs = [at(1, 'done', '2026-10-08T12:00:00Z'), at(2, 'failed', '2026-10-08T12:00:00Z')]
-        expect(railRuns([...runs, ...mockRuns], 10).shown.map((r) => r.id)).toEqual([42, 41])
+        expect(railRuns([...runs, ...mockRuns], 10).shown.map((r) => r.id)).toEqual([41, 42])
     })
 
     it('counts the runs past the limit', () => {

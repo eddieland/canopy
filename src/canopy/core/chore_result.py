@@ -59,7 +59,7 @@ class ChoreResult(BaseModel):
 
 
 def parse(stdout: str) -> ChoreResult | None:
-    """Parse the last non-empty line of `stdout` as a chore's result. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as a chore's result. None if it is missing or invalid."""
     return contract.last_line(ChoreResult, stdout)
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import transcript
-from canopy.core.transcript import Error, Step, Text, ToolCall
+from canopy.core.transcript import Error, Step, Text, Tokens, ToolCall
 
 SESSION = "ses_abc123"
 T = 1_791_460_800_000  # 2026-10-08 12:00 UTC, in milliseconds
@@ -75,7 +75,7 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
             2500,
         ),
         ToolCall(AT, "read", "error", None, '{\n  "filePath": "/x"\n}', "no such file", None),
-        Step(AT, "tool-calls", 0.25, 573),
+        Step(AT, "tool-calls", 0.25, Tokens(100, 20, 3, 400, 50)),
         Error(AT, "APIError", ""),
     ]
     assert (found.truncated, found.unreadable) == (False, 0)
@@ -169,3 +169,29 @@ def test_a_missing_log_a_symlink_a_directory_and_a_fifo_are_not_read(tmp_path: P
     fifo = tmp_path / "fifo.log"
     os.mkfifo(fifo)
     assert transcript.read(fifo, SESSION) is None
+
+
+def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_characters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "1.log"
+    path.write_bytes("first line\nsecond, ünïcode\n--- stderr ---\nbell\x07 and \x1b escape\n".encode())
+    found = transcript.tail(path)
+    assert found == transcript.Tail(
+        "first line\nsecond, ünïcode\n--- stderr ---\nbell  and   escape\n", path.stat().st_size, truncated=False
+    )
+    # Past the bound, the cut lands inside a character, and the text starts at the next whole line.
+    monkeypatch.setattr(transcript, "MAX_TAIL", path.stat().st_size - len("first line\nsecond, ü"))
+    cut = transcript.tail(path)
+    assert cut is not None
+    assert (cut.text, cut.size, cut.truncated) == ("--- stderr ---\nbell  and   escape\n", path.stat().st_size, True)
+
+
+def test_a_missing_file_a_symlink_a_directory_and_a_fifo_have_no_tail(tmp_path: Path) -> None:
+    target = log(tmp_path, "secret")
+    link = tmp_path / "link.log"
+    link.symlink_to(target)
+    fifo = tmp_path / "fifo.log"
+    os.mkfifo(fifo)
+    for path in (tmp_path / "missing.log", link, tmp_path, fifo):
+        assert transcript.tail(path) is None

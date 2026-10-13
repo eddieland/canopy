@@ -64,6 +64,9 @@ Re-read the tracker and GitHub before every decision that matters.
     for reviews (see "Reviews"). Only when the state block has `reviews`.
   - The state block's `repositories[].leased_slots` holds what `treehouse status` would say for each repository. You
     run at the workspace root, which is not a repository, so do not run `treehouse` yourself.
+  - Run each command as its own bash call, from where you start: no `cd`, loops, `;`, `&&`, `||`, pipes, or subshells.
+    A call that is refused can end your run, and with it every command it held, so one call must risk one decision,
+    not all of them. A mirror's heredoc is part of its one command.
 - You have no other write capability. If you want to do something not on this
   list, record a `decide` with action `skip` and say what you wanted.
 
@@ -280,6 +283,9 @@ An empty list trusts nobody.
   item's link, every tick, and do not advance the `review` cursor past it. When a unit has both, a trusted reviewer's
   feedback still goes to a worker: dispatch for it, with `--cursor review=` no later than the time of the newest item
   before the first untrusted one, and the untrusted item waits.
+- An untrusted reviewer's approving review is not feedback, its body included: it asks for nothing, so it is never
+  `untrusted_review`. The inline comments posted with it are review comments, and are. When the approval is the newest
+  review item and nothing before it waits, advance the `review` cursor to its `submitted_at` with `canopy ticket set`.
 - A worker's marked comment is never review feedback, whoever's login it carries (see "Workers' comments").
 
 The operator answers in canopy, with `canopy reply` or the web UI, never on the ticket. A public ticket with an

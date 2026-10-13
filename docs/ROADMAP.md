@@ -406,6 +406,9 @@ Learned:
   (exit 0). The loop has been the operator's daily surface since. A working session's legibility is SCENARIOS S26.
 - Pausing joined it on request (2026-10-13): `p` at the loop's terminal, `canopy pause` and `canopy resume`, and the
   web UI's header write one journal row that holds the wait (DESIGN §6), tested against the fakes.
+- Reloading config joined it on request (2026-10-13): SIGHUP or the web UI's settings page reads the config again
+  once the running tick ends (DESIGN §6), tested against the fakes; a terminal hanging up still ends the loop, tested
+  on a pseudo-terminal. A live check is SCENARIOS S31.
 Next: the closing line does not say a signal stopped it; a small follow-up, not a milestone.
 
 ## M13. Spend-paced loop
@@ -748,7 +751,7 @@ shows it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
 - Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it; M27 serves its
-  session's events.
+  session's events. Reopened on request (2026-10-13): the page serves its end (DESIGN §22).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.

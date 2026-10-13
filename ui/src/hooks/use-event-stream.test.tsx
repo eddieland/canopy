@@ -1,7 +1,7 @@
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useEventStream } from './use-event-stream'
+import { HIDDEN_MS, RETRY_FIRST_MS, useEventStream } from './use-event-stream'
 
 /** Stands in for EventSource: records instances, and lets a test play the server. */
 class FakeEventSource extends EventTarget {
@@ -33,16 +33,43 @@ class FakeEventSource extends EventTarget {
         this.dispatchEvent(new Event('error'))
     }
 
+    refuse(): void {
+        this.readyState = FakeEventSource.CLOSED
+        this.dispatchEvent(new Event('error'))
+    }
+
     close(): void {
         this.closed = true
         this.readyState = FakeEventSource.CLOSED
     }
 }
 
+let visibility: DocumentVisibilityState = 'visible'
+
 beforeEach(() => {
     FakeEventSource.instances = []
     vi.stubGlobal('EventSource', FakeEventSource)
+    visibility = 'visible'
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility)
+    vi.useFakeTimers()
 })
+
+afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+})
+
+function show(state: DocumentVisibilityState): void {
+    visibility = state
+    document.dispatchEvent(new Event('visibilitychange'))
+}
+
+function stream(onReconnect = vi.fn()) {
+    const hook = renderHook(() => useEventStream('/api/events', { parse: (d) => d, onEvent: () => {}, onReconnect }))
+    act(() => latest().open())
+    return { ...hook, onReconnect }
+}
 
 function latest(): FakeEventSource {
     const source = FakeEventSource.instances.at(-1)
@@ -88,5 +115,91 @@ describe('useEventStream', () => {
         )
         expect(result.current).toBe('closed')
         expect(FakeEventSource.instances).toHaveLength(0)
+    })
+
+    it('starts over when a dropped stream has not come back, waiting longer each time', () => {
+        const { result, onReconnect } = stream()
+        const first = latest()
+        act(() => first.drop())
+        act(() => first.drop())
+        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS - 1))
+        expect(FakeEventSource.instances).toHaveLength(1)
+
+        act(() => vi.advanceTimersByTime(1))
+        expect(first.closed).toBe(true)
+        expect(FakeEventSource.instances).toHaveLength(2)
+        expect(result.current).toBe('reconnecting')
+
+        act(() => latest().drop())
+        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS))
+        expect(FakeEventSource.instances).toHaveLength(2)
+        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS))
+        expect(FakeEventSource.instances).toHaveLength(3)
+
+        act(() => latest().open())
+        expect(result.current).toBe('open')
+        expect(onReconnect).toHaveBeenCalledOnce()
+    })
+
+    it('leaves a stream the browser brought back in time alone', () => {
+        const { result, onReconnect } = stream()
+        act(() => latest().drop())
+        act(() => latest().open())
+        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS * 4))
+        expect(FakeEventSource.instances).toHaveLength(1)
+        expect(result.current).toBe('open')
+        expect(onReconnect).toHaveBeenCalledOnce()
+    })
+
+    it('tries again after the server refused it, which the browser never does', () => {
+        const { result } = stream()
+        act(() => latest().refuse())
+        expect(result.current).toBe('reconnecting')
+        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS))
+        expect(FakeEventSource.instances).toHaveLength(2)
+        act(() => latest().open())
+        expect(result.current).toBe('open')
+    })
+
+    it('starts over when the page is shown after long enough hidden to have lost the stream unawares', () => {
+        const { result, onReconnect } = stream()
+        act(() => show('hidden'))
+        act(() => vi.advanceTimersByTime(HIDDEN_MS - 1))
+        act(() => show('visible'))
+        expect(FakeEventSource.instances).toHaveLength(1)
+
+        act(() => show('hidden'))
+        act(() => vi.advanceTimersByTime(HIDDEN_MS))
+        act(() => show('visible'))
+        expect(FakeEventSource.instances).toHaveLength(2)
+        expect(FakeEventSource.instances[0]?.closed).toBe(true)
+        expect(result.current).toBe('reconnecting')
+        act(() => latest().open())
+        expect(onReconnect).toHaveBeenCalledOnce()
+    })
+
+    it('starts over at once when the page is shown or the device is online with the stream down', () => {
+        stream()
+        act(() => latest().drop())
+        act(() => show('hidden'))
+        act(() => show('visible'))
+        expect(FakeEventSource.instances).toHaveLength(2)
+
+        act(() => latest().drop())
+        act(() => window.dispatchEvent(new Event('online')))
+        expect(FakeEventSource.instances).toHaveLength(3)
+        act(() => latest().open())
+        act(() => window.dispatchEvent(new Event('online')))
+        expect(FakeEventSource.instances).toHaveLength(3)
+    })
+
+    it('stops trying once unmounted', () => {
+        const { unmount } = stream()
+        act(() => latest().drop())
+        unmount()
+        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS * 10))
+        act(() => window.dispatchEvent(new Event('online')))
+        expect(FakeEventSource.instances).toHaveLength(1)
+        expect(latest().closed).toBe(true)
     })
 })

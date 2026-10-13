@@ -1,4 +1,4 @@
-"""The pieces every agent result contract is built from (D026): bounded text, plain URLs, and the last line of stdout.
+"""The pieces every agent result contract is built from (D026): bounded text, plain URLs, and the result line.
 
 An agent's result is untrusted, so every field of a contract is bounded and validated before anything reads it. A result
 that does not validate is no result: each caller decides what that run's status becomes.
@@ -41,9 +41,13 @@ def url(limit: int) -> AfterValidator:
     return AfterValidator(check)
 
 
-def last_line[M: BaseModel](model: type[M], stdout: str) -> M | None:
-    """Parse the last non-empty line of `stdout` as `model`. None if it is missing or invalid."""
-    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+def last_line[M: BaseModel](model: type[M], text: str) -> M | None:
+    """Parse the last line of `text` that starts with `{` as `model`. None if there is none or it is invalid.
+
+    Lines after it that are not JSON objects, such as a runtime plugin's notices, are passed over (DESIGN §13). An
+    invalid object is not: a result the agent got wrong is no result, never an earlier line's.
+    """
+    lines = [line.strip() for line in text.splitlines() if line.strip().startswith("{")]
     if not lines:
         return None
     return stored(model, lines[-1])

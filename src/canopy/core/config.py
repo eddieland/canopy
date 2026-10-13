@@ -878,6 +878,20 @@ def _describe(error: ValidationError, origin: dict[str, Path], shared_file: Path
     return "\n".join(lines)
 
 
+def changed(old: Config, new: Config) -> list[str]:
+    """The keys whose values differ from `old` to `new`, as `section.key` names, in the schema's order.
+
+    A table section, such as `chores`, is one key: any change to any of its tables names it.
+    """
+    return [name for name in SPECS if _value(old, name) != _value(new, name)]
+
+
+def _value(cfg: Config, name: str) -> object:
+    section, _, key = name.partition(".")
+    values: object = getattr(cfg, section)
+    return getattr(values, key) if key else values
+
+
 def render_command(template: str, prompt: str, definitions_dir: Path, title: str) -> list[str]:
     """Turn a command template into argv. No shell runs (D023).
 

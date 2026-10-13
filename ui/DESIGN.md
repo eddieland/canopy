@@ -9,7 +9,7 @@ An operations inbox: a control room's at-a-glance state, kept calm enough to rea
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take; what is selected in a page sits on its tint. Each section of
 the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
-label over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
+trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
 decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
 color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
@@ -30,7 +30,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `border` | Every hairline. Applied by default to `border`, so `border-b` needs no color. |
 | `foreground` | Primary text. |
 | `muted-foreground` | Labels, descriptions, inactive navigation, placeholders. |
-| `accent`, `accent-foreground` | The one accent: active nav item, page labels, links, primary buttons, focus, live. |
+| `accent`, `accent-foreground` | The one accent: active nav item, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `status-running` | A run working. Pulses. |
@@ -58,8 +58,8 @@ Rules:
   claims it.
 - **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Reviews fuchsia,
   Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go
-  on the nav's icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data:
-  there a color is a state's. A page in no section (the 404) takes the accent.
+  on the nav's icons and highlight, the first step of the page header's trail, and the header's aurora, and nowhere
+  in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -88,8 +88,9 @@ Rules:
   The side rail runs the full height of the page and only its top part is sticky: nothing in the shell is sized
   to the viewport, so a full-page capture (or print) shows it whole.
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
-  (`src/components/shell/rail.tsx`). Each block under the nav is a hairline and a `panel-label` over its content. The
-  working runs are those waiting on the operator's answer first, then those running, each oldest first: a dot in its
+  (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
+  covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
+  working runs are those running first, then those waiting on the operator's answer, each oldest first: a dot in its
   state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
   it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
@@ -123,7 +124,16 @@ Rules:
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
-  The page header's label is in its section's color; a panel's stays in `muted-foreground`.
+  The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
+  Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
+  query: a pasted URL widened the page.
+- **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
+  section's name in its color, then the pages between it and this one. On the section's own list the name is plain
+  text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
+  section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
+  (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
+  repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
+  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
@@ -213,7 +223,9 @@ tabs.
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
   number). Columns keep their width on every row, the age's included. An idle slot shows its state and number
-  alone, dimmed; only a note or an unreadable branch takes a second line.
+  alone, dimmed; only a note or an unreadable branch takes a second line, wrapped to the panel. The branch and the
+  processes treehouse found share what the row leaves, each cut to fit with the whole on hover: an agent can start
+  a dozen, and the line still ends at the age.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
@@ -246,13 +258,23 @@ tabs.
   colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
   with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
-  breaks, its reasoning muted and italic under a `thinking` label. A tool call is one line, a native `<details>`: a
-  `RunDot` in `done` or `failed`, the tool's name, its title or its input's first value, and how long it took; it
-  opens to its input and its output (or error, in `status-failed`) in monospace blocks at most 24rem tall. A model
-  call is a muted line with its reason, tokens, and cost; a runtime error is tinted `status-failed`. Open all and Close
-  all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
-  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
-  overseer's under its decisions.
+  breaks, its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line
+  says what it did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name, and
+  in monospace a shell call's command (the agent's description of it on hover), else the runtime's title, else its
+  input's short values as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of
+  one short line that is not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a
+  `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented, in
+  monospace blocks at most 24rem tall. A model call is a muted line with its tokens and cost, and its reason only when
+  it is not `tool-calls`, as every call but the last is; it opens the same way to its tokens by kind, each a label
+  and a readout on one line, and Open all leaves it closed. A runtime error is tinted `status-failed`. Open all and
+  Close all are in the header, with the session id; above the rows, how many tool calls, failed and refused ones, and
+  model calls. A
+  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
+  (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
+- **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
+  line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
+  wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
+  at its end, where stderr is; the file's size is in the header, and a cut says so above the block.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
@@ -262,10 +284,12 @@ tabs.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
-  run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
+  run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
+  an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
+  how long it has been open.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
-  header, under the title, so they are the first thing found (`TicketLinks`): an outline button per link, in the
+  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per link, in the
   accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR), what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR; an unknown
   ticket's page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase.
@@ -293,9 +317,11 @@ tabs.
   text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
   (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
-  from anywhere but a text field. The search page has a panel per source with hits, in the server's order, its count
-  in the header (`newest 20` when the source has more). A hit is a row: where it opens (its ticket or chore with the
-  run that said it, or the tick that decided it), its label as a chip, the snippet with the query's words marked on
-  the accent's tint (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL
-  short. While the next query's hits load, the last ones stay, dimmed to 60%.
+  from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
+  when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.
+  The search page has a panel per source with hits, in the server's order, its count in the header (`newest 20` when
+  the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, or the tick
+  that decided it), its label as a chip, the snippet with the query's words marked on the accent's tint
+  (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While
+  the next query's hits load, the last ones stay, dimmed to 60%.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.

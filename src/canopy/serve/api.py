@@ -3,7 +3,7 @@
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
 functions the CLI's verbs call (`canopy.core.conversation`, and `canopy.core.pause` for the loop's pause), with channel
 `web`, so the guards are the same ones; a guard's refusal is a 409 naming it. A forget also carries the ticket's key as
-the operator typed it.
+the operator typed it. A reload asks the loop to read its config again, as SIGHUP does; it writes nothing.
 """
 
 from __future__ import annotations
@@ -16,14 +16,16 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import chore_view, conversation, pause, search
+from canopy.core import chore_view, config, conversation, pause, search
 from canopy.infra import logs
 from canopy.serve import live, reviews, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
 from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
+    ChoreRunDetail,
     ChoreSummary,
+    ConfigReload,
     ForgetRequest,
     Forgot,
     LastTick,
@@ -49,6 +51,7 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
+    TickOutput,
     Transcript,
 )
 
@@ -267,7 +270,8 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
 def _chore_routes(api: APIRouter, backend: Backend) -> None:
     """The chores (DESIGN §19): what `canopy status` and `canopy show chore:NAME` print, and the operator's notes.
 
-    Nothing here runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
+    Each run is readable on its own, with its session's transcript: untrusted text, read back from its log. Nothing
+    here runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
     """
     log = logs.for_tick(None)
 
@@ -283,6 +287,33 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
             found = views.chore(backend, ctx, ref.id)
         if found is None:
             raise HTTPException(status_code=404, detail=f"no chore {ref.id!r} is defined for this workspace")
+        return found
+
+    @api.get(
+        "/chores/{name}/runs/{run_id}",
+        operation_id="getChoreRun",
+        responses={404: {"description": "No such run of this chore."}},
+    )
+    def chore_run(name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> ChoreRunDetail:
+        ref = chore_ref(name, "show")
+        with backend.open() as ctx:
+            found = views.chore_run_detail(ctx, ref.id, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"chore {ref.id!r} has no run {run_id}")
+        return found
+
+    # Agent output, read back from the run's log on each request; never on the stream (DESIGN §22).
+    @api.get(
+        "/chores/{name}/runs/{run_id}/transcript",
+        operation_id="getChoreRunTranscript",
+        responses={404: {"description": "No such run of this chore."}},
+    )
+    def chore_run_transcript(name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
+        ref = chore_ref(name, "show")
+        with backend.open() as ctx:
+            found = views.chore_run_transcript(ctx, ref.id, run_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"chore {ref.id!r} has no run {run_id}")
         return found
 
     @api.post("/chores/{name}/replies", operation_id="replyChore", responses=_REFUSED)
@@ -301,9 +332,9 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
 
 
 def _tick_routes(api: APIRouter, backend: Backend) -> None:
-    """The ticks (DESIGN §6): what `canopy decisions` prints, and the overseer's transcript.
+    """The ticks (DESIGN §6): what `canopy decisions` prints, and the overseer's transcript and output.
 
-    Reads only; a rationale and a transcript are untrusted text.
+    Reads only; a rationale, a transcript, and an output are untrusted text.
     """
 
     @api.get("/ticks", operation_id="listTicks")
@@ -332,9 +363,21 @@ def _tick_routes(api: APIRouter, backend: Backend) -> None:
             raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
         return found
 
+    # The end of the same file as written, stderr included, read again on each request (DESIGN §22).
+    @api.get("/ticks/{tick_id}/output", operation_id="getTickOutput", responses={404: {"description": "No such tick."}})
+    def tick_output(tick_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> TickOutput:
+        with backend.open() as ctx:
+            found = views.tick_raw_output(ctx, tick_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
+        return found
+
 
 def _loop_routes(api: APIRouter, backend: Backend) -> None:
-    """The loop's pause (DESIGN §6): `canopy pause` and `canopy resume`. The loop reads it at every step of its wait."""
+    """The loop's pause (DESIGN §6), `canopy pause` and `canopy resume`, and asking it to read its config again.
+
+    The loop reads both at every step of its wait.
+    """
     log = logs.for_tick(None)
 
     @api.get("/loop", operation_id="getLoop")
@@ -359,6 +402,16 @@ def _loop_routes(api: APIRouter, backend: Backend) -> None:
         if not already:
             log.info("loop resumed", extra={"channel": WEB})
         return PauseChanged(already=already, loop=state)
+
+    @api.post("/loop/reload", operation_id="reloadConfig", responses=_REFUSED)
+    def reload_config() -> ConfigReload:
+        with backend.open() as ctx:
+            try:
+                found = backend.reload(ctx)
+            except config.ConfigError as e:
+                raise refusal(conversation.Refused("config_invalid", str(e))) from None
+        log.info("config reload asked for", extra={"channel": WEB, "changed": list(found.changed)})
+        return ConfigReload(changed=list(found.changed), restart=list(found.restart), after_tick=found.after_tick)
 
 
 def _run_routes(api: APIRouter, backend: Backend) -> None:

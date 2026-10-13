@@ -50,6 +50,42 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-marker', 'kept')
 })
 
+test('every page header opens with a trail back up to its section', async ({ page }) => {
+    const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
+
+    // On a section's list the trail names the section and links nowhere.
+    await page.goto('runs')
+    await expect(trail).toHaveText('Runs')
+    await expect(trail.getByRole('link')).toHaveCount(0)
+
+    // On a run, the section links back to its list; the title is not repeated in the trail.
+    await page.goto('runs/39')
+    await expect(trail).toHaveText('Runs')
+    await trail.getByRole('link', { name: 'Runs' }).click()
+    await expect(page).toHaveURL(/\/runs$/)
+
+    // A chore run's trail passes through its chore, by its name as written.
+    await page.goto('chores/deps/runs/2')
+    await expect(trail.getByRole('link')).toHaveText(['Chores', 'chore:deps'])
+    await trail.getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps')
+    await trail.getByRole('link', { name: 'Chores' }).click()
+    await expect(page).toHaveURL(/\/chores$/)
+
+    // A page in no section names itself.
+    await page.goto('search?q=csv')
+    await expect(trail).toHaveText('Search')
+})
+
+test('each nav item says on hover what its page holds', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('title', /ended last/)
+    for (const link of await nav.getByRole('link').all()) await expect(link).toHaveAttribute('title', /\w/)
+})
+
 test('the side rail runs the full height of the page and its nav stays in view when scrolled', async ({ page }) => {
     await page.goto('tickets/ABC-102')
     await settled(page)
@@ -179,6 +215,35 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     const reads = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
     await page.getByTestId('worktrees-refresh').click()
     expect((await reads).status()).toBe(200)
+})
+
+test('a slot with long text keeps it inside its row', async ({ page }) => {
+    // Treehouse can find many processes in one slot, and a branch or a note can be any length: each is cut to fit
+    // or wrapped, never past the panel's edge.
+    await page.route('**/api/worktrees', async (route) => {
+        const response = await route.fetch()
+        const pools = (await response.json()) as {
+            repo: string
+            worktrees: { name: string; branch: string | null; note: string | null; processes: object[] }[]
+        }[]
+        const slot = pools.find((p) => p.repo === 'web')?.worktrees.find((w) => w.name === '1')
+        if (slot === undefined) throw new Error('the mock has no slot web#1')
+        slot.processes = Array.from({ length: 12 }, (_, i) => ({ pid: 340928 + i, name: `great_gasdbq_${i}` }))
+        slot.branch = `agent/ABC-101-${'a-very-long-branch-name-'.repeat(6)}end`
+        slot.note = `left ${'/a/path/with/no/spaces'.repeat(12)}`
+        await route.fulfill({ response, json: pools })
+    })
+    await page.goto('worktrees')
+    await settled(page)
+    const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
+    await expect(slot).toContainText('great_gasdbq_0 340928')
+    const processes = slot.getByTestId('worktree-processes')
+    await expect(processes).toHaveAttribute('title', /great_gasdbq_11 340939/)
+    const overflow = await slot.evaluate((li) => {
+        const edge = li.getBoundingClientRect().right
+        return [...li.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > edge + 0.5).length
+    })
+    expect(overflow).toBe(0)
 })
 
 test('the worktrees page reads the pools again every 10 seconds, and only while it is open', async ({ page }) => {
