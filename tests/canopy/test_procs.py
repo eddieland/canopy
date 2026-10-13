@@ -1,8 +1,10 @@
 import contextlib
+import gc
 import json
 import os
 import signal
 import time
+import warnings
 from pathlib import Path
 
 import pytest
@@ -127,6 +129,23 @@ def test_on_start_gets_the_pid_that_leads_the_group(agent_log: Path) -> None:
     [pid] = started
     assert pid != os.getpid()
     assert not procs.alive(pid)
+
+
+def test_an_interrupted_run_kills_its_child_and_closes_its_pipes() -> None:
+    """A Ctrl-C or SIGTERM mid-run reaches the caller, with the child's group killed and nothing left open."""
+    pids: list[int] = []
+
+    def interrupt(pid: int) -> None:
+        pids.append(pid)
+        raise KeyboardInterrupt
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(KeyboardInterrupt):
+            SubprocessRunner().run(["sleep", "30"], on_start=interrupt)
+        gc.collect()
+    assert not procs.alive(pids[0])
+    assert [str(w.message) for w in caught if issubclass(w.category, ResourceWarning)] == []
 
 
 def test_spawn_detaches_and_logs(agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -141,18 +141,20 @@ class SubprocessRunner:
                 raise CommandNotFoundError(f"command {reason}: {argv[0]}") from e
             raise
 
-        try:
-            if on_start is not None:
-                on_start(proc.pid)
-            stdout, stderr = proc.communicate(stdin, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            _kill_group(proc.pid)
-            stdout, stderr = proc.communicate()
-            return Result(argv, proc.returncode, stdout, stderr, timed_out=True)
-        except BaseException:
-            _kill_group(proc.pid)
-            proc.wait()
-            raise
+        # Leaving the block closes the pipes, which communicate() leaves open when a signal interrupts it.
+        with proc:
+            try:
+                if on_start is not None:
+                    on_start(proc.pid)
+                stdout, stderr = proc.communicate(stdin, timeout=timeout)
+            except subprocess.TimeoutExpired:
+                _kill_group(proc.pid)
+                stdout, stderr = proc.communicate()
+                return Result(argv, proc.returncode, stdout, stderr, timed_out=True)
+            except BaseException:
+                _kill_group(proc.pid)
+                proc.wait()
+                raise
         return Result(argv, proc.returncode, stdout, stderr)
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:

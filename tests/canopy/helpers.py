@@ -12,7 +12,7 @@ import pytest
 
 from canopy.core import db
 from canopy.infra import procs, resources
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, Journals
 
 WORKER_DONE = json.dumps(
     {"status": "done", "branch": "agent/PROJ-1-work", "pr": "https://example.test/pr/1", "summary": "did it"}
@@ -20,9 +20,7 @@ WORKER_DONE = json.dumps(
 
 
 def journal(env: CanopyEnv) -> sqlite3.Connection:
-    conn = db.connect(env.state_dir / "canopy.db")
-    db.migrate(conn, resources.migrations_dir())
-    return conn
+    return env.journal()
 
 
 def shipped_through(dest: Path, version: int) -> Path:
@@ -33,11 +31,9 @@ def shipped_through(dest: Path, version: int) -> Path:
     return dest
 
 
-def journal_at(tmp_path: Path, version: int) -> sqlite3.Connection:
+def journal_at(journals: Journals, tmp_path: Path, version: int) -> sqlite3.Connection:
     """A journal migrated through `version`, as an older canopy left it, for a test of what later migrations do."""
-    conn = db.connect(tmp_path / "canopy.db")
-    db.migrate(conn, shipped_through(tmp_path / "migrations", version))
-    return conn
+    return journals.open_through(tmp_path / "canopy.db", shipped_through(tmp_path / "migrations", version))
 
 
 def versions_after(version: int) -> list[int]:
