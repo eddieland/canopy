@@ -70,6 +70,13 @@
     }
 }
 
+/* Under the shell the window itself never scrolls, so it never shows a scrollbar of its own beside the page's. */
+@media screen {
+    :root:has(.page-scroll) {
+        overflow: hidden;
+    }
+}
+
 /* A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's. */
 @utility panel-scroll {
     overflow-y: auto;
