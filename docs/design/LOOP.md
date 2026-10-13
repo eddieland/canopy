@@ -316,6 +316,10 @@ It is empty by default: nobody is trusted until listed, so a review bot's commen
   reviewers, and the newest item, and does not move the `review` cursor past it. It never dispatches for it on its own
   judgment. A trusted reviewer's feedback on the same unit still goes to a worker, with the cursor no further than the
   item before the first untrusted one.
+- An untrusted reviewer's approving review is not feedback, its body included: an approval asks for nothing, so there
+  is nothing for the operator to say yes or no to, and it raised an `untrusted_review` item that only waited to be
+  dismissed. The inline comments posted with it are review comments, and are feedback as any other. The overseer moves
+  the `review` cursor past such an approval when nothing before it waits.
 - The operator answers in canopy, with `canopy reply KEY` or the web UI (§22), never on the ticket. An operator message
   newer than the ticket's message cursor is an instruction, like an authorized reply. When it speaks to the untrusted
   feedback, however loosely ("use your best judgement on the bot's review"), the ticket is `human_replied`: a `resume`
