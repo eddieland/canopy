@@ -6,7 +6,6 @@ import { metaQuery, runsQuery, spendQuery } from '@/api/queries'
 import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { RunDot } from '@/components/status'
-import { Kbd } from '@/components/ui/kbd'
 import { Skeleton } from '@/components/ui/skeleton'
 import { railRuns } from '@/lib/run-state'
 
@@ -83,17 +82,14 @@ export function RailSpend() {
     )
 }
 
-/** The rail's foot: the search key and the version canopy serves. At the window's foot, or the page's when longer. */
+/** The rail's foot: the version canopy serves. At the window's foot, or the page's when longer. */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (
         <div
-            className="mx-2 flex flex-col gap-1.5 border-t px-2.5 py-3 text-[0.6875rem] text-muted-foreground"
+            className="mx-2 flex border-t px-2.5 py-3 text-[0.6875rem] text-muted-foreground"
             data-testid="rail-footer"
         >
-            <span className="flex items-center gap-1.5">
-                <Kbd>/</Kbd> search
-            </span>
             <span className="readout min-h-4 truncate" title={meta?.version} data-testid="rail-version">
                 {meta === undefined ? '' : `canopy ${meta.version}`}
             </span>
