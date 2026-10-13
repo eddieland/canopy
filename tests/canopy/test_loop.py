@@ -11,6 +11,7 @@ import signal
 import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import override
@@ -98,6 +99,12 @@ def interrupt_me() -> list[str]:
 def console() -> tuple[Console, io.StringIO]:
     out = io.StringIO()
     return Console(file=out, width=200, highlight=False), out
+
+
+def woken_by(env: CanopyEnv) -> list[str | None]:
+    """What started each tick, as its row records it (`ticks.woken_by`)."""
+    with closing(db.connect(env.state_dir / db.DB_FILE_NAME)) as conn:
+        return [r["woken_by"] for r in conn.execute("SELECT woken_by FROM ticks ORDER BY id")]
 
 
 def tick_statuses(env: CanopyEnv) -> list[str]:
@@ -514,6 +521,7 @@ def test_the_tick_now_key_ends_the_wait_at_once(
     )
     log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
     assert any(line["msg"] == "the operator asked for a tick now" for line in log_lines)
+    assert woken_by(canopy_env) == ["start", "key"]
 
 
 def test_without_keys_the_loop_does_not_offer_them(
@@ -572,6 +580,7 @@ def test_a_deferred_start_waits_before_the_first_tick(
     assert text.index("first tick") < text.index("tick 1  ok")
     log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
     assert any(line["msg"] == "loop defers its first tick" and line["wait_seconds"] == 600 for line in log_lines)
+    assert woken_by(canopy_env) == ["start"]
 
 
 def test_the_tick_now_key_ends_a_deferred_start(
@@ -583,6 +592,7 @@ def test_the_tick_now_key_ends_a_deferred_start(
     statuses, _ = deferred(canopy_env, time, keys)
     assert statuses == {"ok": 1}
     assert time.slept == [0.5]
+    assert woken_by(canopy_env) == ["key"]
 
 
 def test_an_operator_message_ends_a_deferred_start_after_a_minute(
@@ -602,6 +612,7 @@ def test_an_operator_message_ends_a_deferred_start_after_a_minute(
     statuses, _ = deferred(canopy_env, time)
     assert statuses == {"ok": 1}
     assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+    assert woken_by(canopy_env) == ["message"]
 
 
 def test_ctrl_c_during_a_deferred_start_stops_without_a_tick(
@@ -677,6 +688,8 @@ def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
     assert sum(time.slept) == 200
     assert set(ticks_seen) == {1}
     assert paused(canopy_env) is None
+    # The wait ran past its deadline: the pause does not change what the row says ended it.
+    assert woken_by(canopy_env) == ["start", "timer"]
     lines = [(line["msg"], line.get("channel")) for line in log_messages(canopy_env)]
     assert ("loop paused", "loop") in lines
     assert ("loop resumed", "loop") in lines
@@ -744,6 +757,7 @@ def test_a_loop_started_paused_holds_its_first_tick_until_resumed(
     assert statuses == {"ok": 1}
     assert time.slept == [0.5, 0.5, 0.5]
     assert not any(ran)  # no overseer ran while paused
+    assert woken_by(canopy_env) == ["start"]
     assert "no tick until resumed" in out.getvalue().split("tick 1  ok")[0]  # the header says so
     assert ("loop resumed", "cli") in [(line["msg"], line.get("channel")) for line in log_messages(canopy_env)]
 
@@ -771,6 +785,7 @@ def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
     held = paused(canopy_env)
     assert held is not None
     assert held.channel == "cli"
+    assert woken_by(canopy_env) == ["key"]
 
 
 def test_ctrl_c_while_paused_stops_the_loop_without_a_tick(

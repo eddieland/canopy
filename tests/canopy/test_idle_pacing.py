@@ -9,6 +9,7 @@ import os
 import sqlite3
 import sys
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -55,6 +56,12 @@ def log_lines(env: CanopyEnv, msg: str) -> list[dict[str, object]]:
 def waits(env: CanopyEnv) -> list[tuple[object, object]]:
     """Each wait the loop chose, as (idle count, seconds), from its log."""
     return [(line["idle_count"], line["wait_seconds"]) for line in log_lines(env, "loop waits")]
+
+
+def recorded(env: CanopyEnv) -> list[tuple[object, object]]:
+    """Each tick's row: whether the loop found it idle, and what ended the wait before it."""
+    with closing(db.connect(env.state_dir / db.DB_FILE_NAME)) as conn:
+        return [(r["idle"], r["woken_by"]) for r in conn.execute("SELECT idle, woken_by FROM ticks ORDER BY id")]
 
 
 def review_run(conn: sqlite3.Connection, tick_id: int) -> int:
@@ -298,6 +305,8 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
     [started] = log_lines(canopy_env, "loop started")
     assert started["idle_max_minutes"] == 4
     assert [line["idle"] for line in log_lines(canopy_env, "loop waits")] == [False, True, True, False, True]
+    # The journal records the same, the last tick's included, for spend on idle ticks.
+    assert recorded(canopy_env) == [(0, "start"), (1, "timer"), (1, "timer"), (0, "timer"), (1, "timer"), (1, "timer")]
 
 
 def test_the_cap_stays_the_cap_however_long_nothing_changes(
@@ -349,6 +358,8 @@ def test_a_cap_not_above_base_keeps_todays_pacing(
     assert sum(time.slept) == 3 * base
     assert "when idle" not in out.getvalue()
     assert "idle " not in out.getvalue()
+    # Pacing does not count them, but the journal still says which ticks were idle.
+    assert recorded(canopy_env) == [(0, "start"), (1, "timer"), (1, "timer"), (1, "timer")]
 
 
 def test_the_cli_paces_from_every_with_the_configured_cap(
@@ -411,6 +422,9 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
         clock=time.clock,
     )
 
+    # The hand-made tick, the loop's first, then the tick the wait ended in.
+    woken_by = {"an operator message": "message", "before the tick": "timer"}.get(when, "run")
+    assert [w for _, w in recorded(canopy_env)] == [None, "start", woken_by]
     if when == "before the tick":
         # The tick could see that run end: nothing for the wait to wake for.
         assert sum(time.slept) == 900
@@ -450,3 +464,39 @@ def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
         clock=time.clock,
     )
     assert sum(time.slept) == 900
+
+
+def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (canopy_env.home / "chores").mkdir()
+    (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
+    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml())
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    # The chore runs every 120 minutes: one that started 115 minutes ago is due in 5, before the 15-minute interval.
+    chore_started(ctx.conn, datetime.now(UTC) - timedelta(minutes=115))
+    overseer_does(monkeypatch)
+    time = FakeTime()
+    term, _ = console()
+    repeat.run(
+        ctx,
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+    assert sum(time.slept) == pytest.approx(300, abs=5)
+    # The hand-made tick that ran the chore, the loop's first, then the one the gate started.
+    assert [w for _, w in recorded(canopy_env)] == [None, "start", "gate"]
+
+
+def test_a_tick_run_by_hand_records_nothing_of_the_loop(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overseer_does(monkeypatch)
+    assert main(["tick", "--dry-run"]) == 0
+    assert recorded(canopy_env) == [(None, None)]

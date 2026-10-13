@@ -239,6 +239,11 @@ def set_tick_read(conn: sqlite3.Connection, tick_id: int) -> None:
     )
 
 
+def set_tick_loop(conn: sqlite3.Connection, tick_id: int, *, idle: bool, woken_by: str) -> None:
+    """Record what the loop knew about a tick it ran: whether it was idle, and what ended the wait before it (§6)."""
+    conn.execute("UPDATE ticks SET idle = ?, woken_by = ? WHERE id = ?", (int(idle), woken_by, tick_id))
+
+
 def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
     """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
     row: sqlite3.Row | None = conn.execute(

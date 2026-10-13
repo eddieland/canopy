@@ -28,6 +28,7 @@ SHIPPED = {
     10: "cf297c7f2eb5a217a1b326da730a56fb71b246241191fb6009592fc867c713e1",
     11: "b5f91649b20c6783e4f915816ba930c0ff986cee619acce6f03c313d398ce941",
     12: "04410ef0faf97f97e28ffdfb7c8a6c0f86ec7878222ef10336fad518f89196f7",
+    13: "995116e0a3010b31af0f183154266a6774a5241972aac2a48ae62be9bf80a49a",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -292,3 +293,5 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     tick = db.get_tick(conn, 1)
     assert tick is not None
     assert (tick["session_id"], tick["cost_usd"], tick["tokens_input"]) == (None, None, None)
+    # Nor did the loop say whether it was idle or what woke it.
+    assert (tick["idle"], tick["woken_by"]) == (None, None)

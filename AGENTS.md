@@ -133,8 +133,7 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 ## Do not build (unless a ROADMAP milestone says so)
 
-- A web UI beyond what ROADMAP M20, M23, M24, M27, and M32 list. `canopy status` and a markdown file stay the CLI's
-  surface.
+- Web UI pages or features no milestone lists. `canopy status` and a markdown file stay the CLI's surface.
 - Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
