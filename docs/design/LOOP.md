@@ -57,7 +57,23 @@ in order:
    operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
    so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is present only when chores are
    configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
-5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
+5. **Check `canopy`, then run the overseer.** The overseer acts only through `canopy`, so a tick first runs
+   `canopy --version` through `procs` as the overseer would find it: from the tick's PATH, in the workspace root, with
+   `CANOPY_TICK_ID` set, for at most 60 seconds. When it does not start, exits other than 0, or times out, the tick
+   records `attention:canopy_unavailable` with why, closes as `canopy_unavailable`, and the overseer does not run. A
+   tick that cannot record anything would otherwise still pay to read the whole world (MEASUREMENTS 2026-10-12, F1:
+   two ticks found no `canopy` on PATH, three a launcher whose cached environment was gone). That tick leaves the
+   attention list standing, as any tick that is not `ok` does, and adds its one item to it while it is the latest tick
+   (§14), so the operator hears at once rather than after `loop.failing`'s streak. It is not idle (below).
+
+   Settled (M28): a check, not putting this canopy's own launcher first on the overseer's PATH. Prepending catches
+   only a missing `canopy`, not a launcher that is there but whose environment is gone, and it would need the
+   launcher's path for every install: the release's scie (whose `SCIE_BOOT` must stay unset for `canopy`), a
+   `uv tool install` script, `uv run`, and `python -m canopy`, none of which `sys.argv[0]` names reliably. It would
+   also override the operator's PATH. The check runs whatever the overseer would, so every install works as it does
+   for the overseer, and costs a process start (about 0.4 seconds) per tick.
+
+   Then run the overseer with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to

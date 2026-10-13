@@ -1,6 +1,7 @@
 """End to end: `canopy tick --dry-run` against the fake treehouse and a fake overseer that calls the real `canopy`."""
 
 import json
+import os
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.infra import lock, procs
+from canopy.loop import attention
 from tests.conftest import CanopyEnv
 
 
@@ -331,6 +333,64 @@ def test_treehouse_failure_skips_the_overseer(
     tick = journal(canopy_env).execute("SELECT * FROM ticks").fetchone()
     assert tick["status"] == "reconcile_failed"
     assert not agent_log.exists()
+
+
+def broken_canopy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, script: str) -> None:
+    """Make the `canopy` on PATH, where the overseer would find it, one that runs `script`, and the only one.
+
+    The only one: exec reports a missing interpreter as a missing file, so a PATH search goes on to the next `canopy`.
+    """
+    bin_dir = tmp_path / "broken-bin"
+    bin_dir.mkdir()
+    launcher = bin_dir / "canopy"
+    launcher.write_text(script)
+    launcher.chmod(0o755)
+    others = [d for d in os.environ["PATH"].split(os.pathsep) if d and not (Path(d) / "canopy").exists()]
+    monkeypatch.setenv("PATH", os.pathsep.join([str(bin_dir), *others]))
+
+
+@pytest.mark.parametrize(
+    ("script", "summary"),
+    [
+        # A launcher whose environment is gone: its interpreter no longer exists (MEASUREMENTS 2026-10-12, F1).
+        ("#!/nonexistent/venv/bin/python\n", "`canopy` does not start for the overseer: command not found: canopy"),
+        (
+            "#!/bin/sh\necho 'no module named canopy' >&2\nexit 1\n",
+            "`canopy --version` exited 1: no module named canopy",
+        ),
+    ],
+)
+def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    script: str,
+    summary: str,
+) -> None:
+    overseer_does(monkeypatch)
+    assert main(["tick", "--dry-run"]) == 0  # an `ok` tick, whose list the failed one leaves standing
+    with monkeypatch.context() as m:
+        broken_canopy(tmp_path, m, script)
+        assert main(["tick", "--dry-run"]) == 1
+        assert main(["tick", "--dry-run"]) == 1
+    assert len(agent_runs(agent_log)) == 1  # the overseer ran for the first tick alone
+
+    conn = journal(canopy_env)
+    ticks = conn.execute("SELECT id, status, summary FROM ticks ORDER BY id").fetchall()
+    assert [(t["status"], t["summary"]) for t in ticks[1:]] == [("canopy_unavailable", summary)] * 2
+    [item] = attention.current(conn)
+    assert (item.ticket_key, item.reason) == (None, "canopy_unavailable")
+    assert item.detail.startswith(f"{summary}; the overseer did not run.")
+    first = conn.execute("SELECT created_at FROM decisions WHERE tick_id = ?", (ticks[1]["id"],)).fetchone()[0]
+    assert item.since == first  # open since the first tick of the streak
+    assert "canopy_unavailable" in (canopy_env.state_dir / "attention.md").read_text()
+
+    # Once `canopy` works again, the next tick runs the overseer and the item is gone.
+    assert main(["tick", "--dry-run"]) == 0
+    assert len(agent_runs(agent_log)) == 2
+    assert attention.current(conn) == []
 
 
 def test_busy_lock_exits_zero_without_a_tick(
