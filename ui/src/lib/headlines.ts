@@ -1,53 +1,90 @@
 /**
- * The header ticker's headlines (src/components/shell/ticker.tsx): light razzing of programming and vibe coding, in
- * the spirit of a cartoon's title-card caption. Plain strings, written here; nothing from the journal.
+ * The header ticker's headlines (src/components/shell/ticker.tsx), by topic: light razzing of programming and of vibe
+ * coding, in the spirit of a cartoon's title-card caption, and tips for using canopy. Plain strings, written here;
+ * nothing from the journal. The ticker picks each one at random from the topics Settings leaves on
+ * (src/lib/ticker-settings.ts). A new topic is a name in TICKER_TOPICS, its headlines, and its label in Settings.
  *
  * A headline can open with RuneScape chat flair, as a player would type it: a color, then an effect, each ending in a
- * colon (`flash2:wave:Now with...`). Either may be left out. See `parseHeadline`.
+ * colon (`flash2:wave:Now with...`). Either may be left out. See `parseHeadline`. A tip opens with `Tip: ` instead,
+ * so it reads as one among the jokes, and has no flair.
  */
-export const HEADLINES: readonly string[] = [
-    'flash2:wave:Now with 40% more vibes than the leading brand',
-    'Works on my machine; machine declines to comment',
-    'Agent says "You\'re absolutely right!" for the 19th time today',
-    'Area man accepts all 412 suggested changes without reading one',
-    'glow1:Dependency count now exceeds lines of code',
-    'Off-by-one errors down 1% (or 2%)',
-    'red:shake:Agent apologizes sincerely, then does it again',
-    'Regex written; experts confirm there are now two problems',
-    'Developer removes one console.log, app stops working',
-    'Scientists find no upper bound on a "quick refactor"',
-    'green:Unit tests pass; units not consulted',
-    'Agent rewrites the test to match the bug, calls it alignment',
-    'Context window full; agent forgets what a for loop is',
-    'Startup pivots to AI-native by renaming utils.py',
-    'It is not a bug, it is an emergent behavior',
-    'glow3:wave:10x developer revealed to be ten agents in a trench coat',
-    "Rubber duck files for workers' comp",
-    'Linter finds 3,000 issues; developer finds a new linter',
-    '"One small change" lands as +4,812 − 3',
-    'cyan:wave2:Prompt engineer promoted to Principal Vibe Architect',
-    'Local dev insists it is just one more prompt',
-    'Exception swallowed whole; witnesses say it was delicious',
-    'Cache invalidated; naming things still pending',
-    'Senior engineer discovers a TODO they left in 2019',
-    'Semicolons now optional, like reading the diff',
-    'flash1:Ship it Friday, said nobody who shipped it Friday',
-    'flash3:shake:A watched CI never turns green',
-    'purple:Model hallucinates a library; library is published by lunch',
-    'Treehouse at capacity; squirrels displaced',
-    'Overseer reminds workers it can see them',
-    'Worker pushes once and exits, as is its way',
-    'Tabs versus spaces talks collapse; vibes declared the winner',
-    'Code review approved with a single "lgtm, vibes are immaculate"',
-    'Stack Overflow answer from 2011 still holding up production',
-    'white:wave:Loading witty headline...',
-    'Recursion explained in full: see "Recursion explained in full"',
-    'Dark mode on, which is to say it is 2 a.m.',
-    'Agent "fixes" flaky test by deleting the flake, and the test',
-    'flash1:wave:Free trimmed armour! Just approve my PR first',
-    'glow2:Agent hits 99 Debugging; bug still at large',
-    'yellow:wave2:Doubling your test coverage, trust me',
-]
+
+/** The ticker's topics, in the order Settings lists them. */
+export const TICKER_TOPICS = ['programming', 'vibes', 'tips'] as const
+
+/** One of the ticker's topics, each of which Settings can turn off. */
+export type TickerTopic = (typeof TICKER_TOPICS)[number]
+
+/** Every headline, by topic. */
+export const HEADLINES: Record<TickerTopic, readonly string[]> = {
+    programming: [
+        'Works on my machine; machine declines to comment',
+        'glow1:Dependency count now exceeds lines of code',
+        'Off-by-one errors down 1% (or 2%)',
+        'Regex written; experts confirm there are now two problems',
+        'Developer removes one console.log, app stops working',
+        'Scientists find no upper bound on a "quick refactor"',
+        'green:Unit tests pass; units not consulted',
+        'It is not a bug, it is an emergent behavior',
+        "Rubber duck files for workers' comp",
+        'Linter finds 3,000 issues; developer finds a new linter',
+        '"One small change" lands as +4,812 − 3',
+        'Exception swallowed whole; witnesses say it was delicious',
+        'Cache invalidated; naming things still pending',
+        'Senior engineer discovers a TODO they left in 2019',
+        'flash1:Ship it Friday, said nobody who shipped it Friday',
+        'flash3:shake:A watched CI never turns green',
+        'Tabs versus spaces talks collapse; vibes declared the winner',
+        'Stack Overflow answer from 2011 still holding up production',
+        'white:wave:Loading witty headline...',
+        'Recursion explained in full: see "Recursion explained in full"',
+        'Dark mode on, which is to say it is 2 a.m.',
+        'flash1:wave:Free trimmed armour! Just approve my PR first',
+    ],
+    vibes: [
+        'flash2:wave:Now with 40% more vibes than the leading brand',
+        'Agent says "You\'re absolutely right!" for the 19th time today',
+        'Area man accepts all 412 suggested changes without reading one',
+        'red:shake:Agent apologizes sincerely, then does it again',
+        'Agent rewrites the test to match the bug, calls it alignment',
+        'Context window full; agent forgets what a for loop is',
+        'Startup pivots to AI-native by renaming utils.py',
+        'glow3:wave:10x developer revealed to be ten agents in a trench coat',
+        'cyan:wave2:Prompt engineer promoted to Principal Vibe Architect',
+        'Local dev insists it is just one more prompt',
+        'Semicolons now optional, like reading the diff',
+        'purple:Model hallucinates a library; library is published by lunch',
+        'Treehouse at capacity; squirrels displaced',
+        'Overseer reminds workers it can see them',
+        'Worker pushes once and exits, as is its way',
+        'Code review approved with a single "lgtm, vibes are immaculate"',
+        'Agent "fixes" flaky test by deleting the flake, and the test',
+        'glow2:Agent hits 99 Debugging; bug still at large',
+        'yellow:wave2:Doubling your test coverage, trust me',
+    ],
+    tips: [
+        'Tip: press / anywhere but a text field to search tickets, messages, and decisions',
+        "Tip: press t during canopy loop's countdown to tick now",
+        "Tip: press p at canopy loop's terminal to pause it, and p again to resume",
+        'Tip: canopy pause holds the next tick; workers already running keep going',
+        "Tip: canopy tick --dry-run shows the overseer's plan and dispatches nothing",
+        "Tip: canopy decisions --ticket KEY prints the latest tick's plan for one ticket",
+        'Tip: canopy reply KEY answers a ticket, and a waiting loop wakes for it',
+        'Tip: canopy start KEY works a ticket privately; nothing canopy writes reaches it',
+        'Tip: canopy stop KEY --now also ends the run working it',
+        'Tip: canopy grant KEY implement allows one more run past the attempt limit',
+        'Tip: canopy forget KEY starts its next implement over on a new branch',
+        'Tip: canopy show run:ID shows one run, and chore:NAME a chore',
+        'Tip: canopy chore try NAME runs a chore now, in the foreground',
+        'Tip: Reload in Settings, or kill -HUP, has the loop read its config again',
+        'Tip: canopy skill prints a skill that teaches your own agent sessions canopy',
+        'Tip: canopy secret --rotate, then a restart, signs every browser out',
+        "Tip: a list's order toggle, in its panel header, flips it to oldest first",
+        'Tip: Settings picks the key that sends a reply; Shift+Enter is always a new line',
+        'Tip: hold the pointer over a headline to keep it still',
+        'Tip: Settings turns off any of these topics, tips included',
+    ],
+}
 
 /** RuneScape's chat colors. A flash alternates two colors; a glow cycles through several. */
 export const FLAIR_COLORS = [
@@ -92,10 +129,17 @@ export function parseHeadline(line: string): Headline {
     return { text: line.slice(match?.[0].length ?? 0), ...(color && { color }), ...(effect && { effect }) }
 }
 
-const DAY_MS = 86_400_000
+/** Every headline of the topics not hidden. */
+export function headlinesFor(hidden: readonly TickerTopic[] = []): string[] {
+    return TICKER_TOPICS.filter((topic) => !hidden.includes(topic)).flatMap((topic) => HEADLINES[topic])
+}
 
-/** Every headline once, starting at a different one each day, so a regular reader does not always see the same lead. */
-export function headlinesFor(now: number): string[] {
-    const start = Math.floor(now / DAY_MS) % HEADLINES.length
-    return [...HEADLINES.slice(start), ...HEADLINES.slice(0, start)]
+/**
+ * Which of `count` headlines to show next: one at random, but never `last` while there is another, so no headline
+ * follows itself. A `last` out of range picks from them all.
+ */
+export function nextIndex(count: number, last: number, random: () => number = Math.random): number {
+    const skip = last >= 0 && last < count && count > 1
+    const pick = Math.floor(random() * (skip ? count - 1 : count))
+    return skip && pick >= last ? pick + 1 : pick
 }
