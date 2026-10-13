@@ -25,6 +25,26 @@ def journal(env: CanopyEnv) -> sqlite3.Connection:
     return conn
 
 
+def shipped_through(dest: Path, version: int) -> Path:
+    """Copy the shipped migrations through `version` into `dest`, the directory an older canopy shipped."""
+    dest.mkdir(parents=True, exist_ok=True)
+    for m in db.discover(resources.migrations_dir())[:version]:
+        (dest / m.path.name).write_text(m.path.read_text())
+    return dest
+
+
+def journal_at(tmp_path: Path, version: int) -> sqlite3.Connection:
+    """A journal migrated through `version`, as an older canopy left it, for a test of what later migrations do."""
+    conn = db.connect(tmp_path / "canopy.db")
+    db.migrate(conn, shipped_through(tmp_path / "migrations", version))
+    return conn
+
+
+def versions_after(version: int) -> list[int]:
+    """The shipped migrations after `version`: what upgrading a journal at `version` applies."""
+    return [m.version for m in db.discover(resources.migrations_dir()) if m.version > version]
+
+
 def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> int:
     tick_id = db.start_tick(conn, dry_run=dry_run)
     monkeypatch.setenv("CANOPY_TICK_ID", str(tick_id))

@@ -13,7 +13,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.infra import resources
 from canopy.loop import attention
-from tests.canopy.helpers import in_tick, journal
+from tests.canopy.helpers import in_tick, journal, journal_at, versions_after
 from tests.canopy.test_loop import canopy, context, overseer_does
 from tests.conftest import CanopyEnv
 
@@ -282,19 +282,14 @@ def test_the_real_delimiter_is_fresh_each_tick() -> None:
 
 
 def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path: Path) -> None:
-    migrations = tmp_path / "migrations"
-    migrations.mkdir()
-    for name in ("0001_init.sql", "0002_run_sessions.sql", "0003_conversations.sql"):
-        (migrations / name).write_text((resources.migrations_dir() / name).read_text())
-    conn = db.connect(tmp_path / "canopy.db")
-    db.migrate(conn, migrations)
+    conn = journal_at(tmp_path, 3)
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute("UPDATE tickets SET last_comment_id = 'c-9' WHERE key = 'OLD-1'")
     conn.execute(
         "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
         "VALUES ('ticket', 'OLD-1', 'x', 'operator', 'reply', 'cli', 'Blue.')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(3)
     # Its whole comment history is mirrored once, worker comments the comment cursor had passed included.
     assert mirror_cursor(conn, "OLD-1") is None
     [message] = mirrored(conn, "OLD-1")
