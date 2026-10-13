@@ -12,14 +12,17 @@ reach `srt` unchanged, after a `--`, so none of them is ever read as an option o
 
 In order, it:
 
-1. Finds the worktrees the run works in, for a worker or setup: the cwd, or each worktree a joint run's desk links to,
+1. Drops from its own environment what would point git at another repository (`GIT_DIR` and its kind), every
+   relative `PATH` entry, which would find `git` or `srt` in the checkout, and `BASH_ENV` and `ENV`, which the shell
+   `srt` starts would source. The command inherits the same.
+2. Finds the worktrees the run works in, for a worker or setup: the cwd, or each worktree a joint run's desk links to,
    and each one's own and shared git directories. A chore has none.
-2. Fills the template's placeholders with those paths and writes the policy to a private directory of its own, with
+3. Fills the template's placeholders with those paths and writes the policy to a private directory of its own, with
    the run's temp directory beside it. Whatever the template says, the policy denies reading the directory that holds
-   every run's, so no run reads another's temp directory.
-3. Drops `BASH_ENV` and `ENV`, which the shell `srt` starts would source, and points git at the run's object directory,
-   `CANOPY_GIT_OBJECTS`, with each worktree's shared objects as alternates.
-4. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
+   every run's, so no run reads another's temp directory, and the workspace's `.canopy/` when the run's directories
+   name it, in case the workspace is outside the HOME the template denies.
+4. Points git at the run's object directory, `CANOPY_GIT_OBJECTS`, with each worktree's shared objects as alternates.
+5. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
 
 A placeholder is a whole string in one of the template's lists, and expands to zero or more paths:
 
@@ -64,12 +67,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, MutableMapping
 
 ROLES = ("worker", "setup", "chore")
 OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
 # What canopy leaves in a joint run's desk (DESIGN §18); every other entry there links to a worktree.
 DESK_MARKER = ".canopy-desk"
+# The workspace's state directory, which holds the run directories canopy passes (D016).
+STATE_DIR = ".canopy"
 PLACEHOLDER = re.compile(r"@[A-Z_]+@")
 # The git the wrapper runs reads a slot a worker had, on the host: nothing from it may run (HOST_ISOLATION §5 item 1).
 SAFE_GIT = (
@@ -88,6 +93,21 @@ SAFE_GIT = (
 UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
 SHELL_STARTUP = ("BASH_ENV", "ENV")
+# Name a repository other than the one git finds from the cwd, for the wrapper's git and the command's alike.
+GIT_LOCATION = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_GRAFT_FILE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_NAMESPACE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+    "GIT_WORK_TREE",
+)
 # Where srt puts the sandbox's TMPDIR. Unset, it is /tmp/claude, which every sandboxed run shares.
 SRT_TMPDIR = "CLAUDE_CODE_TMPDIR"
 
@@ -110,6 +130,7 @@ def main(argv: list[str]) -> int:
     Returns:
         `srt`'s exit status, or 2 when the command could not be sandboxed and did not run.
     """
+    scrub(os.environ)
     try:
         role, reads, command = parse(argv)
         objects = objects_dir(role)
@@ -124,7 +145,7 @@ def main(argv: list[str]) -> int:
         tmp = run_dir / "tmp"
         tmp.mkdir(mode=0o700)
         policy = fill(template, placeholders(cwd, trees, objects, tmp, reads))
-        check(policy, run_dir.parent)
+        check(policy, [run_dir.parent, *state_dirs(objects, cwd)])
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
         return run_srt(settings, command, environment(os.environ, trees, objects, tmp))
@@ -132,7 +153,18 @@ def main(argv: list[str]) -> int:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
         return 2
     finally:
-        shutil.rmtree(run_dir, ignore_errors=True)
+        remove(run_dir)
+
+
+def scrub(env: MutableMapping[str, str]) -> None:
+    """Drop what would point git at another repository, and every relative `PATH` entry, from `env`.
+
+    canopy starts the wrapper in a checkout, so a relative entry such as `.` would find a `git` or `srt` the branch
+    committed, and run it on the host.
+    """
+    for name in (*GIT_LOCATION, *SHELL_STARTUP):
+        env.pop(name, None)
+    env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if Path(p).is_absolute())
 
 
 def parse(argv: list[str]) -> tuple[str, list[Path], list[str]]:
@@ -169,13 +201,25 @@ def worktrees(cwd: Path) -> list[Worktree]:
     Raises:
         SandboxError: a desk links to no worktree, or a place is not a linked worktree.
     """
-    if (cwd / DESK_MARKER).is_file():
+    if desk(cwd):
         places = sorted(p for p in cwd.iterdir() if p.is_symlink() and p.is_dir())
         if not places:
             raise SandboxError(f"the desk {cwd} links to no worktree")
     else:
         places = [cwd]
     return [worktree(place) for place in places]
+
+
+def desk(cwd: Path) -> bool:
+    """Whether `cwd` is a desk canopy made: its marker, and no `.git`, which every slot has and git never checks out.
+
+    A branch can commit a marker and links to other slots, so a marker in a slot must not make it a desk.
+
+    Returns:
+        True for a desk.
+    """
+    marker = cwd / DESK_MARKER
+    return marker.is_file() and not marker.is_symlink() and not os.path.lexists(cwd / ".git")
 
 
 def objects_dir(role: str) -> Path | None:
@@ -239,9 +283,11 @@ def make_run_dir() -> Path:
         raise SandboxError(f"{root} is not a directory private to this user; remove it")
     for entry in root.iterdir():
         if entry.is_dir() and not entry.is_symlink() and not alive(entry / "pid"):
-            shutil.rmtree(entry, ignore_errors=True)
+            remove(entry)
     run_dir = Path(tempfile.mkdtemp(prefix="run.", dir=root))
-    (run_dir / "pid").write_text(f"{os.getpid()}\n", encoding="utf-8")
+    # Whole or not there, never empty: a run sweeping at the same moment reads a missing file as a run starting.
+    (run_dir / "pid.new").write_text(f"{os.getpid()}\n", encoding="utf-8")
+    (run_dir / "pid.new").replace(run_dir / "pid")
     return run_dir
 
 
@@ -311,11 +357,12 @@ def fill(node: object, values: dict[str, list[str]]) -> object:
     return node
 
 
-def check(policy: object, runs: Path) -> None:
-    """Refuse a policy `srt` would run without a sandbox, or with the network open, and deny reading `runs`.
+def check(policy: object, denied: list[Path]) -> None:
+    """Refuse a policy `srt` would run without a sandbox, or with the network open, and deny reading `denied`.
 
-    `runs` holds every run's directory. The system temp directory is outside HOME, so without this one run could read
-    another's temp directory, a private ticket's included; the run's own is re-allowed as `@TMPDIR@`.
+    `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
+    run could read another's temp directory, a private ticket's included. It holds the workspace's `.canopy/` too, when
+    known, for a workspace outside HOME. The run's own directories in them are re-allowed by the template.
 
     Raises:
         SandboxError: it denies no reads, or has no network allowlist.
@@ -330,11 +377,23 @@ def check(policy: object, runs: Path) -> None:
         raise SandboxError("the policy template's filesystem.denyRead is not a list")
     if not isinstance(network, dict) or not isinstance(network.get("allowedDomains"), list):
         raise SandboxError("the policy template has no network.allowedDomains list")
-    deny.append(str(runs))
+    deny.extend(str(p) for p in denied if str(p) not in deny)
+
+
+def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:
+    """Find the workspace's `.canopy/` from the run's object directory, or from a chore's default cwd in it.
+
+    Returns:
+        The state directory, or nothing when neither names one, as for a chore with a `cwd` of its own.
+    """
+    for place in (objects, cwd):
+        if place is not None and place.parent.name in {"runs", "chores"} and place.parent.parent.name == STATE_DIR:
+            return [place.parent.parent]
+    return []
 
 
 def environment(current: Mapping[str, str], trees: list[Worktree], objects: Path | None, tmp: Path) -> dict[str, str]:
-    """Return the command's environment: the wrapper's, less what a shell would source, plus the run's directories.
+    """Return the command's environment: the wrapper's, scrubbed at start, plus the run's directories.
 
     Returns:
         The environment to run `srt` with.
@@ -342,7 +401,7 @@ def environment(current: Mapping[str, str], trees: list[Worktree], objects: Path
     Raises:
         SandboxError: a shared object directory has a name git's list of alternates cannot hold.
     """
-    env = {k: v for k, v in current.items() if k not in SHELL_STARTUP}
+    env = dict(current)
     env[SRT_TMPDIR] = str(tmp)
     env["TMPDIR"] = str(tmp)
     if objects is not None:
@@ -391,6 +450,21 @@ def worktree(place: Path) -> Worktree:
     if own == shared or not (top / ".git").is_file():
         raise SandboxError(f"{top} is not a linked worktree, so a sandboxed run cannot keep its HEAD and index apart")
     return Worktree(top, own, shared)
+
+
+def remove(path: Path) -> None:
+    """Delete a run's directory, after giving back the permissions its command may have taken from a directory in it.
+
+    Every process of the run has ended by now, and nothing here follows a link.
+    """
+    for root, dirs, _ in os.walk(path):
+        for name in dirs:
+            child = Path(root) / name
+            if not child.is_symlink():
+                child.chmod(0o700)
+    shutil.rmtree(path, ignore_errors=True)
+    if os.path.lexists(path):
+        print(f"canopy-sandbox: {path} could not be removed; remove it by hand", file=sys.stderr)
 
 
 def alive(pid_file: Path) -> bool:

@@ -141,6 +141,72 @@ def test_a_joint_runs_desk_names_every_worktree_it_links_to(sandbox: Sandbox, tm
     assert call["env"]["GIT_ALTERNATE_OBJECT_DIRECTORIES"] == alternates
 
 
+def test_a_slot_that_commits_a_desk_marker_is_still_a_slot(sandbox: Sandbox, tmp_path: Path) -> None:
+    """A branch can commit the marker and a link to another slot; only a desk canopy made, with no `.git`, is a desk."""
+    primary, slot = linked_worktree(tmp_path, "repo")
+    other = tmp_path / "repo" / "other"
+    git("worktree", "add", "--quiet", "--detach", str(other), cwd=primary)
+    (slot / ".canopy-desk").write_text("planted\n")
+    (slot / "other").symlink_to(other, target_is_directory=True)
+
+    done = wrap("worker", "true", cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path))})
+
+    assert done.ok, done.stderr
+    allow_write = sandbox.only_call()["settings"]["filesystem"]["allowWrite"]
+    assert str(slot) in allow_write
+    assert str(other.resolve()) not in allow_write
+
+
+def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sandbox, tmp_path: Path) -> None:
+    """`GIT_DIR` naming another slot, and a relative PATH entry that finds an `srt` the checkout committed."""
+    primary, slot = linked_worktree(tmp_path, "repo")
+    other = tmp_path / "repo" / "other"
+    git("worktree", "add", "--quiet", "--detach", str(other), cwd=primary)
+    planted = slot / "bin" / "srt"
+    planted.parent.mkdir()
+    planted.write_text(f"#!/bin/sh\ntouch {tmp_path / 'planted-ran'}\n")
+    planted.chmod(0o755)
+    env = {
+        "CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)),
+        "GIT_DIR": str(primary / ".git" / "worktrees" / "other"),
+        "PATH": f"bin{os.pathsep}{os.environ['PATH']}",
+    }
+
+    done = wrap("worker", "true", cwd=slot, env=env)
+
+    assert done.ok, done.stderr
+    assert not (tmp_path / "planted-ran").exists()
+    call = sandbox.only_call()
+    assert "GIT_DIR" not in call["env"]
+    assert call["settings"]["filesystem"]["allowWrite"][0] == str(slot)
+    assert str(other.resolve()) not in call["settings"]["filesystem"]["allowWrite"]
+
+
+@pytest.mark.parametrize("role", ["worker", "chore"])
+def test_the_workspaces_state_is_denied_even_outside_home(sandbox: Sandbox, tmp_path: Path, role: str) -> None:
+    """The templates deny HOME; a workspace elsewhere would leave `.canopy/` readable without this."""
+    state = tmp_path / "elsewhere" / ".canopy"
+    objects = state / "runs" / "7.objects"
+    objects.mkdir(parents=True)
+    _, slot = linked_worktree(tmp_path, "repo")
+    cwd = slot if role == "worker" else state / "chores" / "build-health"
+    cwd.mkdir(parents=True, exist_ok=True)
+
+    done = wrap(role, "true", cwd=cwd, env={"CANOPY_GIT_OBJECTS": str(objects)} if role == "worker" else None)
+
+    assert done.ok, done.stderr
+    assert str(state) in sandbox.only_call()["settings"]["filesystem"]["denyRead"]
+
+
+def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandbox, tmp_path: Path) -> None:
+    lock = 'mkdir -p "$TMPDIR/a/b" && chmod 000 "$TMPDIR/a" "$TMPDIR"'
+
+    done = wrap("chore", "sh", "-c", lock, cwd=tmp_path)
+
+    assert done.ok, done.stderr
+    assert list(sandbox.runs_root().iterdir()) == []
+
+
 def test_setup_gets_its_own_policy(sandbox: Sandbox, tmp_path: Path) -> None:
     _, slot = linked_worktree(tmp_path, "repo")
     (sandbox.templates / "setup.json").write_text(

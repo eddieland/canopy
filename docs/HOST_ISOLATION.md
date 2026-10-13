@@ -85,25 +85,32 @@ worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_C
 `canopy-sandbox` is a short script the operator installs; canopy ships it as an example, `examples/sandbox/`, not as
 harness code. Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
 `~/.config/canopy/sandbox/<role>.json`; `--read` names a path the command may read, which is how canopy's agent
-definitions, under the workspace's `.canopy/`, are re-allowed. It runs in the worker's cwd, which `_run` sets to the
-slot or the desk (DESIGN §8, §18), and:
+definitions, `<state_dir>/runtime/<digest>/`, are re-allowed: pass it `{definitions_dir}`. Name the wrapper by its
+absolute path when `PATH` has a relative entry: canopy runs the template from the slot, where `.` finds what the
+branch committed. It runs in the worker's cwd, which `_run` sets to the slot or the desk (DESIGN §8, §18), and:
 
-1. Resolves the paths the policy needs: the cwd, each worktree a desk links to, and each worktree's own and common git
-   directories (`git rev-parse --git-dir --git-common-dir`). A worker or setup outside a linked worktree is refused:
-   a clone's HEAD and index live in the directory every slot shares.
-2. Writes a per-run policy from the template, filling in those paths, into a directory of its own that is private to
-   the operator, with the run's temp directory beside it, and adds the directory holding every run's to `denyRead`,
-   since the system temp directory is outside `$HOME`. It refuses a template with no `denyRead` or no network
+1. Drops from its environment, and so from the command's, what would point git at another repository (`GIT_DIR` and its
+   kind), every relative `PATH` entry, so that neither its own `git` and `srt` nor git in the run is found through the
+   checkout, and what the inner `bash -c` would act on, `BASH_ENV` and `ENV`.
+2. Resolves the paths the policy needs: the cwd, each worktree a desk links to, and each worktree's own and common git
+   directories (`git rev-parse --git-dir --git-common-dir`). A worker or setup outside a linked worktree is refused: a
+   clone's HEAD and index live in the directory every slot shares. A desk is a directory with canopy's marker and no
+   `.git`: a branch can commit the marker, and links to other slots beside it, but never a `.git`.
+3. Writes a per-run policy from the template, filling in those paths, into a directory of its own that is private to the
+   operator, with the run's temp directory beside it. It adds to `denyRead` the directory holding every run's, since the
+   system temp directory is outside `$HOME`, and the workspace's `.canopy/` when the run's object directory or a chore's
+   default cwd names it, for a workspace outside `$HOME`. It refuses a template with no `denyRead` or no network
    allowlist: `srt` runs a command whose policy restricts nothing outside any sandbox (§7).
-3. Drops from the environment what the inner `bash -c` would act on, `BASH_ENV` and `ENV`. `srt` passes the caller's
-   environment through and adds its own: the proxy variables, `GIT_SSH_COMMAND`, `GIT_CONFIG_PARAMETERS`, and
-   `TMPDIR`, which it takes from `CLAUDE_CODE_TMPDIR`, or else `/tmp/claude`, shared by every sandboxed process, so the
-   wrapper sets that to the run's temp directory. It turns `CANOPY_GIT_OBJECTS` into git's variables (§4.2).
-4. Runs the sandbox with that policy and the rest of its arguments unchanged, after a `--`:
-   `srt --settings <policy> -- "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms
-   too) anywhere in its arguments, and `-c` takes its value as a shell command, unquoted. It waits rather than `exec`,
-   so that it can remove its directory when `srt` exits; the directory of a run killed with SIGKILL, which is how
-   canopy ends a timed-out run (§5 item 4), is removed by the next run, once the process that made it is gone.
+4. Sets the command's `TMPDIR`. `srt` passes the caller's environment through and adds its own: the proxy variables,
+   `GIT_SSH_COMMAND`, `GIT_CONFIG_PARAMETERS`, and `TMPDIR`, which it takes from `CLAUDE_CODE_TMPDIR`, or else
+   `/tmp/claude`, shared by every sandboxed process, so the wrapper sets that to the run's temp directory. It turns
+   `CANOPY_GIT_OBJECTS` into git's variables (§4.2).
+5. Runs the sandbox with that policy and the rest of its arguments unchanged, after a `--`: `srt --settings <policy> --
+   "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms too) anywhere in its
+   arguments, and `-c` takes its value as a shell command, unquoted. It waits rather than `exec`, so that it can remove
+   its directory when `srt` exits, after giving back any permission the command took from a directory in it; the
+   directory of a run killed with SIGKILL, which is how canopy ends a timed-out run (§5 item 4), is removed by the next
+   run, once the process that made it is gone.
 
 The sandbox recommended here is Anthropic's `sandbox-runtime` (`srt`, Apache-2.0). It wraps any command using
 bubblewrap on Linux and `sandbox-exec` on macOS, and routes all network traffic through a local proxy that enforces a
@@ -118,8 +125,9 @@ denies writes to `~/.config/canopy` (§4.2), a worker cannot remove it either.
 Reads are denied under the home directory and re-allowed where needed. Writes are denied everywhere and allowed where
 needed. A deny list of known secret paths was considered and rejected: it always misses one. `srt`'s policy takes this
 shape: its `allowRead` outranks `denyRead`, so a denied `$HOME` can re-allow directories under it (a denied file is
-re-allowed only by naming that file). The example templates deny `$HOME`, so a workspace outside it must be added to
-`denyRead` too, or its `.canopy/` is readable.
+re-allowed only by naming that file). The example templates deny `$HOME`. For a workspace outside it, the wrapper
+denies `.canopy/` itself where it can find it (§4.1); a chore with a `cwd` of its own names no `.canopy/`, so add the
+workspace to its template's `denyRead`.
 
 | Path | Read | Write | Why |
 | --- | --- | --- | --- |
