@@ -142,7 +142,7 @@ canopy (harness, Python)
   chores/          the operator's recurring chores (§19); what the web UI reads of them is in core (chore_*.py)
     start.py       canopy chore run: guards, the prompt with its `## Run` section, spawn detached _chore
     execute.py     canopy _chore: the chore's command in its cwd, result parsing, closing its row
-    trial.py       canopy chore try: one foreground run outside any tick that records nothing
+    trial.py       canopy chore try: a run outside any tick, in the foreground; recorded unless --no-record
     reconcile.py   chore runs whose _chore is gone marked crashed
 
   notify/          notification sinks (§20)

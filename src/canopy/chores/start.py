@@ -185,7 +185,7 @@ def render(
 ) -> str:
     """Return the chore's prompt: the operator's file, then a `## Run` section the harness writes (DESIGN §19).
 
-    `run_id` is None for `canopy chore try`, which has no run row. `notes` are the operator's, from
+    `run_id` is None for a `canopy chore try` that records nothing, so has no run row. `notes` are the operator's, from
     `conversation.chore_notes`.
     """
     previous = state.latest_ended

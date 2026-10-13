@@ -173,8 +173,10 @@ timeout_minutes = 15
 ### The loop for getting it right
 
 1. Write the prompt and the `[chores.<name>]` table.
-2. Run `canopy chore try <name>` until the findings are the ones you want. It records nothing, ignores
-   `every_minutes`, and works with `max_chores = 0`.
+2. Run `canopy chore try <name>` until the findings are the ones you want. It ignores `every_minutes` and works with
+   `max_chores = 0`. Each try is a real run: its findings replace the chore's open ones, and
+   `canopy show chore:<name>` lists it. Add `--no-record` to record nothing, so a draft cannot clear findings you
+   still want.
 3. Set `max_chores` to at least 1 and let the loop run it.
 4. Answer findings with `canopy reply chore:<name> '<note>'`, for example "leave out review/acme/api/812 until
    2026-10-20, it is blocked on legal". Notes reach every later run; you do not edit the prompt.
