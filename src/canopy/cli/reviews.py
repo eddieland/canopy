@@ -13,7 +13,7 @@ from canopy.cli.params import REPO, TICKET_KEY, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
-from canopy.reviews import execute, findings, start, view
+from canopy.reviews import execute, findings, grants, start, view
 
 
 @click.group("review")
@@ -50,7 +50,7 @@ def cmd_review_run(
         if r.guard == "review_limit":
             # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
             action = f"{attention.ACTION_PREFIX}review_limit"
-            db.record_decision(ctx.conn, tick_id, ticket, action, r.reason, pr=pr_key)
+            db.record_decision(ctx.conn, tick_id, ticket, action, f"{r.reason}; {grants.hint(pr_key)}", pr=pr_key)
         log.info("review refused", extra={"pr": pr_key, "guard": r.guard, "reason": r.reason})
         raise CliError(f"review refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     on_context = f"; context={context}" if context else ""

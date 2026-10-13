@@ -339,6 +339,21 @@ def test_a_merge_conflict_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
         assert ticket["phase"] is None
 
 
+def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    """Feedback on a PR from an untrusted reviewer is `untrusted_review`, the unit's phase like `changes_requested`."""
+    conn = ws.journal()
+    with in_tick(conn):
+        assert main(["ticket", "set", "PROJ-1", "--phase", "untrusted_review"]) == 2
+        err = capsys.readouterr().err
+        assert "the untrusted_review phase belongs to one unit: name its repository with --repo" in err
+        assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review"]) == 0
+    [unit] = db.units(conn, "PROJ-1")
+    assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")
+    ticket = db.get_ticket(conn, "PROJ-1")
+    assert ticket is not None
+    assert ticket["phase"] is None
+
+
 def test_a_joint_prompt_override_without_the_repositories_is_refused(
     ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
 ) -> None:

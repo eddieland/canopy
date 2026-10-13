@@ -1,8 +1,15 @@
+import re
+
 import pytest
 
-from canopy.core import prompts
+from canopy.cli.journal import PHASES
+from canopy.core import db, prompts
 from canopy.core.config import load
+from canopy.infra import resources
 from tests.conftest import CanopyEnv
+
+# A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
+_PHASE_ROW = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
 VALUES = {
     "KEY": "PROJ-1",
@@ -207,6 +214,43 @@ def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyE
     assert text == "Fix CI on PROJ-1 for `agent-ready-alice`\n"
 
 
+def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
+    env.write_user(
+        env.user_file.read_text() + f'\n[trust]\ncommit_trailer_name = "{name}"\ncommit_trailer_email = "{email}"\n'
+    )
+
+
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_shipped_prompts_that_commit_name_the_configured_trailer(
+    canopy_env: CanopyEnv, kind: str, *, private: bool
+) -> None:
+    values = {**VALUES, "CONVERSATION": "None."}
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in text
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "`Co-authored-by: Acme Agent <agent@acme.test>`" in text
+    assert "canopy.invalid" not in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_a_custom_trailer_an_override_must_name_it(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override that still spells out the default trailer would credit commits to it: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_TRAILER\}\}"):
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+
+
+def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+
+
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
     text = prompts.render_overseer(load(canopy_env.root, canopy_env.user_file), "{}")
     assert "## Workers' comments" in text
@@ -228,3 +272,15 @@ def test_shipped_resume_prompts_gate_untrusted_reviewers(canopy_env: CanopyEnv) 
     assert "## Messages from the operator\n\nNo messages from the operator.\n" in public
     private = prompts.render_worker(cfg, "resume", {**VALUES, "CONVERSATION": "No messages yet."}, private=True)
     assert "Trusted reviewers: `octocat`." in private
+
+
+def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
+    """The overseer records the phases its table names, so `ticket set --phase` must take each one."""
+    text = (resources.prompts_dir() / prompts.OVERSEER).read_text()
+    table = text.split("## Phase table", 1)[1].split("\n## ", 1)[0]
+    phases = _PHASE_ROW.findall(table)
+    assert phases
+    assert sorted(phases) == sorted(PHASES)
+    # The table says the phases from `pushed_no_pr` to `merged` are a unit's; the CLI then requires --repo for them.
+    unit = phases[phases.index("pushed_no_pr") : phases.index("merged") + 1]
+    assert set(unit) == db.UNIT_PHASES
