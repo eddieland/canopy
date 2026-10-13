@@ -12,6 +12,8 @@ export const ROUTES = [
     'worktrees',
     'tickets',
     'tickets/ABC-102',
+    'pull-requests',
+    `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',
     'reviews/4',
     'chores',

@@ -732,6 +732,9 @@ findings anchored on its diff and the diff itself (§22); both read only. The Re
 a review's page with each finding's card under the line it names, under its file's header when the diff does not
 show the line, or in a panel of its own; nothing on them writes yet (Open, below).
 
+A review is also listed on its PR's page, in the web UI's pull requests pages (§22), which open it here; a review's
+page links back to its PR's.
+
 - **Taking it.** After the checkout, `_review` fetches the pool's base branch, the slot's lease's `base_branch`, which
   `review_runs.base_branch` records, as `refs/heads/<base>`, and writes `git diff` from the commit's merge base with it
   to the commit beside the run's log, `<id>.diff`, readable only by the operator. Diff drivers and textconv are off

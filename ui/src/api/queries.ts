@@ -34,6 +34,9 @@ export const keys = {
     // The reviews list and each review's page share a prefix, so one invalidation marks both stale.
     reviews: ['reviews'] as const,
     review: (id: number) => ['reviews', id] as const,
+    // The PRs list and each PR's page share a prefix, so one invalidation marks both stale.
+    pullRequests: ['pull-requests'] as const,
+    pullRequest: (url: string) => ['pull-requests', url] as const,
     loop: ['loop'] as const,
 }
 
@@ -241,6 +244,22 @@ export const reviewsQuery = queryOptions({
     queryKey: keys.reviews,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/reviews', { signal })),
 })
+
+/** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */
+export const pullRequestsQuery = queryOptions({
+    queryKey: keys.pullRequests,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/pull-requests', { signal })),
+})
+
+/** One PR: the runs that pushed to it, its reviews, and the decisions naming it. Stale as the PRs list is. */
+export function pullRequestQuery(url: string) {
+    return queryOptions({
+        queryKey: keys.pullRequest(url),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/pull-request', { params: { query: { url } }, signal })),
+        placeholderData: undefined,
+    })
+}
 
 /** One review run in full: its findings, and the diff they sit on, read back from beside its log on every fetch. */
 export function reviewQuery(id: number) {
