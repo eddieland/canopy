@@ -4,11 +4,13 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ticksQuery } from '@/api/queries'
 import type { Tick } from '@/api/types'
 import { Age } from '@/components/age'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { TICK_TONE } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +21,7 @@ export const Route = createFileRoute('/ticks/')({
 
 function TicksPage() {
     const { data } = useQuery(ticksQuery)
+    const order = useListOrder('ticks')
     return (
         <>
             <PageHeader label="Overseer" title="Ticks">
@@ -27,7 +30,10 @@ function TicksPage() {
             </PageHeader>
             <Panel>
                 <PanelHeader label="Ticks">
-                    <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                    <span className="flex items-center gap-2">
+                        {data !== undefined && data.length > 1 && <OrderToggle list="ticks" />}
+                        <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                    </span>
                 </PanelHeader>
                 {data === undefined ? (
                     <div className="flex min-h-72 flex-col gap-2 p-3">
@@ -38,7 +44,7 @@ function TicksPage() {
                     <Placeholder>no ticks yet</Placeholder>
                 ) : (
                     <ul className="stagger divide-y" data-testid="ticks">
-                        {data.map((tick) => (
+                        {ordered('ticks', order, data).map((tick) => (
                             <Row key={tick.id} tick={tick} />
                         ))}
                     </ul>

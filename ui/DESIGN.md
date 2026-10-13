@@ -175,14 +175,21 @@ Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent m
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
-`canopy-ticker` (`src/lib/ticker-settings.ts`), and the key that sends a reply under `canopy-send-key`
-(`src/lib/send-key.ts`), both synced across tabs.
+`canopy-ticker` (`src/lib/ticker-settings.ts`), the key that sends a reply under `canopy-send-key`
+(`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
+tabs.
 
 ## Patterns
 
 - **Lists are rows in a panel**, divided by hairlines: a fixed-width key column (a ticket key, a state), then the
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
+- **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a
+  conversation, a chore's notes, a transcript, the runs page and a ticket's or chore's recent runs, a ticket's or
+  tick's decisions, the ticks, and the tickets. The toggle is a ghost button before the count, an up-down arrow and
+  the order it is in, in words (`newest first`); a click shows the other. Each list starts in the order the server
+  sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on a
+  ticket's page is flipped in the inbox too. It shows only when the list has two items or more.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
@@ -221,10 +228,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
-  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it, on the
-  worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`, `working now` in
-  `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the runs on the
-  stream, so it rises in when the run starts and leaves when it ends.
+  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
+  it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
+  `working now` in `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the
+  runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
