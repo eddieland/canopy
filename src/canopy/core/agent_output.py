@@ -118,9 +118,7 @@ def read(stdout: str) -> AgentOutput:
         if event is None:
             continue
         events += 1
-        found = event["sessionID"]
-        if session is None and isinstance(found, str) and SESSION_ID_RE.fullmatch(found):
-            session = found
+        session = session or session_of(event)
         try:
             if event["type"] == "text":
                 texts.append(_Text.model_validate(event.get("part")).text)
@@ -133,6 +131,12 @@ def read(stdout: str) -> AgentOutput:
     if not events:
         return AgentOutput(stdout)
     return AgentOutput("\n".join(texts), session, _total(steps) if complete else None)
+
+
+def session_of(event: dict[str, object]) -> str | None:
+    """Return the session `event` names, or None when its `sessionID` is not one canopy prints (`SESSION_ID_RE`)."""
+    found = event["sessionID"]
+    return found if isinstance(found, str) and SESSION_ID_RE.fullmatch(found) else None
 
 
 def parse_event(line: str) -> dict[str, object] | None:
