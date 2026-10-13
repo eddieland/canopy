@@ -128,8 +128,10 @@ Rules:
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
-- Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
-  The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
+- Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`,
+  on `surface-raised` at half strength with its label in `foreground` at weight 500, so it stands apart from the rows
+  under it; half, so a ghost button's hover in it still shows. The page header's trail starts in its section's color;
+  a panel's label never takes one.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
   query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
   a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
