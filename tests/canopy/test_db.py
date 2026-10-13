@@ -15,7 +15,7 @@ def fresh(tmp_path: Path) -> sqlite3.Connection:
 
 def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     conn = fresh(tmp_path)
-    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    assert db.migrate(conn, resources.migrations_dir()) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")]
     assert rows == [
@@ -28,6 +28,7 @@ def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
         (7, "tick_messages"),
         (8, "chore_cost"),
         (9, "tick_read_at"),
+        (10, "ticket_title"),
     ]
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -162,7 +163,7 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     conn.execute(
         "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path) VALUES (1, 'nightly', 'x', 'ok', 'l')"
     )
-    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4, 5, 6, 7, 8, 9]
+    assert db.migrate(conn, resources.migrations_dir()) == [2, 3, 4, 5, 6, 7, 8, 9, 10]
     chore_run = db.get_chore_run(conn, 1)
     assert chore_run is not None
     assert (chore_run["session_id"], chore_run["cost_usd"], chore_run["tokens_input"]) == (None, None, None)

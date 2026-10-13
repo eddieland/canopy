@@ -154,7 +154,8 @@ def _print_started(ctx: Context) -> None:
         since = r["started_at"] if r["status"] == "started" else r["stopped_at"]
         waiting = conversation.latest_question(ctx.conn, key) if r["status"] == "started" else None
         note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
-        click.echo(f"  {key}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+        title = ticket["title"] if ticket is not None else None
+        click.echo(f"  {named(key, title)}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
 
 
 def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
@@ -173,7 +174,9 @@ def _print_workers(ctx: Context) -> None:
     for r in running:
         # A joint run holds a slot in each of its repositories.
         where = ", ".join(f"{s['repo']} {s['slot_path']}" for s in slots[int(r["id"])])
-        click.echo(f"  {r['ticket_key']}  {r['kind']}  {attention.age(r['started_at'])}  {where}")
+        click.echo(
+            f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {attention.age(r['started_at'])}  {where}"
+        )
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_review_runs(ctx.conn):
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
@@ -189,7 +192,7 @@ def _print_recent_runs(ctx: Context) -> None:
         result = result_of(r)
         ended = f"{attention.age(str(r['ended_at']))} ago"
         prs = "".join(f"  {pr}" for pr in prs_of(result))
-        click.echo(f"  {r['ticket_key']}  {r['kind']}  {r['status']}  {ended}{prs}")
+        click.echo(f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {r['status']}  {ended}{prs}")
         said = one_line(str(result.get("harness") or result.get("summary") or ""))
         if said:
             click.echo(f"    {said}")
@@ -207,6 +210,11 @@ def result_of(run: sqlite3.Row) -> dict[str, object]:
 def prs_of(result: dict[str, object]) -> list[str]:
     """The PRs a run's result named, each a plain https:// URL; anything else is not printed."""
     return contract.stored_prs(result)
+
+
+def named(key: object, title: object) -> str:
+    """A ticket as a line names it: `PROJ-1: <its title>`, or its key alone before the overseer names it."""
+    return f"{key}: {one_line(str(title))}" if title else str(key)
 
 
 def one_line(text: str) -> str:

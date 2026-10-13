@@ -249,18 +249,19 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         ],
     )
     tickets = (
-        # key, phase, branch, last seen
-        ("ABC-099", "in_review", "agent/ABC-099-search", -59),
-        ("ABC-100", "ci_failing", "agent/ABC-100-flaky-test", -59),
-        ("ABC-101", "implementing", "agent/ABC-101-login", 10),
-        ("ABC-102", "needs_human", "agent/ABC-102-export", -4),
-        ("ABC-103", "in_review", "agent/ABC-103-billing-v2", -80),
-        ("ABC-104", "ci_failing", "agent/ABC-104-retry-queue", 5),
+        # key, title (None: not named yet), phase, branch, last seen
+        ("ABC-099", "Debounce search input", "in_review", "agent/ABC-099-search", -59),
+        ("ABC-100", "Fix the flaky checkout test", "ci_failing", "agent/ABC-100-flaky-test", -59),
+        ("ABC-101", "Sign in with SSO", "implementing", "agent/ABC-101-login", 10),
+        ("ABC-102", "Export reports as CSV", "needs_human", "agent/ABC-102-export", -4),
+        ("ABC-103", "Move billing to the v2 API", "in_review", "agent/ABC-103-billing-v2", -80),
+        ("ABC-104", None, "ci_failing", "agent/ABC-104-retry-queue", 5),
     )
-    for key, phase, branch, seen in tickets:
+    for key, title, phase, branch, seen in tickets:
         conn.execute(
-            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase, branch) VALUES (?, ?, ?, ?, ?, ?)",
-            (key, repo, at(-300), at(seen), phase, branch),
+            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, phase, branch) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (key, repo, at(-300), at(seen), title, phase, branch),
         )
     conn.execute(
         "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",

@@ -194,6 +194,7 @@ def run(row: sqlite3.Row, worktrees: list[str] | None = None) -> Run:
     return Run(
         id=int(row["id"]),
         ticket_key=str(row["ticket_key"]),
+        ticket_title=_title(row["ticket_title"]),
         kind=str(row["kind"]),
         status=status,
         state=_STATES.get(status, "failed"),
@@ -226,6 +227,11 @@ def said(row: sqlite3.Row) -> str | None:
     return text[:SUMMARY_LENGTH] or None
 
 
+def _title(value: object) -> str | None:
+    """A ticket's title on one line. `canopy ticket set` stored it so; this keeps a page from relying on that."""
+    return " ".join(conversation.printable(str(value)).split()) or None if value else None
+
+
 def tickets(ctx: Context) -> list[TicketSummary]:
     """The journal's tickets, most recent activity first."""
     return [summary(ctx.conn, row) for row in db.recent_tickets(ctx.conn, TICKETS)]
@@ -242,6 +248,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     running = db.running_run_of(conn, key)
     return TicketSummary(
         key=key,
+        title=_title(row["title"]),
         private=record is not None,
         start=status,
         phase=str(row["phase"]) if row["phase"] else None,

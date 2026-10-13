@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.loop import chore_line, one_line, phase_of, prs_of, result_of, spent
+from canopy.cli.loop import chore_line, named, one_line, phase_of, prs_of, result_of, spent
 from canopy.core import chore_view, conversation, db
 from canopy.infra import logs
 from canopy.loop import attention
@@ -203,6 +203,8 @@ def _show_ticket(ctx: Context, key: str) -> None:
         since = record["started_at"] if record["status"] == "started" else record["stopped_at"]
         how = f"private, {record['status']} {attention.age(str(since))} ago"
     click.echo(f"{key}: {how}")
+    if ticket is not None and ticket["title"]:
+        click.echo(f"  title {one_line(str(ticket['title']))}")
     if ticket is not None:
         done = ", done" if ticket["done"] else ""
         click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket['branch'] or 'none yet'}")
@@ -268,7 +270,9 @@ def _show_run(ctx: Context, run_id: int) -> None:
     if run is None:
         raise CliError(f"no run {run_id}")
     private = ", private" if run["private"] else ""
-    click.echo(f"run:{run_id}: {run['kind']} of {run['ticket_key']}{private}, {run['status']}")
+    click.echo(
+        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}"
+    )
     click.echo(f"  started {run['started_at']}" + (f", ended {run['ended_at']}" if run["ended_at"] else ""))
     if run["branch"]:
         click.echo(f"  branch {run['branch']}")

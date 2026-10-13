@@ -19,6 +19,8 @@ CURSOR_VALUE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,199}")
 # A review cursor is a time, the one form every kind of review feedback shares (DESIGN §7).
 REVIEW_CURSOR_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 MAX_TEXT = 2000
+# A ticket's title is a name, shown beside its key and in its runs' session titles (DESIGN §13).
+MAX_TITLE = 80
 MAX_PR_URL = 300
 
 
@@ -99,6 +101,19 @@ class TextType(click.ParamType[str, object]):
         if not text:
             self.fail("must not be empty", param, ctx)
         return truncate(text)
+
+
+class TitleType(click.ParamType[str, object]):
+    """A ticket's title: one line, control characters dropped, whitespace collapsed, non-empty, and cut."""
+
+    name = "TITLE"
+
+    @override
+    def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
+        title = " ".join("".join(c if c.isprintable() else " " for c in str(value)).split())
+        if not title:
+            self.fail("must not be empty", param, ctx)
+        return title if len(title) <= MAX_TITLE else title[: MAX_TITLE - 3] + "..."
 
 
 TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")

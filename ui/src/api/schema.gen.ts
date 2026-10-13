@@ -716,6 +716,8 @@ export type components = {
             summary: string | null;
             /** Ticket Key */
             ticket_key: string;
+            /** Ticket Title */
+            ticket_title: string | null;
             /** Tokens */
             tokens: number | null;
             /**
@@ -929,6 +931,8 @@ export type components = {
             /** Running Run */
             running_run: number | null;
             start: components["schemas"]["StartStatus"] | null;
+            /** Title */
+            title: string | null;
         };
         /**
          * TicketsUpdated

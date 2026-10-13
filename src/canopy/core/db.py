@@ -331,12 +331,15 @@ def set_ticket(
     phase: str | None = None,
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
+    title: str | None = None,
 ) -> None:
-    """Record a ticket's own phase, its comment cursor, or its done flag in one transaction."""
+    """Record a ticket's own phase, its comment cursor, its done flag, or its title in one transaction."""
     with transaction(conn):
         touch_ticket(conn, key, repo)
         if phase is not None:
             conn.execute("UPDATE tickets SET phase = ? WHERE key = ?", (phase, key))
+        if title is not None:
+            conn.execute("UPDATE tickets SET title = ? WHERE key = ?", (title, key))
         for name, value in (cursors or {}).items():
             # The column name comes from a fixed mapping, never from input.
             sql = f"UPDATE tickets SET {TICKET_CURSORS[name]} = ? WHERE key = ?"  # noqa: S608
@@ -406,10 +409,14 @@ def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 # Runs and decisions
 
+# A run with its ticket's title as `ticket_title`, for display (DESIGN §13). Every query a page or `canopy status` shows
+# runs from starts here.
+_RUNS = "SELECT r.*, t.title AS ticket_title FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
+
 
 def running_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Return runs with status `running`, oldest first."""
-    return conn.execute("SELECT * FROM runs WHERE status = 'running' ORDER BY started_at").fetchall()
+    return conn.execute(f"{_RUNS} WHERE r.status = 'running' ORDER BY r.started_at").fetchall()
 
 
 def insert_run(
@@ -485,7 +492,7 @@ def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int,
 
 def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     """Return the run with `run_id`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
+    row: sqlite3.Row | None = conn.execute(f"{_RUNS} WHERE r.id = ?", (run_id,)).fetchone()
     return row
 
 
@@ -606,7 +613,8 @@ def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     """Return the `limit` runs that ended most recently, newest first."""
     return conn.execute(
-        "SELECT * FROM runs WHERE status != 'running' ORDER BY ended_at DESC, id DESC LIMIT ?", (limit,)
+        f"{_RUNS} WHERE r.status != 'running' ORDER BY r.ended_at DESC, r.id DESC LIMIT ?",
+        (limit,),
     ).fetchall()
 
 
@@ -1027,7 +1035,10 @@ def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
 
 def runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
     """Return a ticket's latest `limit` runs, newest first."""
-    return conn.execute("SELECT * FROM runs WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)).fetchall()
+    return conn.execute(
+        f"{_RUNS} WHERE r.ticket_key = ? ORDER BY r.id DESC LIMIT ?",
+        (key, limit),
+    ).fetchall()
 
 
 def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:

@@ -89,6 +89,7 @@ def state_block(
         key = str(t["key"])
         summary: dict[str, object] = {
             "key": key,
+            "title": t["title"],
             "phase": t["phase"],
             "branch": t["branch"],
             # The mirror cursor is moved by `canopy mirror` itself, never by `--cursor` (DESIGN §22).

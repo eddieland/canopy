@@ -88,6 +88,8 @@ class Run(_Model):
 
     id: int
     ticket_key: str
+    # The ticket's title, as the overseer named it (DESIGN §13); None until it does.
+    ticket_title: str | None = None
     # implement | fix-ci | resume | split
     kind: str
     # The journal's status: running, done, blocked, failed, crashed, unpushed, unknown, timeout, stopped.
@@ -113,6 +115,8 @@ class TicketSummary(_Model):
     """A ticket as the tickets list shows it."""
 
     key: str
+    # A short name the overseer gave it from the ticket's own title (DESIGN §13); None until it does.
+    title: str | None = None
     # Started in canopy (DESIGN §22): its conversation never reaches the tracker.
     private: bool
     start: StartStatus | None = None

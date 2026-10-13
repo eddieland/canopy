@@ -470,7 +470,12 @@ Status: in progress. Taken in part on request (2026-10-07): each worker and spli
 `canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id.
 Waiting on the operator: a real run under the pinned OpenCode with the default `worker_cmd`, whose session id opens its
 transcript (`opencode export <id>`); an operator's user file from before needs `--format json` added to `worker_cmd`.
-Not started: whether `fix-ci` and `resume` continue a session, and workers against OpenCode's server.
+Not started: whether `fix-ci` and `resume` continue a session, and workers against OpenCode's server. Taken in part on
+request (2026-10-13): the overseer names each ticket (`canopy ticket set --title`), the name shows beside the key in
+`canopy status`, `canopy show`, and the web UI, and every default template passes it, or a tick's, chore's, or review's
+own, as the session title (`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event
+with OpenCode's own title, so canopy names sessions rather than reading them back. Next: workers renaming their ticket
+through their result line, once real runs show whether the overseer's names hold up.
 
 ## M16. Worktree setup for large monorepos
 

@@ -31,9 +31,11 @@ test('the nav moves between pages without reloading the shell', async ({ page })
 
     await nav.getByRole('link', { name: 'Tickets' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets')
+    // A ticket the overseer named shows its title beside its key (DESIGN §7).
+    await expect(page.getByTestId('ticket-ABC-102')).toContainText('Export reports as CSV')
     await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
     await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102: Export reports as CSV')
     await expect(nav.getByRole('link', { name: 'Tickets' })).toHaveAttribute('data-status', 'active')
 
     await nav.getByRole('link', { name: 'Chores' }).click()

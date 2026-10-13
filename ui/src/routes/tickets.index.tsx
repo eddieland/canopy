@@ -52,7 +52,10 @@ function TicketsPage() {
 function Row({ ticket }: { ticket: TicketSummary }) {
     return (
         <li className="flex items-center gap-3 px-3 py-2.5" data-testid={`ticket-${ticket.key}`}>
-            <TicketLink ticketKey={ticket.key} className="w-24 truncate" />
+            <TicketLink ticketKey={ticket.key} className="w-24 shrink-0 truncate" />
+            <span className="min-w-0 flex-1 truncate text-sm" title={ticket.title ?? undefined}>
+                {ticket.title}
+            </span>
             <span className="flex w-32">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
@@ -60,7 +63,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                 {phaseLabel(ticket)}
                 {ticket.done ? ', done' : ''}
             </span>
-            <span className="ml-auto flex items-center gap-4">
+            <span className="flex items-center gap-4">
                 {ticket.running_run !== null && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
                         <RunDot state="running" />

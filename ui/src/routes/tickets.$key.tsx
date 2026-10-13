@@ -59,7 +59,10 @@ function Ticket({ detail }: { detail: TicketDetail }) {
         : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
     return (
         <>
-            <PageHeader label={ticket.private ? 'Private ticket' : 'Public ticket'} title={ticket.key}>
+            <PageHeader
+                label={ticket.private ? 'Private ticket' : 'Public ticket'}
+                title={ticket.title === null ? ticket.key : `${ticket.key}: ${ticket.title}`}
+            >
                 {how}
             </PageHeader>
             {/* On a wide screen the conversation sits beside what the ticket is and did, as in the inbox. */}

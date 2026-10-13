@@ -134,7 +134,7 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, l
     if shadowing:
         raise SetupError(definitions.shadowing_message(shadowing))
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config), f"chore:{name}")
 
 
 def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:

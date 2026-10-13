@@ -8,7 +8,10 @@ import { TicketLink } from '@/components/ticket-link'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
-/** Runs, one row each: state, id, ticket, kind, when, cost, and what it said. `ticket` leaves out the ticket column. */
+/**
+ * Runs, one row each: state, id, ticket, kind, the ticket's title, when, cost, and what it said. `ticket` leaves out
+ * the ticket column and its title, for a ticket's own page.
+ */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
         <ul className="divide-y" data-testid="runs">
@@ -31,6 +34,11 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                 {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
                 <Chip>{run.kind}</Chip>
                 {run.private && <Chip>private</Chip>}
+                {ticket && (
+                    <span className="min-w-0 flex-1 truncate text-sm" title={run.ticket_title ?? undefined}>
+                        {run.ticket_title}
+                    </span>
+                )}
                 <span className="ml-auto flex items-center gap-4">
                     <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
                         {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}

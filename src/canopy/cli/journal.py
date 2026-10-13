@@ -15,6 +15,7 @@ from canopy.cli.params import (
     TICKET_KEY,
     CursorType,
     TextType,
+    TitleType,
     plain_pr_url,
     valid_key,
 )
@@ -131,6 +132,11 @@ def ticket_group() -> None:
 @click.option("--phase", type=click.Choice(PHASES))
 @click.option("--cursor", "cursor_pairs", type=CursorType(), multiple=True)
 @click.option("--done", is_flag=True)
+@click.option(
+    "--title",
+    type=TitleType(),
+    help="A short name for the ticket, from its own title: shown beside its key, and the session title of its runs.",
+)
 @click.pass_context
 def cmd_ticket_set(
     click_ctx: click.Context,
@@ -140,8 +146,9 @@ def cmd_ticket_set(
     phase: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
     done: bool,
+    title: str | None,
 ) -> int:
-    """Record a ticket's phase, cursors, or done flag, or a unit's phase and cursors.
+    """Record a ticket's phase, cursors, done flag, or title, or a unit's phase and cursors.
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
     phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in.
@@ -169,6 +176,7 @@ def cmd_ticket_set(
         phase=None if unit_phase is not None else phase,
         cursors=ticket_cursors,
         done=done and not dry_run,
+        title=title,
     )
     unit_cursors: dict[str, str] = {} if dry_run else dict(unit_pairs)
     if unit is not None and (unit_phase is not None or unit_cursors):
