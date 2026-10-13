@@ -108,10 +108,10 @@ cmd = ""
 # timeout_minutes = 20
 # workspaces = ["acme"]   # default: every workspace
 
-# Optional: adversarial reviews of PRs (DESIGN §21). Each new commit gets one comment from a fresh reviewer; it never
-# approves. Point review_cmd at a different model than worker_cmd, so the reviewer does not share the author's blind
-# spots.
+# Optional: adversarial reviews of PRs (DESIGN §21). A fresh reviewer reads each new commit and reports to canopy only:
+# it posts nothing on the PR and never approves (D114). Read reviews with `canopy review show`. Point review_cmd at a
+# different model than worker_cmd, so the reviewer does not share the author's blind spots.
 # [review]
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
-# query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs; it authorizes comments in your name
+# query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."

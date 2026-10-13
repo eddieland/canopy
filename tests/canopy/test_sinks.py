@@ -306,9 +306,9 @@ def test_slack_blocks_for_each_event_kind() -> None:
             "ticket": None,
             "run": 5,
             "status": "done",
-            "verdict": "approve",
+            "verdict": "findings",
             "impact": "low",
-            "comment": "fine",
+            "findings": 2,
         },
         {"kind": "loop.failing", "count": 3, "status": "error", "tick": 9, "log": "/w/.canopy/canopy.log"},
         {"kind": "loop.recovered", "failed": 3},
@@ -320,7 +320,7 @@ def test_slack_blocks_for_each_event_kind() -> None:
         ":arrow_forward: *P-1* · fix_ci run 2 started\nattempt 1 of 3 on `agent/P-1`",
         ":raising_hand: *P-2* · implement run 3 ended *blocked*\n> *Question:* Which table?",
         ":x: *chore:deps* · run 4 ended *failed* · 1 finding",
-        ":white_check_mark: review run 5 ended *done*: approve low\n<https://x.test/pr/9>\n> *Comment:* fine",
+        ":white_check_mark: review run 5 ended *done*: findings low · 2 findings\n<https://x.test/pr/9>",
         (
             ":rotating_light: *The loop is failing:* 3 ticks in a row ended other than ok\n"
             "latest tick 9 ended error; log `/w/.canopy/canopy.log`"

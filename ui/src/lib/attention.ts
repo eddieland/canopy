@@ -13,7 +13,6 @@ const FAILED = new Set([
     'attempt_limit',
     'chore_failed',
     'review_failed',
-    'review_unposted',
     'review_limit',
 ])
 

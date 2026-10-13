@@ -50,10 +50,12 @@ REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
 # override that still names the GitHub MCP would open the PRs the operator set the skill to avoid.
 OPENS_PRS = ("implement", "resume")
 REQUIRED_PR_SKILL = ("OPEN_PR",)
-# The reviewer's prompt (DESIGN §21). An override must still name the commit, the checkout, and the run, which the
-# reviewer's comment marker carries, so the loop can tell its reviews from anything else.
+# The reviewer's prompt (DESIGN §21). An override must still name the PR, the commit, and the checkout it reviews.
 REVIEWER = "reviewer.md"
-REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT", "RUN_ID")
+REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
+# A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
+# override written before they existed still serves every other resume.
+REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
@@ -70,7 +72,9 @@ def worker_comment(prefix: str, suffix: str) -> str:
 def trusted_reviewers(reviewers: Sequence[str]) -> str:
     """Return the worker's list of trusted reviewers (DESIGN §7, D089), naming canopy's own reviewer in words."""
     names = [
-        "canopy's own reviewer (a comment canopy's review run posted)" if r == CANOPY_REVIEWER else f"`{r}`"
+        "canopy's own reviewer (its findings come in this prompt, never on the PR)"
+        if r == CANOPY_REVIEWER
+        else f"`{r}`"
         for r in reviewers
     ]
     return ", ".join(names) if names else "none (every reviewer's feedback needs the operator's go-ahead)"

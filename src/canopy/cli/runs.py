@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from typing import TYPE_CHECKING
 
 import click
 
@@ -12,7 +13,11 @@ from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, Te
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
+from canopy.reviews import findings
 from canopy.runs import dispatch, policy, worker
+
+if TYPE_CHECKING:
+    import sqlite3
 
 
 @click.command("dispatch")
@@ -51,6 +56,13 @@ from canopy.runs import dispatch, policy, worker
     help="split only, and required for it: the authorized replier's comment on the ticket that asked for the split.",
 )
 @click.option(
+    "--review-run",
+    type=click.IntRange(min=1),
+    metavar="RUN_ID",
+    help="resume only: the canopy review run whose findings the worker addresses. Its prompt carries them from the "
+    "journal; nothing of the review is on the PR.",
+)
+@click.option(
     "--context",
     type=TextType(),
     help="What the worker should read or do: links, comment ids, check names. Never quoted ticket or PR text.",
@@ -74,6 +86,7 @@ def cmd_dispatch(
     slug: str | None,
     base: str | None,
     request: str | None,
+    review_run: int | None,
     context: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
 ) -> int:
@@ -91,6 +104,7 @@ def cmd_dispatch(
     db.touch_ticket(ctx.conn, key, ctx.repo)
     dry_run = bool(current["dry_run"])
     try:
+        review = _review_findings(ctx.conn, key, kind, repos, review_run)
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if dry_run:
             plan = dispatch.check(
@@ -118,6 +132,7 @@ def cmd_dispatch(
                 context=context,
                 repos=repos,
                 request=request,
+                review=review,
             )
             branch, queue_label, repo_names = started.branch, started.label, started.repos
     except dispatch.Refusal as r:
@@ -136,6 +151,7 @@ def cmd_dispatch(
     # A split works on no branch: it reads its repositories and creates a ticket for each.
     work = f"split {key} into {', '.join(repo_names)}" if kind == policy.SPLIT else f"{branch}{on_base}"
     requested = f"; request {request}" if request is not None else ""
+    requested += f"; review run {review_run}" if review_run is not None else ""
     if started is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
@@ -152,6 +168,7 @@ def cmd_dispatch(
                     ),
                     authorized,
                     f"request {request}" if request is not None else "",
+                    f"review run {review_run}" if review_run is not None else "",
                     *extras,
                 ]
                 if e
@@ -174,6 +191,22 @@ def cmd_dispatch(
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")
     return 0
+
+
+def _review_findings(
+    conn: sqlite3.Connection, key: str, kind: str, repos: tuple[str, ...], run_id: int | None
+) -> str | None:
+    """Return the worker's `{{REVIEW_FINDINGS}}` for `--review-run`, or None without it (DESIGN §21)."""
+    if run_id is None:
+        return None
+    if kind != "resume":
+        raise dispatch.Refusal(
+            "bad_review", "--review-run names findings for a resume to address; it is for resume only"
+        )
+    try:
+        return findings.for_worker(conn, run_id, key, repos)
+    except findings.Unusable as e:
+        raise dispatch.Refusal("bad_review", str(e)) from None
 
 
 @click.command("_run", hidden=True)

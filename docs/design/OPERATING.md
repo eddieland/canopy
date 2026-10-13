@@ -103,7 +103,7 @@ to do instead.
 | `notify.*` | user-only | a command run on the operator's machine |
 | `paths.*` | user-only | where prompts and state are read from |
 | `chores.*` | user-only | a chore runs a command and a prompt, and spends money (§19) |
-| `review.*` | user-only | `review.query` authorizes comments in the operator's name (§21) |
+| `review.*` | user-only | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
 | `serve.*` | user-only | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
 
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
@@ -263,8 +263,8 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
   workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
-  tools and the one tool that comments on a PR's conversation; submitting a review, pushing, writing files, labels,
-  and edits denied by name (§21).
+  tools only; commenting anywhere, submitting a review, pushing, writing files, labels, and edits denied by name
+  (§21).
 - `canopy-chore`: no edits, shell, or subagents; MCP write tools denied by name (§19). A chore that runs the operator's
   own tools uses the operator's own copy of it.
 - `canopy-splitter`: read-only file tools in its desk; no edit, shell, or subagents. MCP: the tracker
@@ -373,7 +373,7 @@ characters dropped and cut at 160 characters; and its session id, its cost and t
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
 `attempt_limit`, a private ticket's `awaiting_reply` (§22), and in a workspace `repo_missing` and the overseer's
 `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their findings, listed by
-chore after the ticket items (§19). Reviews add `review_failed`, `review_unposted`, and `review_limit`, about a PR
+chore after the ticket items (§19). Reviews add `review_failed` and `review_limit`, about a PR
 (§21). An item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest

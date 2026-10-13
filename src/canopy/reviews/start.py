@@ -219,7 +219,7 @@ def _check_limits(
     if done is not None:
         # The PR may be out of the state block's window by now, so the refusal says what the review found.
         stored = result.stored(done["result_json"])
-        found = f" ({stored.verdict}, {stored.comment})" if stored is not None else ""
+        found = f" ({stored.verdict}, impact {stored.impact})" if stored is not None else ""
         raise Refusal(
             "reviewed", f"review run {done['id']} already reviewed {request.sha[:12]}{found}; one review per commit"
         )

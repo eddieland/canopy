@@ -359,27 +359,31 @@ if the operator asks. If M10 has landed, add the `reviews` event group; if not, 
   contract validated with pydantic, unconditional slot return; reconcile for review runs.
 - `prompts/reviewer.md`, the `canopy-reviewer` agent definition installed into the operator's runtime config, and a
   canary: the reviewer can read the checkout and nothing else outside its working directory, and cannot call a denied
-  MCP tool.
-- The overseer prompt: the `review_pending` and `review_findings` phases, the `review.query` paragraph (this
-  repository's PRs only), recognizing review comments by the journal, and checking that the latest review's comment
-  exists, with human approval.
+  MCP tool. The reviewer posts nothing (D114): its findings stay in the journal.
+- `canopy dispatch --kind resume --review-run ID`, which hands a worker a review's findings from the journal, and
+  `canopy review show`, where the operator reads reviews.
+- The overseer prompt: the `review_pending` and `review_findings` phases and the `review.query` paragraph (this
+  repository's PRs only), with human approval.
 - The TRUST_MODEL T1, T3 to T7, §6, and §7 changes, with human approval.
 - DESIGN §5, §6, §7, §11, §12, §13, and §14 updated, and §21's planned note removed.
 
 Accept: with `agent_prs` on, one real ticket's PR is reviewed once its checks pass. A finding goes back through
-`resume`, the new commit is reviewed again, and the ticket reaches `needs_reviewer` with no review comment counted as a
-human's. With a `review.query` that matches the operator's own hand-written PR, each new head commit gets exactly one
-identified comment and nothing else happens to the PR: no push, no ticket, no GitHub review. A review run killed
+`resume --review-run`, the new commit is reviewed again, and the ticket reaches `needs_reviewer`, with nothing of the
+review on the PR. With a `review.query` that matches the operator's own hand-written PR, each new head commit gets
+exactly one review in `canopy review show` and nothing happens to the PR: no comment, no push, no ticket, no GitHub
+review. A review run killed
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
 Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), and docs are in. Checked live on
 2026-10-07 with OpenCode 1.18.32: the reviewer canary passes, and with `agent_prs` on, PR #69 got one identified
-`clean` comment at its commit and no GitHub review. The reviewer also needs the runtime's write MCP `add_issue_comment`
-allowed for `canopy-reviewer`, which README step 3 does not say; without it, reviews end `unknown`. Accept's other
-live checks are SCENARIOS S19 to S21. What keeps it open: on 2026-10-12 all seven review runs of a live session ended
-`unknown` within about 15 seconds, the reviewer's last line not a valid result, and the overseer's retries for them
-cost $2.21 (MEASUREMENTS 2026-10-12, F4). Not diagnosed yet; next is a failed review run's log.
+`clean` comment at its commit and no GitHub review. Accept's other live checks are SCENARIOS S19 to S21. What keeps it
+open: on 2026-10-12 all seven review runs of a live session ended `unknown` within about 15 seconds, the reviewer's
+last line not a valid result, and the overseer's retries for them cost $2.21 (MEASUREMENTS 2026-10-12, F4). Not
+diagnosed yet; next is a failed review run's log. On 2026-10-13 the operator decided that reviews post nothing on the
+PR (D114): the comment, its marker, and `review_unposted` are gone, the reviewer needs no write tool (so the
+`add_issue_comment` grant the 2026-10-07 check needed is moot), and findings reach a worker through `--review-run` and
+the operator through `canopy review show`.
 
 ## M12. The loop
 
@@ -954,6 +958,20 @@ Status: in progress. Code, tests, and docs are in (2026-10-13). Measured before 
 reads about 1.6 ms per MB of text when nothing matches (56 MB of messages in 90 ms), and stops at the limit when
 hits are many, so an FTS5 index, with its migration and triggers, waits until a real journal is slow. Waiting on the
 operator: the live search Accept describes.
+
+## M32. Shadow PR reviews in the web UI
+
+REQUIREMENTS N1, DESIGN §21 and §22. Needs M11 and M20. Asked for by the operator (2026-10-13): canopy's reviews stay
+off the PR (D114), so canopy shows them itself, as a PR review of its own that only the operator sees.
+
+- A PR's page: each review run at its commit, the verdict, and each finding with its detail, anchored on the diff at
+  its `path:line` where the line is in the diff.
+- What the operator does from there, such as dismissing a finding or sending some findings to a worker, through the
+  journal's existing channels (`canopy reply`, the overseer), never a write to the PR.
+- Open: whether the diff is read by the harness (`git diff` of the review's commit in a slot) or kept from the review
+  run, and how a finding is tracked across commits.
+
+Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 

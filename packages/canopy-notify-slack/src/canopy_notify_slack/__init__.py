@@ -309,10 +309,11 @@ def _chore_ended(e: dict[str, object]) -> Block:
 def _review_ended(e: dict[str, object]) -> Block:
     ticket = f"*{escape(e.get('ticket'))}* · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
+    findings = e.get("findings") or 0
+    counted = f" · {escape(findings)} finding{'s' if findings != 1 else ''}" if verdict else ""
     return _section(
-        _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}" if verdict else ""),
+        _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}{counted}" if verdict else ""),
         _linked(e.get("pr")) if e.get("pr") else "",
-        _quote("Comment", e.get("comment")),
     )
 
 
