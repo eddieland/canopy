@@ -51,6 +51,7 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
+    TickOutput,
     Transcript,
 )
 
@@ -331,9 +332,9 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
 
 
 def _tick_routes(api: APIRouter, backend: Backend) -> None:
-    """The ticks (DESIGN §6): what `canopy decisions` prints, and the overseer's transcript.
+    """The ticks (DESIGN §6): what `canopy decisions` prints, and the overseer's transcript and output.
 
-    Reads only; a rationale and a transcript are untrusted text.
+    Reads only; a rationale, a transcript, and an output are untrusted text.
     """
 
     @api.get("/ticks", operation_id="listTicks")
@@ -358,6 +359,15 @@ def _tick_routes(api: APIRouter, backend: Backend) -> None:
     def tick_transcript(tick_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> Transcript:
         with backend.open() as ctx:
             found = views.tick_transcript(ctx, tick_id)
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
+        return found
+
+    # The end of the same file as written, stderr included, read again on each request (DESIGN §22).
+    @api.get("/ticks/{tick_id}/output", operation_id="getTickOutput", responses={404: {"description": "No such tick."}})
+    def tick_output(tick_id: Annotated[int, Path(ge=1, le=2**63 - 1)]) -> TickOutput:
+        with backend.open() as ctx:
+            found = views.tick_raw_output(ctx, tick_id)
         if found is None:
             raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
         return found

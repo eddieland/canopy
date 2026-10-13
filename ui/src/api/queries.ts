@@ -15,6 +15,8 @@ export const keys = {
     // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
     runTranscript: (id: number) => ['transcript', 'run', id] as const,
     tickTranscript: (id: number) => ['transcript', 'tick', id] as const,
+    // Under its transcript's key, so the invalidation that marks the transcript stale marks the output too.
+    tickOutput: (id: number) => ['transcript', 'tick', id, 'output'] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
     chores: ['chores'] as const,
@@ -91,6 +93,17 @@ export function tickTranscriptQuery(id: number) {
         queryKey: keys.tickTranscript(id),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/ticks/{tick_id}/transcript', { params: { path: { tick_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** The end of a tick's output file as written, stderr included. Stale when its transcript is. */
+export function tickOutputQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.tickOutput(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/ticks/{tick_id}/output', { params: { path: { tick_id: id } }, signal })),
         placeholderData: undefined,
         staleTime: Number.POSITIVE_INFINITY,
     })

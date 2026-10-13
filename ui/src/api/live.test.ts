@@ -135,6 +135,7 @@ describe('applyStreamEvent', () => {
         client.setQueryData(keys.tick, { tick: running, acknowledged: null })
         client.setQueryData(keys.tickTranscript(3), empty)
         client.setQueryData(keys.tickTranscript(2), empty)
+        client.setQueryData(keys.tickOutput(3), { status: 'no_output', text: '', size: 0, truncated: false })
 
         applyStreamEvent(client, { type: 'tick.updated', tick: { ...running, decisions: 2 }, acknowledged: null })
         expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(false)
@@ -142,6 +143,8 @@ describe('applyStreamEvent', () => {
         const ended = { ...running, status: 'ok', ended_at: '2026-10-08T12:01:00Z', decisions: 2 }
         applyStreamEvent(client, { type: 'tick.updated', tick: ended, acknowledged: null })
         expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(true)
+        // Its output with it: the overseer's file is written as the tick ends.
+        expect(client.getQueryState(keys.tickOutput(3))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.tickTranscript(2))?.isInvalidated).toBe(false)
     })
 

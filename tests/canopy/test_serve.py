@@ -534,6 +534,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/ticks",
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
+        "/api/ticks/{tick_id}/output",
         "/api/worktrees",
         "/api/search",
         "/api/events",

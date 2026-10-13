@@ -751,7 +751,7 @@ shows it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
 - Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it; M27 serves its
-  session's events.
+  session's events. Reopened on request (2026-10-13): the page serves its end (DESIGN §22).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.

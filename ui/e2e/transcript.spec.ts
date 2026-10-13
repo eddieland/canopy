@@ -98,6 +98,35 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await expect(split).toBeHidden()
 })
 
+test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so", async ({
+    page,
+}) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    const output = page.getByTestId('tick-output')
+    await expect(output).toContainText('.canopy/ticks/2.log as written: stdout, then stderr')
+    const text = output.getByTestId('tick-output-text')
+    await expect(text).toHaveCount(0)
+
+    await output.getByRole('button', { name: 'Show' }).click()
+    await expect(text).toContainText('--- stderr ---')
+    await expect(text).toContainText('service=mcp key=jira error=timed out after 1000ms listing prompts')
+    // The session's events too, as the runtime printed them: lines of JSON, as text.
+    await expect(text).toContainText('"sessionID": "ses_tick2"')
+    // The file's size, in the header.
+    await expect(output).toContainText(/\d+\.\d KiB/)
+    // It opens at its end, where stderr is.
+    await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
+
+    await output.getByRole('button', { name: 'Hide' }).click()
+    await expect(text).toHaveCount(0)
+
+    await page.goto('ticks/1')
+    await settled(page)
+    await expect(page.getByTestId('tick-output')).toContainText('none kept')
+    await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
+})
+
 test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
     await page.goto('chores/deps')
     await settled(page)
