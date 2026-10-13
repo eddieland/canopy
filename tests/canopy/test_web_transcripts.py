@@ -1,6 +1,7 @@
 """The web UI's transcripts (DESIGN §13, §22): a run's and a chore run's pages, and a run's, chore run's, or tick's
 session read back from the events its log holds. Reads only; every text in them is agent output."""
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -175,3 +176,13 @@ def test_a_chore_run_is_found_only_under_its_own_chore(backend: Backend) -> None
     assert c.get("/api/chores/deps/runs/0").status_code == 422
     bad = c.get("/api/chores/Not_A_Name/runs/2")
     assert (bad.status_code, bad.json()["detail"]["guard"]) == (409, "bad_ref")
+
+
+def test_a_chore_deleted_from_the_config_keeps_its_runs_pages(backend: Backend) -> None:
+    chores = {name: chore for name, chore in backend.config.chores.items() if name != "deps"}
+    deleted = dataclasses.replace(backend, config=backend.config.model_copy(update={"chores": chores}))
+    c = client(None, deleted)
+    # Its chore's page is gone, as `canopy show chore:deps` refuses it; the journal's history of it is not.
+    assert c.get("/api/chores/deps").status_code == 404
+    assert c.get("/api/chores/deps/runs/2").json()["run"]["id"] == 2
+    assert c.get("/api/chores/deps/runs/2/transcript").json()["session_id"] == "ses_chore2"
