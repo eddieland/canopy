@@ -100,13 +100,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
   there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
-- Newspaper ordering for a module with a clear interface, so it reads top-down from what to how: the docstring, then
-  the public names other modules use, most important first, then the private helper functions, each below the first
-  function that calls it. What Python needs at import time comes first regardless: constants, type aliases, and
-  anything used as a base class, decorator, or default value. `runs/dispatch.py` and `notify/deliver.py` are examples.
-  A module without a clear public surface keeps the order that reads best. Apply it to new modules and to code a PR
-  already rewrites; do not reorder untouched code, and do not open a PR only to reorder, since a bulk move buries
-  `git blame` and conflicts with open branches.
+- Every module is in newspaper order, so it reads top-down from what to how: the docstring, then the public names
+  other modules use, most important first, then the private helper functions, each below the first function that
+  calls it. What Python needs at import time comes first regardless: constants, type aliases, and anything used as a
+  base class, decorator, or default value. `runs/dispatch.py` and `notify/deliver.py` are examples. A module still out
+  of order is never a reason to hold a change, and needs no bulk fix: write new modules in order, and reorder an old
+  one when a PR is already changing it, if that is cheap.
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
