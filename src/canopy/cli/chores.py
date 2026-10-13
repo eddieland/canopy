@@ -94,15 +94,16 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
     ctx = open_context(click_ctx)
     try:
         prepared = trial.prepare(ctx, name, context)
-        run_id = None if no_record else trial.record(ctx, prepared)
+        recorded = None if no_record else trial.record(ctx, prepared)
     except trial.TrialError as e:
         hint = "; --no-record runs it anyway, recording nothing" if isinstance(e, trial.RunningError) else ""
         raise CliError(f"chore try refused: {e}{hint}") from None
-    recorded = "nothing is recorded" if run_id is None else f"recorded as chore run {run_id}"
+    run_id = recorded.run_id if recorded is not None else None
+    where = "nothing is recorded" if run_id is None else f"recorded as chore run {run_id}"
     timeout = prepared.chore.timeout_minutes
-    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes); {recorded}", err=True)
+    click.echo(f"trying chore {name} in {prepared.cwd} (timeout {timeout} minutes); {where}", err=True)
     try:
-        outcome = trial.run_unrecorded(ctx, prepared) if run_id is None else trial.run_recorded(ctx, run_id)
+        outcome = trial.run_unrecorded(ctx, prepared) if recorded is None else trial.run_recorded(ctx, recorded)
     except (procs.ProcError, execute.ChoreError) as e:
         raise CliError(f"chore try: {e}") from None
     logs.for_tick(None).info("chore tried", extra={"chore": name, "chore_run_id": run_id, "status": outcome.status})

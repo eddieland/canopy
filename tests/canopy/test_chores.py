@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from canopy.chores import start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
@@ -482,7 +483,10 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     assert tried["env"]["CANOPY_RUN_ID"] == "chore-2"
     run = run_section(tried["argv"][3])
     assert (run["run_id"], run["context"]) == (2, "Look at build 91")
-    assert run_section((canopy_env.state_dir / "chores" / "2.prompt").read_text()) == run
+    assert run_section(start.prompt_file(Path(row["log_path"])).read_text()) == run
+    # The try held its run's lifelock, as a detached `_chore` does, and let it go once the row was closed.
+    assert procs.lifelock(Path(row["log_path"])).exists()
+    assert not procs.running(Path(row["log_path"]), row["pid"])
     # It sees what a run starting now would: the latest run and its open findings.
     assert run["previous_run"]["run_id"] == 1
     assert [f["id"] for f in run["open_findings"]] == [FINDING["id"]]

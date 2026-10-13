@@ -19,9 +19,11 @@ from typing import TYPE_CHECKING
 from canopy.chores import execute, start
 from canopy.core import agent_output, conversation, db, outbox
 from canopy.core import chore_view as view
-from canopy.infra import lock, logs
+from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core.config import Chore
     from canopy.core.context import Context
 
@@ -36,6 +38,14 @@ class TrialError(Exception):
 
 class RunningError(TrialError):
     """A recorded try cannot start: a run of the chore is running. One that records nothing can."""
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """A recorded try: its chore run's id, and the fd that holds its lifelock while this process does the run."""
+
+    run_id: int
+    lifelock: int
 
 
 @dataclass(frozen=True)
@@ -75,17 +85,18 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
     return Prepared(name, chore, body, context, cwd, argv)
 
 
-def record(ctx: Context, prepared: Prepared) -> int:
+def record(ctx: Context, prepared: Prepared) -> Recorded:
     """Record the prepared try as a chore run with no tick, held by this process, and write its prompt.
 
     Serialized with the overseer's chore runs by the dispatch lock, so a try and a run of the same chore never overlap.
+    This process takes the run's lifelock, as `spawn` does for `_chore`, so reconcile sees the run alive until it ends.
 
     Returns:
-        The new chore run's id.
+        The new chore run's id and the fd holding its lifelock, for `run_recorded` to release.
 
     Raises:
         RunningError: a run of the chore is running.
-        TrialError: the prompt could not be written; the new run then ends `crashed`.
+        TrialError: the run's lifelock or prompt could not be written; the new run then ends `crashed`.
     """
     name = prepared.name
     with lock.hold(ctx.dispatch_lock_path, wait=True):
@@ -93,24 +104,28 @@ def record(ctx: Context, prepared: Prepared) -> int:
         if running is not None:
             raise RunningError(f"chore run {running['id']} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
-        run_id = db.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=start.chores_dir(ctx))
-        db.claim_chore_run(ctx.conn, run_id, os.getpid())
-        notes = conversation.chore_notes(ctx.conn, name)
+        run_id = db.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=start.runs_dir(ctx, name))
+        run = db.get_chore_run(ctx.conn, run_id)
+        if run is None:
+            raise TrialError(f"chore run {run_id} vanished")
+        log_path = Path(run["log_path"])
         try:
-            logs.write_private(
-                start.prompt_file(ctx, run_id), start.render(prepared.body, state, run_id, prepared.context, notes)
-            )
+            held = lock.take(procs.lifelock(log_path))
+        except (OSError, lock.LockBusyError) as e:
+            raise TrialError(_crash(ctx, run, e)) from e
+        try:
+            db.claim_chore_run(ctx.conn, run_id, os.getpid())
+            notes = conversation.chore_notes(ctx.conn, name)
+            prompt = start.render(prepared.body, state, run_id, prepared.context, notes)
+            logs.write_private(start.prompt_file(log_path), prompt)
         except OSError as e:
-            note = json.dumps({"harness": f"could not write the prompt: {e.strerror}"})
-            run = db.get_chore_run(ctx.conn, run_id)
-            ended = outbox.chore_ended(ctx.config, run, "crashed", note) if run is not None else None
-            db.finish_chore_run(ctx.conn, run_id, "crashed", note, event=ended)
-            raise TrialError(f"chore run {run_id}: could not write its prompt: {e.strerror}") from e
-    return run_id
+            os.close(held)
+            raise TrialError(_crash(ctx, run, e)) from e
+    return Recorded(run_id, held)
 
 
-def run_recorded(ctx: Context, run_id: int) -> execute.Outcome:
-    """Do recorded try `run_id` as `_chore` would, from claiming it to closing its row, writing its log.
+def run_recorded(ctx: Context, recorded: Recorded) -> execute.Outcome:
+    """Do a recorded try as `_chore` would, from claiming it to closing its row, then let its lifelock go.
 
     Returns:
         How the run ended, recorded on its row. A failure after the claim is `crashed`.
@@ -118,13 +133,16 @@ def run_recorded(ctx: Context, run_id: int) -> execute.Outcome:
     Raises:
         execute.ChoreError: the run is not this process's to do, for example because reconcile closed it.
     """
-    run = db.get_chore_run(ctx.conn, run_id)
-    if run is None:
-        raise execute.ChoreError(f"no chore run {run_id}")
-    # Opened as `spawn` opens a detached run's log: appended to, readable only by the operator, never through a link.
-    fd = os.open(Path(run["log_path"]), os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, "a", encoding="utf-8") as out:
-        return execute.execute(ctx, run_id, out=out)
+    try:
+        run = db.get_chore_run(ctx.conn, recorded.run_id)
+        if run is None:
+            raise execute.ChoreError(f"no chore run {recorded.run_id}")
+        # Opened as `spawn` opens a detached run's log: appended, readable only by the operator, never through a link.
+        fd = os.open(Path(run["log_path"]), os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(fd, "a", encoding="utf-8") as out:
+            return execute.execute(ctx, recorded.run_id, out=out)
+    finally:
+        os.close(recorded.lifelock)
 
 
 def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
@@ -140,3 +158,15 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
         timeout=prepared.chore.timeout_minutes * 60,
     )
     return execute.outcome_of(done, agent_output.read(done.stdout), prepared.chore)
+
+
+def _crash(ctx: Context, run: sqlite3.Row, e: Exception) -> str:
+    """Close a recorded try that could not start as `crashed`, as `start` closes a run it could not spawn.
+
+    Returns:
+        What went wrong, for the error the caller raises.
+    """
+    note = json.dumps({"harness": f"could not start the try: {e}"})
+    ended = outbox.chore_ended(ctx.config, run, "crashed", note)
+    db.finish_chore_run(ctx.conn, int(run["id"]), "crashed", note, event=ended)
+    return f"chore run {run['id']} could not start: {e}"

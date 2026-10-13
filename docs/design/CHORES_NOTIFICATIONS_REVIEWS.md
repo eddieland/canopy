@@ -193,7 +193,8 @@ exits 0 only on `ok`.
   workspace.
 - A recorded try refuses `running` while a run of the chore is running, and takes `dispatch.lock` to insert its row,
   so it never overlaps one the overseer started. `--no-record` does not refuse. Reconcile treats a try's row as any:
-  its pid is the `canopy chore try` process, and a try killed with SIGKILL is marked `crashed` at the next tick.
+  the `canopy chore try` process holds the run's lifelock, as `_chore` does (§6), so a try killed with SIGKILL is
+  marked `crashed` at the next tick.
 - It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-<run id>`, or
   `chore-try` unrecorded. The overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the
   loop cannot try a chore.
