@@ -90,9 +90,10 @@ Rules:
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
-  working runs are those running first, then those waiting on the operator's answer, each oldest first: a dot in its
-  state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
-  it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
+  working runs are those running first, then those waiting on the operator's answer, each oldest first, a ticket's
+  latest run alone: a dot in its state's color, the ticket's key, how long it has run (or `asks` in
+  `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
+  runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else. The footer (the version) sits at the rail's foot, not the window's: the
   window's foot on a page that fits it, the page's foot on a longer one.
@@ -206,6 +207,16 @@ tabs.
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
+- **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's latest
+  run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs before it,
+  newest first, each one line in the row's own columns: its state, the first line of what it said in muted text where
+  the title is, its id and chips, cost, and when; the rest is on its run's page. The head line leads with the ticket:
+  the state, the key, and the title, which takes the free width, then the run's id and chips in a fixed-width column, so
+  every row's title and run id line up whatever chips a run has. What goes under it (the summary, the PRs, the toggle)
+  starts under the title. A ticket that asked, got its answer, and asked again is one blocked row, not two. The state
+  filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
+  blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
+  there is the same ticket's.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
