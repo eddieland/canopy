@@ -134,6 +134,41 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
 })
 
+test("a tick's output lays its JSON out when asked, and that tick's panel remembers it", async ({ page }) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    const output = page.getByTestId('tick-output')
+    await output.getByRole('button', { name: 'Show' }).click()
+    const text = output.getByTestId('tick-output-text')
+    const pretty = output.getByRole('button', { name: 'Pretty' })
+    const read = () => text.evaluate((el) => el.textContent)
+    await expect(pretty).toHaveAttribute('aria-pressed', 'false')
+    expect(await read()).toContain('{"type": "text", "timestamp"')
+
+    await pretty.click()
+    await expect(pretty).toHaveAttribute('aria-pressed', 'true')
+    expect(await read()).toContain('{\n  "type": "text",\n  "timestamp"')
+    // It opens at its end again, where stderr is: every line moved.
+    await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
+    // A line that is not JSON stays as it was.
+    expect(await read()).toContain('\n--- stderr ---\n')
+    // Still colored.
+    await expect(text.locator('.text-syntax-key', { hasText: '"sessionID"' }).first()).toBeVisible()
+
+    // Kept for this tick across a reload.
+    expect(await page.evaluate(() => window.localStorage.getItem('canopy-pretty-output'))).toBe('[2]')
+    await page.reload()
+    await settled(page)
+    await output.getByRole('button', { name: 'Show' }).click()
+    await expect(pretty).toHaveAttribute('aria-pressed', 'true')
+    expect(await read()).toContain('{\n  "type": "text",')
+
+    await pretty.click()
+    await expect(pretty).toHaveAttribute('aria-pressed', 'false')
+    expect(await read()).toContain('{"type": "text", "timestamp"')
+    expect(await page.evaluate(() => window.localStorage.getItem('canopy-pretty-output'))).toBe('[]')
+})
+
 test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
     await page.goto('chores/deps')
     await settled(page)

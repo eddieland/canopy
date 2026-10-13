@@ -39,6 +39,19 @@ for (const theme of THEMES) {
         await expect(output).toHaveScreenshot(`ticks-2-output-${theme}.png`)
     })
 
+    test(`a tick's output pretty in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto('ticks/2')
+        await settled(page)
+        const output = page.getByTestId('tick-output')
+        await output.getByRole('button', { name: 'Show' }).click()
+        await output.getByRole('button', { name: 'Pretty' }).click()
+        await expect(output.getByRole('button', { name: 'Pretty' })).toHaveAttribute('aria-pressed', 'true')
+        await expect(output).toHaveScreenshot(`ticks-2-output-pretty-${theme}.png`)
+    })
+
     test(`sign-in in ${theme}`, async ({ page }) => {
         await storeTheme(page, theme)
         await page.goto('attention')
