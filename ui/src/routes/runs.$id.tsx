@@ -8,6 +8,7 @@ import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TranscriptPanel } from '@/components/transcript'
@@ -83,7 +84,7 @@ function RunPanel({ run }: { run: Run }) {
                 <Field label="ticket">
                     <span className="flex items-center gap-2">
                         <TicketLink ticketKey={run.ticket_key} />
-                        <Chip>{run.kind}</Chip>
+                        <Chip word={run.kind} />
                         {run.private && <Chip>private</Chip>}
                     </span>
                 </Field>
@@ -99,7 +100,7 @@ function RunPanel({ run }: { run: Run }) {
                 <Field label="ended" mono>
                     {run.ended_at ?? 'still running'}
                 </Field>
-                <Field label="summary">{run.summary ?? 'none'}</Field>
+                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : 'none'}</Field>
                 {run.prs.length > 0 && (
                     <Field label="pull requests" mono>
                         <span className="flex flex-wrap gap-x-4">

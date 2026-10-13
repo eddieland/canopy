@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { keepPreviousData, queryOptions } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 
@@ -25,6 +25,8 @@ export const keys = {
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
     tick: ['tick'] as const,
+    search: (q: string) => ['search', q] as const,
+    loop: ['loop'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -85,7 +87,7 @@ export function tickTranscriptQuery(id: number) {
     })
 }
 
-/** What the last 24 hours cost. The stream sends it again whenever the cost changes. */
+/** What the last 24 hours and the last 30 days cost. The stream sends them again whenever a cost changes. */
 export const spendQuery = queryOptions({
     queryKey: keys.spend,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
@@ -95,6 +97,12 @@ export const spendQuery = queryOptions({
 export const tickQuery = queryOptions({
     queryKey: keys.tick,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/tick', { signal })),
+})
+
+/** Whether the operator paused the loop (docs/DESIGN.md §6). The stream sends it again whenever it changes. */
+export const loopQuery = queryOptions({
+    queryKey: keys.loop,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/loop', { signal })),
 })
 
 export const ticketsQuery = queryOptions({
@@ -159,3 +167,15 @@ export const worktreesQuery = queryOptions({
     refetchInterval: WORKTREES_REFRESH_MS,
     refetchIntervalInBackground: false,
 })
+
+/**
+ * The journal's rows holding every word of `q` (DESIGN §22, Search). Not on the stream: read when the query changes.
+ * The previous query's hits stay on screen while the next one's load, so typing never blanks the page.
+ */
+export function searchQuery(q: string) {
+    return queryOptions({
+        queryKey: keys.search(q),
+        queryFn: async ({ signal }) => unwrap(await api.GET('/api/search', { params: { query: { q } }, signal })),
+        placeholderData: keepPreviousData,
+    })
+}

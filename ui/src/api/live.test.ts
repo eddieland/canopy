@@ -16,7 +16,10 @@ describe('applyStreamEvent', () => {
         applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, state: 'stopped' }] })
         applyStreamEvent(client, { type: 'attention.updated', items: mockAttention })
         applyStreamEvent(client, { type: 'tickets.updated', tickets: mockTickets })
-        const spend = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
+        const spend = {
+            day: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 },
+            month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
+        }
         applyStreamEvent(client, { type: 'spend.updated', spend })
         applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: null })
 
@@ -49,6 +52,16 @@ describe('applyStreamEvent', () => {
 
         expect(client.getQueryData(keys.chores)).toEqual(mockChores)
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
+    })
+
+    it('writes the pause whole, and lifts it', () => {
+        const client = new QueryClient()
+        const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
+
+        applyStreamEvent(client, { type: 'loop.updated', paused })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused })
+        applyStreamEvent(client, { type: 'loop.updated', paused: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused: null })
     })
 
     it('marks the ticks and the tickets stale when the latest tick changes', () => {
@@ -154,13 +167,22 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
         expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"ticket.changed","key":7}')).toBeNull()
-        const spend = { type: 'spend.updated', spend: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 } }
+        const day = { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 }
+        const spend = { type: 'spend.updated', spend: { day, month: { ...day, hours: 720 } } }
         expect(parseStreamEvent(JSON.stringify(spend))).toEqual(spend)
         expect(parseStreamEvent('{"type":"spend.updated","spend":null}')).toBeNull()
         const tick = '{"type":"tick.updated","tick":null,"acknowledged":7}'
         expect(parseStreamEvent(tick)).toEqual({ type: 'tick.updated', tick: null, acknowledged: 7 })
         expect(parseStreamEvent('{"type":"tick.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"tick.updated","tick":null,"acknowledged":"7"}')).toBeNull()
+        const paused = { type: 'loop.updated', paused: { since: '2026-10-08T11:50:00Z', channel: 'web' } }
+        expect(parseStreamEvent(JSON.stringify(paused))).toEqual(paused)
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toEqual({
+            type: 'loop.updated',
+            paused: null,
+        })
+        expect(parseStreamEvent('{"type":"loop.updated"}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":"yes"}')).toBeNull()
         expect(parseStreamEvent('null')).toBeNull()
     })
 })

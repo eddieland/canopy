@@ -16,7 +16,7 @@ or reopen it, without knowing. In practice that is one of:
 
 Everything else goes where the next person to change that code will look:
 
-- why a feature behaves as it does, and what was rejected for it: `DESIGN.md`, next to the behavior;
+- why a feature behaves as it does, and what was rejected for it: the design (`design/`), next to the behavior;
 - why a line of code is the way it is: a comment at that line;
 - the story of a change: its PR;
 - progress, and what a milestone taught: its `Status:`, `Learned:`, and `Next:` lines in `ROADMAP.md`.
@@ -362,3 +362,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: workers and trackers write PR and CI URLs into their prose, and copying them out was the common next step.
 - Rejected: rendering Markdown (labelled links hide their target); a linkify library (a regex and `URL.canParse` do it).
 - Revisit: if journal text should link ticket keys or `repo#N` references to their pages as well.
+
+## D114. canopy's reviews post nothing; they live in the journal
+
+- The reviewer has no write tool and reports only its result line. Its findings reach the operator through
+  `canopy review show` and a worker through `resume --review-run`, never the PR or the ticket. Settled by the operator.
+- Why: a review on the PR speaks in the operator's name before they have seen it; kept local it needs no write grant.
+- Rejected: one identified comment per commit with a marker (the M11 design); repository automation on the verdict.
+- Revisit: with a bot identity, or once the operator wants the web UI's shadow review (ROADMAP M32) published.

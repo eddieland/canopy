@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AttentionRouteImport } from './routes/attention'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
@@ -30,6 +31,11 @@ const IndexRoute = IndexRouteImport.update({
 const AttentionRoute = AttentionRouteImport.update({
   id: '/attention',
   path: '/attention',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -86,6 +92,7 @@ const TicksIdRoute = TicksIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
@@ -115,6 +123,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/attention'
+    | '/search'
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
@@ -145,6 +155,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/attention'
+    | '/search'
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
@@ -159,6 +170,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/attention'
+    | '/search'
     | '/settings'
     | '/worktrees'
     | '/chores/$name'
@@ -174,6 +186,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AttentionRoute: typeof AttentionRoute
+  SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/attention'
       fullPath: '/attention'
       preLoaderRoute: typeof AttentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -278,6 +298,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AttentionRoute: AttentionRoute,
+  SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,

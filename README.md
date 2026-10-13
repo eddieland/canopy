@@ -57,7 +57,7 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
      project. To upgrade, run the same command with `--reinstall`.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
-   Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer, to comment on a PR.
+   Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer needs only read tools.
    Grant nothing more: canopy's definitions deny the dangerous ones by name, but names differ by server. On GitHub
    the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go unlabeled (D084).
 4. In an empty directory, which becomes your workspace: `canopy init --provider jira https://github.com/acme/api.git`
@@ -75,8 +75,10 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 ## Daily surface
 
 - Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
-  attention list. Press `t` while it waits to tick now. `canopy loop --defer 30` starts it waiting: the first tick runs
-  in 30 minutes, or when you press `t`.
+  attention list. Press `t` while it waits to tick now, and `p` to pause it: no tick starts until you press `p` again,
+  run `canopy resume`, or resume it in the web UI's header; `canopy pause` pauses it from another shell. Workers
+  already running keep going. `canopy loop --defer 30` starts it waiting: the first tick runs in 30 minutes, or when
+  you press `t`.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
   every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
   finding with a note. Sign in once per browser with the
@@ -105,11 +107,13 @@ along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
   `opencode export <id>` turns into its transcript. In the web UI, a run's page shows that transcript, each tool call
   with its input and output, once the run ends.
 - Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
-  PRs, or of PRs your query names, and posts one comment saying what it found. It never approves (DESIGN §21).
+  PRs, or of PRs your query names. It posts nothing on the PR: read what it found with `canopy review show`, and the
+  loop's own PRs get a worker for its findings. It never approves (DESIGN §21).
 - Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
   overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
   one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix
   lands, note it to the chore: `canopy reply chore:NAME 'text'`, or the web UI's chore page; its next runs read it.
+  `examples/chores/README.md` lists chores worth writing, with a worked example.
 - Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
   and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
   upgrading.
@@ -150,11 +154,11 @@ canopy tick
 ```
 
 canopy has no tracker code. Agents reach the tracker through its MCP server, guided by a short provider-neutral contract
-and, where it helps, a provider skill (Jira and GitHub Issues ship). See [docs/DESIGN.md](docs/DESIGN.md) §17.
+and, where it helps, a provider skill (Jira and GitHub Issues ship). See [DESIGN §17](docs/design/WORKSPACES.md#17-trackers).
 
 State lives in a SQLite journal. Facts about the world (ticket status, PRs,
 CI, reviews) are always re-read from their source of truth, never from the DB.
-Details in [docs/DESIGN.md](docs/DESIGN.md). Security posture in
+Details in [docs/design/](docs/design/README.md). Security posture in
 [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
 
 ## Related work

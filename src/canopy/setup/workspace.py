@@ -49,7 +49,7 @@ def workspace_file_text(name: str, provider: str) -> str:
     query = init.EXAMPLE_QUERIES.get(provider, "describe which tickets to look at, in plain language")
     return f"""\
 # canopy-workspace.toml: the workspace map, and the config shared by everyone who runs canopy on this workspace.
-# Commit it if the workspace is shared. Shared keys only; personal ones go in the user config (DESIGN.md §12, §18).
+# Commit it if the workspace is shared. Shared keys only; personal ones go in the user config (DESIGN §12, §18).
 
 [workspace]
 name = {json.dumps(name)}

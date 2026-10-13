@@ -1,12 +1,20 @@
 import type { ComponentProps, ReactNode } from 'react'
 
+import { useSection } from '@/hooks/use-section'
+import { SECTION_TEXT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
-/** A page's title block: a small panel label, the title, and one line of description. */
+/**
+ * A page's title block: a small panel label in its section's color (the accent on a page in no section), the title,
+ * and one line of description.
+ */
 export function PageHeader({ label, title, children }: { label: string; title: string; children?: ReactNode }) {
+    const section = useSection()
     return (
         <header className="flex flex-col gap-1">
-            <span className="panel-label">{label}</span>
+            <span className={cn('panel-label', section === undefined ? 'text-accent' : SECTION_TEXT[section])}>
+                {label}
+            </span>
             <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
             {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
         </header>
@@ -25,6 +33,23 @@ export function PanelHeader({ label, children }: { label: string; children?: Rea
             <span className="panel-label">{label}</span>
             {children}
         </div>
+    )
+}
+
+/**
+ * A panel's list that grows without bound (decisions, runs, findings): past a fixed height it scrolls inside the panel,
+ * so the panels under it stay in reach. A focusable region, so the keyboard scrolls it too; `label` names it.
+ */
+export function PanelScroll({ label, className, ...props }: ComponentProps<'section'> & { label: string }) {
+    return (
+        <section
+            aria-label={label}
+            // A scrolling region takes focus so the keyboard can scroll it (axe's scrollable-region-focusable).
+            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+            className={cn('panel-scroll max-h-[28rem] focus-visible:-outline-offset-2', className)}
+            {...props}
+        />
     )
 }
 

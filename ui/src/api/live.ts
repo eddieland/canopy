@@ -8,8 +8,8 @@ import type { LastTick, Run, StreamEvent } from './types'
  * read again, only if a page shows it, and so is a chore's page whenever the chores change, and the ticks and the
  * ticket shown whenever the latest tick does. The worktrees are not on the stream: a run starting or ending, or
  * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A transcript
- * is read again when its run's status or its tick changes, the only times its log can. Unknown event types are
- * ignored, so the server can add some.
+ * is read again when its run's status or its tick changes, the only times its log can. The loop's pause arrives whole,
+ * as a list does. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -59,6 +59,9 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             break
         }
+        case 'loop.updated':
+            client.setQueryData(keys.loop, { paused: event.paused })
+            break
     }
 }
 
@@ -98,6 +101,11 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         const { tick, acknowledged } = value as { tick?: unknown; acknowledged?: unknown }
         const known = tick === null || (typeof tick === 'object' && tick !== undefined)
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
+    }
+    if (type === 'loop.updated') {
+        const paused = (value as { paused?: unknown }).paused
+        // `typeof null` is 'object' too: running is `paused: null`, and a missing key is no event.
+        return typeof paused === 'object' ? (value as StreamEvent) : null
     }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend

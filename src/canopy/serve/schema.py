@@ -97,7 +97,7 @@ class Run(_Model):
     branch: str | None = None
     started_at: datetime
     ended_at: datetime | None = None
-    # The worker's summary or the harness's note, on one line.
+    # The worker's summary or the harness's note, line breaks kept, cut at 300 characters.
     summary: str | None = None
     prs: list[str] = []
     # The runtime's session, for opening its transcript with the runtime's own tools.
@@ -179,8 +179,8 @@ class Decision(_Model):
     pr: str | None = None
     # dispatch:<kind> | wait | skip | done | mirror | attention:<reason> | refused:<guard>
     action: str
-    # The overseer's text, untrusted: control characters dropped and whitespace collapsed, as `canopy decisions` prints
-    # it. Bounded at 2000 characters when it was recorded.
+    # The overseer's text, untrusted: control characters dropped and line breaks kept. Bounded at 2000 characters when
+    # it was recorded.
     rationale: str
 
 
@@ -206,7 +206,7 @@ class ChoreRun(_Model):
     state: RunState
     started_at: datetime
     ended_at: datetime | None = None
-    # The harness's note or the agent's summary, on one line.
+    # The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
     summary: str | None = None
     # How many findings an `ok` run reported.
     findings: int = 0
@@ -464,16 +464,78 @@ class LastTick(_Model):
     acknowledged: int | None = None
 
 
-class Spend(_Model):
+type PauseChannel = Literal["loop", "cli", "web"]
+
+
+class Pause(_Model):
+    """The operator paused the loop (DESIGN §6): since when, and through which channel."""
+
+    since: datetime
+    # `loop` is the `p` key at the loop's terminal.
+    channel: PauseChannel
+
+
+class LoopState(_Model):
+    """Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes."""
+
+    paused: Pause | None = None
+
+
+class PauseChanged(_Model):
+    """What a pause or a resume did: whether the loop was already so, and the state it left."""
+
+    already: bool
+    loop: LoopState
+
+
+class SpendWindow(_Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 
-    Worker, split, and chore runs and each tick's overseer, by when they started. Reviews record nothing yet.
+    Worker, split, chore, and review runs and each tick's overseer, by when they started.
     """
 
     since: datetime
     hours: int
     # None when nothing in the window reported a cost.
     cost_usd: float | None = None
+
+
+class Spend(_Model):
+    """What the last day and the last 30 days cost, read together, so a month never shows less than its day."""
+
+    day: SpendWindow
+    month: SpendWindow
+
+
+# Where a search hit is (DESIGN §22, Search), in the order the search reads them.
+type SearchSource = Literal["ticket", "message", "chore_run", "decision", "tick"]
+
+
+class SearchHit(_Model):
+    """One row holding every word of a search, and where it opens."""
+
+    source: SearchSource
+    at: datetime
+    # The field that matched, on one line, cut around its first match: untrusted text.
+    snippet: str
+    # The ticket a hit is, or whose message or decision it is.
+    ticket_key: str | None = None
+    # The chore a run, note, or decision is about.
+    chore: str | None = None
+    # The run that reported a message, or a chore run's own id.
+    run_id: int | None = None
+    # A tick, or the tick that recorded a decision.
+    tick_id: int | None = None
+    # A fixed word: a message's kind (`note` for a chore's), a decision's action, a status, or a ticket's phase.
+    label: str | None = None
+
+
+class SearchResults(_Model):
+    """A search: the words it looked for, its hits by source and newest first, and the sources that had more."""
+
+    words: list[str]
+    hits: list[SearchHit]
+    more: list[SearchSource]
 
 
 class AttentionUpdated(_Model):
@@ -512,7 +574,7 @@ class TicketChanged(_Model):
 
 
 class SpendUpdated(_Model):
-    """What the last 24 hours cost changed. The payload is the whole figure, as `GET /spend` returns it."""
+    """What a window cost changed. The payload is both windows, as `GET /spend` returns them."""
 
     type: Literal["spend.updated"] = "spend.updated"
     spend: Spend
@@ -526,6 +588,13 @@ class TickUpdated(_Model):
     acknowledged: int | None = None
 
 
+class LoopUpdated(_Model):
+    """The loop was paused or resumed. The payload is what `GET /loop` returns."""
+
+    type: Literal["loop.updated"] = "loop.updated"
+    paused: Pause | None = None
+
+
 class StreamEvent(
     RootModel[
         Annotated[
@@ -535,7 +604,8 @@ class StreamEvent(
             | TicketChanged
             | ChoresUpdated
             | SpendUpdated
-            | TickUpdated,
+            | TickUpdated
+            | LoopUpdated,
             Field(discriminator="type"),
         ]
     ]

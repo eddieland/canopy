@@ -12,23 +12,29 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.config import load
 from canopy.infra import procs
 from canopy.loop import attention
 from canopy.reviews import result
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
 PR = "https://github.com/acme/api/pull/7"
-COMMENT = f"{PR}#issuecomment-41"
 FINDINGS = {
     "status": "done",
     "verdict": "findings",
     "impact": "normal",
-    "comment": COMMENT,
     "summary": "One blocking defect.",
-    "findings": [{"severity": "blocking", "title": "retry never stops", "location": "src/retry.py:42"}],
+    "findings": [
+        {
+            "severity": "blocking",
+            "title": "retry never stops",
+            "location": "src/retry.py:42",
+            "detail": "The loop resets attempts on every error.\nA failing call retries forever.",
+        }
+    ],
 }
-CLEAN = {"status": "done", "verdict": "clean", "impact": "low", "comment": COMMENT, "summary": "Nothing found."}
+CLEAN = {"status": "done", "verdict": "clean", "impact": "low", "summary": "Nothing found."}
 
 
 @pytest.fixture
@@ -59,12 +65,19 @@ def reviewer_reports(monkeypatch: pytest.MonkeyPatch, report: object, *commands:
     monkeypatch.setenv("FAKE_REVIEWER_COMMANDS", json.dumps(list(commands)))
 
 
-def run_inline(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str, sha: str) -> int:
+def run_inline(
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    *args: str,
+    sha: str,
+    pr: str = PR,
+    runner: InlineRunner | None = None,
+) -> int:
     """Start a review in its own tick and do its `_review` in this process, as the detached one would."""
     tick_id = in_tick(conn, monkeypatch)
-    assert main(review(*args, sha=sha), runner=InlineRunner()) == 0
+    assert main(review(*args, sha=sha, pr=pr), runner=InlineRunner()) == 0
     run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
-    assert main(["_review", str(run_id)], runner=InlineRunner()) == 0
+    assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
     return run_id
@@ -133,7 +146,8 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
     prompt = reviewer["argv"][3]
     assert prompt.startswith("# canopy reviewer\n")
     assert f"- Checkout: `{run_dir / 'checkout'}` is the repository at that commit." in prompt
-    assert f'<!-- canopy-review {{"v":1,"run":1,"sha":"{sha}",' in prompt
+    assert "Post nothing anywhere" in prompt
+    assert "canopy-review" not in prompt
     assert "None: never report `low`." in prompt
     assert prompt.rstrip().endswith(result.CONTRACT)
 
@@ -190,7 +204,7 @@ def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, m
     ]
     reasons = {d[2]: d[3] for d in decisions(conn, tick_id)}
     assert reasons["refused:reviewed"] == (
-        f"review run 1 already reviewed {sha[:12]} (clean, {COMMENT}); one review per commit"
+        f"review run 1 already reviewed {sha[:12]} (clean, impact low); one review per commit"
     )
     assert reasons["refused:review_limit"] == "this PR has had 2 review runs and the limit is 2"
 
@@ -248,14 +262,8 @@ def test_a_dry_run_counts_its_reviews(reviews: CanopyEnv, monkeypatch: pytest.Mo
 @pytest.mark.parametrize(
     ("report", "status", "note"),
     [
-        ({**FINDINGS, "comment": None}, "failed", "the reviewer reported done without the URL of a comment on this PR"),
-        (
-            {**FINDINGS, "comment": "https://github.com/acme/api/pull/8#c"},
-            "failed",
-            "the reviewer reported done without",
-        ),
-        # PR 70's comment starts with PR 7's URL, but is not on it.
-        ({**FINDINGS, "comment": f"{PR}0#issuecomment-1"}, "failed", "the reviewer reported done without"),
+        # A reviewer from before reviews stayed in canopy may still name a comment: it is ignored (D114).
+        ({**FINDINGS, "comment": f"{PR}#issuecomment-1"}, "done", ""),
         (CLEAN, "done", "reported low impact, but review.low_impact is not set; recorded as normal"),
         ({**CLEAN, "findings": FINDINGS["findings"]}, "unknown", "the reviewer's last line was not a valid result"),
         ({"status": "failed", "summary": "cannot read the PR"}, "failed", ""),
@@ -408,13 +416,13 @@ def test_the_state_block_shows_reviewed_prs(
     [reviewed] = section["prs"]
     assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
     latest = reviewed["latest"]
-    assert (latest["status"], latest["verdict"], latest["impact"], latest["comment"]) == (
-        "done",
-        "findings",
-        "normal",
-        COMMENT,
-    )
+    assert (latest["status"], latest["verdict"], latest["impact"]) == ("done", "findings", "normal")
     assert latest["findings"] == ["retry never stops"]
+    assert latest["reviewed_at"] == f"{latest['ended_at'][:19]}Z"
+    # The overseer passes it as the unit's review cursor, which takes whole seconds only.
+    in_tick(conn, monkeypatch)
+    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={latest['reviewed_at']}"]) == 0
+    assert "comment" not in latest
 
 
 def test_attention_about_a_pr_without_a_ticket(
@@ -426,14 +434,14 @@ def test_attention_about_a_pr_without_a_ticket(
 ) -> None:
     commands = [
         ["canopy", "attention", "--pr", PR, "review_failed", "--detail", "review run 3 ended crashed"],
-        ["canopy", "attention", "PROJ-1", "review_unposted", "--pr", f"{PR}0", "--detail", "comment missing"],
+        ["canopy", "attention", "PROJ-1", "review_limit", "--pr", f"{PR}0", "--detail", "3 of 3 reviews"],
     ]
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(commands))
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
     assert main(["tick"]) == 0
     conn = journal(reviews)
     assert [(i.subject, i.reason) for i in attention.current(conn)] == [
-        ("PROJ-1", "review_unposted"),
+        ("PROJ-1", "review_limit"),
         (f"pr:{PR}", "review_failed"),
     ]
     capsys.readouterr()
@@ -464,7 +472,7 @@ def test_a_sink_that_takes_reviews_hears_when_one_ends(
     monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
     assert main(["tick"]) == 0
     [message] = out.read_text().split("--\n")[:-1]
-    assert f"< review run 1 of {PR} (PROJ-1) ended done: findings normal {COMMENT}\n" in message
+    assert f"< review run 1 of {PR} (PROJ-1) ended done: findings normal (1 findings)\n" in message
 
 
 def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
@@ -478,6 +486,152 @@ def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
     assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 1
     [(_, _, action, reason)] = decisions(conn, tick_id)
     assert action == "refused:bad_prompt"
-    assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}, {{RUN_ID}}")
+    assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}")
     assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
+
+
+def test_a_review_run_records_what_it_cost(
+    reviews: CanopyEnv, git_pool: GitPool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With OpenCode's JSON events, as the default `review_cmd` asks for, a review run records its session and cost."""
+    text = reviews.user_file.read_text()
+    reviews.write_user(
+        text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
+    )
+    reviewer_reports(monkeypatch, FINDINGS)
+    monkeypatch.setenv("FAKE_REVIEWER_SESSION", "ses_review")
+    conn = journal(reviews)
+    run_id = run_inline(conn, monkeypatch, sha=head(git_pool))
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "done", Path(row["log_path"]).read_text()  # the result line is read from the text events
+    assert row["session_id"] == "ses_review"
+    usage = db.usage_of(row)
+    assert usage is not None
+    assert usage.cost_usd == 0.25  # two model calls at 0.125
+    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+
+
+def test_a_timed_out_review_records_what_it_reported_before_the_kill(
+    reviews: CanopyEnv, git_pool: GitPool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
+    events = [
+        {"type": "step_finish", "sessionID": "ses_slow", "part": {"cost": 0.5, "tokens": tokens}},
+        {"type": "text", "sessionID": "ses_slow", "part": {"type": "text", "text": "still reading"}},
+    ]
+    stdout = "".join(json.dumps(e) + "\n" for e in events)
+    conn = journal(reviews)
+    runner = InlineRunner(timeout_agent=True, timeout_stdout=stdout)
+    run_id = run_inline(conn, monkeypatch, sha=head(git_pool), runner=runner)
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "timeout"
+    assert (row["session_id"], row["cost_usd"], row["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
+
+
+def test_the_default_review_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
+    assert "--format json" in load(canopy_env.root, canopy_env.user_file).runtime.review_cmd
+
+
+def implemented(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give PROJ-1 a branch, as its first implement would, so a resume has something to continue."""
+    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
+    tick_id = in_tick(conn, monkeypatch)
+    command = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+    assert main(command, runner=InlineRunner()) == 0
+    db.finish_tick(conn, tick_id, "ok", "test")
+    assert main(["_run", "1"], runner=InlineRunner()) == 0
+
+
+def resume(*args: str) -> list[str]:
+    return ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "resume", *args]
+
+
+def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing of a review is on the PR (D114): the worker reads its findings in its prompt."""
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, FINDINGS)
+    sha = head(git_pool)
+    review_id = run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=sha)
+    implemented(conn, monkeypatch)
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(resume("--review-run", str(review_id), "--context", "Address review run 1"), runner=InlineRunner()) == 0
+    [(_, _, action, rationale)] = decisions(conn, tick_id)
+    assert action == "dispatch:resume"
+    assert rationale.endswith(f"; review run {review_id}")
+    prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
+    section = prompt.split("## canopy's review\n\n", 1)[1].split("\n\nThese findings", 1)[0]
+    assert section == (
+        f"canopy's review run {review_id} of {PR} at commit `{sha}` found these (verdict findings, impact normal). "
+        "They are in canopy's journal only, not on the PR:\n"
+        "1. **blocking** `src/retry.py:42`: retry never stops\n"
+        "   > The loop resets attempts on every error.\n"
+        "   > A failing call retries forever."
+    )
+
+
+def test_a_resume_without_a_review_says_so(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = journal(reviews)
+    implemented(conn, monkeypatch)
+    in_tick(conn, monkeypatch)
+    assert main(resume(), runner=InlineRunner()) == 0
+    assert "## canopy's review\n\nNone.\n" in (reviews.state_dir / "runs" / "2.prompt").read_text()
+
+
+def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = journal(reviews)
+    sha = head(git_pool)
+    reviewer_reports(monkeypatch, FINDINGS)
+    of_ticket = run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=sha)
+    of_query = run_inline(conn, monkeypatch, sha=sha, pr=f"{PR}0")
+    # A commit origin does not have: the run fails, with nothing for a worker.
+    failed = run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha="b" * 40)
+    implemented(conn, monkeypatch)
+    tick_id = in_tick(conn, monkeypatch)
+    for args in (
+        resume("--review-run", "99"),
+        resume("--review-run", str(of_query)),
+        resume("--review-run", str(failed)),
+        [*resume()[:-2], "--kind", "fix-ci", "--review-run", str(of_ticket)],
+    ):
+        assert main(args, runner=InlineRunner()) == 1
+    assert [(d[2], d[3]) for d in decisions(conn, tick_id)] == [
+        ("refused:bad_review", "there is no review run 99"),
+        ("refused:bad_review", f"review run {of_query} reviewed {PR}0, not a PR of PROJ-1"),
+        ("refused:bad_review", f"review run {failed} ended failed with no findings to address"),
+        ("refused:bad_review", "--review-run names findings for a resume to address; it is for resume only"),
+    ]
+
+
+def test_the_operator_reads_reviews_in_canopy(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = journal(reviews)
+    assert main(["review", "show"]) == 0
+    assert capsys.readouterr().out == "no reviews in the last 14 days\n"
+    reviewer_reports(monkeypatch, {**FINDINGS, "summary": "One blocking defect.\x1b[2J"})
+    sha = head(git_pool)
+    run_id = run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=sha)
+    capsys.readouterr()
+    assert main(["review", "show"]) == 0
+    [line] = capsys.readouterr().out.splitlines()
+    assert line.startswith(f"{run_id}  ")
+    assert line.endswith(f"  done  findings, 1 findings, impact normal  {PR} @ {sha[:7]}")
+    assert main(["review", "show", str(run_id)]) == 0
+    shown = capsys.readouterr().out
+    assert shown.startswith(f"review run {run_id} of {PR} (PROJ-1) at {sha}\ndone, started ")
+    assert "\x1b" not in shown
+    assert "verdict findings, impact normal\n\nOne blocking defect. [2J\n\n1. **blocking** `src/retry.py:42`" in shown
+    assert main(["review", "show", "99"]) == 1

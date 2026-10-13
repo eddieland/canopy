@@ -24,6 +24,7 @@ from canopy.serve.options import ServeOptions
 from canopy.serve.schema import (
     AttentionUpdated,
     ChoresUpdated,
+    LoopUpdated,
     RunsUpdated,
     SpendUpdated,
     StreamEvent,
@@ -343,11 +344,11 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 8)
+    headers, events = read_events(served, 9)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, chores, spend, tick, changed, spent = (e.root for e in events)
+    first, runs, tickets, chores, spend, tick, loop, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
     assert isinstance(tickets, TicketsUpdated)
@@ -357,6 +358,8 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert isinstance(tick, TickUpdated)
     assert tick.tick is not None
     assert (tick.tick.id, tick.tick.status, tick.acknowledged) == (2, "ok", 8)
+    assert isinstance(loop, LoopUpdated)
+    assert loop.paused is None
     # The mock journal moves the running run's cost: only the runs list and the spend are sent again.
     assert isinstance(changed, RunsUpdated)
     before = next(r for r in runs.runs if r.id == mock.LIVE_RUN)
@@ -365,9 +368,11 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert before.cost_usd is not None
     assert after.cost_usd > before.cost_usd
     assert isinstance(spent, SpendUpdated)
-    assert spent.spend.cost_usd is not None
-    assert spend.spend.cost_usd is not None
-    assert spent.spend.cost_usd == pytest.approx(spend.spend.cost_usd + after.cost_usd - before.cost_usd)
+    assert (spent.spend.day.hours, spent.spend.month.hours) == (24, 720)
+    for was, now in ((spend.spend.day, spent.spend.day), (spend.spend.month, spent.spend.month)):
+        assert now.cost_usd is not None
+        assert was.cost_usd is not None
+        assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
 
 
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:
@@ -430,6 +435,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "StreamEvent",
         "Pool",
         "Spend",
+        "SpendWindow",
         "Tick",
         "ChoreSummary",
         "ChoreDetail",
@@ -437,6 +443,11 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "Decision",
         "Transcript",
         "TranscriptStatus",
+        "SearchResults",
+        "SearchHit",
+        "LoopState",
+        "Pause",
+        "PauseChanged",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -461,6 +472,10 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
         "/api/worktrees",
+        "/api/search",
         "/api/events",
+        "/api/loop",
+        "/api/loop/pause",
+        "/api/loop/resume",
     }
     assert set(schema["paths"]) == paths

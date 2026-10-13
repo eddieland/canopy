@@ -1,4 +1,4 @@
-"""Journal rows as the API's models: the attention list, runs, tickets and their conversations, chores, and ticks.
+"""Journal rows as the API's models: attention, runs, tickets and their conversations, chores, ticks, search hits.
 
 Reads only. Every text that came from an agent or the tracker stays untrusted: control characters are dropped from
 message bodies as `canopy show` drops them, run summaries are cut to one line, and the UI renders all of it as text.
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_result, chore_view, contract, conversation, db, items, transcript
+from canopy.core import chore_result, chore_view, contract, conversation, db, items, pause, search, transcript
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
@@ -21,12 +21,18 @@ from canopy.serve.schema import (
     Comment,
     Decision,
     LastTick,
+    LoopState,
     Message,
     MessageKind,
     MessageSource,
+    Pause,
+    PauseChannel,
     Run,
     RunState,
+    SearchHit,
+    SearchResults,
     Spend,
+    SpendWindow,
     StartStatus,
     Tick,
     TickDetail,
@@ -60,14 +66,16 @@ CHORE_RUNS = 10
 TICKS = 50
 TICKET_DECISIONS = 20
 SUMMARY_LENGTH = 300
-# The window the spend figure covers.
-SPEND_HOURS = 24
+# The windows the spend figures cover: the last day and the last 30.
+SPEND_DAY_HOURS = 24
+SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
 _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
 # A chore run that checked is done; every other ending raises `chore_failed` (DESIGN §19).
 _CHORE_STATES: dict[str, RunState] = {"running": "running", "ok": "done"}
 _SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
+_PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
 _KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "reply": "reply", "comment": "comment"}
 
 
@@ -95,14 +103,27 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last SPEND_HOURS hours cost, by the backend's clock."""
-    since = backend.clock() - timedelta(hours=SPEND_HOURS)
-    return Spend(since=since, hours=SPEND_HOURS, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
+    """What the last day and the last 30 days cost, by the backend's clock."""
+    now = backend.clock()
+    return Spend(day=_spent(ctx, now, SPEND_DAY_HOURS), month=_spent(ctx, now, SPEND_MONTH_HOURS))
+
+
+def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
+    since = now - timedelta(hours=hours)
+    return SpendWindow(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
 
 
 def last_tick(ctx: Context) -> LastTick:
     """The latest tick, and the newest message the latest `ok` tick read."""
     return LastTick(tick=tick(ctx), acknowledged=db.acknowledged_message_id(ctx.conn))
+
+
+def loop_state(ctx: Context) -> LoopState:
+    """Whether the operator paused the loop, since when, and through which channel."""
+    held = pause.paused(ctx.conn)
+    if held is None:
+        return LoopState()
+    return LoopState(paused=Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop")))
 
 
 def tick(ctx: Context) -> Tick | None:
@@ -121,7 +142,7 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         dry_run=bool(row["dry_run"]),
         started_at=db.parse_time(row["started_at"]),
         ended_at=db.parse_time(row["ended_at"]) if row["ended_at"] else None,
-        summary=conversation.printable(row["summary"]) if row["summary"] else None,
+        summary=lines(str(row["summary"] or "")) or None,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         decisions=decisions,
@@ -217,7 +238,7 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
 
 
 def decision(row: sqlite3.Row) -> Decision:
-    """One decision, named as `canopy decisions` names it, its rationale on one line as it prints it."""
+    """One decision, named as `canopy decisions` names it, its rationale with its line breaks."""
     chore = str(row["chore"]) if row["chore"] is not None else None
     pr = str(row["pr"]) if row["pr"] is not None else None
     key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
@@ -238,7 +259,7 @@ def decision(row: sqlite3.Row) -> Decision:
         chore=chore,
         pr=pr,
         action=str(row["action"]),
-        rationale=" ".join(conversation.printable(str(row["rationale"])).split()),
+        rationale=lines(str(row["rationale"])),
     )
 
 
@@ -295,10 +316,14 @@ def tokens(row: sqlite3.Row) -> int | None:
 
 
 def said(row: sqlite3.Row) -> str | None:
-    """What a run's or a chore run's result says, the harness's note first, on one line and cut."""
+    """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut."""
     result = contract.stored_object(row["result_json"])
-    text = " ".join(conversation.printable(str(result.get("harness") or result.get("summary") or "")).split())
-    return text[:SUMMARY_LENGTH] or None
+    return lines(str(result.get("harness") or result.get("summary") or ""))[:SUMMARY_LENGTH].rstrip() or None
+
+
+def lines(text: str) -> str:
+    """Agent-written text as a page lays it out: control characters dropped, line breaks kept, trailing space cut."""
+    return "\n".join(line.rstrip() for line in conversation.printable(text).splitlines()).strip("\n")
 
 
 def tickets(ctx: Context) -> list[TicketSummary]:
@@ -445,4 +470,26 @@ def chore_run(row: sqlite3.Row) -> ChoreRun:
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         tokens=tokens(row),
         log_path=str(row["log_path"]),
+    )
+
+
+def found(ctx: Context, query: str) -> SearchResults:
+    """The journal's rows holding every word of `query` (DESIGN §22, Search). Raises search.BadQueryError."""
+    result = search.search(ctx.conn, query)
+    return SearchResults(
+        words=list(result.words),
+        hits=[
+            SearchHit(
+                source=h.source,
+                at=db.parse_time(h.at),
+                snippet=h.snippet,
+                ticket_key=h.ticket_key,
+                chore=h.chore,
+                run_id=h.run_id,
+                tick_id=h.tick_id,
+                label=h.label,
+            )
+            for h in result.hits
+        ],
+        more=list(result.more),
     )

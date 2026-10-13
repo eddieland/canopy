@@ -17,6 +17,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity, type Severity } from '@/lib/attention'
 import { cn } from '@/lib/utils'
@@ -116,7 +117,7 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
                 data-testid={`attention-item-${item.id}`}
                 className={cn(
                     'flex flex-col gap-1 rounded-sm px-2.5 py-2 hover:bg-surface-raised',
-                    selected && 'bg-surface-raised',
+                    selected && 'bg-accent/14 hover:bg-accent/14',
                 )}
             >
                 <span className="flex items-center gap-2">
@@ -132,7 +133,7 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
 }
 
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return <Chip className={TONE[severity(item)]}>{item.reason}</Chip>
+    return <Chip className={TONE[severity(item)]} word={item.reason} />
 }
 
 /** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
@@ -219,6 +220,7 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             ) : (
                 <Conversation messages={messages} waiting={ticket.awaiting} />
             )}
+            <WorkingNow ticketKey={ticket.key} />
             <ReplyForm
                 key={ticket.key}
                 target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
@@ -256,7 +258,7 @@ function Workers() {
                         >
                             <RunDot state={run.state} />
                             <TicketLink ticketKey={run.ticket_key} className="w-20 truncate" />
-                            <Chip>{run.kind}</Chip>
+                            <Chip word={run.kind} />
                             <span className="ml-auto flex items-center gap-3">
                                 <span className="readout text-xs text-muted-foreground">
                                     {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
