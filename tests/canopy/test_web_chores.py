@@ -71,7 +71,7 @@ def test_a_chores_page_is_what_canopy_show_prints_and_any_other_name_is_refused(
     assert (latest["session_id"], latest["cost_usd"], latest["log_path"]) == (
         "ses_chore2",
         0.26,
-        "/home/op/.canopy/chores/2.log",
+        ".canopy/chores/2.log",
     )
     [note] = page["notes"]
     assert (note["id"], note["source"], note["kind"], note["channel"]) == (8, "operator", "reply", "cli")

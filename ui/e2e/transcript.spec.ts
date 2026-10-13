@@ -72,6 +72,36 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await expect(transcript).toContainText('Record the decision on ABC-101')
 })
 
+test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
+    await page.goto('chores/deps')
+    await settled(page)
+    await page.getByTestId('chore-run-2').getByRole('link', { name: '#2' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps #2')
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chores' })).toHaveAttribute(
+        'data-status',
+        'active',
+    )
+    await expect(page.getByTestId('chore-run-findings')).toContainText('lodash 4.17.20 has a prototype pollution')
+
+    const transcript = page.getByTestId('transcript')
+    await expect(transcript).toContainText('session ses_chore2')
+    const tools = transcript.getByTestId('transcript-tool')
+    await expect(tools).toHaveCount(2)
+    const web = tools.filter({ hasText: "Audit web's dependencies" })
+    await web.locator('summary').click()
+    await expect(web).toContainText('1 high severity vulnerability')
+
+    await page.getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps$/)
+
+    await page.goto('chores/build-health/runs/4')
+    await settled(page)
+    await expect(page.getByTestId('transcript')).toContainText('the session’s events reach the log when it ends')
+    await page.goto('chores/deps/runs/4')
+    await expect(page.getByText("chore 'deps' has no run 4")).toBeVisible()
+})
+
 test('a run that does not exist, or a path that names none, says so', async ({ page }) => {
     await page.goto('runs/99')
     await expect(page.getByText('no run 99')).toBeVisible()
