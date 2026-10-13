@@ -50,6 +50,14 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-marker', 'kept')
 })
 
+test('each nav item says on hover what its page holds', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('title', /ended last/)
+    for (const link of await nav.getByRole('link').all()) await expect(link).toHaveAttribute('title', /\w/)
+})
+
 test('the side rail runs the full height of the page and its nav stays in view when scrolled', async ({ page }) => {
     await page.goto('tickets/ABC-102')
     await settled(page)

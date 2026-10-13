@@ -17,21 +17,37 @@ import { countBySeverity, type Severity } from '@/lib/attention'
 import { type Section, SECTION_FILL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
-const ITEMS: { to: Section; label: string; icon: LucideIcon }[] = [
-    { to: '/attention', label: 'Attention', icon: Inbox },
-    { to: '/runs', label: 'Runs', icon: Activity },
-    { to: '/worktrees', label: 'Worktrees', icon: FolderTree },
-    { to: '/tickets', label: 'Tickets', icon: MessagesSquare },
-    { to: '/chores', label: 'Chores', icon: CalendarClock },
-    { to: '/ticks', label: 'Ticks', icon: History },
-    { to: '/settings', label: 'Settings', icon: SlidersHorizontal },
+// Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
+const ITEMS: { to: Section; label: string; icon: LucideIcon; hint: string }[] = [
+    { to: '/attention', label: 'Attention', icon: Inbox, hint: 'What needs you, most severe first' },
+    { to: '/runs', label: 'Runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
+    {
+        to: '/worktrees',
+        label: 'Worktrees',
+        icon: FolderTree,
+        hint: "Each repository's pool: its slots and what holds them",
+    },
+    {
+        to: '/tickets',
+        label: 'Tickets',
+        icon: MessagesSquare,
+        hint: 'Every ticket canopy has worked, and a form to start one',
+    },
+    { to: '/chores', label: 'Chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
+    { to: '/ticks', label: 'Ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
+    {
+        to: '/settings',
+        label: 'Settings',
+        icon: SlidersHorizontal,
+        hint: 'The theme, the ticker, the send key, and the session',
+    },
 ]
 
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
  * ticket's page keeps Tickets active, a chore's Chores, and a tick's Ticks. Attention shows how many items it lists, on
- * every page, split as its counter splits them.
+ * every page, split as its counter splits them. Hovering an item says what its page holds.
  */
 export function Nav() {
     const attention = useQuery(attentionQuery)
@@ -63,10 +79,11 @@ export function Nav() {
                     )}
                 />
             </span>
-            {ITEMS.map(({ to, label, icon: Icon }) => (
+            {ITEMS.map(({ to, label, icon: Icon, hint }) => (
                 <Link
                     key={to}
                     to={to}
+                    title={hint}
                     activeOptions={{ exact: false }}
                     className={cn(
                         'group relative flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-sm text-muted-foreground',

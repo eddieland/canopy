@@ -57,6 +57,7 @@ export function RailWorking() {
                         <li>
                             <Link
                                 to="/runs"
+                                title="Every run, on the runs page"
                                 className="block px-2.5 py-1 font-mono text-xs text-accent hover:underline"
                             >
                                 +{more} more
@@ -75,8 +76,8 @@ export function RailSpend() {
     return (
         <RailSection label="Spent" testId="rail-spend">
             <div className="grid grid-cols-2 gap-2 px-2.5">
-                <Spent window={spend?.day} label="24h" />
-                <Spent window={spend?.month} label="30d" />
+                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours" />
+                <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days" />
             </div>
         </RailSection>
     )
@@ -121,10 +122,10 @@ function RailSection({
 }
 
 /** One window's cost: a dash when nothing in it reported one. */
-function Spent({ window, label }: { window: SpendWindow | undefined; label: string }) {
+function Spent({ window, label, hint }: { window: SpendWindow | undefined; label: string; hint: string }) {
     const cost = window?.cost_usd ?? null
     return (
-        <div className="flex flex-col">
+        <div className="flex flex-col" title={hint}>
             {window === undefined ? (
                 <Skeleton className="h-5 w-14" />
             ) : (
