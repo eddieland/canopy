@@ -68,8 +68,34 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await settled(page)
     const transcript = page.getByTestId('transcript')
     await expect(transcript).toContainText('session ses_tick2')
-    await expect(transcript.getByTestId('transcript-tool')).toHaveCount(2)
-    await expect(transcript).toContainText('Record the decision on ABC-101')
+    const tools = transcript.getByTestId('transcript-tool')
+    await expect(tools).toHaveCount(4)
+    await expect(transcript).toContainText('4 tool calls, 1 refused')
+
+    // A shell call's line is its command, with what it printed when that is one short line.
+    const decide = tools.filter({ hasText: "canopy decide ABC-101 wait 'run 41 is implementing it.'" })
+    await expect(decide).toContainText('recorded decision 8')
+    // An untitled call's line is its input's short values.
+    await expect(tools.nth(1)).toContainText('method=get_status owner=acme repo=web pullNumber=88')
+    // canopy's refusal is marked so, though the runtime says the call completed.
+    const dispatch = tools.filter({ hasText: 'canopy dispatch ABC-104' })
+    await expect(dispatch).toContainText('refused: running')
+    await expect(dispatch).toContainText('dispatch refused (running): run 43 is still working ABC-104')
+
+    // JSON output opens indented.
+    await tools.nth(1).locator('summary').click()
+    await expect(tools.nth(1).locator('pre').last()).toContainText('{\n  "state": "pending",')
+
+    // A model call opens to its tokens by kind; Open all opens only the tool calls.
+    const call = transcript.getByTestId('transcript-step')
+    await expect(call).toHaveCount(1)
+    const split = call.locator('dl')
+    await expect(split).toBeHidden()
+    await call.locator('summary').click()
+    await expect(split).toHaveText('input2.3kcache read6.5kcache write512output930reasoning310')
+    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await expect(transcript.locator('details[open]')).toHaveCount(4)
+    await expect(split).toBeHidden()
 })
 
 test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {

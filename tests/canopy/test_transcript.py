@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import transcript
-from canopy.core.transcript import Error, Step, Text, ToolCall
+from canopy.core.transcript import Error, Step, Text, Tokens, ToolCall
 
 SESSION = "ses_abc123"
 T = 1_791_460_800_000  # 2026-10-08 12:00 UTC, in milliseconds
@@ -75,7 +75,7 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
             2500,
         ),
         ToolCall(AT, "read", "error", None, '{\n  "filePath": "/x"\n}', "no such file", None),
-        Step(AT, "tool-calls", 0.25, 573),
+        Step(AT, "tool-calls", 0.25, Tokens(100, 20, 3, 400, 50)),
         Error(AT, "APIError", ""),
     ]
     assert (found.truncated, found.unreadable) == (False, 0)
