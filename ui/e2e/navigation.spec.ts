@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, settled, signIn } from './helpers.ts'
+import { NOW, padDecisions, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -86,6 +86,18 @@ test('a ticket the journal does not know offers to start it', async ({ page }) =
     await page.goto('tickets/ZZZ-9')
     await expect(page.getByText('canopy has no record of it')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Start privately' })).toBeVisible()
+    await expect(page.getByRole('link', { name: 'jira.example/browse/ZZZ-9' })).toHaveAttribute(
+        'href',
+        'https://jira.example/browse/ZZZ-9',
+    )
+})
+
+test("a ticket's page links to it in the tracker, from tracker.ticket_url", async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    const link = page.getByRole('link', { name: 'jira.example/browse/ABC-102' })
+    await expect(link).toHaveAttribute('href', 'https://jira.example/browse/ABC-102')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
 })
 
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({
@@ -155,7 +167,7 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     expect((await reads).status()).toBe(200)
 })
 
-test('the worktrees page reads the pools again every 30 seconds, and only while it is open', async ({ page }) => {
+test('the worktrees page reads the pools again every 10 seconds, and only while it is open', async ({ page }) => {
     await page.clock.install()
     let reads = 0
     page.on('request', (r) => {
@@ -165,7 +177,7 @@ test('the worktrees page reads the pools again every 30 seconds, and only while 
     await settled(page)
     expect(reads).toBe(1)
 
-    await page.clock.runFor(29_000)
+    await page.clock.runFor(9_000)
     expect(reads).toBe(1)
     const next = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
     await page.clock.runFor(1_000)
@@ -229,6 +241,20 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await decisions.nth(1).getByRole('link', { name: 'tick 1' }).click()
     await expect(page).toHaveURL(/\/ticks\/1$/)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
+})
+
+test('a long list scrolls inside its panel, so the panels under it stay in reach', async ({ page }) => {
+    await padDecisions(page, 'ABC-102', 40)
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const region = page.getByRole('region', { name: 'Decisions' })
+    await expect(region.locator('li')).toHaveCount(40)
+    const { client, scroll } = await region.evaluate((el) => ({ client: el.clientHeight, scroll: el.scrollHeight }))
+    expect(scroll).toBeGreaterThan(client)
+    // The keyboard scrolls it: it takes focus, and End goes to the last row.
+    await region.focus()
+    await page.keyboard.press('End')
+    await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
 })
 
 test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {

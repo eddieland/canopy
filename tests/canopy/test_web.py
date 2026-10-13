@@ -68,6 +68,20 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/meta").json()["ticket_url"] is None
+
+    template = "https://jira.example/browse/{key}"
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    other = context(canopy_env)
+    try:
+        c, _ = signed_in_client(other)
+        assert c.get("/api/meta").json()["ticket_url"] == template
+    finally:
+        other.conn.close()
+
+
 def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
 
@@ -130,6 +144,35 @@ def test_stop_now_from_the_web_ends_the_run_as_canopy_stop_now_does(ctx: Context
     assert "canopy stop --now" in str(run["result_json"])
 
 
+def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forget_does(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    pr = "https://example.test/pr/1"
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith("unknown")
+    run_id = running_run(ctx, KEY)
+    db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase="in_review")
+    ctx.conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (f"agent/{KEY}-work", KEY))
+    ctx.conn.commit()
+
+    # The challenge is checked before anything is read: a wrong or missing key forgets nothing.
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": "PROJ-2"}, headers=headers)) == (
+        f"not_confirmed: type {KEY} to confirm forgetting its work"
+    )
+    assert c.post(f"/api/tickets/{KEY}/forget", json={}, headers=headers).status_code == 422
+    # The CLI's guards hold: a run still works it.
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith("running")
+    assert db.units(ctx.conn, KEY)
+
+    ctx.conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (run_id,))
+    ctx.conn.commit()
+    forgot = c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)
+    assert forgot.json() == {"branch": f"agent/{KEY}-work", "prs": [pr]}
+    ticket = db.get_ticket(ctx.conn, KEY)
+    assert ticket is not None
+    assert (ticket["branch"], ticket["phase"], ticket["forgotten_run_id"]) == (None, None, run_id)
+    assert db.units(ctx.conn, KEY) == []
+    assert db.get_run(ctx.conn, run_id) is not None
+
+
 def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
@@ -167,22 +210,26 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     assert c.get(f"/api/tickets/{KEY}").json()["ticket"]["awaiting"] is None
 
 
-def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_cost(ctx: Context) -> None:
+def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_days_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
     backend = dataclasses.replace(web.backend(ctx), clock=lambda: now)
-    assert views.spend(backend, ctx).cost_usd is None  # nothing reported yet
+    nothing = views.spend(backend, ctx)
+    assert (nothing.day.cost_usd, nothing.month.cost_usd) == (None, None)  # nothing reported yet
 
     def started(table: str, row_id: int, hours_ago: float, cost: float | None) -> None:
         at = db.format_time(now - timedelta(hours=hours_ago))
         ctx.conn.execute(f"UPDATE {table} SET started_at = ?, cost_usd = ? WHERE id = ?", (at, cost, row_id))  # noqa: S608
 
     started("runs", running_run(ctx, KEY), 2, 1.25)
-    started("runs", running_run(ctx, "PROJ-2"), 25, 9.0)  # before the window
+    started("runs", running_run(ctx, "PROJ-2"), 25, 9.0)  # before the day, within the 30 days
     started("runs", running_run(ctx, "PROJ-3"), 1, None)  # reported nothing
+    started("runs", running_run(ctx, "PROJ-4"), 30 * 24 + 1, 40.0)  # before both
     started("ticks", db.start_tick(ctx.conn, dry_run=False), 23.5, 0.5)
 
     spend = views.spend(backend, ctx)
-    assert (spend.hours, spend.since, spend.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
+    day, month = spend.day, spend.month
+    assert (day.hours, day.since, day.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
+    assert (month.hours, month.since, month.cost_usd) == (720, now - timedelta(days=30), pytest.approx(10.75))
 
 
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:

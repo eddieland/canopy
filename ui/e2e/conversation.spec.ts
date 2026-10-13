@@ -17,3 +17,27 @@ test("the operator's own words sit on the right of the thread, everyone else's o
     expect(Math.round(mine.x + mine.width)).toBe(Math.round(all.x + all.width - 12))
     expect(Math.round(theirs.x)).toBe(Math.round(all.x + 12))
 })
+
+test("a URL in a worker's report is a link to itself, opening in a new tab", async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    const link = page.getByTestId('conversation').getByRole('link', { name: 'https://github.com/acme/web/pull/91' })
+    await expect(link).toHaveAttribute('href', 'https://github.com/acme/web/pull/91')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+})
+
+test("a ticket's conversation ends on the run working it now, and only while one is", async ({ page }) => {
+    await page.goto('tickets/ABC-101')
+    await settled(page)
+    const working = page.getByTestId('working-41')
+    await expect(working).toContainText('working now')
+    await expect(working).toContainText('implement')
+    await working.getByRole('link', { name: 'run:41' }).click()
+    await expect(page).toHaveURL(/\/runs\/41$/)
+
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    await expect(page.getByTestId('conversation')).toBeVisible()
+    await expect(page.getByTestId('working-now')).toBeHidden()
+})

@@ -2,12 +2,17 @@ import { ExternalLink } from 'lucide-react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { LinkedText } from '@/components/linked-text'
+import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
-/** Runs, one row each: state, id, ticket, kind, when, cost, and what it said. `ticket` leaves out the ticket column. */
+/**
+ * Runs, one row each: state, id (opening the run's page), ticket, kind, when, cost, and what it said. `ticket` leaves
+ * out the ticket column.
+ */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
         <ul className="divide-y" data-testid="runs">
@@ -26,7 +31,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                     <RunDot state={run.state} />
                     {run.status}
                 </span>
-                <span className="readout w-14 text-xs text-muted-foreground">run:{run.id}</span>
+                <RunLink id={run.id} className="w-14" />
                 {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
                 <Chip>{run.kind}</Chip>
                 {run.private && <Chip>private</Chip>}
@@ -41,7 +46,11 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                     </span>
                 </span>
             </div>
-            {run.summary && <p className="pl-[6.75rem] text-sm break-words">{run.summary}</p>}
+            {run.summary && (
+                <p className="pl-[6.75rem] text-sm break-words">
+                    <LinkedText text={run.summary} />
+                </p>
+            )}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[6.75rem] font-mono text-xs">
                     {run.prs.map((pr) => (
@@ -62,7 +71,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                         </span>
                     ))}
                     {run.session_id && (
-                        <span className="text-muted-foreground" title="open its transcript with the runtime's tools">
+                        <span className="text-muted-foreground" title="its transcript is on the run's page">
                             session {run.session_id}
                         </span>
                     )}

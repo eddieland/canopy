@@ -7,12 +7,15 @@ import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
 import { Decisions } from '@/components/decisions'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { TicketActions } from '@/components/ticket-actions'
+import { TrackerLink } from '@/components/tracker-link'
 import { Skeleton } from '@/components/ui/skeleton'
+import { WorkingNow } from '@/components/working-now'
+import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
@@ -51,6 +54,7 @@ function TicketPage() {
 function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, runs, messages, decisions } = detail
     const now = useNow()
+    const tracker = useTicketUrl(ticket.key)
     const how = ticket.private
         ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
         : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
@@ -83,6 +87,14 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                                 {phaseLabel(ticket)}
                                 {ticket.done ? ', done' : ''}
                             </dd>
+                            {tracker && (
+                                <>
+                                    <dt className="panel-label self-center">tracker</dt>
+                                    <dd className="font-mono text-xs">
+                                        <TrackerLink href={tracker} />
+                                    </dd>
+                                </>
+                            )}
                             <dt className="panel-label self-center">branch</dt>
                             <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
                             {units.map((unit) => (
@@ -97,7 +109,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         {runs.length === 0 ? (
                             <Placeholder className="min-h-20">none</Placeholder>
                         ) : (
-                            <RunsTable runs={runs} ticket={false} />
+                            <PanelScroll label="Recent runs">
+                                <RunsTable runs={runs} ticket={false} />
+                            </PanelScroll>
                         )}
                     </Panel>
                     <Panel data-testid="ticket-decisions">
@@ -107,7 +121,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         {decisions.length === 0 ? (
                             <Placeholder className="min-h-20">no tick has decided anything about it yet</Placeholder>
                         ) : (
-                            <Decisions decisions={decisions} byTick />
+                            <PanelScroll label="Decisions">
+                                <Decisions decisions={decisions} byTick />
+                            </PanelScroll>
                         )}
                     </Panel>
                 </div>
@@ -120,6 +136,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     ) : (
                         <Conversation messages={messages} waiting={ticket.awaiting} />
                     )}
+                    <WorkingNow ticketKey={ticket.key} />
                     <ReplyForm
                         key={ticket.key}
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
@@ -156,10 +173,17 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
 }
 
 function Unknown({ ticketKey }: { ticketKey: string }) {
+    const tracker = useTicketUrl(ticketKey)
     return (
         <>
             <PageHeader label="Ticket" title={ticketKey}>
                 canopy has no record of it. Start it to work it privately.
+                {tracker && (
+                    <>
+                        {' '}
+                        It is at <TrackerLink href={tracker} />.
+                    </>
+                )}
             </PageHeader>
             <Panel>
                 <PanelHeader label="Start a ticket" />

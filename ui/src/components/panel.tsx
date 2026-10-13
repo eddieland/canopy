@@ -28,6 +28,23 @@ export function PanelHeader({ label, children }: { label: string; children?: Rea
     )
 }
 
+/**
+ * A panel's list that grows without bound (decisions, runs, findings): past a fixed height it scrolls inside the panel,
+ * so the panels under it stay in reach. A focusable region, so the keyboard scrolls it too; `label` names it.
+ */
+export function PanelScroll({ label, className, ...props }: ComponentProps<'section'> & { label: string }) {
+    return (
+        <section
+            aria-label={label}
+            // A scrolling region takes focus so the keyboard can scroll it (axe's scrollable-region-focusable).
+            // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+            className={cn('panel-scroll max-h-[28rem] focus-visible:-outline-offset-2', className)}
+            {...props}
+        />
+    )
+}
+
 /** Where a feature will go: reserves its space so the page does not move when the feature lands. */
 export function Placeholder({ className, children }: { className?: string; children: ReactNode }) {
     return (

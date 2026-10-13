@@ -2,11 +2,13 @@
 
 It reads canopy's `json` message format on stdin and posts one Slack message, to an incoming webhook or, given
 `--channel`, with a bot token through `chat.postMessage`, optionally under its own `--username` and `--icon-emoji`.
+Presentation is the sink's: the message is Block Kit built from the fields canopy sends, not from its text lines,
+with the same message as lines for Slack's notifications.
 The secret comes from a file that belongs to the operator and that nobody else can read, never from argv, the
 environment, or canopy's config: `--webhook-file PATH`, by default
 `$XDG_CONFIG_HOME/canopy/slack-webhook`, or `--token-file PATH`, by default `$XDG_CONFIG_HOME/canopy/slack-token`.
-Text from the journal, which agents and org members wrote, is escaped for Slack's markup, so it cannot mention a person
-or `@channel`, or show one link and point at another.
+Text from the journal, which agents and org members wrote, is escaped for Slack's markup and set `verbatim`, so it
+cannot mention a person or `@channel`, or show one link and point at another.
 
 Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on
 stderr; 2 the secret file, the channel, or the message on stdin is not usable, saying which. canopy retries anything
@@ -32,6 +34,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
@@ -203,21 +206,271 @@ def render(message: dict[str, object]) -> str:
     return "\n".join([header, *lines])
 
 
-def post(url: str, text: str) -> tuple[bool, str]:
-    """Post `text` to the webhook. Returns whether Slack accepted it, and its reply."""
+# Block Kit's limits: blocks in a message, characters in a section's text and in a header, elements in a context.
+_MAX_BLOCKS = 50
+_MAX_SECTION = 3000
+_MAX_HEADER = 150
+_MAX_CONTEXT = 10
+# Digest runs listed by name, as the text format lists them.
+_DIGEST_LISTED = 10
+_URL = re.compile(r"https?://[^\s|]+")
+_STATUS_EMOJI = {
+    "done": ":white_check_mark:",
+    "blocked": ":raising_hand:",
+    "failed": ":x:",
+    "crashed": ":boom:",
+    "timeout": ":hourglass:",
+    "abandoned": ":wastebasket:",
+    "stopped": ":octagonal_sign:",
+}
+
+type Block = dict[str, object]
+_DIVIDER: Block = {"type": "divider"}
+
+
+def _mrkdwn(text: str) -> Block:
+    # `verbatim`: Slack parses nothing in it, so journal text that says @channel or #general stays text. Links are
+    # made explicit by `_linked`, and dates by `_when`.
+    if len(text) > _MAX_SECTION:
+        text = text[: _MAX_SECTION - 1] + "…"
+    return {"type": "mrkdwn", "text": text, "verbatim": True}
+
+
+def _section(*lines: str) -> Block:
+    return {"type": "section", "text": _mrkdwn("\n".join(line for line in lines if line))}
+
+
+def _context(*parts: str) -> Block:
+    return {"type": "context", "elements": [_mrkdwn(part) for part in parts[:_MAX_CONTEXT]]}
+
+
+def _linked(text: object) -> str:
+    """`text`, escaped, each URL in it a link that shows the URL itself.
+
+    A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
+    """
+    return " ".join(f"<{word}>" if _URL.fullmatch(word) else word for word in escape(text).split(" "))
+
+
+def _when(at: object) -> str:
+    """`at`, an ISO time, as a Slack date in the reader's own time zone, falling back to `at` as written."""
+    try:
+        parsed = datetime.fromisoformat(str(at))
+    except ValueError:
+        return escape(at)
+    if parsed.tzinfo is None:
+        return escape(at)
+    return f"<!date^{int(parsed.timestamp())}^{{date_short_pretty}} {{time}}|{escape(at)}>"
+
+
+def _ended(e: dict[str, object], what: str) -> str:
+    """`what` ended with the event's status: led by the status's emoji, so a channel scans by outcome."""
+    status = e.get("status")
+    return f"{_STATUS_EMOJI.get(str(status), ':black_small_square:')} {what} ended *{escape(status)}*"
+
+
+def _quote(label: str, text: object) -> str:
+    return f"> *{label}:* {_linked(text)}" if text else ""
+
+
+def _counted(counts: object) -> str:
+    if not isinstance(counts, dict) or not counts:
+        return "none"
+    return ", ".join(f"{escape(k)} {escape(v)}" for k, v in sorted(counts.items(), key=lambda kv: str(kv[0])))
+
+
+def _run_started(e: dict[str, object]) -> Block:
+    return _section(
+        f":arrow_forward: *{escape(e.get('ticket'))}* · {escape(e.get('run_kind'))} run {escape(e.get('run'))} started",
+        f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))} on `{escape(e.get('branch') or '-')}`",
+    )
+
+
+def _run_ended(e: dict[str, object]) -> Block:
+    prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
+    run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
+    return _section(
+        _ended(e, f"*{escape(e.get('ticket'))}* · {run}"),
+        *(_linked(pr) for pr in prs),
+        _linked(e.get("summary")) if e.get("summary") else "",
+        _quote("Question", e.get("question")),
+    )
+
+
+def _chore_ended(e: dict[str, object]) -> Block:
+    findings = e.get("findings") or 0
+    return _section(
+        _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
+        + f" · {escape(findings)} finding{'s' if findings != 1 else ''}",
+        _linked(e.get("summary")) if e.get("summary") else "",
+    )
+
+
+def _review_ended(e: dict[str, object]) -> Block:
+    ticket = f"*{escape(e.get('ticket'))}* · " if e.get("ticket") else ""
+    verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
+    return _section(
+        _ended(e, f"{ticket}review run {escape(e.get('run'))}") + (f": {verdict}" if verdict else ""),
+        _linked(e.get("pr")) if e.get("pr") else "",
+        _quote("Comment", e.get("comment")),
+    )
+
+
+def _loop_failing(e: dict[str, object]) -> Block:
+    return _section(
+        f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok",
+        f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}; log `{escape(e.get('log'))}`",
+    )
+
+
+def _loop_recovered(e: dict[str, object]) -> Block:
+    return _section(f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks")
+
+
+def _sink_failing(e: dict[str, object]) -> Block:
+    return _section(
+        f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row", f"`{escape(e.get('error'))}`"
+    )
+
+
+def _test(e: dict[str, object]) -> Block:
+    return _section(f":test_tube: {_linked(e.get('text'))}")
+
+
+_EVENTS: dict[str, Callable[[dict[str, object]], Block]] = {
+    "run.started": _run_started,
+    "run.ended": _run_ended,
+    "chore.ended": _chore_ended,
+    "review.ended": _review_ended,
+    "loop.failing": _loop_failing,
+    "loop.recovered": _loop_recovered,
+    "loop.sink_failing": _sink_failing,
+    "test": _test,
+}
+
+
+def _event(e: dict[str, object]) -> Block:
+    """One event as a section built from its fields. A kind this sink does not know shows its text-format line."""
+    build = _EVENTS.get(str(e.get("kind")))
+    return build(e) if build is not None else _section(_linked(e.get("line") or e.get("kind")))
+
+
+def _attention(attention: dict[str, object]) -> list[Block]:
+    out = [
+        _section(
+            f":bell: *{escape(_subject(a.get('ticket'), a.get('repo')))}* · {escape(a.get('reason'))}",
+            _linked(a.get("detail")) if a.get("detail") else "",
+            f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
+        )
+        for a in _dicts(attention.get("added"))
+    ]
+    resolved = [
+        f":heavy_check_mark: ~{escape(_subject(r.get('ticket'), r.get('repo')))}~ {escape(r.get('reason'))}"
+        for r in _dicts(attention.get("resolved"))
+    ]
+    if resolved:
+        out.append(_section("*Resolved*", *resolved))
+    return out
+
+
+def _digest(digest: dict[str, object]) -> list[Block]:
+    ticks = digest.get("ticks")
+    total = sum(n for n in ticks.values() if isinstance(n, int)) if isinstance(ticks, dict) else 0
+    given = digest.get("attention")
+    attention: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
+    needs_you = "nothing"
+    if attention.get("open"):
+        needs_you = f"{escape(attention.get('open'))} open ({_counted(attention.get('by_reason'))})"
+        needs_you += f", oldest {escape(attention.get('oldest'))}" if attention.get("oldest") else ""
+    fields = [
+        f"*Ticks*\n{total} ({_counted(ticks)})",
+        f"*Workers running*\n{escape(digest.get('running', 0))}",
+        f"*Runs started*\n{_counted(digest.get('runs_started'))}",
+        f"*Runs ended*\n{_counted(digest.get('runs_ended'))}",
+        f"*Needs you*\n{needs_you}",
+    ]
+    out: list[Block] = [
+        {
+            "type": "section",
+            "text": _mrkdwn(f"*Digest* since {_when(digest.get('since'))}"),
+            "fields": [_mrkdwn(f) for f in fields],
+        }
+    ]
+    runs = [
+        f"{_STATUS_EMOJI['done']} *{escape(d.get('ticket'))}* {_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
+        for d in _dicts(digest.get("done"))[:_DIGEST_LISTED]
+    ]
+    runs += [f"{_STATUS_EMOJI['blocked']} *{escape(b.get('ticket'))}*" for b in _dicts(digest.get("blocked"))]
+    if runs:
+        out.append(_section(*runs[: 2 * _DIGEST_LISTED]))
+    return out
+
+
+def blocks(message: dict[str, object]) -> list[Block]:
+    """Return Block Kit blocks for one canopy `json` message, built from its fields rather than its text lines.
+
+    A header with the repository directory name and counts, a section per attention item and per event, the resolved
+    items together, and the digest as fields. At most Slack's 50 blocks, the last saying how many were left out.
+    """
+    repo = Path(str(message.get("repo") or "")).name or "canopy"
+    header: Block = {"type": "plain_text", "text": f"canopy · {repo}"[:_MAX_HEADER]}
+    out: list[Block] = [{"type": "header", "text": header}]
+    counts: list[str] = []
+    given = message.get("attention")
+    body: list[Block] = []
+    if isinstance(given, dict):
+        attention: dict[str, object] = {str(k): v for k, v in given.items()}
+        added, resolved = _dicts(attention.get("added")), _dicts(attention.get("resolved"))
+        if added or resolved:
+            counts.append(f"{len(added)} new · {len(resolved)} resolved · {escape(attention.get('open', 0))} open")
+        body = _attention(attention)
+    events = _dicts(message.get("events"))
+    if events:
+        counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
+        body += [_DIVIDER] if body else []
+        body += [_event(e) for e in events]
+    digest = message.get("digest")
+    if isinstance(digest, dict):
+        counts.append("digest")
+        body += [_DIVIDER] if body else []
+        body += _digest({str(k): v for k, v in digest.items()})
+    if counts:
+        out.append(_context(" · ".join(counts)))
+    out += body
+    omitted = message.get("omitted")
+    more = omitted if isinstance(omitted, int) else 0
+    if len(out) + (1 if more else 0) > _MAX_BLOCKS:
+        more += len(out) - (_MAX_BLOCKS - 1)
+        out = out[: _MAX_BLOCKS - 1]
+    if more:
+        out.append(_context(f"_… and {more} more: see `canopy status`_"))
+    return out
+
+
+def post(url: str, text: str, blocks: list[Block]) -> tuple[bool, str]:
+    """Post `blocks` to the webhook, with `text` for notifications. Returns whether Slack accepted it, and its reply."""
     # `read_webhook` checked the URL's scheme and host.
-    return _post(url, {"text": text}, {"Content-Type": "application/json"})
+    return _post(url, {"text": text, "blocks": blocks}, {"Content-Type": "application/json"})
 
 
 def post_message(
-    api_url: str, token: str, channel: str, text: str, *, username: str | None = None, icon_emoji: str | None = None
+    api_url: str,
+    token: str,
+    channel: str,
+    text: str,
+    blocks: list[Block],
+    *,
+    username: str | None = None,
+    icon_emoji: str | None = None,
 ) -> tuple[bool, str]:
-    """Post `text` to `channel` with `chat.postMessage`, as `username` with `icon_emoji` when given.
+    """Post `blocks` to `channel` with `chat.postMessage`, as `username` with `icon_emoji` when given.
+
+    `text` is what Slack shows in a notification, and where blocks cannot be shown.
 
     Returns whether Slack accepted it, and its reply.
     """
     headers = {"Content-Type": "application/json; charset=utf-8", "Authorization": f"Bearer {token}"}
-    payload = {"channel": channel, "text": text}
+    payload: dict[str, object] = {"channel": channel, "text": text, "blocks": blocks}
     if username is not None:
         payload["username"] = username
     if icon_emoji is not None:
@@ -233,7 +486,7 @@ def post_message(
     return isinstance(parsed, dict) and parsed.get("ok") is True, reply
 
 
-def _post(url: str, payload: dict[str, str], headers: dict[str, str]) -> tuple[bool, str]:
+def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tuple[bool, str]:
     request = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers, method="POST")  # noqa: S310
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
@@ -285,7 +538,7 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
             parser.error(f"{flag} needs --channel")
     if args.channel is not None and args.webhook_file is not None:
         parser.error("--webhook-file and --channel are two ways to post; give one")
-    send: Callable[[str], tuple[bool, str]]
+    send: Callable[[str, list[Block]], tuple[bool, str]]
     try:
         if args.channel is None:
             send = functools.partial(post, read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix))
@@ -303,7 +556,7 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
         return 2
-    ok, reply = send(render(parsed))
+    ok, reply = send(render(parsed), blocks(parsed))
     if not ok:
         print(f"canopy-notify-slack: Slack refused the post: {reply[:_MAX_REPLY]}", file=sys.stderr)  # noqa: T201
         return 1

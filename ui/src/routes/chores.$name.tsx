@@ -7,7 +7,8 @@ import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreFinding, ChoreRun } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreNotes } from '@/components/chore-notes'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { LinkedText } from '@/components/linked-text'
+import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import { choreLine, windowText } from '@/lib/chores'
@@ -84,11 +85,13 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                         {chore.findings.length === 0 ? (
                             <Placeholder className="min-h-20">none: its latest ok run found nothing</Placeholder>
                         ) : (
-                            <ul className="divide-y">
-                                {chore.findings.map((finding) => (
-                                    <Finding key={finding.id} finding={finding} />
-                                ))}
-                            </ul>
+                            <PanelScroll label="Open findings">
+                                <ul className="divide-y">
+                                    {chore.findings.map((finding) => (
+                                        <Finding key={finding.id} finding={finding} />
+                                    ))}
+                                </ul>
+                            </PanelScroll>
                         )}
                     </Panel>
                     <Panel>
@@ -98,11 +101,13 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                         {runs.length === 0 ? (
                             <Placeholder className="min-h-20">never run</Placeholder>
                         ) : (
-                            <ul className="divide-y" data-testid="chore-runs">
-                                {runs.map((run) => (
-                                    <RunRow key={run.id} run={run} />
-                                ))}
-                            </ul>
+                            <PanelScroll label="Recent runs">
+                                <ul className="divide-y" data-testid="chore-runs">
+                                    {runs.map((run) => (
+                                        <RunRow key={run.id} run={run} />
+                                    ))}
+                                </ul>
+                            </PanelScroll>
                         )}
                     </Panel>
                 </div>
@@ -124,7 +129,9 @@ function Finding({ finding }: { finding: ChoreFinding }) {
                 <Age at={finding.since} className="ml-auto" />
             </div>
             {finding.detail && (
-                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">{finding.detail}</p>
+                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
+                    <LinkedText text={finding.detail} />
+                </p>
             )}
             {finding.link && (
                 <a
@@ -166,7 +173,11 @@ function RunRow({ run }: { run: ChoreRun }) {
                     </span>
                 </span>
             </div>
-            {run.summary && <p className="pl-[9.5rem] text-sm break-words">{run.summary}</p>}
+            {run.summary && (
+                <p className="pl-[9.5rem] text-sm break-words">
+                    <LinkedText text={run.summary} />
+                </p>
+            )}
             <div
                 className={cn(
                     'flex flex-wrap items-center gap-x-4 gap-y-1 pl-[9.5rem]',

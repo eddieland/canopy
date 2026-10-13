@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { attentionQuery, runsQuery, spendQuery, ticketsQuery } from '@/api/queries'
+import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
 import { severity, type Severity } from '@/lib/attention'
 
-/** The loop at a glance, above the attention list: what runs, what waits on you, what needs you, what it cost. */
+/**
+ * The loop at a glance, above the attention list: what runs, what waits on you, what needs you, and what it cost in
+ * the last day and the last 30.
+ */
 export function Counters() {
     const runs = useQuery(runsQuery)
     const tickets = useQuery(ticketsQuery)
@@ -26,7 +30,6 @@ export function Counters() {
         return found
     }, {})
     const broken = (counts?.failed ?? 0) > 0
-    const cost = spend.data?.cost_usd
 
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="counters">
@@ -45,14 +48,24 @@ export function Counters() {
             <Counter label="Attention" value={attention.data?.length} tone={broken ? 'failed' : 'plain'}>
                 {counts === undefined ? null : breakdown(counts)}
             </Counter>
-            <Counter
-                label="Spent, 24h"
-                value={spend.data === undefined ? undefined : cost === null || cost === undefined ? '–' : usd(cost)}
-                tone="accent"
-            >
-                {spend.data === undefined ? null : cost === null ? 'nothing reported' : 'overseer and workers'}
-            </Counter>
+            <Spent label="Spent, 24h" testId="spent-24h" window={spend.data?.day} />
+            <Spent label="Spent, 30d" testId="spent-30d" window={spend.data?.month} />
         </div>
+    )
+}
+
+/** What one window cost: a dash when nothing in it reported a cost. */
+function Spent({ label, testId, window }: { label: string; testId: string; window: SpendWindow | undefined }) {
+    const cost = window?.cost_usd ?? null
+    return (
+        <Counter
+            label={label}
+            testId={testId}
+            value={window === undefined ? undefined : cost === null ? '–' : usd(cost)}
+            tone="accent"
+        >
+            {window === undefined ? null : cost === null ? 'nothing reported' : 'overseer and workers'}
+        </Counter>
     )
 }
 

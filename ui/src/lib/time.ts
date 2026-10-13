@@ -20,8 +20,8 @@ export function localTime(iso: string): string {
     return new Date(iso).toLocaleString()
 }
 
-// One clock for every age on the page: it ticks every 15 seconds while something reads it.
-const TICK_MS = 15_000
+// One clock for every age on the page: it ticks every second while something reads it, so an age in seconds counts.
+const TICK_MS = 1_000
 let now = Date.now()
 const listeners = new Set<() => void>()
 let timer: ReturnType<typeof setInterval> | undefined
@@ -44,7 +44,7 @@ function subscribe(listener: () => void): () => void {
     }
 }
 
-/** The current time, in milliseconds, updated every 15 seconds: enough for ages in minutes. */
+/** The current time, in milliseconds, updated every second. */
 export function useNow(): number {
     return useSyncExternalStore(
         subscribe,

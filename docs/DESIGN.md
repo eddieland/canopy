@@ -148,7 +148,7 @@ canopy (harness, Python)
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
                    request
     views.py       journal rows as the API's models: attention items, runs, tickets, messages
-    live.py        the event stream: data_version read once a second, changed lists sent whole
+    live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
     guard.py       Host and Origin checks, and security headers on every response
@@ -888,6 +888,7 @@ to do instead.
 | `tracker.provider` | shared | a property of the repository's tracker |
 | `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
+| `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
 | `tracker.labels` | user-only | defines this operator's queue |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
@@ -914,6 +915,7 @@ Workspace file, beside the map (§18):
 provider = "jira"            # jira | github | linear | any name; selects tracker-<provider> skill
 needs_human_label = "needs-human"
 query = 'project = PROJ AND statusCategory != Done'
+ticket_url = ""              # optional; a ticket's page, with {key} for its key, for the web UI to link (§17)
 
 [policy]
 max_implement_attempts = 2
@@ -998,6 +1000,8 @@ Rules:
   never set them (TRUST_MODEL §3).
 - `trust.branch_prefix` must be non-empty, end in `/`, and consist of plain ref components (letters, digits, `_`, `-`,
   each starting with a letter or digit) joined by `/`. Branch names reach git's argv.
+- `tracker.ticket_url` is empty (no links) or a plain `https://` URL of at most 500 characters with `{key}` exactly
+  once and no other braces, such as `https://acme.atlassian.net/browse/{key}`. The web UI puts it in an `href`.
 - `canopy init` sets up a workspace in the current directory, or fills in the one it is inside (§18). A new workspace
   is never the home directory, where every later init below it would land, and never a directory that already has a
   `.canopy/`, which may be an earlier canopy's journal. In a git checkout it refuses, unless given `--workspace`:
@@ -1092,8 +1096,8 @@ From events the harness also reads, each validated (D026):
 The default `overseer_cmd`, `worker_cmd`, `split_cmd`, and `chore_cmd` ask for events. A tick records what its
 overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), and `_chore` what a
 chore reports on its chore run (§19). Other templates may ask for them too; what reviews report is not recorded yet
-(ROADMAP M13). A tick's output file and a run log hold the events as
-printed.
+(ROADMAP M13). A tick's output file and a run log hold the events as printed, and the web UI reads one session's back
+from them as its transcript (§22).
 
 ### Where the runtime finds canopy's definitions
 
@@ -1249,7 +1253,12 @@ no tracker code in the harness. Tracker differences are handled in three places,
 1. **The contract below.** Agents map it onto the tools a tracker's MCP server exposes without being told how. This is
    the default for any tracker.
 2. **Config.** `tracker.provider`, `tracker.query`, the queue labels, `needs_human_label`, and
-   `trust.authorized_repliers` in the tracker's own identity format.
+   `trust.authorized_repliers` in the tracker's own identity format. `tracker.ticket_url`, optional, is where a
+   ticket's page is, with `{key}` for its key: the web UI links each ticket's page there (§22), the key URL-encoded.
+   It is the only tracker address canopy knows, and nothing but a browser the operator clicks in follows it (D003).
+   It is shared because the tracker's address is the team's, and a link runs nothing, spends nothing, and authorizes
+   no one (TRUST_MODEL T7). Not a URL per ticket from the overseer, which would put agent-written text in an `href`,
+   and not a link format per provider, which would be tracker code in the harness.
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action
    (closing keywords, smart commits). Skills ship for `jira` and `github`. A skill is optional; add one when the
@@ -1610,7 +1619,7 @@ workspaces = ["acme"]     # optional; default every workspace
 - A chore name matches `[a-z][a-z0-9-]*`.
 - `prompt` (required) is the operator's file, absolute or starting with `~` like every `paths.*` value.
   `examples/chores/build-health.md` is one to start from: it checks CI through the GitHub MCP server's read tools, so
-  it runs under the shipped `canopy-chore`.
+  it runs under the shipped `canopy-chore`. `examples/chores/README.md` lists more chores to write, and what not to.
 - `cmd` follows §12 (`{prompt}` exactly once, no shell); default `runtime.chore_cmd`. A chore using the operator's own
   tools needs its own agent definition (below), so `cmd` is usually set.
 - `every_minutes`, at least 15, is the shortest time between two run starts. A guard, not a schedule.
@@ -1921,6 +1930,12 @@ event carries its fields and `line` (its text-format line); the digest its count
 the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown fields. `text` serves a
 sink that only forwards a string.
 
+Presentation is the sink's. The fields are the contract, and a sink that can show more than lines builds its own
+message from them in its channel's native form, as the Slack sink does with Block Kit; `line`, `lines`, and `text`
+are canopy's one rendering, for sinks that only forward a string and as a fallback. So the harness never learns a
+channel's markup, and a new event kind needs fields a sink can present, not only a line. A sink shows a kind it does
+not know by its `line`.
+
 ### The desktop sink
 
 `canopy-notify-desktop` is a script in canopy's own install (`canopy.notify.desktop`), stdlib only (D035). It runs only
@@ -1977,10 +1992,15 @@ exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
   (`username` and `icon_emoji` in the body), which needs the app's `chat:write.customize` scope. The name must be
   printable, not blank, and at most 80 characters; the emoji one code, optionally with a skin tone
   (`:wave::skin-tone-3:`). Either without `--channel` is a usage error, exit 2: an app's webhook ignores both.
-- Message: a header with the repository directory name and counts, a line per item or event (ticket key, reason or
-  status, link), and the digest as a short block. Posted as `{"text": ...}`, at most 45 lines.
-- Journal text is escaped for Slack markup (`&`, `<`, `>`), so it cannot mention `@channel` or a person, or disguise a
-  link. Bare URLs stay clickable.
+- Message: Block Kit built from the fields (Formats, above): a header with the repository directory name, a line of
+  counts, a section per attention item (ticket, reason, detail, and since when, as a Slack date in the reader's time
+  zone), the resolved items together, a section per event led by an emoji for its status (ticket, kind, run, its PRs,
+  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. At most Slack's
+  50 blocks, the last counting what was left out. The `text` the post also carries is the message as at most 45 lines,
+  which Slack shows in notifications and where blocks cannot be shown.
+- Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
+  `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. Each URL in it is made a link
+  that shows the URL itself; one holding `|`, which would take a label, stays text.
 - Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
   `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
   scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set
@@ -2033,8 +2053,7 @@ Approved with M10:
 - Routing finer than groups, such as `crashed` to a phone and `needs_reviewer` to Slack only.
 - Digests at fixed times of day instead of an interval.
 - Reminders for items open longer than some threshold.
-- Links to tickets. The harness knows no tracker URLs (D003); a `tracker.ticket_url` template would let every message
-  link its ticket.
+- Links to tickets. `tracker.ticket_url` (§17) links them in the web UI; a sink's message could link its ticket too.
 - A sink secret read from a command (a password manager's CLI) instead of a file.
 
 ## 21. Reviews
@@ -2442,7 +2461,7 @@ separate `list`.
 ### Forgetting a ticket's work
 
 `canopy forget REF` has canopy drop a ticket's work so the loop starts it over (D086). It takes a ticket, public or
-private, from the operator's shell only, and:
+private, from the operator's shell or the web UI's Forget (below), and:
 
 - refuses `unknown` for a ticket the journal has no row for, `running` while a run works it (wait for it, or end a
   started ticket's with `canopy stop --now`), and `split` for a ticket a split made children of: they are tickets of
@@ -2534,7 +2553,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop; notes to chores (M23) | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget; notes to chores (M23) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -2549,21 +2568,25 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, and `reply` with channel `web` (a note to a chore is a `reply` on its
-  subject, as `canopy reply chore:NAME` is), and for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`. `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it
-  that function and the attention list's (`loop.attention.listed`) when it starts the server (`serve.backend`). The one
-  process it runs is `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the
-  pool's lock.
+  CLI uses: `conversation.start`, `stop`, `reply`, and `forget` with channel `web` (a note to a chore is a `reply`
+  on its subject, as `canopy reply chore:NAME` is), and for a stop with `now`, the same `runs.halt.end` as
+  `canopy stop --now`. A forget cannot be undone from the UI, so its request carries the ticket's key as the operator
+  typed it, and the server refuses `not_confirmed` before reading anything when it does not match, so no client skips
+  the challenge; one more click, as Stop now asks, is too easy to give by mistake. Its outcome
+  names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
+  `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it that function and the attention list's
+  (`loop.attention.listed`) when it starts the server (`serve.backend`). The one process it runs is
+  `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
-  the list, and the last 24 hours' spend, `ui/DESIGN.md`), runs (running, then the 50 that ended last), worktrees (each
-  pool's slots, below), tickets, each with its conversation and the decisions about it, chores (below), and ticks
-  (below). Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a note to a chore.
-  OpenCode's session attach (M15) is not in the UI: the runs page shows each run's session id, and attach joins once
-  M15 runs workers against OpenCode's server.
+  the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
+  ended last, each with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets,
+  each with its conversation and the decisions about it, chores (below), and ticks (below). Actions: the CLI's verbs,
+  reply, start, and stop (with or without `now`), and a note to a chore. OpenCode's session attach (M15) is not in the
+  UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once M15 runs
+  workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -2572,6 +2595,10 @@ Served by `canopy loop` from a thread (D073):
   the operator's session. React escapes text it renders, and nothing renders journal text as HTML
   (`dangerouslySetInnerHTML` is never given it). No inline script built from data. Message bodies are sent with control
   characters dropped, as `canopy show` prints them.
+- An http or https URL in journal text (a message body, a run's or tick's summary, a rationale, an attention item's or
+  finding's detail) is shown as a link whose text is the URL as written, opening in a new tab with no referrer (D113).
+  No other scheme is linked, and nothing else in the text becomes markup. A row that is itself a link (an attention
+  item in the list) links nothing inside it.
 - It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
   `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
   `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
@@ -2603,13 +2630,16 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, and whether the data is mock |
+| `GET /meta` | canopy's version, whether the data is mock, and `tracker.ticket_url` (or none) |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: kind, status, PRs, summary, session, cost, worktrees |
+| `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
+| `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
-| `GET /spend` | what the last 24 hours cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
+| `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
+| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -2631,18 +2661,18 @@ A guard's refusal is a 409 whose `detail` names the guard and gives its reason, 
 a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
 `web:<id>`, so a retried submission records nothing new.
 
-The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` once a second.
+The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
 spend, and the latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
-`tickets.updated`, `chores.updated`, `spend.updated` (when the cost changed; its window moves with the clock),
+`tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
 `tick.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with every list,
 the spend, and the latest tick. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
 sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,
-each only if a page shows it. The journal has
-no notifications, so a once-a-second read of one pragma is the cheapest way to learn of a change; nothing in the browser
-polls.
+each only if a page shows it. The journal has no notifications, so reading one pragma every quarter second is the
+cheapest way to learn of a change, and quick enough that a change shows as it happens; nothing in the browser polls.
+An age on a page (`5m ago`) counts on a clock that ticks every second.
 
 The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
 `canopy reply chore:NAME` does in the terminal.
@@ -2677,10 +2707,39 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 - A rationale is the overseer's text: untrusted, rendered as text, its control characters dropped and its whitespace
   collapsed to one line as `canopy decisions` prints it. It was cut at 2000 characters when recorded (§6).
 - A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
-- The tick's page names where the overseer's output is, `<state_dir>/ticks/<id>.log`, when the file exists, and does
-  not serve it: it is agent output from a file, unbounded and unchecked, where everything the UI shows comes from
-  the journal.
+- The tick's page names where the overseer's output is, `.canopy/ticks/<id>.log`, when the file exists, and shows its
+  session's transcript under the decisions (below).
 - The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
+
+The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
+`opencode export`.
+
+- `GET /runs/{id}/transcript` reads the run's log, and `GET /ticks/{id}/transcript` the tick's output, on each request
+  (`core/transcript.py`). Of the events in it (§13), only those of the session the journal recorded for the run or tick
+  are read; any other line (stderr, a setup command's output, the harness's markers, another session's events) is left
+  out, and the file itself is never served.
+- Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
+  call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
+  long it took; a `step_finish` is one model call's reason, tokens, and cost; an `error` is the runtime's. `step_start`
+  and any type canopy does not know are left out, and an event of a known type that does not validate is counted, not
+  shown.
+- Bounded: at most 32 MiB of the file, to its last whole line; at most 2000 entries and 2 million characters in all;
+  each text, output, and error cut at 20,000 characters, and an input at 5,000. A cut says so. Control characters are
+  dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
+  without following links and without blocking.
+- A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
+  events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8); a running run's
+  page says so. A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its
+  answer.
+- It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
+  again when `runs.updated` moves that run's status, and a tick's when `tick.updated` moves that tick's.
+- A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
+- Everything in a transcript is agent output: untrusted, rendered as text. It holds whatever a tool read or printed, a
+  file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
+- Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
+  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving the file,
+  or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed to its
+  log, or when a second runtime prints another shape.
 
 The worktrees page (taken on request, 2026-10-08): for each repository in the workspace, in map order, its pool's
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
@@ -2694,7 +2753,8 @@ running), `held` (leased or in use by anything else: the operator's own shell,
 with uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
 names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
-is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here and in the runs page's worktrees. When a pool's slots
+is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here, in the runs page's worktrees, and for a run's log and
+a tick's output. When a pool's slots
 share a directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
@@ -2708,7 +2768,7 @@ that pool for as long as it takes.
 It is not on the event stream: the journal does not hold a slot's branch or processes, and a `treehouse status` per
 pool once a second per open page would cost more than the page is worth. The UI reads it again when a `runs.updated`
 event changes which running runs hold which worktrees (a run's cost moving does not), when the operator asks, and
-every 30 seconds while a page shows it in a visible tab: what runs in a slot, whether it is dirty, and the slots
+every 10 seconds while a page shows it in a visible tab: what runs in a slot, whether it is dirty, and the slots
 a sync adds or removes never reach the journal, and a run's own refresh comes as it is recorded, before its worker has
 checked out its branch. Only an operator's read shows on the Read again button.
 
@@ -2755,7 +2815,6 @@ the operator's approval note.
   elsewhere; the overseer's `--context` holds 2000 characters.
 - Whether a private ticket's PR body and branch should name the ticket key.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
-- `forget` in the web UI. It is the CLI's only; the web channel would call the same function.
 - A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a
   limit from the `attempt_limit` refusal rather than before dispatching.
 - Mirrored comments edited or deleted after the mirror.

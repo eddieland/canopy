@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ExternalLink, RotateCw } from 'lucide-react'
 import { useState } from 'react'
 
-import { worktreesQuery } from '@/api/queries'
+import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES, type Pool, type Worktree, type WorktreeState } from '@/api/types'
 import { Age } from '@/components/age'
 import { Counter, type Tone } from '@/components/counter'
@@ -22,7 +22,7 @@ export const Route = createFileRoute('/worktrees')({
 
 function WorktreesPage() {
     const { data, error, refetch } = useQuery(worktreesQuery)
-    // Only a read the operator asked for shows on the button: the 30-second one would make it flicker.
+    // Only a read the operator asked for shows on the button: the timed one would make it flicker.
     const [reading, setReading] = useState(false)
     const readAgain = async () => {
         setReading(true)
@@ -48,7 +48,7 @@ function WorktreesPage() {
                     className="ml-auto"
                     onClick={() => void readAgain()}
                     disabled={reading}
-                    title="Read every 30 seconds while this page is open"
+                    title={`Read every ${WORKTREES_REFRESH_MS / 1000} seconds while this page is open`}
                     data-testid="worktrees-refresh"
                 >
                     <RotateCw />
