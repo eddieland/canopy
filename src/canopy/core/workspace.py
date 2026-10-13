@@ -6,8 +6,8 @@ for one repository: it reads no config from a code repository (D016).
 
 The map's `[workspace]` and `[repos]` tables are read here; its `[tracker]`, `[policy]`, and `[trust]` tables are the
 shared config layer, read by `config.load`. Summaries and `MAP.md` are data, like ticket text: they help choose a
-repository and authorize nothing. Clone URLs are read only by `canopy workspace sync`, never by a tick. A branch URL is
-only ever a link in the web UI.
+repository and authorize nothing. Clone URLs are read only by `canopy workspace sync`, never by a tick, and to make the
+web UI's branch links. A branch URL is only ever a link.
 """
 
 from __future__ import annotations
@@ -41,6 +41,12 @@ DESKS_DIR = "desks"
 MAX_SUMMARY = 200
 # Where a repository's `branch_url` puts a branch's name.
 BRANCH_NAME = "{branch}"
+# A GitHub clone URL as `git clone` takes it: https (credentials allowed, and dropped), scp-style SSH, or ssh://, with
+# an optional `.git` and trailing slash. Its owner and repository name make the default `branch_url` (D115).
+GITHUB_URL_RE = re.compile(
+    r"(?:https://(?:[^@/\s]+@)?|ssh://git@|git@)github\.com[/:]([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?/?",
+    re.IGNORECASE,
+)
 
 
 def _summary(value: str) -> str:
@@ -80,8 +86,8 @@ class _RepoTable(_Table):
     url: Annotated[StrictStr, AfterValidator(_url)]
     summary: Annotated[StrictStr, AfterValidator(_summary)] = ""
     # A branch's page on the repository's host, with {branch} where its name goes: the web UI links branches there
-    # (DESIGN §18). Empty means no link.
-    branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] = ""
+    # (DESIGN §18). Unset means the one `url` gives on GitHub, if any; empty means no link.
+    branch_url: Annotated[StrictStr, link_template(BRANCH_NAME)] | None = None
 
 
 class _Map(_Table):
@@ -248,11 +254,23 @@ def load(root: Path) -> Workspace:
             path=root / REPOS_DIR / name,
             url=table.url,
             summary=table.summary,
-            branch_url=table.branch_url,
+            branch_url=github_branch_url(table.url) if table.branch_url is None else table.branch_url,
         )
         for name, table in sorted(parsed.repos.items())
     )
     return Workspace(root=root, name=parsed.workspace.name or default_name(root), repos=repos, map_file=path)
+
+
+def github_branch_url(url: str) -> str:
+    """The branch link template a GitHub clone URL implies, for a repository whose map sets no `branch_url` (D115).
+
+    Returns:
+        `https://github.com/OWNER/REPO/tree/{branch}`, or an empty string, meaning no link, for any other URL.
+    """
+    match = GITHUB_URL_RE.fullmatch(url)
+    if match is None or match[2] in {".", ".."}:
+        return ""
+    return f"https://github.com/{match[1]}/{match[2]}/tree/{BRANCH_NAME}"
 
 
 def ensure_state_dir(state_dir: Path) -> None:

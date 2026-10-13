@@ -95,7 +95,6 @@ name = "acme"
 [repos.api]
 url = "https://github.com/acme/api.git"
 summary = "Public REST API. Owns the order schema and the generated OpenAPI spec."
-branch_url = "https://github.com/acme/api/tree/{branch}"
 
 [repos.web]
 url = "https://github.com/acme/web.git"
@@ -109,18 +108,22 @@ summary = "Customer web app. Consumes the api's generated client from a release.
 - `summary` is one line, at most 200 characters, rendered into the overseer's state block. `MAP.md` is prose the
   overseer and workers read: ownership, dependency direction, where contracts live, landing order. Both are data, like
   ticket text, and authorize nothing.
-- `branch_url`, optional, is where a branch's page is on the repository's host, with `{branch}` for its name: the web
-  UI links a ticket's branch in each of its repositories there, and a worktree's branch (§22), each `/`-separated part
-  of the name URL-encoded. It is empty (no links) or a plain `https://` URL of at most 500 characters with `{branch}`
-  exactly once and no other braces, checked as `tracker.ticket_url` is (§17), and for the same reasons: a template in
-  the map, not a URL the harness derives from `url`, which would be host code in the harness, and nothing but a
-  browser the operator clicks in follows it. A branch that was never pushed links to the host's not-found page.
+- A branch's page on the repository's host is where the web UI links a ticket's branch in each of its repositories,
+  and a worktree's branch (§22), each `/`-separated part of the name URL-encoded. By default canopy reads it from
+  `url`: a GitHub clone URL (`https://github.com/OWNER/REPO`, `git@github.com:OWNER/REPO`, or `ssh://`, with or
+  without `.git`) gives `https://github.com/OWNER/REPO/tree/{branch}`, and any other URL gives no link (D115). A
+  credential in the URL never reaches the link. `branch_url`, optional, overrides it: a template with `{branch}` for
+  the name, such as GitLab's `https://gitlab.com/acme/api/-/tree/{branch}`, checked as `tracker.ticket_url` is
+  (§17): a plain `https://` URL of at most 500 characters with `{branch}` exactly once and no other braces. An empty
+  `branch_url` turns the links off. Nothing but a browser the operator clicks in follows one, and a branch that was
+  never pushed links to the host's not-found page.
 - Config layers: built-in defaults, the workspace file, the user file (§12). The workspace file's policy may only
   tighten. Nothing in the repositories is read as config: one tracker, one queue.
 - A map committed to a shared repository is exposed as any file in it is (TRUST_MODEL T7). `url` is read only by the
   operator commands `canopy workspace sync`, which prints what it clones first, and `canopy workspace add`, which writes
-  it. Map URLs should be HTTPS (§12); `sync` warns about SSH ones and clones them anyway. A tick never clones or
-  changes a remote; a mapped repository with no clone is attention `repo_missing` and cannot be dispatched to.
+  it, and for the web UI's branch links. Map URLs should be HTTPS (§12); `sync` warns about SSH ones and clones them
+  anyway. A tick never clones or changes a remote; a mapped repository with no clone is attention `repo_missing` and
+  cannot be dispatched to.
 - `canopy init` writes, overwriting nothing: the workspace file (asking for the tracker provider), a
   `MAP.md`, a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and `.canopy/` (an existing one gains only
   missing lines), and the user file if missing. It prints the branch protection rules with every mapped repository

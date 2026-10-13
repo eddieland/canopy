@@ -41,7 +41,6 @@ name = "acme"
 
 [repos.api]
 url = "https://github.com/acme/api"
-branch_url = "https://github.com/acme/api/tree/{branch}"
 summary = "The public API."
 
 [repos.mobile]
@@ -50,7 +49,6 @@ summary = "The mobile app."
 
 [repos.web]
 url = "https://github.com/acme/web"
-branch_url = "https://github.com/acme/web/tree/{branch}"
 summary = "The web app."
 
 [tracker]

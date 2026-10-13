@@ -370,7 +370,7 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), and each repository's `branch_url` |
+| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), and each repository's branch link template |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
@@ -543,7 +543,7 @@ The worktrees page (taken on request, 2026-10-08): for each repository in the wo
 slots as `treehouse status --json` reports them, read when the page asks. Each slot is one line: its state (below;
 treehouse's own status on hover), its number (its path on hover), its lease holder, the branch it has checked out (or
 detached; a run's slot is detached, D109, and shows the run's branch), linking to its page on the host when the
-repository has a `branch_url` (§18), the processes treehouse found running in it,
+repository has a branch link (§18), the processes treehouse found running in it,
 and since when; an idle slot is its state and number alone, and a note gets a second line. A lease is matched to a
 running run or review by its lease id, as reconcile matches them, so a slot names the ticket, run kind, and run that
 hold it. The page groups slots in five states it colors: `working` (held by a run or review the journal shows
