@@ -230,6 +230,13 @@ Approved with M9:
   candidate, and opt-in per chore.
 - Whether `workspaces` should become a per-workspace table in the user file.
 - Whether a repository should offer chores operators opt into by name, as it offers its tracker query.
+- Whether a chore should get checkouts of the workspace's repositories, for a tool that reads files rather than
+  GitHub (today the operator keeps a checkout current and points `cwd` at it). The parts exist: a review's detached
+  checkout, linked from a private directory so no repository config loads (§21), and a desk for several (§18). Likely
+  first: the chore's table names the repositories, never the overseer, who still decides only when. The cost is
+  slots: a chore holding one in each repository it reads can block a dispatch, so it would count toward `capacity`
+  as a review does, and chores would then affect tickets, which they do not now. Also open: a chore in a workspace
+  whose map lacks one of its repositories.
 
 ## 20. Notifications
 
