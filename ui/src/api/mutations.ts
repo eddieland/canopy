@@ -10,18 +10,22 @@ import type { Forgot, LoopState, PauseChanged, Replied, Session, Started, Stoppe
  * with the same guards; a refusal is an ApiError naming its guard.
  */
 
+/** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
 export async function signIn(secret: string): Promise<Session> {
     return unwrap(await api.POST('/api/session', { body: { secret } }))
 }
 
+/** Signs this browser out: the server drops its session cookie. */
 export async function signOut(): Promise<Session> {
     return unwrap(await api.DELETE('/api/session'))
 }
 
+/** `canopy start`: the ticket is started privately, and the next tick picks it up. */
 export async function startTicket(key: string): Promise<Started> {
     return unwrap(await api.POST('/api/tickets/{key}/start', { params: { path: { key } } }))
 }
 
+/** `canopy stop`, or `canopy stop --now` with `now`, which also ends the run working it. */
 export async function stopTicket(key: string, now: boolean): Promise<Stopped> {
     return unwrap(await api.POST('/api/tickets/{key}/stop', { params: { path: { key } }, body: { now } }))
 }
@@ -31,6 +35,7 @@ export async function forgetTicket(key: string, confirm: string): Promise<Forgot
     return unwrap(await api.POST('/api/tickets/{key}/forget', { params: { path: { key } }, body: { confirm } }))
 }
 
+/** `canopy reply`: a message on the ticket for the next tick to read. `submission` makes a resend a no-op. */
 export async function replyTicket(key: string, body: string, submission: string): Promise<Replied> {
     return unwrap(
         await api.POST('/api/tickets/{key}/replies', { params: { path: { key } }, body: { body, submission } }),

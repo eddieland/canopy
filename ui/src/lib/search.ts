@@ -1,13 +1,16 @@
 import type { SearchHit, SearchSource } from '@/api/types'
 
 // The server's bounds on a query (core/search.py): it answers anything else with a 422, so the UI never sends it.
+/** The fewest characters a query may have. */
 export const SEARCH_MIN = 2
+/** The most characters a query may have. */
 export const SEARCH_MAX = 200
+/** The most distinct words a query may have. */
 export const SEARCH_WORDS = 8
-// How long the box waits after the last keystroke before it searches.
+/** How long the box waits after the last keystroke before it searches. */
 export const SEARCH_DEBOUNCE_MS = 250
 
-// The order the server reads its sources in, and each one's panel. `satisfies` fails the typecheck on a new source.
+/** The order the server reads its sources in, and each one's panel. `satisfies` fails the typecheck on a new source. */
 export const SEARCH_SOURCES = [
     'ticket',
     'message',
@@ -16,6 +19,7 @@ export const SEARCH_SOURCES = [
     'tick',
 ] as const satisfies readonly SearchSource[]
 
+/** Each source's panel title. */
 export const SOURCE_LABEL: Record<SearchSource, string> = {
     ticket: 'Tickets',
     message: 'Messages',
@@ -37,7 +41,9 @@ export function searchQueryOf(raw: unknown): string | undefined {
 
 /** One piece of a snippet: text, and whether it is one of the search's words. */
 export interface Piece {
+    /** The piece's characters, as they were in the snippet. */
     text: string
+    /** Whether it matches one of the search's words. */
     mark: boolean
 }
 

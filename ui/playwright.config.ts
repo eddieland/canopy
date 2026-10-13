@@ -18,6 +18,7 @@ const withSecret = (args: string): string =>
     `sh -c 'umask 077 && d=$(mktemp -d) && printf %s ${E2E_SECRET} > "$d/secret" && ` +
     `exec ${serve(`--secret-file "$d/secret" ${args}`)}'`
 
+/** Playwright against the production build, served by FastAPI over the mock journal: never the Vite dev server. */
 export default defineConfig({
     testDir: './e2e',
     fullyParallel: true,

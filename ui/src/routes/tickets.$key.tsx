@@ -20,6 +20,7 @@ import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
 
+/** One ticket: the operator's actions on it, its work, its recent runs and decisions, and its conversation. */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
 })
