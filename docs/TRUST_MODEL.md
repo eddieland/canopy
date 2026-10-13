@@ -390,6 +390,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
   following links; the file itself is never served, and nothing else under the state directory is read.
+- It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
+  `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
+  other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
+  without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
+  textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
   does, and pause and resume the loop as `canopy pause` and `canopy resume` do, nothing else. A forget must carry the

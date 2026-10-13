@@ -984,8 +984,9 @@ off the PR (D114), so canopy shows them itself, as a PR review of its own that o
   (DESIGN §21, The diff). Open: how a finding is followed from one commit's review to the next.
 
 Status: in progress. Migration 0016 records a review run's base branch, and `_review` keeps the diff, which
-`core/review_diff.py` reads back and anchors each finding on (2026-10-13). Next: the API that serves a review with
-its diff, then the pages.
+`core/review_diff.py` reads back and anchors each finding on (2026-10-13). `GET /reviews` and `GET /reviews/{id}`
+serve them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note.
+Next: the pages.
 
 ## M33. Spend by what it bought
 
