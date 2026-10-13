@@ -376,7 +376,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   the review's link, its state's dot and verdict in that state's color, its ticket (or `review.query`), the PR as a
   link out, the commit's first 7 characters, its impact, cost, and age.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
-  its page, its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
+  its page, named `org/repo#123` when it is GitHub's, as GitHub writes a reference (`pullRequestLabel`, the URL on
+  hover), its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
   state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
   a link out under it as a ticket's page has, then panels for its fields, the runs that pushed to it (`RunsTable`), its
