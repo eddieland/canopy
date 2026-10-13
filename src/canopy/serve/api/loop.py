@@ -14,18 +14,21 @@ from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
 from canopy.serve.schema import ConfigReload, LoopState, PauseChanged
 
-router = APIRouter()
+TAG = "loop"
+router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 
 
-@router.get("/loop", operation_id="getLoop")
+@router.get("/loop", operation_id="getLoop", summary="Get the loop's state")
 def loop(backend: BackendDep) -> LoopState:
+    """Whether the loop is paused: since when, and through which channel, or not."""
     with backend.open() as ctx:
         return views.loop_state(ctx)
 
 
-@router.post("/loop/pause", operation_id="pauseLoop")
+@router.post("/loop/pause", operation_id="pauseLoop", summary="Pause the loop")
 def pause_loop(backend: BackendDep) -> PauseChanged:
+    """`canopy pause`: no tick starts until the operator resumes the loop. A tick running now finishes."""
     with backend.open() as ctx:
         already = pause.pause(ctx.conn, channel=WEB)
         state = views.loop_state(ctx)
@@ -34,8 +37,9 @@ def pause_loop(backend: BackendDep) -> PauseChanged:
     return PauseChanged(already=already, loop=state)
 
 
-@router.post("/loop/resume", operation_id="resumeLoop")
+@router.post("/loop/resume", operation_id="resumeLoop", summary="Resume the loop")
 def resume_loop(backend: BackendDep) -> PauseChanged:
+    """`canopy resume`: ticks start again."""
     with backend.open() as ctx:
         already = pause.resume(ctx.conn)
         state = views.loop_state(ctx)
@@ -44,8 +48,12 @@ def resume_loop(backend: BackendDep) -> PauseChanged:
     return PauseChanged(already=already, loop=state)
 
 
-@router.post("/loop/reload", operation_id="reloadConfig", responses=REFUSED)
+@router.post("/loop/reload", operation_id="reloadConfig", summary="Reload the config", responses=REFUSED)
 def reload_config(backend: BackendDep) -> ConfigReload:
+    """Ask the loop to read its config again, as SIGHUP does. It writes nothing.
+
+    A config that does not validate is refused `config_invalid`, and the loop keeps the one it runs on.
+    """
     with backend.open() as ctx:
         try:
             found = backend.reload(ctx)

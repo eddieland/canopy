@@ -2,26 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException
 
 from canopy.serve import reviews
 from canopy.serve.api.deps import BackendDep
+from canopy.serve.api.refs import ReviewId, not_found
 from canopy.serve.schema import ReviewDetail, ReviewSummary
 
-router = APIRouter()
+TAG = "reviews"
+router = APIRouter(tags=[TAG])
 
 
-@router.get("/reviews", operation_id="listReviews")
+@router.get("/reviews", operation_id="listReviews", summary="List the reviews")
 def review_list(backend: BackendDep) -> list[ReviewSummary]:
+    """The latest 100 review runs canopy kept, newest first."""
     with backend.open() as ctx:
         return reviews.reviews(ctx)
 
 
 # The diff is read back from the file beside the run's log on each request; never on the stream.
-@router.get("/reviews/{run_id}", operation_id="getReview", responses={404: {"description": "No such review run."}})
-def review(run_id: Annotated[int, Path(ge=1, le=2**63 - 1)], backend: BackendDep) -> ReviewDetail:
+@router.get("/reviews/{run_id}", operation_id="getReview", summary="Get a review", responses=not_found("review run"))
+def review(run_id: ReviewId, backend: BackendDep) -> ReviewDetail:
+    """One review run: its summary, its findings anchored on its diff, the diff, and the PR's other runs."""
     with backend.open() as ctx:
         found = reviews.review(ctx, run_id)
     if found is None:
