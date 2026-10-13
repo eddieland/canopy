@@ -1,6 +1,10 @@
 """The subcommands the overseer calls during a tick, and `canopy status`."""
 
+import os
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
+from unittest import mock
 
 import pytest
 
@@ -15,10 +19,12 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     return canopy_env.journal()
 
 
-def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = True) -> int:
+@contextmanager
+def in_tick(conn: sqlite3.Connection, *, dry_run: bool = True) -> Iterator[int]:
+    """Start a tick, a dry run by default, and act inside it: CANOPY_TICK_ID names it until the block ends."""
     tick_id = db.start_tick(conn, dry_run=dry_run)
-    monkeypatch.setenv("CANOPY_TICK_ID", str(tick_id))
-    return tick_id
+    with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": str(tick_id)}):
+        yield tick_id
 
 
 @pytest.mark.parametrize(
@@ -40,142 +46,132 @@ def test_every_key_taking_command_rejects_bad_keys(
 
 
 def test_journal_commands_need_a_running_tick(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["decide", "PROJ-1", "wait", "--rationale", "r"]) == 1
     assert "CANOPY_TICK_ID is not set" in capsys.readouterr().err
-    tick_id = in_tick(conn, monkeypatch)
-    db.finish_tick(conn, tick_id, "ok", "done")
-    assert main(["attention", "PROJ-1", "needs_reviewer", "--detail", "d"]) == 1
-    assert "does not name a running tick" in capsys.readouterr().err
-    assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
+    with in_tick(conn) as tick_id:
+        db.finish_tick(conn, tick_id, "ok", "done")
+        assert main(["attention", "PROJ-1", "needs_reviewer", "--detail", "d"]) == 1
+        assert "does not name a running tick" in capsys.readouterr().err
+        assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
 
 
-def test_decide_records_and_touches_ticket(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["decide", "PROJ-1", "skip", "--rationale", "  blocked by PROJ-0  "]) == 0
-    assert main(["decide", "skip", "--rationale", "mcp_unavailable: tracker"]) == 0
-    rows = [(d["ticket_key"], d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
-    assert rows == [("PROJ-1", "skip", "blocked by PROJ-0"), (None, "skip", "mcp_unavailable: tracker")]
-    ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert ticket["repo"] == str(canopy_env.root)
+def test_decide_records_and_touches_ticket(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    with in_tick(conn) as tick_id:
+        assert main(["decide", "PROJ-1", "skip", "--rationale", "  blocked by PROJ-0  "]) == 0
+        assert main(["decide", "skip", "--rationale", "mcp_unavailable: tracker"]) == 0
+        rows = [(d["ticket_key"], d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+        assert rows == [("PROJ-1", "skip", "blocked by PROJ-0"), (None, "skip", "mcp_unavailable: tracker")]
+        ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
+        assert ticket["repo"] == str(canopy_env.root)
 
 
-def test_decide_needs_a_key_except_for_skip(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    in_tick(conn, monkeypatch)
-    assert main(["decide", "wait", "--rationale", "r"]) == 2
-    assert main(["decide", "PROJ-1", "dispatch:implement", "--rationale", "r"]) == 2
-    assert main(["decide", "PROJ-1", "wait", "--rationale", "   "]) == 2
-    assert main(["decide", "PROJ-1", "wait", "extra", "--rationale", "r"]) == 2
+def test_decide_needs_a_key_except_for_skip(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    with in_tick(conn):
+        assert main(["decide", "wait", "--rationale", "r"]) == 2
+        assert main(["decide", "PROJ-1", "dispatch:implement", "--rationale", "r"]) == 2
+        assert main(["decide", "PROJ-1", "wait", "--rationale", "   "]) == 2
+        assert main(["decide", "PROJ-1", "wait", "extra", "--rationale", "r"]) == 2
 
 
-def test_long_text_is_truncated(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["decide", "PROJ-1", "wait", "--rationale", "x" * 5000]) == 0
-    [row] = db.decisions_for_tick(conn, tick_id)
-    assert len(row["rationale"]) == 2000
+def test_long_text_is_truncated(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    with in_tick(conn) as tick_id:
+        assert main(["decide", "PROJ-1", "wait", "--rationale", "x" * 5000]) == 0
+        [row] = db.decisions_for_tick(conn, tick_id)
+        assert len(row["rationale"]) == 2000
 
 
-def test_attention_reason_format(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    in_tick(conn, monkeypatch)
-    assert main(["attention", "PROJ-1", "Needs Reviewer", "--detail", "d"]) == 2
+def test_attention_reason_format(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    with in_tick(conn):
+        assert main(["attention", "PROJ-1", "Needs Reviewer", "--detail", "d"]) == 2
 
 
-def test_dry_run_dispatch_records_branch_cursors_and_context(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    tick_id = in_tick(conn, monkeypatch)
-    assert (
-        main(
-            [
-                "dispatch",
-                "PROJ-2",
-                "--repo",
-                "repo",
-                "--label",
-                "agent-ready-tester",
-                "--kind",
-                "implement",
-                "--context",
-                "see comment 7",
-                "--cursor",
-                "comment=7",
-            ]
+def test_dry_run_dispatch_records_branch_cursors_and_context(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    with in_tick(conn) as tick_id:
+        assert (
+            main(
+                [
+                    "dispatch",
+                    "PROJ-2",
+                    "--repo",
+                    "repo",
+                    "--label",
+                    "agent-ready-tester",
+                    "--kind",
+                    "implement",
+                    "--context",
+                    "see comment 7",
+                    "--cursor",
+                    "comment=7",
+                ]
+            )
+            == 0
         )
-        == 0
-    )
-    assert (
-        main(
-            [
-                "dispatch",
-                "PROJ-3",
-                "--repo",
-                "repo",
-                "--label",
-                "agent-ready-tester",
-                "--kind",
-                "implement",
-                "--slug",
-                "add-login",
-            ]
+        assert (
+            main(
+                [
+                    "dispatch",
+                    "PROJ-3",
+                    "--repo",
+                    "repo",
+                    "--label",
+                    "agent-ready-tester",
+                    "--kind",
+                    "implement",
+                    "--slug",
+                    "add-login",
+                ]
+            )
+            == 0
         )
-        == 0
-    )
-    rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
-    assert rows == [
-        (
-            "dispatch:implement",
+        rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+        assert rows == [
             (
-                "dry run: not dispatched; would work on agent/PROJ-2-work in repo; label agent-ready-tester; "
-                "cursor comment=7; context=see comment 7"
+                "dispatch:implement",
+                (
+                    "dry run: not dispatched; would work on agent/PROJ-2-work in repo; label agent-ready-tester; "
+                    "cursor comment=7; context=see comment 7"
+                ),
             ),
-        ),
-        (
-            "dispatch:implement",
-            "dry run: not dispatched; would work on agent/PROJ-3-add-login in repo; label agent-ready-tester",
-        ),
-    ]
-    ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
-    assert ticket["last_comment_id"] is None  # a dry run never advances cursors
-    assert ticket["branch"] is None  # nor records a branch
+            (
+                "dispatch:implement",
+                "dry run: not dispatched; would work on agent/PROJ-3-add-login in repo; label agent-ready-tester",
+            ),
+        ]
+        ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-2'").fetchone()
+        assert ticket["last_comment_id"] is None  # a dry run never advances cursors
+        assert ticket["branch"] is None  # nor records a branch
 
 
 def test_dry_run_ticket_set_records_the_phase_only(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    in_tick(conn, monkeypatch)
-    assert (
-        main(
-            [
-                "ticket",
-                "set",
-                "PROJ-1",
-                "--repo",
-                "repo",
-                "--phase",
-                "merged",
-                "--cursor",
-                "review=2026-10-07T20:58:50Z",
-                "--done",
-            ]
+    with in_tick(conn):
+        assert (
+            main(
+                [
+                    "ticket",
+                    "set",
+                    "PROJ-1",
+                    "--repo",
+                    "repo",
+                    "--phase",
+                    "merged",
+                    "--cursor",
+                    "review=2026-10-07T20:58:50Z",
+                    "--done",
+                ]
+            )
+            == 0
         )
-        == 0
-    )
-    assert capsys.readouterr().out == "updated PROJ-1 (repo); dry run, cursors not advanced and not marked done\n"
-    row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["phase"], row["done"]) == (None, 0)
-    # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
-    [unit] = db.units(conn, "PROJ-1")
-    assert (unit["phase"], unit["last_review_id"]) == ("merged", None)
-    assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
+        assert capsys.readouterr().out == "updated PROJ-1 (repo); dry run, cursors not advanced and not marked done\n"
+        row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
+        assert (row["phase"], row["done"]) == (None, 0)
+        # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
+        [unit] = db.units(conn, "PROJ-1")
+        assert (unit["phase"], unit["last_review_id"]) == ("merged", None)
+        assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
 def test_decisions_prints_a_ticks_plan(
@@ -365,11 +361,11 @@ def test_status_and_attention_ages(
 
 @pytest.mark.parametrize("key", ["PROJ-1\n", "PROJ-1\r\n", "PROJ-1\n\n"])
 def test_trailing_line_breaks_are_not_part_of_a_valid_key(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, key: str
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, key: str
 ) -> None:
     # `$` in a Python regex also matches before a trailing newline; validation must use the whole string.
-    in_tick(conn, monkeypatch)
-    assert main(["decide", key, "wait", "--rationale", "r"]) == 2
-    assert main(["attention", "PROJ-1", "needs_reviewer\n", "--detail", "d"]) == 2
-    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=1\n"]) == 2
-    assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
+    with in_tick(conn):
+        assert main(["decide", key, "wait", "--rationale", "r"]) == 2
+        assert main(["attention", "PROJ-1", "needs_reviewer\n", "--detail", "d"]) == 2
+        assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=1\n"]) == 2
+        assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0

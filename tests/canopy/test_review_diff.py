@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -89,18 +90,18 @@ def test_control_characters_become_spaces_and_tabs_stay() -> None:
     assert [ln.text for ln in diff.files[0].hunks[0].lines] == ["a [2J", "\tb "]
 
 
-def test_bounds_cut_a_diff_and_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(review_diff, "MAX_LINES", 3)
-    diff = review_diff.parse(DIFF)
-    assert diff.truncated
-    assert sum(len(h.lines) for f in diff.files for h in f.hunks) == 3
-    monkeypatch.setattr(review_diff, "MAX_FILES", 1)
-    assert [f.path for f in review_diff.parse(DIFF).files] == ["src/retry.py"]
-    long = review_diff.parse(f"diff --git a/x b/x\n@@ -1 +1 @@\n+{'y' * 5000}\n")
-    assert len(long.files[0].hunks[0].lines[0].text) == review_diff.MAX_LINE_CHARS
+def test_bounds_cut_a_diff_and_say_so() -> None:
+    with mock.patch.object(review_diff, "MAX_LINES", 3):
+        diff = review_diff.parse(DIFF)
+        assert diff.truncated
+        assert sum(len(h.lines) for f in diff.files for h in f.hunks) == 3
+        with mock.patch.object(review_diff, "MAX_FILES", 1):
+            assert [f.path for f in review_diff.parse(DIFF).files] == ["src/retry.py"]
+            long = review_diff.parse(f"diff --git a/x b/x\n@@ -1 +1 @@\n+{'y' * 5000}\n")
+            assert len(long.files[0].hunks[0].lines[0].text) == review_diff.MAX_LINE_CHARS
 
 
-def test_reading_a_diff_beside_a_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reading_a_diff_beside_a_log(tmp_path: Path) -> None:
     path = review_diff.path_for(tmp_path / "7.log")
     assert path == tmp_path / "7.diff"
     assert review_diff.read(path) is None
@@ -109,8 +110,8 @@ def test_reading_a_diff_beside_a_log(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert found is not None
     assert len(found.files) == 4
     assert not found.truncated
-    monkeypatch.setattr(review_diff, "MAX_BYTES", 200)
-    cut = review_diff.read(path)
+    with mock.patch.object(review_diff, "MAX_BYTES", 200):
+        cut = review_diff.read(path)
     assert cut is not None
     assert cut.truncated
 

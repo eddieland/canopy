@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -9,6 +10,7 @@ from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest import mock
 
 import pytest
 
@@ -26,51 +28,65 @@ SCRIPTS_DIR = Path(sys.executable).parent
 # The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
 RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
 
+# Commits made under test have a fixed author, and git reads no config of the operator's or the machine's.
+HERMETIC_GIT = {
+    "GIT_AUTHOR_NAME": "canopy test",
+    "GIT_COMMITTER_NAME": "canopy test",
+    "GIT_AUTHOR_EMAIL": "test@example.test",
+    "GIT_COMMITTER_EMAIL": "test@example.test",
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+
 
 @pytest.fixture(autouse=True)
-def hermetic_agent_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets.
+def hermetic_agent_env() -> Iterator[None]:
+    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets, and restore the
+    whole environment when the test ends.
 
     Workers run this suite inside the agent runtime, which exports its own (OpenCode sets OPENCODE_PID). The fake
     agent records these prefixes and tests assert on them exactly, so an inherited one would fail them.
     """
-    for name in [k for k in os.environ if k.startswith(RECORDED_ENV_PREFIXES)]:
-        monkeypatch.delenv(name)
+    with mock.patch.dict(os.environ):
+        for name in [k for k in os.environ if k.startswith(RECORDED_ENV_PREFIXES)]:
+            del os.environ[name]
+        yield
 
 
 @pytest.fixture
-def fakes_on_path(monkeypatch: pytest.MonkeyPatch) -> Path:
+def fakes_on_path() -> Iterator[Path]:
     """Put tests/fakes first on PATH, so `treehouse` and `agent` resolve to the fakes, and this environment's `canopy`
     right after it."""
-    monkeypatch.setenv("PATH", os.pathsep.join([str(FAKES_DIR), str(SCRIPTS_DIR), os.environ.get("PATH", "")]))
-    return FAKES_DIR
+    path = os.pathsep.join([str(FAKES_DIR), str(SCRIPTS_DIR), os.environ.get("PATH", "")])
+    with mock.patch.dict(os.environ, {"PATH": path}):
+        yield FAKES_DIR
 
 
 @pytest.fixture
-def treehouse_state(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Fake treehouse on PATH with an empty pool. Returns its state file; write it to seed the pool, read it to assert.
+def treehouse_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
+    """Fake treehouse on PATH with an empty pool. Yields its state file; write it to seed the pool, read it to assert.
 
     The file does not exist until the first `treehouse` call. See tests/fakes/treehouse for its keys.
     """
     state = tmp_path / "treehouse.json"
-    monkeypatch.setenv("FAKE_TREEHOUSE_STATE", str(state))
-    monkeypatch.delenv("TREEHOUSE_LEASE_HOLDER", raising=False)
-    return state
+    with mock.patch.dict(os.environ, {"FAKE_TREEHOUSE_STATE": str(state)}):
+        os.environ.pop("TREEHOUSE_LEASE_HOLDER", None)
+        yield state
 
 
 @pytest.fixture
-def agent_log(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Fake agent on PATH with default behavior. Returns the file each run appends its argv and cwd to.
+def agent_log(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
+    """Fake agent on PATH with default behavior. Yields the file each run appends its argv and cwd to.
 
-    Tests change behavior with monkeypatch.setenv on the FAKE_AGENT_* variables, or FAKE_OVERSEER_* and FAKE_WORKER_*
-    for one role only; see tests/fakes/agent.
+    Tests change behavior with `mock.patch.dict(os.environ, ...)` on the FAKE_AGENT_* variables, or FAKE_OVERSEER_*
+    and FAKE_WORKER_* for one role only; see tests/fakes/agent.
     """
     log = tmp_path / "agent.jsonl"
-    for role in ("AGENT", "OVERSEER", "WORKER", "WORKER_PRIVATE", "SPLITTER", "CHORE", "REVIEWER"):
-        for name in ("RESULT", "EXIT", "SLEEP", "COMMANDS"):
-            monkeypatch.delenv(f"FAKE_{role}_{name}", raising=False)
-    monkeypatch.setenv("FAKE_AGENT_LOG", str(log))
-    return log
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_LOG": str(log)}):
+        for role in ("AGENT", "OVERSEER", "WORKER", "WORKER_PRIVATE", "SPLITTER", "CHORE", "REVIEWER"):
+            for name in ("RESULT", "EXIT", "SLEEP", "COMMANDS"):
+                os.environ.pop(f"FAKE_{role}_{name}", None)
+        yield log
 
 
 @dataclass
@@ -170,7 +186,7 @@ split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-
 
 
 @pytest.fixture
-def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, journals: Journals) -> CanopyEnv:
+def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
     """A workspace of one repository with its workspace file, and a user config whose runtime commands run the fake
     agent. HOME and XDG_CONFIG_HOME point into tmp_path too, so nothing reads or writes the real operator's files.
     CANOPY_TICK_ID is cleared."""
@@ -179,11 +195,6 @@ def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, journals: Journa
     repo = root / "repos" / REPO_NAME
     (repo / ".git").mkdir(parents=True)
     home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
-    monkeypatch.setenv("USER", "tester")
-    monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
-    monkeypatch.chdir(root)
     env = CanopyEnv(
         root=root,
         repo=repo,
@@ -196,7 +207,10 @@ def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, journals: Journa
     env.write_user(user_toml())
     # As canopy creates it, so a journal a test opens first is in a directory canopy accepts as the operator's own.
     env.state_dir.mkdir(mode=0o700)
-    return env
+    variables = {"HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "USER": "tester"}
+    with mock.patch.dict(os.environ, variables), contextlib.chdir(root):
+        os.environ.pop("CANOPY_TICK_ID", None)
+        yield env
 
 
 def pool_state(repo: Path, slots: Sequence[Mapping[str, object]], max_trees: int | None = None) -> str:
@@ -234,18 +248,16 @@ class GitPool:
 
 
 @pytest.fixture
-def git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> GitPool:
+def git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> Iterator[GitPool]:
     """Real git behind the fake treehouse: `treehouse get` leases one of two clones of a bare origin, as `repo`'s pool.
 
     Real treehouse slots are worktrees of one repository; clones behave the same for what canopy runs in a slot.
     """
-    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"):
-        monkeypatch.setenv(var, "canopy test")
-    for var in ("GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
-        monkeypatch.setenv(var, "test@example.test")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    with mock.patch.dict(os.environ, HERMETIC_GIT):
+        yield seed_git_pool(canopy_env, treehouse_state, tmp_path)
 
+
+def seed_git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> GitPool:
     origin = tmp_path / "origin.git"
     origin.mkdir()
     git("init", "--quiet", "--bare", "--initial-branch=main", cwd=origin)

@@ -1,8 +1,10 @@
 """`canopy grant` (DESIGN §8, §22): the operator lets a unit at its attempt limit run again; every run still counts."""
 
 import json
+import os
 import sqlite3
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -26,11 +28,11 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     return journal(canopy_env)
 
 
-def fail_twice(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+def fail_twice(conn: sqlite3.Connection) -> None:
     """Spend both of PROJ-1's implement attempts in `repo`."""
-    worker_does(monkeypatch, result=FAILED)
-    for _ in range(2):
-        assert dispatch_and_run(conn, monkeypatch, *LABEL, "--kind", "implement")["status"] == "failed"
+    with worker_does(result=FAILED):
+        for _ in range(2):
+            assert dispatch_and_run(conn, *LABEL, "--kind", "implement")["status"] == "failed"
 
 
 def grants(conn: sqlite3.Connection) -> list[tuple[str, str, str, int]]:
@@ -43,24 +45,24 @@ def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    fail_twice(conn, monkeypatch)
-    [first, _] = refused(conn, monkeypatch, *LABEL, "--kind", "implement")
+    fail_twice(conn)
+    [first, _] = refused(conn, *LABEL, "--kind", "implement")
     assert first == ("refused:attempt_limit", "PROJ-1 in repo has had 2 implement runs and the limit is 2")
 
     # The ticket has had runs in one repository, so the grant needs no --repo.
-    assert operator("grant", KEY, "implement", monkeypatch=monkeypatch) == 0
+    assert operator("grant", KEY, "implement") == 0
     assert "PROJ-1 in repo has had 2 implement runs, and may now have 3." in capsys.readouterr().out
-    run = dispatch_and_run(conn, monkeypatch, *LABEL, "--kind", "implement")
+    with worker_does(result=FAILED):
+        run = dispatch_and_run(conn, *LABEL, "--kind", "implement")
     assert "This is attempt 3 of 3." in prompt_of(canopy_env, int(run["id"]))
 
     # The granted run counted like any other: the unit is at its raised limit.
-    [first, _] = refused(conn, monkeypatch, *LABEL, "--kind", "implement")
+    [first, _] = refused(conn, *LABEL, "--kind", "implement")
     assert first == ("refused:attempt_limit", "PROJ-1 in repo has had 3 implement runs and the limit is 3")
     # Grants add up, and are per kind: resume keeps the policy's limit.
-    assert operator("grant", KEY, "implement", "--repo", "repo", "--runs", "2", monkeypatch=monkeypatch) == 0
+    assert operator("grant", KEY, "implement", "--repo", "repo", "--runs", "2") == 0
     assert "has had 3 implement runs, and may now have 5." in capsys.readouterr().out
     assert policy.grants(conn) == {(KEY, "repo"): {"implement": 3}}
     assert policy.unit_limits(config.load(canopy_env.root, canopy_env.user_file), policy.grants(conn)[KEY, "repo"]) == {
@@ -70,12 +72,12 @@ def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
     }
 
     # The overseer's state block shows the unit's grants beside its attempts, so it dispatches past the policy's limit.
-    overseer_does(monkeypatch, canopy("decide", KEY, "wait", "--rationale", "nothing new"))
-    assert main(["tick"]) == 0
-    [ticket] = state_block(agent_log)["tickets"]
-    [unit] = ticket["units"]
-    assert unit["attempts"] == {"implement": 3, "fix-ci": 0, "resume": 0}
-    assert unit["granted"] == {"implement": 3}
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "nothing new")):
+        assert main(["tick"]) == 0
+        [ticket] = state_block(agent_log)["tickets"]
+        [unit] = ticket["units"]
+        assert unit["attempts"] == {"implement": 3, "fix-ci": 0, "resume": 0}
+        assert unit["granted"] == {"implement": 3}
 
 
 def test_a_unit_with_no_grant_has_no_granted_key(
@@ -83,14 +85,13 @@ def test_a_unit_with_no_grant_has_no_granted_key(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fail_twice(conn, monkeypatch)
-    overseer_does(monkeypatch, canopy("decide", KEY, "wait", "--rationale", "nothing new"))
-    assert main(["tick"]) == 0
-    [ticket] = state_block(agent_log)["tickets"]
-    [unit] = ticket["units"]
-    assert "granted" not in unit
+    fail_twice(conn)
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "nothing new")):
+        assert main(["tick"]) == 0
+        [ticket] = state_block(agent_log)["tickets"]
+        [unit] = ticket["units"]
+        assert "granted" not in unit
 
 
 @pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
@@ -98,44 +99,42 @@ def test_only_the_operator_grants(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     env: str,
 ) -> None:
-    fail_twice(conn, monkeypatch)
+    fail_twice(conn)
     capsys.readouterr()
-    tick_id = in_tick(conn, monkeypatch)
-    if env == "CANOPY_RUN_ID":
-        monkeypatch.delenv("CANOPY_TICK_ID")
-        monkeypatch.setenv("CANOPY_RUN_ID", "1")
-    assert main(["grant", KEY, "implement"]) == 1
-    assert "grant refused (inside_run)" in capsys.readouterr().err
-    db.finish_tick(conn, tick_id, "ok", "test")
-    assert grants(conn) == []
+    in_run: dict[str, str] = {"CANOPY_RUN_ID": "1"} if env == "CANOPY_RUN_ID" else {}
+    with in_tick(conn) as tick_id, mock.patch.dict(os.environ, in_run):
+        if in_run:
+            os.environ.pop("CANOPY_TICK_ID")
+        assert main(["grant", KEY, "implement"]) == 1
+        assert "grant refused (inside_run)" in capsys.readouterr().err
+        db.finish_tick(conn, tick_id, "ok", "test")
+        assert grants(conn) == []
 
 
 def test_grant_refusals(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert operator("grant", KEY, "resume", monkeypatch=monkeypatch) == 1
+    assert operator("grant", KEY, "resume") == 1
     assert f"grant refused (unknown): canopy has no record of {KEY}" in capsys.readouterr().err
     db.touch_ticket(conn, KEY, "repo")
-    assert operator("grant", KEY, "resume", monkeypatch=monkeypatch) == 1
+    assert operator("grant", KEY, "resume") == 1
     assert (
         "grant refused (unknown_repo): name the repository with --repo: it has had no runs" in capsys.readouterr().err
     )
 
-    fail_twice(conn, monkeypatch)
+    fail_twice(conn)
     capsys.readouterr()
-    assert operator("grant", KEY, "resume", "--repo", "other", monkeypatch=monkeypatch) == 1
+    assert operator("grant", KEY, "resume", "--repo", "other") == 1
     assert f"grant refused (unknown_repo): {KEY} has had no runs in other" in capsys.readouterr().err
     # A split's limit is the ticket's, not a unit's: only config raises it.
-    assert operator("grant", KEY, "split", monkeypatch=monkeypatch) == 2
-    assert operator("grant", KEY, "resume", "--runs", "0", monkeypatch=monkeypatch) == 2
+    assert operator("grant", KEY, "split") == 2
+    assert operator("grant", KEY, "resume", "--runs", "0") == 2
     assert grants(conn) == []
 
 
@@ -143,15 +142,14 @@ def test_a_forgotten_ticket_is_granted_in_the_repository_its_runs_were_in(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    fail_twice(conn, monkeypatch)
-    assert operator("forget", KEY, monkeypatch=monkeypatch) == 0
+    fail_twice(conn)
+    assert operator("forget", KEY) == 0
     assert f"grant it another with `canopy grant {KEY} implement --repo repo`" in capsys.readouterr().out
     assert db.units(conn, KEY) == []
-    assert operator("grant", KEY, "implement", monkeypatch=monkeypatch) == 0
+    assert operator("grant", KEY, "implement") == 0
     assert grants(conn) == [(KEY, "repo", "implement", 1)]
     # Granted, the unit is no longer at its limit, so forgetting it again says nothing about one.
-    assert operator("forget", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("forget", KEY) == 0
     assert "its limit is" not in capsys.readouterr().out

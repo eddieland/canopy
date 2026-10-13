@@ -4,18 +4,19 @@ session read back from the events its log holds. Reads only; every text in them 
 import dataclasses
 import json
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core import transcript
-from canopy.serve import mock
+from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.test_serve import client
 
 
 @pytest.fixture
 def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+    return serve_mock.seed(tmp_path / "mock")
 
 
 def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> None:
@@ -109,9 +110,9 @@ def test_a_run_with_no_session_or_no_log_says_so(backend: Backend) -> None:
     assert c.get("/api/runs/40/transcript").json()["status"] == "no_log"
 
 
-def test_a_transcript_past_its_bounds_says_it_was_cut(backend: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(transcript, "MAX_ENTRIES", 3)
-    found = client(None, backend).get("/api/runs/39/transcript").json()
+def test_a_transcript_past_its_bounds_says_it_was_cut(backend: Backend) -> None:
+    with mock.patch.object(transcript, "MAX_ENTRIES", 3):
+        found = client(None, backend).get("/api/runs/39/transcript").json()
     assert (len(found["entries"]), found["truncated"]) == (3, True)
 
 

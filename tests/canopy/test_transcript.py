@@ -4,8 +4,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
+from unittest import mock
 
 from canopy.core import transcript
 from canopy.core.transcript import Error, Step, Text, Tokens, ToolCall
@@ -132,28 +131,26 @@ def test_a_bad_timestamp_is_no_time(tmp_path: Path) -> None:
     assert found.entries == [Text(None, "when?")]
 
 
-def test_entries_past_the_bounds_are_left_out_and_say_so(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(transcript, "MAX_ENTRIES", 2)
-    path = log(tmp_path, *(event("text", {"type": "text", "text": str(i)}) for i in range(5)))
-    found = transcript.read(path, SESSION)
-    assert found is not None
-    assert ([e.text for e in found.entries if isinstance(e, Text)], found.truncated) == (["0", "1"], True)
+def test_entries_past_the_bounds_are_left_out_and_say_so(tmp_path: Path) -> None:
+    with mock.patch.object(transcript, "MAX_ENTRIES", 2):
+        path = log(tmp_path, *(event("text", {"type": "text", "text": str(i)}) for i in range(5)))
+        found = transcript.read(path, SESSION)
+        assert found is not None
+        assert ([e.text for e in found.entries if isinstance(e, Text)], found.truncated) == (["0", "1"], True)
 
-    monkeypatch.setattr(transcript, "MAX_ENTRIES", 100)
-    monkeypatch.setattr(transcript, "MAX_CHARS", 5)
-    found = transcript.read(log(tmp_path, *(event("text", {"type": "text", "text": "abc"}) for _ in range(3))), SESSION)
-    assert found is not None
-    assert (len(found.entries), found.truncated) == (1, True)
+    with mock.patch.object(transcript, "MAX_ENTRIES", 100), mock.patch.object(transcript, "MAX_CHARS", 5):
+        lines = (event("text", {"type": "text", "text": "abc"}) for _ in range(3))
+        found = transcript.read(log(tmp_path, *lines), SESSION)
+        assert found is not None
+        assert (len(found.entries), found.truncated) == (1, True)
 
 
-def test_a_log_past_the_byte_bound_is_read_to_its_last_whole_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_log_past_the_byte_bound_is_read_to_its_last_whole_line(tmp_path: Path) -> None:
     lines = [event("text", {"type": "text", "text": str(i)}) for i in range(3)]
     path = tmp_path / "1.log"
     path.write_text("\n".join(lines) + "\n")
-    monkeypatch.setattr(transcript, "MAX_BYTES", len(lines[0]) + len(lines[1]) + 10)
-    found = transcript.read(path, SESSION)
+    with mock.patch.object(transcript, "MAX_BYTES", len(lines[0]) + len(lines[1]) + 10):
+        found = transcript.read(path, SESSION)
     assert found is not None
     assert ([e.text for e in found.entries if isinstance(e, Text)], found.truncated) == (["0", "1"], True)
 
@@ -171,9 +168,7 @@ def test_a_missing_log_a_symlink_a_directory_and_a_fifo_are_not_read(tmp_path: P
     assert transcript.read(fifo, SESSION) is None
 
 
-def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_characters(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_characters(tmp_path: Path) -> None:
     path = tmp_path / "1.log"
     path.write_bytes("first line\nsecond, ünïcode\n--- stderr ---\nbell\x07 and \x1b escape\n".encode())
     found = transcript.tail(path)
@@ -181,8 +176,8 @@ def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_ch
         "first line\nsecond, ünïcode\n--- stderr ---\nbell  and   escape\n", path.stat().st_size, truncated=False
     )
     # Past the bound, the cut lands inside a character, and the text starts at the next whole line.
-    monkeypatch.setattr(transcript, "MAX_TAIL", path.stat().st_size - len("first line\nsecond, ü"))
-    cut = transcript.tail(path)
+    with mock.patch.object(transcript, "MAX_TAIL", path.stat().st_size - len("first line\nsecond, ü")):
+        cut = transcript.tail(path)
     assert cut is not None
     assert (cut.text, cut.size, cut.truncated) == ("--- stderr ---\nbell  and   escape\n", path.stat().st_size, True)
 

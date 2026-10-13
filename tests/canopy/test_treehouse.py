@@ -1,5 +1,7 @@
 import json
+import os
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -70,27 +72,31 @@ def test_unidentifiable_lease_is_left_for_reconcile(treehouse_state: Path) -> No
     assert slot.canopy_key == "PROJ-1"
 
 
-def test_missing_treehouse_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PATH", str(tmp_path))
-    with pytest.raises(treehouse.TreehouseError, match="command not found"):
+def test_missing_treehouse_is_an_error(tmp_path: Path) -> None:
+    with (
+        mock.patch.dict(os.environ, {"PATH": str(tmp_path)}),
+        pytest.raises(treehouse.TreehouseError, match="command not found"),
+    ):
         treehouse.status(runner)
 
 
 @pytest.mark.parametrize("output", ["not json", "{}", '[{"name": "1"}]', '[{"name": 1, "path": "/p", "status": "x"}]'])
-def test_unexpected_status_output_is_an_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str) -> None:
+def test_unexpected_status_output_is_an_error(tmp_path: Path, output: str) -> None:
     fake = tmp_path / "treehouse"
     fake.write_text(f"#!/bin/sh\nprintf '%s\\n' '{output}'\n")
     fake.chmod(0o755)
-    monkeypatch.setenv("PATH", str(tmp_path))
-    with pytest.raises(treehouse.TreehouseError, match="unexpected output"):
+    with (
+        mock.patch.dict(os.environ, {"PATH": str(tmp_path)}),
+        pytest.raises(treehouse.TreehouseError, match="unexpected output"),
+    ):
         treehouse.status(runner)
 
 
-def test_status_tolerates_null_and_extra_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_status_tolerates_null_and_extra_fields(tmp_path: Path) -> None:
     fake = tmp_path / "treehouse"
     row = '{"name": "1", "path": "/p", "status": "available", "lease_id": null, "leased_at": "", "future": 1}'
     fake.write_text(f"#!/bin/sh\necho '[{row}]'\n")
     fake.chmod(0o755)
-    monkeypatch.setenv("PATH", str(tmp_path))
-    [slot] = treehouse.status(runner)
-    assert (slot.lease_id, slot.lease_holder, slot.leased_at, slot.canopy_key) == ("", "", None, None)
+    with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
+        [slot] = treehouse.status(runner)
+        assert (slot.lease_id, slot.lease_holder, slot.leased_at, slot.canopy_key) == ("", "", None, None)
