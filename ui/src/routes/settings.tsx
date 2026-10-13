@@ -10,6 +10,7 @@ import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { type BuddySetting, setBuddy, useBuddy } from '@/lib/buddy'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
@@ -49,6 +50,11 @@ const TOPICS: { value: TickerTopic; label: string }[] = [
     { value: 'tips', label: 'Tips' },
 ]
 
+const BUDDY: { value: BuddySetting; label: string }[] = [
+    { value: 'on', label: 'On' },
+    { value: 'off', label: 'Off' },
+]
+
 const SEND_KEYS: { value: SendKey; label: string }[] = [
     { value: 'enter', label: 'Enter' },
     { value: 'mod-enter', label: 'Ctrl+Enter' },
@@ -60,8 +66,8 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the ticker, and the send key are kept in this browser. Everything else canopy reads from its
-                config files.
+                The theme, the ticker, Sprig, and the send key are kept in this browser. Everything else canopy reads
+                from its config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -86,6 +92,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <TickerPanel />
+            <BuddyPanel />
             <SendKeyPanel />
             <ConfigPanel />
             <SessionPanel />
@@ -168,6 +175,37 @@ function TickerPanel() {
                         </label>
                     ))}
                 </fieldset>
+            </div>
+        </Panel>
+    )
+}
+
+/** Whether Sprig sits in the corner offering tips. */
+function BuddyPanel() {
+    const buddy = useBuddy()
+    return (
+        <Panel>
+            <PanelHeader label="Sprig" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    The helper in the bottom-left corner, with a tip for every page. None of them help. Off hides it.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={buddy}
+                    aria-label="Sprig"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = BUDDY.find((b) => b.value === value)
+                        if (picked) setBuddy(picked.value)
+                    }}
+                >
+                    {BUDDY.map(({ value, label }) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`buddy-${value}`}>
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
         </Panel>
     )
