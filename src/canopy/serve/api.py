@@ -65,30 +65,47 @@ WEB = "web"
 _REFUSED: dict[int | str, dict[str, Any]] = {409: {"model": RefusalResponse, "description": "A guard refused it."}}
 
 
-def refusal(r: conversation.Refused) -> HTTPException:
-    """A guard's refusal as the 409 the UI shows."""
-    return HTTPException(status_code=409, detail={"guard": r.guard, "reason": r.reason})
+class RefusedError(HTTPException):
+    """A guard's refusal as the 409 the UI shows, its detail the guard and its reason."""
+
+    def __init__(self, r: conversation.Refused) -> None:
+        """Carry refusal `r`."""
+        super().__init__(status_code=409, detail={"guard": r.guard, "reason": r.reason})
 
 
 def ticket_ref(key: str, verb: str) -> Ref:
-    """The ticket `key` names, refused as the CLI refuses it: `bad_ref`, or `unsupported` for another kind."""
+    """The ticket `key` names, refused as the CLI refuses it: `bad_ref`, or `unsupported` for another kind.
+
+    Returns:
+        The ticket's reference.
+
+    Raises:
+        RefusedError: `key` is not a reference, `verb` does not apply to it, or it is not a ticket.
+    """
     try:
         ref = conversation.parse_ref(key)
         conversation.check_verb(ref, verb)
     except conversation.Refused as r:
-        raise refusal(r) from None
+        raise RefusedError(r) from None
     if ref.kind != conversation.TICKET:
-        raise refusal(conversation.Refused("unsupported", f"{ref} is not a ticket"))
+        raise RefusedError(conversation.Refused("unsupported", f"{ref} is not a ticket"))
     return ref
 
 
 def chore_ref(name: str, verb: str) -> Ref:
-    """The chore `name` names, refused as `canopy reply chore:NAME` refuses it: `bad_ref` for a name no chore has."""
+    """The chore `name` names, refused as `canopy reply chore:NAME` refuses it: `bad_ref` for a name no chore has.
+
+    Returns:
+        The chore's reference.
+
+    Raises:
+        RefusedError: `name` is not a chore name, or `verb` does not apply to a chore.
+    """
     try:
         ref = conversation.parse_ref(f"{conversation.CHORE}:{name}")
         conversation.check_verb(ref, verb)
     except conversation.Refused as r:
-        raise refusal(r) from None
+        raise RefusedError(r) from None
     return ref
 
 
@@ -216,7 +233,7 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
             try:
                 started = conversation.start(ctx.conn, ctx.config, ref, repo=ctx.repo, channel=WEB)
             except conversation.Refused as r:
-                raise refusal(r) from None
+                raise RefusedError(r) from None
         log.info("ticket started", extra={"ticket": ref.id, "already": started.already, "channel": WEB})
         run = started.running
         return Started(
@@ -232,7 +249,7 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
             try:
                 stopped = conversation.stop(ctx.conn, ref, channel=WEB)
             except conversation.Refused as r:
-                raise refusal(r) from None
+                raise RefusedError(r) from None
             log.info("ticket stopped", extra={"ticket": ref.id, "now": body.now, "channel": WEB})
             run = stopped.running
             ended = run is not None and body.now and backend.end_run(ctx, run)
@@ -245,7 +262,7 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
             try:
                 replied = conversation.reply(ctx.conn, ref, body.body, channel=WEB, submission=body.submission)
             except conversation.Refused as r:
-                raise refusal(r) from None
+                raise RefusedError(r) from None
         log.info("operator replied", extra={"ticket": ref.id, "message_id": replied.message_id, "channel": WEB})
         return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
 
@@ -255,12 +272,12 @@ def _write_routes(api: APIRouter, backend: Backend) -> None:
     def forget(key: str, body: ForgetRequest) -> Forgot:
         ref = ticket_ref(key, "forget")
         if body.confirm != ref.id:
-            raise refusal(conversation.Refused("not_confirmed", f"type {ref} to confirm forgetting its work"))
+            raise RefusedError(conversation.Refused("not_confirmed", f"type {ref} to confirm forgetting its work"))
         with backend.open() as ctx:
             try:
                 forgot = conversation.forget(ctx.conn, ref, dispatch_lock=ctx.dispatch_lock_path)
             except conversation.Refused as r:
-                raise refusal(r) from None
+                raise RefusedError(r) from None
         log.info(
             "ticket forgotten", extra={"ticket": ref.id, "branch": forgot.branch, "prs": forgot.prs, "channel": WEB}
         )
@@ -326,7 +343,7 @@ def _chore_routes(api: APIRouter, backend: Backend) -> None:
                     ctx.conn, ref, body.body, channel=WEB, submission=body.submission, chores=defined
                 )
             except conversation.Refused as r:
-                raise refusal(r) from None
+                raise RefusedError(r) from None
         log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
         return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
 
@@ -409,7 +426,7 @@ def _loop_routes(api: APIRouter, backend: Backend) -> None:
             try:
                 found = backend.reload(ctx)
             except config.ConfigError as e:
-                raise refusal(conversation.Refused("config_invalid", str(e))) from None
+                raise RefusedError(conversation.Refused("config_invalid", str(e))) from None
         log.info("config reload asked for", extra={"channel": WEB, "changed": list(found.changed)})
         return ConfigReload(changed=list(found.changed), restart=list(found.restart), after_tick=found.after_tick)
 

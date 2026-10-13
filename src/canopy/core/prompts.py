@@ -141,6 +141,9 @@ def render(config: Config, name: str, values: Mapping[str, str], *, required: Se
     """Return prompt file `name` with every `{{NAME}}` replaced from `values`, in one pass.
 
     A placeholder with no value is an error, and so is a prompt that lacks one of `required`.
+
+    Raises:
+        PromptError: The prompt has a placeholder `values` has no value for, or lacks one of `required`.
     """
     path = prompt_path(config, name)
     text = path.read_text(encoding="utf-8")

@@ -158,10 +158,14 @@ def holder_for(key: str) -> str:
 
 
 def status(runner: procs.Runner, *, pool: Pool = DEFAULT_POOL) -> list[Slot]:
-    """Return every slot in the pool."""
+    """Return every slot in the pool.
+
+    Raises:
+        TreehouseError: treehouse could not be run, timed out, failed, or printed something that is not a slot list.
+    """
     result = _run(runner, ["status", "--json"], pool)
     if not result.ok:
-        raise _fail(result)
+        raise TreehouseError(_failure(result))
     try:
         return _SLOTS.validate_json(result.stdout)
     except ValidationError as e:
@@ -179,6 +183,13 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None, pool: Pool
     or hand out a slot of a pool bigger than declared. treehouse may still make one when the available slots are not
     reusable (another clone's, say); that slot is returned and destroyed, and the lease refused, so the pool keeps its
     size (DESIGN §18).
+
+    Returns:
+        The leased slot: its path, lease id and holder, when it was leased, and the branch it is based on.
+
+    Raises:
+        TreehouseError: The pool's declared slots are all busy, treehouse could not be run, timed out, failed, or
+            printed something that is not a lease, or it made a slot past the pool's declared size.
     """
     if pool.slots is None:
         return lease_as(runner, holder_for(key), base=base, pool=pool)
@@ -203,6 +214,12 @@ def lease_as(
     Without `fetch`, the slot is cut from the clone's existing refs; a later `get` that reuses it fetches. treehouse
     seeds the slot from the pool's `include_file` on every `get`, a reused slot too, and fails one whose file is missing
     before it touches any slot.
+
+    Returns:
+        The leased slot: its path, lease id and holder, when it was leased, and the branch it is based on.
+
+    Raises:
+        TreehouseError: treehouse could not be run, timed out, failed, or printed something that is not a lease.
     """
     args = ["get", "--lease", "--lease-holder", holder, "--json"]
     if not fetch:
@@ -216,7 +233,7 @@ def lease_as(
         args += ["--include-file", str(pool.include_file)]
     result = _run(runner, args, pool)
     if not result.ok:
-        raise _fail(result)
+        raise TreehouseError(_failure(result))
     try:
         return Lease.model_validate_json(result.stdout)
     except ValidationError as e:
@@ -230,6 +247,12 @@ def return_slot(
     """Return a slot of `pool` only if it is still held under this exact lease.
 
     Always forced: the pushed branch is the checkpoint, and anything uncommitted in the slot is discarded.
+
+    Returns:
+        `RETURNED`, or `FAILED` (exit 1) or `DIRTY` (exit 3) when treehouse kept the slot.
+
+    Raises:
+        TreehouseError: treehouse could not be run, timed out, or exited with any other code.
     """
     args = ["return", "--force", "--if-lease-id", lease_id, "--if-lease-holder", lease_holder, str(path)]
     result = _run(runner, args, pool)
@@ -239,14 +262,16 @@ def return_slot(
         return ReturnOutcome.FAILED
     if result.returncode == 3:  # noqa: PLR2004
         return ReturnOutcome.DIRTY
-    raise _fail(result)
+    raise TreehouseError(_failure(result))
 
 
 def destroy(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> str | None:
     """Remove slot `path` from its pool if treehouse finds it disposable: clean, merged, idle, and unleased.
 
     Never forced: none of `destroy`'s `--include-*` flags is passed, so treehouse keeps a slot with anything to lose.
-    Returns None when the slot is gone, else what treehouse said about keeping it.
+
+    Returns:
+        None when the slot is gone, else what treehouse said about keeping it, at most 500 characters.
     """
     result = _run(runner, ["destroy", "--yes", str(path)], pool)
     if result.ok:
@@ -265,9 +290,9 @@ def _run(runner: procs.Runner, args: list[str], pool: Pool) -> procs.Result:
     return result
 
 
-def _fail(result: procs.Result) -> TreehouseError:
+def _failure(result: procs.Result) -> str:
     detail = result.stderr.strip() or result.stdout.strip()
-    return TreehouseError(f"treehouse {result.args[1]} exited {result.returncode}: {detail}")
+    return f"treehouse {result.args[1]} exited {result.returncode}: {detail}"
 
 
 def _undo(runner: procs.Runner, leased: Lease, pool: Pool) -> str:
