@@ -15,7 +15,7 @@ export function PageHeader({ label, title, children }: { label: string; title: R
             <span className={cn('panel-label', section === undefined ? 'text-accent' : SECTION_TEXT[section])}>
                 {label}
             </span>
-            <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+            <h1 className="text-xl font-semibold tracking-tight break-words">{title}</h1>
             {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
         </header>
     )

@@ -81,3 +81,21 @@ test('a query the server would refuse asks for one, and one nothing holds says s
     await page.goto('search?q=zzzqqq')
     await expect(page.getByText('nothing in the journal holds every word')).toBeVisible()
 })
+
+test('a long query with no spaces, such as a pasted URL, wraps in the title rather than widening the page', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 960, height: 800 })
+    const query = `https://github.com/acme/web/actions/runs/${'1234567890'.repeat(8)}`
+    await page.goto(`search?q=${encodeURIComponent(query)}`)
+    await settled(page)
+    const title = page.getByRole('heading', { level: 1 })
+    await expect(title).toHaveText(`“${query}”`)
+    // Where the text ends, not the heading's box: an unbroken word spills out of its box rather than widening it.
+    const right = await title.evaluate((h) => {
+        const text = document.createRange()
+        text.selectNodeContents(h)
+        return text.getBoundingClientRect().right
+    })
+    expect(right).toBeLessThanOrEqual(await page.evaluate(() => document.documentElement.clientWidth))
+})

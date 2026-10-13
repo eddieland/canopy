@@ -124,7 +124,9 @@ Rules:
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
-  The page header's label is in its section's color; a panel's stays in `muted-foreground`.
+  The page header's label is in its section's color; a panel's stays in `muted-foreground`. Its title wraps
+  (`break-words`) inside an unbroken word, since it can be a ticket's title or a search's query: a pasted URL widened
+  the page.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
