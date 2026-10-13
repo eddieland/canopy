@@ -213,7 +213,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D046. Proprietary, installed from git, never from PyPI under this name
 
 - `canopy` on PyPI is unrelated; `Private :: Do Not Upload` blocks an upload. `make install-check` checks the install.
-- Revisit: before any public release, together with the name.
+- The repository is public to read, still unlicensed for use and unsupported (2026-10-13).
+- Revisit: before a release meant for others to run, together with the name.
 
 ## D050. Build canopy rather than adopt Symphony, agent-orchestrator, or Hermes Kanban
 
