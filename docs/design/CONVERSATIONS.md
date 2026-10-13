@@ -411,13 +411,16 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
 stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,
-held up every other request while the overseer worked. When another connection has committed since, it reads the
-attention list, the runs, the tickets, the chores, the spend, the latest tick, and the pause again, and sends each that
-changed, whole: `attention.updated`, `runs.updated`,
+held up every other request while the overseer worked. When another connection has committed since, or the loop has
+read its config again (§6), it reads the attention list, the runs, the tickets, the chores, the spend, the latest tick,
+and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
 `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
 read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
-summary in a list still in the order from before it. A new stream starts with every list, the spend, the latest
+summary in a list still in the order from before it. A reload commits nothing, yet the chores and the attention list
+are read through the config, so the stream holds the loop's config as the server's requests do, taking the new one at
+its next read: a chore added and reloaded shows on an open page without a refresh.
+A new stream starts with every list, the spend, the latest
 tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
