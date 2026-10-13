@@ -251,6 +251,43 @@ def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> N
     prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
 
 
+def with_rebase(env: CanopyEnv) -> None:
+    env.write_user(env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+
+
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_shipped_prompts_that_commit_say_how_to_bring_a_base_in(
+    canopy_env: CanopyEnv, kind: str, *, private: bool
+) -> None:
+    values = {**VALUES, "CONVERSATION": "None."}
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "merge `origin/<base>` into it. Never rebase" in text
+    assert "--force-with-lease" not in text
+    with_rebase(canopy_env)
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "rebase onto `origin/<base>`, and never merge it in" in text
+    assert "`git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-work`" in text
+    assert "Never rebase" not in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_rebase_an_override_must_say_how_to_bring_a_base_in(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override written for merging would make the merge commits the operator's repositories refuse: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; merge the base in\n")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    with_rebase(canopy_env)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{BRANCH_UPDATE\}\}"):
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+
+
+def test_rebase_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+    with_rebase(canopy_env)
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+
+
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
     text = prompts.prompt_path(load(canopy_env.root, canopy_env.user_file), prompts.OVERSEER).read_text()
     assert "## Workers' comments" in text

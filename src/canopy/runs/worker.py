@@ -399,7 +399,8 @@ def _check_out(slot: _Slot, branch: str = "") -> _Start:
     git.run("checkout", "--quiet", "--detach", f"refs/remotes/origin/{target}")
     if branch:
         _drop_local_branch(git, branch, target)
-    return _Start(git.run("rev-parse", "HEAD"), len(_head_log(git)))
+    commit = git.run("rev-parse", "HEAD")
+    return _Start(commit, len(_head_log(git)), commit if target == branch else "")
 
 
 def _drop_local_branch(git: _Git, branch: str, target: str) -> None:
@@ -452,8 +453,11 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         slots = [slot.reading(ctx, objects) for slot in slots]
 
     # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
+    rebase = ctx.config.trust.rebase
     unpushed = [
-        found for slot, start in zip(slots, starts, strict=True) if (found := _ensure_pushed(slot, branch, start, log))
+        found
+        for slot, start in zip(slots, starts, strict=True)
+        if (found := _ensure_pushed(slot, branch, start, log, rebase=rebase))
     ]
     if unpushed:
         status, note = "unpushed", "; ".join(unpushed)
@@ -476,10 +480,14 @@ def _stopped(ctx: Context, run: sqlite3.Row) -> str:
 
 @dataclass(frozen=True)
 class _Start:
-    """Where a worker run's slot started: HEAD's commit, and how many entries HEAD's reflog then had."""
+    """Where a worker run's slot started: HEAD's commit, how many entries HEAD's reflog then had, and origin's branch.
+
+    `pushed` is the commit the branch held on origin when the run started, or "" if origin did not have it.
+    """
 
     commit: str
     moves: int
+    pushed: str
 
 
 def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: logs.TickAdapter) -> None:
@@ -521,11 +529,12 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
         raise _SetupError(f"{slot.git.where}setup exited {result.returncode}; see the run log")
 
 
-def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapter) -> str:
+def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapter, *, rebase: bool) -> str:
     """Check the checkpoint invariant: the branch on origin is the slot's HEAD. Push HEAD to it once if it is not.
 
     Detached, HEAD is the only thing holding the worker's commits, so a worker that moved it off them leaves them
-    behind: that is unpushed too.
+    behind: that is unpushed too. With `rebase` (`trust.rebase`), the push may replace the branch, but only if origin
+    still has it where the run started: a worker that rebased and did not push loses nothing anyone else pushed.
 
     Returns:
         Why the work is not pushed, or "" if it is, or if the worker committed nothing.
@@ -536,7 +545,7 @@ def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapte
     # A HEAD that holds nothing past the start is no work of the worker's; whatever is on origin is its doing.
     if remote != local and not git.ok("merge-base", "--is-ancestor", local, start.commit):
         log.warning("worker left commits unpushed; pushing once", extra={"branch": branch, "repo": slot.repo})
-        pushed = _push(git, branch)
+        pushed = _push(git, branch, start.pushed if rebase else None)
         remote = _remote_head(git, branch)
         if not pushed.ok or remote != local:
             detail = (pushed.stderr.strip() or pushed.stdout.strip())[:500]
@@ -550,8 +559,11 @@ def _ensure_pushed(slot: _Slot, branch: str, start: _Start, log: logs.TickAdapte
     return ""
 
 
-def _push(git: _Git, branch: str) -> procs.Result:
+def _push(git: _Git, branch: str, lease: str | None) -> procs.Result:
     """Push HEAD to `branch` on origin, and leave the shared refs as they were if git reads the run's objects.
+
+    With a `lease`, the push may replace the branch, if origin has it at that commit, or does not have it when the
+    lease is "". Without one, it only adds commits.
 
     A push also moves origin's remote-tracking ref, which every slot of the pool shares. Pointed at a commit only the
     run's object directory holds, it would break git in every slot, and in the primary clone, once that directory goes
@@ -562,7 +574,8 @@ def _push(git: _Git, branch: str) -> procs.Result:
     """
     tracking = f"refs/remotes/origin/{branch}"
     before = git.result("rev-parse", "--verify", "--quiet", tracking).stdout.strip() if git.reads_run else ""
-    pushed = git.result("push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+    force = () if lease is None else (f"--force-with-lease=refs/heads/{branch}:{lease}",)
+    pushed = git.result("push", "--quiet", *force, "origin", f"HEAD:refs/heads/{branch}")
     if git.reads_run and before:
         git.result("update-ref", tracking, before)
     elif git.reads_run:
@@ -571,7 +584,12 @@ def _push(git: _Git, branch: str) -> procs.Result:
 
 
 def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str]:
-    """Commits HEAD held during the run that neither HEAD, origin's `branch`, nor any of origin's branches holds.
+    """Commits HEAD held during the run whose changes neither HEAD nor origin holds.
+
+    That is commits that neither HEAD, origin's `branch` now or when the run started, nor any of origin's branches
+    holds, less those whose own change origin's `branch` already has (`_on_origin`). A worker that rebased, could not
+    push the copies, and pushed the same work another way left nothing behind; one that rebased and pushed with a lease
+    (`trust.rebase`) replaced the commits origin had, which were pushed before the run.
 
     Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
     checked something else out, not one that tried to hide its work.
@@ -583,13 +601,32 @@ def _left_behind(git: _Git, branch: str, start: _Start, remote: str) -> list[str
     held = list(dict.fromkeys(entries[: max(0, len(entries) - start.moves)]))
     if not held:
         return []
-    keep = ["HEAD"]
+    keep = ["HEAD", start.pushed] if start.pushed else ["HEAD"]
     if remote and not git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
         # --refmap=: no remote-tracking ref moves, only the slot's own FETCH_HEAD, which tidying drops.
         git.result("fetch", "--quiet", "--refmap=", "origin", f"refs/heads/{branch}")
-    if remote and git.ok("cat-file", "-e", f"{remote}^{{commit}}"):
-        keep.append(remote)
-    return git.run("rev-list", *held, "--not", *keep, "--remotes=origin").split()
+    if not (remote and git.ok("cat-file", "-e", f"{remote}^{{commit}}")):
+        return git.run("rev-list", *held, "--not", *keep, "--remotes=origin").split()
+    left = git.run("rev-list", *held, "--not", *keep, remote, "--remotes=origin").split()
+    tree = git.run("rev-parse", f"{remote}^{{tree}}")
+    return [commit for commit in left if not _on_origin(git, commit, remote, tree)]
+
+
+def _on_origin(git: _Git, commit: str, remote: str, tree: str) -> bool:
+    """Whether `remote`, with tree `tree`, already has `commit`'s own change: applying it there changes nothing.
+
+    A rebased copy of a commit origin has, or a commit whose change went up in another one, is not lost. It is a
+    three-way merge of `commit` into `remote` on `commit`'s first parent, so a change made again by hand counts too, and
+    a change origin has only in part does not. A root commit counts as not on origin, and so does every commit under
+    git older than 2.40, which lacks `--merge-base`.
+
+    Returns:
+        True if the merge is clean and leaves `remote`'s tree as it is.
+    """
+    if not git.ok("rev-parse", "--verify", "--quiet", f"{commit}^"):
+        return False
+    merged = git.result("merge-tree", "--write-tree", f"--merge-base={commit}^", remote, commit)
+    return merged.ok and merged.stdout.split()[:1] == [tree]
 
 
 def _head_log(git: _Git) -> list[str]:
