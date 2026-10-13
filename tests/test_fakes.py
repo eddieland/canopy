@@ -1,7 +1,9 @@
 """The fakes are test infrastructure other tests rely on; pin their behavior here."""
 
 import json
+import os
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -85,6 +87,6 @@ def test_agent_default_result_is_last_line(agent_log: Path) -> None:
 
 
 @pytest.mark.parametrize("configured", ['{"status":"blocked","question":"which API?"}', "not json"])
-def test_agent_prints_configured_result(agent_log: Path, monkeypatch: pytest.MonkeyPatch, configured: str) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", configured)
-    assert run(["agent"]).stdout.splitlines()[-1] == configured
+def test_agent_prints_configured_result(agent_log: Path, configured: str) -> None:
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": configured}):
+        assert run(["agent"]).stdout.splitlines()[-1] == configured

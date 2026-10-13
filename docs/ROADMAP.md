@@ -375,16 +375,21 @@ review. A review run killed
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), and docs are in. Checked live on
-2026-10-07 with OpenCode 1.18.32: the reviewer canary passes, and with `agent_prs` on, PR #69 got one identified
-`clean` comment at its commit and no GitHub review. Accept's other live checks are SCENARIOS S19 to S21. What keeps it
-open: on 2026-10-12 all seven review runs of a live session ended `unknown` within about 15 seconds, the reviewer's
-last line not a valid result, and the overseer's retries for them cost $2.21 (MEASUREMENTS 2026-10-12, F4). Not
-diagnosed yet; next is a failed review run's log. On 2026-10-13 the operator decided that reviews post nothing on the
-PR (D114): the comment, its marker, and `review_unposted` are gone, the reviewer needs no write tool (so the
-`add_issue_comment` grant the 2026-10-07 check needed is moot), and findings reach a worker through `--review-run` and
-the operator through `canopy review show`. Over the first day 8 of 11 review runs ended `unknown` within seconds
-(MEASUREMENTS 2026-10-13, F18).
+Status: done 2026-10-13.
+Learned:
+
+- Closed on the operator's real use. Checked live on 2026-10-07 with OpenCode 1.18.32: the reviewer canary passed, and
+  PR #69 was reviewed once at its commit. Accept's other live checks are SCENARIOS S19 to S21.
+- The review runs that ended `unknown` within seconds (MEASUREMENTS 2026-10-12 F4, 2026-10-13 F18) were an OpenCode
+  plugin printing log lines on stdout after the reviewer's result, under a plain-text template, so the last line was
+  not the result. Since #218 a JSON contract is the last line of the text that starts with `{`, for every agent's
+  result. The fix landed at 15:33Z, inside the 2026-10-13 window, so that window's count mostly predates it.
+- Reviews post nothing on the PR (D114): findings reach a worker through `--review-run` and the operator through
+  `canopy review show`. Use added `canopy dismiss review:ID N`, which keeps a finding from any worker or tick, and
+  `canopy grant URL review`, which raises one PR's review limit.
+
+Next: the next spend measurement counts review runs ending `unknown`, to confirm F18 is gone. M32 shows reviews in the
+web UI.
 
 ## M12. The loop
 
@@ -983,10 +988,18 @@ cannot be done well.
 Accept: the tests above pass. Live: on a journal from a week of `canopy loop`, the operator finds a ticket by a word
 of its title and a run by a phrase from its summary, and a search nothing matches answers in under a second.
 
-Status: in progress. Code, tests, and docs are in (2026-10-13). Measured before choosing a plain scan: SQLite's `LIKE`
-reads about 1.6 ms per MB of text when nothing matches (56 MB of messages in 90 ms), and stops at the limit when
-hits are many, so an FTS5 index, with its migration and triggers, waits until a real journal is slow. Waiting on the
-operator: the live search Accept describes.
+Status: done 2026-10-13.
+Learned:
+
+- Closed on the operator's real use, searching a real journal in the web UI, without the timed check Accept
+  describes, which is SCENARIOS S32.
+- A plain scan was chosen on a measurement, not a guess: SQLite's `LIKE` reads about 1.6 ms per MB of text when nothing
+  matches (56 MB of messages in 90 ms) and stops at a source's limit when hits are many, so an FTS5 index, with its
+  migration and triggers, was not needed to start.
+
+Next: FTS5 waits until a real journal's empty search takes more than a quarter of a second (DESIGN §22, Search); S32
+times one. Ticket titles become searchable only when the journal records them, which needs the overseer to report
+them.
 
 ## M32. Shadow PR reviews in the web UI
 

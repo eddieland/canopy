@@ -5,10 +5,12 @@ the run before its worker starts. `paths.worktree_include` reaches every `treeho
 """
 
 import json
+import os
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import override
+from unittest import mock
 
 import pytest
 
@@ -46,15 +48,15 @@ def dispatch(*args: str, kind: str = "implement") -> list[str]:
     return ["dispatch", "PROJ-1", *repos, "--label", LABEL, "--kind", kind, *args]
 
 
-def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, runner: InlineRunner) -> sqlite3.Row:
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(dispatch("--slug", "work"), runner=runner) == 0
-    db.finish_tick(conn, tick_id, "ok", "test")
-    run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-    assert main(["_run", str(run_id)], runner=runner) == 0
-    row = db.get_run(conn, run_id)
-    assert row is not None
-    return row
+def dispatch_and_run(conn: sqlite3.Connection, runner: InlineRunner) -> sqlite3.Row:
+    with in_tick(conn) as tick_id:
+        assert main(dispatch("--slug", "work"), runner=runner) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+        row = db.get_run(conn, run_id)
+        assert row is not None
+        return row
 
 
 def agent_runs(agent_log: Path) -> list[dict[str, object]]:
@@ -99,7 +101,6 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """M16 acceptance, against the fakes: setup sees the branch a continued run checks out, unlike `post_create`."""
@@ -109,9 +110,8 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
     git("push", "--quiet", "origin", BRANCH, cwd=seed)
     git("checkout", "--quiet", "--detach", cwd=seed)
     setup_is(canopy_env, SETUP)
-    worker_does(monkeypatch, ["test", "-e", ".setup-done"])
-
-    run = dispatch_and_run(conn, monkeypatch, InlineRunner())
+    with worker_does(["test", "-e", ".setup-done"]):
+        run = dispatch_and_run(conn, InlineRunner())
 
     assert run["status"] == "done"
     out = capsys.readouterr().out
@@ -130,11 +130,10 @@ def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     setup_is(canopy_env, "sh -c 'echo cannot fetch >&2; exit 3'")
-    run = dispatch_and_run(conn, monkeypatch, InlineRunner())
+    run = dispatch_and_run(conn, InlineRunner())
 
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"]) == {"harness": "repo: setup exited 3; see the run log"}
@@ -149,10 +148,9 @@ def test_a_setup_that_times_out_crashes_the_run(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     setup_is(canopy_env, "sh -c 'sleep 3600'", "setup_timeout_minutes = 5")
-    run = dispatch_and_run(conn, monkeypatch, SetupTimesOut())
+    run = dispatch_and_run(conn, SetupTimesOut())
 
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"]) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
@@ -161,10 +159,10 @@ def test_a_setup_that_times_out_crashes_the_run(
 
 
 def test_a_setup_that_cannot_start_crashes_the_run(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
     setup_is(canopy_env, "no-such-setup-command --all")
-    run = dispatch_and_run(conn, monkeypatch, InlineRunner())
+    run = dispatch_and_run(conn, InlineRunner())
 
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"])["harness"].startswith("repo: setup could not start: ")
@@ -172,51 +170,47 @@ def test_a_setup_that_cannot_start_crashes_the_run(
 
 
 def test_a_joint_run_sets_up_every_slot_each_naming_its_repository(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     seed_pools(ws, treehouse_state)
     setup_is(canopy_env, SETUP)
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-    worker_does(monkeypatch, ["test", "-e", "api/.setup-done"], ["test", "-e", "web/.setup-done"])
-    assert main(dispatch("--repo", "api", "--repo", "web")) == 0
-    run = wait_for_run(conn, 1)
+    with in_tick(conn), worker_does(["test", "-e", "api/.setup-done"], ["test", "-e", "web/.setup-done"]):
+        assert main(dispatch("--repo", "api", "--repo", "web")) == 0
+        run = wait_for_run(conn, 1)
 
-    log = Path(run["log_path"]).read_text()
-    assert f"setup on {BRANCH} in api, run 1: initial api\n" in log
-    assert f"setup on {BRANCH} in web, run 1: initial web\n" in log
-    [w] = agent_runs(agent_log)
-    commands = w["commands"]
-    assert isinstance(commands, list)
-    assert [c["returncode"] for c in commands] == [0, 0]
+        log = Path(run["log_path"]).read_text()
+        assert f"setup on {BRANCH} in api, run 1: initial api\n" in log
+        assert f"setup on {BRANCH} in web, run 1: initial web\n" in log
+        [w] = agent_runs(agent_log)
+        commands = w["commands"]
+        assert isinstance(commands, list)
+        assert [c["returncode"] for c in commands] == [0, 0]
 
 
-def test_a_split_runs_no_setup(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_split_runs_no_setup(ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
     # The splitter reads its desk and has no shell to use what setup would install (DESIGN §18).
     seed_pools(ws, treehouse_state)
     setup_is(canopy_env, "sh -c 'exit 1'")
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
     result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
-    monkeypatch.setenv("FAKE_SPLITTER_RESULT", json.dumps(result))
-    split = [
-        "dispatch",
-        "PROJ-12",
-        "--label",
-        LABEL,
-        "--kind",
-        "split",
-        "--request",
-        "1",
-        "--repo",
-        "api",
-    ]
-    assert main([*split, "--repo", "web"]) == 0
-    run = wait_for_run(conn, 1)
-    assert run["status"] == "done", Path(run["log_path"]).read_text()
-    assert "--- setup" not in Path(run["log_path"]).read_text()
+    with in_tick(conn), mock.patch.dict(os.environ, {"FAKE_SPLITTER_RESULT": json.dumps(result)}):
+        split = [
+            "dispatch",
+            "PROJ-12",
+            "--label",
+            LABEL,
+            "--kind",
+            "split",
+            "--request",
+            "1",
+            "--repo",
+            "api",
+        ]
+        assert main([*split, "--repo", "web"]) == 0
+        run = wait_for_run(conn, 1)
+        assert run["status"] == "done", Path(run["log_path"]).read_text()
+        assert "--- setup" not in Path(run["log_path"]).read_text()
 
 
 @pytest.mark.parametrize(
@@ -257,15 +251,13 @@ def test_every_lease_passes_the_operators_include_file(
     git_pool: GitPool,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manifest = canopy_env.home / ".config" / "canopy" / "worktreeinclude"
     manifest.parent.mkdir(parents=True, exist_ok=True)
     manifest.write_text("user.bazelrc\n.env.local\n")
     configure(canopy_env, paths="worktree_include = '~/.config/canopy/worktreeinclude'")
-    worker_does(monkeypatch, ["true"])
-
-    run = dispatch_and_run(conn, monkeypatch, InlineRunner())
+    with worker_does(["true"]):
+        run = dispatch_and_run(conn, InlineRunner())
 
     [get] = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
     # Absolute, with ~ expanded: treehouse reads a relative one from the repository.
@@ -279,10 +271,9 @@ def test_without_an_include_file_treehouse_reads_the_committed_one(
     git_pool: GitPool,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker_does(monkeypatch, ["true"])
-    dispatch_and_run(conn, monkeypatch, InlineRunner())
+    with worker_does(["true"]):
+        dispatch_and_run(conn, InlineRunner())
     [get] = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
     assert "--include-file" not in get
 
@@ -292,11 +283,10 @@ def test_a_missing_include_file_refuses_the_dispatch_and_leases_nothing(
     git_pool: GitPool,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     configure(canopy_env, paths="worktree_include = '~/nowhere/worktreeinclude'")
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(dispatch("--slug", "work"), runner=InlineRunner()) == 1
+    with in_tick(conn) as tick_id:
+        assert main(dispatch("--slug", "work"), runner=InlineRunner()) == 1
 
     [decision] = db.decisions_for_tick(conn, tick_id)
     assert decision["action"] == "refused:no_slot"
