@@ -638,6 +638,11 @@ def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | No
     _set_report(conn, "ticks", tick_id, session_id, usage)
 
 
+def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
+    """Record a tick's overseer session while it runs, before what it cost is known (§6, §13)."""
+    conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
+
+
 def set_chore_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
     """Record what the agent runtime reported about a chore run: its session, and what it cost (§13, §19)."""
     _set_report(conn, "chore_runs", run_id, session_id, usage)

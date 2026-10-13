@@ -160,7 +160,8 @@ def _run_overseer(
 ) -> tuple[str | None, agent_output.Usage | None]:
     """Run `overseer_cmd`.
 
-    Output goes to `<state_dir>/ticks/<id>.log`. The session and cost are recorded on the tick, failed or not.
+    Output goes to `<state_dir>/ticks/<id>.log`. The session is recorded on the tick at the first event that names it,
+    so a running tick shows it; the session and cost again when the overseer ends, failed or not.
 
     Returns:
         Why it failed, None on success, and what it cost if the runtime reported it.
@@ -185,6 +186,7 @@ def _run_overseer(
             cwd=ctx.repo_root,
             env={TICK_ID_ENV: str(tick_id)},
             timeout=timeout_minutes * 60,
+            on_line=_SessionWatch(ctx, tick_id, log),
         )
     except procs.ProcError as e:
         log.exception("overseer could not start", extra={"error": str(e)})
@@ -207,6 +209,27 @@ def _run_overseer(
         return None, output.usage
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure, output.usage
+
+
+class _SessionWatch:
+    """Records the overseer's session on the tick at the first line of its output that names one (DESIGN §6)."""
+
+    def __init__(self, ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+        self.ctx = ctx
+        self.tick_id = tick_id
+        self.log = log
+        self.seen = False
+
+    def __call__(self, line: str) -> None:
+        if self.seen:
+            return
+        event = agent_output.parse_event(line)
+        session = agent_output.session_of(event) if event is not None else None
+        if session is None:
+            return
+        self.seen = True
+        db.set_tick_session(self.ctx.conn, self.tick_id, session)
+        self.log.info("overseer session started", extra={"session_id": session})
 
 
 def _done(message: str) -> bool:

@@ -62,16 +62,18 @@ in order:
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
-   the journal. The session id and cost the runtime reported (§13) go on the `ticks` row, whether or not the run
-   succeeded. The run succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and
-   backticks, is `CANOPY_TICK_DONE` and nothing else; otherwise the tick closes as `overseer_failed`. Text before or
-   after that line is allowed, because models summarize what they did, and a tick that did its work but failed on a
-   summary is lost to the attention list (MEASUREMENTS 2026-10-12, F2). The check stays on the final message, not the
-   whole transcript, because what it catches is a run that exits 0 short of the procedure's last step: a refused tool
-   call, a cut-off session. The token is a word no model writes by chance, where `tick complete` was ordinary English
-   that a looser check would find in a rationale; a line that only mentions it does not count. A successful run that
-   recorded a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves
-   the attention list standing, so an outage does not resolve and re-raise every item.
+   the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
+   overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
+   id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
+   succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and backticks, is
+   `CANOPY_TICK_DONE` and nothing else; otherwise the tick closes as `overseer_failed`. Text before or after that line
+   is allowed, because models summarize what they did, and a tick that did its work but failed on a summary is lost to
+   the attention list (MEASUREMENTS 2026-10-12, F2). The check stays on the final message, not the whole transcript,
+   because what it catches is a run that exits 0 short of the procedure's last step: a refused tool call, a cut-off
+   session. The token is a word no model writes by chance, where `tick complete` was ordinary English that a looser
+   check would find in a rationale; a line that only mentions it does not count. A successful run that recorded a
+   tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention
+   list standing, so an outage does not resolve and re-raise every item.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch

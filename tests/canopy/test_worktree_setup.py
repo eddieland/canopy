@@ -79,10 +79,11 @@ class SetupTimesOut(InlineRunner):
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> procs.Result:
         if args[0] == "sh":
             return procs.Result(tuple(args), -9, "installing\n", "", timed_out=True)
-        return super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+        return super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line)
 
 
 @pytest.fixture
