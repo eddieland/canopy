@@ -7,12 +7,13 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-test('the rail lists the runs working now, the one waiting on an answer first, on every page', async ({ page }) => {
+test('the rail lists the runs working now, the running ones first, on every page', async ({ page }) => {
     await page.goto('tickets')
     await settled(page)
     const working = page.getByTestId('rail-working')
     await expect(working.getByRole('link')).toHaveCount(3)
-    await expect(working.getByRole('link').first()).toContainText('ABC-102')
+    await expect(working.getByRole('link').first()).toContainText('ABC-101')
+    await expect(working.getByRole('link').nth(2)).toContainText('ABC-102')
     await expect(page.getByTestId('rail-run-42')).toContainText('asks')
     await expect(page.getByTestId('rail-run-41')).toContainText('Sign in with SSO')
 
