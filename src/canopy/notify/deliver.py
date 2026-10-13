@@ -9,6 +9,7 @@ failure count, so the next tick tries again. Sinks run one after another under t
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,8 +41,12 @@ class Delivery:
     detail: str = ""
 
 
-def publish(ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter) -> list[Delivery]:
+def publish(
+    ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter, *, dismissed: Collection[str] = ()
+) -> list[Delivery]:
     """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed.
+
+    `dismissed` holds the fingerprints of chore findings the operator dismissed: a sink told of one hears why it left.
 
     Returns:
         How each sink's delivery went, in name order.
@@ -52,7 +57,10 @@ def publish(ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter) 
     now = datetime.now(UTC)
     if ctx.config.notify.takes(outbox.LOOP):
         _record_loop_events(ctx)
-    deliveries = [_deliver(ctx, name, sink, items, path=path, now=now, log=log) for name, sink in sinks.items()]
+    deliveries = [
+        _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed)
+        for name, sink in sinks.items()
+    ]
     journal.prune_events(ctx.conn, now)
     return deliveries
 
@@ -167,14 +175,22 @@ def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
 
 
 def _deliver(
-    ctx: Context, name: str, sink: Sink, items: list[Item], *, path: Path, now: datetime, log: logs.TickAdapter
+    ctx: Context,
+    name: str,
+    sink: Sink,
+    items: list[Item],
+    *,
+    path: Path,
+    now: datetime,
+    log: logs.TickAdapter,
+    dismissed: Collection[str],
 ) -> Delivery:
     row = journal.ensure_sink(ctx.conn, name)
     groups = [g for g in sink.events if g in _POINT_GROUPS]
     # Read first: a detached `_run` may record an event while this sink is served, and the cursor must not pass it.
     cursor = journal.newest_event_id(ctx.conn)
     events = [message.Event.of(e) for e in journal.events_after(ctx.conn, int(row["cursor"]), groups, cursor)]
-    change = journal.diff(ctx.conn, name, items) if "attention" in sink.events else None
+    change = journal.diff(ctx.conn, name, items, dismissed) if "attention" in sink.events else None
     digest = None
     if _digest_due(row, sink, now) and sink.digest_every_minutes is not None:
         # The first digest covers one interval back.

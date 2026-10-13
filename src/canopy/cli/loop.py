@@ -266,14 +266,16 @@ def spent(row: sqlite3.Row) -> str:
 
 
 def _print_chores(ctx: Context) -> None:
-    """A line per configured chore; nothing at all when there are none (DESIGN §19)."""
+    """A line per configured chore, with how many findings the operator dismissed; nothing when there are none (§19)."""
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     if not states:
         return
     click.echo(f"\nChores ({len(db.running_chore_runs(ctx.conn))}/{ctx.config.capacity.max_chores} running):")
     now = datetime.now(UTC)
     for state in states:
-        click.echo(f"  {state.name}  {chore_line(state, now)}")
+        dismissed = sum(f.dismissed for f in state.findings())
+        note = f"; {dismissed} finding{'s' if dismissed != 1 else ''} dismissed" if dismissed else ""
+        click.echo(f"  {state.name}  {chore_line(state, now)}{note}")
 
 
 def chore_line(state: chore_view.ChoreState, now: datetime) -> str:

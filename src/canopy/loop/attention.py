@@ -245,13 +245,30 @@ def publish(ctx: Context, log: logs.TickAdapter) -> None:
 
     Failures are logged, never raised: the tick is already closed. A delivery that fails is tried again next tick.
     """
+    items = write(ctx, log)
+    dismissed = {
+        fingerprint(f"{CHORE_PREFIX}{f.chore}", f.finding.id, None)
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        if f.dismissed
+    }
+    try:
+        deliver.publish(ctx, items, ctx.state_dir / FILE_NAME, log, dismissed=dismissed)
+    except Exception as e:
+        log.exception("notification failed", extra={"error": str(e)})
+
+
+def write(ctx: Context, log: logs.TickAdapter) -> list[Item]:
+    """Rewrite `attention.md` from the journal: after a tick, and after the operator dismisses a finding.
+
+    A failure is logged, never raised.
+
+    Returns:
+        The list as written.
+    """
     items = listed(ctx)
     path = ctx.state_dir / FILE_NAME
     try:
         logs.write_private(path, render(items, datetime.now(UTC)))
     except OSError as e:
         log.error("could not write the attention list", extra={"path": str(path), "error": str(e)})  # noqa: TRY400
-    try:
-        deliver.publish(ctx, items, path, log)
-    except Exception as e:
-        log.exception("notification failed", extra={"error": str(e)})
+    return items

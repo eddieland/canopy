@@ -298,7 +298,11 @@ class Message:
         else:
             lines = ["canopy digest"]
         lines += [f"+ {i.subject} {i.reason}: {_line(i.detail)}" for i in added]
-        lines += [f"- {name} {reason}" for name, reason in resolved]
+        dismissed: list[bool] = self.attention.resolved_dismissed if self.attention else []
+        lines += [
+            f"- {name} {reason}{' (dismissed)' if i < len(dismissed) and dismissed[i] else ''}"
+            for i, (name, reason) in enumerate(resolved)
+        ]
         lines += [e.line for e in events]
         if omitted:
             lines.append(f"... and {omitted} more: see {self.path} and `canopy status`")
@@ -317,6 +321,7 @@ class Message:
         attention: dict[str, object] | None = None
         if self.attention is not None:
             resolved_items = self.attention.resolved_items[: len(resolved)]
+            dismissed = self.attention.resolved_dismissed
             attention = {
                 "added": [
                     {
@@ -330,8 +335,14 @@ class Message:
                     for i in added
                 ],
                 "resolved": [
-                    {"ticket": k, "title": self._title(k), "repo": r, "reason": reason}
-                    for k, reason, r in resolved_items
+                    {
+                        "ticket": k,
+                        "title": self._title(k),
+                        "repo": r,
+                        "reason": reason,
+                        "dismissed": i < len(dismissed) and dismissed[i],
+                    }
+                    for i, (k, reason, r) in enumerate(resolved_items)
                 ],
                 "open": self.open_items,
                 "path": str(self.path),

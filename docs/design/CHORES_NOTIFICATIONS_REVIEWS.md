@@ -181,7 +181,10 @@ runs are told, not what the latest run reported, so a finding stayed listed unti
   again. Nothing has to be cleaned up, and a dismissal never hides a recurrence the operator has not seen.
 - It changes what the operator is shown, nothing else: the chore's prompt still carries the finding so its id is
   reused, the overseer's state block still lists it, and `canopy show chore:<NAME>` and the chore's page list it marked
-  dismissed. Leaving the list, it is notified as resolved (§14). To have the chore stop reporting it, write a note.
+  dismissed. Leaving the list, it is notified as resolved and marked so: `- chore:<name> <id> (dismissed)`, and
+  `dismissed: true` in the `json` format (§20). To have the chore stop reporting it, write a note.
+- `attention.md` is rewritten at once, from the CLI and the web UI alike, rather than at the next tick; notifications
+  still go at the next tick, with the tick's. `canopy status` counts each chore's dismissed findings on its line.
 - `--undo`, or List again on the chore's page, takes it back. Dismissing it again records the time anew.
 - Refused `unknown` for a chore not defined for this workspace or a finding it does not have open (with `--undo`, one
   not dismissed), `bad_finding` for an id no finding can have, and `inside_run` as `reply` is: the overseer and
@@ -396,9 +399,11 @@ run or chore run ended, `!` for the loop's own events, `*` for a test.
  "text": "the same message in the text format"}
 ```
 
-`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`. Each
-event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every ticket key, in
-`added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside it: the
+`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`, and a
+`resolved` item `dismissed`, true for a chore finding the operator dismissed rather than one whose cause is gone
+(§19). Each event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every
+ticket key, in `added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside
+it: the
 ticket's title as it is at delivery (§13), or null before the overseer names it. It is for display, so a reader knows
 a ticket without looking its key up; `text` and `line` show the key alone, keeping §14's message as it was.
 `omitted` counts what the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown

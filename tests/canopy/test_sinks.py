@@ -251,6 +251,17 @@ def _texts(blocks: list[dict[str, Any]]) -> list[str]:
     return out
 
 
+def test_slack_marks_a_finding_the_operator_dismissed() -> None:
+    attention: dict[str, Any] = {
+        **MESSAGE["attention"],
+        "added": [],
+        "resolved": [{"ticket": "chore:deps", "title": None, "repo": None, "reason": "lodash", "dismissed": True}],
+    }
+    message: dict[str, Any] = {**MESSAGE, "attention": attention, "events": []}
+    assert "- *chore:deps* · lodash (dismissed)" in slack.render(message).splitlines()
+    assert "*Resolved*\n:heavy_check_mark: ~chore:deps~ lodash (dismissed)" in _texts(slack.blocks(message))
+
+
 def test_slack_blocks_are_built_from_the_fields() -> None:
     blocks = slack.blocks(MESSAGE)
     assert blocks[0] == {"type": "header", "text": {"type": "plain_text", "text": "canopy · api"}}

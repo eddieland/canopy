@@ -86,4 +86,5 @@ def backend(ctx: Context, reload: reread.Reload) -> Backend:
         attention=attention.listed,
         end_run=end_run,
         reload=reload_config,
+        write_attention=lambda current: attention.write(current, logs.for_tick(None)),
     )

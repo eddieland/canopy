@@ -6,8 +6,8 @@ Each sink's cursor and failures, the attention items it was told about, and the 
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from canopy.core import db
@@ -105,6 +105,8 @@ class Diff:
     resolved: list[tuple[str, str]]  # (subject, reason)
     resolved_fingerprints: list[str]
     resolved_items: list[tuple[str | None, str, str | None]]  # (ticket key, reason, repo)
+    # Whether each resolved item left because the operator dismissed it rather than because its cause is gone.
+    resolved_dismissed: list[bool] = field(default_factory=list[bool])
 
     def __bool__(self) -> bool:
         """Whether anything changed.
@@ -124,11 +126,14 @@ def item_fingerprint(item: Item) -> str:
     return fingerprint(item.ticket_key, item.reason, item.repo)
 
 
-def diff(conn: sqlite3.Connection, sink_name: str, items: list[Item]) -> Diff:
+def diff(conn: sqlite3.Connection, sink_name: str, items: list[Item], dismissed: Collection[str] = ()) -> Diff:
     """Compare `items` with the open items already delivered to sink `sink_name`.
 
+    `dismissed` holds the fingerprints of chore findings the operator dismissed: still open, but off the list.
+
     Returns:
-        The items the sink was not told of, and those it was told of that are no longer open, by subject and reason.
+        The items the sink was not told of, and those it was told of that are no longer open, by subject and reason,
+        each marked whether it was dismissed.
     """
     told = {
         str(r["fingerprint"]): (r["ticket_key"], str(r["reason"]), r["repo"])
@@ -143,7 +148,13 @@ def diff(conn: sqlite3.Connection, sink_name: str, items: list[Item]) -> Diff:
         key=lambda g: (g[0], g[1]),
     )
     gone = [g for g in gone if g[2] not in now_open]
-    return Diff(added, [(g[0], g[1]) for g in gone], [g[2] for g in gone], [g[3] for g in gone])
+    return Diff(
+        added,
+        [(g[0], g[1]) for g in gone],
+        [g[2] for g in gone],
+        [g[3] for g in gone],
+        [g[2] in dismissed for g in gone],
+    )
 
 
 def mark_delivered(conn: sqlite3.Connection, sink_name: str, change: Diff | None, *, cursor: int, digest: bool) -> None:

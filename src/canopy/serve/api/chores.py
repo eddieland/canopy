@@ -128,6 +128,7 @@ def dismiss(name: ChoreName, body: DismissRequest, backend: BackendDep) -> Dismi
             conversation.dismiss(ctx.conn, ref, body.finding, channel=WEB, chores=defined, undo=body.undo)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
     _log.info(
         "finding dismissal taken back" if body.undo else "finding dismissed",
         extra={"chore": ref.id, "finding": body.finding, "channel": WEB},
