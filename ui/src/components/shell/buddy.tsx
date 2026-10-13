@@ -9,10 +9,10 @@ import { cn } from '@/lib/utils'
 const TIP_SECONDS = 20
 
 /**
- * Sprig, the helper in the bottom-left corner, in the side rail under the nav, where it covers nothing: a bent wire
- * with a sprig on top and googly eyes that follow the pointer. On every page it offers a tip about that page, the
- * dumber the better (`TIPS` in src/lib/buddy.ts); clicking it offers another. The tip closes with its button, or by
- * itself after a while. Settings turns Sprig off, and so does the tip's "Don't show me tips again".
+ * Sprig, the helper in the bottom-left corner, in the side rail under the nav and above its footer, where it covers
+ * nothing: a bent wire with a sprig on top and googly eyes that follow the pointer. On every page it offers a tip
+ * about that page, the dumber the better (`TIPS` in src/lib/buddy.ts); clicking it offers another. The tip closes with
+ * its button, or by itself after a while. Settings turns Sprig off, and so does the tip's "Don't show me tips again".
  */
 export function Buddy() {
     const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -25,7 +25,7 @@ export function Buddy() {
         <aside
             aria-label="Sprig"
             data-testid="buddy"
-            className="pointer-events-none fixed bottom-3 left-3 z-20 flex w-48 flex-col items-start gap-2"
+            className="pointer-events-none fixed bottom-12 left-3 z-20 flex w-48 flex-col items-start gap-2"
         >
             <Bubble key={cue} tip={tipFor(pathname, asked, today)} onAnother={() => setAsked((n) => n + 1)} />
             <button
