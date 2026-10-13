@@ -451,6 +451,10 @@ class Trust(Section):
     commit_trailer: Annotated[StrictBool, Scope.USER] = True
     commit_trailer_name: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
     commit_trailer_email: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
+    # Whether workers bring a base branch in by rebasing, and push the result with a lease, instead of merging it
+    # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. User-only: a shared file must not let
+    # workers replace a branch's history.
+    rebase: Annotated[StrictBool, Scope.USER] = False
 
     @model_validator(mode="after")
     def _one_comment_mark(self) -> Trust:

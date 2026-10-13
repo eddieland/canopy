@@ -342,7 +342,7 @@ model-written text, and the Slack sink escapes it. It stays out of `attention.md
 | `blocked` | as `ready`, but a blocker ticket is open | dispatch `implement` stacked on the blocker's branch if its PR is open and green (§10), else wait |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
-| `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to merge the base in |
+| `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
@@ -361,8 +361,8 @@ A unit is `conflicted` when GitHub reports that its PR does not merge cleanly in
 `pull_request` checks on a PR it cannot merge, so a conflicting PR's checks are pending with nothing running, or are the
 results of an earlier head. `conflicted` therefore comes before every CI and review phase: before `ci_running`,
 `ci_red`, `review_pending`, `green_unreviewed`, and `approved`. Its `resume` points at the conflict and the base, and
-carries `--base` for a stacked PR (§10); the worker merges the base into the branch and pushes without force (a rebase
-would need a force-push). Review
+carries `--base` for a stacked PR (§10); the worker merges the base into the branch and pushes without force, or, with
+`trust.rebase`, rebases onto it and pushes with a lease (§8 worker obligations). Review
 comments or findings newer than the `review` cursor ride the same `resume`, with their cursor. A conflict has no cursor:
 it is a state of the PR, not an item, so it is new for as long as it lasts. A `resume` that pushes a merge ends it; one
 that is still there after that push means the base moved again, and the `resume` attempt limit bounds the repeats
@@ -573,11 +573,17 @@ dispatch names at least one, in a workspace of one repository too.
    remote-tracking ref, which every slot shares, back as it was: pointed at a commit only the run's directory holds, it
    would break git in every slot once that directory goes. In each slot, verify the branch is pushed
    (`git ls-remote origin refs/heads/<branch>` equals HEAD). If not and HEAD holds commits past step 2's, push once,
-   without force: `git push origin HEAD:refs/heads/<branch>`. Then, since HEAD alone holds a detached worker's commits,
-   look in HEAD's reflog entries since step 2 for commits that neither HEAD, origin's branch, nor any of origin's
-   branches holds: a worker that checked something else out left them behind. If any slot's push failed or left commits
-   behind, record `status='unpushed'`, naming each repository in a workspace: the checkpoint invariant failed and a
-   human looks.
+   without force: `git push origin HEAD:refs/heads/<branch>`. With `trust.rebase`, the push carries
+   `--force-with-lease=refs/heads/<branch>:<commit>`, the commit origin's branch held at step 2, or nothing if it had
+   none: a worker that rebased and did not push gets its work pushed, and a push anyone else made since is never
+   overwritten. Then, since HEAD alone holds a detached worker's commits, look in HEAD's reflog entries since step 2
+   for commits that neither HEAD, origin's branch now or at step 2, nor any of origin's branches holds: a worker that
+   checked something else out left them behind. Of those, drop each whose own change origin's branch already has:
+   merging it into that branch on its first parent (`git merge-tree --write-tree --merge-base`) is clean and changes
+   nothing. A worker that rebased, could not push the copies, and pushed the same work another way left nothing
+   behind. git older than 2.40 has no `--merge-base`, and there every such commit counts as left behind.
+   If any slot's push failed or left commits behind, record `status='unpushed'`, naming each repository in a
+   workspace: the checkpoint invariant failed and a human looks.
 6. Always: remove a joint run's desk, tidy each slot (`runs/tidy.py`): put back its `.git` file if the run changed it,
    and, if the object directory holds anything, check it out detached at `origin/<base>` with `--force`, delete its own
    refs (`refs/worktree/*`, `refs/bisect/*`, `refs/rewritten/*`), `ORIG_HEAD`, and `FETCH_HEAD`, and expire its HEAD
@@ -624,8 +630,13 @@ read for a run in one repository.
 Worker obligations, stated in every worker prompt:
 
 - Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
-  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A resume
-  that merges its base merges `origin/<base>`, which step 2 fetched, and does not fetch.
+  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker
+  that brings its base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it
+  rebases onto `origin/<base>` instead, never merging, and pushes the rebased branch with
+  `git push --force-with-lease origin HEAD:refs/heads/<branch>`: the one force the worker's definition then allows
+  (TRUST_MODEL T1). `{{BRANCH_UPDATE}}` says which, in every prompt of a kind that commits; with `trust.rebase` set,
+  an override without it fails to render rather than have the worker make merge commits the operator's repositories
+  refuse.
 - Keep the runtime's attribution trailer on commits, or add canopy's: `Co-authored-by: canopy worker
   <noreply@canopy.invalid>` by default, with the name and address from `trust.commit_trailer_name` and
   `trust.commit_trailer_email` (§12, TRUST_MODEL T5). With `trust.commit_trailer` off, add none: the operator chose
@@ -666,11 +677,12 @@ whose PRs the operator set the skill to avoid. The skill is ordinary customizati
 reads skills, under a name no repository canopy works in uses, since OpenCode picks either of two same-named skills and
 a repository's could stand in for the operator's. Any program it runs must be on the `PATH` of the shell that runs
 canopy, which workers inherit. It changes only how the PR is opened; every other obligation above still holds. The
-branch is `{{BRANCH}}`, pushed without force, and `_run` still checks it is on origin (step 5). A program that pushes by
-itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL T1). The PR
-targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL goes in the
-result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one that server
-can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting a stacked
+branch is `{{BRANCH}}`, pushed as the obligations above say, and `_run` still checks it is on origin (step 5). A program
+that pushes by itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL
+T1). The PR targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL
+goes in the result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one
+that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
+a stacked
 one, stays with the MCP.
 
 ## 9. Aggressive release
@@ -750,6 +762,7 @@ The operator's guide, with a `.bazelrc` recipe, examples of each setup step, siz
   repository it names, and the run records each (`run_slots.base_branch`, shown in the latest run's `repos` in the
   state block). While the blocker's PR is open, the overseer passes the same `--base` to the stacked ticket's `resume`
   and `fix-ci`. Once it merges, a `resume` without `--base` tells the worker to retarget the PR to the repository's
-  base branch, merging that branch in if it conflicts. Workers never rebase, since their pushes never force.
+  base branch, bringing that branch in if it conflicts. Workers never rebase, since their pushes never force, unless
+  the operator sets `trust.rebase`; then they rebase only the ticket's own commits onto it (`git rebase --onto`).
 - Ordering is decided by the overseer each tick from live state and recorded in `decisions`. There is no plan file
   and no DAG config.

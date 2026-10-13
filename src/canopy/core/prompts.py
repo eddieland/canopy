@@ -70,6 +70,11 @@ MAX_STANDING_BYTES = 4096
 COMMITS = ("implement", "fix-ci", "resume")
 REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
 REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
+# How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
+# (DESIGN §8). An override written before it existed says to merge, which still serves an operator who keeps the
+# default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
+# repositories refuse.
+REQUIRED_REBASE = ("BRANCH_UPDATE",)
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
@@ -112,6 +117,22 @@ def commit_attribution(config: Config) -> str:
     if not config.trust.commit_trailer:
         return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
     return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config)}`."
+
+
+def branch_update(config: Config, branch: str) -> str:
+    """Return how a worker brings a base branch into `branch`: by merging, or with `trust.rebase`, by rebasing."""
+    if not config.trust.rebase:
+        return (
+            "To bring a base branch into yours, merge `origin/<base>` into it. Never rebase or otherwise rewrite a "
+            "commit that is already pushed: a push must never need force."
+        )
+    return (
+        "To bring a base branch into yours, rebase onto `origin/<base>`, and never merge it in: the operator's "
+        "repositories refuse merge commits. If this ticket was stacked on a PR that has since merged, rebase only this "
+        "ticket's own commits, with `git rebase --onto origin/<base> <the last commit of the branch it was stacked "
+        f"on>`. Push a rebased branch once, with `git push --force-with-lease origin HEAD:refs/heads/{branch}` in "
+        "place of the plain push. That is the only force you may use, and a rebase the only reason to use it."
+    )
 
 
 def open_pr(skill: str) -> str:
@@ -175,7 +196,8 @@ def render_worker(
     `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_ATTRIBUTION}}` and
     `{{COMMIT_TRAILER}}` come from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
-    `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`.
+    `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
+    prompt must carry with `trust.rebase` set.
     """
     instructed = kind != "split"
     values = {
@@ -183,10 +205,12 @@ def render_worker(
         "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
         "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
+        "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     standing = REQUIRED_STANDING if config.paths.worker_instructions is not None and instructed else ()
-    required = (*pr_skill, *standing, *required)
+    rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
+    required = (*pr_skill, *standing, *rebase, *required)
     one_of = _required_attribution(config) if kind in COMMITS else ()
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)

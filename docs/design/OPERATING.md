@@ -106,6 +106,7 @@ to do instead.
 | `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
 | `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whether and whom the operator's commits credit (§8) |
+| `trust.rebase` | user-only | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
@@ -177,6 +178,7 @@ comment_suffix = ""          # and ends with this, if set
 commit_trailer = true                            # a worker adds this trailer when the runtime adds none (§8)
 commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
 commit_trailer_email = "noreply@canopy.invalid"  # at this address
+rebase = false               # true: workers rebase and push with a lease, never merge a base in (§8)
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -215,6 +217,12 @@ an agent's. `trust.commit_trailer = false` turns the trailer off, for a runtime 
 team whose tooling rejects it: a worker still keeps the runtime's trailer, but adds none of its own, so with a runtime
 that adds none the commits carry no trailer, and only the branch prefix and the PR mark the work. It is user-only for
 the same reason.
+
+`trust.rebase` is for repositories whose host or CI refuses merge commits. Set, a worker that brings a base branch into
+its branch rebases onto it instead of merging it, and pushes the result with `git push --force-with-lease`; the
+worker's definition allows that one force and no other, and `canopy _run`'s own push takes a lease on the commit the
+run started from (§8, TRUST_MODEL T1). It applies to every repository the operator works on. It is user-only because
+it lets a worker replace a branch's history: a shared file must not decide that.
 
 Rules:
 

@@ -15,13 +15,13 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pull requests')
     const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
     await expect(rows).toHaveCount(3)
-    const ours = rows.filter({ hasText: 'github.com/acme/web/pull/88' })
+    const ours = rows.filter({ hasText: 'acme/web#88' })
     await expect(ours).toContainText('Debounce search input')
     await expect(ours.getByTestId('pull-request-review')).toContainText('review 4')
     // A PR canopy only reviews has no ticket, whoever asked for the review.
-    await expect(rows.filter({ hasText: 'github.com/acme/api/pull/12' })).toContainText('no ticket')
+    await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('no ticket')
 
-    await ours.getByRole('link', { name: 'github.com/acme/web/pull/88' }).click()
+    await ours.getByRole('link', { name: 'acme/web#88' }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('github.com/acme/web/pull/88')
     await expect(nav.getByRole('link', { name: 'Pull requests' })).toHaveAttribute('data-status', 'active')

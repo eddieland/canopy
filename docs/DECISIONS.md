@@ -241,8 +241,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D056. A worker may push to an open, non-fork PR the operator wrote and labeled
 
-- Agents check author and label (D003). Never forced.
-- Rejected: any labeled PR (a label would put commits on a coworker's branch).
+- Agents check author and label (D003). Never forced, unless the operator sets `trust.rebase` (user-only): then a
+  rebased branch is pushed with `--force-with-lease`, the only force a worker's definition allows.
+- Rejected: any labeled PR (a label would put commits on a coworker's branch); rebasing by default (merging needs no
+  force, and most repositories accept merge commits).
 
 ## D058. A ticket's work is units, one per repository
 

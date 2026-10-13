@@ -69,6 +69,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("trust", "commit_trailer = false"),
         ("trust", 'commit_trailer_name = "Alice Example"'),
         ("trust", 'commit_trailer_email = "alice@example.com"'),
+        ("trust", "rebase = true"),
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
         ("loop", "idle_max_minutes = 1"),
