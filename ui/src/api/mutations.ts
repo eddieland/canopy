@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 import { keys } from './queries'
-import type { Forgot, LoopState, PauseChanged, Replied, Session, Started, Stopped } from './types'
+import type { ConfigReload, Forgot, LoopState, PauseChanged, Replied, Session, Started, Stopped } from './types'
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, and pausing the loop. Each
@@ -57,6 +57,14 @@ export async function pauseLoop(): Promise<PauseChanged> {
 /** `canopy resume`: the loop ticks when its wait runs out, at once if it already has. */
 export async function resumeLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/resume'))
+}
+
+/**
+ * Ask the loop to read its config files again, as SIGHUP does (DESIGN §6). A file that does not load is refused
+ * (`config_invalid`) and the loop keeps the config it has.
+ */
+export async function reloadConfig(): Promise<ConfigReload> {
+    return unwrap(await api.POST('/api/loop/reload'))
 }
 
 /** After a pause or a resume: show the state it left now, rather than wait for the stream. */

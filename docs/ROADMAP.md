@@ -406,6 +406,9 @@ Learned:
   (exit 0). The loop has been the operator's daily surface since. A working session's legibility is SCENARIOS S26.
 - Pausing joined it on request (2026-10-13): `p` at the loop's terminal, `canopy pause` and `canopy resume`, and the
   web UI's header write one journal row that holds the wait (DESIGN §6), tested against the fakes.
+- Reloading config joined it on request (2026-10-13): SIGHUP or the web UI's settings page reads the config again
+  once the running tick ends (DESIGN §6), tested against the fakes; a terminal hanging up still ends the loop, tested
+  on a pseudo-terminal. A live check is SCENARIOS S31.
 Next: the closing line does not say a signal stopped it; a small follow-up, not a milestone.
 
 ## M13. Spend-paced loop

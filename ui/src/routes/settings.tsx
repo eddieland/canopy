@@ -1,21 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { LogOut, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
+import { LogOut, Monitor, Moon, RefreshCw, Sun, type LucideIcon } from 'lucide-react'
 
-import { signOut } from '@/api/mutations'
+import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, sessionQuery } from '@/api/queries'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { reloadedText } from '@/lib/outcomes'
 import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, type TickerSpeed, useTickerSettings } from '@/lib/ticker-settings'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** The settings kept in this browser: the theme, the ticker, the send key, and the session. */
+/** What this browser keeps (the theme, the ticker, the send key, the session), and reloading the loop's config. */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -44,7 +45,8 @@ function SettingsPage() {
     return (
         <>
             <PageHeader label="Preferences" title="Settings">
-                Kept in this browser. Everything else canopy reads from its config file.
+                The theme, the ticker, and the send key are kept in this browser. Everything else canopy reads from its
+                config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -70,6 +72,7 @@ function SettingsPage() {
             </Panel>
             <TickerPanel />
             <SendKeyPanel />
+            <ConfigPanel />
             <SessionPanel />
         </>
     )
@@ -162,6 +165,39 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/** Asks the loop to read its config files again, as SIGHUP does. A tick running then finishes on the config it had. */
+function ConfigPanel() {
+    const mutation = useMutation({ mutationFn: reloadConfig })
+    return (
+        <Panel>
+            <PanelHeader label="Config" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <div className="flex flex-col gap-1">
+                    <p className="text-sm text-muted-foreground">
+                        The loop reads the workspace file and your{' '}
+                        <code className="font-mono text-xs">config.toml</code> when it starts. Reload reads them again,
+                        as <code className="font-mono text-xs">kill -HUP</code> does; a running tick finishes first. A
+                        file that does not load changes nothing.
+                    </p>
+                    {/* A config error names its file and key, a line each. */}
+                    <Notice error={mutation.error} className="whitespace-pre-line">
+                        {mutation.data ? reloadedText(mutation.data) : null}
+                    </Notice>
+                </div>
+                <Button
+                    variant="outline"
+                    onClick={() => mutation.mutate()}
+                    disabled={mutation.isPending}
+                    data-testid="config-reload"
+                >
+                    <RefreshCw />
+                    Reload
+                </Button>
             </div>
         </Panel>
     )

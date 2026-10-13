@@ -16,14 +16,14 @@ from canopy.cli.main import main
 from canopy.core import config, conversation, db, pause
 from canopy.core.context import Context
 from canopy.infra import resources
-from canopy.loop import repeat, web
+from canopy.loop import repeat, reread, web
 from canopy.serve import live, secret, views
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
 from canopy.serve.schema import LoopUpdated
 from tests.canopy.test_loop import FakeTime, console, context, overseer_does
-from tests.conftest import CanopyEnv, user_toml
+from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 KEY = "PROJ-1"
 SECRET = "w" * 43
@@ -37,11 +37,11 @@ def ctx(canopy_env: CanopyEnv) -> Context:
     return found
 
 
-def signed_in_client(ctx: Context) -> tuple[TestClient, dict[str, str]]:
+def signed_in_client(ctx: Context, reload: reread.Reload | None = None) -> tuple[TestClient, dict[str, str]]:
     """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs."""
     options = ServeOptions(port=8765)
     sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
-    c = TestClient(create_app(options, web.backend(ctx), sessions), base_url=ORIGIN)
+    c = TestClient(create_app(options, web.backend(ctx, reload or reread.Reload()), sessions), base_url=ORIGIN)
     token = c.post("/api/session", json={"secret": SECRET}).json()["token"]
     return c, {"x-canopy-token": token, "origin": ORIGIN}
 
@@ -196,8 +196,31 @@ def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_
     assert c.post("/api/loop/resume", headers=headers).json()["already"] is True
 
 
+def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: Context, canopy_env: CanopyEnv) -> None:
+    reload = reread.Reload()
+    c, headers = signed_in_client(ctx, reload)
+    assert c.post("/api/loop/reload").status_code == 403  # a write: it needs the session's token
+    assert not reload.requested
+
+    unchanged = c.post("/api/loop/reload", headers=headers)
+    assert unchanged.json() == {"changed": [], "restart": [], "after_tick": False}
+    assert reload.requested
+
+    reload.requested, reload.ticking = False, True
+    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n")
+    found = c.post("/api/loop/reload", headers=headers).json()
+    assert found == {"changed": ["capacity.max_workers", "serve.port"], "restart": ["serve.port"], "after_tick": True}
+    assert reload.requested
+
+    reload.requested = False
+    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 'many'\n")
+    assert refused(c.post("/api/loop/reload", headers=headers)).startswith("config_invalid: ")
+    assert "capacity.max_workers" in refused(c.post("/api/loop/reload", headers=headers))
+    assert not reload.requested  # the loop is not asked to read a config that does not load
+
+
 def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
-    backend = web.backend(ctx)
+    backend = web.backend(ctx, reread.Reload())
     sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
     first = [e.root for e in sent.changes(backend, ctx)]
     assert LoopUpdated(paused=None) in first
@@ -298,7 +321,7 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
 
 def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_days_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
-    backend = dataclasses.replace(web.backend(ctx), clock=lambda: now)
+    backend = dataclasses.replace(web.backend(ctx, reread.Reload()), clock=lambda: now)
     nothing = views.spend(backend, ctx)
     assert (nothing.day.cost_usd, nothing.month.cost_usd) == (None, None)  # nothing reported yet
 
@@ -431,6 +454,56 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
     # Stopping the loop stopped the server.
     with pytest.raises(httpx2.TransportError):
         httpx2.get(f"{base}/api/session", timeout=1)
+
+
+def test_a_reload_from_the_ui_reaches_the_loop_and_what_the_ui_serves(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    port = free_port()
+    serve_on(canopy_env, port)
+    secret.create(secret.path(), rotate=False)
+    key = secret.read(secret.path())
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    overseer_does(monkeypatch)
+    base = f"http://127.0.0.1:{port}"
+    time_ = FakeTime()
+    ticket_urls: list[object] = []
+    reloads: list[dict[str, object]] = []
+    url = "https://example.test/browse/{key}"
+
+    def reload_from_the_browser() -> None:
+        if len(ticket_urls) == 2:
+            return
+        wait_until_up(f"{base}/api/session")
+        with httpx2.Client(base_url=base, timeout=10) as browser:
+            token = browser.post("/api/session", json={"secret": key}).json()["token"]
+            ticket_urls.append(browser.get("/api/meta").json()["ticket_url"])
+            if not reloads:
+                canopy_env.write_shared(SHARED_TOML + f'ticket_url = "{url}"\n')
+                response = browser.post("/api/loop/reload", headers={"x-canopy-token": token, "origin": base})
+                assert response.status_code == 200, response.text
+                reloads.append(response.json())
+
+    time_.on_sleep = reload_from_the_browser
+    term, out = console()
+    statuses = repeat.run(
+        ctx,
+        dry_run=True,
+        interval_minutes=15,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        serve=True,
+        sleep=time_.sleep,
+        clock=time_.clock,
+    )
+
+    assert statuses == {"ok": 2}
+    assert reloads == [{"changed": ["tracker.ticket_url"], "restart": [], "after_tick": False}]
+    # The wait's next step applied it, and the server served it from the next request on.
+    assert ticket_urls == [None, url]
+    assert "config reloaded  tracker.ticket_url changed" in out.getvalue()
 
 
 def test_without_a_secret_the_loop_serves_nothing_and_says_how_to_make_one(

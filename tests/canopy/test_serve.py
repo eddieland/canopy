@@ -481,6 +481,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "LoopState",
         "Pause",
         "PauseChanged",
+        "ConfigReload",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -512,5 +513,6 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/reviews/{run_id}",
         "/api/loop/pause",
         "/api/loop/resume",
+        "/api/loop/reload",
     }
     assert set(schema["paths"]) == paths

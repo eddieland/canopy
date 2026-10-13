@@ -297,13 +297,17 @@ Served by `canopy loop` from a thread (D073):
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
   CLI uses: `conversation.start`, `stop`, `reply`, and `forget` with channel `web` (a note to a chore is a `reply`
   on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). A forget
+  `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
+  the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
+  the operator's to edit. A forget
   cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
   `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
   Stop now asks, is too easy to give by mistake. Its outcome
   names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
   `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it that function and the attention list's
-  (`loop.attention.listed`) when it starts the server (`serve.backend`). The one process it runs is
+  (`loop.attention.listed`), and a way to ask for a reload (`loop.reread`), when it starts the server
+  (`serve.backend`); a reload hands the server the new config, which each request reads as it opens. The one process
+  it runs is
   `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
@@ -315,7 +319,8 @@ Served by `canopy loop` from a thread (D073):
   last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in
   view wherever the operator is.
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, and pausing and resuming
-  the loop from the header on every page, which shows how long it has been paused. OpenCode's session attach (M15) is
+  the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
+  from the settings page. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
   M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.

@@ -1,7 +1,8 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
-The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, and
-the pools' slots are stand-ins, since the first two belong to the loop and there is no treehouse to ask (backend.py).
+The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
+reload, and the pools' slots are stand-ins, since the first three belong to the loop and there is no treehouse to ask
+(backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
@@ -22,7 +23,7 @@ from canopy.core import config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
-from canopy.serve.backend import Backend
+from canopy.serve.backend import Backend, Reloading
 
 if TYPE_CHECKING:
     import sqlite3
@@ -208,6 +209,7 @@ def seed(directory: Path) -> Backend:
         workspace=ws,
         attention=lambda _ctx: list(ATTENTION),
         end_run=_end_run,
+        reload=_reload,
         mock=True,
         slots=slots,
         clock=lambda: T0,
@@ -227,6 +229,11 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
         return False
     note = json.dumps({"harness": "the operator stopped the ticket (mock: no process was killed)"})
     return conversation.close_run(ctx.conn, ctx.config, current, "stopped", note)
+
+
+def _reload(_ctx: Context) -> Reloading:
+    # No loop runs on the mock's config, so there is nothing to read again.
+    return Reloading(changed=(), restart=(), after_tick=False)
 
 
 async def changes(backend: Backend, seconds: float | None) -> None:
