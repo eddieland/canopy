@@ -9,8 +9,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import definitions
+from canopy.core import config, definitions
 from canopy.infra import resources
+from tests.conftest import CanopyEnv
+
+PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 
 
 def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
@@ -252,3 +255,58 @@ def test_the_reviewer_posts_nothing(tool: str) -> None:
 )
 def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
+
+
+def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canopy_env: CanopyEnv) -> None:
+    # The prompt is the agent's system prompt, cached across ticks; the tick's message is the state block (DESIGN §6).
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+    text = (snapshot / "agents" / "canopy-overseer.md").read_text()
+    head = (resources.agents_dir() / "canopy-overseer.md").read_text().split(PROMPT_MARKER)[0]
+    assert text.startswith(head)
+    body = text.removeprefix(head)
+    prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")
+    assert body.startswith(
+        f"{prompt}\n\nThe skill `tracker-jira` follows, given here so that you need not load it.\n\n"
+    )
+    skill = (resources.skills_dir() / "tracker-jira" / "SKILL.md").read_text()
+    assert body.endswith(skill.split("\n---\n", 1)[1].strip() + "\n")
+    assert "name: tracker-jira" not in body
+    assert "no prompt supplied" not in body
+    # The skill stays a skill too, for the workers.
+    assert (snapshot / "skills" / "tracker-jira" / "SKILL.md").read_text() == skill
+
+
+def test_an_overseer_override_makes_a_snapshot_of_its_own(canopy_env: CanopyEnv) -> None:
+    cfg = config.load(canopy_env.root)
+    shipped = definitions.ensure(canopy_env.state_dir, cfg)
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "overseer.md").write_text("# my overseer\n\nDecide my way.\n")
+    snapshot = definitions.ensure(canopy_env.state_dir, cfg)
+    assert snapshot != shipped
+    text = (snapshot / "agents" / "canopy-overseer.md").read_text()
+    assert "\n---\n\n# my overseer\n\nDecide my way.\n\nThe skill `tracker-jira` follows" in text
+    assert "# canopy overseer" not in text
+    # The snapshot a run may be loading is never changed.
+    assert "# canopy overseer" in (shipped / "agents" / "canopy-overseer.md").read_text()
+
+
+def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "overseer.md").write_bytes(b"\xff\xfe not UTF-8")
+    with pytest.raises(definitions.DefinitionsError, match="cannot read the overseer prompt"):
+        definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+
+
+def test_the_overseer_prompt_stands_alone_without_a_skill_for_its_tracker() -> None:
+    head = f"---\ndescription: x\n---\n\n{PROMPT_MARKER}"
+    assert definitions.render_overseer(f"{head}stub\n", "# canopy overseer\n\nDecide.\n", None) == (
+        "---\ndescription: x\n---\n\n# canopy overseer\n\nDecide.\n"
+    )
+
+
+def test_an_overseer_definition_without_its_marked_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="no line"):
+        definitions.render_overseer(bundled.replace(PROMPT_MARKER, ""), "# canopy overseer\n", None)

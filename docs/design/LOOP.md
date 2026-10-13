@@ -43,20 +43,30 @@ in order:
    - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
      ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
-4. **Render the overseer prompt**: `prompts/overseer.md` (or the override), plus a generated `## State` section holding
-   one JSON object: tick id, current time, whether it is a dry run, workspace root; the workspace (name, the path of
-   `MAP.md` if any) and its repositories (name, path, summary, whether cloned, its pool's leased slots, §18); tracker
-   config (provider, query, labels, needs-human label); trust config (authorized repliers, branch prefix, PR label);
-   capacity; policy (limits and stacking); running workers and their repositories; and the `tickets` rows not marked
-   done, except those the operator stopped. Each ticket has its phase, branch, and comment, message, and mirror cursors
-   (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the
-   runs of each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run
-   if still ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base,
-   start and end). A ticket the operator started has a `private` object (§22): when it was started, its message cursor,
-   the operator's messages newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the
-   operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
-   so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is present only when chores are
-   configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter (§22).
+4. **Render the state block**, the overseer's whole message: a generated `## State` section holding one JSON object.
+   The overseer's prompt, `prompts/overseer.md` or the operator's override (§12), is not in it: it is the body of the
+   overseer's agent definition in the definitions snapshot (§13), so the runtime sends it as the system prompt, after
+   the tool schemas and before the message. The provider caches by content, not by session, so a tick that starts
+   within the cache's lifetime (minutes) of the one before reads the prompt and tools from the cache, and only the
+   state block, which changes every tick, is written to it fresh. With the prompt in the message, the whole 13k-token
+   prompt was a cache write on every tick (MEASUREMENTS 2026-10-13, F11). The tracker's provider skill rides along in
+   the definition when canopy ships one, which saves the overseer a tool call to load it on every tick.
+
+   The object holds, in order from what changes rarely to what changes every tick, for a runtime that caches part of a
+   message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
+   needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
+   repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
+   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; then
+   capacity, running workers and their repositories, the mirror limit and delimiter, tick id, current time, and whether
+   it is a dry run. Each ticket has its phase, branch, and comment, message, and mirror cursors (§22); its units (§18),
+   each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the runs of each kind the
+   operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run if still ahead; and its
+   latest run (id, kind, status, branch, each repository it leased in with its starting base, start and end). A ticket
+   the operator started has a `private` object (§22): when it was started, its message cursor, the operator's messages
+   newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the operator stopped, by key
+   alone: none is a candidate, whatever its labels, and the overseer records nothing for one, so a ticket stopped for
+   weeks adds no decision to every tick. `chores` (§19) is present only when chores are configured. `mirror` holds the
+   per-tick mirror limit and this tick's heredoc delimiter (§22).
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to

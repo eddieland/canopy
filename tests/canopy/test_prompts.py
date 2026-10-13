@@ -252,7 +252,7 @@ def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> N
 
 
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
-    text = prompts.render_overseer(load(canopy_env.root, canopy_env.user_file), "{}")
+    text = prompts.prompt_path(load(canopy_env.root, canopy_env.user_file), prompts.OVERSEER).read_text()
     assert "## Workers' comments" in text
     assert "`trust.comment_prefix`" in text
     assert "`trust.comment_suffix`" in text
