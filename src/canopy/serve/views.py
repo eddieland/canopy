@@ -17,6 +17,8 @@ from canopy.serve.schema import (
     ChoreDetail,
     ChoreFinding,
     ChoreRun,
+    ChoreRunDetail,
+    ChoreRunFinding,
     ChoreSummary,
     Comment,
     Decision,
@@ -421,7 +423,8 @@ def message(row: sqlite3.Row) -> Message:
 def chores(backend: Backend, ctx: Context) -> list[ChoreSummary]:
     """Each configured chore, as `canopy status` lists it: none when `capacity.max_chores` is 0 (DESIGN §19)."""
     now = backend.clock()
-    return [chore_summary(ctx.conn, s, now) for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace)]
+    root = ctx.workspace.root
+    return [chore_summary(ctx.conn, s, now, root) for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace)]
 
 
 def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
@@ -434,13 +437,13 @@ def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
         return None
     state = chore_view.state_of(ctx.conn, name, defined[name])
     return ChoreDetail(
-        chore=chore_summary(ctx.conn, state, backend.clock()),
-        runs=[chore_run(r) for r in state.runs[:CHORE_RUNS]],
+        chore=chore_summary(ctx.conn, state, backend.clock(), ctx.workspace.root),
+        runs=[chore_run(r, ctx.workspace.root) for r in state.runs[:CHORE_RUNS]],
         notes=[message(m) for m in db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)],
     )
 
 
-def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: datetime) -> ChoreSummary:
+def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: datetime, root: Path) -> ChoreSummary:
     """A chore's state as its line in `canopy status` and the head of `canopy show chore:NAME` say it."""
     defined = state.chore
     running = state.running
@@ -452,8 +455,8 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
         hours=defined.hours,
         timezone=defined.timezone,
         when=defined.when or None,
-        running=chore_run(running) if running is not None else None,
-        latest=chore_run(latest) if latest is not None else None,
+        running=chore_run(running, root) if running is not None else None,
+        latest=chore_run(latest, root) if latest is not None else None,
         due_at=state.due_at(now),
         findings=[
             ChoreFinding(
@@ -469,8 +472,8 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
     )
 
 
-def chore_run(row: sqlite3.Row) -> ChoreRun:
-    """One chore run's row."""
+def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
+    """One chore run's row, its log's path from the workspace `root`."""
     status = str(row["status"])
     parsed = chore_result.stored(row["result_json"]) if status == "ok" else None
     return ChoreRun(
@@ -484,8 +487,45 @@ def chore_run(row: sqlite3.Row) -> ChoreRun:
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         tokens=tokens(row),
-        log_path=str(row["log_path"]),
+        log_path=shown_path(str(row["log_path"]), root),
     )
+
+
+def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | None:
+    """One run of chore `name`, or None if it has no such run. A chore deleted from the config keeps its runs."""
+    row = _chore_run_of(ctx.conn, name, run_id)
+    if row is None:
+        return None
+    stored = contract.stored_object(row["result_json"])
+    parsed = chore_result.stored(row["result_json"]) if row["status"] == "ok" else None
+    return ChoreRunDetail(
+        chore=name,
+        run=chore_run(row, ctx.workspace.root),
+        summary=lines(str(stored.get("summary") or "")) or None,
+        note=lines(str(stored.get("harness") or "")) or None,
+        findings=[
+            ChoreRunFinding(
+                id=f.id,
+                title=conversation.printable(f.title),
+                detail=conversation.printable(f.detail),
+                link=f.link,
+            )
+            for f in (parsed.findings if parsed is not None else [])
+        ],
+    )
+
+
+def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | None:
+    """A chore run's session in its log, or None if chore `name` has no such run."""
+    row = _chore_run_of(ctx.conn, name, run_id)
+    if row is None:
+        return None
+    return session_transcript(Path(str(row["log_path"])), row["session_id"])
+
+
+def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> sqlite3.Row | None:
+    row = db.get_chore_run(conn, run_id)
+    return row if row is not None and row["chore"] == name else None
 
 
 def found(ctx: Context, query: str) -> SearchResults:

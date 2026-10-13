@@ -253,8 +253,8 @@ tabs.
   call is a muted line with its reason, tokens, and cost, that opens the same way to its tokens by kind, each a label
   and a readout on one line; Open all leaves it closed. A runtime error is tinted `status-failed`. Open all and Close
   all are in the header, with the session id; above the rows, how many tool calls, failed ones, and model calls. A
-  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript; a tick's page has the
-  overseer's under its decisions.
+  run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
+  (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
@@ -264,7 +264,9 @@ tabs.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
-  run's, its id as `#2` (a chore run has no `run:ID` reference), with its findings as a chip on an `ok` run.
+  run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
+  an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
+  how long it has been open.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's page has a `tracker` row in
   its Work panel when `tracker.ticket_url` is set (`TrackerLink`, `useTicketUrl`), and an unknown ticket's page names
@@ -293,9 +295,11 @@ tabs.
   text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
   (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
-  from anywhere but a text field. The search page has a panel per source with hits, in the server's order, its count
-  in the header (`newest 20` when the source has more). A hit is a row: where it opens (its ticket or chore with the
-  run that said it, or the tick that decided it), its label as a chip, the snippet with the query's words marked on
-  the accent's tint (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL
-  short. While the next query's hits load, the last ones stay, dimmed to 60%.
+  from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
+  when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.
+  The search page has a panel per source with hits, in the server's order, its count in the header (`newest 20` when
+  the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, or the tick
+  that decided it), its label as a chip, the snippet with the query's words marked on the accent's tint
+  (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While
+  the next query's hits load, the last ones stay, dimmed to 60%.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
