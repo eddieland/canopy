@@ -180,4 +180,4 @@ Details in [docs/design/](docs/design/README.md). Security posture in
 
 ## License
 
-Proprietary, all rights reserved, for now (D046). See [LICENSE](LICENSE). Revisit before any public release.
+MIT (D046). See [LICENSE](LICENSE). It is not supported: issues and pull requests from outside may go unanswered.
