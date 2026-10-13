@@ -145,7 +145,11 @@ def signals(
 def _on_hangup(
     reload: reread.Reload, hung_up: Callable[[], bool], *, ignored: bool
 ) -> Callable[[int, FrameType | None], None]:
-    """SIGHUP's handler: a reload, unless the terminal hung up and SIGHUP was not `ignored` before the loop started."""
+    """SIGHUP's handler: a reload, unless the terminal hung up and SIGHUP was not `ignored` before the loop started.
+
+    Returns:
+        The handler, to install with `signal.signal`.
+    """
 
     def handle(_signum: int, _frame: FrameType | None) -> None:
         if not ignored and hung_up():
@@ -173,7 +177,7 @@ def run(
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> Counter[str]:
-    """Run ticks until `stop` is requested or `max_ticks` have run. Returns how many ticks ended in each status.
+    """Run ticks until `stop` is requested or `max_ticks` have run.
 
     `interval_minutes` is `--every`'s; None waits `loop.interval_minutes`. With `serve`, the web UI is served from a
     thread for as long as the loop runs (DESIGN §22). `keys` returns the keys pressed since it was last called
@@ -181,6 +185,9 @@ def run(
     `defer_minutes`, the first tick waits that long, as the wait between ticks does. While the loop is paused, no tick
     starts but one `TICK_NOW_KEY` asks for. A reload asked for through `reload`, by `signals` or the web UI, reads the
     config again between ticks: the next tick, the pace, and the web UI run on it, and `--every` still holds.
+
+    Returns:
+        How many ticks ended in each status.
 
     Raises:
         lock.LockBusyError: another loop holds `<state_dir>/loop.lock`.
@@ -245,7 +252,11 @@ def run(
 
 
 def _pace(cfg: Config, every: int | None) -> pacing.Pace:
-    """What the loop waits after a tick: `--every`, else `loop.interval_minutes`, and the idle cap."""
+    """What the loop waits after a tick: `--every`, else `loop.interval_minutes`, and the idle cap.
+
+    Returns:
+        The base wait and the idle cap, in seconds.
+    """
     return pacing.Pace(
         base_seconds=(every or cfg.loop.interval_minutes) * 60,
         cap_seconds=cfg.loop.idle_max_minutes * 60,
@@ -291,7 +302,11 @@ class _Settings:
 
 
 def _stamped(label: Text, rest: str) -> Text:
-    """A line of the loop's own, outside any tick's block: the time, `label`, and `rest` as plain text."""
+    """A line of the loop's own, outside any tick's block: the time, `label`, and `rest` as plain text.
+
+    Returns:
+        The line, the local time dimmed.
+    """
     return Text.assemble((datetime.now(UTC).astimezone().strftime("%H:%M:%S"), "dim"), "  ", label, rest)
 
 
@@ -413,7 +428,8 @@ def _defer(
 ) -> Woken | None:
     """Wait `seconds` before the first tick. An operator message or `TICK_NOW_KEY` ends it early, as between ticks.
 
-    Returns what ended it early, if anything did.
+    Returns:
+        What ended it early, if anything did.
     """
     seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
     started = clock()
@@ -454,7 +470,11 @@ def _log_woken(log: logs.TickAdapter, woken: Woken | None, *, seen: int, read_at
 
 
 def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
-    """Run one tick. An unexpected error ends that tick, not the loop, as with a scheduler that starts each tick."""
+    """Run one tick. An unexpected error ends that tick, not the loop, as with a scheduler that starts each tick.
+
+    Returns:
+        The tick's outcome, or an `error` outcome naming the exception when the tick raised one.
+    """
     try:
         return tick.run(ctx, dry_run=dry_run)
     # Logged with its traceback. The journal is in autocommit mode, so the next tick starts clean.
@@ -501,7 +521,10 @@ def _wait(
     message or a run ending runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor:
     the operator asked for this tick, as they could with `canopy tick`. While the loop is paused, the wait does not end
     at its deadline but holds until the pause is lifted; `PAUSE_KEY` pauses and resumes. `each_step` runs first at
-    every step, as a reload does. Returns what ended the wait early, if anything did.
+    every step, as a reload does.
+
+    Returns:
+        What ended the wait early, if anything did.
     """
     woken: Woken | None = None
     with Live(console=console, transient=True, auto_refresh=False) as live:
@@ -698,12 +721,20 @@ def _attention_rows(rows: Table, before: list[attention.Item], after: list[atten
 
 
 def _detail(text: str) -> Text:
-    """A last-column cell: one line, whitespace collapsed, cut with an ellipsis when the terminal is too narrow."""
+    """A last-column cell: one line, whitespace collapsed, cut with an ellipsis when the terminal is too narrow.
+
+    Returns:
+        The cell's text, set not to wrap.
+    """
     return Text(" ".join(text.split()), no_wrap=True, overflow="ellipsis")
 
 
 def duration(seconds: float) -> str:
-    """Render a length of time for a person: `45s`, `3m 05s`, `2h 10m`."""
+    """Render a length of time for a person: `45s`, `3m 05s`, `2h 10m`.
+
+    Returns:
+        Hours and minutes, minutes and seconds, or seconds alone, rounded to the second. A negative length is `0s`.
+    """
     total = max(0, round(seconds))
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
@@ -719,5 +750,9 @@ def _clock_time(seconds_from_now: float) -> str:
 
 
 def _local_time(stamp: str) -> str:
-    """A time the journal wrote, as the terminal's clock shows it."""
+    """A time the journal wrote, as the terminal's clock shows it.
+
+    Returns:
+        The local time as `HH:MM`.
+    """
     return db.parse_time(stamp).astimezone().strftime("%H:%M")

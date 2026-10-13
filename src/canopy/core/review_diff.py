@@ -67,12 +67,21 @@ class Diff:
 
 
 def path_for(log_path: str | Path) -> Path:
-    """Where a review run's diff is kept: beside its log, as `<id>.diff`."""
+    """Where a review run's diff is kept: beside its log, as `<id>.diff`.
+
+    Returns:
+        `log_path` with its suffix replaced by `.diff`. The file may not exist.
+    """
     return Path(log_path).with_suffix(".diff")
 
 
 def read(path: Path) -> Diff | None:
-    """Read and parse the diff at `path`. None when it is missing, a symlink, or not a regular file."""
+    """Read and parse the diff at `path`. None when it is missing, a symlink, or not a regular file.
+
+    Returns:
+        The parsed diff, with `truncated` set when the file was longer than `MAX_BYTES` or a bound cut it, or None
+        when the file cannot be opened or is not a regular file.
+    """
     try:
         # Non-blocking, so a FIFO in the diff's place cannot hold the request open; it is refused below.
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -93,7 +102,11 @@ def read(path: Path) -> Diff | None:
 
 
 def parse(text: str) -> Diff:
-    """Parse `git diff` output into files, hunks, and numbered lines, within the bounds."""
+    """Parse `git diff` output into files, hunks, and numbered lines, within the bounds.
+
+    Returns:
+        The files parsed, with `truncated` set when `MAX_FILES` or `MAX_LINES` was reached and the rest left out.
+    """
     parser = _Parser()
     for raw in text.splitlines():
         if not parser.feed(raw):
@@ -107,6 +120,9 @@ def anchor(diff: Diff, location: str) -> tuple[int | None, int | None]:
 
     `(index, None)` when the file is in the diff but the line is not, or the location names no line; `(None, None)`
     when no file matches. A path matches a file's in full, or as its unique suffix after a `/`.
+
+    Returns:
+        The index of the matching file in `diff.files` and the line in the new file, each None when not found.
     """
     found = _LOCATION_RE.match(location.strip())
     if found is None:
@@ -137,7 +153,11 @@ class _Parser:
         self.lines = 0
 
     def feed(self, raw: str) -> bool:
-        """Take one line. False when a bound is reached: the rest is left out."""
+        """Take one line. False when a bound is reached: the rest is left out.
+
+        Returns:
+            True when the line was taken or passed over, False when `MAX_FILES` or `MAX_LINES` was reached.
+        """
         if raw.startswith("diff --git "):
             if len(self.diff.files) >= MAX_FILES:
                 return False

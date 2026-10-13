@@ -77,7 +77,11 @@ class Usage:
         return self.input + self.output + self.reasoning + self.cache_read + self.cache_write
 
     def describe(self) -> str:
-        """What it cost for a person, as `$0.25, 12.3k tokens`."""
+        """What it cost for a person, as `$0.25, 12.3k tokens`.
+
+        Returns:
+            The cost to the cent and the token count, abbreviated with `k` or `M` from a thousand up.
+        """
         return f"${self.cost_usd:.2f}, {_count(self.tokens)} tokens"
 
 
@@ -98,7 +102,12 @@ class AgentOutput:
 
 
 def read(stdout: str) -> AgentOutput:
-    """Read an agent's stdout: plain text, or OpenCode's JSON events."""
+    """Read an agent's stdout: plain text, or OpenCode's JSON events.
+
+    Returns:
+        `stdout` as it is when it holds no event. Otherwise the events' text parts joined by newlines, the first valid
+        session id, and the steps' total usage, or None for usage when a step could not be read.
+    """
     texts: list[str] = []
     steps: list[_StepFinish] = []
     session: str | None = None
@@ -109,9 +118,7 @@ def read(stdout: str) -> AgentOutput:
         if event is None:
             continue
         events += 1
-        found = event["sessionID"]
-        if session is None and isinstance(found, str) and SESSION_ID_RE.fullmatch(found):
-            session = found
+        session = session or session_of(event)
         try:
             if event["type"] == "text":
                 texts.append(_Text.model_validate(event.get("part")).text)
@@ -124,6 +131,12 @@ def read(stdout: str) -> AgentOutput:
     if not events:
         return AgentOutput(stdout)
     return AgentOutput("\n".join(texts), session, _total(steps) if complete else None)
+
+
+def session_of(event: dict[str, object]) -> str | None:
+    """Return the session `event` names, or None when its `sessionID` is not one canopy prints (`SESSION_ID_RE`)."""
+    found = event["sessionID"]
+    return found if isinstance(found, str) and SESSION_ID_RE.fullmatch(found) else None
 
 
 def parse_event(line: str) -> dict[str, object] | None:

@@ -1,6 +1,7 @@
 """The web UI's server (canopy.serve): the guard, the SPA fallback and caching, base paths, signing in, the stream, and
 the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
 
+import asyncio
 import json
 import sqlite3
 import stat
@@ -136,6 +137,19 @@ def test_a_base_path_prefixes_everything(ui: Path, backend: Backend) -> None:
     assert c.get("/api/meta").status_code == 404
 
 
+def test_each_app_serves_its_own_backend_and_sessions(ui: Path, tmp_path: Path) -> None:
+    # The routers are shared by every app in the process; what a route is handed is bound per app.
+    first = client(ui, mock.seed(tmp_path / "first"))
+    second = client(ui, mock.seed(tmp_path / "second"), key=SECRET, base_path="/canopy")
+    assert second.get("/canopy/api/meta").status_code == 401
+    headers = signed_in(second, base="/canopy")
+    before = second.get("/canopy/api/loop", headers=headers).json()
+    paused = first.post("/api/loop/pause", headers={"origin": ORIGIN}).json()
+    assert paused["already"] is False
+    assert first.get("/api/loop").json() == paused["loop"] != before
+    assert second.get("/canopy/api/loop", headers=headers).json() == before
+
+
 @pytest.mark.parametrize("base_path", ["/", "canopy", "/canopy/", "/a/../b", '/"><script>'])
 def test_a_bad_base_path_is_refused(base_path: str) -> None:
     with pytest.raises(ValidationError):
@@ -210,7 +224,7 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
 def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(
     ui: Path, backend: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("canopy.serve.api.FAILED_SIGN_IN_SECONDS", 0.2)
+    monkeypatch.setattr("canopy.serve.api.session.FAILED_SIGN_IN_SECONDS", 0.2)
     c = client(ui, backend, key=SECRET)
     began = time.monotonic()
     response = c.post("/api/session", json={"secret": SECRET + "x"})
@@ -409,6 +423,23 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend, monkeyp
     [tickets] = [e for e in events if isinstance(e, TicketsUpdated)]
     assert tickets.tickets[0].key == "ABC-103"
     assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
+
+
+def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
+    async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
+        stream = live.events(backend, poll_seconds=0.01)
+        first = [await anext(stream) for _ in range(7)]
+        # A reload commits nothing to the journal: the stream sees it in the config it serves.
+        chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
+        backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
+        after = await asyncio.wait_for(anext(stream), timeout=5)
+        return first, after
+
+    first, after = asyncio.run(first_and_after_a_reload())
+    [before] = [e.root for e in first if isinstance(e.root, ChoresUpdated)]
+    assert [c.name for c in before.chores] == ["build-health", "deps"]
+    assert isinstance(after.root, ChoresUpdated)
+    assert [c.name for c in after.root.chores] == ["deps"]
 
 
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:

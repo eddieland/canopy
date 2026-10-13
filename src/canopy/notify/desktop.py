@@ -84,7 +84,11 @@ def command(title: str, body: str, platform: str) -> list[str] | None:
 
 
 def run(argv: list[str], stdin: TextIO, *, runner: procs.Runner, platform: str) -> int:
-    """Show the message on `stdin` as a desktop notification. Returns the exit code."""
+    """Show the message on `stdin` as a desktop notification. Returns the exit code.
+
+    Returns:
+        0 once shown; 1 if the notifier could not run or failed; 2 for an empty message or no notifier installed.
+    """
     parser = argparse.ArgumentParser(
         prog="canopy-notify-desktop",
         description=__doc__.split("\n", 1)[0],
@@ -114,5 +118,9 @@ def run(argv: list[str], stdin: TextIO, *, runner: procs.Runner, platform: str) 
 
 
 def main() -> int:
-    """The `canopy-notify-desktop` command."""
+    """The `canopy-notify-desktop` command.
+
+    Returns:
+        The process exit code, as `run` returns it.
+    """
     return run(sys.argv[1:], sys.stdin, runner=procs.SubprocessRunner(), platform=sys.platform)

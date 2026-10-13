@@ -39,8 +39,8 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
    checkout, `make treehouse` does the same). No release has the lease output canopy reads yet, and `treehouse update`
    installs a release binary that needs glibc 2.34+.
 2. Install canopy. Either:
-   - From a release, with no credential, Python, or uv on the machine that runs canopy (D067). Where you are signed in
-     to GitHub, download `canopy-<platform>` from the
+   - From a release, with no credential, Python, or uv on the machine that runs canopy (D067). Download
+     `canopy-<platform>` from the
      [latest release](https://github.com/eddieland/canopy/releases/latest) (or `gh release download --repo
      eddieland/canopy --pattern 'canopy-linux-x86_64*'`), check it against its `.sha256`, and copy it to the machine
      as `~/.local/bin/canopy` (`mkdir -p ~/.local/bin` first if it is missing, and put it on `PATH` if it is not).
@@ -56,10 +56,9 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
      ```
 
      On macOS, a browser download needs `xattr -d com.apple.quarantine canopy` too. To upgrade, replace the file.
-   - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. The repository is private; git needs an
-     HTTPS credential for it, as for any private clone. Not `uv tool install canopy`: that name on PyPI is another
-     project. To upgrade, run the same command with `--reinstall`. The install builds the web UI, so it needs Node
-     22.12+ and npm on PATH (with nvm: `nvm install 22`); the release binary needs neither.
+   - Or from git: `uv tool install git+https://github.com/eddieland/canopy`. Not `uv tool install canopy`:
+     that name on PyPI is another project. To upgrade, run the same command with `--reinstall`. The install builds the
+     web UI, so it needs Node 22.12+ and npm on PATH (with nvm: `nvm install 22`); the release binary needs neither.
 3. In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP server (Jira, Linear, anything
    with one; for GitHub Issues the GitHub server is both). Your runtime holds the tokens; canopy never sees them.
    Workers need write tools to comment on a ticket, edit its labels, and open PRs; the reviewer needs only read tools.

@@ -62,9 +62,11 @@ in order:
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
    `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
-   the journal. The session id and cost the runtime reported (§13) go on the `ticks` row, whether or not the run
-   succeeded. The run succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`;
-   otherwise the tick closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
+   the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
+   overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
+   id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
+   succeeded if it exited 0 and the last non-empty line of its text (§13) is `tick complete`; otherwise the tick
+   closes as `overseer_failed`. A successful run that recorded a tick-wide `skip`
    (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention list standing,
    so an outage does not resolve and re-raise every item.
 
@@ -441,6 +443,11 @@ dispatch names at least one, in a workspace of one repository too.
      `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed. A public
      ticket's prompt without `{{OPERATOR_MESSAGES}}` is `bad_prompt` once the operator has written to the ticket in
      canopy (§22, D093), and still renders for a ticket the operator never wrote to.
+   - Every prompt but a split's carries `{{STANDING_INSTRUCTIONS}}`, the operator's file `paths.worker_instructions`
+     (§12), or `None.` without one. With it set, a prompt without the placeholder is `bad_prompt`, so an override
+     cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
+     worker without it would work as if the operator had never written it. It is the operator's own text, an
+     instruction like their messages, and the prompt's obligations come before it.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first

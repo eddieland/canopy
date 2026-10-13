@@ -37,6 +37,9 @@ def is_desk(desk: Path) -> bool:
 def make(root: Path, key: str, links: Sequence[tuple[str, Path]]) -> Path:
     """Make `key`'s desk with a link named for each repository to its worktree, replacing one left by a dead run.
 
+    Returns:
+        The desk's path.
+
     Raises:
         DeskError: `desks/` is a symlink, so the desk would land wherever it points; something canopy did not make is
             where the desk goes; or the desk cannot be written.
@@ -63,7 +66,8 @@ def make(root: Path, key: str, links: Sequence[tuple[str, Path]]) -> Path:
 def remove(desk: Path) -> bool:
     """Remove a desk canopy made and anything the worker left in it, never following its links.
 
-    Returns whether one was removed: anything else at `desk` is not canopy's and is left alone.
+    Returns:
+        Whether one was removed: anything else at `desk` is not canopy's and is left alone.
     """
     if not is_desk(desk):
         return False
@@ -73,7 +77,11 @@ def remove(desk: Path) -> bool:
 
 
 def prune(root: Path, keep: Iterable[str]) -> list[Path]:
-    """Remove every desk except those of the tickets in `keep`, which have a running run. Returns the desks removed."""
+    """Remove every desk except those of the tickets in `keep`, which have a running run.
+
+    Returns:
+        The desks removed, sorted. Empty when `desks/` is a symlink or not a directory.
+    """
     parent = root / DESKS_DIR
     if parent.is_symlink() or not parent.is_dir():
         return []

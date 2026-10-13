@@ -29,13 +29,21 @@ class Paused:
 
 
 def paused(conn: sqlite3.Connection) -> Paused | None:
-    """The pause in force, or None while the loop ticks."""
+    """The pause in force, or None while the loop ticks.
+
+    Returns:
+        When the loop was paused and through which channel, or None if it is not paused.
+    """
     row = conn.execute("SELECT paused_at, channel FROM pause WHERE id = 1").fetchone()
     return Paused(str(row["paused_at"]), str(row["channel"])) if row is not None else None
 
 
 def pause(conn: sqlite3.Connection, *, channel: str) -> bool:
-    """Pause the loop. Returns whether it was already paused, which keeps the first pause's time and channel."""
+    """Pause the loop.
+
+    Returns:
+        Whether it was already paused, which keeps the first pause's time and channel.
+    """
     cur = conn.execute(
         "INSERT INTO pause (id, paused_at, channel) VALUES (1, ?, ?) ON CONFLICT (id) DO NOTHING", (db.now(), channel)
     )
@@ -43,5 +51,9 @@ def pause(conn: sqlite3.Connection, *, channel: str) -> bool:
 
 
 def resume(conn: sqlite3.Connection) -> bool:
-    """Lift the pause. Returns whether the loop was already running."""
+    """Lift the pause.
+
+    Returns:
+        Whether the loop was already running.
+    """
     return conn.execute("DELETE FROM pause WHERE id = 1").rowcount == 0
