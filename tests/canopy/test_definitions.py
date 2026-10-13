@@ -140,7 +140,11 @@ def test_the_shadowing_message_names_the_files(tmp_path: Path) -> None:
 def _rules(agent: str, section: str = "") -> list[tuple[str, str]]:
     """The agent's quoted permission rules, in order: its top-level ones, OpenCode's patterns for MCP tool names, or
     those under `section`, such as `bash`, whose patterns are command lines."""
-    frontmatter = (resources.agents_dir() / f"{agent}.md").read_text().split("---")[1]
+    return _rules_in((resources.agents_dir() / f"{agent}.md").read_text(), section)
+
+
+def _rules_in(definition: str, section: str = "") -> list[tuple[str, str]]:
+    frontmatter = definition.split("---")[1]
     indent = "    " if section else "  "
     inside = not section
     rules: list[tuple[str, str]] = []
@@ -166,6 +170,41 @@ def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> No
         "git push origin :refs/heads/agent/PROJ-1-x",
     ):
         assert not _allowed(rules, refused), refused
+
+
+LEASED_PUSH = "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x"
+
+
+@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env: CanopyEnv, agent: str) -> None:
+    """`trust.rebase` adds the one forced push the prompts name; every other force, and the rest, stay denied."""
+    path = f"agents/{agent}.md"
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    assert not _allowed(_rules_in(rendered, "bash"), LEASED_PUSH)
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    rules = _rules_in(rendered, "bash")
+    assert _allowed(rules, LEASED_PUSH)
+    assert _allowed(rules, "git push origin HEAD:refs/heads/agent/PROJ-1-x")
+    for refused in (
+        "git push --force origin HEAD:refs/heads/agent/PROJ-1-x",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --force",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --force --no-verify",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x -f",
+        "git push --force-with-lease=refs/heads/main origin HEAD:refs/heads/main",
+        "git push --force-with-lease origin +HEAD:refs/heads/agent/PROJ-1-x",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --delete",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --mirror",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x :refs/heads/main",
+        "git push -f origin HEAD:refs/heads/agent/PROJ-1-x",
+    ):
+        assert not _allowed(rules, refused), refused
+
+
+def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="no line"):
+        definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
 
 
 def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:

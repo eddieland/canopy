@@ -46,7 +46,7 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 
 Stay in {{SLOT}}, push only to `{{BRANCH}}`, with
 `git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
-merge or approve. Post no
+merge or approve. {{BRANCH_UPDATE}} Post no
 comments: describe the fix in your summary. Keep the agent runtime's attribution trailer on commits, or add
 `{{COMMIT_TRAILER}}`. Never transition the ticket, including indirectly: refer to
 it by key only, with no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands (Jira smart commits such

@@ -208,6 +208,126 @@ def test_a_worker_that_pushed_and_then_moved_head_is_done(
     assert git_pool.remote_head("agent/PROJ-1-work") != git_pool.remote_head("main")
 
 
+def branch_behind_main(git_pool: GitPool, branch: str = "agent/PROJ-1-work") -> None:
+    """Put `branch` on origin with two commits of its own, and then a commit on `main` it lacks."""
+    seed = git_pool.slots[1]
+    git("checkout", "--quiet", "-b", branch, "origin/main", cwd=seed)
+    for name in ("a", "b"):
+        (seed / f"{name}.txt").write_text(f"{name}\n")
+        git("add", f"{name}.txt", cwd=seed)
+        git("commit", "--quiet", "-m", f"PROJ-1: {name}", cwd=seed)
+    git("push", "--quiet", "origin", branch, cwd=seed)
+    git("checkout", "--quiet", "--detach", "origin/main", cwd=seed)
+    (seed / "m.txt").write_text("m\n")
+    git("add", "m.txt", cwd=seed)
+    git("commit", "--quiet", "-m", "main moves on", cwd=seed)
+    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=seed)
+    git("checkout", "--quiet", "--detach", cwd=seed)
+
+
+def commit_file(name: str) -> list[str]:
+    return ["sh", "-c", f"echo {name} > {name}.txt && git add {name}.txt && git commit --quiet -m 'PROJ-1: {name}'"]
+
+
+def with_rebase(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+
+
+def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """Issue #293: the worker rebased, could not force-push, and pushed a fix on top of origin's branch instead."""
+    branch_behind_main(git_pool)
+    with worker_does(
+        ["git", "rebase", "--quiet", "origin/main"],
+        ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
+        commit_file("fix"),
+        ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+    ):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "done", run["result_json"]
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+
+
+def test_a_rebase_dropped_with_work_of_its_own_is_unpushed(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """Only a commit whose change origin already has is dropped from the check: new work left behind still counts."""
+    branch_behind_main(git_pool)
+    with worker_does(
+        ["git", "rebase", "--quiet", "origin/main"],
+        commit_file("lost"),
+        ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
+        commit_file("fix"),
+        ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+    ):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "unpushed"
+    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run["result_json"])["harness"]
+
+
+def test_without_rebase_a_rebased_branch_is_never_forced(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    branch_behind_main(git_pool)
+    before = git_pool.remote_head("agent/PROJ-1-work")
+    with worker_does(["git", "rebase", "--quiet", "origin/main"]):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "unpushed"
+    assert "not on origin; the push failed: " in json.loads(run["result_json"])["harness"]
+    assert git_pool.remote_head("agent/PROJ-1-work") == before
+
+
+def test_with_rebase_a_worker_that_rebased_and_pushed_with_a_lease_is_done(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """Its own commit, made before the rebase, and origin's old commits are replaced by copies: nothing is lost."""
+    with_rebase(canopy_env)
+    branch_behind_main(git_pool)
+    with worker_does(
+        commit_file("fix"),
+        ["git", "rebase", "--quiet", "origin/main"],
+        ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+    ):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "done", run["result_json"]
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+    assert git("merge-base", "--is-ancestor", "origin/main", "HEAD", cwd=slot) == ""
+
+
+def test_with_rebase_canopy_pushes_a_rebased_branch_with_a_lease(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    with_rebase(canopy_env)
+    branch_behind_main(git_pool)
+    with worker_does(["git", "rebase", "--quiet", "origin/main"]):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "done", run["result_json"]
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+
+
+def test_with_rebase_canopy_never_overwrites_a_push_made_since_the_run_started(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    with_rebase(canopy_env)
+    branch_behind_main(git_pool)
+    other = git_pool.slots[1]
+    script = (
+        f"git -C {other} fetch --quiet origin && git -C {other} checkout --quiet --detach origin/agent/PROJ-1-work && "
+        f"git -C {other} commit --quiet --allow-empty -m 'a coworker' && "
+        f"git -C {other} push --quiet origin HEAD:refs/heads/agent/PROJ-1-work"
+    )
+    pushed_meanwhile = ["sh", "-c", script]
+    with worker_does(pushed_meanwhile, ["git", "rebase", "--quiet", "origin/main"]):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "unpushed"
+    assert "not on origin; the push failed: " in json.loads(run["result_json"])["harness"]
+    assert git("log", "-1", "--format=%s", git_pool.remote_head("agent/PROJ-1-work") or "", cwd=other) == "a coworker"
+
+
 @pytest.mark.parametrize("only_here", [False, True])
 def test_a_local_branch_an_earlier_canopy_left_is_dropped_unless_it_holds_commits_origin_lacks(
     canopy_env: CanopyEnv,

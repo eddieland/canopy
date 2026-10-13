@@ -98,8 +98,8 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   attention for failures the branch did not cause, avoids that.
 - **Merge conflicts have no phase** (§7). A conflicting PR may get no CI run and sit in `ci_running` or show a stale
   green. agent-orchestrator tracks mergeability and fixed two bugs in its conflict nudge
-  ([#3766](https://github.com/Untrivial-ai/agent-orchestrator/pull/3766)). Its "rebase" instruction does not fit canopy,
-  whose workers never force-push; merging the base in does.
+  ([#3766](https://github.com/Untrivial-ai/agent-orchestrator/pull/3766)). Its "rebase" instruction does not fit canopy
+  by default, whose workers never force-push; merging the base in does. With `trust.rebase` they rebase (C6).
 
 ### Open design questions
 

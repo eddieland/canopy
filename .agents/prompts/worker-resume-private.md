@@ -9,13 +9,12 @@ yet. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 {{REPOSITORIES}}
 
 {{STACKING}} If the context says the PR this ticket was stacked on has merged, change this ticket's PR to target its
-repository's base branch listed above, and if the branch then conflicts with it, merge that base into the branch as
-`origin/<base>` and resolve the conflicts. If the context says the PR conflicts with its base, merge that repository's
-base branch listed above into the branch as `origin/<base>`. Either way, canopy fetched it just before you started, so
-do not fetch, and never merge a local branch of that name: it is not the base. Resolve each
-conflict so both sides' changes survive; if one cannot be resolved without a decision about behavior that neither the
-ticket nor the code settles, do not guess: abort the merge and ask, as under "blocked" below. Never rebase: the push
-must not need force.
+repository's base branch listed above, and if the branch then conflicts with it, bring that base into the branch and
+resolve the conflicts. If the context says the PR conflicts with its base, bring that repository's base branch listed
+above into the branch. {{BRANCH_UPDATE}} Either way, canopy fetched the base as `origin/<base>` just before you
+started, so do not fetch, and never use a local branch of that name: it is not the base. Resolve each conflict so both
+sides' changes survive; if one cannot be resolved without a decision about behavior that neither the ticket nor the
+code settles, do not guess: abort and ask, as under "blocked" below.
 
 ## This ticket is private
 
