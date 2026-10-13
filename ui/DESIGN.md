@@ -301,7 +301,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   input's short values as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of
   one short line that is not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a
   `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented and
-  colored as a tick's output is (below), in monospace blocks at most 24rem tall. A model call is a muted line with
+  colored as a tick's output is with Pretty on (below), every value as written, in monospace blocks at most 24rem
+  tall. A model call is a muted line with
   its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
   same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
   is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
@@ -314,7 +315,11 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
   `JsonTokens`): keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line
-  stays plain. A transcript's block is colored the same way when the whole of it is JSON.
+  stays plain. A transcript's block is colored the same way when the whole of it is JSON. A ghost Pretty toggle in the
+  header (`aria-pressed`, its pressed look the open Hide button's) lays each JSON line out over several, two spaces a
+  level, by the space between its tokens alone, so every value stays as written; it reopens the block at its end.
+  Each tick's panel keeps its own choice, off until turned on, across reloads (`src/lib/pretty-output.ts`), as a list
+  keeps its order.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.

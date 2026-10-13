@@ -1,4 +1,4 @@
-"""The overseer's state block: the `## State` section the harness appends to its prompt (DESIGN §6 step 4)."""
+"""The overseer's state block: the `## State` section that is each tick's whole message to it (DESIGN §6 step 4)."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def state_block(
     operator: Mapping[str, dict[str, object]] | None = None,
     mirror_delimiter: str,
 ) -> str:
-    """Render the `## State` section the harness appends to the overseer prompt.
+    """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
     `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22). `units` are each
     ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`, and
@@ -119,29 +119,11 @@ def state_block(
         return summary
 
     state: dict[str, object] = {
-        "tick_id": tick_id,
-        "now": db.format_time(now),
-        "dry_run": dry_run,
         "repository": str(repo_root),
-        # The overseer runs at the workspace root, which is not a repository: each repository's leased slots stand in
-        # for its own `treehouse status` (DESIGN §18).
         "workspace": {
             "name": workspace.name,
             "map": str(workspace.map_prose) if workspace.map_prose is not None else None,
         },
-        "repositories": [
-            {
-                "name": r.name,
-                "path": str(r.path),
-                "summary": r.summary,
-                "cloned": r.cloned,
-                "leased_slots": [
-                    {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": s.leased_at}
-                    for s in leased.get(r.name, [])
-                ],
-            }
-            for r in workspace.repos
-        ],
         "tracker": {
             "provider": config.tracker.provider,
             "query": config.tracker.query,
@@ -156,11 +138,6 @@ def state_block(
             "branch_prefix": config.trust.branch_prefix,
             "pr_label": config.trust.pr_label,
         },
-        "capacity": {
-            "max_workers": capacity.max_workers,
-            "running": capacity.running,
-            "available": capacity.available,
-        },
         "policy": {
             "max_implement_attempts": config.policy.max_implement_attempts,
             "max_fix_ci_attempts": config.policy.max_fix_ci_attempts,
@@ -169,22 +146,24 @@ def state_block(
             "max_split_attempts": config.policy.max_split_attempts,
             "stacking": config.policy.stacking,
         },
-        "running_workers": [
+        # The overseer runs at the workspace root, which is not a repository: each repository's leased slots stand in
+        # for its own `treehouse status` (DESIGN §18).
+        "repositories": [
             {
-                "run_id": r["id"],
-                "ticket": r["ticket_key"],
-                "repos": [s["repo"] for s in run_slots.get(int(r["id"]), [])],
-                "kind": r["kind"],
-                "branch": r["branch"],
-                "started_at": r["started_at"],
+                "name": r.name,
+                "path": str(r.path),
+                "summary": r.summary,
+                "cloned": r.cloned,
+                "leased_slots": [
+                    {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": s.leased_at}
+                    for s in leased.get(r.name, [])
+                ],
             }
-            for r in running
+            for r in workspace.repos
         ],
         "tickets": [ticket_summary(t) for t in tickets],
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
-        # Tracker comments the overseer copies into the journal (DESIGN §22).
-        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
         # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).
         "split_children": [
             {
@@ -202,6 +181,33 @@ def state_block(
     # With reviews off, nothing about them reaches the overseer (DESIGN §21).
     if reviews is not None:
         state["reviews"] = reviews
+    # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
+    # (DESIGN §6).
+    state.update(
+        {
+            "capacity": {
+                "max_workers": capacity.max_workers,
+                "running": capacity.running,
+                "available": capacity.available,
+            },
+            "running_workers": [
+                {
+                    "run_id": r["id"],
+                    "ticket": r["ticket_key"],
+                    "repos": [s["repo"] for s in run_slots.get(int(r["id"]), [])],
+                    "kind": r["kind"],
+                    "branch": r["branch"],
+                    "started_at": r["started_at"],
+                }
+                for r in running
+            ],
+            # Tracker comments the overseer copies into the journal (DESIGN §22).
+            "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
+            "tick_id": tick_id,
+            "now": db.format_time(now),
+            "dry_run": dry_run,
+        }
+    )
     if dry_run:
         mode = (
             "This is a dry run. `canopy dispatch` checks its guards and records what it would have done, or the "
