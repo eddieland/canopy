@@ -135,3 +135,7 @@ relying on a permission they check.
   or was not dispatched in a given tick; expect it to match `canopy decisions`.
 - **S30. A session's transcript** (M15, M27). Open a worker run's page and a tick's page. Expect the tool calls
   `opencode export <id>` shows for the same session id, and, for a failed run, its runtime error.
+- **S32. Search** (M31). After a week of `canopy loop`, type into the web UI's search box a word of a ticket's title,
+  then a phrase from a run's summary. Expect the ticket, by its branch, and the run's report among the hits, each
+  opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and
+  time `GET /search` in the browser's network tab. Over a quarter of a second is the cue to revisit FTS5 (DESIGN §22).
