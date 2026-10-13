@@ -213,6 +213,17 @@ the cap, the per-tick block shows the count with the wait, as `idle 3, next tick
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
 records whether it was idle, the count, and the wait chosen, in seconds.
 
+The journal records the same on each tick the loop ran, for spend (ROADMAP M33): `ticks.idle`, whether the tick was idle
+by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any
+`--defer` ran its length), `timer` (the wait ran its length), `gate` (a gate shortened it and it ran out), `message`,
+`run`, or `key`. A pause does not change it: a tick held past its deadline until the operator resumed records what it
+would have without the pause, and one the operator ran during the pause records `key`. The loop classifies every tick
+with idle pacing off too, though only pacing counts them, so the journal says what the overseer's spend bought whatever
+the pacing; a `loop waits` line's `idle` is then the tick's classification, and its count stays 0. Both are NULL on a
+tick the loop did not run, such as a hand-run `canopy tick`: the rule compares the journal before and after the tick,
+and only the loop reads it before. A tick the loop has no id for (`lock_busy`, or `error`, where tick code raised)
+records nothing.
+
 ## 7. Ticket phases and next actions
 
 The overseer derives phases each tick from live state. They are recorded in `tickets.phase` for the status view, never
