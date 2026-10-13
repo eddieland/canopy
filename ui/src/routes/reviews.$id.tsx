@@ -40,7 +40,7 @@ function Loaded({ id }: { id: number }) {
     if (data === undefined) {
         return (
             <>
-                <PageHeader label="Review" title={`review ${id}`} />
+                <PageHeader title={`review ${id}`} />
                 <Panel className="min-h-72 p-3">
                     <Skeleton className="h-4 w-1/2" />
                 </Panel>
@@ -50,7 +50,7 @@ function Loaded({ id }: { id: number }) {
     const placed = placeFindings(data.findings, data.diff !== null)
     return (
         <>
-            <PageHeader label="Review" title={`review ${data.review.id}`}>
+            <PageHeader title={`review ${data.review.id}`}>
                 canopy's adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on the
                 diff, at the lines they name.
             </PageHeader>
@@ -92,7 +92,7 @@ function Loaded({ id }: { id: number }) {
 function NoReview({ title, children }: { title: string; children: string }) {
     return (
         <>
-            <PageHeader label="Review" title={title} />
+            <PageHeader title={title} />
             <Panel>
                 <Placeholder className="min-h-40">{children}</Placeholder>
             </Panel>

@@ -92,7 +92,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await web.locator('summary').click()
     await expect(web).toContainText('1 high severity vulnerability')
 
-    await page.getByRole('link', { name: 'chore:deps' }).click()
+    await page.locator('dl').getByRole('link', { name: 'chore:deps' }).click()
     await expect(page).toHaveURL(/\/chores\/deps$/)
 
     await page.goto('chores/build-health/runs/4')

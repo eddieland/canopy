@@ -50,6 +50,34 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-marker', 'kept')
 })
 
+test('every page header opens with a trail back up to its section', async ({ page }) => {
+    const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
+
+    // On a section's list the trail names the section and links nowhere.
+    await page.goto('runs')
+    await expect(trail).toHaveText('Runs')
+    await expect(trail.getByRole('link')).toHaveCount(0)
+
+    // On a run, the section links back to its list; the title is not repeated in the trail.
+    await page.goto('runs/39')
+    await expect(trail).toHaveText('Runs')
+    await trail.getByRole('link', { name: 'Runs' }).click()
+    await expect(page).toHaveURL(/\/runs$/)
+
+    // A chore run's trail passes through its chore, by its name as written.
+    await page.goto('chores/deps/runs/2')
+    await expect(trail.getByRole('link')).toHaveText(['Chores', 'chore:deps'])
+    await trail.getByRole('link', { name: 'chore:deps' }).click()
+    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps')
+    await trail.getByRole('link', { name: 'Chores' }).click()
+    await expect(page).toHaveURL(/\/chores$/)
+
+    // A page in no section names itself.
+    await page.goto('search?q=csv')
+    await expect(trail).toHaveText('Search')
+})
+
 test('each nav item says on hover what its page holds', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
