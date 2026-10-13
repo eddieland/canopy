@@ -89,7 +89,7 @@ Rules:
   to the viewport, so a full-page capture (or print) shows it whole.
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each block under the nav is a hairline and a `panel-label` over its content. The
-  working runs are those waiting on the operator's answer first, then those running, each oldest first: a dot in its
+  working runs are those running first, then those waiting on the operator's answer, each oldest first: a dot in its
   state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
   it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it

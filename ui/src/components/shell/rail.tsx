@@ -13,8 +13,9 @@ import { railRuns } from '@/lib/run-state'
 const RAIL_RUNS = 4
 
 /**
- * Under the nav, on every page: the runs working now, those waiting on the operator's answer first, each opening its
- * page. The runs come whole from the stream, so a row appears when a run starts and leaves when it ends.
+ * Under the nav, on every page: the runs working now, those running first and then those waiting on the operator's
+ * answer, each opening its page. The runs come whole from the stream, so a row appears when a run starts and leaves
+ * when it ends.
  */
 export function RailWorking() {
     const runs = useQuery(runsQuery).data
