@@ -21,7 +21,7 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import chore_view, conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
@@ -164,7 +164,17 @@ def _unavailable(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:
     return [Item(None, UNAVAILABLE, str(rows[-1]["rationale"]), str(rows[0]["created_at"]))]
 
 
-def for_overseer(conn: sqlite3.Connection) -> list[dict[str, object]]:
+class OpenItem(TypedDict):
+    """An open item the overseer recorded: its ticket, or its PR when it has none, and its repository if it has one."""
+
+    ticket: NotRequired[str | None]
+    pr: NotRequired[str]
+    repo: NotRequired[str]
+    reason: str
+    since: str
+
+
+def for_overseer(conn: sqlite3.Connection) -> list[OpenItem]:
     """The open items the overseer recorded, for its state block (DESIGN §6 step 4, ROADMAP M28).
 
     An item stays open only while each tick records it again, so the overseer is shown what it would drop by leaving
@@ -175,17 +185,23 @@ def for_overseer(conn: sqlite3.Connection) -> list[dict[str, object]]:
         One object per item: its ticket, or its PR when it has no ticket; its repository when it has one; its reason;
         and since when it has been open.
     """
-    found: list[dict[str, object]] = []
+    found: list[OpenItem] = []
     for item in current(conn):
         key = item.ticket_key
         if item.reason in HARNESS_REASONS or (key is not None and key.startswith(CHORE_PREFIX)):
             continue
-        subject: dict[str, object] = (
-            {"pr": key.removeprefix(PR_PREFIX)} if key is not None and key.startswith(PR_PREFIX) else {"ticket": key}
+        found.append(
+            {
+                **(
+                    {"pr": key.removeprefix(PR_PREFIX)}
+                    if key is not None and key.startswith(PR_PREFIX)
+                    else {"ticket": key}
+                ),
+                **({"repo": item.repo} if item.repo is not None else {}),
+                "reason": item.reason,
+                "since": item.since,
+            }
         )
-        if item.repo is not None:
-            subject["repo"] = item.repo
-        found.append({**subject, "reason": item.reason, "since": item.since})
     return found
 
 

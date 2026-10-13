@@ -21,7 +21,7 @@ import sqlite3
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
@@ -628,7 +628,41 @@ def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> l
     ).fetchall()
 
 
-def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, object] | None:
+class OperatorMessage(TypedDict):
+    """One of the operator's messages as the overseer's state block carries it."""
+
+    id: int
+    at: str
+    # The message it replies to, when the channel knew it.
+    answers: int | None
+    body: str
+
+
+class AwaitingReply(TypedDict):
+    """The question a private ticket's worker asked that no operator message has followed."""
+
+    message_id: int
+    run_id: int | None
+    at: str
+
+
+class PrivateSection(TypedDict):
+    """A started ticket's `private` key in the overseer's state block (DESIGN §22)."""
+
+    started_at: str
+    message_cursor: int | None
+    new_operator_messages: list[OperatorMessage]
+    awaiting_reply: AwaitingReply | None
+
+
+class OperatorSection(TypedDict):
+    """A public ticket's `operator` key in the overseer's state block (DESIGN §7, D089)."""
+
+    message_cursor: int | None
+    new_operator_messages: list[OperatorMessage]
+
+
+def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> PrivateSection | None:
     """Return a started ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
@@ -646,8 +680,7 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
         "started_at": record["started_at"],
         "message_cursor": cursor or None,
         "new_operator_messages": [
-            {"id": m["id"], "at": m["at"], "answers": m["answers"], "body": m["body"]}
-            for m in operator_messages_after(conn, key, max(cursor, forgotten))
+            _operator_message(m) for m in operator_messages_after(conn, key, max(cursor, forgotten))
         ],
         "awaiting_reply": None
         if question is None
@@ -655,7 +688,7 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, ob
     }
 
 
-def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str, object] | None:
+def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> OperatorSection | None:
     """Return a public ticket's operator messages for the overseer's state block, or None when it has no new ones.
 
     They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget. The
@@ -672,10 +705,12 @@ def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> dict[str,
         return None
     return {
         "message_cursor": cursor or None,
-        "new_operator_messages": [
-            {"id": m["id"], "at": m["at"], "answers": m["answers"], "body": m["body"]} for m in messages
-        ],
+        "new_operator_messages": [_operator_message(m) for m in messages],
     }
+
+
+def _operator_message(row: sqlite3.Row) -> OperatorMessage:
+    return {"id": row["id"], "at": row["at"], "answers": row["answers"], "body": row["body"]}
 
 
 def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:
@@ -713,7 +748,15 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
 
 
-def chore_notes(conn: sqlite3.Connection, name: str) -> list[dict[str, object]]:
+class ChoreNote(TypedDict):
+    """One of the operator's notes to a chore, as its prompt carries it (DESIGN §19)."""
+
+    id: int
+    at: str
+    note: str
+
+
+def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     """Return what a chore's prompt carries of the operator's notes to it: the latest, oldest first (DESIGN §19)."""
     return [
         {"id": m["id"], "at": m["at"], "note": printable(str(m["body"]))}

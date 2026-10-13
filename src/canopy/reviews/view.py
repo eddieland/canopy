@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import db
 from canopy.core import review_result as result
@@ -19,7 +19,62 @@ RECENT = timedelta(days=14)
 MAX_PRS = 50
 
 
-def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[str, object] | None:
+class Limits(TypedDict):
+    """The review limits in force, and how many reviews started in the last day."""
+
+    max_reviews: int
+    max_reviews_per_day: int
+    max_reviews_per_pr: int
+    started_last_24h: int
+
+
+class RunningReview(TypedDict):
+    """A review run still running."""
+
+    run_id: int
+    pr: str
+    sha: str
+    ticket: str | None
+    started_at: str
+
+
+class LatestReview(TypedDict):
+    """A PR's latest review run. `findings` are the titles of those the operator did not dismiss."""
+
+    run_id: int
+    sha: str
+    status: str
+    verdict: str | None
+    impact: str | None
+    findings: list[str]
+    dismissed_findings: int
+    started_at: str
+    ended_at: str | None
+    reviewed_at: str | None
+
+
+class ReviewedPR(TypedDict):
+    """A PR reviewed recently. Only one the operator granted more reviews has `granted`."""
+
+    url: str
+    ticket: str | None
+    review_runs: int
+    granted: NotRequired[int]
+    latest: LatestReview
+
+
+class ReviewsSection(TypedDict):
+    """The state block's `reviews` (DESIGN §21)."""
+
+    agent_prs: bool
+    query: str | None
+    low_impact: bool
+    limits: Limits
+    running: list[RunningReview]
+    prs: list[ReviewedPR]
+
+
+def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> ReviewsSection | None:
     """Return the state block's `reviews`, or None when reviews are off: then the block has no such key."""
     if not config.reviews_on:
         return None
@@ -53,7 +108,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> di
     }
 
 
-def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
+def _pr_summary(conn: sqlite3.Connection, url: str) -> ReviewedPR:
     runs = db.review_runs_of(conn, url)
     latest = runs[0]
     stored = result.stored(latest["result_json"])
