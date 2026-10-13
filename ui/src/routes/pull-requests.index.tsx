@@ -12,6 +12,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -55,14 +56,16 @@ function PullRequestsPage() {
 }
 
 /**
- * A PR: the PR, its ticket and title (or `no ticket`, for any PR canopy only reviews), its unit's phase, the run
- * working it now, its latest review's verdict, and its age.
+ * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `no ticket`, for any PR canopy only reviews),
+ * its unit's phase, the run working it now, its latest review's verdict, and its age.
  */
 function Row({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
     return (
         <li className="flex items-center gap-3 px-3 py-2.5" data-testid="pull-request">
-            <PullRequestLink url={pr.url} className="w-64 shrink-0 truncate" />
+            <PullRequestLink url={pr.url} className="w-64 shrink-0 truncate">
+                {pullRequestLabel(pr.url)}
+            </PullRequestLink>
             {pr.ticket_key === null ? (
                 <span className="font-mono text-xs text-muted-foreground">no ticket</span>
             ) : (
