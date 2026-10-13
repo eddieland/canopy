@@ -1,3 +1,10 @@
 {
-  "Exclude": ["\\.py$", "^tests/fakes/(agent|treehouse)$", "\\.md$", "\\.gen\\.ts$", "^docs/ui-explorations/"]
+  "Exclude": [
+    "\\.py$",
+    "^tests/fakes/(agent|treehouse|srt)$",
+    "^examples/sandbox/canopy-sandbox$",
+    "\\.md$",
+    "\\.gen\\.ts$",
+    "^docs/ui-explorations/"
+  ]
 }

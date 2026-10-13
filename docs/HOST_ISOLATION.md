@@ -3,8 +3,9 @@
 Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
 Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
 explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
-so is the half of item 5 that does (D109). The claims about `srt` below were checked against its source at version
-0.0.79 (2026-10-09); re-check them against the version the operator pins.
+so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates are in `examples/sandbox/`.
+The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against
+the version the operator pins.
 
 This document covers how to keep a worker (and a chore) from reaching the rest of the operator's machine. It recommends
 an OS-level sandbox wrapped around `worker_cmd`, lists the small harness changes that sandbox needs to be worth
@@ -77,21 +78,32 @@ The operator sets, in the user config only:
 ```toml
 [runtime]
 # A multi-line literal string: the template is split into words, so the line break is only a space.
-worker_cmd = '''canopy-sandbox worker env OPENCODE_CONFIG_DIR={definitions_dir}
+worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_CONFIG_DIR={definitions_dir}
     opencode run --agent canopy-worker --format json {prompt}'''
 ```
 
-`canopy-sandbox` is a short script the operator installs (canopy would ship it as an example, not as harness code). It
-runs in the worker's cwd, which `_run` sets to the slot or the desk (DESIGN §8, §18), and:
+`canopy-sandbox` is a short script the operator installs; canopy ships it as an example, `examples/sandbox/`, not as
+harness code. Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
+`~/.config/canopy/sandbox/<role>.json`; `--read` names a path the command may read, which is how canopy's agent
+definitions, under the workspace's `.canopy/`, are re-allowed. It runs in the worker's cwd, which `_run` sets to the
+slot or the desk (DESIGN §8, §18), and:
 
-1. Resolves the paths the policy needs: the cwd, each worktree a desk links to, and each worktree's git common directory
-   (`git rev-parse --git-common-dir`).
-2. Writes a per-run policy from a template in `~/.config/canopy/sandbox/`, filling in those paths.
-3. Drops from the environment what the inner `bash -c` would act on, `BASH_ENV` first. `srt` passes the caller's
-   environment through and adds its own: `TMPDIR`, the proxy variables, `GIT_SSH_COMMAND`, `GIT_CONFIG_PARAMETERS`.
-4. `exec`s the sandbox with that policy and the rest of its arguments unchanged, after a `--`:
+1. Resolves the paths the policy needs: the cwd, each worktree a desk links to, and each worktree's own and common git
+   directories (`git rev-parse --git-dir --git-common-dir`). A worker or setup outside a linked worktree is refused:
+   a clone's HEAD and index live in the directory every slot shares.
+2. Writes a per-run policy from the template, filling in those paths, into a directory of its own that is private to
+   the operator, with the run's temp directory beside it, and adds the directory holding every run's to `denyRead`,
+   since the system temp directory is outside `$HOME`. It refuses a template with no `denyRead` or no network
+   allowlist: `srt` runs a command whose policy restricts nothing outside any sandbox (§7).
+3. Drops from the environment what the inner `bash -c` would act on, `BASH_ENV` and `ENV`. `srt` passes the caller's
+   environment through and adds its own: the proxy variables, `GIT_SSH_COMMAND`, `GIT_CONFIG_PARAMETERS`, and
+   `TMPDIR`, which it takes from `CLAUDE_CODE_TMPDIR`, or else `/tmp/claude`, shared by every sandboxed process, so the
+   wrapper sets that to the run's temp directory. It turns `CANOPY_GIT_OBJECTS` into git's variables (§4.2).
+4. Runs the sandbox with that policy and the rest of its arguments unchanged, after a `--`:
    `srt --settings <policy> -- "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms
-   too) anywhere in its arguments, and `-c` takes its value as a shell command, unquoted.
+   too) anywhere in its arguments, and `-c` takes its value as a shell command, unquoted. It waits rather than `exec`,
+   so that it can remove its directory when `srt` exits; the directory of a run killed with SIGKILL, which is how
+   canopy ends a timed-out run (§5 item 4), is removed by the next run, once the process that made it is gone.
 
 The sandbox recommended here is Anthropic's `sandbox-runtime` (`srt`, Apache-2.0). It wraps any command using
 bubblewrap on Linux and `sandbox-exec` on macOS, and routes all network traffic through a local proxy that enforces a
@@ -106,7 +118,8 @@ denies writes to `~/.config/canopy` (§4.2), a worker cannot remove it either.
 Reads are denied under the home directory and re-allowed where needed. Writes are denied everywhere and allowed where
 needed. A deny list of known secret paths was considered and rejected: it always misses one. `srt`'s policy takes this
 shape: its `allowRead` outranks `denyRead`, so a denied `$HOME` can re-allow directories under it (a denied file is
-re-allowed only by naming that file).
+re-allowed only by naming that file). The example templates deny `$HOME`, so a workspace outside it must be added to
+`denyRead` too, or its `.canopy/` is readable.
 
 | Path | Read | Write | Why |
 | --- | --- | --- | --- |
@@ -121,6 +134,7 @@ re-allowed only by naming that file).
 | Build and package caches | yes | yes | Separate from the operator's own caches (§7). |
 | A per-run temp directory, exported as `TMPDIR` | yes | yes | Scratch space. |
 | A chore's own `cwd` (default `<state_dir>/chores/<name>/`) | yes | only if it writes | Chores only (below). |
+| canopy's agent definitions (`<state_dir>/runtime/<digest>/`) | yes | no | The agent's own definition (D040). |
 | The rest of `~/.config/canopy` and the workspace's `.canopy/` | no | no | Config and journal belong to the harness. |
 | The rest of `$HOME` | no | no | Secrets, other repositories. |
 
@@ -146,6 +160,25 @@ writable through `GIT_OBJECT_DIRECTORY` and `GIT_ALTERNATE_OBJECT_DIRECTORIES`):
 of `origin/<base>`, and the push by refspec all work, and the push leaves the shared remote-tracking refs alone. Moving
 any ref, making a branch, writing the common `config`, a hook, `config.worktree`, or the `.git` link all fail, and so
 does every plain `git fetch`, since the configured refspec updates a remote-tracking ref.
+
+`srt` cannot say "the common directory, except `worktrees/<slot>/`" as one read rule. Under a denied directory such
+as `$HOME`, it binds each `allowWrite` path back and then each `allowRead` path read-only, so a common directory in
+`allowRead` covers the slot's writable directory inside it, and the worker cannot commit (checked at 0.0.79). The
+wrapper's `@GIT_SHARED@` therefore names what the common directory holds, entry by entry, and every other slot's
+`worktrees/` entry, but not this run's. What the common directory gains after the run starts, such as a first
+`packed-refs`, is not visible inside the sandbox. A `config.worktree` that does not exist yet is still denied: `srt`
+binds an empty file over it, which bubblewrap creates on the host and `srt` removes when the run ends (a run killed
+with SIGKILL leaves it empty, which git ignores without `extensions.worktreeConfig`).
+
+Checked with `srt` 0.0.79, bubblewrap, and git 2.43, through `examples/sandbox/canopy-sandbox worker` and the shipped
+`worker.json` in a slot of a pool under a fake `$HOME`: a commit in the slot works, its objects only in the per-run
+object directory, and so do writes in the slot and in `TMPDIR`; reading `~/.ssh`, the user config, or the journal,
+writing the user config, the `.git` link, `config.worktree`, the common `config`, a hook, or another slot, reading
+another run's temp directory, and moving a branch all fail, as does a connection to a host not on the allowlist or to
+`169.254.169.254`. Writing `~/canary` succeeds inside the sandbox but never reaches the host: `srt` hides a denied
+directory under an empty, writable `tmpfs`, and what is written there is gone when the run ends (§6). Reaching an
+allowed host was not checked there: that machine reached the network only through a proxy of its own, which the canary's
+CI job will not have.
 
 The per-run object directory needs two things the first draft of this section missed:
 
@@ -201,6 +234,7 @@ worker can still push to any repository or post anywhere the operator can. That 
 - `worker_cmd`: yes.
 - `runtime.setup_cmd`: yes. It runs the branch's code in the slot just before the worker (DESIGN §9).
 - Chore `cmd`: yes.
+- `review_cmd`: open (§7).
 - `overseer_cmd`: no. The overseer acts through the `canopy` CLI, which needs the journal, the lock, and the user
   config, so its sandbox would have to allow exactly what §4.2 denies. It has no edit or write tools, and its bash is
   limited to `canopy *` and `treehouse status*` (DESIGN §13). Revisit if that changes.
@@ -246,7 +280,7 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
 5. Worker git state is private (§4.2). Built (D109): a detached checkout in step 2 and a push by refspec, in `_run`
    and the worker prompts; a resume merges `origin/<base>` instead of fetching. Built (DESIGN §8): the per-run object
    directory, passed as `CANOPY_GIT_OBJECTS`, read by step 5, and tidied away on every exit path and by reconcile, as
-   §4.2 describes. Nothing sets git's variables from it until the wrapper does.
+   §4.2 describes. Only the wrapper (§4.1) sets git's variables from it.
 
 No new config keys. `canopy init` can print a suggested `worker_cmd` and the one install command, but does not write
 them. The sandbox stays opt-in until the canary has passed on real machines.
@@ -256,7 +290,9 @@ them. The sandbox stays opt-in until the canary has passed on real machines.
 D021 needed a model to test OpenCode permissions. This does not: the sandbox is the boundary, so a plain script run
 through the real `worker_cmd` prefix is the test. An opt-in live test (`CANOPY_SANDBOX_CANARY=1`) sets up a HOME in a
 temp directory with a fake `~/.ssh/id_ed25519`, a user config, and a state directory, leases a fake slot backed by a
-real git worktree, and runs a script that tries each of these. Every attempt must fail:
+real git worktree, and runs a script that tries each of these. Every attempt must fail, and a write is checked on the
+host, not by whether the attempt reported an error: under a denied directory, `srt`'s `tmpfs` takes the write and
+drops it when the run ends (§4.2).
 
 - Read the fake SSH key, and anything else under HOME outside the policy.
 - Write `~/canary`, `~/.bashrc`, `~/.config/canopy/config.toml`, and anything under the state dir.
@@ -298,8 +334,14 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
   hostile config can reach.
 - `sandbox-exec` is marked deprecated on macOS, though the Seatbelt framework it drives is what Chrome and several
   agent runtimes still use. Apple's `container` (a lightweight VM per container) is the macOS fallback if it goes away.
-- A policy with no restrictions at all makes `srt` run the command without bubblewrap. The canary's denials catch a
-  template that ends up empty.
+- A policy with no restrictions at all makes `srt` run the command without bubblewrap. The wrapper refuses a template
+  with no `denyRead` or no network allowlist, and the canary's denials catch the rest.
+- `/tmp/claude` is writable by every process `srt` sandboxes, whatever the policy says, so two runs can pass files
+  through it. The wrapper moves `TMPDIR` to a directory of the run's own, but cannot close that one. The rest of the
+  system temp directory stays readable, as other system paths do; denying it breaks tools that write there without
+  reading `TMPDIR`.
+- `review_cmd` (DESIGN §21) is not in §4.4. The reviewer reads a PR's diff and checkout, which an untrusted author
+  wrote, from `<state_dir>/reviews/<id>/`; whether it gets a role and a template of its own is open.
 - Where this sits in the ROADMAP: the trigger says before a second team adopts canopy. It needs M2's real worker to be
   worth testing against.
 
