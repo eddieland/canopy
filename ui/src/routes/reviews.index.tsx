@@ -23,7 +23,7 @@ function ReviewsPage() {
     const { data } = useQuery(reviewsQuery)
     return (
         <>
-            <PageHeader label="Reviews" title="Reviews">
+            <PageHeader title="Reviews">
                 canopy's own adversarial reviews, newest first. They are yours alone: nothing of them is on the PR, so
                 this page, <code className="font-mono text-xs">canopy review show</code>, and the workers sent to fix
                 their findings are the only places they are.

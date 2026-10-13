@@ -1,5 +1,5 @@
 // The side nav's sections, each with a color of its own (ui/DESIGN.md, "Tokens"). A section's color is identity,
-// never state: it marks the nav's icons, its highlight, and the label over each page, and nothing in the data.
+// never state: it marks the nav's icons, its highlight, and the trail over each page, and nothing in the data.
 
 /** Every section, by its path, in the nav's order. */
 export const SECTIONS = [
@@ -15,6 +15,18 @@ export const SECTIONS = [
 
 /** One section of the nav, by its path. */
 export type Section = (typeof SECTIONS)[number]
+
+/** Each section's name: its nav item's label and the first step of the trail over its pages. */
+export const SECTION_LABEL: Record<Section, string> = {
+    '/attention': 'Attention',
+    '/runs': 'Runs',
+    '/worktrees': 'Worktrees',
+    '/tickets': 'Tickets',
+    '/reviews': 'Reviews',
+    '/chores': 'Chores',
+    '/ticks': 'Ticks',
+    '/settings': 'Settings',
+}
 
 // Full class names, written out, so Tailwind finds them. One entry per section; the types make a missing one an error.
 

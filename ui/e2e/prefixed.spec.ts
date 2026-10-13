@@ -180,7 +180,8 @@ test('starting a ticket from the list opens it, private', async ({ page }) => {
     await page.getByLabel('Ticket key').fill('ABC-200')
     await page.getByRole('button', { name: 'Start privately' }).click()
     await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-200$/)
-    await expect(page.getByText('Private ticket')).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-200')
+    await expect(page.locator('header').getByText('private', { exact: true })).toBeVisible()
 })
 
 test('a refusal names its guard', async ({ page }) => {

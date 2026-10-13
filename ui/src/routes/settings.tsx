@@ -44,7 +44,7 @@ function SettingsPage() {
     const { preference } = useTheme()
     return (
         <>
-            <PageHeader label="Preferences" title="Settings">
+            <PageHeader title="Settings">
                 The theme, the ticker, and the send key are kept in this browser. Everything else canopy reads from its
                 config files.
             </PageHeader>

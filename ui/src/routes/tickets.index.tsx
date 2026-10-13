@@ -24,7 +24,7 @@ function TicketsPage() {
     const order = useListOrder('tickets')
     return (
         <>
-            <PageHeader label="Conversations" title="Tickets">
+            <PageHeader title="Tickets">
                 Every ticket canopy has worked or been asked to, most recent activity first.
             </PageHeader>
             <Panel>

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
@@ -29,7 +29,12 @@ function ChoreRunPage() {
     const title = `chore:${name} #${id}`
     // A chore run's id is a positive number, as a run's is.
     const parsed = tickId(id)
-    if (parsed === null) return <NoRun title={title}>not a chore run: its id is a positive number</NoRun>
+    if (parsed === null)
+        return (
+            <NoRun name={name} title={title}>
+                not a chore run: its id is a positive number
+            </NoRun>
+        )
     return <Loaded name={name} id={parsed} />
 }
 
@@ -39,12 +44,16 @@ function Loaded({ name, id }: { name: string; id: number }) {
     const { data: transcript } = useQuery(choreRunTranscriptQuery(name, id))
     const title = `chore:${name} #${id}`
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
-        return <NoRun title={title}>{error.message}</NoRun>
+        return (
+            <NoRun name={name} title={title}>
+                {error.message}
+            </NoRun>
+        )
     }
     if (data === undefined) {
         return (
             <>
-                <PageHeader label="Chore run" title={title} />
+                <PageHeader parents={<ChoreCrumb name={name} />} title={title} />
                 <Panel className="min-h-72 p-3">
                     <Skeleton className="h-4 w-1/2" />
                 </Panel>
@@ -53,7 +62,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
     }
     return (
         <>
-            <PageHeader label="Chore run" title={title}>
+            <PageHeader parents={<ChoreCrumb name={name} />} title={title}>
                 What the chore's agent did, from its session's events in the run's log: its text, each tool call with
                 its input and output, and what each model call cost.
             </PageHeader>
@@ -77,14 +86,22 @@ function Loaded({ name, id }: { name: string; id: number }) {
     )
 }
 
-function NoRun({ title, children }: { title: string; children: string }) {
+function NoRun({ name, title, children }: { name: string; title: string; children: string }) {
     return (
         <>
-            <PageHeader label="Chore run" title={title} />
+            <PageHeader parents={<ChoreCrumb name={name} />} title={title} />
             <Panel>
                 <Placeholder className="min-h-40">{children}</Placeholder>
             </Panel>
         </>
+    )
+}
+
+function ChoreCrumb({ name }: { name: string }) {
+    return (
+        <Link to="/chores/$name" params={{ name }} activeOptions={{ exact: true }}>
+            chore:{name}
+        </Link>
     )
 }
 

@@ -56,7 +56,7 @@ function AttentionPage() {
     const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
     return (
         <>
-            <PageHeader label="Inbox" title="Attention">
+            <PageHeader title="Attention">
                 What needs you, as <code className="font-mono text-xs">canopy status</code> lists it, most severe first.
                 An item leaves when its cause is gone.
             </PageHeader>

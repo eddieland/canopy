@@ -35,7 +35,7 @@ function WorktreesPage() {
     }
     return (
         <>
-            <PageHeader label="Pools" title="Worktrees">
+            <PageHeader title="Worktrees">
                 Every slot in canopy's treehouse pools: what holds it, what it has checked out, and what runs in it.
                 Paths inside the workspace are shown from its root. Read from treehouse when the page opens and whenever
                 a run starts or ends.

@@ -33,7 +33,7 @@ function RunsPage() {
     const order = useListOrder('runs')
     return (
         <>
-            <PageHeader label="Workers" title="Runs">
+            <PageHeader title="Runs">
                 Running runs, then the ones that ended last: what each worked on, what it said, and what it cost.
             </PageHeader>
             <Panel>
