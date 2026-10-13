@@ -94,7 +94,7 @@ export function RailFooter() {
             <span className="flex items-center gap-1.5">
                 <Kbd>/</Kbd> search
             </span>
-            <span className="readout min-h-4 truncate" title={meta?.version}>
+            <span className="readout min-h-4 truncate" title={meta?.version} data-testid="rail-version">
                 {meta === undefined ? '' : `canopy ${meta.version}`}
             </span>
         </div>

@@ -95,7 +95,8 @@ SQL of its own.
   server needs the listener secret (`e2e/secret.ts`; `signIn` in `e2e/helpers.ts`) and never changes its journal;
   tests that write run against the prefixed one. Every route gets a screenshot per theme in
   `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately and the PR says why; look at each
-  new image before it merges. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch,
+  new image before it merges. Every screenshot applies `e2e/screenshot.css`, which hides what changes with the build
+  rather than the page (the rail's version, which names the commit). The baselines are CI's Chromium and fonts, so regenerate them there: push the branch,
   then run the Screenshots workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or
   an agent's GitHub tools). It pushes a commit with the images that changed and starts CI on it; pull before going
   on. It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold
