@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
+from canopy.loop.state import OverseerState, TicketState
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
@@ -37,16 +38,14 @@ def reply(conn: sqlite3.Connection, text: str) -> int:
         return db.latest_message_id(conn)
 
 
-def overseer_state(agent_log: Path) -> dict[str, object]:
+def overseer_state(agent_log: Path) -> OverseerState:
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
-    state: dict[str, object] = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
+    state: OverseerState = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
     return state
 
 
-def tickets_of(state: dict[str, object]) -> dict[str, dict[str, object]]:
-    tickets = state["tickets"]
-    assert isinstance(tickets, list)
-    return {str(t["key"]): t for t in tickets}
+def tickets_of(state: OverseerState) -> dict[str, TicketState]:
+    return {t["key"]: t for t in state["tickets"]}
 
 
 def run_once(conn: sqlite3.Connection, *args: str) -> sqlite3.Row:
@@ -75,14 +74,11 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
         assert main(["tick", "--dry-run"]) == 0
         state = overseer_state(agent_log)
-        trusted = state["trust"]
-        assert isinstance(trusted, dict)
-        assert trusted["trusted_reviewers"] == ["octocat", "canopy:review"]
+        assert state["trust"]["trusted_reviewers"] == ["octocat", "canopy:review"]
         tickets = tickets_of(state)
         # A public ticket: no `private` key, and its operator messages under `operator`.
         assert "private" not in tickets[KEY]
         operator = tickets[KEY]["operator"]
-        assert isinstance(operator, dict)
         assert operator["message_cursor"] is None
         assert [(m["id"], m["body"]) for m in operator["new_operator_messages"]] == [(message, GO_AHEAD)]
         assert "operator" not in tickets["PROJ-2"]
@@ -104,9 +100,7 @@ def test_a_started_tickets_messages_stay_in_its_private_section(
     assert conversation.operator_section(conn, ticket) is None
     private = conversation.state_section(conn, ticket)
     assert private is not None
-    messages = private["new_operator_messages"]
-    assert isinstance(messages, list)
-    assert [m["body"] for m in messages] == [GO_AHEAD]
+    assert [m["body"] for m in private["new_operator_messages"]] == [GO_AHEAD]
 
 
 def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(
