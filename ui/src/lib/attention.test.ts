@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { AttentionItem } from '@/api/types'
 
-import { bySeverity, severity } from './attention'
+import { bySeverity, countBySeverity, severity } from './attention'
 
 const item = (id: string, reason: string, since: string, finding = false): AttentionItem => ({
     id,
@@ -14,6 +14,18 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
     detail: '',
     since,
     finding,
+})
+
+describe('countBySeverity', () => {
+    it('counts each severity, zero for one with no item', () => {
+        const items = [
+            item('a', 'worker_failed', '2026-10-08T12:00:00Z'),
+            item('b', 'awaiting_reply', '2026-10-08T12:00:00Z'),
+            item('c', 'untrusted_review', '2026-10-08T12:00:00Z'),
+            item('d', 'needs_reviewer', '2026-10-08T12:00:00Z'),
+        ]
+        expect(countBySeverity(items)).toEqual({ failed: 1, waiting: 2, other: 1, finding: 0 })
+    })
 })
 
 describe('severity', () => {
