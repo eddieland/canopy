@@ -13,6 +13,7 @@ import {
 
 import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
+import { countBySeverity, type Severity } from '@/lib/attention'
 import { type Section, SECTION_FILL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
@@ -30,11 +31,11 @@ const ITEMS: { to: Section; label: string; icon: LucideIcon }[] = [
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
  * ticket's page keeps Tickets active, a chore's Chores, and a tick's Ticks. Attention shows how many items it lists, on
- * every page.
+ * every page, split as its counter splits them.
  */
 export function Nav() {
     const attention = useQuery(attentionQuery)
-    const listed = attention.data?.length
+    const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const section = useSection()
     const active = ITEMS.findIndex(({ to }) => to === section)
     // With no section active the highlight is hidden; it keeps a color so it fades rather than flashes.
@@ -80,16 +81,33 @@ export function Nav() {
                         )}
                     />
                     {label}
-                    {to === '/attention' && listed !== undefined && listed > 0 && (
-                        <span
-                            className={cn('ml-auto readout text-xs', SECTION_TEXT[to])}
-                            data-testid="nav-attention-count"
-                        >
-                            {listed}
-                        </span>
-                    )}
+                    {to === '/attention' && counts !== undefined && <AttentionCount counts={counts} />}
                 </Link>
             ))}
         </nav>
+    )
+}
+
+/**
+ * The attention list's count beside its nav item: what is broken in the failure color, what waits on the operator's
+ * answer in theirs, and the rest muted, each shown only when there is one. Not the section's rose, which is too near
+ * the failure color to tell apart at this size.
+ */
+function AttentionCount({ counts }: { counts: Record<Severity, number> }) {
+    const parts = [
+        { kind: 'failed', count: counts.failed, tone: 'text-status-failed' },
+        { kind: 'waiting', count: counts.waiting, tone: 'text-status-blocked' },
+        { kind: 'other', count: counts.other + counts.finding, tone: 'text-muted-foreground' },
+    ].filter(({ count }) => count > 0)
+    if (parts.length === 0) return null
+    return (
+        <span className="ml-auto flex gap-1.5 readout text-xs" data-testid="nav-attention-count">
+            {parts.map(({ kind, count, tone }) => (
+                <span key={kind} className={tone} title={`${count} ${kind}`} data-testid={`nav-attention-${kind}`}>
+                    {count}
+                    <span className="sr-only"> {kind}</span>
+                </span>
+            ))}
+        </span>
     )
 }

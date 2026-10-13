@@ -102,7 +102,10 @@ Rules:
   of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
 - The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
   was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
-  the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page.
+  the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page,
+  split by severity as the Attention counter splits them: broken in `status-failed`, waiting on the operator's answer
+  in `status-blocked`, the rest muted, each only when there is one. Never in the section's rose, too near the failure
+  color to tell apart at that size.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
   The page header's label is in its section's color; a panel's stays in `muted-foreground`.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint

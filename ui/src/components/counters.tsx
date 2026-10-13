@@ -5,7 +5,7 @@ import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
-import { severity, type Severity } from '@/lib/attention'
+import { countBySeverity, type Severity } from '@/lib/attention'
 
 /**
  * The loop at a glance, above the attention list: what runs, what waits on you, what needs you, and what it cost in
@@ -24,11 +24,7 @@ export function Counters() {
         ?.filter((i) => i.reason === 'awaiting_reply' && !answered(i, tickets.data))
         .map((i) => i.since)
     const oldest = questions?.toSorted()[0]
-    const counts = attention.data?.reduce<Partial<Record<Severity, number>>>((found, item) => {
-        const s = severity(item)
-        found[s] = (found[s] ?? 0) + 1
-        return found
-    }, {})
+    const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const broken = (counts?.failed ?? 0) > 0
 
     return (
@@ -73,8 +69,8 @@ function usd(cost: number): string {
     return `$${cost.toFixed(2)}`
 }
 
-function breakdown(counts: Partial<Record<Severity, number>>): string {
-    const rest = (counts.other ?? 0) + (counts.finding ?? 0)
+function breakdown(counts: Record<Severity, number>): string {
+    const rest = counts.other + counts.finding
     const parts = [
         counts.failed && `${counts.failed} failed`,
         counts.waiting && `${counts.waiting} waiting`,

@@ -29,6 +29,13 @@ export function severity(item: AttentionItem): Severity {
     return 'other'
 }
 
+/** How many of the items are of each severity. */
+export function countBySeverity(items: AttentionItem[]): Record<Severity, number> {
+    const counts: Record<Severity, number> = { failed: 0, waiting: 0, other: 0, finding: 0 }
+    for (const item of items) counts[severity(item)] += 1
+    return counts
+}
+
 /** The items, most severe first; within a severity, the one open longest first. */
 export function bySeverity(items: AttentionItem[]): AttentionItem[] {
     return items.toSorted(
