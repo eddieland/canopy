@@ -301,8 +301,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D079. The web UI is a single-page app in `ui/`
 
 - Vite, React, TypeScript, Tailwind, shadcn/ui, TanStack; types generated from FastAPI's OpenAPI. Built by the wheel's
-  hook when npm is present, so operators never need Node. Rules in `ui/AGENTS.md`.
-- Rejected: Jinja2 with htmx (per-page script drifts); committing the build; building at install; server rendering.
+  hook, which fails without Node rather than build a wheel with no UI: an install from git needs Node, the release
+  binary does not. Rules in `ui/AGENTS.md`.
+- Rejected: Jinja2 with htmx (per-page script drifts); committing the build; building at install; server rendering;
+  a wheel without the UI.
 - Revisit: if the UI shrinks to pages a template would serve.
 
 ## D081. The overseer mirrors comments through a quoted heredoc with a per-tick random delimiter
