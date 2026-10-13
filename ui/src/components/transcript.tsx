@@ -15,9 +15,8 @@ import { cn } from '@/lib/utils'
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
- * printed them. All of it is agent
- * output, rendered as text. `running` says the session's events have not reached the log yet: they do when its run
- * or tick ends.
+ * printed them. All of it is agent output, rendered as text. `running` says the session's events have not reached the
+ * log yet: they do when its run or tick ends.
  */
 export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
     // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own.
