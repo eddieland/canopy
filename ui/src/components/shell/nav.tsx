@@ -15,36 +15,32 @@ import {
 import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
 import { countBySeverity, type Severity } from '@/lib/attention'
-import { type Section, SECTION_FILL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
+import { type Section, SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
 // Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
-const ITEMS: { to: Section; label: string; icon: LucideIcon; hint: string }[] = [
-    { to: '/attention', label: 'Attention', icon: Inbox, hint: 'What needs you, most severe first' },
-    { to: '/runs', label: 'Runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
+const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
+    { to: '/attention', icon: Inbox, hint: 'What needs you, most severe first' },
+    { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
     {
         to: '/worktrees',
-        label: 'Worktrees',
         icon: FolderTree,
         hint: "Each repository's pool: its slots and what holds them",
     },
     {
         to: '/tickets',
-        label: 'Tickets',
         icon: MessagesSquare,
         hint: 'Every ticket canopy has worked, and a form to start one',
     },
     {
         to: '/reviews',
-        label: 'Reviews',
         icon: FileSearch,
         hint: 'PR reviews canopy keeps instead of posting, with findings on the diff',
     },
-    { to: '/chores', label: 'Chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
-    { to: '/ticks', label: 'Ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
+    { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
+    { to: '/ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
     {
         to: '/settings',
-        label: 'Settings',
         icon: SlidersHorizontal,
         hint: 'The theme, the ticker, the send key, and the session',
     },
@@ -86,7 +82,7 @@ export function Nav() {
                     )}
                 />
             </span>
-            {ITEMS.map(({ to, label, icon: Icon, hint }) => (
+            {ITEMS.map(({ to, icon: Icon, hint }) => (
                 <Link
                     key={to}
                     to={to}
@@ -104,7 +100,7 @@ export function Nav() {
                             SECTION_TEXT[to],
                         )}
                     />
-                    {label}
+                    {SECTION_LABEL[to]}
                     {to === '/attention' && counts !== undefined && <AttentionCount counts={counts} />}
                 </Link>
             ))}

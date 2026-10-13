@@ -48,7 +48,7 @@ describe('tally and startOf', () => {
         tool('completed'),
         tool('error'),
         shell('canopy dispatch ABC-1', 'Error: dispatch refused (capacity): 2 of 2 running'),
-        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10 },
+        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null },
         { kind: 'error', at: null, name: 'APIError', message: '' },
     ]
 

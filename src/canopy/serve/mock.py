@@ -599,11 +599,13 @@ def _tool(session: str, minutes: float, tool: str, state: dict[str, object], sec
 
 
 def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls") -> str:
+    # Most of what a call sends is read back from the provider's cache, after the first.
+    sent = int(cost * 30_000)
     tokens = {
-        "input": int(cost * 30_000),
-        "output": int(cost * 4_000),
-        "reasoning": 0,
-        "cache": {"read": 0, "write": 0},
+        "input": sent // 4,
+        "output": int(cost * 3_000),
+        "reasoning": int(cost * 1_000),
+        "cache": {"read": sent - sent // 4 - 512, "write": 512},
     }
     return _event(
         "step_finish", session, minutes, part={"type": "step-finish", "reason": reason, "cost": cost, "tokens": tokens}

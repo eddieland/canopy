@@ -85,6 +85,17 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     // JSON output opens indented.
     await tools.nth(1).locator('summary').click()
     await expect(tools.nth(1).locator('pre').last()).toContainText('{\n  "state": "pending",')
+
+    // A model call opens to its tokens by kind; Open all opens only the tool calls.
+    const call = transcript.getByTestId('transcript-step')
+    await expect(call).toHaveCount(1)
+    const split = call.locator('dl')
+    await expect(split).toBeHidden()
+    await call.locator('summary').click()
+    await expect(split).toHaveText('input2.3kcache read6.5kcache write512output930reasoning310')
+    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await expect(transcript.locator('details[open]')).toHaveCount(4)
+    await expect(split).toBeHidden()
 })
 
 test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
@@ -107,7 +118,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await web.locator('summary').click()
     await expect(web).toContainText('1 high severity vulnerability')
 
-    await page.getByRole('link', { name: 'chore:deps' }).click()
+    await page.locator('dl').getByRole('link', { name: 'chore:deps' }).click()
     await expect(page).toHaveURL(/\/chores\/deps$/)
 
     await page.goto('chores/build-health/runs/4')
