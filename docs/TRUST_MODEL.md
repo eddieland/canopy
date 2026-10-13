@@ -390,7 +390,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
   following links; nothing else under the state directory is read but a tick's output below.
-- It serves the end of a tick's output as written (DESIGN §22, M34): at most its last 1 MiB, read the same way, its
+- It serves the end of a tick's output as written (DESIGN §22): at most its last 1 MiB, read the same way, its
   control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
   which may name the operator's paths and config, and every field of the overseer's events. A run's log is never
   served this way.

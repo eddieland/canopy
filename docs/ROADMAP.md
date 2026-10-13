@@ -748,7 +748,7 @@ shows it.
 - Tests over the mock journal: the routes, the 404, a ticket's decisions across ticks; a Playwright test from the
   header's tick to its decisions.
 - Settled: a tick's page names the overseer's output (`ticks/<id>.log`) and does not serve it; M27 serves its
-  session's events. Reopened by M34, which serves its end.
+  session's events. Reopened on request (2026-10-13): the page serves its end (DESIGN §22).
 
 Accept: the tests above pass. Live: after a day of `canopy loop` on the real queue, the operator finds in the browser
 why a ticket was or was not dispatched in a given tick, and it matches `canopy decisions`.
@@ -1014,29 +1014,6 @@ ticks' share of overseer spend from `canopy spend` and from the web UI, and both
 
 Status: in progress. Each tick the loop runs records `idle` and `woken_by` (2026-10-13). What keeps it open:
 `canopy spend` and the web UI's spend page.
-
-## M34. A tick's output in the web UI
-
-REQUIREMENTS N1, DESIGN §22. Needs M24 and M27. Asked for by the operator (2026-10-13): to read a tick's log in the
-browser. The transcript shows the overseer's session, but not what it printed on stderr, nor any line that is not one
-of its events, so a tick that failed before or around its session still sent the operator to `.canopy/ticks/<id>.log`.
-This reopens M24's settled "names the overseer's output and does not serve it".
-
-- `core/transcript.py` reads the end of the file as written: the transcript's checks (a regular file, opened without
-  following links or blocking), at most 1 MiB from its end, from its first whole line, control characters dropped.
-- `GET /ticks/{id}/output`: the text, the file's size, and whether it was cut; `no_output` when there is no file; 404
-  for no such tick. Reads only, and never on the stream.
-- An Output panel under the tick page's transcript, hidden until the operator shows it, opening at its end.
-- TRUST_MODEL T8: the listener serves the end of a tick's output, stderr included, with the operator's approval note
-  in the PR.
-- Tests: the reader's bound and refusals, the route over the mock journal, and Playwright from a tick's page to its
-  stderr.
-
-Accept: the tests above pass. Live: after a tick whose overseer failed, the operator reads why on its page, and it
-matches the end of `.canopy/ticks/<id>.log`.
-
-Status: in progress. Code, tests, and docs are in (2026-10-13). Waiting on the operator: the approval note for T8, and
-the live check.
 
 ## Deferred, with the trigger that would unblock each
 
