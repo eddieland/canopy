@@ -91,8 +91,9 @@ Rules:
   working runs are those waiting on the operator's answer first, then those running, each oldest first: a dot in its
   state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
   it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
-  The spend is the attention page's two windows in small readouts. The footer (the search key and the version) sits
-  at the rail's foot, not the window's: the window's foot on a page that fits it, the page's foot on a longer one.
+  The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
+  is shown nowhere else. The footer (the search key and the version) sits at the rail's foot, not the window's: the
+  window's foot on a page that fits it, the page's foot on a longer one.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -193,12 +194,11 @@ inline script and checks it against the store's key. The ticker's speed and gap 
 - **A ticket's title** (`TicketTitle`) follows its key, in medium weight, so it reads as the row's name and apart
   from what a run said under it; one line, cut to fit, the whole on hover. A ticket's page heading sets the key in
   muted mono before it. Nowhere too narrow to show more than a few letters of it: the Working panel leaves it out.
-- **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
-  attention, and spent in the last 24 hours and in the last 30 days from `GET /api/spend`, on the stream) and the
-  worktrees page (working, held, needs a look, free, across every pool). Each is a label, the value, and one line
-  under it, with a 2px top rule in the state color it counts: `status-running`, `status-stopped` for held,
-  `status-blocked`, `status-failed` while something is broken, the accent for spend. The same color washes down from
-  the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
+- **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
+  attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
+  Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
+  `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
+  same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
