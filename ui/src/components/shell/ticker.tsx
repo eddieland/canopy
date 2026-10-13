@@ -27,17 +27,19 @@ const EFFECT: Record<FlairEffect, string> = {
 }
 
 /**
- * The header's news ticker: joke headlines crawling right to left, one at a time. Each enters at the window's right
- * edge and leaves at its left; the window then stays empty for the gap set in Settings before the next arrives. It
- * holds still under the pointer. Off, the space stays and the window is gone. Under reduced motion it shows the first
- * headline in place. A headline may carry RuneScape chat flair (`flash2:wave:`), drawn by `Flair`.
+ * The header's news ticker: joke headlines, with tips mixed in, crawling right to left, one at a time. Each enters at
+ * the window's right edge and leaves at its left; the window then stays empty for the gap set in Settings before the
+ * next arrives. It holds still under the pointer. Off, or with every topic turned off, the space stays and the window
+ * is gone. Under reduced motion it shows the first headline in place. A headline may carry RuneScape chat flair
+ * (`flash2:wave:`), drawn by `Flair`.
  */
 export function Ticker() {
-    const { speed, gap } = useTickerSettings()
-    // Picked once per page load: a re-render mid-crawl must not reorder the reel under the reader.
-    const [headlines] = useState(() => headlinesFor(Date.now()))
+    const { speed, gap, hidden } = useTickerSettings()
+    // The day is picked once per page load: a re-render mid-crawl must not reorder the reel under the reader.
+    const [loaded] = useState(Date.now)
+    const headlines = headlinesFor(loaded, hidden)
     const [index, setIndex] = useState(0)
-    if (speed === 'off') return <div className="min-w-0 flex-1" />
+    if (speed === 'off' || headlines.length === 0) return <div className="min-w-0 flex-1" />
     const headline = parseHeadline(headlines[index % headlines.length] ?? '')
     return (
         <div
@@ -47,9 +49,9 @@ export function Ticker() {
             data-testid="ticker"
             data-speed={speed}
         >
-            {/* Keyed on the settings too: a change restarts the crawl at the new pace rather than jumping. */}
+            {/* Keyed on the settings too: a change restarts the crawl with the new settings rather than jumping. */}
             <Crawl
-                key={`${index}:${speed}:${gap}`}
+                key={`${index}:${speed}:${gap}:${hidden.join()}`}
                 headline={headline}
                 rate={SPEED_REM[speed]}
                 gap={gap}
