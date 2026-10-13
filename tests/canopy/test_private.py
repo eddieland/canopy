@@ -363,9 +363,10 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     assert dispatch(conn, monkeypatch, "--kind", "implement", runner=InlineRunner()) == 0
     run = last_run(conn)
     # Stand-ins for `_run` and its worker, each leading its own process group as the real ones do.
-    log = canopy_env.state_dir / "sleep.log"
-    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=log)
-    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=log)
+    # Each has a log, and so a lifelock, of its own.
+    state = canopy_env.state_dir
+    run_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "run.log")
+    worker_pid = procs.SubprocessRunner().spawn(["sleep", "60"], cwd=canopy_env.repo, log_path=state / "worker.log")
     conn.execute("UPDATE runs SET pid = ?, worker_pid = ? WHERE id = ?", (run_pid, worker_pid, run["id"]))
     assert {s["status"] for s in pool(treehouse_state)} == {"available", "leased"}
 
@@ -494,7 +495,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     assert main(["reply", KEY, "B"]) == 0
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
     state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])

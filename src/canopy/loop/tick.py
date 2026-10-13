@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 TICK_ID_ENV = conversation.TICK_ID_ENV
-DONE_LINE = "tick complete"
+# A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
+DONE_LINE = "CANOPY_TICK_DONE"
 
 
 @dataclass(frozen=True)
@@ -34,7 +35,12 @@ class Outcome:
 
 
 def run(ctx: Context, *, dry_run: bool) -> Outcome:
-    """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error."""
+    """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error.
+
+    Returns:
+        How the tick ended: its id, status, summary, and what the overseer cost. A busy lock is `lock_busy`, with no
+        tick id.
+    """
     try:
         with lock.hold(ctx.lock_path):
             outcome = _locked(ctx, dry_run=dry_run)
@@ -152,9 +158,13 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
 def _run_overseer(
     ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter
 ) -> tuple[str | None, agent_output.Usage | None]:
-    """Run `overseer_cmd`. Returns why it failed, None on success, and what it cost if the runtime reported it.
+    """Run `overseer_cmd`.
 
-    Output goes to `<state_dir>/ticks/<id>.log`. The session and cost are recorded on the tick, failed or not.
+    Output goes to `<state_dir>/ticks/<id>.log`. The session is recorded on the tick at the first event that names it,
+    so a running tick shows it; the session and cost again when the overseer ends, failed or not.
+
+    Returns:
+        Why it failed, None on success, and what it cost if the runtime reported it.
     """
     # OpenCode reads the repository's config too: it must not define an agent of canopy's (D044).
     shadowing = definitions.shadowing(ctx.repo_root)
@@ -176,6 +186,7 @@ def _run_overseer(
             cwd=ctx.repo_root,
             env={TICK_ID_ENV: str(tick_id)},
             timeout=timeout_minutes * 60,
+            on_line=_SessionWatch(ctx, tick_id, log),
         )
     except procs.ProcError as e:
         log.exception("overseer could not start", extra={"error": str(e)})
@@ -188,14 +199,46 @@ def _run_overseer(
 
     output = agent_output.read(result.stdout)
     db.set_tick_report(ctx.conn, tick_id, output.session_id, output.usage)
-    lines = [line.strip().strip("`").strip() for line in output.text.splitlines() if line.strip()]
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:
         failure = f"overseer exited {result.returncode}"
-    elif not lines or lines[-1].lower() != DONE_LINE:
-        failure = f"overseer did not end with {DONE_LINE!r}"
+    elif not _done(output.last):
+        failure = f"overseer's final message has no {DONE_LINE} line"
     else:
         return None, output.usage
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure, output.usage
+
+
+class _SessionWatch:
+    """Records the overseer's session on the tick at the first line of its output that names one (DESIGN §6)."""
+
+    def __init__(self, ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
+        self.ctx = ctx
+        self.tick_id = tick_id
+        self.log = log
+        self.seen = False
+
+    def __call__(self, line: str) -> None:
+        if self.seen:
+            return
+        event = agent_output.parse_event(line)
+        session = agent_output.session_of(event) if event is not None else None
+        if session is None:
+            return
+        self.seen = True
+        db.set_tick_session(self.ctx.conn, self.tick_id, session)
+        self.log.info("overseer session started", extra={"session_id": session})
+
+
+def _done(message: str) -> bool:
+    """Whether `message`, the overseer's final message, has the done line.
+
+    Text around that line is allowed: models summarize what they did. Only the final message is passed, so a run cut
+    off after an earlier message that named the token still fails.
+
+    Returns:
+        True if a line, trimmed of whitespace and backticks, is `DONE_LINE` and nothing else.
+    """
+    return any(line.strip().strip("`").strip() == DONE_LINE for line in message.splitlines())

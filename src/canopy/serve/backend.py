@@ -15,7 +15,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -71,7 +71,11 @@ class Backend:
 
     @contextmanager
     def open(self) -> Iterator[Context]:
-        """A Context on a journal connection of its own, closed when the block ends. One per request or stream."""
+        """A Context on a journal connection of its own, closed when the block ends. One per request or stream.
+
+        Yields:
+            A Context with the config and workspace served when the block started.
+        """
         with self._lock:
             cfg, ws = self.config, self.workspace
         conn = db.connect(db_path(ws))
@@ -84,6 +88,19 @@ class Backend:
             )
         finally:
             conn.close()
+
+    def current(self, ctx: Context) -> Context:
+        """`ctx` on the config and workspace served now, for a stream, which holds one Context while a page is open.
+
+        Returns:
+            `ctx` itself unless the loop has read its config again since; then a Context on the same connection with
+            the config and workspace it read.
+        """
+        with self._lock:
+            cfg, ws = self.config, self.workspace
+        if cfg is ctx.config and ws is ctx.ws:
+            return ctx
+        return replace(ctx, config=cfg, ws=ws)
 
     def use(self, config: Config, workspace: Workspace) -> None:
         """Serve `config` and `workspace` from the next request on: the loop read its config again."""

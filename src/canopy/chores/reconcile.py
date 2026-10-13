@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db, outbox
@@ -14,16 +15,18 @@ if TYPE_CHECKING:
 
 
 def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
-    """Mark running chore runs whose `_chore` is dead or never recorded `crashed`. Returns their ids.
+    """Mark running chore runs whose `_chore` is gone `crashed`. Returns their ids.
 
     The agent leads its own process group, so whatever is left of it is killed first.
+
+    Returns:
+        The ids of the chore runs this call closed. A run another process closed first is not among them.
     """
     closed: list[int] = []
     for row in db.running_chore_runs(ctx.conn):
-        pid = row["pid"]
-        if pid is not None and procs.alive(int(pid)):
+        if procs.running(Path(row["log_path"]), row["pid"]):
             continue
-        fields = {"chore_run_id": row["id"], "chore": row["chore"], "pid": pid}
+        fields = {"chore_run_id": row["id"], "chore": row["chore"], "pid": row["pid"]}
         if row["agent_pid"] is not None and procs.kill_group(int(row["agent_pid"])):
             log.warning("killed the chore agent `_chore` left behind", extra={**fields, "agent_pid": row["agent_pid"]})
         note = json.dumps({"harness": "the chore process is gone"})

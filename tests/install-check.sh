@@ -88,7 +88,7 @@ worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent --agent canopy-wor
 TOML
 
 export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
-export FAKE_AGENT_RESULT="tick complete"
+export FAKE_AGENT_RESULT="CANOPY_TICK_DONE"
 export FAKE_AGENT_COMMANDS='[["canopy", "decide", "GH-1", "wait", "--rationale", "install check"]]'
 canopy tick --dry-run
 decisions=$(canopy decisions)

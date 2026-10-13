@@ -11,7 +11,7 @@ from canopy.core import config, conversation, pause
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, refusal
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError
 from canopy.serve.schema import ConfigReload, LoopState, PauseChanged
 
 router = APIRouter()
@@ -50,6 +50,6 @@ def reload_config(backend: BackendDep) -> ConfigReload:
         try:
             found = backend.reload(ctx)
         except config.ConfigError as e:
-            raise refusal(conversation.Refused("config_invalid", str(e))) from None
+            raise RefusedError(conversation.Refused("config_invalid", str(e))) from None
     _log.info("config reload asked for", extra={"channel": WEB, "changed": list(found.changed)})
     return ConfigReload(changed=list(found.changed), restart=list(found.restart), after_tick=found.after_tick)
