@@ -1,4 +1,5 @@
 import type { TranscriptEntry, TranscriptTool } from '@/api/types'
+import { indent, tokenize } from '@/lib/json-lines'
 
 // A value longer than this is left out of a call's summary; a summary or outcome line is cut at `MAX_LINE`.
 const MAX_VALUE = 80
@@ -123,10 +124,15 @@ export function outcome(entry: TranscriptTool): Outcome {
     return { verdict: 'done', guard: null, line: fits ? only : null }
 }
 
-/** A tool's output as it is shown opened: JSON indented, anything else as it was printed. */
+/**
+ * A tool's output as it is shown opened: a JSON object or array indented, anything else as it was printed. Laid out
+ * from its tokens, never parsed and printed again, so every value stays as written: a number past a double's
+ * precision, an id in an API's response, is not rounded.
+ */
 export function pretty(output: string): string {
-    const value = parsedJson(output)
-    return typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : output
+    return indent(tokenize(output))
+        .map((token) => token.text)
+        .join('')
 }
 
 function oneLine(text: string): string {
