@@ -278,6 +278,55 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(
     assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
 
 
+def private_only(canopy_env: CanopyEnv) -> None:
+    """Make the operator's queue private-only (DESIGN §22)."""
+    canopy_env.write_user(
+        canopy_env.user_file.read_text().replace("[tracker]\n", "[tracker]\nprivate_only = true\n", 1)
+    )
+
+
+def test_a_private_only_queue_dispatches_only_started_tickets(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private_only(canopy_env)
+    runner = InlineRunner()
+    # A queue label is no authorization here: only a start record is.
+    assert dispatch(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 1
+    assert "dispatch refused (private_only)" in capsys.readouterr().err
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
+    assert last_run(conn)["private"] == 1
+
+
+def test_a_private_only_state_block_carries_only_started_tickets_and_nothing_to_find_others_with(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    agent_log: Path,
+    treehouse_state: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_only(canopy_env)
+    assert main(["start", KEY]) == 0
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
+    # A public ticket the operator wrote to: without private_only, the block would carry it and its message.
+    assert main(["reply", "PROJ-2", "go"]) == 0
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    assert main(["tick", "--dry-run"]) == 0
+    overseer = json.loads(agent_log.read_text().splitlines()[-1])
+    state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
+    assert [t["key"] for t in state["tickets"]] == [KEY]
+    assert state["tracker"] == {"provider": "jira", "private_only": True}
+    assert state["split_children"] == []
+    assert "mirror" not in state
+
+
 def test_a_private_ticket_is_never_split(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

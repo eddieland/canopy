@@ -54,9 +54,18 @@ def state_block(
     public ticket's operator messages newer than its message cursor, by key; a ticket without any has no `operator`
     key (DESIGN §7, D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the
     tick's own, so no comment can predict it.
+
+    With `tracker.private_only`, the block carries only the tickets the operator started, and none of what finds or
+    authorizes a public one: no query, labels, operator messages on a public ticket, or split children; and no `mirror`,
+    since nothing is mirrored (DESIGN §22).
     """
     private = private or {}
     operator = operator or {}
+    private_only = config.tracker.private_only
+    if private_only:
+        tickets = [t for t in tickets if str(t["key"]) in private]
+        operator = {}
+        split_children = []
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
@@ -132,7 +141,9 @@ def state_block(
             }
             for r in workspace.repos
         ],
-        "tracker": {
+        "tracker": {"provider": config.tracker.provider, "private_only": True}
+        if private_only
+        else {
             "provider": config.tracker.provider,
             "query": config.tracker.query,
             "labels": list(config.tracker.labels),
@@ -185,6 +196,8 @@ def state_block(
             for c in split_children
         ],
     }
+    if private_only:
+        del state["mirror"]
     if chores:
         state["chores"] = chores
     # With reviews off, nothing about them reaches the overseer (DESIGN §21).

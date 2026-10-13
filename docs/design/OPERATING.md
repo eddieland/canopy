@@ -95,6 +95,7 @@ to do instead.
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
 | `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
 | `tracker.labels` | user-only | defines this operator's queue |
+| `tracker.private_only` | user-only | defines this operator's queue: only the tickets they started (§22) |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
@@ -140,6 +141,7 @@ User file, personal:
 ```toml
 [tracker]
 labels = ["agent-ready-yourname"]
+private_only = false    # optional; work only tickets started with `canopy start`, and never run the query (§22)
 mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
 # read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
 

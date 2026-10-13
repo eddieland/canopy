@@ -56,7 +56,8 @@ in order:
    with its starting base, start and end). A ticket the operator started has a `private` object (§22): its start
    record's status, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if
    any. `chores` (§19) is present only when chores are configured. `mirror` holds the per-tick mirror limit and this
-   tick's heredoc delimiter (§22).
+   tick's heredoc delimiter (§22). With `tracker.private_only` (§22), the tracker config is the provider and
+   `private_only` alone, `tickets` holds only started tickets, and there is no `mirror`, `operator`, or split child.
 5. **Run the overseer** with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
    `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
