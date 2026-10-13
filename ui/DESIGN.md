@@ -314,7 +314,11 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
   `JsonTokens`): keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line
-  stays plain. A transcript's block is colored the same way when the whole of it is JSON.
+  stays plain. A transcript's block is colored the same way when the whole of it is JSON. A ghost Pretty toggle in the
+  header (`aria-pressed`, its pressed look the open Hide button's) lays each JSON line out over several, two spaces a
+  level, by the space between its tokens alone, so every value stays as written; it reopens the block at its end.
+  Each tick's panel keeps its own choice, off until turned on, across reloads (`src/lib/pretty-output.ts`), as a list
+  keeps its order.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
