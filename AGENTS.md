@@ -22,6 +22,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   earlier milestones' `Learned` and `Next` before starting a new one.
 - A live measurement a milestone cites goes in `docs/MEASUREMENTS.md`: one dated section each, not edited after, so a
   re-measurement is a new section.
+- A live check worth running again, against real systems, goes in `docs/SCENARIOS.md`, naming the milestone it came
+  from. A milestone the operator closes on real use, before every live check in its Accept has run, moves the
+  unrun ones there.
 - Small PRs. One concern per PR. Conventional commit messages.
 - Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
   the design is incomplete.
