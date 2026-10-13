@@ -266,7 +266,8 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info(
+    log = logs.for_tick(None)
+    log.info(
         "finding dismissal taken back" if undo else "finding dismissed",
         extra={"subject": str(subject), "finding": finding, "channel": CLI},
     )
@@ -276,6 +277,7 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
         else:
             click.echo(f"{subject} finding {finding} is dismissed: no worker or tick acts on it.")
         return 0
+    attention.write(ctx, log)
     if undo:
         click.echo(f"{subject} {finding} is listed again while the chore reports it.")
     else:

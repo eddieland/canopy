@@ -52,7 +52,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
-| `canopy chore try NAME` | Runs a chore now, in the foreground, and prints its result. Records nothing. |
+| `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and the user config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |

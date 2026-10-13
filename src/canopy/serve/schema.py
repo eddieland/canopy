@@ -975,6 +975,44 @@ class ReviewDetail(_Model):
     """Every review run of the same PR, newest first, this one included."""
 
 
+class PullRequest(_Model):
+    """A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is."""
+
+    url: str
+    """The PR's URL: an opaque https:// string canopy never parses."""
+    ticket_key: str | None = None
+    """The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns."""
+    ticket_title: str | None = None
+    """That ticket's title, as the overseer named it; None until it does."""
+    repo: str | None = None
+    """The PR's repository, as the workspace names it."""
+    branch: str | None = None
+    """The unit's branch; None for a PR no unit records."""
+    phase: str | None = None
+    """The unit's phase as the overseer last derived it, for display; None for a PR no unit records."""
+    active_at: datetime
+    """The newest of its ticket's last sighting and its review runs' starts and ends."""
+    running_run: int | None = None
+    """A run of its ticket working now, whose page it opens."""
+    reviews: int = 0
+    """How many review runs it has had, however they ended."""
+    latest_review: ReviewSummary | None = None
+    """Its newest review run, or None when canopy has not reviewed it."""
+
+
+class PullRequestDetail(_Model):
+    """One PR: the runs that pushed to it, canopy's reviews of it, and the decisions that name it."""
+
+    pull_request: PullRequest
+    """The PR, as the PRs list shows it."""
+    runs: list[Run]
+    """Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20."""
+    reviews: list[ReviewSummary]
+    """Every review run of it, newest first; each opens its own page, with its findings on its diff."""
+    decisions: list[Decision]
+    """The latest 20 decisions naming it, across ticks, newest first."""
+
+
 class AttentionUpdated(_Model):
     """The attention list changed. The payload is the whole list."""
 

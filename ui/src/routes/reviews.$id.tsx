@@ -7,6 +7,7 @@ import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
@@ -113,6 +114,9 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
             <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
                 <Field label="pull request" mono>
                     <TrackerLink href={review.pr_url} />
+                    <PullRequestLink url={review.pr_url} className="ml-3 font-sans">
+                        its page in canopy
+                    </PullRequestLink>
                 </Field>
                 <Field label="ticket">
                     {review.ticket_key === null ? (
