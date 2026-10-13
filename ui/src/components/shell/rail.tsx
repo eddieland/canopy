@@ -84,7 +84,7 @@ export function RailSpend() {
     )
 }
 
-/** The rail's foot: the version canopy serves. At the window's foot, or the page's when longer. */
+/** The rail's foot: the version canopy serves. Always at the window's foot, however long the page. */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (

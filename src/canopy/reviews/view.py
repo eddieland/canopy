@@ -58,6 +58,9 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
     latest = runs[0]
     stored = result.stored(latest["result_json"])
     granted = grants.granted(conn, url)
+    # The operator's dismissals hold a finding back from workers and from the overseer alike (DESIGN §21).
+    dismissed = db.review_dismissals(conn, int(latest["id"]))
+    findings: list[result.Finding] = stored.findings if stored is not None else []
     return {
         "url": url,
         "ticket": next((r["ticket_key"] for r in runs if r["ticket_key"]), None),
@@ -70,7 +73,8 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> dict[str, object]:
             "status": latest["status"],
             "verdict": stored.verdict if stored is not None else None,
             "impact": stored.impact if stored is not None else None,
-            "findings": [f.title for f in stored.findings] if stored is not None else [],
+            "findings": [f.title for i, f in enumerate(findings, 1) if i not in dismissed],
+            "dismissed_findings": len(dismissed),
             "started_at": latest["started_at"],
             "ended_at": latest["ended_at"],
             # The review's time for the `review` cursor, which takes whole seconds only (DESIGN §7).

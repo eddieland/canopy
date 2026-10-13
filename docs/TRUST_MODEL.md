@@ -103,7 +103,8 @@ Controls:
   bounds it. So do `pause` and `resume`, the
   loop's pause (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
   it could undo the operator's pause. So does `dismiss`, which keeps a chore's finding off the attention list until it
-  clears (DESIGN §19): an agent that could dismiss one could hide what it was steered to hide from the operator.
+  clears (DESIGN §19), or holds a review's finding back from workers and the overseer (§21): an agent that could
+  dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -404,7 +405,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
-  does, dismiss a chore's finding or take that back as `canopy dismiss` does, pause and resume the loop as
+  does, dismiss a chore's or a review's finding or take that back as `canopy dismiss` does, pause and resume the loop as
   `canopy pause` and `canopy resume` do, and ask the loop to read its config files
   again as SIGHUP does, nothing else. It cannot write config: a reload reads only the operator's own files, and a
   `serve.*` change waits for a restart, so the listener's bind and port never change under it. A forget must carry the

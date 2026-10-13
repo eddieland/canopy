@@ -181,7 +181,10 @@ runs are told, not what the latest run reported, so a finding stayed listed unti
   again. Nothing has to be cleaned up, and a dismissal never hides a recurrence the operator has not seen.
 - It changes what the operator is shown, nothing else: the chore's prompt still carries the finding so its id is
   reused, the overseer's state block still lists it, and `canopy show chore:<NAME>` and the chore's page list it marked
-  dismissed. Leaving the list, it is notified as resolved (§14). To have the chore stop reporting it, write a note.
+  dismissed. Leaving the list, it is notified as resolved and marked so: `- chore:<name> <id> (dismissed)`, and
+  `dismissed: true` in the `json` format (§20). To have the chore stop reporting it, write a note.
+- `attention.md` is rewritten at once, from the CLI and the web UI alike, rather than at the next tick; notifications
+  still go at the next tick, with the tick's. `canopy status` counts each chore's dismissed findings on its line.
 - `--undo`, or List again on the chore's page, takes it back. Dismissing it again records the time anew.
 - Refused `unknown` for a chore not defined for this workspace or a finding it does not have open (with `--undo`, one
   not dismissed), `bad_finding` for an id no finding can have, and `inside_run` as `reply` is: the overseer and
@@ -396,9 +399,11 @@ run or chore run ended, `!` for the loop's own events, `*` for a test.
  "text": "the same message in the text format"}
 ```
 
-`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`. Each
-event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every ticket key, in
-`added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside it: the
+`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`, and a
+`resolved` item `dismissed`, true for a chore finding the operator dismissed rather than one whose cause is gone
+(§19). Each event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every
+ticket key, in `added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside
+it: the
 ticket's title as it is at delivery (§13), or null before the overseer names it. It is for display, so a reader knows
 a ticket without looking its key up; `text` and `line` show the key alone, keeping §14's message as it was.
 `omitted` counts what the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown
@@ -671,7 +676,8 @@ reviewer. A repository that wants that needs a verdict it can trust, which waits
 The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
 and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, the
 review runs the operator granted it past the policy's limit if any (`granted`, §22), and latest run: id, commit, status,
-verdict, impact, finding titles, start and end, and `reviewed_at`, its end in the `review` cursor's form (§7).
+verdict, impact, the titles of the findings the operator has not dismissed and how many were (`dismissed_findings`,
+Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -680,7 +686,7 @@ they are `untrusted_review` and wait for the operator's go-ahead like any untrus
 | Phase | Derived from | Next action |
 |---|---|---|
 | `review_pending` | checks pass, no approval, no `done` review of the head commit, under the per-PR limit | `canopy review run --ticket KEY` |
-| `review_findings` | the head commit's `done` review has findings, newer than the `review` cursor | classify as review comments (§7): dispatch `resume --review-run <id>`, or `needs_author` |
+| `review_findings` | the head commit's `done` review has findings the operator has not dismissed, newer than the `review` cursor | classify as review comments (§7): dispatch `resume --review-run <id>`, or `needs_author` |
 
 A clean review, or a PR at its review limit, moves on to `green_unreviewed`, whose `needs_reviewer` item names the
 latest review run. A `resume` pushes a new commit, which is reviewed again, up to the per-PR limit. The overseer knows a
@@ -722,8 +728,25 @@ and how many findings, never their text.
 
 `canopy review show` lists the review runs of the last 14 days, newest first: id, start, status, verdict, how many
 findings, impact, PR, and commit. `canopy review show ID` prints one in full: the summary and each finding with its
-detail. Text the reviewer wrote is made printable, as any message shown on a terminal is (§22). It reads the journal
-only, and runs outside a tick.
+detail, a dismissed one marked so. Text the reviewer wrote is made printable, as any message shown on a terminal is
+(§22). It reads the journal only, and runs outside a tick.
+
+### Dismissing a finding
+
+`canopy dismiss review:<ID> <N>`, or `dismiss` on a finding's card in the web UI (§22), dismisses finding `N` (its
+number in the review, from 1) of review run `ID` (asked for by the operator, 2026-10-13, with ROADMAP M32: a reviewer
+is wrong often enough that the operator wants to rule a finding out before a worker spends a run on it).
+
+- A dismissed finding stays on the review's page and in `canopy review show`, marked. It is left out of what a
+  `resume --review-run` hands the worker, which keeps the rest's numbers, and of the state block's finding titles,
+  which count it in `dismissed_findings`. A `resume` for a review whose findings are all dismissed refuses as
+  `bad_review`, and the PR, having none left to classify, moves on as a clean review would.
+- It is one run's finding. A finding has no id that lasts from one commit's review to the next, so a new commit's
+  review starts fresh (Open, below). `--undo`, or `keep` on its card, takes it back.
+- Refused `unknown` for a review run that does not exist, did not end `done` with findings, or has no finding `N` (with
+  `--undo`, one not dismissed), `bad_finding` for a number that is not 1 to 20, and `inside_run` as `reply` is: the
+  overseer and agents cannot hold a finding back from a worker. A row in `review_dismissals` per run and number, with
+  its time and channel. A `review:ID` reference takes only `dismiss`; `canopy review show ID` shows one.
 
 ### The diff
 
@@ -731,7 +754,7 @@ For the web UI's review page (ROADMAP M32), which shows each finding on the diff
 the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GET /reviews/{id}` serves one with its
 findings anchored on its diff and the diff itself (§22); both read only. The Reviews pages show them: the list, and
 a review's page with each finding's card under the line it names, under its file's header when the diff does not
-show the line, or in a panel of its own; nothing on them writes yet (Open, below).
+show the line, or in a panel of its own. The one thing they write is a finding's dismissal (above).
 
 A review is also listed on its PR's page, in the web UI's pull requests pages (§22), which open it here; a review's
 page links back to its PR's.
@@ -776,6 +799,7 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   nothing. A timed-out reviewer records what its finished calls cost. Separate from `runs`, which is keyed by ticket
   and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
+- `review_dismissals`: review run, finding number, when dismissed, and channel; at most one row per run and number.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=` with the run's `reviewed_at`.
 
@@ -792,8 +816,8 @@ marker, with the operator's approval.
 
 ### Open
 
-- Showing a review as a PR review of canopy's own, findings on the diff's lines, in the web UI (ROADMAP M32), and
-  what the operator does from there: dismiss a finding, or send it to a worker.
+- What else the operator does from a review's page (ROADMAP M32): send some findings to a worker. And how a
+  finding is followed from one commit's review to the next, so a dismissal could outlast its run.
 - A repository-offered review rubric, such as its own `low_impact`, that an operator opts into by name.
 - Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
   (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR

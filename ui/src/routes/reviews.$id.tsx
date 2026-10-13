@@ -63,7 +63,7 @@ function Loaded({ id }: { id: number }) {
                         <PanelHeader label="Not in the diff" />
                         <div className="flex flex-col gap-2 p-3">
                             {placed.elsewhere.map((f) => (
-                                <FindingCard key={f.n} numbered={f} />
+                                <FindingCard key={f.n} run={data.review.id} numbered={f} />
                             ))}
                         </div>
                     </Panel>
@@ -77,13 +77,13 @@ function Loaded({ id }: { id: number }) {
                         {placed.elsewhere.length > 0 && (
                             <div className="flex flex-col gap-2 border-t p-3">
                                 {placed.elsewhere.map((f) => (
-                                    <FindingCard key={f.n} numbered={f} />
+                                    <FindingCard key={f.n} run={data.review.id} numbered={f} />
                                 ))}
                             </div>
                         )}
                     </Panel>
                 ) : (
-                    <ReviewDiffPanels diff={data.diff} placed={placed} />
+                    <ReviewDiffPanels run={data.review.id} diff={data.diff} placed={placed} />
                 )}
             </div>
         </>
@@ -203,6 +203,7 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                         >
                             {f.title}
                         </Link>
+                        {f.dismissed && <Chip>dismissed</Chip>}
                         <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
                             {f.line !== null ? 'on the diff' : f.file !== null ? 'on its file' : 'not in the diff'}
                         </span>

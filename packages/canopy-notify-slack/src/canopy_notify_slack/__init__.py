@@ -270,6 +270,7 @@ def render(message: dict[str, object]) -> str:
             lines.append(f"+ {what} · {escape(a.get('reason'))}: {escape(a.get('detail'))}")
         lines += [
             f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {escape(r.get('reason'))}"
+            + (" (dismissed)" if r.get("dismissed") is True else "")
             for r in resolved
         ]
     events = _dicts(message.get("events"))
@@ -467,7 +468,7 @@ def _attention(attention: dict[str, object]) -> list[Block]:
     ]
     resolved = [
         f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
-        f"{escape(r.get('reason'))}"
+        f"{escape(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
         for r in _dicts(attention.get("resolved"))
     ]
     if resolved:
