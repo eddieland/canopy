@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 CHORES_DIR = "chores"
+RUNS_DIR = "chore-runs"
 DISPATCH_ACTION = "dispatch:chore"
 
 
@@ -46,7 +47,7 @@ class Started:
 
 
 def chores_dir(ctx: Context) -> Path:
-    """Where chore run logs and prompts live, and each chore's default working directory: the operator's only.
+    """Where each chore's default working directory lives: the operator's only.
 
     Returns:
         `<state_dir>/chores/`, created mode 0700 if it was missing.
@@ -56,9 +57,22 @@ def chores_dir(ctx: Context) -> Path:
     return path
 
 
-def prompt_file(ctx: Context, run_id: int) -> Path:
-    """Return the file holding chore run `run_id`'s rendered prompt."""
-    return chores_dir(ctx) / f"{run_id}.prompt"
+def runs_dir(ctx: Context, name: str) -> Path:
+    """Where chore `name`'s run logs and prompts live, out of its working directory: the operator's only.
+
+    Returns:
+        `<state_dir>/chore-runs/<name>/`, created mode 0700, with its parent, if it was missing.
+    """
+    parent = ctx.state_dir / RUNS_DIR
+    parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = parent / name
+    path.mkdir(mode=0o700, exist_ok=True)
+    return path
+
+
+def prompt_file(log_path: Path) -> Path:
+    """Return the file holding a chore run's rendered prompt: beside its log at `log_path`, as `<run_id>.prompt`."""
+    return log_path.with_suffix(".prompt")
 
 
 def default_cwd(ctx: Context, name: str) -> Path:
@@ -107,13 +121,13 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
         except OSError as e:
             raise Refusal("bad_prompt", f"cannot read {chore.prompt}: {e.strerror}") from e
         state = next(s for s in view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name)
-        run_id = db.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=chores_dir(ctx))
+        run_id = db.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=runs_dir(ctx, name))
         run = db.get_chore_run(ctx.conn, run_id)
         if run is None:
             raise RuntimeError(f"chore run {run_id} vanished")
         try:
             notes = conversation.chore_notes(ctx.conn, name)
-            logs.write_private(prompt_file(ctx, run_id), render(body, state, run_id, context, notes))
+            logs.write_private(prompt_file(Path(run["log_path"])), render(body, state, run_id, context, notes))
             # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
             argv = [sys.executable, "-m", "canopy", "_chore", str(run_id)]
             pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
