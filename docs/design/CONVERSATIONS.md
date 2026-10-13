@@ -408,6 +408,12 @@ A guard's refusal is a 409 whose `detail` names the guard and gives its reason, 
 a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
 `web:<id>`, so a retried submission records nothing new.
 
+The OpenAPI schema (`python -m canopy.serve openapi`) says all of this as well, so the UI's generated types carry it
+as JSDoc. Each route has its resource's tag, a summary, a description, and every error it answers with the model of
+its body: a 403 on every route (the guard, or a write's token and `Origin` checks), a 401 on all but `/session`, a 404
+for no such thing, a 409 for a guard's refusal, and FastAPI's validation error for every 422, a search of too many
+words included. Every model, field, path parameter, and named type is described; `test_serve.py` checks each.
+
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
 stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,

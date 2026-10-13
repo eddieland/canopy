@@ -1,13 +1,15 @@
 """The JSON and SSE API (DESIGN §6, §19, §22), one router per resource, mounted under `{base_path}/api`.
 
-Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
-functions the CLI's verbs call (`canopy.core.conversation`, and `canopy.core.pause` for the loop's pause), with channel
-`web`, so the guards are the same ones; a guard's refusal is a 409 naming it (refs.py). A forget also carries the
-ticket's key as the operator typed it. A reload asks the loop to read its config again, as SIGHUP does; it writes
-nothing. A route is handed the backend and the sessions it uses by deps.py.
+Every route but `/session` needs a signed-in session: the cookie `POST /session` sets with the listener secret. A write
+(any method but GET and HEAD) also carries the session's token, from `GET /session`, as `X-Canopy-Token`, and an
+`Origin` naming this server. Writes go through the functions the CLI's verbs call, with channel `web`, so the guards
+are the same ones; a guard's refusal is a 409 naming it. A forget also carries the ticket's key as the operator typed
+it. A reload asks the loop to read its config again, as SIGHUP does; it writes nothing.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from fastapi import APIRouter, Depends
 
@@ -17,6 +19,7 @@ from canopy.serve.api import (
     events,
     loop,
     overview,
+    refs,
     reviews,
     runs,
     search,
@@ -26,11 +29,20 @@ from canopy.serve.api import (
     worktrees,
 )
 
-# A new resource's router goes on `_signed_in`, so it needs a session like the rest.
-_signed_in = APIRouter(dependencies=[Depends(deps.signed_in)])
-for _resource in (overview, tickets, runs, ticks, chores, loop, worktrees, events, search, reviews):
+# The docstring above is the schema's description. A route is handed the backend and the sessions it uses by deps.py;
+# what the routes share, the errors they answer among it, is in refs.py.
+
+# A new resource's module goes here, so it needs a session like the rest and its tag is described; its router has
+# that tag, and each route a summary, a docstring, and every error it answers (test_serve.py checks).
+_RESOURCES = (overview, tickets, runs, ticks, chores, loop, worktrees, events, search, reviews)
+
+# Each resource's tag, described by its module's docstring, in the order the schema lists them.
+TAGS: list[dict[str, Any]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]
+
+_signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses=refs.SIGNED_IN)
+for _resource in _RESOURCES:
     _signed_in.include_router(_resource.router)
 
-router = APIRouter()
+router = APIRouter(responses=refs.GUARDED)
 router.include_router(session.router)
 router.include_router(_signed_in)
