@@ -40,6 +40,14 @@ export function AppShell() {
                     'border-b bg-surface/85 px-4 backdrop-blur',
                 )}
             >
+                {/* The aurora: a hairline through the sections' colors along the header's foot, over its border. */}
+                <span
+                    aria-hidden
+                    className={cn(
+                        'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
+                        'bg-linear-to-r from-section-attention via-section-runs to-section-worktrees',
+                    )}
+                />
                 <div className="flex items-center gap-2.5">
                     <LiveMark stream={stream} />
                     <span className="font-mono text-sm font-medium tracking-tight">canopy</span>

@@ -117,7 +117,7 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
                 data-testid={`attention-item-${item.id}`}
                 className={cn(
                     'flex flex-col gap-1 rounded-sm px-2.5 py-2 hover:bg-surface-raised',
-                    selected && 'bg-surface-raised',
+                    selected && 'bg-accent/14 hover:bg-accent/14',
                 )}
             >
                 <span className="flex items-center gap-2">

@@ -21,8 +21,12 @@ test('the nav highlight slides to the item a navigation lands on', async ({ page
     const highlight = page.getByTestId('nav-highlight')
     await covers(highlight, nav.getByRole('link', { name: 'Attention' }))
 
+    await expect(highlight).toHaveClass(/\bbg-section-attention\/16\b/)
+
     await nav.getByRole('link', { name: 'Worktrees' }).click()
     await covers(highlight, nav.getByRole('link', { name: 'Worktrees' }))
+    // It takes on the color of the section it lands on.
+    await expect(highlight).toHaveClass(/\bbg-section-worktrees\/16\b/)
 
     await page.getByRole('link', { name: 'Tickets' }).click()
     await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()

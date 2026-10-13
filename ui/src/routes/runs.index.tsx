@@ -70,7 +70,7 @@ function FilterLink({ search, children }: { search: RunsSearch; children: ReactN
             className={cn(
                 'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
                 'hover:bg-surface-raised hover:text-foreground',
-                'data-[selected=true]:bg-surface-raised data-[selected=true]:text-foreground',
+                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
             )}
         >
             {children}
