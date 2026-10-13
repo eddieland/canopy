@@ -1,4 +1,5 @@
 import { ExternalLink } from 'lucide-react'
+import { useState } from 'react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
@@ -7,7 +8,7 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { RUN_TEXT } from '@/lib/run-state'
+import { RUN_TEXT, type TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 /**
@@ -24,9 +25,65 @@ export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boole
     )
 }
 
+/**
+ * Runs grouped by ticket, one row each: the ticket's latest run, as `RunsTable` shows it, and a toggle that opens the
+ * runs before it, so a ticket that asked twice is one row.
+ */
+export function TicketRunsTable({ groups }: { groups: TicketRuns[] }) {
+    return (
+        <ul className="divide-y" data-testid="runs">
+            {groups.map((group) => (
+                <TicketRow key={group.latest.ticket_key} group={group} />
+            ))}
+        </ul>
+    )
+}
+
 function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
     return (
         <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${run.id}`}>
+            <RunBody run={run} ticket={ticket} />
+        </li>
+    )
+}
+
+function TicketRow({ group }: { group: TicketRuns }) {
+    const [open, setOpen] = useState(false)
+    const { latest, earlier } = group
+    return (
+        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${latest.id}`}>
+            <RunBody run={latest} ticket />
+            {earlier.length > 0 && (
+                <div className="pl-[6.75rem]">
+                    <button
+                        type="button"
+                        aria-expanded={open}
+                        onClick={() => setOpen(!open)}
+                        className={cn(
+                            'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
+                            'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
+                        )}
+                    >
+                        {open
+                            ? 'hide earlier runs'
+                            : `${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
+                    </button>
+                </div>
+            )}
+            {open && (
+                <ul className="ml-[6.75rem] divide-y border-l" data-testid={`earlier-runs-${latest.ticket_key}`}>
+                    {earlier.map((run) => (
+                        <RunRow key={run.id} run={run} ticket={false} />
+                    ))}
+                </ul>
+            )}
+        </li>
+    )
+}
+
+function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
+    return (
+        <>
             <div className="flex items-center gap-3">
                 <span className={cn('flex w-20 items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                     <RunDot state={run.state} />
@@ -75,6 +132,6 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                     )}
                 </div>
             )}
-        </li>
+        </>
     )
 }

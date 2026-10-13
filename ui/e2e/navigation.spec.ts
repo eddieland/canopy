@@ -86,6 +86,26 @@ test('search params are typed: a known state filters, an unknown one is dropped'
     await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(1)
 })
 
+test('the runs page lists a ticket once, by its latest run, and opens its earlier runs under it', async ({ page }) => {
+    await page.goto('runs')
+    await settled(page)
+    const rows = page.getByTestId('runs').locator(':scope > li')
+    await expect(rows.filter({ has: page.getByRole('link', { name: 'ABC-100', exact: true }) })).toHaveCount(1)
+    const ticket = page.getByTestId('run-40')
+    await expect(page.getByTestId('run-37')).toHaveCount(0)
+    await ticket.getByRole('button', { name: '1 earlier run' }).click()
+    await expect(ticket.getByTestId('earlier-runs-ABC-100').getByTestId('run-37')).toContainText('done')
+    await ticket.getByRole('button', { name: 'hide earlier runs' }).click()
+    await expect(page.getByTestId('run-37')).toHaveCount(0)
+
+    // The filter goes by where each ticket stands: its latest run failed, so the run that finished before it is no
+    // reason to list it as done.
+    await page.goto('runs?state=done')
+    await expect(page.getByTestId('run-40')).toHaveCount(0)
+    await page.goto('runs?state=failed')
+    await expect(page.getByTestId('run-40')).toBeVisible()
+})
+
 test('an unknown route renders the not-found page inside the shell', async ({ page }) => {
     await page.goto('nowhere')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing here')

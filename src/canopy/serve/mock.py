@@ -331,6 +331,21 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             2.31,
         ),
         (
+            37,
+            "ABC-100",
+            "implement",
+            "agent/ABC-100-flaky-test",
+            -200,
+            -170,
+            "done",
+            {
+                "summary": "The checkout test now waits for the payment frame instead of a fixed sleep.",
+                "prs": {"web": "https://github.com/acme/web/pull/86"},
+            },
+            0,
+            1.32,
+        ),
+        (
             40,
             "ABC-100",
             "fix-ci",

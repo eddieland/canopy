@@ -18,7 +18,7 @@ export const LISTS = {
     notes: 'oldest',
     /** A run's or tick's transcript, in the order the runtime printed it. */
     transcript: 'oldest',
-    /** The runs page: running first, then the ones that ended last. */
+    /** The runs page, a row per ticket by its latest run: running first, then the ones that ended last. */
     runs: 'newest',
     /** A ticket's recent runs. */
     'ticket-runs': 'newest',
