@@ -471,8 +471,9 @@ The loop's own PRs, when `reviews.agent_prs` is true:
 
 - A unit whose PR has passing checks and no approval, and whose head commit has no `done` review, is `review_pending`:
   `canopy review run --pr <URL> --sha <head> --ticket <KEY> --repo <the unit>`.
-  At the per-PR limit (`reviews.limits.max_reviews_per_pr` runs), it moves on to `green_unreviewed` instead, and you
-  record `canopy attention <KEY> review_limit --pr <URL> --detail '<the latest review>'`.
+  At the per-PR limit (`reviews.limits.max_reviews_per_pr` runs, plus the PR's `granted` in `reviews.prs` when it
+  has one: reviews the operator allowed past the policy), it moves on to `green_unreviewed` instead, and you record
+  `canopy attention <KEY> review_limit --pr <URL> --detail '<the latest review>'`.
 - The operator may dismiss a review's findings: `latest.findings` lists only the ones they kept, and
   `dismissed_findings` counts the rest. A review whose findings were all dismissed has none to address, and its unit
   moves on as after a clean review.

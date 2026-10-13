@@ -609,8 +609,8 @@ commit the overseer read. `--ticket` links an agent PR to its ticket. Under the 
 - `unknown_repo`: no `--repo`, or one not in the map or with no clone. The slot comes from that repository's pool.
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is.
 - `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and impact.
-- `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, however they ended. Also records the
-  `review_limit` attention item.
+- `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, plus any the operator granted it with
+  `canopy grant URL review` (§22), however they ended. Also records the `review_limit` attention item.
 - `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
 - `review_capacity`: `capacity.max_reviews` review runs are running.
 - `capacity`: `max_workers` runs and review runs, together, are running.
@@ -674,10 +674,10 @@ reviewer. A repository that wants that needs a verdict it can trust, which waits
 ### The overseer's part
 
 The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
-and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, and
-latest run: id, commit, status, verdict, impact, the titles of the findings the operator has not dismissed and how
-many were (`dismissed_findings`, Dismissing a finding below), start and end, and `reviewed_at`, its end in the
-`review` cursor's form (§7).
+and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, the
+review runs the operator granted it past the policy's limit if any (`granted`, §22), and latest run: id, commit, status,
+verdict, impact, the titles of the findings the operator has not dismissed and how many were (`dismissed_findings`,
+Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -714,7 +714,8 @@ Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dis
 - `review_failed`: a PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed`. Recorded every tick
   that the PR is still a candidate and nothing newer has run; `canopy review run` may retry within the per-PR limit.
 - `review_limit`: recorded by the refusal, and by the overseer every tick that a candidate PR's head is unreviewed and
-  it is at its limit.
+  it is at its limit. However it is recorded, `canopy attention` ends its detail with the command that lifts that
+  PR's limit, `canopy grant URL review` (§22), so raising `max_reviews_per_pr` for every PR is not the only way.
 - Findings are not attention items. For an agent PR they lead to a `resume`, or the existing `needs_author` or
   `needs_reviewer` items.
 

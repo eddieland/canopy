@@ -3,8 +3,8 @@
 `pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
 or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`,
 and `dismiss` write through `canopy.core.conversation`, which every channel shares, `grant` through
-`canopy.runs.policy`, and `pause` and `resume` through `canopy.core.pause`; all eight refuse inside canopy's own ticks
-and runs.
+`canopy.runs.policy`, or `canopy.reviews.grants` for a PR's reviews, and `pause` and `resume` through
+`canopy.core.pause`; all eight refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from canopy.cli.params import REPO
 from canopy.core import chore_view, conversation, db, pause
 from canopy.infra import logs
 from canopy.loop import attention
+from canopy.reviews import grants
 from canopy.runs import halt, policy
 
 if TYPE_CHECKING:
@@ -216,18 +217,23 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 
 @click.command("grant")
 @click.argument("ref", metavar="REF")
-@click.argument("kind", type=click.Choice(policy.KINDS))
+@click.argument("kind", type=click.Choice((*policy.KINDS, grants.KIND)))
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
 @click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
 @click.pass_context
 def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, runs: int) -> int:
-    """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository.
+    """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository, or a PR more reviews.
 
-    For a ticket at its attempt limit that you want the loop to keep working. Every run still counts toward the limit;
-    this raises that unit's limit, and only from your shell. The next tick decides whether to dispatch it.
+    For a ticket at its attempt limit that you want the loop to keep working, or, with REF a PR's URL and KIND
+    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. Every run still counts toward the
+    limit; this raises that unit's or PR's limit, and only from your shell. The next tick decides whether to use it.
     """
     subject = _ref(ref, "grant")
+    if (subject.kind == conversation.PR) != (kind == grants.KIND):
+        raise CliError(f"grant refused (bad_kind): {_grant_mismatch(subject, kind)}")
     ctx = open_context(click_ctx)
+    if kind == grants.KIND:
+        return _grant_reviews(ctx, subject, repo=repo, runs=runs)
     try:
         granted = policy.grant(ctx.conn, ctx.config, subject.id, kind, repo=repo, runs=runs)
     except conversation.Refused as r:
@@ -238,6 +244,27 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     click.echo(
         f"{subject} in {granted.repo} has had {granted.runs} {kind} runs, and may now have {granted.limit}. "
         "The next tick decides whether to dispatch it."
+    )
+    return 0
+
+
+def _grant_mismatch(subject: Ref, kind: str) -> str:
+    if kind == grants.KIND:
+        return f"{subject} is a ticket; `review` takes the PR's URL: `canopy grant <URL> review`"
+    return f"{subject} is a PR, which takes only `review`; {kind} takes a ticket key"
+
+
+def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -> int:
+    if repo is not None:
+        raise CliError("grant refused (bad_repo): a PR's review limit is the PR's own; leave out --repo")
+    try:
+        granted = grants.grant(ctx.conn, ctx.config, subject, runs=runs)
+    except conversation.Refused as r:
+        raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("reviews granted", extra={"pr": subject.id, "runs": runs})
+    click.echo(
+        f"{subject} has had {granted.runs} review runs, and may now have {granted.limit}. "
+        "The next tick decides whether to review it."
     )
     return 0
 
