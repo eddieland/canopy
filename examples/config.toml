@@ -81,6 +81,9 @@ comment_suffix = ""
 # here, such as your team's bot address, never a person: it is how a reader tells the work is an agent's.
 # commit_trailer_name = "canopy worker"
 # commit_trailer_email = "noreply@canopy.invalid"
+# Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
+# push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
+# rebase = false
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
