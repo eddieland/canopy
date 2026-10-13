@@ -263,10 +263,12 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info(
+    log = logs.for_tick(None)
+    log.info(
         "finding dismissal taken back" if undo else "finding dismissed",
         extra={"chore": subject.id, "finding": finding, "channel": CLI},
     )
+    attention.write(ctx, log)
     if undo:
         click.echo(f"{subject} {finding} is listed again while the chore reports it.")
     else:
