@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { LinkedText } from '@/components/linked-text'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
@@ -11,9 +12,9 @@ import { TicketTitle } from '@/components/ticket-title'
 import { RUN_TEXT, type TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
-// Where a ticket's row puts what goes under its head line, so it starts under the ticket's title: the state's column,
-// the key's, and the gaps after each. Written out in full so Tailwind finds them.
-const UNDER_TITLE = { pad: 'pl-[12.5rem]', margin: 'ml-[12.5rem]' }
+// Where a ticket's row starts what goes under its head line, so it lines up with the ticket's title: past the state's
+// column, the key's, and the gap after each.
+const UNDER_TITLE = 'pl-[12.5rem]'
 
 /**
  * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
@@ -58,7 +59,7 @@ function TicketRow({ group }: { group: TicketRuns }) {
         <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${latest.id}`}>
             <RunBody run={latest} ticket />
             {earlier.length > 0 && (
-                <div className={UNDER_TITLE.pad}>
+                <div className={UNDER_TITLE}>
                     <button
                         type="button"
                         aria-expanded={open}
@@ -75,12 +76,9 @@ function TicketRow({ group }: { group: TicketRuns }) {
                 </div>
             )}
             {open && (
-                <ul
-                    className={cn(UNDER_TITLE.margin, 'divide-y border-l')}
-                    data-testid={`earlier-runs-${latest.ticket_key}`}
-                >
+                <ul className="flex flex-col gap-1.5 pt-1" data-testid={`earlier-runs-${latest.ticket_key}`}>
                     {earlier.map((run) => (
-                        <RunRow key={run.id} run={run} ticket={false} />
+                        <EarlierRow key={run.id} run={run} />
                     ))}
                 </ul>
             )}
@@ -88,15 +86,33 @@ function TicketRow({ group }: { group: TicketRuns }) {
     )
 }
 
+/**
+ * One of a ticket's earlier runs, on one line in the columns of the row it sits in: its state, the first line of what
+ * it said where the title is, its id and chips, cost, and when. The rest is on the run's page.
+ */
+function EarlierRow({ run }: { run: Run }) {
+    const said = run.summary?.split('\n', 1)[0] ?? ''
+    return (
+        <li className="flex items-center gap-3" data-testid={`run-${run.id}`}>
+            <RunStatus run={run} />
+            <span className="w-24 shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground" title={said || undefined}>
+                <LinkedText text={said} />
+            </span>
+            <span className="flex w-56 shrink-0 items-center gap-3">
+                <RunFacts run={run} />
+            </span>
+            <RunReadouts run={run} />
+        </li>
+    )
+}
+
 function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
-    const indent = ticket ? UNDER_TITLE.pad : 'pl-[6.75rem]'
+    const indent = ticket ? UNDER_TITLE : 'pl-[6.75rem]'
     return (
         <>
             <div className="flex items-center gap-3">
-                <span className={cn('flex w-20 items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
-                    <RunDot state={run.state} />
-                    {run.status}
-                </span>
+                <RunStatus run={run} />
                 {ticket ? (
                     <>
                         <TicketLink ticketKey={run.ticket_key} className="w-24 shrink-0 truncate" />
@@ -109,16 +125,7 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                 ) : (
                     <RunFacts run={run} />
                 )}
-                <span className="ml-auto flex items-center gap-4">
-                    <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
-                        {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
-                    </span>
-                    <span className="flex w-24 justify-end gap-1 text-xs text-muted-foreground">
-                        {run.ended_at === null ? 'for' : 'ended'}
-                        <Age at={run.ended_at ?? run.started_at} />
-                        {run.ended_at === null ? '' : 'ago'}
-                    </span>
-                </span>
+                <RunReadouts run={run} />
             </div>
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={indent} />}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
@@ -158,5 +165,29 @@ function RunFacts({ run }: { run: Run }) {
             <Chip word={run.kind} />
             {run.private && <Chip>private</Chip>}
         </>
+    )
+}
+
+function RunStatus({ run }: { run: Run }) {
+    return (
+        <span className={cn('flex w-20 shrink-0 items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
+            <RunDot state={run.state} />
+            {run.status}
+        </span>
+    )
+}
+
+function RunReadouts({ run }: { run: Run }) {
+    return (
+        <span className="ml-auto flex items-center gap-4">
+            <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
+                {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
+            </span>
+            <span className="flex w-24 justify-end gap-1 text-xs text-muted-foreground">
+                {run.ended_at === null ? 'for' : 'ended'}
+                <Age at={run.ended_at ?? run.started_at} />
+                {run.ended_at === null ? '' : 'ago'}
+            </span>
+        </span>
     )
 }
