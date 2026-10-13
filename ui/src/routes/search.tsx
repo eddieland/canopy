@@ -29,7 +29,11 @@ function SearchPage() {
     const { q } = Route.useSearch()
     return (
         <>
-            <PageHeader label="Search" title={q === undefined ? 'Search' : `“${q}”`}>
+            <PageHeader
+                root="Search"
+                title={q === undefined ? 'Search' : `“${q}”`}
+                tab={q === undefined ? 'Search' : `Search “${q}”`}
+            >
                 Tickets by key and branch, every conversation, chore runs, decisions, and ticks that hold every word,
                 newest first. Not searched: transcripts, ticket titles (a branch carries its words), and reviews.
             </PageHeader>

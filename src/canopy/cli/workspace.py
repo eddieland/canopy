@@ -67,7 +67,11 @@ def _require_workspace() -> Path:
 
 
 def add_repos(ws: workspace.Workspace, repos: Sequence[str]) -> None:
-    """Add each `[NAME=]URL` in `repos` to the map, and print what was added. Nothing is written if one is refused."""
+    """Add each `[NAME=]URL` in `repos` to the map, and print what was added. Nothing is written if one is refused.
+
+    Raises:
+        CliError: An argument's name or URL is not valid, or the map already has a repository by its name.
+    """
     try:
         entries = [setup_workspace.repo_arg(arg) for arg in repos]
         added = setup_workspace.add(ws, entries)
@@ -81,8 +85,10 @@ def add_repos(ws: workspace.Workspace, repos: Sequence[str]) -> None:
 def sync(click_ctx: click.Context, *, dry_run: bool, add: Sequence[str] = ()) -> list[setup_workspace.Checked]:
     """Add the `[NAME=]URL`s in `add` to the map, then make the workspace match its map and declared slots.
 
-    Both happen between ticks, under the tick lock, which also serializes two of these. Returns what each sync step
-    found or did.
+    Both happen between ticks, under the tick lock, which also serializes two of these.
+
+    Returns:
+        What each sync step found or did.
     """
     ctx = open_context(click_ctx)
     with contextlib.ExitStack() as stack:
@@ -100,7 +106,11 @@ def sync(click_ctx: click.Context, *, dry_run: bool, add: Sequence[str] = ()) ->
 
 
 def check_synced(results: Sequence[setup_workspace.Checked]) -> None:
-    """Refuse, exit 1, if any step did not reach what is declared."""
+    """Refuse, exit 1, if any step did not reach what is declared.
+
+    Raises:
+        CliError: A step ended `failed` or `kept`.
+    """
     unmet = sum(r.outcome in _UNMET for r in results)
     if unmet:
         raise CliError(f"{unmet} of {len(results)} steps did not reach what is declared; see above")

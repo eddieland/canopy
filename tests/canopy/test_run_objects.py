@@ -115,7 +115,11 @@ def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, 
     git("checkout", "--quiet", "--detach", "refs/remotes/origin/main", cwd=slot)
     objects = objects_of(canopy_env, run_id)
     objects.mkdir(mode=0o700)
-    done = SubprocessRunner().run(["sh", "-c", WORKER], cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects)})
+    # Without automatic maintenance: newer git (2.55 on CI) starts it in the background after the commit and the fetch,
+    # and its `maintenance.lock` comes and goes in the run's object directory while a test lists it.
+    no_maintenance = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "maintenance.auto", "GIT_CONFIG_VALUE_0": "false"}
+    env = {"CANOPY_GIT_OBJECTS": str(objects), **no_maintenance}
+    done = SubprocessRunner().run(["sh", "-c", WORKER], cwd=slot, env=env)
     assert done.ok, done.stderr
     conn.execute("UPDATE runs SET pid = ? WHERE id = ?", (DEAD_PID, run_id))
 
@@ -139,7 +143,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     if rewrites_link:
         (slot / ".git").write_text("gitdir: /somewhere/else\n")
 
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
 
     run = db.get_run(conn, run_id)

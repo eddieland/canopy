@@ -17,7 +17,7 @@ def journal(env: CanopyEnv) -> sqlite3.Connection:
     return env.journal(migrate=False)
 
 
-def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str], last_line: str = "tick complete") -> None:
+def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str], last_line: str = "CANOPY_TICK_DONE") -> None:
     monkeypatch.setenv("FAKE_AGENT_COMMANDS", json.dumps([["canopy", *c] for c in commands]))
     monkeypatch.setenv("FAKE_AGENT_RESULT", last_line)
 
@@ -130,9 +130,9 @@ def test_next_tick_sees_the_journal(
 @pytest.mark.parametrize(
     "case",
     [
-        ("3", "tick complete", "overseer exited 3"),
-        ("0", "I got distracted", "did not end with 'tick complete'"),
-        ("0", "", "did not end with 'tick complete'"),
+        ("3", "CANOPY_TICK_DONE", "overseer exited 3"),
+        ("0", "I got distracted", "final message has no CANOPY_TICK_DONE line"),
+        ("0", "", "final message has no CANOPY_TICK_DONE line"),
     ],
 )
 def test_overseer_failure_closes_the_tick(
@@ -151,7 +151,52 @@ def test_overseer_failure_closes_the_tick(
     assert summary in tick["summary"]
 
 
-@pytest.mark.parametrize(("last_line", "status"), [("tick complete", "ok"), ("I got distracted", "overseer_failed")])
+@pytest.mark.parametrize(
+    ("final", "status"),
+    [
+        ("CANOPY_TICK_DONE", "ok"),
+        ("CANOPY_TICK_DONE\n\nRecorded 6 decisions and dispatched 2 runs.", "ok"),  # a summary after it (tick 150)
+        ("Recorded 6 decisions.\n  `CANOPY_TICK_DONE`  ", "ok"),
+        ("tick complete", "overseer_failed"),  # the old done line
+        ("I'll print CANOPY_TICK_DONE when finished", "overseer_failed"),  # the token is the whole line or nothing
+        ("canopy_tick_done", "overseer_failed"),
+    ],
+)
+def test_the_done_token_is_a_line_anywhere_in_the_final_message(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    final: str,
+    status: str,
+) -> None:
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    overseer_does(monkeypatch, last_line=final)
+    main(["tick", "--dry-run"])
+    assert journal(canopy_env).execute("SELECT status FROM ticks").fetchone()[0] == status
+
+
+def test_the_done_token_in_an_earlier_message_fails_the_tick(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run that named the token, then stopped before the procedure's end, did not finish it."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    monkeypatch.setenv("FAKE_AGENT_SAYS", "CANOPY_TICK_DONE")
+    overseer_does(monkeypatch, last_line="Now reading the next ticket.")
+    main(["tick", "--dry-run"])
+    tick = journal(canopy_env).execute("SELECT status, summary FROM ticks").fetchone()
+    assert (tick["status"], tick["summary"]) == (
+        "overseer_failed",
+        "overseer's final message has no CANOPY_TICK_DONE line",
+    )
+
+
+@pytest.mark.parametrize(("last_line", "status"), [("CANOPY_TICK_DONE", "ok"), ("I got distracted", "overseer_failed")])
 def test_an_overseer_printing_json_events_is_read_by_their_text(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
@@ -168,7 +213,7 @@ def test_an_overseer_printing_json_events_is_read_by_their_text(
     assert journal(canopy_env).execute("SELECT status FROM ticks").fetchone()[0] == status
 
 
-@pytest.mark.parametrize("last_line", ["tick complete", "I got distracted"])
+@pytest.mark.parametrize("last_line", ["CANOPY_TICK_DONE", "I got distracted"])
 def test_a_tick_records_and_prints_what_its_overseer_cost(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
@@ -189,6 +234,24 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     assert tuple(tick[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
     assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 11.5k tokens)")
+
+
+def test_a_running_tick_shows_its_overseer_session(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The session is on the tick from the overseer's first event, so a page or `canopy decisions` shows it mid-tick."""
+    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
+    canopy_env.write_user(text)
+    monkeypatch.setenv("FAKE_OVERSEER_SESSION", "ses_o1")
+    overseer_does(monkeypatch, ["decisions"])
+    assert main(["tick", "--dry-run"]) == 0
+
+    [run] = agent_runs(agent_log)
+    commands = run["commands"]
+    assert isinstance(commands, list)
+    [decisions] = commands
+    assert "Tick 1: running (dry run)" in decisions["stdout"]
+    assert "overseer session ses_o1\n" in decisions["stdout"]  # no cost yet: the overseer has not ended
 
 
 def test_a_tick_whose_overseer_reports_nothing_records_no_cost(
@@ -231,11 +294,14 @@ class TimingOutAgent:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> procs.Result:
         if "agent" in args[:3]:
             assert timeout == 15 * 60
             return procs.Result(tuple(args), -9, "fake agent: starting\n", "", timed_out=True)
-        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+        return procs.SubprocessRunner().run(
+            args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line
+        )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         return procs.SubprocessRunner().spawn(args, cwd=cwd, log_path=log_path)

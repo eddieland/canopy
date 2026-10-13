@@ -56,12 +56,20 @@ class ReviewResult(BaseModel):
 
 
 def parse(stdout: str) -> ReviewResult | None:
-    """Parse the last non-empty line of `stdout` as a review's result. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as a review's result. None if it is missing or invalid.
+
+    Returns:
+        The validated result, or None if `stdout` has no result line or its last one does not validate.
+    """
     return contract.last_line(ReviewResult, stdout)
 
 
 def stored(result_json: object) -> ReviewResult | None:
-    """Read a result the journal stored, or None if there is none."""
+    """Read a result the journal stored, or None if there is none.
+
+    Returns:
+        The validated result, or None if the run stored none or what it stored does not validate.
+    """
     return contract.stored(ReviewResult, result_json)
 
 

@@ -9,6 +9,7 @@ failure count, so the next tick tries again. Sinks run one after another under t
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -40,21 +41,36 @@ class Delivery:
     detail: str = ""
 
 
-def publish(ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter) -> list[Delivery]:
-    """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed."""
+def publish(
+    ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter, *, dismissed: Collection[str] = ()
+) -> list[Delivery]:
+    """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed.
+
+    `dismissed` holds the fingerprints of chore findings the operator dismissed: a sink told of one hears why it left.
+
+    Returns:
+        How each sink's delivery went, in name order.
+    """
     sinks = ctx.config.notify.all_sinks()
     for name in journal.forget_sinks(ctx.conn, sinks):
         log.info("notification sink removed from the config; forgot it", extra={"sink": name})
     now = datetime.now(UTC)
     if ctx.config.notify.takes(outbox.LOOP):
         _record_loop_events(ctx)
-    deliveries = [_deliver(ctx, name, sink, items, path=path, now=now, log=log) for name, sink in sinks.items()]
+    deliveries = [
+        _deliver(ctx, name, sink, items, path=path, now=now, log=log, dismissed=dismissed)
+        for name, sink in sinks.items()
+    ]
     journal.prune_events(ctx.conn, now)
     return deliveries
 
 
 def send(ctx: Context, sink: Sink, text: str) -> str | None:
-    """Run the sink's command with `text` on stdin. Returns None on exit 0, else why it failed."""
+    """Run the sink's command with `text` on stdin.
+
+    Returns:
+        None on exit 0, else why it failed: it could not start, timed out, or exited non-zero, with its stderr's tail.
+    """
     argv = notify_words(sink.cmd)
     try:
         result = ctx.runner.run(argv, cwd=ctx.repo_root, stdin=text, timeout=TIMEOUT_SECONDS)
@@ -68,7 +84,11 @@ def send(ctx: Context, sink: Sink, text: str) -> str | None:
 
 
 def test(ctx: Context, names: list[str]) -> list[Delivery]:
-    """Send a test message to each sink in `names` now, outside any tick, changing nothing in the journal."""
+    """Send a test message to each sink in `names` now, outside any tick, changing nothing in the journal.
+
+    Returns:
+        How each sink's delivery went, in the order of `names`: `delivered`, or `failed` with why.
+    """
     sinks = ctx.config.notify.all_sinks()
     results: list[Delivery] = []
     for name in names:
@@ -92,7 +112,11 @@ class SinkStatus:
 
 
 def status(ctx: Context) -> list[SinkStatus]:
-    """Every configured sink as the journal sees it, in name order."""
+    """Every configured sink as the journal sees it, in name order.
+
+    Returns:
+        One status per sink. A sink the journal has no row for yet shows no delivery, no failures, and nothing waiting.
+    """
     found: list[SinkStatus] = []
     for name, sink in ctx.config.notify.all_sinks().items():
         row = journal.sink(ctx.conn, name)
@@ -136,7 +160,11 @@ def _record_loop_events(ctx: Context) -> None:
 
 
 def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
-    """How many ended ticks before `tick_id` failed since the last `ok` one: the whole streak, however long."""
+    """How many ended ticks before `tick_id` failed since the last `ok` one: the whole streak, however long.
+
+    Returns:
+        The count, 0 when the last ended tick before `tick_id` was `ok`.
+    """
     return int(
         conn.execute(
             "SELECT count(*) FROM ticks WHERE id < ? AND status NOT IN ('running', 'ok') "
@@ -147,21 +175,31 @@ def _failed_before(conn: sqlite3.Connection, tick_id: int) -> int:
 
 
 def _deliver(
-    ctx: Context, name: str, sink: Sink, items: list[Item], *, path: Path, now: datetime, log: logs.TickAdapter
+    ctx: Context,
+    name: str,
+    sink: Sink,
+    items: list[Item],
+    *,
+    path: Path,
+    now: datetime,
+    log: logs.TickAdapter,
+    dismissed: Collection[str],
 ) -> Delivery:
     row = journal.ensure_sink(ctx.conn, name)
     groups = [g for g in sink.events if g in _POINT_GROUPS]
     # Read first: a detached `_run` may record an event while this sink is served, and the cursor must not pass it.
     cursor = journal.newest_event_id(ctx.conn)
     events = [message.Event.of(e) for e in journal.events_after(ctx.conn, int(row["cursor"]), groups, cursor)]
-    change = journal.diff(ctx.conn, name, items) if "attention" in sink.events else None
+    change = journal.diff(ctx.conn, name, items, dismissed) if "attention" in sink.events else None
     digest = None
     if _digest_due(row, sink, now) and sink.digest_every_minutes is not None:
         # The first digest covers one interval back.
         first = db.format_time(now - timedelta(minutes=sink.digest_every_minutes))
         since = str(row["last_digest_at"] or first)
         digest = message.digest(ctx.conn, items, since=since, now=now)
-    msg = message.Message(name, ctx.repo, path, change, len(items), events, digest, now)
+    msg = message.Message(
+        name, ctx.repo, path, change, len(items), events, digest, now, titles=message.titles(ctx.conn)
+    )
     if msg.is_empty():
         # Nothing to say; the cursor still moves past events of groups this sink does not take.
         ctx.conn.execute("UPDATE notify_sinks SET cursor = max(cursor, ?) WHERE name = ?", (cursor, name))

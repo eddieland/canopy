@@ -97,6 +97,9 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
             split's is the ticket's, and only config raises it), `unknown` for a ticket canopy has no record of,
             `unknown_repo` for a repository the ticket has had no runs in, or none named when it has had them in
             several.
+
+    Returns:
+        The unit's repository, named or found, and its runs of `kind` and its limit for them with the grant counted.
     """
     conversation.check_operator()
     if kind not in KINDS:
@@ -134,7 +137,11 @@ def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None) -> dict[
 
 
 def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:
-    """Return, by unit, when fix-ci may next run, for units still inside the cooldown."""
+    """Return, by unit, when fix-ci may next run, for units still inside the cooldown.
+
+    Returns:
+        Each unit whose last fix-ci run ended less than the cooldown before `now`, with when the cooldown ends.
+    """
     window = timedelta(minutes=config.policy.fix_ci_cooldown_minutes)
     until: dict[Unit, datetime] = {}
     rows = conn.execute(

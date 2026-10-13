@@ -12,10 +12,13 @@ export const ROUTES = [
     'worktrees',
     'tickets',
     'tickets/ABC-102',
+    'pull-requests',
+    `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',
     'reviews/4',
     'chores',
     'chores/deps',
+    'chores/deps/runs/2',
     'ticks',
     'ticks/2',
     'settings',
@@ -51,6 +54,19 @@ export async function settled(page: Page): Promise<void> {
     await expect(readouts.locator('[data-slot=skeleton]')).toHaveCount(0)
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
+}
+
+/**
+ * Screenshots the whole page as `name`. The page scrolls under the header, not the window (AppShell), so a full-page
+ * capture would stop at the window's foot: the window grows to the page's height first.
+ */
+export async function screenshotWhole(page: Page, name: string): Promise<void> {
+    const scroller = page.locator('[data-scroll-restoration-id=page]')
+    const height = await scroller.evaluate((el) => el.getBoundingClientRect().top + el.scrollHeight)
+    const viewport = page.viewportSize()
+    if (viewport === null) throw new Error('the page has no viewport to grow')
+    await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
+    await expect(page).toHaveScreenshot(name)
 }
 
 /**

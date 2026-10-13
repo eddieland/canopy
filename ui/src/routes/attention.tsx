@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
 import { attentionQuery, choreQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
@@ -10,6 +11,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
+import { useDismissFinding } from '@/components/dismiss-finding'
 import { LinkedText } from '@/components/linked-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
@@ -56,7 +58,7 @@ function AttentionPage() {
     const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
     return (
         <>
-            <PageHeader label="Inbox" title="Attention">
+            <PageHeader title="Attention">
                 What needs you, as <code className="font-mono text-xs">canopy status</code> lists it, most severe first.
                 An item leaves when its cause is gone.
             </PageHeader>
@@ -145,28 +147,17 @@ function Answered() {
 }
 
 /**
- * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another; or for an
- * item about neither, what it says.
+ * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another, and for a
+ * finding the button to dismiss it; or for an item about neither, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <Panel data-testid="attention-detail">
-            <div className="flex flex-col gap-2 border-b p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                    <ReasonChip item={item} />
-                    {done && <Answered />}
-                    <Subject item={item} />
-                    <Age at={item.since} className="ml-auto" />
-                </div>
-                <p className="text-sm break-words whitespace-pre-wrap">
-                    <LinkedText text={item.detail} />
-                </p>
-                {done && (
-                    <p className="text-sm text-muted-foreground" data-testid="answered-note">
-                        You answered it. The item leaves at the next tick, when the loop reads your reply.
-                    </p>
-                )}
-            </div>
+            {item.finding && item.chore !== null ? (
+                <FindingHead item={item} chore={item.chore} done={done} />
+            ) : (
+                <Head item={item} done={done} />
+            )}
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {item.ticket_key === null && item.chore === null && (
@@ -176,6 +167,46 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
             )}
         </Panel>
     )
+}
+
+/** What the item says: its reason, subject, and age, an action beside them, and its detail with any notice below. */
+function Head({
+    item,
+    done,
+    action,
+    notice,
+}: {
+    item: AttentionItem
+    done: boolean
+    action?: ReactNode
+    notice?: ReactNode
+}) {
+    return (
+        <div className="flex flex-col gap-2 border-b p-3">
+            <div className="flex flex-wrap items-center gap-2">
+                <ReasonChip item={item} />
+                {done && <Answered />}
+                <Subject item={item} />
+                <Age at={item.since} className="ml-auto" />
+                {action}
+            </div>
+            <p className="text-sm break-words whitespace-pre-wrap">
+                <LinkedText text={item.detail} />
+            </p>
+            {done && (
+                <p className="text-sm text-muted-foreground" data-testid="answered-note">
+                    You answered it. The item leaves at the next tick, when the loop reads your reply.
+                </p>
+            )}
+            {notice}
+        </div>
+    )
+}
+
+/** A chore's finding's head: as any item's, with the button that dismisses it beside its age. */
+function FindingHead({ item, chore, done }: { item: AttentionItem; chore: string; done: boolean }) {
+    const { button, notice } = useDismissFinding(chore, item.reason, false)
+    return <Head item={item} done={done} action={button} notice={notice} />
 }
 
 function Subject({ item }: { item: AttentionItem }) {

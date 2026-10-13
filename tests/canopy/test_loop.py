@@ -22,9 +22,9 @@ from canopy.cli.main import main
 from canopy.core import config, conversation, db, pause, workspace
 from canopy.core.context import Context
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import repeat
+from canopy.loop import repeat, reread
 from tests.canopy.helpers import journal
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, user_toml
 
 
 @dataclass
@@ -62,11 +62,14 @@ class RaisingRunner:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> procs.Result:
         if self.raises:
             self.raises -= 1
             raise RuntimeError("a bug in tick code")
-        return procs.SubprocessRunner().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start)
+        return procs.SubprocessRunner().run(
+            args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line
+        )
 
     def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
         return procs.SubprocessRunner().spawn(args, cwd=cwd, log_path=log_path)
@@ -83,7 +86,7 @@ def context(env: CanopyEnv, runner: procs.Runner | None = None) -> Context:
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(commands))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 def canopy(*args: str) -> list[str]:
@@ -323,7 +326,7 @@ def test_loop_holds_its_own_lock_and_a_second_loop_is_refused(
     assert "another canopy loop is running" in capsys.readouterr().err
     assert not agent_log.exists()  # no tick ran
 
-    overseer_does(monkeypatch)  # records nothing, ends with "tick complete"
+    overseer_does(monkeypatch)  # records nothing, ends with "CANOPY_TICK_DONE"
     assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
     out = capsys.readouterr().out
     assert "wait 3 minutes after each tick ends" in out
@@ -638,6 +641,10 @@ def test_loop_passes_defer_through(monkeypatch: pytest.MonkeyPatch, canopy_env: 
     monkeypatch.setattr(repeat, "run", fake_run)
     assert main(["loop", "--defer", "30", "--no-serve"]) == 0
     assert seen["defer_minutes"] == 30
+    assert seen["interval_minutes"] is None  # left to loop.interval_minutes, which a reload reads again
+    assert isinstance(seen["reload"], reread.Reload)
+    assert main(["loop", "--every", "7", "--no-serve"]) == 0
+    assert seen["interval_minutes"] == 7
     assert main(["loop", "--defer", "0"]) == 2  # at least a minute; to tick at once, leave it out
 
 
@@ -845,3 +852,143 @@ def test_an_agent_can_neither_pause_nor_resume_the_loop(
 )
 def test_duration(seconds: float, text: str) -> None:
     assert repeat.duration(seconds) == text
+
+
+def hup_me() -> list[str]:
+    """A command that sends SIGHUP to this test process, as `kill -HUP` from the operator's shell would."""
+    return [sys.executable, "-c", f"import os, signal; os.kill({os.getpid()}, signal.SIGHUP)"]
+
+
+def paced(env: CanopyEnv, minutes: int) -> None:
+    """Write the user config with `loop.interval_minutes` at `minutes`, and idle pacing off."""
+    env.write_user(user_toml() + f"\n[loop]\ninterval_minutes = {minutes}\nidle_max_minutes = {minutes}\n")
+
+
+@dataclass
+class Asked(reread.Reload):
+    """A reload request that records whether a tick was running each time one was asked for."""
+
+    during_tick: list[bool] = field(default_factory=list)
+
+    @override
+    def request(self) -> bool:
+        self.during_tick.append(self.ticking)
+        return super().request()
+
+
+def test_sighup_during_the_wait_reads_the_config_again_for_the_waits_after_it(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paced(canopy_env, 10)
+    overseer_does(monkeypatch)
+    stop, reload = repeat.Stop(), Asked()
+    before = signal.getsignal(signal.SIGHUP)
+
+    def change_then_hup() -> None:
+        if not reload.during_tick:
+            paced(canopy_env, 4)
+            os.kill(os.getpid(), signal.SIGHUP)
+
+    time = FakeTime(on_sleep=change_then_hup)
+    term, out = console()
+    with repeat.signals(stop, reload):
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=3,
+            console=term,
+            stop=stop,
+            reload=reload,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 3}
+    assert reload.during_tick == [False]
+    assert not stop.requested  # SIGHUP is no stop
+    assert signal.getsignal(signal.SIGHUP) == before  # restored
+    # The wait it came in keeps the length it started with; the next one is the new interval's.
+    assert sum(time.slept) == 600 + 240
+    text = out.getvalue()
+    assert "wait 10 minutes after each tick ends" in text
+    assert "config reloaded  loop.interval_minutes, loop.idle_max_minutes changed" in text
+    assert "pace  wait 4 minutes after each tick ends" in text
+    assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")
+    assert [line["changed"] for line in log_messages(canopy_env) if line["msg"] == "config reloaded"] == [
+        ["loop.interval_minutes", "loop.idle_max_minutes"]
+    ]
+
+
+def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paced(canopy_env, 10)
+    ctx = context(canopy_env)
+    paced(canopy_env, 4)  # changed after the loop read it, as an operator editing the file would
+    overseer_does(monkeypatch, hup_me(), canopy("decide", "PROJ-1", "done", "--rationale", "merged"))
+    stop, reload = repeat.Stop(), Asked()
+    time = FakeTime()
+    term, out = console()
+    with repeat.signals(stop, reload):
+        statuses = repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=stop,
+            reload=reload,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 2}
+    assert reload.during_tick == [True, True]  # the web UI would have said: after the running tick
+    conn = canopy_env.journal(migrate=False)
+    assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+    assert sum(time.slept) == 600  # the wait after it was paced before the reload applied
+    text = out.getvalue()
+    assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")
+
+
+def test_a_config_that_does_not_load_leaves_the_loop_on_the_one_it_had(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paced(canopy_env, 10)
+    good = canopy_env.user_file.read_text()
+    overseer_does(monkeypatch)
+    stop, reload = repeat.Stop(), reread.Reload()
+    sleeps: list[None] = []
+
+    def break_then_mend() -> None:
+        sleeps.append(None)
+        if len(sleeps) == 1:
+            canopy_env.write_user(good + "\n[capacity]\nmax_workers = 'many'\n")
+            os.kill(os.getpid(), signal.SIGHUP)
+        elif len(sleeps) == 2:
+            canopy_env.write_user(good)  # mended, unasked: the loop reads it again only when asked
+
+    time = FakeTime(on_sleep=break_then_mend)
+    term, out = console()
+    with repeat.signals(stop, reload):
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=stop,
+            reload=reload,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    assert statuses == {"ok": 2}
+    assert sum(time.slept) == 600
+    text = out.getvalue()
+    assert "config not reloaded; kept the one it had:" in text
+    assert "capacity.max_workers" in text
+    assert "config reloaded" not in text
+    [warning] = [line for line in log_messages(canopy_env) if line["msg"] == "config not reloaded"]
+    assert "capacity.max_workers" in str(warning["error"])

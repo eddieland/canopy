@@ -69,6 +69,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
         ("paths", "worktree_include = '/tmp/x'"),
+        ("paths", "worker_instructions = '/tmp/x'"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -337,3 +338,17 @@ def test_user_paths_expand_the_home_directory(canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + 'prompt_overrides = "~/my-prompts"\n')
     paths = load(canopy_env.root, canopy_env.user_file).paths
     assert paths.prompt_overrides == canopy_env.home / "my-prompts"
+
+
+def test_changed_names_the_keys_whose_values_differ_in_the_schemas_order(canopy_env: CanopyEnv) -> None:
+    before = load(canopy_env.root, canopy_env.user_file)
+    assert config.changed(before, before) == []
+    canopy_env.write_user(
+        canopy_env.user_file.read_text()
+        + "\n[serve]\nport = 9000\n\n[capacity]\nmax_workers = 3\n"
+        + '\n[chores.deps]\nprompt = "~/chores/deps.md"\nevery_minutes = 60\n'
+    )
+    after = load(canopy_env.root, canopy_env.user_file)
+    # A table section is one key, whichever of its tables changed.
+    assert config.changed(before, after) == ["capacity.max_workers", "serve.port", "chores"]
+    assert config.changed(after, before) == ["capacity.max_workers", "serve.port", "chores"]

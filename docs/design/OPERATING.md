@@ -177,6 +177,7 @@ comment_suffix = ""          # and ends with this, if set
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
 # worktree_include = "~/.config/canopy/worktreeinclude"   # optional; replaces the committed .worktreeinclude (§9)
+# worker_instructions = "~/.config/canopy/worker-instructions.md"   # optional; in every worker's prompt (below)
 
 [notify]
 cmd = ""   # optional; receives the attention diff on stdin: the sink `default` (§20)
@@ -254,6 +255,14 @@ says otherwise; an empty value means the default. `paths.*` values must be absol
 runs from the workspace root and a relative path would let a shared workspace supply them (TRUST_MODEL T7). There is
 no key for the state directory: it is always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
 
+`paths.worker_instructions` names a file of the operator's standing instructions, a few habits every worker should
+keep, such as how to commit review fixes. canopy renders it into every worker prompt but a split's, as
+`{{STANDING_INSTRUCTIONS}}` under its own heading, before the obligations, which come first (§8). It adds to the shipped
+prompts without copying them, so prefer it to an override for anything a few lines can say; a skill is still the place
+for know-how a worker loads when it needs it (§13). It is at most 4 KiB of UTF-8, and a file canopy cannot use refuses
+the dispatch as `bad_prompt` rather than running a worker without it. Like every `paths.*` key it is user-only and
+serves every workspace the user file does.
+
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, and every shipped skill is in the definitions directory (§13). `tracker.query` is how the
 overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue search), otherwise plain
@@ -267,8 +276,10 @@ read its stdout, `opencode run --agent <name>`. MCP connectivity, OAuth, and too
 
 Agent definitions ship in `agents/`; agent runs load them from a directory canopy owns (below):
 
-- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`. MCP: the tracker,
-  GitHub.
+- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
+  workspace (`external_directory: deny`), and one command per bash call, as its prompt says: an `ask`, such as a `cd`
+  out of the workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a
+  `deny` costs only the call. MCP: the tracker, GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
   edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
@@ -292,8 +303,15 @@ the command templates. No interface.
 Every agent's output is read the same way (`core/agent_output.py`). A template either prints the agent's text on
 stdout, or asks OpenCode for `--format json`, which prints one JSON event per line. If any line of stdout is an event
 (a JSON object with a string `type` and a `sessionID`), the agent's text is the `part.text` of each `text` event, one
-per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is the
-last non-empty line of that text, so a template may switch formats without changing a prompt.
+per line; otherwise it is stdout itself. Every result contract (the overseer's done token, §8, §18, §19, §21) is read
+from that text, so a template may switch formats without changing a prompt. The agent's final message is the last
+`text` event's text; plain stdout does not say where a message ends, so all of it is the final message.
+
+A JSON contract (§8, §18, §19, §21) is the last line of the text that starts with `{`, and lines after it that do not
+are passed over: a runtime, or a plugin the operator must load, may print a notice after the agent's last word, and a
+plain template, or one that sends stderr to stdout, puts it in the text. A last object that does not validate is no
+result; canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
+The overseer's done token is plain text, a line anywhere in its final message (§6).
 
 From events the harness also reads, each validated (D026):
 

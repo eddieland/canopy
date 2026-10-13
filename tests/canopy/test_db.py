@@ -33,6 +33,9 @@ SHIPPED = {
     14: "764761a8223991f778163245e702688715f2d9144de5573244c4fee8c74f533e",
     15: "91667c9b816fde738ca9809286ad3d2b49dce1db8f6fdc9dc2cb1cac46d200ee",
     16: "d8c8ca63da12108ce7fbca6f9e2baf36c8e6ba028db7598783fda0894d7167c6",
+    17: "51c8d5942669378ea5984b9dde80851f26684e7bdefae6a384aaabc2985ed1c1",
+    18: "8da85c12a7f48e16cc76fd4be19beafeecfbd7f79b5418d2e86b608abfb4baae",
+    19: "df22e157b9cd5981c11536a7787e7ada6e0cd4d5d9715c261d4a3c45b3cf4927",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -80,6 +83,10 @@ SEED: Mapping[str, str] = {
     "attempt_grants": (
         "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) "
         "VALUES ('OLD-1', 'api', 'resume', 1, 'x')"
+    ),
+    "finding_dismissals": (
+        "INSERT INTO finding_dismissals (chore, finding_id, dismissed_at, channel) "
+        "VALUES ('nightly', 'f/1', 'x', 'cli')"
     ),
 }
 
@@ -225,6 +232,25 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     last = db.last_tick(conn)
     assert last is not None
     assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
+
+
+def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
+    """A ticket's newest decisions are read through an index, not a scan of every decision ever recorded."""
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    tick = db.start_tick(conn, dry_run=False)
+    db.touch_ticket(conn, "PROJ-1", "/repo")
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    assert db.last_decision_of(conn, "PROJ-1") == "wait"
+    assert len(db.decisions_about(conn, "PROJ-1", 20)) == 1
+    conn.set_trace_callback(None)
+    assert len(statements) == 2
+    for sql in statements:
+        plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {sql}")]
+        assert any("USING INDEX decisions_ticket" in step for step in plan), plan
+        assert not any(step.startswith("SCAN d") for step in plan), plan
 
 
 def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path, journals: Journals) -> None:

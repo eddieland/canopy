@@ -76,7 +76,11 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
 
 
 def _unit(ctx: Context, repo: str | None) -> str | None:
-    """Return the repository `--repo` names, checked against the map, or None if it names none."""
+    """Return the repository `--repo` names, checked against the map, or None if it names none.
+
+    Raises:
+        CliError: `repo` is not a repository in this workspace.
+    """
     ws = ctx.workspace
     if repo is None:
         return None

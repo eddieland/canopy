@@ -13,6 +13,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
@@ -35,7 +36,7 @@ function WorktreesPage() {
     }
     return (
         <>
-            <PageHeader label="Pools" title="Worktrees">
+            <PageHeader title="Worktrees">
                 Every slot in canopy's treehouse pools: what holds it, what it has checked out, and what runs in it.
                 Paths inside the workspace are shown from its root. Read from treehouse when the page opens and whenever
                 a run starts or ends.
@@ -152,7 +153,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
             ) : (
                 <ul className="divide-y" data-testid="worktrees">
                     {pool.worktrees.map((w) => (
-                        <WorktreeRow key={w.path} worktree={w} shared={root !== null} />
+                        <WorktreeRow key={w.path} worktree={w} repo={pool.repo} shared={root !== null} />
                     ))}
                 </ul>
             )}
@@ -186,7 +187,9 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
  * word, with treehouse's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
  * line, since it is something to act on. An idle slot is the state and number alone, dimmed.
  */
-function WorktreeRow({ worktree: w, shared }: { worktree: Worktree; shared: boolean }) {
+function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
+    const branchUrl = useBranchUrls()
+    const branchHref = w.branch === null ? undefined : branchUrl(repo, w.branch)
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
@@ -209,31 +212,52 @@ function WorktreeRow({ worktree: w, shared }: { worktree: Worktree; shared: bool
                 {!idle && (
                     <>
                         <Holder worktree={w} />
-                        <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
-                            {w.branch ?? (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
-                        </span>
+                        {branchHref === undefined ? (
+                            <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
+                                {w.branch ??
+                                    (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
+                            </span>
+                        ) : (
+                            <a
+                                href={branchHref}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                title={branchHref}
+                                className={cn(
+                                    'inline-flex min-w-0 items-center gap-1 font-mono text-xs text-accent',
+                                    'underline-offset-4 hover:underline',
+                                )}
+                            >
+                                <span className="truncate">{w.branch}</span>
+                                <ExternalLink aria-hidden className="size-3 shrink-0" />
+                            </a>
+                        )}
                     </>
                 )}
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
-                <span className="ml-auto flex shrink-0 items-center gap-4 text-xs text-muted-foreground">
-                    {w.processes.length > 0 && (
-                        <span className="font-mono" title="processes treehouse found running in it">
-                            {w.processes.map((p) => `${p.name} ${p.pid}`).join(' · ')}
-                        </span>
+                {/* Not one group: each keeps its own minimum width, so the processes are cut to fit, the age never. */}
+                {w.processes.length > 0 && <Processes processes={w.processes} />}
+                <span
+                    className={cn(
+                        'flex w-20 shrink-0 justify-end gap-1 text-xs text-muted-foreground',
+                        w.processes.length > 0 ? 'ml-1' : 'ml-auto',
                     )}
-                    <span className="flex w-20 justify-end gap-1">
-                        {since && (
-                            <>
-                                for <Age at={since} />
-                            </>
-                        )}
-                    </span>
+                >
+                    {since && (
+                        <>
+                            for <Age at={since} />
+                        </>
+                    )}
                 </span>
             </div>
             {(w.note || w.branch_error) && (
                 <div className="flex flex-wrap gap-x-4 pl-[7.5rem] font-mono text-xs">
-                    {w.branch_error && <span className="text-status-failed">branch unreadable: {w.branch_error}</span>}
-                    {w.note && <span className="text-status-blocked">{w.note}</span>}
+                    {w.branch_error && (
+                        <span className="min-w-0 break-words text-status-failed">
+                            branch unreadable: {w.branch_error}
+                        </span>
+                    )}
+                    {w.note && <span className="min-w-0 break-words text-status-blocked">{w.note}</span>}
                 </div>
             )}
         </li>
@@ -270,6 +294,23 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
     return (
         <span className="w-52 shrink-0 truncate font-mono text-xs text-muted-foreground" title={w.holder ?? undefined}>
             {w.holder}
+        </span>
+    )
+}
+
+/**
+ * The processes treehouse found running in a slot, by name and pid. An agent can start many: they take what the branch
+ * leaves, cut to fit, and the whole list is on hover, one to a line.
+ */
+function Processes({ processes }: { processes: Worktree['processes'] }) {
+    const named = processes.map((p) => `${p.name} ${p.pid}`)
+    return (
+        <span
+            className="ml-auto max-w-72 min-w-24 truncate text-right font-mono text-xs text-muted-foreground"
+            title={`processes treehouse found running in it:\n${named.join('\n')}`}
+            data-testid="worktree-processes"
+        >
+            {named.join(' · ')}
         </span>
     )
 }

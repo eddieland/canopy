@@ -13,8 +13,9 @@ import { railRuns } from '@/lib/run-state'
 const RAIL_RUNS = 4
 
 /**
- * Under the nav, on every page: the runs working now, those waiting on the operator's answer first, each opening its
- * page. The runs come whole from the stream, so a row appears when a run starts and leaves when it ends.
+ * Under the nav, on every page: the runs working now, those running first and then those waiting on the operator's
+ * answer, each opening its page. The runs come whole from the stream, so a row appears when a run starts and leaves
+ * when it ends.
  */
 export function RailWorking() {
     const runs = useQuery(runsQuery).data
@@ -57,6 +58,7 @@ export function RailWorking() {
                         <li>
                             <Link
                                 to="/runs"
+                                title="Every run, on the runs page"
                                 className="block px-2.5 py-1 font-mono text-xs text-accent hover:underline"
                             >
                                 +{more} more
@@ -75,14 +77,14 @@ export function RailSpend() {
     return (
         <RailSection label="Spent" testId="rail-spend">
             <div className="grid grid-cols-2 gap-2 px-2.5">
-                <Spent window={spend?.day} label="24h" />
-                <Spent window={spend?.month} label="30d" />
+                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours" />
+                <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days" />
             </div>
         </RailSection>
     )
 }
 
-/** The rail's foot: the version canopy serves. At the window's foot, or the page's when longer. */
+/** The rail's foot: the version canopy serves. Always at the window's foot, however long the page. */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (
@@ -121,10 +123,10 @@ function RailSection({
 }
 
 /** One window's cost: a dash when nothing in it reported one. */
-function Spent({ window, label }: { window: SpendWindow | undefined; label: string }) {
+function Spent({ window, label, hint }: { window: SpendWindow | undefined; label: string; hint: string }) {
     const cost = window?.cost_usd ?? null
     return (
-        <div className="flex flex-col">
+        <div className="flex flex-col" title={hint}>
             {window === undefined ? (
                 <Skeleton className="h-5 w-14" />
             ) : (

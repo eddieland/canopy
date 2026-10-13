@@ -1,4 +1,4 @@
-import type { Forgot, Replied, Started, Stopped } from '@/api/types'
+import type { ConfigReload, Dismissed, Forgot, Replied, Started, Stopped } from '@/api/types'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
 
@@ -41,9 +41,31 @@ export function notedText(name: string, replied: Replied): string {
     return `Message ${replied.message_id} on chore:${name} already says this; nothing new recorded.`
 }
 
+/** What a dismissal did, as `canopy dismiss` says it: off the attention list until it clears, or listed again. */
+export function dismissedText(dismissed: Dismissed): string {
+    const head = `chore:${dismissed.chore} ${dismissed.finding}`
+    if (dismissed.dismissed) {
+        return `${head} is dismissed: it is off the attention list until the chore stops reporting it.`
+    }
+    return `${head} is listed again while the chore reports it.`
+}
+
 /** What a reply did, as `canopy reply` says it: the message it recorded, or the one that already said it. */
 export function repliedText(key: string, replied: Replied): string {
     const answered = replied.answers !== null ? `, answering message ${replied.answers}` : ''
     if (replied.new) return `Recorded message ${replied.message_id} on ${key}${answered}. The next tick reads it.`
     return `Message ${replied.message_id} on ${key} already says this${answered}; nothing new recorded.`
+}
+
+/** What a reload found, as the loop's terminal says it: the keys that changed, when the loop runs on them, and which
+ * wait for a restart. */
+export function reloadedText(reload: ConfigReload): string {
+    const what = reload.changed.length === 0 ? 'Nothing changed' : `${reload.changed.join(', ')} changed`
+    const when = reload.after_tick
+        ? 'The loop reads it again once the running tick ends.'
+        : 'The loop runs on it from now on.'
+    const count = reload.restart.length
+    const restart =
+        count === 0 ? '' : ` ${reload.restart.join(', ')} take${count === 1 ? 's' : ''} effect on a restart.`
+    return `${what}. ${when}${restart}`
 }

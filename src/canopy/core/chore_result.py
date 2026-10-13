@@ -59,12 +59,20 @@ class ChoreResult(BaseModel):
 
 
 def parse(stdout: str) -> ChoreResult | None:
-    """Parse the last non-empty line of `stdout` as a chore's result. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as a chore's result. None if it is missing or invalid.
+
+    Returns:
+        The validated result, or None when no line starts with `{` or the last one does not validate.
+    """
     return contract.last_line(ChoreResult, stdout)
 
 
 def stored(result_json: object) -> ChoreResult | None:
-    """Read a result the journal stored, or None if there is none (a run that ended without a valid result)."""
+    """Read a result the journal stored, or None if there is none (a run that ended without a valid result).
+
+    Returns:
+        The validated result, or None when `result_json` is not a non-empty string or does not validate.
+    """
     return contract.stored(ChoreResult, result_json)
 
 

@@ -71,17 +71,33 @@ def _config_file(name: str) -> Path:
 
 
 def default_webhook_file() -> Path:
-    """`$XDG_CONFIG_HOME/canopy/slack-webhook`, or `~/.config/canopy/slack-webhook`."""
+    """`$XDG_CONFIG_HOME/canopy/slack-webhook`, or `~/.config/canopy/slack-webhook`.
+
+    Returns:
+        The path, whether or not the file exists.
+    """
     return _config_file("slack-webhook")
 
 
 def default_token_file() -> Path:
-    """`$XDG_CONFIG_HOME/canopy/slack-token`, or `~/.config/canopy/slack-token`."""
+    """`$XDG_CONFIG_HOME/canopy/slack-token`, or `~/.config/canopy/slack-token`.
+
+    Returns:
+        The path, whether or not the file exists.
+    """
     return _config_file("slack-token")
 
 
 def _read_secret(path: Path, what: str) -> str:
-    """Return the stripped text of `path`, which must be a regular file of the operator's, closed to others."""
+    """Return the stripped text of `path`, which must be a regular file of the operator's, closed to others.
+
+    Returns:
+        The file's text, without leading or trailing whitespace.
+
+    Raises:
+        SinkError: The file cannot be read, is not a regular file, belongs to someone else, is readable by others,
+            or is not UTF-8.
+    """
     try:
         st = path.stat()
     except OSError as e:
@@ -100,7 +116,14 @@ def _read_secret(path: Path, what: str) -> str:
 
 
 def read_webhook(path: Path, *, prefix: str = SLACK_PREFIX) -> str:
-    """Return the webhook URL in `path`, which must be the operator's, closed to others, and hold one Slack URL."""
+    """Return the webhook URL in `path`, which must be the operator's, closed to others, and hold one Slack URL.
+
+    Returns:
+        The URL, which starts with `prefix` and has its scheme and host.
+
+    Raises:
+        SinkError: The file is not usable, or does not hold one URL starting with `prefix`.
+    """
     url = _read_secret(path, "webhook")
     if not url.startswith(prefix) or any(c.isspace() for c in url) or not _same_origin(url, prefix):
         raise SinkError(f"the webhook file {path} must hold one URL starting {prefix}")
@@ -108,7 +131,14 @@ def read_webhook(path: Path, *, prefix: str = SLACK_PREFIX) -> str:
 
 
 def read_token(path: Path) -> str:
-    """Return the token in `path`, which must be the operator's, closed to others, and hold one Slack bot token."""
+    """Return the token in `path`, which must be the operator's, closed to others, and hold one Slack bot token.
+
+    Returns:
+        The token, printable ASCII starting with `xoxb-`.
+
+    Raises:
+        SinkError: The file is not usable, or does not hold one bot token.
+    """
     token = _read_secret(path, "token")
     # The message never quotes the file's text: it is a secret.
     # ASCII, since it goes in a header.
@@ -122,28 +152,53 @@ def read_token(path: Path) -> str:
 
 
 def check_channel(channel: str) -> str:
-    """Return `channel` if it is a Slack channel id or name."""
+    """Return `channel` if it is a Slack channel id or name.
+
+    Returns:
+        `channel`, unchanged.
+
+    Raises:
+        SinkError: `channel` is not a channel id or name.
+    """
     if not _CHANNEL.fullmatch(channel):
         raise SinkError(f"--channel {channel!r} is not a Slack channel id or name")
     return channel
 
 
 def check_username(username: str) -> str:
-    """Return `username` if it is a display name: printable, not blank, at most 80 characters."""
+    """Return `username` if it is a display name: printable, not blank, at most 80 characters.
+
+    Returns:
+        `username`, unchanged.
+
+    Raises:
+        SinkError: `username` is blank, not printable, or longer than 80 characters.
+    """
     if not username.strip() or not username.isprintable() or len(username) > _MAX_USERNAME:
         raise SinkError(f"--username {username!r} must be printable, not blank, and at most {_MAX_USERNAME} characters")
     return username
 
 
 def check_icon_emoji(icon_emoji: str) -> str:
-    """Return `icon_emoji` if it is an emoji code such as `:robot_face:`."""
+    """Return `icon_emoji` if it is an emoji code such as `:robot_face:`.
+
+    Returns:
+        `icon_emoji`, unchanged.
+
+    Raises:
+        SinkError: `icon_emoji` is not an emoji code.
+    """
     if not _EMOJI.fullmatch(icon_emoji):
         raise SinkError(f"--icon-emoji {icon_emoji!r} is not an emoji code such as :robot_face:")
     return icon_emoji
 
 
 def _same_origin(url: str, prefix: str) -> bool:
-    """Whether `url` parses to the scheme and host of `prefix`, with no user part: a prefix match cannot hide a host."""
+    """Whether `url` parses to the scheme and host of `prefix`, with no user part: a prefix match cannot hide a host.
+
+    Returns:
+        True if the scheme and host match and `url` has no user part. False otherwise, or if `url` does not parse.
+    """
     try:
         got, want = urllib.parse.urlsplit(url), urllib.parse.urlsplit(prefix)
         _ = got.port  # raises on a malformed port
@@ -153,7 +208,11 @@ def _same_origin(url: str, prefix: str) -> bool:
 
 
 def escape(text: object) -> str:
-    """Escape Slack's markup characters, so text cannot mention anyone or disguise a link. Bare URLs stay clickable."""
+    """Escape Slack's markup characters, so text cannot mention anyone or disguise a link. Bare URLs stay clickable.
+
+    Returns:
+        `text` as a string on one line, its runs of whitespace made single spaces, and `&`, `<` and `>` escaped.
+    """
     return " ".join(str(text).split()).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
@@ -161,6 +220,24 @@ def _subject(ticket: object, repo: object) -> str:
     if ticket is None:
         return str(repo or "-")
     return f"{ticket} ({repo})" if repo else str(ticket)
+
+
+def _named(subject: object, title: object) -> str:
+    """`subject` in bold, then the ticket's `title` if canopy sent one: `*PROJ-1* Add retries to checkout`.
+
+    Returns:
+        The escaped Slack text.
+    """
+    return f"*{escape(subject)}*" + (f" {escape(title)}" if title else "")
+
+
+def _titled(subject: object, title: object) -> str:
+    """`subject`, then the ticket's `title` if canopy sent one, unmarked.
+
+    Returns:
+        The escaped Slack text.
+    """
+    return escape(subject) + (f" {escape(title)}" if title else "")
 
 
 def _dicts(value: object) -> list[dict[str, object]]:
@@ -174,7 +251,11 @@ def _lines(value: object) -> list[str]:
 
 
 def render(message: dict[str, object]) -> str:
-    """Return the Slack text for one canopy `json` message: a header with counts, a line per item or event, a digest."""
+    """Return the Slack text for one canopy `json` message: a header with counts, a line per item or event, a digest.
+
+    Returns:
+        The escaped text, its lines joined by newlines, at most 45 lines, the last saying how many were left out.
+    """
     repo = Path(str(message.get("repo") or "")).name or "canopy"
     lines: list[str] = []
     counts: list[str] = []
@@ -185,9 +266,13 @@ def render(message: dict[str, object]) -> str:
         if added or resolved:
             counts.append(f"{len(added)} new, {len(resolved)} resolved, {attention.get('open', 0)} open")
         for a in added:
-            what = escape(_subject(a.get("ticket"), a.get("repo")))
-            lines.append(f"+ *{what}* {escape(a.get('reason'))}: {escape(a.get('detail'))}")
-        lines += [f"- *{escape(_subject(r.get('ticket'), r.get('repo')))}* {escape(r.get('reason'))}" for r in resolved]
+            what = _named(_subject(a.get("ticket"), a.get("repo")), a.get("title"))
+            lines.append(f"+ {what} · {escape(a.get('reason'))}: {escape(a.get('detail'))}")
+        lines += [
+            f"- {_named(_subject(r.get('ticket'), r.get('repo')), r.get('title'))} · {escape(r.get('reason'))}"
+            + (" (dismissed)" if r.get("dismissed") is True else "")
+            for r in resolved
+        ]
     events = _dicts(message.get("events"))
     if events:
         counts.append(f"{len(events)} event{'s' if len(events) != 1 else ''}")
@@ -248,12 +333,19 @@ def _linked(text: object) -> str:
     """`text`, escaped, each URL in it a link that shows the URL itself.
 
     A URL holding `|` stays text: in a link, what follows `|` is a label shown in the URL's place.
+
+    Returns:
+        The escaped Slack text.
     """
     return " ".join(f"<{word}>" if _URL.fullmatch(word) else word for word in escape(text).split(" "))
 
 
 def _when(at: object) -> str:
-    """`at`, an ISO time, as a Slack date in the reader's own time zone, falling back to `at` as written."""
+    """`at`, an ISO time, as a Slack date in the reader's own time zone, falling back to `at` as written.
+
+    Returns:
+        A Slack date token, or `at` escaped if it is not an ISO time with a time zone.
+    """
     try:
         parsed = datetime.fromisoformat(str(at))
     except ValueError:
@@ -264,7 +356,11 @@ def _when(at: object) -> str:
 
 
 def _ended(e: dict[str, object], what: str) -> str:
-    """`what` ended with the event's status: led by the status's emoji, so a channel scans by outcome."""
+    """`what` ended with the event's status: led by the status's emoji, so a channel scans by outcome.
+
+    Returns:
+        The Slack text.
+    """
     status = e.get("status")
     return f"{_STATUS_EMOJI.get(str(status), ':black_small_square:')} {what} ended *{escape(status)}*"
 
@@ -281,7 +377,8 @@ def _counted(counts: object) -> str:
 
 def _run_started(e: dict[str, object]) -> Block:
     return _section(
-        f":arrow_forward: *{escape(e.get('ticket'))}* · {escape(e.get('run_kind'))} run {escape(e.get('run'))} started",
+        f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
+        f"{escape(e.get('run'))} started",
         f"attempt {escape(e.get('attempt'))} of {escape(e.get('limit'))} on `{escape(e.get('branch') or '-')}`",
     )
 
@@ -290,7 +387,7 @@ def _run_ended(e: dict[str, object]) -> Block:
     prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
     run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
     return _section(
-        _ended(e, f"*{escape(e.get('ticket'))}* · {run}"),
+        _ended(e, f"{_named(e.get('ticket'), e.get('title'))} · {run}"),
         *(_linked(pr) for pr in prs),
         _linked(e.get("summary")) if e.get("summary") else "",
         _quote("Question", e.get("question")),
@@ -307,7 +404,7 @@ def _chore_ended(e: dict[str, object]) -> Block:
 
 
 def _review_ended(e: dict[str, object]) -> Block:
-    ticket = f"*{escape(e.get('ticket'))}* · " if e.get("ticket") else ""
+    ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
     findings = e.get("findings") or 0
     counted = f" · {escape(findings)} finding{'s' if findings != 1 else ''}" if verdict else ""
@@ -351,7 +448,11 @@ _EVENTS: dict[str, Callable[[dict[str, object]], Block]] = {
 
 
 def _event(e: dict[str, object]) -> Block:
-    """One event as a section built from its fields. A kind this sink does not know shows its text-format line."""
+    """One event as a section built from its fields. A kind this sink does not know shows its text-format line.
+
+    Returns:
+        The section block.
+    """
     build = _EVENTS.get(str(e.get("kind")))
     return build(e) if build is not None else _section(_linked(e.get("line") or e.get("kind")))
 
@@ -359,14 +460,15 @@ def _event(e: dict[str, object]) -> Block:
 def _attention(attention: dict[str, object]) -> list[Block]:
     out = [
         _section(
-            f":bell: *{escape(_subject(a.get('ticket'), a.get('repo')))}* · {escape(a.get('reason'))}",
+            f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}",
             _linked(a.get("detail")) if a.get("detail") else "",
             f"_open since {_when(a.get('since'))}_" if a.get("since") else "",
         )
         for a in _dicts(attention.get("added"))
     ]
     resolved = [
-        f":heavy_check_mark: ~{escape(_subject(r.get('ticket'), r.get('repo')))}~ {escape(r.get('reason'))}"
+        f":heavy_check_mark: ~{_titled(_subject(r.get('ticket'), r.get('repo')), r.get('title'))}~ "
+        f"{escape(r.get('reason'))}" + (" (dismissed)" if r.get("dismissed") is True else "")
         for r in _dicts(attention.get("resolved"))
     ]
     if resolved:
@@ -398,10 +500,13 @@ def _digest(digest: dict[str, object]) -> list[Block]:
         }
     ]
     runs = [
-        f"{_STATUS_EMOJI['done']} *{escape(d.get('ticket'))}* {_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
+        f"{_STATUS_EMOJI['done']} {_named(d.get('ticket'), d.get('title'))} "
+        f"{_linked(d.get('pr')) if d.get('pr') else ''}".rstrip()
         for d in _dicts(digest.get("done"))[:_DIGEST_LISTED]
     ]
-    runs += [f"{_STATUS_EMOJI['blocked']} *{escape(b.get('ticket'))}*" for b in _dicts(digest.get("blocked"))]
+    runs += [
+        f"{_STATUS_EMOJI['blocked']} {_named(b.get('ticket'), b.get('title'))}" for b in _dicts(digest.get("blocked"))
+    ]
     if runs:
         out.append(_section(*runs[: 2 * _DIGEST_LISTED]))
     return out
@@ -412,6 +517,9 @@ def blocks(message: dict[str, object]) -> list[Block]:
 
     A header with the repository directory name and counts, a section per attention item and per event, the resolved
     items together, and the digest as fields. At most Slack's 50 blocks, the last saying how many were left out.
+
+    Returns:
+        The blocks, in the order Slack shows them.
     """
     repo = Path(str(message.get("repo") or "")).name or "canopy"
     header: Block = {"type": "plain_text", "text": f"canopy · {repo}"[:_MAX_HEADER]}
@@ -449,7 +557,11 @@ def blocks(message: dict[str, object]) -> list[Block]:
 
 
 def post(url: str, text: str, blocks: list[Block]) -> tuple[bool, str]:
-    """Post `blocks` to the webhook, with `text` for notifications. Returns whether Slack accepted it, and its reply."""
+    """Post `blocks` to the webhook, with `text` for notifications.
+
+    Returns:
+        Whether Slack accepted it, and its reply.
+    """
     # `read_webhook` checked the URL's scheme and host.
     return _post(url, {"text": text, "blocks": blocks}, {"Content-Type": "application/json"})
 
@@ -468,7 +580,8 @@ def post_message(
 
     `text` is what Slack shows in a notification, and where blocks cannot be shown.
 
-    Returns whether Slack accepted it, and its reply.
+    Returns:
+        Whether Slack accepted it, and its reply. A 2xx reply without `"ok": true` is not accepted.
     """
     headers = {"Content-Type": "application/json; charset=utf-8", "Authorization": f"Bearer {token}"}
     payload: dict[str, object] = {"channel": channel, "text": text, "blocks": blocks}
@@ -500,7 +613,14 @@ def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tupl
 
 
 def read_message(stdin: str) -> dict[str, object]:
-    """Read canopy's `json` message format from `stdin`."""
+    """Read canopy's `json` message format from `stdin`.
+
+    Returns:
+        The message, a JSON object, with string keys.
+
+    Raises:
+        SinkError: `stdin` is not JSON, or not a JSON object.
+    """
     hint = 'set format = "json" for this sink'
     try:
         parsed: object = json.loads(stdin)
@@ -512,9 +632,13 @@ def read_message(stdin: str) -> dict[str, object]:
 
 
 def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
-    """Post the message on `stdin`. Returns the exit code.
+    """Post the message on `stdin`.
 
     `prefix` is what the webhook URL must start with; `api_url` is where a token posts.
+
+    Returns:
+        The exit code: 0 posted, 1 Slack refused the post, 2 the secret file, the channel, or the message is not
+        usable.
     """
     parser = argparse.ArgumentParser(
         prog="canopy-notify-slack",
@@ -565,5 +689,9 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
 
 
 def main() -> int:
-    """The `canopy-notify-slack` command."""
+    """The `canopy-notify-slack` command.
+
+    Returns:
+        The exit code.
+    """
     return run(sys.argv[1:], sys.stdin)

@@ -92,7 +92,7 @@ def state_block(agent_log: Path) -> dict[str, Any]:
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert "reviews" not in state_block(agent_log)
     conn = journal(canopy_env)
@@ -105,7 +105,7 @@ def test_max_reviews_zero_turns_reviews_off(
     reviews: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     reviews.write_user(reviews.user_file.read_text() + "\n[capacity]\nmax_reviews = 0\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert "reviews" not in state_block(agent_log)
 
@@ -290,6 +290,24 @@ def test_the_harness_checks_what_it_can_of_a_result(
         assert stored["impact"] == "normal"
 
 
+@pytest.mark.parametrize("events", [False, True])
+def test_a_plugin_notice_after_the_result_does_not_hide_it(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, monkeypatch: pytest.MonkeyPatch, *, events: bool
+) -> None:
+    # A plugin the operator must load prints after the agent's last word; it lands in the text (DESIGN §13).
+    if events:
+        text = reviews.user_file.read_text()
+        reviews.write_user(
+            text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
+        )
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations")
+    row = db.get_review_run(conn, run_inline(conn, monkeypatch, sha=head(git_pool)))
+    assert row is not None
+    assert row["status"] == "done"
+    assert json.loads(row["result_json"])["verdict"] == "findings"
+
+
 def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
     reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -366,7 +384,7 @@ def test_a_killed_review_is_crashed_on_the_next_tick(
     treehouse_state = Path(os.environ["FAKE_TREEHOUSE_STATE"])
     assert [s["status"] for s in pool(treehouse_state)] == ["leased", "available"]
 
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     crashed = db.get_review_run(conn, 1)
     assert crashed is not None
@@ -387,7 +405,7 @@ def test_reconcile_leaves_a_running_reviews_slot_alone(
     assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID")
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["leased", "available"]
     row = db.get_review_run(conn, 1)
@@ -401,7 +419,7 @@ def test_the_state_block_shows_reviewed_prs(
     conn = journal(reviews)
     reviewer_reports(monkeypatch, FINDINGS)
     run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=head(git_pool))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     section = state_block(agent_log)["reviews"]
     assert section["agent_prs"] is True
@@ -437,7 +455,7 @@ def test_attention_about_a_pr_without_a_ticket(
         ["canopy", "attention", "PROJ-1", "review_limit", "--pr", f"{PR}0", "--detail", "3 of 3 reviews"],
     ]
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(commands))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     conn = journal(reviews)
     assert [(i.subject, i.reason) for i in attention.current(conn)] == [
@@ -464,12 +482,12 @@ def test_a_sink_that_takes_reviews_hears_when_one_ends(
         reviews.user_file.read_text()
         + f"\n[notify.sinks.s]\ncmd = '{script} {out}'\nformat = 'text'\nevents = ['reviews']\n"
     )
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     conn = journal(reviews)
     reviewer_reports(monkeypatch, FINDINGS)
     run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=head(git_pool))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     [message] = out.read_text().split("--\n")[:-1]
     assert f"< review run 1 of {PR} (PROJ-1) ended done: findings normal (1 findings)\n" in message

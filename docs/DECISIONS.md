@@ -115,9 +115,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: also running `ty` (two checkers to satisfy for little extra coverage).
 - Revisit: if strict costs more than it catches; then relax error kinds, not the project.
 
-## D018. ruff selects every stable rule
+## D018. ruff selects every stable rule, and the pydoclint rules that check Google docstring sections
 
-- `select = ["ALL"]`, no preview rules. Opt out with a commented `ignore` or a `noqa` with a code, never by narrowing.
+- `select = ["ALL"]`. Opt out with a commented `ignore` or a `noqa` with a code, never by narrowing.
+- Preview rules stay off but for the pydoclint `DOC` rules, named one by one under `explicit-preview-rules`: a public
+  function's Returns, Yields, and Raises sections must match its body.
+- Preview mode also turns on preview behavior in stable rules, so a ruff bump can change the lint; fix or opt out then.
 
 ## D019. Every test directory is a package
 
@@ -301,8 +304,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D079. The web UI is a single-page app in `ui/`
 
 - Vite, React, TypeScript, Tailwind, shadcn/ui, TanStack; types generated from FastAPI's OpenAPI. Built by the wheel's
-  hook when npm is present, so operators never need Node. Rules in `ui/AGENTS.md`.
-- Rejected: Jinja2 with htmx (per-page script drifts); committing the build; building at install; server rendering.
+  hook, which fails without Node rather than build a wheel with no UI: an install from git needs Node, the release
+  binary does not. Rules in `ui/AGENTS.md`.
+- Rejected: Jinja2 with htmx (per-page script drifts); committing the build; building at install; server rendering;
+  a wheel without the UI.
 - Revisit: if the UI shrinks to pages a template would serve.
 
 ## D081. The overseer mirrors comments through a quoted heredoc with a per-tick random delimiter
@@ -372,3 +377,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: a review on the PR speaks in the operator's name before they have seen it; kept local it needs no write grant.
 - Rejected: one identified comment per commit with a marker (the M11 design); repository automation on the verdict.
 - Revisit: with a bot identity, or once the operator wants the web UI's shadow review (ROADMAP M32) published.
+
+## D115. The web UI's branch links default to the GitHub page a clone URL implies
+
+- A repository's GitHub `url` gives `https://github.com/OWNER/REPO/tree/{branch}` unless its map sets `branch_url`.
+  This one URL format is the only host knowledge in the harness; it builds a link and calls nothing. Settled by the
+  operator.
+- Why: most workspaces are GitHub, and a link that needs a template per repository is a link nobody configures.
+- Rejected: templates only (more config for the common case); formats for other hosts (a template covers them).
+- Revisit: if a second host is common enough to want its own default.

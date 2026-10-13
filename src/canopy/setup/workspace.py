@@ -74,7 +74,11 @@ query = {json.dumps(query)}
 def run_init(root: Path, user_file: Path, provider: str | None) -> init.Report:
     """Write what a workspace at `root` is missing. `provider` is needed only when it has no workspace file yet.
 
-    Returns what was written, kept, and updated; `updated` holds a `.gitignore` that gained lines.
+    Returns:
+        What was written, kept, and updated; `updated` holds a `.gitignore` that gained lines.
+
+    Raises:
+        ValueError: `root` has no workspace file and `provider` is None.
     """
     report = init.Report()
     if user_file.exists():
@@ -114,7 +118,11 @@ def _ignore(path: Path, report: init.Report) -> None:
 
 
 def protection_targets(ws: workspace.Workspace) -> str:
-    """Name the repositories the branch protection rules must be configured in (TRUST_MODEL §7)."""
+    """Name the repositories the branch protection rules must be configured in (TRUST_MODEL §7).
+
+    Returns:
+        Lines for the operator naming each repository in the map, or saying it lists none yet.
+    """
     if not ws.repos:
         return "The map lists no repositories yet. Configure the rules in each one you add.\n"
     # Names only: clone URLs are read by `canopy workspace sync` alone, and one may carry a credential.
@@ -141,6 +149,9 @@ def repo_arg(arg: str) -> tuple[str, str]:
     """Split a `[NAME=]URL` argument into the repository's name and clone URL.
 
     Without a name, it is the URL's last path segment without `.git`, reduced to a valid repository name.
+
+    Returns:
+        The name and the URL.
 
     Raises:
         ValueError: the name or URL is not valid. The message says what to pass instead.
@@ -174,6 +185,9 @@ def add(ws: workspace.Workspace, entries: list[tuple[str, str]]) -> list[Added]:
     """Add each `(name, url)` to the map as a `[repos.<name>]` table, unless the map already lists that URL.
 
     Nothing is written if any entry conflicts: a name the map gives another URL, or a name given twice.
+
+    Returns:
+        What was done with each entry, in order: `added`, or `present` under the name the map lists the URL by.
 
     Raises:
         ValueError: an entry conflicts. The message names it.
@@ -209,7 +223,11 @@ def missing(ws: workspace.Workspace) -> list[workspace.Repo]:
 
 
 def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -> Checked:
-    """Clone `repo` from the map's URL into `repos/<name>`."""
+    """Clone `repo` from the map's URL into `repos/<name>`.
+
+    Returns:
+        `cloned`, or `failed` with why: something not a clone is in the way, or git could not clone it.
+    """
     if repo.path.is_symlink() or (repo.path.exists() and (not repo.path.is_dir() or any(repo.path.iterdir()))):
         return Checked(repo, "failed", f"{repo.path} exists and is not a clone; move it away and sync again")
     repo.path.parent.mkdir(parents=True, exist_ok=True)
@@ -226,7 +244,11 @@ def clone(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo) -
 
 
 def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
-    """Report whether an existing clone's `origin` is the map's URL. Nothing is changed either way."""
+    """Report whether an existing clone's `origin` is the map's URL. Nothing is changed either way.
+
+    Returns:
+        `present`, with a detail naming both URLs when they differ, or `failed` when git cannot read the origin.
+    """
     try:
         result = runner.run(
             hostgit.argv("remote", "get-url", "origin"), cwd=repo.path, env=hostgit.ENV, timeout=_GIT_TIMEOUT_SECONDS
@@ -267,6 +289,10 @@ def converge_pool(
     one a crashed sync left is returned first. Surplus slots are removed highest name first, and only available ones,
     with treehouse's unforced `destroy`: a busy one stays until a later sync finds it idle. A new slot is seeded from
     the pool's include file, as a run's lease would seed it, before its `post_create` hooks run.
+
+    Returns:
+        `slots` with the pool's size, `kept` when treehouse keeps a surplus slot with work in it, or `failed` when the
+        pool could not be read or grown.
     """
     try:
         slots = treehouse.status(runner, pool=pool)
@@ -306,7 +332,11 @@ def _fill(
     *,
     dry_run: bool,
 ) -> Checked:
-    """Lease until the pool has `want` slots, then return every lease. treehouse makes a slot when none is available."""
+    """Lease until the pool has `want` slots, then return every lease. treehouse makes a slot when none is available.
+
+    Returns:
+        `slots` with how many were made, or `failed` when a lease failed or one could not be returned.
+    """
     if dry_run:
         return Checked(repo, "slots", f"{len(slots)} of {want}, would make {want - len(slots)}")
     known = {s.path for s in slots}
@@ -362,6 +392,10 @@ def _trim(
     """Remove available slots, highest name first, until the pool has `want`. Busy slots stay.
 
     A slot treehouse keeps, because it has work in it, is passed over for the next available one.
+
+    Returns:
+        `slots` with what was removed and any busy surplus left, or `kept` when treehouse kept a slot with work in it
+        and the pool is still over `want`.
     """
     surplus = len(slots) - want
     idle = sorted((s for s in slots if s.status == treehouse.AVAILABLE), key=_slot_order, reverse=True)
@@ -399,7 +433,11 @@ def undeclared(ws: workspace.Workspace) -> list[workspace.Repo]:
 
 
 def remove(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *, dry_run: bool) -> Checked:
-    """Remove a clone the map no longer lists, and its pool's slots, unless anything in them could be lost."""
+    """Remove a clone the map no longer lists, and its pool's slots, unless anything in them could be lost.
+
+    Returns:
+        `removed`, `to remove` in a dry run, or `kept` with what could be lost or the slot treehouse kept.
+    """
     # Not in the map, so its pool is found from the clone itself.
     pool = treehouse.Pool(cwd=repo.path, root=ws.root)
     blocked, slots = _removable(runner, repo, pool)
@@ -421,7 +459,11 @@ def remove(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, 
 def _removable(
     runner: procs.Runner, repo: workspace.Repo, pool: treehouse.Pool
 ) -> tuple[str | None, list[treehouse.Slot]]:
-    """Say why the clone cannot be removed, or None, and return its pool's slots."""
+    """Say why the clone cannot be removed, or None, and return its pool's slots.
+
+    Returns:
+        The reason or None, and the pool's slots, which are empty when there is a reason before the pool is read.
+    """
     if repo.path.is_symlink() or not repo.path.is_dir() or not repo.cloned:
         return f"{repo.path} is not a clone; canopy removes only clones", []
     unsaved = _unsaved(runner, repo.path)
@@ -436,7 +478,11 @@ def _removable(
 
 
 def _unsaved(runner: procs.Runner, path: Path) -> str | None:
-    """Say what in the clone at `path` would be lost by removing it, or None if nothing would."""
+    """Say what in the clone at `path` would be lost by removing it, or None if nothing would.
+
+    Returns:
+        The first thing found, or why git could not check, or None.
+    """
     checks = (
         # Ignored files too: a primary clone holds local config that `.worktreeinclude` seeds into slots (DESIGN §9).
         (("status", "--porcelain", "--ignored"), "it has uncommitted, untracked, or ignored files"),

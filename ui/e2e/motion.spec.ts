@@ -82,3 +82,32 @@ test('the header ticker crawls one headline at a time, at the speed and gap set 
     await expect(page.getByTestId('ticker-gap')).toHaveValue('5')
     await expect(page.getByTestId('ticker-gap')).toBeDisabled()
 })
+
+test('the ticker leaves out the topics turned off in Settings', async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    const ticker = page.getByTestId('ticker')
+    const headline = page.getByTestId('ticker-headline')
+    const programming = page.getByTestId('ticker-topic-programming')
+    const vibes = page.getByTestId('ticker-topic-vibes')
+    const tips = page.getByTestId('ticker-topic-tips')
+    await expect(programming).toBeChecked()
+    await expect(tips).toBeChecked()
+
+    // With the jokes off, every headline is a tip.
+    await programming.click()
+    await page.getByText('Vibe coding', { exact: true }).click()
+    await expect(vibes).not.toBeChecked()
+    await expect(headline).toHaveText(/^Tip: /)
+
+    // With none picked, the window is gone, and it stays gone on a reload.
+    await tips.click()
+    await expect(ticker).toHaveCount(0)
+    await page.reload()
+    await settled(page)
+    await expect(ticker).toHaveCount(0)
+    await expect(tips).not.toBeChecked()
+
+    await vibes.click()
+    await expect(headline).not.toHaveText(/^Tip: /)
+})
