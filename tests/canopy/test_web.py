@@ -210,6 +210,24 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     assert c.get(f"/api/tickets/{KEY}").json()["ticket"]["awaiting"] is None
 
 
+def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
+    run = db.get_run(ctx.conn, running_run(ctx, KEY))
+    assert run is not None
+    result = {"status": "done", "summary": "Done:\r\n- one\x1b  \n- two\n\n"}
+    assert conversation.close_run(ctx.conn, ctx.config, run, "done", json.dumps(result))
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    db.record_decision(ctx.conn, tick_id, KEY, "wait", "Checks running:\n  - lint")
+    db.finish_tick(ctx.conn, tick_id, "ok", "\nOne wait.\nNothing else.\n")
+
+    [listed] = c.get("/api/runs").json()
+    assert listed["summary"] == "Done:\n- one\n- two"  # control characters dropped, trailing space cut
+    detail = c.get(f"/api/ticks/{tick_id}").json()
+    assert detail["tick"]["summary"] == "One wait.\nNothing else."
+    assert [d["rationale"] for d in detail["decisions"]] == ["Checks running:\n  - lint"]
+
+
 def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_days_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
     backend = dataclasses.replace(web.backend(ctx), clock=lambda: now)

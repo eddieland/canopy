@@ -246,7 +246,15 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id, session_id, cost_usd) "
         "VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)",
         [
-            (1, at(-121), at(-119), "dispatched 2, waiting on 1", 3, "ses_tick1", 0.28),
+            (
+                1,
+                at(-121),
+                at(-119),
+                "dispatched 2, waiting on 1:\n- ABC-099 implement\n- ABC-103 implement",
+                3,
+                "ses_tick1",
+                0.28,
+            ),
             (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31),
         ],
     )
@@ -298,7 +306,15 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             -61,
             "done",
             {
-                "summary": "Search now debounces input and cancels stale requests.",
+                "summary": (
+                    "Search now debounces input and cancels stale requests.\n"
+                    "- `useSearch` waits 250ms after the last key\n"
+                    "- a new query aborts the one in flight\n"
+                    "- tests cover both, with **fake timers**\n"
+                    "- `make check` passes\n"
+                    "\n"
+                    "Left the result cache as it was: ABC-112 owns it."
+                ),
                 "prs": {"web": "https://github.com/acme/web/pull/88"},
             },
             0,

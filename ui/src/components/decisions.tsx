@@ -3,7 +3,7 @@ import { ExternalLink } from 'lucide-react'
 import type { Decision } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
-import { LinkedText } from '@/components/linked-text'
+import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
@@ -19,7 +19,7 @@ const TONE: Record<ActionTone, string> = {
 
 /**
  * Decisions, one row each: what it was about (or, on a ticket's page, which tick), the action, and the rationale. A
- * rationale is the overseer's text: untrusted, on one line as `canopy decisions` prints it, and rendered as text.
+ * rationale is the overseer's text: untrusted, laid out as `RichText`, which renders it as text.
  */
 export function Decisions({ decisions, byTick = false }: { decisions: Decision[]; byTick?: boolean }) {
     return (
@@ -53,9 +53,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                         )}
                         {byTick && <Age at={decision.at} className="ml-auto" />}
                     </div>
-                    <p className="text-sm break-words">
-                        <LinkedText text={decision.rationale} />
-                    </p>
+                    <RichText text={decision.rationale} lines={SUMMARY_LINES} />
                 </li>
             ))}
         </ul>

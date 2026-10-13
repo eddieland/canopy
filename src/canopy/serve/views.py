@@ -128,7 +128,7 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         dry_run=bool(row["dry_run"]),
         started_at=db.parse_time(row["started_at"]),
         ended_at=db.parse_time(row["ended_at"]) if row["ended_at"] else None,
-        summary=conversation.printable(row["summary"]) if row["summary"] else None,
+        summary=lines(str(row["summary"] or "")) or None,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         decisions=decisions,
@@ -224,7 +224,7 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
 
 
 def decision(row: sqlite3.Row) -> Decision:
-    """One decision, named as `canopy decisions` names it, its rationale on one line as it prints it."""
+    """One decision, named as `canopy decisions` names it, its rationale with its line breaks."""
     chore = str(row["chore"]) if row["chore"] is not None else None
     pr = str(row["pr"]) if row["pr"] is not None else None
     key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
@@ -245,7 +245,7 @@ def decision(row: sqlite3.Row) -> Decision:
         chore=chore,
         pr=pr,
         action=str(row["action"]),
-        rationale=" ".join(conversation.printable(str(row["rationale"])).split()),
+        rationale=lines(str(row["rationale"])),
     )
 
 
@@ -302,10 +302,14 @@ def tokens(row: sqlite3.Row) -> int | None:
 
 
 def said(row: sqlite3.Row) -> str | None:
-    """What a run's or a chore run's result says, the harness's note first, on one line and cut."""
+    """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut."""
     result = contract.stored_object(row["result_json"])
-    text = " ".join(conversation.printable(str(result.get("harness") or result.get("summary") or "")).split())
-    return text[:SUMMARY_LENGTH] or None
+    return lines(str(result.get("harness") or result.get("summary") or ""))[:SUMMARY_LENGTH].rstrip() or None
+
+
+def lines(text: str) -> str:
+    """Agent-written text as a page lays it out: control characters dropped, line breaks kept, trailing space cut."""
+    return "\n".join(line.rstrip() for line in conversation.printable(text).splitlines()).strip("\n")
 
 
 def tickets(ctx: Context) -> list[TicketSummary]:

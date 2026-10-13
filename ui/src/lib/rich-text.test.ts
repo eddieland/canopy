@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest'
+
+import { clamp, inline, lineCount, parse } from '@/lib/rich-text'
+
+const text = (value: string) => ({ kind: 'text', text: value })
+
+describe('parse', () => {
+    it('keeps a paragraph its line breaks and splits paragraphs on a blank line', () => {
+        expect(parse('Moved billing.\nRemoved v1.\n\nDone.')).toEqual([
+            { kind: 'paragraph', lines: [[text('Moved billing.')], [text('Removed v1.')]] },
+            { kind: 'paragraph', lines: [[text('Done.')]] },
+        ])
+    })
+
+    it('reads bullets and numbers as lists, nested by indent, with a continued item', () => {
+        expect(parse('Changes:\n- one\n  - two\n    still two\n* three')).toEqual([
+            { kind: 'paragraph', lines: [[text('Changes:')]] },
+            {
+                kind: 'list',
+                ordered: false,
+                start: 1,
+                items: [
+                    { depth: 0, lines: [[text('one')]] },
+                    { depth: 1, lines: [[text('two')], [text('still two')]] },
+                    { depth: 0, lines: [[text('three')]] },
+                ],
+            },
+        ])
+        expect(parse('3. c\n4) d')).toEqual([
+            {
+                kind: 'list',
+                ordered: true,
+                start: 3,
+                items: [
+                    { depth: 0, lines: [[text('c')]] },
+                    { depth: 0, lines: [[text('d')]] },
+                ],
+            },
+        ])
+    })
+
+    it('starts a list of its own for a nested list of the other kind', () => {
+        const blocks = parse('1. step\n   - detail')
+        expect(blocks.map((b) => b.kind === 'list' && [b.ordered, b.items[0]?.depth])).toEqual([
+            [true, 0],
+            [false, 1],
+        ])
+    })
+
+    it('keeps a fenced block verbatim, and an unclosed fence runs to the end', () => {
+        expect(parse('Ran:\n```sh\nmake  check\n- not a list\n```\nafter')).toEqual([
+            { kind: 'paragraph', lines: [[text('Ran:')]] },
+            { kind: 'code', lines: ['make  check', '- not a list'] },
+            { kind: 'paragraph', lines: [[text('after')]] },
+        ])
+        expect(parse('```\n**not strong**')).toEqual([{ kind: 'code', lines: ['**not strong**'] }])
+    })
+
+    it('reads a heading as one line', () => {
+        expect(parse('## Summary\nok')).toEqual([
+            { kind: 'heading', line: [text('Summary')] },
+            { kind: 'paragraph', lines: [[text('ok')]] },
+        ])
+    })
+
+    it('reads carriage returns as line breaks and an empty text as nothing', () => {
+        expect(parse('a\r\nb')).toEqual([{ kind: 'paragraph', lines: [[text('a')], [text('b')]] }])
+        expect(parse('')).toEqual([])
+    })
+
+    it('leaves markup it does not read as text', () => {
+        expect(parse('<b>hi</b> [link](https://example.test)')).toEqual([
+            { kind: 'paragraph', lines: [[text('<b>hi</b> [link](https://example.test)')]] },
+        ])
+    })
+})
+
+describe('inline', () => {
+    it('reads code spans and strong runs', () => {
+        expect(inline('ran `make check`, **all green**.')).toEqual([
+            text('ran '),
+            { kind: 'code', text: 'make check' },
+            text(', '),
+            { kind: 'strong', text: 'all green' },
+            text('.'),
+        ])
+    })
+
+    it('leaves an unclosed marker as written', () => {
+        expect(inline('a `b and **c')).toEqual([text('a `b and **c')])
+    })
+})
+
+describe('clamp', () => {
+    const blocks = parse('one\ntwo\n- three\n- four\n```\nfive\nsix\n```')
+
+    it('counts each line, a list item and a code line included', () => {
+        expect(lineCount(blocks)).toBe(6)
+    })
+
+    it('shows the first lines and says how many are left out', () => {
+        const cut = clamp(blocks, 3)
+        expect(cut.hidden).toBe(3)
+        expect(lineCount(cut.blocks)).toBe(3)
+        expect(cut.blocks.map((b) => b.kind)).toEqual(['paragraph', 'list'])
+    })
+
+    it('shows text one line over whole', () => {
+        expect(clamp(blocks, 5)).toEqual({ blocks, hidden: 0 })
+        expect(clamp(blocks, 6)).toEqual({ blocks, hidden: 0 })
+    })
+})

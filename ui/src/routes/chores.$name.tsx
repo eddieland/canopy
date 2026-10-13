@@ -9,6 +9,7 @@ import { Age } from '@/components/age'
 import { ChoreNotes } from '@/components/chore-notes'
 import { LinkedText } from '@/components/linked-text'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
+import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import { choreLine, windowText } from '@/lib/chores'
@@ -173,11 +174,7 @@ function RunRow({ run }: { run: ChoreRun }) {
                     </span>
                 </span>
             </div>
-            {run.summary && (
-                <p className="pl-[9.5rem] text-sm break-words">
-                    <LinkedText text={run.summary} />
-                </p>
-            )}
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className="pl-[9.5rem]" />}
             <div
                 className={cn(
                     'flex flex-wrap items-center gap-x-4 gap-y-1 pl-[9.5rem]',

@@ -68,12 +68,12 @@ test('search params are typed: a known state filters, an unknown one is dropped'
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
     await expect(filters.getByRole('link', { name: 'blocked' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
-    await expect(page.getByTestId('runs').locator('li')).toHaveCount(1)
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
 
     // The router leaves the URL as typed; what matters is the page never sees the value.
     await page.goto('runs?state=bogus')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'true')
-    await expect(page.getByTestId('runs').locator('li')).not.toHaveCount(1)
+    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(1)
 })
 
 test('an unknown route renders the not-found page inside the shell', async ({ page }) => {
@@ -209,7 +209,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
         'data-status',
         'active',
     )
-    const decisions = page.getByTestId('decisions').locator('li')
+    const decisions = page.getByTestId('decisions').locator(':scope > li')
     await expect(decisions).toHaveCount(5)
     await expect(decisions.nth(0)).toContainText('awaiting the operator')
     await expect(decisions.nth(1)).toContainText('refused:running')
@@ -228,13 +228,13 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
 }) => {
     await page.goto('ticks')
     await settled(page)
-    await expect(page.getByTestId('ticks').locator('li')).toHaveCount(2)
+    await expect(page.getByTestId('ticks').locator(':scope > li')).toHaveCount(2)
     await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('5 decisions')
     await expect(page.getByTestId('tick-1')).toContainText('dispatched 2, waiting on 1')
 
     await page.goto('tickets/ABC-102')
     await settled(page)
-    const decisions = page.getByTestId('ticket-decisions').getByTestId('decisions').locator('li')
+    const decisions = page.getByTestId('ticket-decisions').getByTestId('decisions').locator(':scope > li')
     await expect(decisions).toHaveCount(2)
     await expect(decisions.nth(0)).toContainText('tick 2')
     await expect(decisions.nth(1)).toContainText('dispatch:implement')
@@ -255,6 +255,22 @@ test('a long list scrolls inside its panel, so the panels under it stay in reach
     await region.focus()
     await page.keyboard.press('End')
     await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+})
+
+test("a run's summary keeps its lines and lists, its first four shown until the toggle opens the rest", async ({
+    page,
+}) => {
+    await page.goto('runs')
+    await settled(page)
+    const run = page.getByTestId('run-39')
+    await expect(run.getByRole('listitem')).toHaveCount(3)
+    await expect(run.locator('code').first()).toHaveText('useSearch')
+    await expect(run).not.toContainText('ABC-112 owns it')
+    await run.getByRole('button', { name: 'show 2 more lines' }).click()
+    await expect(run.getByRole('listitem')).toHaveCount(4)
+    await expect(run).toContainText('Left the result cache as it was: ABC-112 owns it.')
+    await run.getByRole('button', { name: 'show less' }).click()
+    await expect(run).not.toContainText('ABC-112 owns it')
 })
 
 test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {
