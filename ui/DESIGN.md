@@ -252,6 +252,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
   label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **A choice of a few fixed options** (a theme, the ticker's speed, the send key) is a segmented control
+  (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
+  `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
+  them, Space picks one, and Tab leaves the group.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
