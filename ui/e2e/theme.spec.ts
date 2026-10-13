@@ -87,6 +87,22 @@ test.describe('the toggle', () => {
         expect(await page.evaluate(() => window.canopyViewTransitions)).toBe(0)
     })
 
+    test('the settings page picks a theme from the keyboard', async ({ page }) => {
+        await storeTheme(page, 'light')
+        await page.goto('settings')
+        await settled(page)
+        const themes = page.getByRole('radiogroup', { name: 'Theme' })
+        // The arrows move between the themes, Space picks one, and Tab leaves for the next group's pick.
+        await page.getByTestId('theme-light').focus()
+        await page.keyboard.press('ArrowRight')
+        await expect(themes.getByRole('radio', { name: 'Dark' })).toBeFocused()
+        await page.keyboard.press('Space')
+        await expect(page.locator('html')).toHaveClass(/\bdark\b/)
+        await expect(themes.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
+        await page.keyboard.press('Tab')
+        await expect(page.getByTestId('ticker-normal')).toBeFocused()
+    })
+
     test('a change in one tab reaches the others', async ({ context }) => {
         const first = await context.newPage()
         const second = await context.newPage()

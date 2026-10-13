@@ -98,7 +98,8 @@ Controls:
   harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
   journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
   `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
-  canopy runs has.
+  canopy runs has. So do `pause` and `resume`, the loop's pause (DESIGN §6): an agent that paused the loop could hold
+  off every tick after its own, and one that resumed it could undo the operator's pause.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -387,8 +388,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
   following links; the file itself is never served, and nothing else under the state directory is read.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
-  reply to, and forget tickets, end a stopped ticket's run, and note something to a chore as `canopy reply chore:NAME`
-  does, nothing else. A forget must carry the ticket's key typed out, checked in code. It cannot run a chore.
+  reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
+  does, and pause and resume the loop as `canopy pause` and `canopy resume` do, nothing else. A forget must carry the
+  ticket's key typed out, checked in code. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a

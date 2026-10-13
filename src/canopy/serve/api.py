@@ -1,8 +1,9 @@
 """The JSON and SSE API under `{base_path}/api` (DESIGN §6, §19, §22).
 
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
-functions the CLI's verbs call (`canopy.core.conversation`), with channel `web`, so the guards are the same ones; a
-guard's refusal is a 409 naming it. A forget also carries the ticket's key as the operator typed it.
+functions the CLI's verbs call (`canopy.core.conversation`, and `canopy.core.pause` for the loop's pause), with channel
+`web`, so the guards are the same ones; a guard's refusal is a 409 naming it. A forget also carries the ticket's key as
+the operator typed it.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import chore_view, conversation, search
+from canopy.core import chore_view, conversation, pause, search
 from canopy.infra import logs
 from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
@@ -26,7 +27,9 @@ from canopy.serve.schema import (
     ForgetRequest,
     Forgot,
     LastTick,
+    LoopState,
     Meta,
+    PauseChanged,
     Pool,
     RefusalResponse,
     Replied,
@@ -94,6 +97,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _write_routes(signed_in, backend)
     _chore_routes(signed_in, backend)
     _tick_routes(signed_in, backend)
+    _loop_routes(signed_in, backend)
     _run_routes(signed_in, backend)
     _search_routes(signed_in, backend)
     api.include_router(signed_in)
@@ -324,6 +328,34 @@ def _tick_routes(api: APIRouter, backend: Backend) -> None:
         if found is None:
             raise HTTPException(status_code=404, detail=f"no tick {tick_id}")
         return found
+
+
+def _loop_routes(api: APIRouter, backend: Backend) -> None:
+    """The loop's pause (DESIGN §6): `canopy pause` and `canopy resume`. The loop reads it at every step of its wait."""
+    log = logs.for_tick(None)
+
+    @api.get("/loop", operation_id="getLoop")
+    def loop() -> LoopState:
+        with backend.open() as ctx:
+            return views.loop_state(ctx)
+
+    @api.post("/loop/pause", operation_id="pauseLoop")
+    def pause_loop() -> PauseChanged:
+        with backend.open() as ctx:
+            already = pause.pause(ctx.conn, channel=WEB)
+            state = views.loop_state(ctx)
+        if not already:
+            log.info("loop paused", extra={"channel": WEB})
+        return PauseChanged(already=already, loop=state)
+
+    @api.post("/loop/resume", operation_id="resumeLoop")
+    def resume_loop() -> PauseChanged:
+        with backend.open() as ctx:
+            already = pause.resume(ctx.conn)
+            state = views.loop_state(ctx)
+        if not already:
+            log.info("loop resumed", extra={"channel": WEB})
+        return PauseChanged(already=already, loop=state)
 
 
 def _run_routes(api: APIRouter, backend: Backend) -> None:

@@ -100,12 +100,17 @@ Rules:
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
   headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
   of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
-- The header carries the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in `status-failed` when it failed or
-  was abandoned, its summary on hover, linking to its page), the stream's state (and `mock`), and the theme toggle;
-  the counters are the attention page's, and the nav's Attention item shows how many items it lists, on every page,
-  split by severity as the Attention counter splits them: broken in `status-failed`, waiting on the operator's answer
-  in `status-blocked`, the rest muted, each only when there is one. Never in the section's rose, too near the failure
-  color to tell apart at that size.
+- The header carries the loop's pause (`LoopPause`), the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in
+  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
+  `mock`), and the theme toggle; the counters are the attention page's, and the nav's Attention item shows how many
+  items it lists, on every page, split by severity as the Attention counter splits them: broken in `status-failed`,
+  waiting on the operator's answer in `status-blocked`, the rest muted, each only when there is one. Never in the
+  section's rose, too near the failure color to tell apart at that size.
+- **The pause** is the one action in the header, since it is about the loop, not a page's subject: a ghost Pause
+  button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
+  from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
+  did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
+  the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
   The page header's label is in its section's color; a panel's stays in `muted-foreground`.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
@@ -247,6 +252,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
   label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **A choice of a few fixed options** (a theme, the ticker's speed, the send key) is a segmented control
+  (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
+  `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
+  them, Space picks one, and Tab leaves the group.
 - **An action** is a button in an Actions panel or under its form, with one line under it (`Notice`): what the action
   did, in the CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks

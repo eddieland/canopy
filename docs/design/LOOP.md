@@ -111,8 +111,32 @@ Workers dispatched during a tick outlive it, as detached processes owned by `can
    M13 will lengthen it by tick cost. An operator message recorded since the tick began, such as a `canopy reply`, ends
    the wait early, but no sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22); so does a run
    ending (below). On a terminal, pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor
-   (the floor guards against bursts of messages; a keypress is deliberate); keys pressed during the tick are dropped.
+   (the floor guards against bursts of messages; a keypress is deliberate); keys pressed during the tick are dropped,
+   but `p` (below). While the loop is paused, the wait does not end at its deadline (Pausing, below).
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
+
+Pausing (taken on request, 2026-10-13): the operator can hold the loop's ticks without stopping it, so the web UI
+stays up, the countdown stays on screen, and the workers already dispatched keep going.
+
+- The pause is a journal row (`pause`, §11; `core/pause.py`), so every channel writes the same fact: `p` at the
+  loop's terminal (`repeat.PAUSE_KEY`, either case) pauses and resumes, as do `canopy pause` and `canopy resume`
+  and the web UI's header (§22). Each records its channel (`loop`, `cli`, `web`) and logs `loop paused` or
+  `loop resumed` with it. Pausing a paused loop keeps the first pause's time and channel.
+- The wait reads it at every step. Paused, it does not end at its deadline or on an operator message or a run ending:
+  it holds, drawing `paused since 14:02 (web); no tick until resumed` instead of the countdown. A message or run
+  ending still moves the deadline as it would (step 5), so resuming ticks at once if the deadline has passed, and
+  otherwise the countdown goes on to it. The tick running when a pause comes finishes; `p` pressed during it is read
+  when it ends, so the tick's block already says `paused: no tick until resumed` in place of the next tick.
+- A loop started while paused holds its first tick the same way, and its header says so; with `--defer`, the
+  deferral counts down and then holds. The pause outlives the loop: it is the operator's, lifted only by a resume.
+- `t` during a pause runs one tick and the loop stays paused, as a hand-run `canopy tick` does: either is the
+  operator asking for that tick. Ctrl-C ends a paused loop at once, as during any wait.
+- `canopy pause` and `canopy resume` refuse inside canopy's own ticks and runs (`inside_run`), as `start` and
+  `reply` do: an agent that could pause the loop could hold off every tick after its own, and one that could resume
+  it could undo the operator's pause (TRUST_MODEL T1). `canopy status` names a pause after its last tick line.
+- Not a scheduler's: a hand-run or cron-run `canopy tick` ignores the pause, and nothing but the loop reads it.
+  Rejected: holding the pause in the loop's memory (lost on a restart, and the CLI could not reach it); stopping the
+  workers too (`canopy stop --now` does that per ticket).
 
 Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first lets the tick
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
@@ -125,11 +149,13 @@ Config is read once at loop start; restart to apply a change. Prompt files are r
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
 gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
-`loop waits` line per tick, and a line when a key, a message, or a run ending ends a wait.
+`loop waits` line per tick, a line when a key, a message, or a run ending ends a wait, and `loop paused` and
+`loop resumed` lines with their channel.
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
-loop runs and restored when it stops. Otherwise no keys are read, and the header and countdown do not mention them.
+loop runs and restored when it stops. Otherwise no keys are read, and the header and countdown do not mention them;
+a paused wait then names `canopy resume` and the web UI instead of `p`.
 
 ### Idle pacing
 

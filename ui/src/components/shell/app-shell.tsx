@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
 import { LiveReadouts } from './live-readouts'
+import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
 import { Nav } from './nav'
 import { SearchBox } from './search-box'
@@ -55,6 +56,7 @@ export function AppShell() {
                 </div>
                 <Ticker />
                 <div className="flex items-center gap-4">
+                    <LoopPause />
                     <LiveReadouts stream={stream} />
                     <span aria-hidden className="h-5 w-px bg-border" />
                     <ThemeToggle />

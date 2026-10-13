@@ -6,12 +6,11 @@ import { signOut } from '@/api/mutations'
 import { keys, sessionQuery } from '@/api/queries'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
-import { Button } from '@/components/ui/button'
-
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
+import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, type TickerSpeed, useTickerSettings } from '@/lib/ticker-settings'
-import { cn } from '@/lib/utils'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
@@ -39,15 +38,6 @@ const SEND_KEYS: { value: SendKey; label: string }[] = [
     { value: 'button', label: 'Button only' },
 ]
 
-// A segmented control: a row of buttons, the pressed one raised.
-const SEGMENTS = 'inline-flex rounded-md border bg-background p-0.5'
-const SEGMENT = [
-    'inline-flex h-7 items-center gap-1.5 rounded-sm px-2.5 text-xs',
-    'text-muted-foreground transition-colors hover:text-foreground',
-    'aria-pressed:bg-surface-raised aria-pressed:text-foreground',
-    'aria-pressed:shadow-xs',
-]
-
 function SettingsPage() {
     const { preference } = useTheme()
     return (
@@ -61,22 +51,20 @@ function SettingsPage() {
                     <p className="text-sm text-muted-foreground">
                         Follows the system unless you pick one. Syncs across tabs.
                     </p>
-                    <fieldset className={SEGMENTS}>
-                        <legend className="sr-only">Theme</legend>
+                    {/* Switched on click, not on a value change, so the transition grows from the item pressed. */}
+                    <ToggleGroup type="single" value={preference} aria-label="Theme">
                         {THEMES.map(({ value, label, icon: Icon }) => (
-                            <button
+                            <ToggleGroupItem
                                 key={value}
-                                type="button"
-                                aria-pressed={preference === value}
+                                value={value}
                                 data-testid={`theme-${value}`}
                                 onClick={(event) => switchTheme(value, event.currentTarget)}
-                                className={cn(SEGMENT)}
                             >
-                                <Icon className="size-3.5" />
+                                <Icon />
                                 {label}
-                            </button>
+                            </ToggleGroupItem>
                         ))}
-                    </fieldset>
+                    </ToggleGroup>
                 </div>
             </Panel>
             <TickerPanel />
@@ -96,21 +84,21 @@ function TickerPanel() {
                 <p className="text-sm text-muted-foreground">
                     How fast the headlines in the header crawl, one at a time. Off hides them.
                 </p>
-                <fieldset className={SEGMENTS}>
-                    <legend className="sr-only">Ticker speed</legend>
+                <ToggleGroup
+                    type="single"
+                    value={speed}
+                    aria-label="Ticker speed"
+                    onValueChange={(value) => {
+                        const picked = SPEEDS.find((s) => s.value === value)
+                        if (picked) setTickerSettings({ speed: picked.value })
+                    }}
+                >
                     {SPEEDS.map(({ value, label }) => (
-                        <button
-                            key={value}
-                            type="button"
-                            aria-pressed={speed === value}
-                            data-testid={`ticker-${value}`}
-                            onClick={() => setTickerSettings({ speed: value })}
-                            className={cn(SEGMENT)}
-                        >
+                        <ToggleGroupItem key={value} value={value} data-testid={`ticker-${value}`}>
                             {label}
-                        </button>
+                        </ToggleGroupItem>
                     ))}
-                </fieldset>
+                </ToggleGroup>
             </div>
             <div className="flex items-center justify-between gap-4 p-3">
                 <label htmlFor="ticker-gap" className="text-sm text-muted-foreground">
@@ -157,21 +145,22 @@ function SendKeyPanel() {
                     Which key sends a reply or a note. Shift+Enter always makes a new line. Ctrl+Enter is ⌘+Enter on a
                     Mac.
                 </p>
-                <fieldset className={cn(SEGMENTS, 'shrink-0')}>
-                    <legend className="sr-only">Send a reply with</legend>
+                <ToggleGroup
+                    type="single"
+                    value={sendKey}
+                    aria-label="Send a reply with"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = SEND_KEYS.find((k) => k.value === value)
+                        if (picked) setSendKey(picked.value)
+                    }}
+                >
                     {SEND_KEYS.map(({ value, label }) => (
-                        <button
-                            key={value}
-                            type="button"
-                            aria-pressed={sendKey === value}
-                            data-testid={`send-key-${value}`}
-                            onClick={() => setSendKey(value)}
-                            className={cn(SEGMENT)}
-                        >
+                        <ToggleGroupItem key={value} value={value} data-testid={`send-key-${value}`}>
                             {label}
-                        </button>
+                        </ToggleGroupItem>
                     ))}
-                </fieldset>
+                </ToggleGroup>
             </div>
         </Panel>
     )

@@ -117,7 +117,10 @@ test("a chore's finding is answered from the attention list with a note its next
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
     await page.goto('settings')
     await page.getByTestId('send-key-mod-enter').click()
-    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-checked', 'true')
+    // Pressing the key that is on keeps it on: one is always picked.
+    await page.getByTestId('send-key-mod-enter').click()
+    await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-checked', 'true')
     await page.goto('tickets/ABC-101')
     const form = page.getByRole('form', { name: 'Reply' })
     // Chromium on Linux: the button names Ctrl, not ⌘.
@@ -172,4 +175,21 @@ test('a refusal names its guard', async ({ page }) => {
     await page.getByLabel('Ticket key').fill('run:4')
     await page.getByRole('button', { name: 'Start privately' }).click()
     await expect(page.getByRole('alert')).toContainText('refused (unsupported)')
+})
+
+test('the header pauses the loop and resumes it, as canopy pause and resume do', async ({ page }) => {
+    await page.goto('attention')
+    const control = page.getByTestId('loop-pause')
+    await expect(control).toHaveAttribute('data-paused', 'false')
+    await control.getByRole('button', { name: 'Pause' }).click()
+    await expect(control).toHaveAttribute('data-paused', 'true')
+    await expect(control).toContainText('paused · 0s')
+    await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/)
+
+    // The pause is the journal's: another page reads it back, as the loop does.
+    await page.reload()
+    await expect(control).toHaveAttribute('data-paused', 'true')
+    await control.getByRole('button', { name: 'Resume' }).click()
+    await expect(control).toHaveAttribute('data-paused', 'false')
+    await expect(control).not.toContainText('paused')
 })
