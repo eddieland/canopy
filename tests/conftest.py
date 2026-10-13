@@ -5,16 +5,20 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import dataclass
+from contextlib import closing
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
+from canopy.core import db
+from canopy.infra import resources
 from canopy.infra.procs import SubprocessRunner
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    import sqlite3
+    from collections.abc import Iterator, Mapping, Sequence
 
 FAKES_DIR = Path(__file__).parent / "fakes"
 # Where this interpreter's scripts live, `canopy` among them. A fake agent runs `canopy` the way an overseer does.
@@ -69,6 +73,40 @@ def agent_log(fakes_on_path: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPat
     return log
 
 
+@dataclass
+class Journals:
+    """The journal connections a test opens, each closed when the test ends.
+
+    A connection left to the garbage collector raises a ResourceWarning, which fails the test (pyproject.toml).
+    """
+
+    _opened: list[sqlite3.Connection] = field(default_factory=list)
+
+    def open(self, path: Path, *, migrate: bool = True) -> sqlite3.Connection:
+        """Open the journal at `path`, applying the shipped migrations unless `migrate` is False."""
+        return self.open_through(path, resources.migrations_dir() if migrate else None)
+
+    def open_through(self, path: Path, migrations: Path | None) -> sqlite3.Connection:
+        """Open the journal at `path` and apply the migrations in `migrations`, if any."""
+        conn = db.connect(path)
+        self._opened.append(conn)
+        if migrations is not None:
+            db.migrate(conn, migrations)
+        return conn
+
+    def close(self) -> None:
+        for conn in self._opened:
+            conn.close()
+        self._opened.clear()
+
+
+@pytest.fixture
+def journals() -> Iterator[Journals]:
+    """Open journals through this, and they close when the test ends."""
+    with closing(Journals()) as opened:
+        yield opened
+
+
 @dataclass(frozen=True)
 class CanopyEnv:
     """A workspace of one repository, `repo`, and an operator, all in tmp_path. The process cwd is the workspace root.
@@ -83,10 +121,15 @@ class CanopyEnv:
     home: Path
     user_file: Path
     shared_file: Path
+    journals: Journals
 
     @property
     def state_dir(self) -> Path:
         return self.root / ".canopy"
+
+    def journal(self, *, migrate: bool = True) -> sqlite3.Connection:
+        """Open this workspace's journal, closed when the test ends."""
+        return self.journals.open(self.state_dir / db.DB_FILE_NAME, migrate=migrate)
 
     def write_user(self, text: str) -> None:
         self.user_file.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +170,7 @@ split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-
 
 
 @pytest.fixture
-def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CanopyEnv:
+def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, journals: Journals) -> CanopyEnv:
     """A workspace of one repository with its workspace file, and a user config whose runtime commands run the fake
     agent. HOME and XDG_CONFIG_HOME point into tmp_path too, so nothing reads or writes the real operator's files.
     CANOPY_TICK_ID is cleared."""
@@ -147,6 +190,7 @@ def canopy_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> CanopyEnv:
         home=home,
         user_file=home / ".config" / "canopy" / "config.toml",
         shared_file=root / "canopy-workspace.toml",
+        journals=journals,
     )
     env.write_shared(SHARED_TOML)
     env.write_user(user_toml())

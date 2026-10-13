@@ -6,16 +6,13 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import agent_output, db
-from canopy.infra import resources
 from canopy.loop import attention
 from tests.conftest import CanopyEnv
 
 
 @pytest.fixture
 def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    c = db.connect(canopy_env.state_dir / "canopy.db")
-    db.migrate(c, resources.migrations_dir())
-    return c
+    return canopy_env.journal()
 
 
 def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = True) -> int:

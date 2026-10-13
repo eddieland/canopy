@@ -15,7 +15,7 @@ from canopy.infra import resources
 from canopy.loop import attention
 from tests.canopy.helpers import in_tick, journal, journal_at, versions_after
 from tests.canopy.test_loop import canopy, context, overseer_does
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, Journals
 
 KEY = "PROJ-1"
 AUTHOR = "5b10ac8d82e05b22cc7d4ef5"
@@ -281,8 +281,8 @@ def test_the_real_delimiter_is_fresh_each_tick() -> None:
     assert first.startswith("CANOPY_BODY_")
 
 
-def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path: Path) -> None:
-    conn = journal_at(tmp_path, 3)
+def test_a_ticket_worked_before_the_mirror_starts_with_an_empty_cursor(tmp_path: Path, journals: Journals) -> None:
+    conn = journal_at(journals, tmp_path, 3)
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute("UPDATE tickets SET last_comment_id = 'c-9' WHERE key = 'OLD-1'")
     conn.execute(

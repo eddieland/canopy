@@ -11,7 +11,6 @@ import signal
 import sys
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import override
@@ -78,7 +77,7 @@ def context(env: CanopyEnv, runner: procs.Runner | None = None) -> Context:
     ws = workspace.load(env.root)
     workspace.ensure_state_dir(ws.state_dir)
     logs.configure(ws.state_dir)
-    conn = db.connect(ws.state_dir / db.DB_FILE_NAME)
+    conn = env.journal(migrate=False)
     return Context(config=cfg, conn=conn, runner=runner or procs.SubprocessRunner(), ws=ws)
 
 
@@ -103,12 +102,12 @@ def console() -> tuple[Console, io.StringIO]:
 
 def woken_by(env: CanopyEnv) -> list[str | None]:
     """What started each tick, as its row records it (`ticks.woken_by`)."""
-    with closing(db.connect(env.state_dir / db.DB_FILE_NAME)) as conn:
-        return [r["woken_by"] for r in conn.execute("SELECT woken_by FROM ticks ORDER BY id")]
+    conn = env.journal(migrate=False)
+    return [r["woken_by"] for r in conn.execute("SELECT woken_by FROM ticks ORDER BY id")]
 
 
 def tick_statuses(env: CanopyEnv) -> list[str]:
-    conn = db.connect(env.state_dir / db.DB_FILE_NAME)
+    conn = env.journal(migrate=False)
     return [str(r["status"]) for r in conn.execute("SELECT status FROM ticks ORDER BY id")]
 
 
@@ -382,7 +381,7 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
     assert statuses == {"ok": 1}
     assert time.slept == []  # stopped without waiting
     assert tick_statuses(canopy_env) == ["ok"]
-    conn = db.connect(canopy_env.state_dir / db.DB_FILE_NAME)
+    conn = canopy_env.journal(migrate=False)
     assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
 
 
@@ -425,7 +424,7 @@ def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
             context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop
         )
     assert statuses == {"ok": 1}
-    conn = db.connect(canopy_env.state_dir / db.DB_FILE_NAME)
+    conn = canopy_env.journal(migrate=False)
     assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
 
 
@@ -647,11 +646,7 @@ def log_messages(env: CanopyEnv) -> list[dict[str, object]]:
 
 
 def paused(env: CanopyEnv) -> pause.Paused | None:
-    conn = db.connect(env.state_dir / db.DB_FILE_NAME)
-    try:
-        return pause.paused(conn)
-    finally:
-        conn.close()
+    return pause.paused(env.journal(migrate=False))
 
 
 def test_the_pause_key_holds_the_wait_past_its_deadline_until_pressed_again(
