@@ -111,7 +111,8 @@ canopy (harness, Python)
     setup.py       init, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
-    conversation.py start, stop, reply, forget, show: the operator's verbs on a subject (§22)
+    conversation.py start, stop, reply, forget, show: the operator's verbs on a subject (§22); pause and resume, on
+                   the loop (§6)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
@@ -191,6 +192,7 @@ canopy (harness, Python)
     db.py          SQLite journal, migrations
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
+    pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts

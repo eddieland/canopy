@@ -259,7 +259,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget; notes to chores (M23) | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget; notes to chores (M23); pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -275,10 +275,11 @@ Served by `canopy loop` from a thread (D073):
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
   CLI uses: `conversation.start`, `stop`, `reply`, and `forget` with channel `web` (a note to a chore is a `reply`
-  on its subject, as `canopy reply chore:NAME` is), and for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`. A forget cannot be undone from the UI, so its request carries the ticket's key as the operator
-  typed it, and the server refuses `not_confirmed` before reading anything when it does not match, so no client skips
-  the challenge; one more click, as Stop now asks, is too easy to give by mistake. Its outcome
+  on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
+  `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). A forget
+  cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
+  `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
+  Stop now asks, is too easy to give by mistake. Its outcome
   names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
   `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it that function and the attention list's
   (`loop.attention.listed`) when it starts the server (`serve.backend`). The one process it runs is
@@ -290,9 +291,10 @@ Served by `canopy loop` from a thread (D073):
   the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
   ended last, each with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets,
   each with its conversation and the decisions about it, chores (below), ticks (below), and search (below).
-  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a note to a chore. OpenCode's session
-  attach (M15) is not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and
-  attach joins once M15 runs workers against OpenCode's server.
+  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, and pausing and resuming
+  the loop from the header on every page, which shows how long it has been paused. OpenCode's session attach (M15) is
+  not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
+  M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -360,6 +362,8 @@ The API, under `{base}/api`:
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
 | `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
+| `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
+| `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
 | `GET /events` | the event stream, below |
 
 A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message
@@ -374,10 +378,11 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
-spend, and the latest tick again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
+spend, the latest tick, and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
-`tick.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with every list,
-the spend, and the latest tick. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
+`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. A new stream starts with
+every list, the spend, the latest tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
+the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it. The latest tick carries how many decisions it has recorded, so `tick.updated` is
 sent as a running tick records them, and on it the UI reads again the ticks list, a tick's page, and a ticket's page,

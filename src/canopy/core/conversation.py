@@ -140,14 +140,18 @@ def check_verb(ref: Ref, verb: str) -> None:
 
 
 def check_operator(environ: Mapping[str, str] | None = None) -> None:
-    """Refuse when run inside one of canopy's own ticks or runs (`inside_run`): only the operator starts or replies."""
+    """Refuse when run inside one of canopy's own ticks or runs (`inside_run`): only the operator starts or replies.
+
+    `canopy pause` and `canopy resume` check it too: an agent that could pause the loop could hold off every tick
+    after its own, and one that could resume it could undo the operator's pause.
+    """
     env = os.environ if environ is None else environ
     for name in (TICK_ID_ENV, RUN_ID_ENV):
         if env.get(name):
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, or forgets",
+                "stops, replies, forgets, pauses, or resumes",
             )
 
 

@@ -87,6 +87,57 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Loop */
+        get: operations["getLoop"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Loop */
+        post: operations["pauseLoop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Loop */
+        post: operations["resumeLoop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meta": {
         parameters: {
             query?: never;
@@ -626,6 +677,25 @@ export type components = {
             tick: components["schemas"]["Tick"] | null;
         };
         /**
+         * LoopState
+         * @description Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes.
+         */
+        LoopState: {
+            paused: components["schemas"]["Pause"] | null;
+        };
+        /**
+         * LoopUpdated
+         * @description The loop was paused or resumed. The payload is what `GET /loop` returns.
+         */
+        LoopUpdated: {
+            paused: components["schemas"]["Pause"] | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "loop.updated";
+        };
+        /**
          * Message
          * @description One message in a ticket's conversation.
          */
@@ -665,6 +735,29 @@ export type components = {
             /** Version */
             version: string;
         };
+        /**
+         * Pause
+         * @description The operator paused the loop (DESIGN §6): since when, and through which channel.
+         */
+        Pause: {
+            channel: components["schemas"]["PauseChannel"];
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+        };
+        /**
+         * PauseChanged
+         * @description What a pause or a resume did: whether the loop was already so, and the state it left.
+         */
+        PauseChanged: {
+            /** Already */
+            already: boolean;
+            loop: components["schemas"]["LoopState"];
+        };
+        /** @enum {string} */
+        PauseChannel: "loop" | "cli" | "web";
         /**
          * Pool
          * @description One repository's treehouse pool, read when asked for.
@@ -944,7 +1037,7 @@ export type components = {
          * StreamEvent
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
-        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"];
+        StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"];
         /**
          * Tick
          * @description A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded.
@@ -1404,6 +1497,66 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+        };
+    };
+    getLoop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoopState"];
+                };
+            };
+        };
+    };
+    pauseLoop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseChanged"];
+                };
+            };
+        };
+    };
+    resumeLoop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseChanged"];
                 };
             };
         };
