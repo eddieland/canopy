@@ -215,25 +215,29 @@ function WorktreeRow({ worktree: w, shared }: { worktree: Worktree; shared: bool
                     </>
                 )}
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
-                <span className="ml-auto flex shrink-0 items-center gap-4 text-xs text-muted-foreground">
-                    {w.processes.length > 0 && (
-                        <span className="font-mono" title="processes treehouse found running in it">
-                            {w.processes.map((p) => `${p.name} ${p.pid}`).join(' · ')}
-                        </span>
+                {/* Not one group: each keeps its own minimum width, so the processes are cut to fit, the age never. */}
+                {w.processes.length > 0 && <Processes processes={w.processes} />}
+                <span
+                    className={cn(
+                        'flex w-20 shrink-0 justify-end gap-1 text-xs text-muted-foreground',
+                        w.processes.length > 0 ? 'ml-1' : 'ml-auto',
                     )}
-                    <span className="flex w-20 justify-end gap-1">
-                        {since && (
-                            <>
-                                for <Age at={since} />
-                            </>
-                        )}
-                    </span>
+                >
+                    {since && (
+                        <>
+                            for <Age at={since} />
+                        </>
+                    )}
                 </span>
             </div>
             {(w.note || w.branch_error) && (
                 <div className="flex flex-wrap gap-x-4 pl-[7.5rem] font-mono text-xs">
-                    {w.branch_error && <span className="text-status-failed">branch unreadable: {w.branch_error}</span>}
-                    {w.note && <span className="text-status-blocked">{w.note}</span>}
+                    {w.branch_error && (
+                        <span className="min-w-0 break-words text-status-failed">
+                            branch unreadable: {w.branch_error}
+                        </span>
+                    )}
+                    {w.note && <span className="min-w-0 break-words text-status-blocked">{w.note}</span>}
                 </div>
             )}
         </li>
@@ -270,6 +274,23 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
     return (
         <span className="w-52 shrink-0 truncate font-mono text-xs text-muted-foreground" title={w.holder ?? undefined}>
             {w.holder}
+        </span>
+    )
+}
+
+/**
+ * The processes treehouse found running in a slot, by name and pid. An agent can start many: they take what the branch
+ * leaves, cut to fit, and the whole list is on hover, one to a line.
+ */
+function Processes({ processes }: { processes: Worktree['processes'] }) {
+    const named = processes.map((p) => `${p.name} ${p.pid}`)
+    return (
+        <span
+            className="ml-auto max-w-72 min-w-24 truncate text-right font-mono text-xs text-muted-foreground"
+            title={`processes treehouse found running in it:\n${named.join('\n')}`}
+            data-testid="worktree-processes"
+        >
+            {named.join(' · ')}
         </span>
     )
 }
