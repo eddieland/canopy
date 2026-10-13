@@ -184,7 +184,7 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
         with pytest.raises(conversation.Refused, match="bad_ref"):
             conversation.parse_ref(bad)
     conversation.check_verb(conversation.parse_ref("run:7"), "show")
-    with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, show"):
+    with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, dismiss, show"):
         conversation.check_verb(conversation.parse_ref("chore:build-health"), "start")
     with pytest.raises(conversation.Refused, match=r"unsupported.*M14"):
         conversation.check_verb(conversation.parse_ref("api#42"), "show")

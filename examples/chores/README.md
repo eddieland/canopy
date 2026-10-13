@@ -180,6 +180,8 @@ timeout_minutes = 15
 3. Set `max_chores` to at least 1 and let the loop run it.
 4. Answer findings with `canopy reply chore:<name> '<note>'`, for example "leave out review/acme/api/812 until
    2026-10-20, it is blocked on legal". Notes reach every later run; you do not edit the prompt.
+   To take one off your attention list without waiting for a run to leave it out, `canopy dismiss chore:<name> <id>`
+   (or Dismiss in the web UI). It comes back if it clears and recurs.
 5. Check `canopy show chore:<name>` for cost per run, and lengthen `every_minutes` or tighten `when` if it finds
    little.
 

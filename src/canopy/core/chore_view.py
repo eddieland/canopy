@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -50,11 +50,15 @@ def defined(config: Config, workspace: Workspace) -> dict[str, Chore]:
 
 @dataclass(frozen=True)
 class OpenFinding:
-    """A finding of a chore's latest `ok` run, and when the unbroken sequence of `ok` runs reporting it started."""
+    """A finding of a chore's latest `ok` run, and when the unbroken sequence of `ok` runs reporting it started.
+
+    `dismissed` is whether the operator dismissed it since then, which keeps it off the attention list until it clears.
+    """
 
     chore: str
     finding: result.Finding
     since: str
+    dismissed: bool = False
 
 
 @dataclass(frozen=True)
@@ -62,12 +66,14 @@ class ChoreState:
     """One configured chore: its definition, its newest runs first, and what follows from them.
 
     `older` returns the page of runs before a run id, newest first, for a finding open longer than `runs` reaches.
+    `dismissals` is when the operator last dismissed each finding id it dismissed.
     """
 
     name: str
     chore: Chore
     runs: list[sqlite3.Row]
     older: Callable[[int], list[sqlite3.Row]]
+    dismissals: Mapping[str, str]
 
     @property
     def running(self) -> sqlite3.Row | None:
@@ -114,13 +120,23 @@ class ChoreState:
     def findings(self) -> list[OpenFinding]:
         """The findings of the latest `ok` run. A run that ended any other way leaves them standing.
 
+        A finding is dismissed when the operator dismissed it after that sequence started: one that clears and comes
+        back starts a new sequence, which an earlier dismissal does not cover.
+
         Returns:
-            Each finding, with when the unbroken sequence of `ok` runs reporting it started; none before an `ok` run.
+            Each finding, with when the unbroken sequence of `ok` runs reporting it started, and whether it is
+            dismissed; none before an `ok` run.
         """
         oks = _oks(self.runs)
         if not oks:
             return []
-        return [OpenFinding(self.name, f, self._since(f.id, oks)) for f in oks[0][1].findings]
+        found: list[OpenFinding] = []
+        for f in oks[0][1].findings:
+            since = self._since(f.id, oks)
+            at = self.dismissals.get(f.id)
+            dismissed = at is not None and db.parse_time(at) >= db.parse_time(since)
+            found.append(OpenFinding(self.name, f, since, dismissed=dismissed))
+        return found
 
     def _since(self, finding_id: str, oks: list[tuple[sqlite3.Row, result.ChoreResult]]) -> str:
         """When the unbroken sequence of `ok` runs reporting `finding_id` started, reading back page by page.
@@ -156,11 +172,11 @@ def state_of(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
     def older(before: int) -> list[sqlite3.Row]:
         return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
-    return ChoreState(name, chore, db.chore_runs(conn, name, _HISTORY_RUNS), older)
+    return ChoreState(name, chore, db.chore_runs(conn, name, _HISTORY_RUNS), older, db.dismissals(conn, name))
 
 
 def open_findings(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[OpenFinding]:
-    """Return every configured chore's open findings, by chore and then as the chore listed them."""
+    """Return every configured chore's open findings, by chore and then as the chore listed them, dismissed or not."""
     return [f for state in states(conn, config, workspace) for f in state.findings()]
 
 

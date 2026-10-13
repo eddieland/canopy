@@ -1,4 +1,4 @@
-import type { ConfigReload, Forgot, Replied, Started, Stopped } from '@/api/types'
+import type { ConfigReload, Dismissed, Forgot, Replied, Started, Stopped } from '@/api/types'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
 
@@ -39,6 +39,15 @@ export function forgotText(key: string, forgot: Forgot): string {
 export function notedText(name: string, replied: Replied): string {
     if (replied.new) return `Recorded message ${replied.message_id} on chore:${name}. Its next run reads it.`
     return `Message ${replied.message_id} on chore:${name} already says this; nothing new recorded.`
+}
+
+/** What a dismissal did, as `canopy dismiss` says it: off the attention list until it clears, or listed again. */
+export function dismissedText(dismissed: Dismissed): string {
+    const head = `chore:${dismissed.chore} ${dismissed.finding}`
+    if (dismissed.dismissed) {
+        return `${head} is dismissed: it is off the attention list until the chore stops reporting it.`
+    }
+    return `${head} is listed again while the chore reports it.`
 }
 
 /** What a reply did, as `canopy reply` says it: the message it recorded, or the one that already said it. */
