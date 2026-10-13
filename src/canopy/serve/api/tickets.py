@@ -8,7 +8,7 @@ from canopy.core import conversation
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ticket_ref
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TicketKey, not_found, ticket_ref
 from canopy.serve.schema import (
     ForgetRequest,
     Forgot,
@@ -21,18 +21,29 @@ from canopy.serve.schema import (
     TicketSummary,
 )
 
-router = APIRouter()
+TAG = "tickets"
+router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 
 
-@router.get("/tickets", operation_id="listTickets")
+@router.get("/tickets", operation_id="listTickets", summary="List the tickets")
 def tickets(backend: BackendDep) -> list[TicketSummary]:
+    """The journal's tickets, most recent activity first, at most 200."""
     with backend.open() as ctx:
         return views.tickets(ctx)
 
 
-@router.get("/tickets/{key}", operation_id="getTicket", responses={404: {"description": "No such ticket."}})
-def ticket(key: str, backend: BackendDep) -> TicketDetail:
+@router.get(
+    "/tickets/{key}",
+    operation_id="getTicket",
+    summary="Get a ticket",
+    responses={**REFUSED, **not_found("ticket")},
+)
+def ticket(key: TicketKey, backend: BackendDep) -> TicketDetail:
+    """One ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions.
+
+    A key that is not a ticket's is refused `bad_ref` or `unsupported`; one canopy has no record of is a 404.
+    """
     ref = ticket_ref(key, "show")
     with backend.open() as ctx:
         found = views.ticket(ctx, ref.id)
@@ -41,8 +52,9 @@ def ticket(key: str, backend: BackendDep) -> TicketDetail:
     return found
 
 
-@router.post("/tickets/{key}/start", operation_id="startTicket", responses=REFUSED)
-def start(key: str, backend: BackendDep) -> Started:
+@router.post("/tickets/{key}/start", operation_id="startTicket", summary="Start a ticket", responses=REFUSED)
+def start(key: TicketKey, backend: BackendDep) -> Started:
+    """`canopy start`: work the ticket privately, in place of a queue label; its conversation stays in the journal."""
     ref = ticket_ref(key, "start")
     with backend.open() as ctx:
         try:
@@ -58,8 +70,9 @@ def start(key: str, backend: BackendDep) -> Started:
     )
 
 
-@router.post("/tickets/{key}/stop", operation_id="stopTicket", responses=REFUSED)
-def stop(key: str, body: StopRequest, backend: BackendDep) -> Stopped:
+@router.post("/tickets/{key}/stop", operation_id="stopTicket", summary="Stop a ticket", responses=REFUSED)
+def stop(key: TicketKey, body: StopRequest, backend: BackendDep) -> Stopped:
+    """`canopy stop`: no new dispatches; a running run finishes unless `now` ends it, as `--now` does."""
     ref = ticket_ref(key, "stop")
     with backend.open() as ctx:
         try:
@@ -72,8 +85,12 @@ def stop(key: str, body: StopRequest, backend: BackendDep) -> Stopped:
     return Stopped(already=stopped.already, running_run=int(run["id"]) if run is not None else None, ended=ended)
 
 
-@router.post("/tickets/{key}/replies", operation_id="replyTicket", responses=REFUSED)
-def reply(key: str, body: ReplyRequest, backend: BackendDep) -> Replied:
+@router.post("/tickets/{key}/replies", operation_id="replyTicket", summary="Reply on a ticket", responses=REFUSED)
+def reply(key: TicketKey, body: ReplyRequest, backend: BackendDep) -> Replied:
+    """`canopy reply`: add the operator's message to the ticket's conversation, answering its latest question.
+
+    Idempotent on the submission id: a retried submission records nothing new.
+    """
     ref = ticket_ref(key, "reply")
     with backend.open() as ctx:
         try:
@@ -86,8 +103,13 @@ def reply(key: str, body: ReplyRequest, backend: BackendDep) -> Replied:
 
 # Forgetting cannot be undone from here, so the request carries the ticket's key as the operator typed it, and a
 # mismatch is refused before anything is read (DESIGN §22).
-@router.post("/tickets/{key}/forget", operation_id="forgetTicket", responses=REFUSED)
-def forget(key: str, body: ForgetRequest, backend: BackendDep) -> Forgot:
+@router.post("/tickets/{key}/forget", operation_id="forgetTicket", summary="Forget a ticket's work", responses=REFUSED)
+def forget(key: TicketKey, body: ForgetRequest, backend: BackendDep) -> Forgot:
+    """`canopy forget`: drop the ticket's branch and PRs, so its next `implement` starts over.
+
+    Cannot be undone: `confirm` must be the ticket's key, or it is refused `not_confirmed` before anything is read.
+    The branch and PRs it returns are the operator's to close and delete.
+    """
     ref = ticket_ref(key, "forget")
     if body.confirm != ref.id:
         raise RefusedError(conversation.Refused("not_confirmed", f"type {ref} to confirm forgetting its work"))

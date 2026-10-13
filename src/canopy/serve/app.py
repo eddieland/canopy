@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
@@ -42,6 +43,10 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     # openapi` prints it without a server.
     app = FastAPI(
         title="canopy",
+        summary="The web UI's API: what canopy's journal holds, and the operator's verbs on it.",
+        description=api.__doc__,
+        version=version("canopy"),
+        openapi_tags=api.TAGS,
         docs_url=None,
         redoc_url=None,
         openapi_url=f"{base}/api/openapi.json" if backend.mock else None,

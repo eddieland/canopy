@@ -3,11 +3,13 @@ the mock journal. The API over a real journal, and the loop serving it, are in t
 
 import asyncio
 import json
+import re
 import sqlite3
 import stat
 import threading
 import time
 from collections.abc import Iterator
+from importlib.metadata import version
 from pathlib import Path
 
 import httpx2
@@ -578,3 +580,44 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/loop/reload",
     }
     assert set(schema["paths"]) == paths
+
+
+def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.CaptureFixture[str]) -> None:
+    main(["openapi"])
+    schema = json.loads(capsys.readouterr().out)
+    assert schema["info"]["version"] == version("canopy")
+    assert schema["info"]["description"]
+    tags = {t["name"] for t in schema["tags"] if t["description"]}
+    assert len(tags) == len(schema["tags"])
+    used: set[str] = set()
+    operation_ids: list[str] = []
+    for path, operations in schema["paths"].items():
+        for method, operation in operations.items():
+            where = f"{method.upper()} {path}"
+            operation_ids.append(operation["operationId"])
+            assert operation["summary"], where
+            assert operation["description"], where
+            [tag] = operation["tags"]
+            assert tag in tags, where
+            used.add(tag)
+            assert all(p["description"] for p in operation.get("parameters", [])), where
+            responses = operation["responses"]
+            # Every error names the shape of its body.
+            assert all("content" in r for code, r in responses.items() if code != "200"), where
+            assert "403" in responses, where
+            if path != "/api/session":
+                assert "401" in responses, where
+            if "{key}" in path or "{name}" in path:
+                assert "409" in responses, where
+            if path.endswith(("_id}", "{key}", "{name}")) and method == "get":
+                assert "404" in responses, where
+    assert used == tags
+    assert len(set(operation_ids)) == len(operation_ids)
+    assert all(re.fullmatch(r"[a-z]+(?:[A-Z][a-z]+)*", o) for o in operation_ids), operation_ids
+    fastapis = {"HTTPValidationError", "ValidationError"}
+    for name, model in schema["components"]["schemas"].items():
+        if name in fastapis:
+            continue
+        assert model.get("description"), name
+        undescribed = [field for field, s in model.get("properties", {}).items() if not s.get("description")]
+        assert not undescribed, name

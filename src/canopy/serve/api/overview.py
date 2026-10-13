@@ -10,21 +10,30 @@ from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema import AttentionItem, Meta, Spend
 
-router = APIRouter()
+TAG = "overview"
+router = APIRouter(tags=[TAG])
 
 
-@router.get("/meta", operation_id="getMeta")
+@router.get("/meta", operation_id="getMeta", summary="Get the server's meta")
 def meta(backend: BackendDep) -> Meta:
-    return Meta(version=version("canopy"), mock=backend.mock, ticket_url=backend.config.tracker.ticket_url or None)
+    """The version of canopy serving, whether the data is mock, `tracker.ticket_url`, and the branch link templates."""
+    return Meta(
+        version=version("canopy"),
+        mock=backend.mock,
+        ticket_url=backend.config.tracker.ticket_url or None,
+        branch_urls={r.name: r.branch_url for r in backend.workspace.repos if r.branch_url},
+    )
 
 
-@router.get("/attention", operation_id="listAttention")
+@router.get("/attention", operation_id="listAttention", summary="List the attention items")
 def attention(backend: BackendDep) -> list[AttentionItem]:
+    """The attention list, as `canopy status` shows it: what needs the operator, and since when."""
     with backend.open() as ctx:
         return views.attention(backend, ctx)
 
 
-@router.get("/spend", operation_id="getSpend")
+@router.get("/spend", operation_id="getSpend", summary="Get the spend")
 def spend(backend: BackendDep) -> Spend:
+    """What the last 24 hours and the last 30 days each cost, as the agent runtime reported it."""
     with backend.open() as ctx:
         return views.spend(backend, ctx)

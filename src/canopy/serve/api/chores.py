@@ -6,15 +6,13 @@ runs a chore: the overseer decides when one runs, and `canopy chore try` is the 
 
 from __future__ import annotations
 
-from typing import Annotated
-
-from fastapi import APIRouter, HTTPException, Path
+from fastapi import APIRouter, HTTPException
 
 from canopy.core import chore_view, conversation
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, RefusedError, chore_ref
+from canopy.serve.api.refs import REFUSED, WEB, ChoreName, ChoreRunId, RefusedError, chore_ref, not_found
 from canopy.serve.schema import (
     ChoreDetail,
     ChoreRunDetail,
@@ -26,18 +24,29 @@ from canopy.serve.schema import (
     Transcript,
 )
 
-router = APIRouter()
+TAG = "chores"
+router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
 
 
-@router.get("/chores", operation_id="listChores")
+@router.get("/chores", operation_id="listChores", summary="List the chores")
 def chores(backend: BackendDep) -> list[ChoreSummary]:
+    """Each chore configured for this workspace, as `canopy status` lists it; none while `capacity.max_chores` is 0."""
     with backend.open() as ctx:
         return views.chores(backend, ctx)
 
 
-@router.get("/chores/{name}", operation_id="getChore", responses={404: {"description": "No such chore."}})
-def chore(name: str, backend: BackendDep) -> ChoreDetail:
+@router.get(
+    "/chores/{name}",
+    operation_id="getChore",
+    summary="Get a chore",
+    responses={**REFUSED, **not_found("chore defined for this workspace")},
+)
+def chore(name: ChoreName, backend: BackendDep) -> ChoreDetail:
+    """One chore defined for this workspace, configured or not: what `canopy show chore:NAME` prints.
+
+    A name no chore could have is refused `bad_ref`; one not defined here is a 404.
+    """
     ref = chore_ref(name, "show")
     with backend.open() as ctx:
         found = views.chore(backend, ctx, ref.id)
@@ -49,9 +58,14 @@ def chore(name: str, backend: BackendDep) -> ChoreDetail:
 @router.get(
     "/chores/{name}/runs/{run_id}",
     operation_id="getChoreRun",
-    responses={404: {"description": "No such run of this chore."}},
+    summary="Get a chore run",
+    responses={**REFUSED, **not_found("run of this chore")},
 )
-def chore_run(name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)], backend: BackendDep) -> ChoreRunDetail:
+def chore_run(name: ChoreName, run_id: ChoreRunId, backend: BackendDep) -> ChoreRunDetail:
+    """One run of the chore: its row, the whole of its summary, the harness's note, and its findings.
+
+    A run is found only under its own chore, and a chore since deleted from the config keeps its runs.
+    """
     ref = chore_ref(name, "show")
     with backend.open() as ctx:
         found = views.chore_run_detail(ctx, ref.id, run_id)
@@ -64,11 +78,11 @@ def chore_run(name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)], backe
 @router.get(
     "/chores/{name}/runs/{run_id}/transcript",
     operation_id="getChoreRunTranscript",
-    responses={404: {"description": "No such run of this chore."}},
+    summary="Get a chore run's transcript",
+    responses={**REFUSED, **not_found("run of this chore")},
 )
-def chore_run_transcript(
-    name: str, run_id: Annotated[int, Path(ge=1, le=2**63 - 1)], backend: BackendDep
-) -> Transcript:
+def chore_run_transcript(name: ChoreName, run_id: ChoreRunId, backend: BackendDep) -> Transcript:
+    """The chore run's session, read back from its log: agent output, untrusted and bounded."""
     ref = chore_ref(name, "show")
     with backend.open() as ctx:
         found = views.chore_run_transcript(ctx, ref.id, run_id)
@@ -77,8 +91,12 @@ def chore_run_transcript(
     return found
 
 
-@router.post("/chores/{name}/replies", operation_id="replyChore", responses=REFUSED)
-def note(name: str, body: ReplyRequest, backend: BackendDep) -> Replied:
+@router.post("/chores/{name}/replies", operation_id="replyChore", summary="Add a note to a chore", responses=REFUSED)
+def note(name: ChoreName, body: ReplyRequest, backend: BackendDep) -> Replied:
+    """`canopy reply chore:NAME`: a note the chore's next runs read.
+
+    Idempotent on the submission id: a retried submission records nothing new.
+    """
     ref = chore_ref(name, "reply")
     with backend.open() as ctx:
         try:
@@ -92,8 +110,17 @@ def note(name: str, body: ReplyRequest, backend: BackendDep) -> Replied:
     return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
 
 
-@router.post("/chores/{name}/dismissals", operation_id="dismissFinding", responses=REFUSED)
-def dismiss(name: str, body: DismissRequest, backend: BackendDep) -> Dismissed:
+@router.post(
+    "/chores/{name}/dismissals",
+    operation_id="dismissFinding",
+    summary="Dismiss a chore's finding",
+    responses=REFUSED,
+)
+def dismiss(name: ChoreName, body: DismissRequest, backend: BackendDep) -> Dismissed:
+    """`canopy dismiss chore:NAME ID`: the finding is off the attention list until the chore stops reporting it.
+
+    With `undo`, `--undo`: the dismissal is taken back and the finding listed again (DESIGN §19).
+    """
     ref = chore_ref(name, "dismiss")
     with backend.open() as ctx:
         try:
