@@ -5,6 +5,7 @@ import {
     CalendarClock,
     FileSearch,
     FolderTree,
+    GitPullRequest,
     History,
     Inbox,
     MessagesSquare,
@@ -33,6 +34,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
         hint: 'Every ticket canopy has worked, and a form to start one',
     },
     {
+        to: '/pull-requests',
+        icon: GitPullRequest,
+        hint: "Every PR canopy knows: the loop's own and the ones it reviewed, with their runs and reviews",
+    },
+    {
         to: '/reviews',
         icon: FileSearch,
         hint: 'PR reviews canopy keeps instead of posting, with findings on the diff',
@@ -49,8 +55,9 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
- * ticket's page keeps Tickets active, a review's Reviews, a chore's Chores, and a tick's Ticks. Attention shows how
- * many items it lists, on every page, split as its counter splits them. Hovering an item says what its page holds.
+ * ticket's page keeps Tickets active, a PR's Pull requests, a review's Reviews, a chore's Chores, and a tick's Ticks.
+ * Attention shows how many items it lists, on every page, split as its counter splits them. Hovering an item says what
+ * its page holds.
  */
 export function Nav() {
     const attention = useQuery(attentionQuery)

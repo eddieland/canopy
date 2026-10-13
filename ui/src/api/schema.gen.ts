@@ -272,6 +272,51 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a PR
+         * @description One PR: the runs that pushed to it, its review runs, and the latest 20 decisions naming it.
+         *
+         *     A PR only decisions name, such as a `review.query` match no review has run on yet, has a page too.
+         *
+         *     Raises:
+         *         HTTPException: 422 when `url` is not a plain https:// URL, 404 when nothing in the journal names it.
+         */
+        get: operations["getPullRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pull-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the PRs
+         * @description The PRs the journal knows, at most 100, most recent activity first: a unit's, or one canopy reviewed.
+         */
+        get: operations["listPullRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews": {
         parameters: {
             query?: never;
@@ -1504,6 +1549,84 @@ export type components = {
              * @description Its process id.
              */
             pid: number;
+        };
+        /**
+         * PullRequest
+         * @description A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is.
+         */
+        PullRequest: {
+            /**
+             * Active At
+             * Format: date-time
+             * @description The newest of its ticket's last sighting and its review runs' starts and ends.
+             */
+            active_at: string;
+            /**
+             * Branch
+             * @description The unit's branch; None for a PR no unit records.
+             */
+            branch: string | null;
+            /** @description Its newest review run, or None when canopy has not reviewed it. */
+            latest_review: components["schemas"]["ReviewSummary"] | null;
+            /**
+             * Phase
+             * @description The unit's phase as the overseer last derived it, for display; None for a PR no unit records.
+             */
+            phase: string | null;
+            /**
+             * Repo
+             * @description The PR's repository, as the workspace names it.
+             */
+            repo: string | null;
+            /**
+             * Reviews
+             * @description How many review runs it has had, however they ended.
+             * @default 0
+             */
+            reviews: number;
+            /**
+             * Running Run
+             * @description A run of its ticket working now, whose page it opens.
+             */
+            running_run: number | null;
+            /**
+             * Ticket Key
+             * @description The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns.
+             */
+            ticket_key: string | null;
+            /**
+             * Ticket Title
+             * @description That ticket's title, as the overseer named it; None until it does.
+             */
+            ticket_title: string | null;
+            /**
+             * Url
+             * @description The PR's URL: an opaque https:// string canopy never parses.
+             */
+            url: string;
+        };
+        /**
+         * PullRequestDetail
+         * @description One PR: the runs that pushed to it, canopy's reviews of it, and the decisions that name it.
+         */
+        PullRequestDetail: {
+            /**
+             * Decisions
+             * @description The latest 20 decisions naming it, across ticks, newest first.
+             */
+            decisions: components["schemas"]["Decision"][];
+            /** @description The PR, as the PRs list shows it. */
+            pull_request: components["schemas"]["PullRequest"];
+            /**
+             * Reviews
+             * @description Every review run of it, newest first; each opens its own page, with its findings on its diff.
+             */
+            reviews: components["schemas"]["ReviewSummary"][];
+            /**
+             * Runs
+             * @description Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20.
+             */
+            runs: components["schemas"]["Run"][];
         };
         /**
          * Refusal
@@ -3272,6 +3395,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meta"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getPullRequest: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequestDetail"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such PR. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listPullRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequest"][];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */
