@@ -5,7 +5,7 @@ import type { ReviewFinding, ReviewSummary } from '@/api/types'
 import { placeFindings, shortSha, verdictText } from './reviews'
 
 function finding(title: string, file: number | null, line: number | null): ReviewFinding {
-    return { severity: 'minor', title, location: '', detail: '', file, line }
+    return { severity: 'minor', title, location: '', detail: '', file, line, dismissed: false }
 }
 
 const REVIEW: ReviewSummary = {

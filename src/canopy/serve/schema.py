@@ -479,6 +479,26 @@ class Dismissed(_Model):
     """Whether it is now dismissed: false after an `undo`."""
 
 
+class ReviewDismissRequest(_Model):
+    """A dismissal of one of a review run's findings, by its number, or with `undo` the taking back of one."""
+
+    finding: Annotated[int, Field(ge=1, le=20)]
+    """The finding's number in the review, from 1."""
+    undo: bool = False
+    """Take the dismissal back, as `--undo` does."""
+
+
+class ReviewDismissed(_Model):
+    """What a dismissal of a review's finding left: the finding, and whether it is now dismissed."""
+
+    run: int
+    """The review run's id."""
+    finding: int
+    """The finding's number in the review, from 1."""
+    dismissed: bool
+    """Whether it is now dismissed: false after an `undo`."""
+
+
 class Process(_Model):
     """A process treehouse found running in a worktree."""
 
@@ -888,6 +908,8 @@ class ReviewFinding(_Model):
     """The index in the diff's files of the file it is in; None when the diff does not show it."""
     line: int | None = None
     """The line it is on, on the new side; None when the diff does not show it."""
+    dismissed: bool = False
+    """Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21)."""
 
 
 class DiffLine(_Model):

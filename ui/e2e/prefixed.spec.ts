@@ -223,3 +223,14 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await expect(control).toHaveAttribute('data-paused', 'false')
     await expect(control).not.toContainText('paused')
 })
+
+test("a review's finding is dismissed on its card, and kept again", async ({ page }) => {
+    await page.goto('reviews/4')
+    const card = page.locator('#finding-2')
+    await card.getByTestId('dismiss-finding-2').click()
+    await expect(card.getByRole('status')).toHaveText('review:4 finding 2 is dismissed: no worker or tick acts on it.')
+    await expect(card).toHaveAttribute('data-dismissed', 'true')
+    await card.getByTestId('undismiss-finding-2').click()
+    await expect(card).not.toHaveAttribute('data-dismissed', 'true')
+    await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
+})

@@ -1,7 +1,8 @@
 """The reviews canopy keeps, as the web UI shows them (DESIGN §21): a shadow PR review, posted nowhere (D114).
 
-Reads only. Everything a review holds is untrusted: the reviewer read the PR, and the diff is the PR's own text. Text
-goes out with control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.
+Reads only; dismissing a finding goes through `canopy.core.conversation`, as `canopy dismiss review:ID` does.
+Everything a review holds is untrusted: the reviewer read the PR, and the diff is the PR's own text. Text goes out with
+control characters dropped, as every page's does, and the diff within `review_diff`'s bounds.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     if row is None:
         return None
     stored = result.stored(row["result_json"])
+    dismissed = db.review_dismissals(ctx.conn, run_id)
     note = contract.stored_object(row["result_json"]).get("harness")
     found = review_diff.read(review_diff.path_for(str(row["log_path"])))
     diff = _diff(found) if found is not None else None
@@ -60,7 +62,9 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
         base_branch=str(row["base_branch"]) if row["base_branch"] else None,
-        findings=[_finding(f, found) for f in stored.findings] if stored is not None else [],
+        findings=[_finding(f, found, i in dismissed) for i, f in enumerate(stored.findings, 1)]
+        if stored is not None
+        else [],
         diff=diff,
         runs=[summary(r) for r in db.review_runs_of(ctx.conn, str(row["pr_url"]))],
     )
@@ -91,7 +95,7 @@ def summary(row: sqlite3.Row) -> ReviewSummary:
     )
 
 
-def _finding(f: result.Finding, diff: review_diff.Diff | None) -> ReviewFinding:
+def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) -> ReviewFinding:  # noqa: FBT001
     file, line = review_diff.anchor(diff, f.location) if diff is not None else (None, None)
     return ReviewFinding(
         severity=f.severity,
@@ -100,6 +104,7 @@ def _finding(f: result.Finding, diff: review_diff.Diff | None) -> ReviewFinding:
         detail=lines(f.detail),
         file=file,
         line=line,
+        dismissed=dismissed,
     )
 
 

@@ -1005,8 +1005,9 @@ Status: in progress. Migration 0016 records a review run's base branch, and `_re
 them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note. The
 Reviews pages show them, findings on the diff. The pull requests pages make the PR the subject: each PR the journal
 knows, the loop's own included before any review, with its page of the runs that pushed to it, its reviews, and the
-decisions naming it. Next: what the operator does from
-a finding, through the journal's channels; then the live check, a real review's page against its PR's diff on GitHub.
+decisions naming it. The operator dismisses a finding from its card or with `canopy dismiss review:ID N` (2026-10-13),
+which holds it back from a resume's worker and from the overseer, for that run only. Next: sending some findings to a
+worker from the page; then the live check, a real review's page against its PR's diff on GitHub.
 
 ## M33. Spend by what it bought
 

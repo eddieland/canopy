@@ -357,6 +357,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a review's finding
+         * @description `canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21).
+         */
+        post: operations["dismissReviewFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -1702,6 +1722,44 @@ export type components = {
             truncated: boolean;
         };
         /**
+         * ReviewDismissed
+         * @description What a dismissal of a review's finding left: the finding, and whether it is now dismissed.
+         */
+        ReviewDismissed: {
+            /**
+             * Dismissed
+             * @description Whether it is now dismissed: false after an `undo`.
+             */
+            dismissed: boolean;
+            /**
+             * Finding
+             * @description The finding's number in the review, from 1.
+             */
+            finding: number;
+            /**
+             * Run
+             * @description The review run's id.
+             */
+            run: number;
+        };
+        /**
+         * ReviewDismissRequest
+         * @description A dismissal of one of a review run's findings, by its number, or with `undo` the taking back of one.
+         */
+        ReviewDismissRequest: {
+            /**
+             * Finding
+             * @description The finding's number in the review, from 1.
+             */
+            finding: number;
+            /**
+             * Undo
+             * @description Take the dismissal back, as `--undo` does.
+             * @default false
+             */
+            undo: boolean;
+        };
+        /**
          * ReviewFinding
          * @description One finding, with where it falls in the diff: `file` indexes the diff's files, `line` is on the new side.
          *
@@ -1713,6 +1771,12 @@ export type components = {
              * @description Its detail, as the reviewer wrote it: untrusted text.
              */
             detail: string;
+            /**
+             * Dismissed
+             * @description Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21).
+             * @default false
+             */
+            dismissed: boolean;
             /**
              * File
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
@@ -3558,6 +3622,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismissReviewFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDismissed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Validation Error */

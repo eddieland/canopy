@@ -1,4 +1,4 @@
-import type { ConfigReload, Dismissed, Forgot, Replied, Started, Stopped } from '@/api/types'
+import type { ConfigReload, Dismissed, Forgot, Replied, ReviewDismissed, Started, Stopped } from '@/api/types'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
 
@@ -48,6 +48,13 @@ export function dismissedText(dismissed: Dismissed): string {
         return `${head} is dismissed: it is off the attention list until the chore stops reporting it.`
     }
     return `${head} is listed again while the chore reports it.`
+}
+
+/** What a dismissal of a review's finding did, as `canopy dismiss review:ID N` says it. */
+export function reviewDismissedText(dismissed: ReviewDismissed): string {
+    const head = `review:${dismissed.run} finding ${dismissed.finding}`
+    if (dismissed.dismissed) return `${head} is dismissed: no worker or tick acts on it.`
+    return `${head} is no longer dismissed: a resume hands it to the worker again.`
 }
 
 /** What a reply did, as `canopy reply` says it: the message it recorded, or the one that already said it. */

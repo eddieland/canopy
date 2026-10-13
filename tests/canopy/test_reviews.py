@@ -704,3 +704,81 @@ def test_a_review_without_its_base_branch_still_runs(
     assert row is not None
     assert row["status"] == "done", Path(row["log_path"]).read_text()
     assert not review_diff.path_for(row["log_path"]).exists()
+
+
+TWO_FINDINGS = {
+    **FINDINGS,
+    "findings": [
+        *FINDINGS["findings"],
+        {"severity": "minor", "title": "log line is noisy", "location": "src/retry.py:7", "detail": "It logs twice."},
+    ],
+}
+
+
+def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = journal(reviews)
+    reviewer_reports(monkeypatch, TWO_FINDINGS)
+    review_id = run_inline(conn, monkeypatch, "--ticket", "PROJ-1", sha=head(git_pool))
+    ref = f"review:{review_id}"
+
+    # Only the operator dismisses, and only a finding the review has.
+    monkeypatch.setenv("CANOPY_TICK_ID", "1")
+    assert main(["dismiss", ref, "2"]) == 1
+    assert "dismiss refused (inside_run)" in capsys.readouterr().err
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    for args, guard in [
+        ([ref, "3"], "unknown"),
+        ([ref, "0"], "bad_finding"),
+        ([ref, "two"], "bad_finding"),
+        (["review:99", "1"], "unknown"),
+        (["review:x", "1"], "bad_ref"),
+        ([ref, "2", "--undo"], "unknown"),
+    ]:
+        assert main(["dismiss", *args]) == 1
+        assert f"dismiss refused ({guard})" in capsys.readouterr().err
+
+    assert main(["dismiss", ref, "2"]) == 0
+    assert f"{ref} finding 2 is dismissed: no worker or tick acts on it." in capsys.readouterr().out
+    assert main(["review", "show", str(review_id)]) == 0
+    assert "2. **minor** `src/retry.py:7`: log line is noisy (dismissed)" in capsys.readouterr().out
+    assert main(["review", "show"]) == 0
+    assert "findings, 2 findings (1 dismissed), impact normal" in capsys.readouterr().out
+
+    # The overseer reads only the findings the operator kept.
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
+    assert main(["tick", "--dry-run"]) == 0
+    latest = state_block(agent_log)["reviews"]["prs"][0]["latest"]
+    assert (latest["findings"], latest["dismissed_findings"]) == (["retry never stops"], 1)
+
+    # A resume hands the worker the kept one, under its own number.
+    implemented(conn, monkeypatch)
+    in_tick(conn, monkeypatch)
+    assert main(resume("--review-run", str(review_id)), runner=InlineRunner()) == 0
+    prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
+    assert "1. **blocking** `src/retry.py:42`: retry never stops" in prompt
+    assert "log line is noisy" not in prompt
+
+    # With every finding dismissed, there is nothing for a worker to address.
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    assert main(["dismiss", ref, "1"]) == 0
+    tick_id = in_tick(conn, monkeypatch)
+    assert main(resume("--review-run", str(review_id)), runner=InlineRunner()) == 1
+    assert [(d[2], d[3]) for d in decisions(conn, tick_id)] == [
+        (
+            "refused:bad_review",
+            f"the operator dismissed every finding of review run {review_id}: none is left to address",
+        )
+    ]
+
+    # Undo hands it back.
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    capsys.readouterr()
+    assert main(["dismiss", ref, "1", "--undo"]) == 0
+    assert "is no longer dismissed: a resume hands it to the worker again." in capsys.readouterr().out
+    assert db.review_dismissals(conn, review_id) == frozenset({2})
