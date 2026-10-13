@@ -16,7 +16,8 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from canopy.core import db
-from canopy.serve import live, mock, secret
+from canopy.core.context import Context
+from canopy.serve import live, mock, secret, views
 from canopy.serve.__main__ import main
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
@@ -31,6 +32,7 @@ from canopy.serve.schema import (
     SpendUpdated,
     StreamEvent,
     TicketChanged,
+    TicketSummary,
     TicketsUpdated,
     TickUpdated,
 )
@@ -431,6 +433,29 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     lists = [e.root for e in found if isinstance(e.root, TicketsUpdated)]
     assert len(lists) == 2
     assert lists[1].tickets[0].key == "ABC-103"
+
+
+def test_a_streams_read_never_holds_up_a_request(served: int, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stream reads the lists on a thread of its own: a request is answered while a read is still under way."""
+    reading, answered = threading.Event(), threading.Event()
+    tickets = views.tickets
+
+    def slow(ctx: Context) -> list[TicketSummary]:
+        reading.set()
+        answered.wait(timeout=10)
+        return tickets(ctx)
+
+    monkeypatch.setattr(views, "tickets", slow)
+    stream = threading.Thread(target=read_events, args=(served, 1), daemon=True)
+    stream.start()
+    assert reading.wait(timeout=10)
+    try:
+        response = httpx2.get(f"http://127.0.0.1:{served}/api/loop", timeout=5)
+    finally:
+        answered.set()
+    assert response.status_code == 200
+    stream.join(timeout=10)
+    assert not stream.is_alive()
 
 
 # The development server and the schema
