@@ -1,7 +1,6 @@
 # canopy
 
-> Working name. `canopy` on PyPI is an unrelated project, so canopy installs from this repository (D046). Rename
-> before any index release.
+> Not on PyPI: `canopy` there is an unrelated project. canopy installs from this repository or its releases (D046).
 
 An unattended, local agent loop driven by your issue tracker.
 
