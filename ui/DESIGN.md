@@ -40,7 +40,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
-| `syntax-key`, `-string`, `-number`, `-literal` | A JSON line's keys, strings, numbers, and literals, in tick output. |
+| `syntax-key`, `-string`, `-number`, `-literal` | JSON's keys, strings, numbers, and literals, in agent output. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
@@ -300,20 +300,21 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   in monospace a shell call's command (the agent's description of it on hover), else the runtime's title, else its
   input's short values as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of
   one short line that is not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a
-  `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented, in
-  monospace blocks at most 24rem tall. A model call is a muted line with its tokens and cost, and its reason only when
-  it is not `tool-calls`, as every call but the last is; it opens the same way to its tokens by kind, each a label
-  and a readout on one line, and Open all leaves it closed. A runtime error is tinted `status-failed`. Open all and
-  Close all are in the header, with the session id; above the rows, how many tool calls, failed and refused ones, and
-  model calls. A
+  `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented and
+  colored as a tick's output is (below), in monospace blocks at most 24rem tall. A model call is a muted line with
+  its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
+  same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
+  is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
+  tool calls, failed and refused ones, and model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
   line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
   wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
-  as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`):
-  keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line stays plain.
+  as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
+  `JsonTokens`): keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line
+  stays plain. A transcript's block is colored the same way when the whole of it is JSON.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
