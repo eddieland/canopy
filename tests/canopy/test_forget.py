@@ -58,7 +58,7 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
     assert f"{KEY} is forgotten" in out
     assert f"canopy no longer tracks branch {OLD}, {OLD_PR}." in out
     assert "delete its branch on origin yourself" in out
-    assert "max_implement_attempts" not in out  # one implement of two
+    assert "its limit is" not in out  # one implement of two
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None
     assert (ticket["branch"], ticket["phase"], ticket["done"]) == (None, None, 0)
@@ -86,7 +86,7 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
     assert dispatch(conn, monkeypatch, *LABEL, "--kind", "implement", runner=runner) == 1
     assert "dispatch refused (attempt_limit)" in capsys.readouterr().err
     assert operator("forget", KEY, monkeypatch=monkeypatch) == 0
-    assert "It has had 2 implement runs in repo, and policy.max_implement_attempts is 2" in capsys.readouterr().out
+    assert "It has had 2 implement runs in repo, and its limit is 2" in capsys.readouterr().out
     assert dispatch(conn, monkeypatch, *LABEL, "--kind", "implement", "--slug", "third", runner=runner) == 1
     assert "dispatch refused (attempt_limit)" in capsys.readouterr().err
 

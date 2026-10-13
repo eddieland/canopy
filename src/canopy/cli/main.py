@@ -62,6 +62,7 @@ for command in (
     conversation.cmd_stop,
     conversation.cmd_reply,
     conversation.cmd_forget,
+    conversation.cmd_grant,
     conversation.cmd_show,
     runs.cmd_dispatch,
     runs.cmd_run,

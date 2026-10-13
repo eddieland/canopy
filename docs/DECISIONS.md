@@ -162,7 +162,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D030. Attempt limits and cooldowns are derived from `runs`, with no reset
 
 - An attempt is a `runs` row of that kind, however it ended. The overseer can run any `canopy` command, and a guard it
-  can reset is not a guard; a human raises a limit in config.
+  can reset is not a guard; a human raises a limit in config, or one unit's with `canopy grant` (DESIGN §22).
 - `--cursor` advances only once the worker starts, so a refused dispatch leaves its trigger for the next tick.
 - Revisit: if limits routinely hit healthy tickets; then count per PR.
 

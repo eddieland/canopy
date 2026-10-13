@@ -97,9 +97,11 @@ Controls:
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
   harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
   journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
-  `start`, `stop`, `reply`, and `forget` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
-  canopy runs has. So do `pause` and `resume`, the loop's pause (DESIGN §6): an agent that paused the loop could hold
-  off every tick after its own, and one that resumed it could undo the operator's pause.
+  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind and resets no count
+  (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is
+  set, which every agent canopy runs has, so no agent can lift a limit that bounds it. So do `pause` and `resume`, the
+  loop's pause (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
+  it could undo the operator's pause.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -168,7 +170,8 @@ Controls:
 Controls in code, not prompts:
 
 - `capacity.max_workers` cap.
-- Per-run timeout; per-kind attempt limits; cooldowns.
+- Per-run timeout; per-kind attempt limits, raised only by the operator, in config or per unit with `canopy grant`;
+  cooldowns.
 - One running worker per ticket.
 - Workers push once and exit. They do not poll CI or retry.
 - A tick that cannot acquire the lock exits immediately.

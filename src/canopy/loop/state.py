@@ -34,6 +34,7 @@ def state_block(
     last_runs: Mapping[str, sqlite3.Row],
     run_slots: Mapping[int, list[sqlite3.Row]],
     attempts: Mapping[policy.Unit, Mapping[str, int]],
+    grants: Mapping[policy.Unit, Mapping[str, int]],
     fix_ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
     split_attempts: Mapping[str, int],
@@ -46,14 +47,14 @@ def state_block(
 ) -> str:
     """Render the `## State` section the harness appends to the overseer prompt.
 
-    `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts` and
-    `fix_ci_cooldowns` are per unit (`policy.unit`). `split_attempts` are per ticket, and `split_children` are the
-    children of splits not yet done, with their split run's end (DESIGN §18). `chores` are the configured chores
-    (DESIGN §19); with none, the block has no `chores` key, exactly as before chores existed. `private` holds each
-    private ticket's conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a
-    public ticket's operator messages newer than its message cursor, by key; a ticket without any has no `operator`
-    key (DESIGN §7, D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the
-    tick's own, so no comment can predict it.
+    `units` are each ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`,
+    and `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key
+    (DESIGN §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with
+    their split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no
+    `chores` key, exactly as before chores existed. `private` holds each private ticket's conversation state, by key
+    (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages newer than
+    its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `mirror_delimiter` ends
+    the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
     """
     private = private or {}
     operator = operator or {}
@@ -62,7 +63,7 @@ def state_block(
     def unit_summary(key: str, u: sqlite3.Row) -> dict[str, object]:
         name = str(u["repo"])
         unit = policy.unit(key, name)
-        return {
+        summary: dict[str, object] = {
             "repo": name,
             "branch": u["branch"],
             "pr_url": u["pr_url"],
@@ -71,6 +72,9 @@ def state_block(
             "attempts": dict(attempts.get(unit, no_attempts)),
             "fix_ci_cooldown_until": _stamp(fix_ci_cooldowns.get(unit)),
         }
+        if unit in grants:
+            summary["granted"] = dict(grants[unit])
+        return summary
 
     def run_summary(run: sqlite3.Row | None) -> dict[str, object] | None:
         if run is None:
