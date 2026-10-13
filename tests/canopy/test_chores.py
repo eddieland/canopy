@@ -5,9 +5,12 @@ import os
 import signal
 import sqlite3
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 
@@ -48,24 +51,25 @@ def chores(canopy_env: CanopyEnv) -> Path:
     return prompt
 
 
-def chore_reports(monkeypatch: pytest.MonkeyPatch, report: object) -> None:
-    monkeypatch.setenv("FAKE_CHORE_RESULT", report if isinstance(report, str) else json.dumps(report))
+@contextmanager
+def chore_reports(report: object) -> Iterator[None]:
+    """Until the block ends, the fake chore prints `report` as its final line, verbatim if it is a string."""
+    with mock.patch.dict(os.environ, {"FAKE_CHORE_RESULT": report if isinstance(report, str) else json.dumps(report)}):
+        yield
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, str, str]]:
     return [(d["chore"], str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
 
 
-def run_inline(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, report: object, *, close: bool = True) -> int:
+def run_inline(conn: sqlite3.Connection, report: object, *, close: bool = True) -> int:
     """Start build-health in its own tick, then do its `_chore` in this process, as the detached one would."""
-    tick_id = in_tick(conn, monkeypatch)
-    chore_reports(monkeypatch, report)
-    assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
-    run_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
-    assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
-    if close:
-        db.finish_tick(conn, tick_id, "ok", "test")
-    monkeypatch.delenv("CANOPY_TICK_ID", raising=False)  # `_chore` drops it, in this process too
+    with in_tick(conn) as tick_id, chore_reports(report):
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        run_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
+        assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
+        if close:
+            db.finish_tick(conn, tick_id, "ok", "test")
     return run_id
 
 
@@ -87,126 +91,119 @@ def state_block(agent_log: Path) -> dict[str, Any]:
 
 
 def test_without_chores_nothing_about_them_reaches_the_overseer(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
-    assert decisions(conn, tick_id) == [
-        ("build-health", "refused:unknown_chore", "no chore named 'build-health' is configured for this workspace")
-    ]
+    with in_tick(conn) as tick_id:
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
+        assert decisions(conn, tick_id) == [
+            ("build-health", "refused:unknown_chore", "no chore named 'build-health' is configured for this workspace")
+        ]
 
 
 def test_max_chores_zero_turns_every_chore_off(
-    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
-    assert "chores" not in state_block(agent_log)
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+        assert "chores" not in state_block(agent_log)
 
 
-def test_a_chore_run_records_its_findings(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
     """M9 against the fakes: a detached `_chore` runs the operator's command in its own directory and closes its row."""
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    chore_reports(monkeypatch, OK)
-    assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
-    deadline = time.monotonic() + 30
-    row = db.get_chore_run(conn, 1)
-    while row is not None and row["status"] == "running" and time.monotonic() < deadline:
-        time.sleep(0.05)
+    with in_tick(conn) as tick_id, chore_reports(OK):
+        assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
+        deadline = time.monotonic() + 30
         row = db.get_chore_run(conn, 1)
-    assert row is not None
-    assert row["status"] == "ok", Path(row["log_path"]).read_text()
-    assert result.stored(row["result_json"]) == result.ChoreResult.model_validate(OK)
-    assert decisions(conn, tick_id) == [("build-health", "dispatch:chore", "chore run 1; context=Look at build 90")]
+        while row is not None and row["status"] == "running" and time.monotonic() < deadline:
+            time.sleep(0.05)
+            row = db.get_chore_run(conn, 1)
+        assert row is not None
+        assert row["status"] == "ok", Path(row["log_path"]).read_text()
+        assert result.stored(row["result_json"]) == result.ChoreResult.model_validate(OK)
+        assert decisions(conn, tick_id) == [("build-health", "dispatch:chore", "chore run 1; context=Look at build 90")]
 
-    [agent] = [json.loads(line) for line in agent_log.read_text().splitlines()]
-    cwd = canopy_env.state_dir / "chores" / "build-health"
-    assert agent["cwd"] == str(cwd)
-    assert cwd.stat().st_mode & 0o777 == 0o700
-    assert "CANOPY_TICK_ID" not in agent["env"]  # a chore cannot act as the overseer
-    prompt = agent["argv"][3]
-    assert prompt.startswith("# Build health\n\nLook at the build queue.\n\n## Run\n")
-    run = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
-    assert (run["chore"], run["run_id"], run["context"]) == ("build-health", 1, "Look at build 90")
-    assert run["previous_run"] is None
-    assert run["open_findings"] == []
-    assert run["result_contract"] == result.CONTRACT
-    # Run files are kept by chore, out of its working directory.
-    runs = canopy_env.state_dir / "chore-runs" / "build-health"
-    assert runs.stat().st_mode & 0o777 == 0o700
-    assert row["log_path"] == str(runs / "1.log")
-    assert (runs / "1.prompt").stat().st_mode & 0o777 == 0o600
-    assert not (cwd / "1.log").exists()
+        [agent] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+        cwd = canopy_env.state_dir / "chores" / "build-health"
+        assert agent["cwd"] == str(cwd)
+        assert cwd.stat().st_mode & 0o777 == 0o700
+        assert "CANOPY_TICK_ID" not in agent["env"]  # a chore cannot act as the overseer
+        prompt = agent["argv"][3]
+        assert prompt.startswith("# Build health\n\nLook at the build queue.\n\n## Run\n")
+        run = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
+        assert (run["chore"], run["run_id"], run["context"]) == ("build-health", 1, "Look at build 90")
+        assert run["previous_run"] is None
+        assert run["open_findings"] == []
+        assert run["result_contract"] == result.CONTRACT
+        # Run files are kept by chore, out of its working directory.
+        runs = canopy_env.state_dir / "chore-runs" / "build-health"
+        assert runs.stat().st_mode & 0o777 == 0o700
+        assert row["log_path"] == str(runs / "1.log")
+        assert (runs / "1.prompt").stat().st_mode & 0o777 == 0o600
+        assert not (cwd / "1.log").exists()
 
 
-def test_chore_guards(canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml("queue-age", every=30))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    runner = InlineRunner()
-    # The run is started but its `_chore` never runs, so it stays running.
-    assert main(["chore", "run", "build-health"], runner=runner) == 0
-    assert main(["chore", "run", "build-health"], runner=runner) == 1
-    assert main(["chore", "run", "queue-age"], runner=runner) == 1
-    assert db.finish_chore_run(conn, 1, "ok", json.dumps({"status": "ok"}))
-    assert main(["chore", "run", "build-health"], runner=runner) == 1
-    backdate(conn, 120)
-    assert main(["chore", "run", "queue-age"], runner=runner) == 0
-    assert main(["chore", "run", "nope"], runner=runner) == 1
+    with in_tick(conn) as tick_id:
+        runner = InlineRunner()
+        # The run is started but its `_chore` never runs, so it stays running.
+        assert main(["chore", "run", "build-health"], runner=runner) == 0
+        assert main(["chore", "run", "build-health"], runner=runner) == 1
+        assert main(["chore", "run", "queue-age"], runner=runner) == 1
+        assert db.finish_chore_run(conn, 1, "ok", json.dumps({"status": "ok"}))
+        assert main(["chore", "run", "build-health"], runner=runner) == 1
+        backdate(conn, 120)
+        assert main(["chore", "run", "queue-age"], runner=runner) == 0
+        assert main(["chore", "run", "nope"], runner=runner) == 1
 
-    found = decisions(conn, tick_id)
-    assert [(c, a) for c, a, _ in found] == [
-        ("build-health", "dispatch:chore"),
-        ("build-health", "refused:running"),
-        ("queue-age", "refused:chore_capacity"),
-        ("build-health", "refused:not_due"),
-        ("queue-age", "dispatch:chore"),
-        ("nope", "refused:unknown_chore"),
-    ]
-    assert found[1][2] == "chore run 1 of build-health is running"
-    assert found[2][2] == "1 of 1 chore runs are running"
-    assert found[3][2].startswith("build-health runs at most every 120 minutes; next after ")
-    # Chore runs are not workers: they take no worker capacity.
-    assert db.running_runs(conn) == []
+        found = decisions(conn, tick_id)
+        assert [(c, a) for c, a, _ in found] == [
+            ("build-health", "dispatch:chore"),
+            ("build-health", "refused:running"),
+            ("queue-age", "refused:chore_capacity"),
+            ("build-health", "refused:not_due"),
+            ("queue-age", "dispatch:chore"),
+            ("nope", "refused:unknown_chore"),
+        ]
+        assert found[1][2] == "chore run 1 of build-health is running"
+        assert found[2][2] == "1 of 1 chore runs are running"
+        assert found[3][2].startswith("build-health runs at most every 120 minutes; next after ")
+        # Chore runs are not workers: they take no worker capacity.
+        assert db.running_runs(conn) == []
 
 
-def test_a_dry_run_checks_the_guards_and_starts_nothing(
-    canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_dry_run_checks_the_guards_and_starts_nothing(canopy_env: CanopyEnv, chores: Path) -> None:
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch, dry_run=True)
-    runner = InlineRunner()
-    assert main(["chore", "run", "build-health"], runner=runner) == 0
-    assert main(["chore", "run", "build-health"], runner=runner) == 1
-    assert decisions(conn, tick_id) == [
-        ("build-health", "dispatch:chore", "dry run: not dispatched"),
-        ("build-health", "refused:running", "this dry run already ran build-health"),
-    ]
-    assert runner.spawned == []
-    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+    with in_tick(conn, dry_run=True) as tick_id:
+        runner = InlineRunner()
+        assert main(["chore", "run", "build-health"], runner=runner) == 0
+        assert main(["chore", "run", "build-health"], runner=runner) == 1
+        assert decisions(conn, tick_id) == [
+            ("build-health", "dispatch:chore", "dry run: not dispatched"),
+            ("build-health", "refused:running", "this dry run already ran build-health"),
+        ]
+        assert runner.spawned == []
+        assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
 
 
-def test_wait_names_a_configured_chore(
-    canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_wait_names_a_configured_chore(canopy_env: CanopyEnv, chores: Path, capsys: pytest.CaptureFixture[str]) -> None:
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["chore", "wait", "build-health", "--rationale", "outside working hours"]) == 0
-    assert main(["chore", "wait", "nope", "--rationale", "x"]) == 1
-    assert "no chore named 'nope'" in capsys.readouterr().err
-    assert decisions(conn, tick_id) == [("build-health", "wait", "outside working hours")]
-    assert main(["decisions", str(tick_id)]) == 0
-    assert "chore:build-health  wait  outside working hours" in capsys.readouterr().out
+    with in_tick(conn) as tick_id:
+        assert main(["chore", "wait", "build-health", "--rationale", "outside working hours"]) == 0
+        assert main(["chore", "wait", "nope", "--rationale", "x"]) == 1
+        assert "no chore named 'nope'" in capsys.readouterr().err
+        assert decisions(conn, tick_id) == [("build-health", "wait", "outside working hours")]
+        assert main(["decisions", str(tick_id)]) == 0
+        assert "chore:build-health  wait  outside working hours" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -221,10 +218,10 @@ def test_wait_names_a_configured_chore(
     ],
 )
 def test_an_invalid_result_is_unknown_and_records_no_findings(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch, report: object
+    canopy_env: CanopyEnv, chores: Path, agent_log: Path, report: object
 ) -> None:
     conn = journal(canopy_env)
-    run_id = run_inline(conn, monkeypatch, report)
+    run_id = run_inline(conn, report)
     row = db.get_chore_run(conn, run_id)
     assert row is not None
     assert row["status"] == "unknown"
@@ -241,9 +238,9 @@ def test_long_text_is_cut_to_its_limits() -> None:
     assert len(parsed.findings[0].detail) == 2000
 
 
-def tick(monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> None:
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0
+def tick(*, dry_run: bool = False) -> None:
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0
 
 
 @pytest.fixture
@@ -262,12 +259,11 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     treehouse_state: Path,
     agent_log: Path,
     notified: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """M9's acceptance against the fakes: findings are listed and notified once, and leave when no longer reported."""
     conn = journal(canopy_env)
-    run_inline(conn, monkeypatch, OK)
-    tick(monkeypatch)
+    run_inline(conn, OK)
+    tick()
     page = (canopy_env.state_dir / "attention.md").read_text()
     assert (
         "## chore:build-health\n\n- test_retry fails one run in five https://ci.example.test/job/checkout/90, " in page
@@ -288,8 +284,8 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
 
     # A failed run leaves the findings standing and raises chore_failed; still nothing new about the finding.
     backdate(conn, 120)
-    run_inline(conn, monkeypatch, {"status": "failed", "summary": "CI unreachable"})
-    tick(monkeypatch)
+    run_inline(conn, {"status": "failed", "summary": "CI unreachable"})
+    tick()
     items = {(i.subject, i.reason) for i in attention.current(conn)}
     assert ("chore:build-health", "chore_failed") in items
     second = notified.read_text().split("--\n")[1]
@@ -298,8 +294,8 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
 
     # An ok run that no longer reports it: the finding and chore_failed both resolve.
     backdate(conn, 120)
-    run_inline(conn, monkeypatch, {"status": "ok", "summary": "all clear"})
-    tick(monkeypatch)
+    run_inline(conn, {"status": "ok", "summary": "all clear"})
+    tick()
     third = notified.read_text().split("--\n")[2]
     assert "- chore:build-health flaky/checkout/test_retry\n" in third
     assert "- chore:build-health chore_failed\n" in third
@@ -307,14 +303,14 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
 
 
 def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, chores: Path, agent_log: Path
 ) -> None:
     conn = journal(canopy_env)
-    run_inline(conn, monkeypatch, OK)
+    run_inline(conn, OK)
     backdate(conn, 600)
-    run_inline(conn, monkeypatch, {"status": "failed"})
+    run_inline(conn, {"status": "failed"})
     backdate(conn, 120)
-    run_inline(conn, monkeypatch, {"status": "ok", "findings": [FINDING, {**FINDING, "id": "stuck/pr-7"}]})
+    run_inline(conn, {"status": "ok", "findings": [FINDING, {**FINDING, "id": "stuck/pr-7"}]})
     first = db.get_chore_run(conn, 1)
     third = db.get_chore_run(conn, 3)
     assert first is not None
@@ -323,14 +319,12 @@ def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
     found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
     assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
     # A finding open longer than one page of history reads back further.
-    monkeypatch.setattr(view, "_HISTORY_RUNS", 1)
-    found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
-    assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
+    with mock.patch.object(view, "_HISTORY_RUNS", 1):
+        found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
+        assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
 
 
-def test_a_shadowing_config_above_the_cwd_stops_the_chore(
-    canopy_env: CanopyEnv, chores: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
     project = canopy_env.home / "project"
     (project / "sub").mkdir(parents=True)
     (project / ".opencode" / "agent").mkdir(parents=True)
@@ -338,7 +332,7 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(
     cwd = f"cwd = {json.dumps(str(project / 'sub'))}\n"
     canopy_env.write_user(canopy_env.user_file.read_text() + cwd)
     conn = journal(canopy_env)
-    run_id = run_inline(conn, monkeypatch, OK)
+    run_id = run_inline(conn, OK)
     run = db.get_chore_run(conn, run_id)
     assert run is not None
     assert run["status"] == "crashed"
@@ -347,55 +341,51 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(
 
 
 def test_deleting_a_chore_clears_its_items(
-    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
     conn = journal(canopy_env)
-    run_inline(conn, monkeypatch, {"status": "failed", "findings": []})
-    tick(monkeypatch)
+    run_inline(conn, {"status": "failed", "findings": []})
+    tick()
     assert "## chore_failed" in (canopy_env.state_dir / "attention.md").read_text()
     canopy_env.write_user(canopy_env.user_file.read_text().split("\n[chores.build-health]")[0])
-    tick(monkeypatch)
+    tick()
     assert "Nothing needs you." in (canopy_env.state_dir / "attention.md").read_text()
     assert "chores" not in state_block(agent_log)
     assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 1  # kept as history
 
 
-def test_a_chore_for_another_workspace_is_not_configured_here(
-    canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_chore_for_another_workspace_is_not_configured_here(canopy_env: CanopyEnv, chores: Path) -> None:
     text = canopy_env.user_file.read_text().replace('when = "Weekdays only."', 'workspaces = ["elsewhere"]')
     canopy_env.write_user(text)
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
-    assert decisions(conn, tick_id)[0][1] == "refused:unknown_chore"
-    canopy_env.write_user(text.replace('["elsewhere"]', '["acme"]'))  # the name in this workspace's map
-    assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+    with in_tick(conn) as tick_id:
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
+        assert decisions(conn, tick_id)[0][1] == "refused:unknown_chore"
+        canopy_env.write_user(text.replace('["elsewhere"]', '["acme"]'))  # the name in this workspace's map
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
 
 
-def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\ntimeout_minutes = 1")
     )
     conn = journal(canopy_env)
-    in_tick(conn, monkeypatch)
-    assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
-    assert main(["_chore", "1"], runner=InlineRunner(timeout_agent=True)) == 0
-    row = db.get_chore_run(conn, 1)
-    assert row is not None
-    assert row["status"] == "timeout"
-    assert json.loads(row["result_json"]) == {"harness": "the chore timed out after 1 minutes"}
+    with in_tick(conn):
+        assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 0
+        assert main(["_chore", "1"], runner=InlineRunner(timeout_agent=True)) == 0
+        row = db.get_chore_run(conn, 1)
+        assert row is not None
+        assert row["status"] == "timeout"
+        assert json.loads(row["result_json"]) == {"harness": "the chore timed out after 1 minutes"}
 
 
 def test_a_killed_chore_run_is_crashed_on_the_next_tick(
-    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
     conn = journal(canopy_env)
-    tick_id = in_tick(conn, monkeypatch)
-    monkeypatch.setenv("FAKE_CHORE_SLEEP", "60")
-    assert main(["chore", "run", "build-health"]) == 0
-    db.finish_tick(conn, tick_id, "ok", "test")
-    monkeypatch.delenv("CANOPY_TICK_ID")
+    with in_tick(conn) as tick_id, mock.patch.dict(os.environ, {"FAKE_CHORE_SLEEP": "60"}):
+        assert main(["chore", "run", "build-health"]) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
     deadline = time.monotonic() + 30
     row = db.get_chore_run(conn, 1)
     while (row is None or row["agent_pid"] is None) and time.monotonic() < deadline:
@@ -408,7 +398,7 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     while procs.alive(pid) and time.monotonic() < deadline:
         time.sleep(0.05)
 
-    tick(monkeypatch)
+    tick()
     crashed = db.get_chore_run(conn, 1)
     assert crashed is not None
     assert crashed["status"] == "crashed"
@@ -424,11 +414,10 @@ def test_status_lists_each_chore(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = journal(canopy_env)
-    run_inline(conn, monkeypatch, OK)
+    run_inline(conn, OK)
     capsys.readouterr()
     assert main(["status"]) == 0
     out = capsys.readouterr().out
@@ -449,17 +438,16 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = journal(canopy_env)
-    run_inline(conn, monkeypatch, OK)
+    run_inline(conn, OK)
     backdate(conn, 600)
     assert open_ids(canopy_env, conn) == [FINDING["id"]]
-    chore_reports(monkeypatch, {"status": "ok", "summary": "all green", "findings": []})
     # Due, but with no tick and no chore capacity left to take: a try is the operator's, outside every guard but
     # `running`.
-    assert main(["chore", "try", "build-health", "--context", "Look at build 91"]) == 0
+    with chore_reports({"status": "ok", "summary": "all green", "findings": []}):
+        assert main(["chore", "try", "build-health", "--context", "Look at build 91"]) == 0
     out = capsys.readouterr()
     assert "trying chore build-health in " in out.err
     assert "recorded as chore run 2" in out.err
@@ -496,13 +484,12 @@ def test_try_with_no_record_records_nothing(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = journal(canopy_env)
-    run_inline(conn, monkeypatch, OK)
-    chore_reports(monkeypatch, {"status": "ok", "summary": "all green", "findings": []})
-    assert main(["chore", "try", "build-health", "--no-record"]) == 0
+    run_inline(conn, OK)
+    with chore_reports({"status": "ok", "summary": "all green", "findings": []}):
+        assert main(["chore", "try", "build-health", "--no-record"]) == 0
     out = capsys.readouterr()
     assert "nothing is recorded" in out.err
     assert out.out.rstrip().endswith("chore try build-health: ok; nothing recorded")
@@ -518,58 +505,55 @@ def test_try_works_with_chores_off_and_reports_a_bad_result(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
-    chore_reports(monkeypatch, {"status": "done"})
-    assert main(["chore", "try", "build-health", "--no-record"]) == 1
-    out = capsys.readouterr().out
-    assert "chore try build-health: unknown (the chore's last line was not a valid result" in out
-    assert "--- agent text ---" in out
-    conn = journal(canopy_env)
-    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+    with chore_reports({"status": "done"}):
+        assert main(["chore", "try", "build-health", "--no-record"]) == 1
+        out = capsys.readouterr().out
+        assert "chore try build-health: unknown (the chore's last line was not a valid result" in out
+        assert "--- agent text ---" in out
+        conn = journal(canopy_env)
+        assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
 
-    assert main(["chore", "try", "build-health"]) == 1
-    assert "chore try build-health: unknown (" in capsys.readouterr().out
-    row = db.get_chore_run(conn, 1)
-    assert row is not None
-    assert row["status"] == "unknown"
+        assert main(["chore", "try", "build-health"]) == 1
+        assert "chore try build-health: unknown (" in capsys.readouterr().out
+        row = db.get_chore_run(conn, 1)
+        assert row is not None
+        assert row["status"] == "unknown"
 
 
 def test_try_refuses_while_the_chore_runs_unless_it_records_nothing(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = journal(canopy_env)
     running = db.insert_chore_run(conn, tick_id=None, chore="build-health", logs_dir=canopy_env.state_dir)
-    chore_reports(monkeypatch, OK)
-    assert main(["chore", "try", "build-health"]) == 1
-    err = capsys.readouterr().err
-    assert f"chore try refused: chore run {running} of build-health is running; --no-record runs it anyway" in err
-    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 1
-    assert main(["chore", "try", "build-health", "--no-record"]) == 0
+    with chore_reports(OK):
+        assert main(["chore", "try", "build-health"]) == 1
+        err = capsys.readouterr().err
+        assert f"chore try refused: chore run {running} of build-health is running; --no-record runs it anyway" in err
+        assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 1
+        assert main(["chore", "try", "build-health", "--no-record"]) == 0
 
 
 def test_try_refuses_an_unknown_chore_and_inside_canopy_runs(
-    canopy_env: CanopyEnv, chores: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, chores: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert main(["chore", "try", "nope"]) == 1
     assert capsys.readouterr().err.rstrip().endswith("no chore named 'nope' is defined for this workspace")
-    monkeypatch.setenv("CANOPY_RUN_ID", "chore-3")
-    assert main(["chore", "try", "build-health"]) == 1
-    assert "chore try refused (inside_run)" in capsys.readouterr().err
-    assert journal(canopy_env).execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "chore-3"}):
+        assert main(["chore", "try", "build-health"]) == 1
+        assert "chore try refused (inside_run)" in capsys.readouterr().err
+        assert journal(canopy_env).execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
 
 
 def test_a_note_to_a_chore_reaches_its_next_runs(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     note = f"Leave out {FINDING['id']} until 2026-10-15: the fix is merging."
@@ -583,11 +567,12 @@ def test_a_note_to_a_chore_reaches_its_next_runs(
     conn = journal(canopy_env)
     # A note waits for the chore's next run: it does not wake a waiting loop, which wakes for tickets' messages.
     assert db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) == 0
-    run_inline(conn, monkeypatch, OK)
+    run_inline(conn, OK)
     run = run_section(json.loads(agent_log.read_text().splitlines()[-1])["argv"][3])
     [carried] = run["operator_notes"]
     assert (carried["id"], carried["note"]) == (1, note)
-    assert main(["chore", "try", "build-health"]) == 0
+    with chore_reports(OK):
+        assert main(["chore", "try", "build-health"]) == 0
     assert run_section(json.loads(agent_log.read_text().splitlines()[-1])["argv"][3])["operator_notes"] == [carried]
 
     capsys.readouterr()
@@ -603,20 +588,18 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
     treehouse_state: Path,
     agent_log: Path,
     notified: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     conn = journal(canopy_env)
     page = canopy_env.state_dir / "attention.md"
-    run_inline(conn, monkeypatch, OK)
-    tick(monkeypatch)
+    run_inline(conn, OK)
+    tick()
     assert FINDING["id"] in page.read_text()
 
     # Only the operator dismisses, and only a finding the chore has open.
-    monkeypatch.setenv("CANOPY_TICK_ID", "1")
-    assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 1
-    assert "dismiss refused (inside_run)" in capsys.readouterr().err
-    monkeypatch.delenv("CANOPY_TICK_ID")
+    with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": "1"}):
+        assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 1
+        assert "dismiss refused (inside_run)" in capsys.readouterr().err
     for ref, finding, guard in [
         ("chore:build-health", "stuck/pr-7", "unknown"),
         ("chore:build-health", "not an id", "bad_finding"),
@@ -632,7 +615,7 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
     assert "is dismissed: it is off the attention list" in capsys.readouterr().out
     # `attention.md` is rewritten at once, not at the next tick; a sink hears why the finding left at the next one.
     assert "Nothing needs you." in page.read_text()
-    tick(monkeypatch)
+    tick()
     assert "Nothing needs you." in page.read_text()
     assert f"- chore:build-health {FINDING['id']} (dismissed)\n" in notified.read_text().split("--\n")[1]
     assert main(["show", "chore:build-health"]) == 0
@@ -643,16 +626,16 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
 
     # A later run still reporting it leaves it dismissed.
     backdate(conn, 120)
-    run_inline(conn, monkeypatch, OK)
-    tick(monkeypatch)
+    run_inline(conn, OK)
+    tick()
     assert "Nothing needs you." in page.read_text()
 
     # Once a run leaves it out, the dismissal is spent: the finding coming back is listed again.
     backdate(conn, 120)
-    run_inline(conn, monkeypatch, {"status": "ok", "summary": "all clear"})
+    run_inline(conn, {"status": "ok", "summary": "all clear"})
     backdate(conn, 120)
-    run_inline(conn, monkeypatch, OK)
-    tick(monkeypatch)
+    run_inline(conn, OK)
+    tick()
     assert FINDING["id"] in page.read_text()
 
     # Undo lists it again at once.
@@ -670,33 +653,33 @@ def test_a_chore_run_records_what_it_cost(
     canopy_env: CanopyEnv,
     chores: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """With OpenCode's JSON events, as the default `chore_cmd` asks for, a chore run records its session and cost."""
     text = canopy_env.user_file.read_text()
     canopy_env.write_user(text.replace("--agent canopy-chore {prompt}", "--agent canopy-chore --format json {prompt}"))
-    monkeypatch.setenv("FAKE_CHORE_SESSION", "ses_chore")
-    conn = journal(canopy_env)
-    run_id = run_inline(conn, monkeypatch, OK)
-    row = db.get_chore_run(conn, run_id)
-    assert row is not None
-    assert row["status"] == "ok"  # the result line is read from the text events
-    assert row["session_id"] == "ses_chore"
-    usage = db.usage_of(row)
-    assert usage is not None
-    assert usage.cost_usd == 0.25  # two model calls at 0.125
-    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+    # The tries after the run report what it did.
+    with mock.patch.dict(os.environ, {"FAKE_CHORE_SESSION": "ses_chore"}), chore_reports(OK):
+        conn = journal(canopy_env)
+        run_id = run_inline(conn, OK)
+        row = db.get_chore_run(conn, run_id)
+        assert row is not None
+        assert row["status"] == "ok"  # the result line is read from the text events
+        assert row["session_id"] == "ses_chore"
+        usage = db.usage_of(row)
+        assert usage is not None
+        assert usage.cost_usd == 0.25  # two model calls at 0.125
+        assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
 
-    capsys.readouterr()
-    assert main(["show", "chore:build-health"]) == 0
-    assert "session ses_chore  $0.25, " in capsys.readouterr().out
-    assert main(["chore", "try", "build-health", "--no-record"]) == 0
-    assert "--- agent exit 0, cost $0.25, " in capsys.readouterr().out
-    # A try that records nothing records its cost neither; a recorded one does.
-    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
-    assert main(["chore", "try", "build-health"]) == 0
-    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.5
+        capsys.readouterr()
+        assert main(["show", "chore:build-health"]) == 0
+        assert "session ses_chore  $0.25, " in capsys.readouterr().out
+        assert main(["chore", "try", "build-health", "--no-record"]) == 0
+        assert "--- agent exit 0, cost $0.25, " in capsys.readouterr().out
+        # A try that records nothing records its cost neither; a recorded one does.
+        assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+        assert main(["chore", "try", "build-health"]) == 0
+        assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.5
 
 
 def test_the_default_chore_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:

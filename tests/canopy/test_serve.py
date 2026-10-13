@@ -11,6 +11,7 @@ import time
 from collections.abc import Iterator
 from importlib.metadata import version
 from pathlib import Path
+from unittest import mock
 
 import httpx2
 import pytest
@@ -20,8 +21,10 @@ from pydantic import ValidationError
 
 from canopy.core import db
 from canopy.core.context import Context
-from canopy.serve import live, mock, secret, views
+from canopy.serve import live, secret, views
+from canopy.serve import mock as serve_mock
 from canopy.serve.__main__ import main
+from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
@@ -67,7 +70,7 @@ def ui(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+    return serve_mock.seed(tmp_path / "mock")
 
 
 def client(ui_dir: Path | None, backend: Backend, *, key: str | None = None, **options: object) -> TestClient:
@@ -141,8 +144,8 @@ def test_a_base_path_prefixes_everything(ui: Path, backend: Backend) -> None:
 
 def test_each_app_serves_its_own_backend_and_sessions(ui: Path, tmp_path: Path) -> None:
     # The routers are shared by every app in the process; what a route is handed is bound per app.
-    first = client(ui, mock.seed(tmp_path / "first"))
-    second = client(ui, mock.seed(tmp_path / "second"), key=SECRET, base_path="/canopy")
+    first = client(ui, serve_mock.seed(tmp_path / "first"))
+    second = client(ui, serve_mock.seed(tmp_path / "second"), key=SECRET, base_path="/canopy")
     assert second.get("/canopy/api/meta").status_code == 401
     headers = signed_in(second, base="/canopy")
     before = second.get("/canopy/api/loop", headers=headers).json()
@@ -223,17 +226,15 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     assert c.post("/api/tickets/ABC-102/start", headers={"origin": ORIGIN}).status_code == 401
 
 
-def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(
-    ui: Path, backend: Backend, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr("canopy.serve.api.session.FAILED_SIGN_IN_SECONDS", 0.2)
-    c = client(ui, backend, key=SECRET)
-    began = time.monotonic()
-    response = c.post("/api/session", json={"secret": SECRET + "x"})
-    assert response.status_code == 401
-    assert time.monotonic() - began >= 0.2
-    assert "set-cookie" not in response.headers
-    assert c.post("/api/session", json={"secret": ""}).status_code == 422
+def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(ui: Path, backend: Backend) -> None:
+    with mock.patch.object(session, "FAILED_SIGN_IN_SECONDS", 0.2):
+        c = client(ui, backend, key=SECRET)
+        began = time.monotonic()
+        response = c.post("/api/session", json={"secret": SECRET + "x"})
+        assert response.status_code == 401
+        assert time.monotonic() - began >= 0.2
+        assert "set-cookie" not in response.headers
+        assert c.post("/api/session", json={"secret": ""}).status_code == 422
 
 
 def test_signing_in_sets_an_httponly_strict_cookie_named_for_the_port_and_scoped_to_the_base(
@@ -384,8 +385,8 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert loop.paused is None
     # The mock journal moves the running run's cost: only the runs list and the spend are sent again.
     assert isinstance(changed, RunsUpdated)
-    before = next(r for r in runs.runs if r.id == mock.LIVE_RUN)
-    after = next(r for r in changed.runs if r.id == mock.LIVE_RUN)
+    before = next(r for r in runs.runs if r.id == serve_mock.LIVE_RUN)
+    after = next(r for r in changed.runs if r.id == serve_mock.LIVE_RUN)
     assert after.cost_usd is not None
     assert before.cost_usd is not None
     assert after.cost_usd > before.cost_usd
@@ -397,7 +398,7 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
         assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
 
 
-def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
     recent = db.recent_tickets
     replied: list[bool] = []
 
@@ -415,13 +416,13 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend, monkeyp
     with backend.open() as ctx:
         sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
         sent.changes(backend, ctx)
-        monkeypatch.setattr(db, "recent_tickets", then_a_reply)
-        # The reply commits after the tickets' order is read: the rest of this read does not see it either, so no
-        # ticket's summary changes beside an order from before it.
-        assert sent.changes(backend, ctx) == []
-        assert replied == [True]
-        # The next read sees it whole: the order and the summary.
-        events = [e.root for e in sent.changes(backend, ctx)]
+        with mock.patch.object(db, "recent_tickets", autospec=True, side_effect=then_a_reply):
+            # The reply commits after the tickets' order is read: the rest of this read does not see it either, so no
+            # ticket's summary changes beside an order from before it.
+            assert sent.changes(backend, ctx) == []
+            assert replied == [True]
+            # The next read sees it whole: the order and the summary.
+            events = [e.root for e in sent.changes(backend, ctx)]
     [tickets] = [e for e in events if isinstance(e, TicketsUpdated)]
     assert tickets.tickets[0].key == "ABC-103"
     assert [e.key for e in events if isinstance(e, TicketChanged)] == ["ABC-103"]
@@ -468,7 +469,7 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     assert lists[1].tickets[0].key == "ABC-103"
 
 
-def test_a_streams_read_never_holds_up_a_request(served: int, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_streams_read_never_holds_up_a_request(served: int) -> None:
     """A stream reads the lists on a thread of its own: a request is answered while a read is still under way."""
     reading, answered = threading.Event(), threading.Event()
     tickets = views.tickets
@@ -478,17 +479,17 @@ def test_a_streams_read_never_holds_up_a_request(served: int, monkeypatch: pytes
         answered.wait(timeout=10)
         return tickets(ctx)
 
-    monkeypatch.setattr(views, "tickets", slow)
-    stream = threading.Thread(target=read_events, args=(served, 1), daemon=True)
-    stream.start()
-    assert reading.wait(timeout=10)
-    try:
-        response = httpx2.get(f"http://127.0.0.1:{served}/api/loop", timeout=5)
-    finally:
-        answered.set()
-    assert response.status_code == 200
-    stream.join(timeout=10)
-    assert not stream.is_alive()
+    with mock.patch.object(views, "tickets", autospec=True, side_effect=slow):
+        stream = threading.Thread(target=read_events, args=(served, 1), daemon=True)
+        stream.start()
+        assert reading.wait(timeout=10)
+        try:
+            response = httpx2.get(f"http://127.0.0.1:{served}/api/loop", timeout=5)
+        finally:
+            answered.set()
+        assert response.status_code == 200
+        stream.join(timeout=10)
+        assert not stream.is_alive()
 
 
 # The development server and the schema

@@ -128,6 +128,12 @@ ban-relative-imports = "all"
 "urllib.request".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "http.client".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "socket".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+# Tests patch with unittest.mock, as context managers (AGENTS.md, Testing).
+"pytest.MonkeyPatch".msg = "Patch with `mock.patch`, `mock.patch.object`, or `mock.patch.dict` in a `with` block."
+
+# `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
+[tool.ruff.lint.flake8-import-conventions]
+banned-from = ["unittest.mock"]
 
 [tool.ruff.lint.per-file-ignores]
 # The subprocess boundary (D015). Arguments are an argv list, never a shell string.

@@ -1,5 +1,9 @@
+import contextlib
+import sys
 import tomllib
+from collections.abc import Iterator
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -11,13 +15,13 @@ from tests.conftest import CanopyEnv
 
 
 @pytest.fixture
-def empty(canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def empty(canopy_env: CanopyEnv, tmp_path: Path) -> Iterator[Path]:
     """An empty directory outside any workspace or repository, as the working directory, and no user file yet."""
     canopy_env.user_file.unlink()
     path = tmp_path / "new"
     path.mkdir()
-    monkeypatch.chdir(path)
-    return path
+    with contextlib.chdir(path):
+        yield path
 
 
 def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
@@ -57,55 +61,53 @@ def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv, e
 
 
 def test_init_in_a_workspace_never_overwrites_configs(
-    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
     user_before = canopy_env.user_file.read_text()
     shared_before = canopy_env.shared_file.read_text()
-    monkeypatch.chdir(canopy_env.repo)  # inside the workspace, not at its root
-    assert main(["init", "--provider", "github"]) == 0
-    assert canopy_env.user_file.read_text() == user_before
-    assert canopy_env.shared_file.read_text() == shared_before
-    out = capsys.readouterr().out
-    assert f"kept    {canopy_env.user_file}" in out
-    assert f"kept    {canopy_env.shared_file}" in out
-    assert not (canopy_env.repo / "canopy.toml").exists()
+    with contextlib.chdir(canopy_env.repo):  # inside the workspace, not at its root
+        assert main(["init", "--provider", "github"]) == 0
+        assert canopy_env.user_file.read_text() == user_before
+        assert canopy_env.shared_file.read_text() == shared_before
+        out = capsys.readouterr().out
+        assert f"kept    {canopy_env.user_file}" in out
+        assert f"kept    {canopy_env.shared_file}" in out
+        assert not (canopy_env.repo / "canopy.toml").exists()
 
 
 def test_init_refuses_a_code_checkout(
-    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """D016: canopy writes nothing into a code repository; --workspace makes a repository of its own one."""
     checkout = tmp_path / "code"
     (checkout / ".git").mkdir(parents=True)
     (checkout / "src").mkdir()
-    monkeypatch.chdir(checkout / "src")
-    assert main(["init", "--provider", "jira"]) == 2
-    assert f"is inside the git repository {checkout}" in capsys.readouterr().err
-    assert sorted(p.name for p in checkout.iterdir()) == [".git", "src"]
-    monkeypatch.chdir(checkout)
-    assert main(["init", "--workspace", "--provider", "jira"]) == 0
-    assert (checkout / config.WORKSPACE_FILE_NAME).is_file()
+    with contextlib.chdir(checkout / "src"):
+        assert main(["init", "--provider", "jira"]) == 2
+        assert f"is inside the git repository {checkout}" in capsys.readouterr().err
+        assert sorted(p.name for p in checkout.iterdir()) == [".git", "src"]
+    with contextlib.chdir(checkout):
+        assert main(["init", "--workspace", "--provider", "jira"]) == 0
+        assert (checkout / config.WORKSPACE_FILE_NAME).is_file()
 
 
 def test_init_names_a_leftover_canopy_toml_in_the_checkout(
-    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     checkout = tmp_path / "code"
     (checkout / ".git").mkdir(parents=True)
     (checkout / "canopy.toml").write_text("[tracker]\n")
-    monkeypatch.chdir(checkout)
-    assert main(["init", "--provider", "jira"]) == 2
-    assert f"{checkout / 'canopy.toml'} is not read: move its keys" in capsys.readouterr().err
+    with contextlib.chdir(checkout):
+        assert main(["init", "--provider", "jira"]) == 2
+        assert f"{checkout / 'canopy.toml'} is not read: move its keys" in capsys.readouterr().err
 
 
-def test_init_refuses_the_home_directory(
-    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_init_refuses_the_home_directory(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     """Every later init below it would fill it in, and its .canopy/ is an earlier canopy's journal."""
-    monkeypatch.chdir(canopy_env.home)
-    assert main(["init", "--provider", "jira"]) == 2
-    assert "is your home directory" in capsys.readouterr().err
-    assert not (canopy_env.home / config.WORKSPACE_FILE_NAME).exists()
+    with contextlib.chdir(canopy_env.home):
+        assert main(["init", "--provider", "jira"]) == 2
+        assert "is your home directory" in capsys.readouterr().err
+        assert not (canopy_env.home / config.WORKSPACE_FILE_NAME).exists()
 
 
 def test_init_refuses_a_directory_with_a_journal_and_no_workspace_file(
@@ -117,16 +119,14 @@ def test_init_refuses_a_directory_with_a_journal_and_no_workspace_file(
     assert not (empty / config.WORKSPACE_FILE_NAME).exists()
 
 
-def test_init_under_a_home_that_is_a_dotfiles_repository(
-    canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_init_under_a_home_that_is_a_dotfiles_repository(canopy_env: CanopyEnv) -> None:
     """A repository at the home directory is the operator's dotfiles, not a code repository."""
     (canopy_env.home / ".git").mkdir()
     root = canopy_env.home / "acme"
     root.mkdir()
-    monkeypatch.chdir(root)
-    assert main(["init", "--provider", "jira"]) == 0
-    assert (root / config.WORKSPACE_FILE_NAME).is_file()
+    with contextlib.chdir(root):
+        assert main(["init", "--provider", "jira"]) == 0
+        assert (root / config.WORKSPACE_FILE_NAME).is_file()
 
 
 def test_init_warns_about_copies_of_canopys_agents_in_a_repository(
@@ -158,13 +158,11 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
     assert old.exists()
 
 
-def test_init_needs_provider_when_not_interactive(
-    empty: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
-    assert main(["init"]) == 2
-    assert "--provider" in capsys.readouterr().err
-    assert list(empty.iterdir()) == []
+def test_init_needs_provider_when_not_interactive(empty: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with mock.patch.object(sys.stdin, "isatty", autospec=True, return_value=False):
+        assert main(["init"]) == 2
+        assert "--provider" in capsys.readouterr().err
+        assert list(empty.iterdir()) == []
 
 
 @pytest.mark.parametrize("provider", ["../evil", "Jira Cloud", "", "jira\n"])

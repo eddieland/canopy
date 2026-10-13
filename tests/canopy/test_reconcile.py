@@ -5,7 +5,10 @@ import os
 import signal
 import sqlite3
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -25,9 +28,14 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     return journal(canopy_env)
 
 
-def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
-    monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps([["canopy", *c] for c in commands]))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
+@contextmanager
+def overseer_does(*commands: list[str]) -> Iterator[None]:
+    """Until the block ends, the fake overseer runs `canopy` with each of `commands` and then ends its tick."""
+    commands_json = json.dumps([["canopy", *c] for c in commands])
+    with mock.patch.dict(
+        os.environ, {"FAKE_OVERSEER_COMMANDS": commands_json, "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+    ):
+        yield
 
 
 def lease(treehouse_state: Path, key: str) -> dict[str, str]:
@@ -78,30 +86,29 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
     treehouse_state: Path,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    overseer_does(monkeypatch)
-    dead = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
-    never_started = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=None)
-    live = add_run(conn, "PROJ-3", lease(treehouse_state, "PROJ-3"), pid=os.getpid())
+    with overseer_does():
+        dead = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
+        never_started = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=None)
+        live = add_run(conn, "PROJ-3", lease(treehouse_state, "PROJ-3"), pid=os.getpid())
 
-    assert main(["tick"]) == 0
-    for run_id in (dead, never_started):
-        run = db.get_run(conn, run_id)
-        assert run is not None
-        assert run["status"] == "crashed"
-        assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
-    still = db.get_run(conn, live)
-    assert still is not None
-    assert still["status"] == "running"
-    assert [s["status"] for s in pool(treehouse_state)] == ["available", "available", "leased"]
+        assert main(["tick"]) == 0
+        for run_id in (dead, never_started):
+            run = db.get_run(conn, run_id)
+            assert run is not None
+            assert run["status"] == "crashed"
+            assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
+        still = db.get_run(conn, live)
+        assert still is not None
+        assert still["status"] == "running"
+        assert [s["status"] for s in pool(treehouse_state)] == ["available", "available", "leased"]
 
-    items = [(k, a) for k, a, _ in last_tick_decisions(conn)]
-    assert items == [("PROJ-1", "attention:crashed"), ("PROJ-2", "attention:crashed")]
-    [prompt] = [r["argv"][-1] for r in map(json.loads, agent_log.read_text().splitlines())]
-    assert '"running": 1' in prompt
-    assert '"available": 1' in prompt
-    assert '"status": "crashed"' in prompt  # the ticket's last run, for the overseer
+        items = [(k, a) for k, a, _ in last_tick_decisions(conn)]
+        assert items == [("PROJ-1", "attention:crashed"), ("PROJ-2", "attention:crashed")]
+        [prompt] = [r["argv"][-1] for r in map(json.loads, agent_log.read_text().splitlines())]
+        assert '"running": 1' in prompt
+        assert '"available": 1' in prompt
+        assert '"status": "crashed"' in prompt  # the ticket's last run, for the overseer
 
 
 def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
@@ -109,23 +116,22 @@ def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
     treehouse_state: Path,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # The lock beside a run's log says whether its `_run` lives; the pid counts only for a run that has none.
-    overseer_does(monkeypatch)
-    holding = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
-    let_go = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=os.getpid())
-    runs = canopy_env.state_dir / "runs"
-    for run_id in (holding, let_go):
-        conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs / f"{run_id}.log"), run_id))
-    os.close(lock.take(procs.lifelock(runs / f"{let_go}.log")))
-    held = lock.take(procs.lifelock(runs / f"{holding}.log"))
-    try:
-        assert main(["tick"]) == 0
-    finally:
-        os.close(held)
-    statuses = {r: (run["status"] if (run := db.get_run(conn, r)) else None) for r in (holding, let_go)}
-    assert statuses == {holding: "running", let_go: "crashed"}
+    with overseer_does():
+        holding = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
+        let_go = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=os.getpid())
+        runs = canopy_env.state_dir / "runs"
+        for run_id in (holding, let_go):
+            conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs / f"{run_id}.log"), run_id))
+        os.close(lock.take(procs.lifelock(runs / f"{let_go}.log")))
+        held = lock.take(procs.lifelock(runs / f"{holding}.log"))
+        try:
+            assert main(["tick"]) == 0
+        finally:
+            os.close(held)
+        statuses = {r: (run["status"] if (run := db.get_run(conn, r)) else None) for r in (holding, let_go)}
+        assert statuses == {holding: "running", let_go: "crashed"}
 
 
 def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
@@ -133,22 +139,21 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
     treehouse_state: Path,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    overseer_does(monkeypatch)
-    old = canopy_env.state_dir / "runtime" / "0123456789abcdef"
-    old.mkdir(parents=True)
-    live = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=os.getpid())
+    with overseer_does():
+        old = canopy_env.state_dir / "runtime" / "0123456789abcdef"
+        old.mkdir(parents=True)
+        live = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=os.getpid())
 
-    # A live run may be one of an earlier canopy, still loading the old snapshot.
-    assert main(["tick", "--dry-run"]) == 0
-    assert old.is_dir()
+        # A live run may be one of an earlier canopy, still loading the old snapshot.
+        assert main(["tick", "--dry-run"]) == 0
+        assert old.is_dir()
 
-    db.finish_run(conn, live, "done", "{}")
-    assert main(["tick", "--dry-run"]) == 0
-    assert not old.exists()
-    current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
-    assert [p.name for p in (canopy_env.state_dir / "runtime").iterdir()] == [current.name]
+        db.finish_run(conn, live, "done", "{}")
+        assert main(["tick", "--dry-run"]) == 0
+        assert not old.exists()
+        current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+        assert [p.name for p in (canopy_env.state_dir / "runtime").iterdir()] == [current.name]
 
 
 def test_stale_canopy_lease_is_returned_and_others_are_not(
@@ -156,18 +161,17 @@ def test_stale_canopy_lease_is_returned_and_others_are_not(
     treehouse_state: Path,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    overseer_does(monkeypatch)
-    slots = [
-        {"name": "1", "path": "/pool/1/repo", "status": "leased", "lease_id": "a", "lease_holder": "canopy:P-1"},
-        {"name": "2", "path": "/pool/2/repo", "status": "leased", "lease_id": "b", "lease_holder": "someone-else"},
-    ]
-    treehouse_state.write_text(pool_state(canopy_env.repo, slots))
-    assert main(["tick", "--dry-run"]) == 0
-    assert [s["status"] for s in pool(treehouse_state)] == ["available", "leased"]
-    log = (canopy_env.state_dir / "canopy.log").read_text()
-    assert "canopy lease with no running worker; returned" in log
+    with overseer_does():
+        slots = [
+            {"name": "1", "path": "/pool/1/repo", "status": "leased", "lease_id": "a", "lease_holder": "canopy:P-1"},
+            {"name": "2", "path": "/pool/2/repo", "status": "leased", "lease_id": "b", "lease_holder": "someone-else"},
+        ]
+        treehouse_state.write_text(pool_state(canopy_env.repo, slots))
+        assert main(["tick", "--dry-run"]) == 0
+        assert [s["status"] for s in pool(treehouse_state)] == ["available", "leased"]
+        log = (canopy_env.state_dir / "canopy.log").read_text()
+        assert "canopy lease with no running worker; returned" in log
 
 
 @pytest.mark.parametrize(
@@ -212,20 +216,19 @@ def test_treehouse_return_failure_stops_the_tick(
     agent_log: Path,
     conn: sqlite3.Connection,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
     broken = tmp_path / "bin"
     broken.mkdir()
     (broken / "treehouse").write_text('#!/bin/sh\n[ "$1" = status ] && echo "[]" && exit 0\necho boom >&2; exit 2\n')
     (broken / "treehouse").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{broken}{os.pathsep}{os.environ['PATH']}")
-    assert main(["tick"]) == 1
-    tick = db.last_tick(conn)
-    assert tick is not None
-    assert tick["status"] == "reconcile_failed"
-    assert "boom" in tick["summary"]
-    assert not agent_log.exists()
+    with mock.patch.dict(os.environ, {"PATH": f"{broken}{os.pathsep}{os.environ['PATH']}"}):
+        assert main(["tick"]) == 1
+        tick = db.last_tick(conn)
+        assert tick is not None
+        assert tick["status"] == "reconcile_failed"
+        assert "boom" in tick["summary"]
+        assert not agent_log.exists()
 
 
 def test_live_tick_takes_a_ticket_to_a_pushed_branch(
@@ -234,27 +237,12 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     treehouse_state: Path,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
-    overseer_does(
-        monkeypatch,
-        [
-            "dispatch",
-            "PROJ-1",
-            "--repo",
-            "repo",
-            "--label",
-            "agent-ready-tester",
-            "--kind",
-            "implement",
-            "--slug",
-            "add-login",
-        ],
-    )
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-add-login"))
-    assert main(["tick"]) == 0
+    dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+    with overseer_does([*dispatch, "--slug", "add-login"]), worker_does(*commit_and_push("agent/PROJ-1-add-login")):
+        assert main(["tick"]) == 0
     assert capsys.readouterr().out.startswith("tick 1: ok: 1 decisions: dispatch:implement=1")
 
     run = wait_for_run(conn, 1)
@@ -268,8 +256,8 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
     # The next tick sees nothing running and nothing to return, and tells the overseer how the run ended.
-    overseer_does(monkeypatch)
-    assert main(["tick"]) == 0
+    with overseer_does():
+        assert main(["tick"]) == 0
     calls = json.loads(treehouse_state.read_text())["calls"]
     assert [c[0] for c in calls] == ["status", "get", "return", "status"]
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
@@ -283,15 +271,16 @@ def test_killed_worker_is_detected_on_the_next_tick(
     treehouse_state: Path,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """M2 acceptance, against the fakes: a killed worker is found by the next tick and its slot returned."""
-    worker_does(monkeypatch)
-    monkeypatch.setenv("FAKE_WORKER_SLEEP", "60")
-    tick_id = in_tick(conn, monkeypatch)
-    assert main(["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
-    db.finish_tick(conn, tick_id, "ok", "test")
-    monkeypatch.delenv("CANOPY_TICK_ID")
+    with (
+        worker_does(),
+        mock.patch.dict(os.environ, {"FAKE_WORKER_SLEEP": "60"}),
+        in_tick(conn) as tick_id,
+    ):
+        dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+        assert main(dispatch) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
 
     # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come
     # first. The log is written after the fake's stdout chatter: killing `_run` before then would break the worker's
@@ -313,8 +302,8 @@ def test_killed_worker_is_detected_on_the_next_tick(
     assert procs.alive(worker_pid)
     assert pool(treehouse_state)[0]["status"] == "leased"
 
-    overseer_does(monkeypatch)
-    assert main(["tick"]) == 0
+    with overseer_does():
+        assert main(["tick"]) == 0
     crashed = db.get_run(conn, 1)
     assert crashed is not None
     assert crashed["status"] == "crashed"
