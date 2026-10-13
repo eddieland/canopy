@@ -67,7 +67,10 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
 export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: number } {
     const working = latestRuns(runs)
         .filter((r) => r.state === 'blocked' || r.state === 'running')
-        .toSorted((a, b) => rank(a) - rank(b) || a.started_at.localeCompare(b.started_at))
+        .toSorted((a, b) => {
+            const order = rank(a) - rank(b)
+            return order === 0 ? a.started_at.localeCompare(b.started_at) : order
+        })
     return { shown: working.slice(0, limit), more: Math.max(working.length - limit, 0) }
 }
 
