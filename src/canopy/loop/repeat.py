@@ -9,6 +9,8 @@ never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost 
 message recorded since the last tick began, such as a `canopy reply`, ends the wait early, at most once a minute (DESIGN
 §22), and so, with idle pacing on, does a run ending after the tick read the journal. On a terminal, pressing
 `TICK_NOW_KEY` ends it at once. A deferred start waits the same way before the first tick, from when the loop started.
+Each tick's row records whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend
+can be split by what it bought (ROADMAP M33).
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -75,6 +77,9 @@ _STATUS_STYLES = {
 
 # What ended a wait before its deadline: an operator message, a run ending, or the operator pressing `TICK_NOW_KEY`.
 type Woken = Literal["message", "run", "key"]
+# What started a tick, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its length, one a gate
+# shortened, or what ended one early.
+type WokenBy = Woken | Literal["start", "timer", "gate"]
 _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
     "run": "a run ended; next tick in ",
@@ -212,12 +217,14 @@ def _ticks(
     log: logs.TickAdapter,
 ) -> None:
     """Tick, report, and wait, until `stop` is requested or `max_ticks` have run, counting each tick's status."""
+    woken_by: WokenBy = "start"
     if defer_seconds:
-        _defer(console, ctx, stop, defer_seconds, keys=keys, sleep=sleep, clock=clock, log=log)
+        woken_by = _defer(console, ctx, stop, defer_seconds, keys=keys, sleep=sleep, clock=clock, log=log) or "start"
     elif pause.paused(ctx.conn) is not None:
         # Paused before the loop started: hold the first tick as a wait already due holds.
         woken = _wait(console, ctx, stop, clock(), sleep=sleep, clock=clock, keys=keys, log=log)
         _log_woken(log, woken, seen=0, read_at=None)
+        woken_by = woken or "start"
     idle_count = 0
     while not stop.requested:
         before = pacing.before(ctx)
@@ -232,8 +239,11 @@ def _ticks(
             # Keys pressed during the tick are dropped, all but a pause, which holds the next tick.
             _toggle_pause(ctx, keys(), log)
         statuses[outcome.status] += 1
-        idle = pace.on and pacing.idle(ctx, outcome, before)
-        idle_count = idle_count + 1 if idle else 0
+        # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it.
+        idle = pacing.idle(ctx, outcome, before)
+        idle_count = idle_count + 1 if pace.on and idle else 0
+        if outcome.tick_id is not None:
+            db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
         wait = None if last or stop.requested else pacing.wait(ctx, pace, idle_count, datetime.now(UTC))
         if wait is not None:
@@ -265,6 +275,7 @@ def _ticks(
             log=log,
         )
         _log_woken(log, woken, seen=seen, read_at=read_at)
+        woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
 
 
 def _defer(
@@ -277,8 +288,11 @@ def _defer(
     sleep: Callable[[float], None],
     clock: Callable[[], float],
     log: logs.TickAdapter,
-) -> None:
-    """Wait `seconds` before the first tick. An operator message or `TICK_NOW_KEY` ends it early, as between ticks."""
+) -> Woken | None:
+    """Wait `seconds` before the first tick. An operator message or `TICK_NOW_KEY` ends it early, as between ticks.
+
+    Returns what ended it early, if anything did.
+    """
     seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
     started = clock()
     log.info("loop defers its first tick", extra={"wait_seconds": round(seconds)})
@@ -304,6 +318,7 @@ def _defer(
         note="first tick in ",
     )
     _log_woken(log, woken, seen=seen, read_at=None)
+    return woken
 
 
 def _log_woken(log: logs.TickAdapter, woken: Woken | None, *, seen: int, read_at: str | None) -> None:
