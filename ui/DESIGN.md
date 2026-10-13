@@ -315,8 +315,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
   `JsonTokens`): keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line
-  stays plain. A transcript's block is colored the same way when the whole of it is JSON. A ghost Pretty toggle in the
-  header (`aria-pressed`, its pressed look the open Hide button's) lays each JSON line out over several, two spaces a
+  stays plain. A transcript's block is colored the same way when the whole of it is JSON. A Pretty `Toggle` in the
+  header (a ghost button raised while on, as the open Hide button is) lays each JSON line out over several, two spaces a
   level, by the space between its tokens alone, so every value stays as written; it reopens the block at its end.
   Each tick's panel keeps its own choice, off until turned on, across reloads (`src/lib/pretty-output.ts`), as a list
   keeps its order.
@@ -351,6 +351,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
   label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the
+  lint refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens
+  under its button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper), an option that
+  is on or off a `Checkbox`, and a choice of a few options a `ToggleGroup`. Radix keeps their ARIA in step with
+  their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a component never writes it by hand. Two
+  stay native on purpose: a transcript's tool call is a `<details>` (above), and rich text's `show N more lines`
+  shows more of text already on screen rather than opening a part, so it is a plain button with `aria-expanded`.
+  A new wrapper is shadcn's, added or ported as `button.tsx` was.
 - **Options that are each on or off** (the ticker's topics) are a row of checkboxes (`Checkbox`,
   `src/components/ui/checkbox.tsx`), each inside its label, so a click on the word toggles it too: a box on the raised
   surface, filled with the accent and its foreground's tick when on. The row is a `fieldset` named by the line beside
