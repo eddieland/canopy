@@ -240,7 +240,8 @@ exits 0 only on `ok`.
   path, and what the runtime reported (§13): `session_id`,
   `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported nothing. Separate from `runs`, whose
   ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
-  cost, and the web UI's spend counts chore runs.
+  cost, the web UI's spend counts chore runs, and its chores pages show each chore's spend over the last day and 30
+  days (§22).
 - `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
 - `finding_dismissals`: chore, finding id, when dismissed, and channel; at most one row per chore and finding.
 

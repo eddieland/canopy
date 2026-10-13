@@ -328,6 +328,38 @@ class ChoreFinding(_Model):
     """Whether the operator dismissed it since then: it is off the attention list until it clears."""
 
 
+class ChoreSpendWindow(_Model):
+    """What one chore's runs that started in the last `hours` hours cost, as the agent runtime reported it (§13).
+
+    No start time, unlike `SpendWindow`: that moves with the clock, and would change the chores list on every read.
+    """
+
+    hours: int
+    """How long the window is, in hours."""
+    runs: int
+    """How many of its runs started in the window, a running one included."""
+    priced: int
+    """How many of those reported a cost."""
+    cost_usd: float | None = None
+    """What they cost, in US dollars; None when none reported a cost."""
+    mean_usd: float | None = None
+    """What a run cost on average, over those that reported a cost; None when none did."""
+    p99_usd: float | None = None
+    """The 99th percentile of what a run cost, by nearest rank over those that reported a cost: the dearest run when
+    fewer than 100 did. None when none did."""
+    max_usd: float | None = None
+    """What the dearest run cost, of those that reported a cost; None when none did."""
+
+
+class ChoreSpend(_Model):
+    """What one chore's runs cost in the last day and the last 30 days, read together."""
+
+    day: ChoreSpendWindow
+    """The last 24 hours."""
+    month: ChoreSpendWindow
+    """The last 30 days."""
+
+
 class ChoreSummary(_Model):
     """A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings."""
 
@@ -353,6 +385,8 @@ class ChoreSummary(_Model):
     """Its open findings."""
     latest_note_id: int | None = None
     """The newest of the operator's notes to it, so a new note changes the list the stream sends."""
+    spend: ChoreSpend
+    """What its runs cost in the last day and the last 30 days."""
 
 
 class ChoreDetail(_Model):
