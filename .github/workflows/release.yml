@@ -77,7 +77,6 @@ jobs:
       - name: Build the executable
         env:
           SCIENCE_AUTH_API_GITHUB_COM_BEARER: ${{ github.token }}
-          CANOPY_UI_REQUIRED: "1"
         run: make binary
 
       # The version comes from the tag, so this fails only when the build did not see it, or the tag is not in PEP 440's
