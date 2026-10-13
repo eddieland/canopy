@@ -443,7 +443,7 @@ def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path) 
             "VALUES (1, 'OLD-1', 'implement', 'b', 'x', ?, 'l', ?, ?)",
             (ended, status, result),
         )
-    assert db.migrate(conn, resources.migrations_dir()) == [3, 4, 5, 6, 7, 8, 9]
+    assert db.migrate(conn, resources.migrations_dir()) == [3, 4, 5, 6, 7, 8, 9, 10]
     found = [(m["run_id"], m["kind"], m["body"], m["source"]) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
     assert found == [
         (2, "report", "ended blocked", "worker"),

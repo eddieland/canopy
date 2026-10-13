@@ -842,7 +842,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
 - `run_slots`: one row per slot a run leased; the repository whose pool it came from, slot path, lease id and holder,
   and the base branch the run started from there. A joint run has one per repository.
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
-  pids, times, status, the validated result (§21). `decisions.pr` names the PR of a decision about a review.
+  pids, times, status, the validated result (§21), and what the runtime reported (§13), as `runs` has it.
+  `decisions.pr` names the PR of a decision about a review.
 - `split_children`: one row per ticket a split created; its parent, the repository it covers, and the split run.
   Written only by `_run` from a validated split result (§18).
 - `decisions`: one row per overseer decision; tick id, ticket, action, rationale, and for an attention item about a
@@ -1093,11 +1094,12 @@ From events the harness also reads, each validated (D026):
   killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
   session's, and not counted.
 
-The default `overseer_cmd`, `worker_cmd`, `split_cmd`, and `chore_cmd` ask for events. A tick records what its
-overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), and `_chore` what a
-chore reports on its chore run (§19). Other templates may ask for them too; what reviews report is not recorded yet
-(ROADMAP M13). A tick's output file and a run log hold the events as printed, and the web UI reads one session's back
-from them as its transcript (§22).
+The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
+what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), `_chore` what a
+chore reports on its chore run (§19), and `_review` what a reviewer reports on its review run (§21). So every agent run
+canopy starts records what it cost, and the web UI's spend (§22) sums them all. A template of the operator's that asks
+for no events records nothing, and its runs are missing from the spend. A tick's output file and a run log hold the
+events as printed, and the web UI reads one session's back from them as its transcript (§22).
 
 ### Where the runtime finds canopy's definitions
 
@@ -2081,7 +2083,8 @@ query = 'repo:acme/api is:pr is:open author:@me -is:draft'
 low_impact = """Only docs, comments, or tests change; or one dependency moves by a patch version."""
 
 [runtime]
-review_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer {prompt}'
+# the default
+review_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json {prompt}'
 review_timeout_minutes = 20
 
 [capacity]
@@ -2268,8 +2271,10 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 ### Journal
 
 - `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), slot, lease id and holder, pid of `_review`, pid of
-  the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path. Separate
-  from `runs`, which is keyed by ticket and branch.
+  the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what
+  the runtime reported (§13): `session_id`, `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported
+  nothing. A timed-out reviewer records what its finished calls cost. Separate from `runs`, which is keyed by ticket
+  and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=` with the time of the run's comment.
@@ -2639,7 +2644,7 @@ The API, under `{base}/api`:
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
-| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, and chore runs and each tick's overseer, by start (§13) |
+| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
 | `POST /tickets/{key}/start` | `canopy start` |
