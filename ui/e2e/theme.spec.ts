@@ -16,7 +16,7 @@ test.describe('no flash of the wrong theme', () => {
             const seen: NonNullable<typeof globalThis.canopyThemeProbe> = {}
             globalThis.canopyThemeProbe = seen
             new MutationObserver((_, observer) => {
-                if (document.body) {
+                if (document.querySelector('body') !== null) {
                     seen.atBody = document.documentElement.className
                     observer.disconnect()
                 }
@@ -49,13 +49,11 @@ test.describe('the toggle', () => {
         // Counts view transitions, to tell the animated switch from the instant one.
         await page.addInitScript(() => {
             globalThis.canopyViewTransitions = 0
-            const original = document.startViewTransition?.bind(document)
-            if (original) {
-                document.startViewTransition = ((...args: Parameters<typeof original>) => {
-                    globalThis.canopyViewTransitions = (globalThis.canopyViewTransitions ?? 0) + 1
-                    return original(...args)
-                }) as typeof document.startViewTransition
-            }
+            const original = document.startViewTransition.bind(document)
+            document.startViewTransition = ((...args: Parameters<typeof original>) => {
+                globalThis.canopyViewTransitions = (globalThis.canopyViewTransitions ?? 0) + 1
+                return original(...args)
+            }) as typeof document.startViewTransition
         })
     })
 

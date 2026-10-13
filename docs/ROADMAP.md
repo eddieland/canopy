@@ -838,8 +838,12 @@ tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
 before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
 that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). Next: the wrapper, the policy template, `docs/SANDBOX.md`, the canary, and TRUST_MODEL T4
-and T6.
+back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `examples/sandbox/`, tested
+against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
+included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
+`allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
+denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
+§6). Next: `docs/SANDBOX.md`, the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 
@@ -894,9 +898,8 @@ in code can catch, and the same reasons keep idle pacing from counting a quiet t
 - Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
   attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
   `decisions` table shows a pattern. The first day shows one (2026-10-13 F17): the overseer leaves out an attention
-  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Open: whether that is a
-  prompt fix, or the harness keeps an item until the overseer resolves it or a tick that could see the world drops
-  it.
+  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Settled by the operator
+  (2026-10-13): a prompt fix, with the overseer's open items in its state block (DESIGN §6 step 4).
 - Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
   the wait; a fake overseer that prints a summary after `CANOPY_TICK_DONE` closes the tick `ok`.
 

@@ -476,8 +476,9 @@ the cause holds. `--repo` names the unit it is about, such as the PR waiting on 
 decision with action `attention:<reason>`, not in a separate table (D020). The current list is the attention decisions
 of the latest `ok` tick: an item disappears the first tick that does not record it, and a failed or `skipped` tick
 leaves the previous list standing. A `canopy_unavailable` tick adds its one item to that list while it is the latest
-tick to have ended, open since the first such tick after the last `ok` one. Dry-run ticks count like live ones. An
-item's age runs from the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
+tick to have ended, open since the first such tick after the last `ok` one. The overseer's state block lists its own
+open items (`attention`, §6 step 4), so it records each again until it sees the cause gone. Dry-run ticks count like
+live ones. An item's age runs from the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
 
 `attempt_limit` is raised two ways: the overseer records it when the state block shows a ticket at its limit for the
 work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the

@@ -59,10 +59,12 @@ export function countBySeverity(items: AttentionItem[]): Record<Severity, number
 
 /** The items, most severe first; within a severity, the one open longest first. */
 export function bySeverity(items: AttentionItem[]): AttentionItem[] {
-    return items.toSorted(
-        (a, b) =>
-            RANK[severity(a)] - RANK[severity(b)] ||
-            Date.parse(a.since) - Date.parse(b.since) ||
-            a.id.localeCompare(b.id),
-    )
+    return items.toSorted((a, b) => {
+        const rank = RANK[severity(a)] - RANK[severity(b)]
+        if (rank !== 0) {
+            return rank
+        }
+        const age = Date.parse(a.since) - Date.parse(b.since)
+        return age === 0 ? a.id.localeCompare(b.id) : age
+    })
 }

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from canopy.core.chore_view import ChoreSummary
     from canopy.core.config import Config
     from canopy.core.workspace import Workspace
+    from canopy.loop.attention import OpenItem
     from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
 
@@ -38,6 +39,7 @@ class OverseerState(TypedDict):
     split_children: list[SplitChild]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
+    attention: list[OpenItem]
     capacity: CapacityState
     running_workers: list[RunningWorker]
     mirror: MirrorState
@@ -213,6 +215,7 @@ def state_block(
     private: Mapping[str, conversation.PrivateSection] | None = None,
     operator: Mapping[str, conversation.OperatorSection] | None = None,
     mirror_delimiter: str,
+    attention: list[OpenItem] | None = None,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
@@ -225,6 +228,8 @@ def state_block(
     (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages newer than
     its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `mirror_delimiter` ends
     the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
+    `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one out
+    drops (ROADMAP M28).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -347,6 +352,8 @@ def state_block(
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
         **({"reviews": reviews} if reviews is not None else {}),
+        # What the overseer keeps on the attention list by recording it again: leaving one out resolves it (§14).
+        "attention": attention or [],
         # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
         # (DESIGN §6).
         "capacity": {

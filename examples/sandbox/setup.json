@@ -1,0 +1,48 @@
+{
+  "#": [
+    "canopy-sandbox's template for runtime.setup_cmd, which runs the branch's code in each slot before the worker",
+    "starts (HOST_ISOLATION §4.4). Copy it to ~/.config/canopy/sandbox/setup.json, then fill in your registries and",
+    "trim the toolchains to yours. Keys starting with # are comments; @NAME@ strings are the paths canopy-sandbox",
+    "fills in for each run."
+  ],
+  "network": {
+    "#": [
+      "Everything not listed is refused. Setup reaches no model and no MCP service: add only the package registries",
+      "it installs from."
+    ],
+    "allowedDomains": [
+      "github.com",
+      "*.githubusercontent.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "#": [
+      "As worker.json, without the agent runtime's own files. If your workspace is outside HOME, add it to denyRead."
+    ],
+    "denyRead": ["~"],
+    "allowRead": [
+      "@CWD@",
+      "@WORKTREES@",
+      "@GIT_OWN@",
+      "@GIT_SHARED@",
+      "@OBJECTS@",
+      "@TMPDIR@",
+      "~/.gitconfig",
+      "~/.config/git",
+      "~/.local/bin",
+      "~/.local/share/uv",
+      "~/.nvm",
+      "~/.cargo",
+      "~/.rustup",
+      "~/go"
+    ],
+    "allowWrite": [
+      "@WORKTREES@",
+      "@GIT_OWN@",
+      "@OBJECTS@",
+      "@TMPDIR@"
+    ],
+    "denyWrite": ["@GIT_PROTECTED@"]
+  }
+}

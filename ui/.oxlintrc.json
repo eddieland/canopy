@@ -48,6 +48,27 @@
     // What is keyed by its index is a list parsed from text (rich text, a diff's lines), which never reorders and
     // has no other identity.
     "react/no-array-index-key": "off",
+    // Type-aware rules (`--type-aware`, oxlint-tsgolint). Off: a validator narrows `unknown` and a style object
+    // carries CSS custom properties by assertion, which TypeScript still refuses between unrelated types; and
+    // readonly parameter types, which every callback and props object would need.
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/prefer-readonly-parameter-types": "off",
+    // `onClick={() => setOpen(false)}` returns a void call, and says nothing confusing.
+    "typescript/no-confusing-void-expression": ["error", { "ignoreArrowShorthand": true }],
+    // A nullable string or boolean tested for truth reads as "present and not empty" or "true". A number must be
+    // compared (`{count && ...}` renders 0), and an object, `any`, or a mixed union must be tested explicitly.
+    "typescript/strict-boolean-expressions": [
+      "error",
+      { "allowNullableString": true, "allowNullableBoolean": true, "allowNumber": false }
+    ],
+    // `||` on strings means "the first that is not empty", which `??` is not.
+    "typescript/prefer-nullish-coalescing": ["error", { "ignorePrimitives": { "string": true } }],
+    // TypeScript's noImplicitReturns checks this, and knows an exhaustive switch and an effect's optional cleanup.
+    "typescript/consistent-return": "off",
+    "typescript/switch-exhaustiveness-check": ["error", { "considerDefaultExhaustiveForUnions": false }],
+    "typescript/consistent-type-exports": "error",
+    "typescript/no-unnecessary-condition": "error",
+    "typescript/prefer-optional-chain": "error",
     // A test narrows what noUncheckedIndexedAccess leaves possibly undefined (`if (!first) throw ...`, `?? ''`):
     // that is a guard, not a branch in what the test checks.
     "vitest/no-conditional-in-test": "off",
@@ -190,6 +211,16 @@
     ]
   },
   "overrides": [
+    {
+      // Plain JavaScript run by node: no types for the type-aware rules to check.
+      "files": ["scripts/**"],
+      "rules": {
+        "typescript/no-unsafe-argument": "off",
+        "typescript/no-unsafe-call": "off",
+        "typescript/no-unsafe-member-access": "off",
+        "typescript/strict-boolean-expressions": "off"
+      }
+    },
     {
       // A browser test acts in order: each step waits on the page the last one left.
       "files": ["e2e/**"],
