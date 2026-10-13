@@ -137,6 +137,10 @@ Rules:
   (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
   repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
   links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
+- **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which
+  React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with the attention list's
+  count, when it holds anything, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
+  The name is the header's title when that is plain text, else its `tab`; the sign-in page's is `Sign in`.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
