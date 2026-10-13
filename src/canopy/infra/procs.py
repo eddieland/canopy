@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import contextlib
 import os
+import queue
 import signal
 import subprocess
+import threading
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import IO, Protocol, cast
 
 
 class ProcError(Exception):
@@ -57,6 +60,7 @@ class Runner(Protocol):
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> Result:
         """Run `args` to completion and capture its output.
 
@@ -68,6 +72,9 @@ class Runner(Protocol):
             stdin: Text written to the child's stdin. When None, stdin is `/dev/null`.
             timeout: Seconds before the child's process group is killed. None waits forever.
             on_start: Called with the child's pid, which is also its process group id, once it has started.
+            on_line: Called with each line of the child's stdout, its newline kept, as the child prints it, on the
+                calling thread. `stdout` in the result holds the same lines. An exception it raises kills the child
+                and propagates.
 
         Returns:
             The exit code and captured output. `timed_out` is set when `timeout` expired.
@@ -113,6 +120,7 @@ class SubprocessRunner:
         stdin: str | None = None,
         timeout: float | None = None,
         on_start: Callable[[int], None] | None = None,
+        on_line: Callable[[str], None] | None = None,
     ) -> Result:
         """Run `args` to completion and capture its output. See `Runner.run`.
 
@@ -155,6 +163,8 @@ class SubprocessRunner:
             try:
                 if on_start is not None:
                     on_start(proc.pid)
+                if on_line is not None:
+                    return _stream(proc, argv, stdin, timeout, on_line)
                 stdout, stderr = proc.communicate(stdin, timeout=timeout)
             except subprocess.TimeoutExpired:
                 _kill_group(proc.pid)
@@ -229,6 +239,102 @@ def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) ->
             if candidate.is_file():
                 return True
     return False
+
+
+def _stream(
+    proc: subprocess.Popen[str],
+    argv: tuple[str, ...],
+    stdin: str | None,
+    timeout: float | None,
+    on_line: Callable[[str], None],
+) -> Result:
+    """What `communicate` does, but each line of stdout goes to `on_line`, on this thread, as the child prints it.
+
+    Threads read the pipes and write stdin, so a child that fills one pipe while canopy waits on another never blocks.
+    Only this thread calls `on_line`, so it may use what this thread owns, such as a journal connection.
+
+    Returns:
+        The exit code and captured output, `timed_out` set when `timeout` expired and the child's group was killed.
+    """
+    # `run` opened both as pipes.
+    out, err = cast("IO[str]", proc.stdout), cast("IO[str]", proc.stderr)
+    lines: queue.SimpleQueue[str | None] = queue.SimpleQueue()
+    stderr: list[str] = []
+    stderr_reader = threading.Thread(target=_read_all, args=(err, stderr), daemon=True)
+    workers = [threading.Thread(target=_read_lines, args=(out, lines), daemon=True), stderr_reader]
+    if stdin is not None:
+        workers.append(threading.Thread(target=_write_all, args=(proc.stdin, stdin), daemon=True))
+    for worker in workers:
+        worker.start()
+    deadline = _Deadline(proc.pid, timeout)
+    try:
+        stdout = _pump(lines, on_line, deadline)
+        stderr_reader.join(deadline.left())
+        if stderr_reader.is_alive():
+            deadline.expire()
+        try:
+            proc.wait(deadline.left())
+        except subprocess.TimeoutExpired:
+            deadline.expire()
+            proc.wait()
+    except BaseException:
+        _kill_group(proc.pid)
+        raise
+    finally:
+        # The readers stop at the pipes' end, which the child's exit or a kill brings, before `run` closes the pipes.
+        for worker in workers:
+            worker.join()
+    return Result(argv, proc.returncode, "".join(stdout), "".join(stderr), timed_out=deadline.expired)
+
+
+class _Deadline:
+    """When a timeout expires, and whether it did: expiring kills the child's group, and leaves no deadline after."""
+
+    def __init__(self, pgid: int, timeout: float | None) -> None:
+        self.pgid = pgid
+        self.at = None if timeout is None else time.monotonic() + timeout
+        self.expired = False
+
+    def left(self) -> float | None:
+        return None if self.at is None else max(0.0, self.at - time.monotonic())
+
+    def expire(self) -> None:
+        _kill_group(self.pgid)
+        self.expired = True
+        self.at = None
+
+
+def _pump(lines: queue.SimpleQueue[str | None], on_line: Callable[[str], None], deadline: _Deadline) -> list[str]:
+    stdout: list[str] = []
+    while True:
+        try:
+            line = lines.get(timeout=deadline.left())
+        except queue.Empty:
+            # What the group printed before the kill is still read, and still passed on.
+            deadline.expire()
+            continue
+        if line is None:
+            return stdout
+        stdout.append(line)
+        on_line(line)
+
+
+def _read_lines(pipe: IO[str], lines: queue.SimpleQueue[str | None]) -> None:
+    for line in pipe:
+        lines.put(line)
+    lines.put(None)
+
+
+def _read_all(pipe: IO[str], into: list[str]) -> None:
+    into.append(pipe.read())
+
+
+def _write_all(pipe: IO[str], text: str) -> None:
+    # A child need not read all of its stdin, as `communicate` allows.
+    with contextlib.suppress(BrokenPipeError):
+        pipe.write(text)
+    with contextlib.suppress(BrokenPipeError):
+        pipe.close()
 
 
 def alive(pid: int) -> bool:
