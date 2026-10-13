@@ -942,8 +942,8 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
 
     assert statuses == {"ok": 2}
     assert reload.during_tick == [True, True]  # the web UI would have said: after the running tick
-    with closing(db.connect(canopy_env.state_dir / db.DB_FILE_NAME)) as conn:
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+    conn = canopy_env.journal(migrate=False)
+    assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
     assert sum(time.slept) == 600  # the wait after it was paced before the reload applied
     text = out.getvalue()
     assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")
