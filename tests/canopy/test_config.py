@@ -285,7 +285,8 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
     runtime = load(canopy_env.root, canopy_env.user_file).runtime
     for template in (runtime.overseer_cmd, runtime.worker_cmd):
         assert template.startswith("env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-")
-    # One word, so even a title that read as an option could not be taken for one (DESIGN §13).
+    # Events, the model's reasoning among them (DESIGN §13); the title one word, so even a title that read as an option
+    # could not be taken for one.
     for template in (
         runtime.overseer_cmd,
         runtime.worker_cmd,
@@ -294,7 +295,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.chore_cmd,
         runtime.review_cmd,
     ):
-        assert template.endswith(" --title={title} {prompt}")
+        assert template.endswith(" --format json --thinking --title={title} {prompt}")
 
 
 def test_xdg_config_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
