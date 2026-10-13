@@ -908,8 +908,11 @@ def test_sighup_during_the_wait_reads_the_config_again_for_the_waits_after_it(
     assert reload.during_tick == [False]
     assert not stop.requested  # SIGHUP is no stop
     assert signal.getsignal(signal.SIGHUP) == before  # restored
-    # The wait it came in keeps the length it started with; the next one is the new interval's.
-    assert sum(time.slept) == 600 + 240
+    # The reload ends the wait it came in, a minute after the tick began, as an operator message does (DESIGN §22);
+    # the next wait is the new interval's.
+    assert sum(time.slept) == repeat.WAKE_MIN_SECONDS + 240
+    assert woken_by(canopy_env) == ["start", "reload", "timer"]
+    assert len([line for line in log_messages(canopy_env) if line["msg"] == "a config reload ended the wait"]) == 1
     text = out.getvalue()
     assert "wait 10 minutes after each tick ends" in text
     assert "config reloaded  loop.interval_minutes, loop.idle_max_minutes changed" in text
@@ -947,9 +950,46 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
     assert reload.during_tick == [True, True]  # the web UI would have said: after the running tick
     conn = canopy_env.journal(migrate=False)
     assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
-    assert sum(time.slept) == 600  # the wait after it was paced before the reload applied
+    # Applied at the wait's first step, the reload ends that wait a minute after the tick began.
+    assert sum(time.slept) == repeat.WAKE_MIN_SECONDS
+    assert woken_by(canopy_env) == ["start", "reload"]
     text = out.getvalue()
     assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")
+
+
+def test_a_reload_that_changes_nothing_a_tick_reads_does_not_end_the_wait(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paced(canopy_env, 10)
+    overseer_does(monkeypatch)
+    stop, reload = repeat.Stop(), reread.Reload()
+    sleeps: list[None] = []
+
+    def hup_once() -> None:
+        sleeps.append(None)
+        if len(sleeps) == 1:
+            canopy_env.write_user(canopy_env.user_file.read_text() + "\n[serve]\nport = 8799\n")
+            os.kill(os.getpid(), signal.SIGHUP)
+
+    time = FakeTime(on_sleep=hup_once)
+    term, out = console()
+    with repeat.signals(stop, reload):
+        repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=stop,
+            reload=reload,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    # `serve.port` takes effect on a restart: nothing for the next tick to see sooner.
+    assert "serve.port takes effect on a restart" in out.getvalue()
+    assert sum(time.slept) == 600
+    assert woken_by(canopy_env) == ["start", "timer"]
 
 
 def test_a_config_that_does_not_load_leaves_the_loop_on_the_one_it_had(

@@ -285,10 +285,15 @@ place, public or private (D081).
 
 ### Waking the loop
 
-During the wait (§6, the loop), each step checks the journal for an operator message to a ticket recorded since the
-last tick began. A note to a chore (§19) does not wake it: the chore's next run reads it. One ends the wait and runs the
-next tick, at most once a minute. Every channel wakes it the same way, whether the message came from another process
-(`canopy reply`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick.
+During the wait (§6, the loop), each step checks the journal for the operator's acts: a message to a ticket recorded
+since the last tick began; a ticket started or stopped (`starts`), or attempts or a PR's reviews granted
+(`canopy grant`), since the last tick read the journal (or began, when it read nothing); and the loop's own record of
+a config reload that changed a key a tick reads (§6). A note to a chore (§19) does not wake it: the chore's next run
+reads it. Any of them ends the wait and runs the next tick, at most once a minute, whether idle pacing is on or not;
+the tick records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`, `reload`) and is not idle. Every
+channel wakes it the same way, whether the act came from another process (`canopy start`) or the loop's own server
+thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick. Before M28 only a message woke it, so a
+start from the web UI waited for the timer or a "tick now" (MEASUREMENTS 2026-10-12, F3).
 
 ### Channels
 

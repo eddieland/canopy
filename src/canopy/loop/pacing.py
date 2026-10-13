@@ -3,8 +3,8 @@
 A tick is idle when the journal shows it found nothing new and changed nothing (`idle`). After the n-th idle tick in a
 row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`
 still ahead ends it sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`)
-wakes it, as an operator message does. With the cap not above `base`, idle pacing is off: the wait is `base`, no
-gate shortens it, and only an operator message wakes it.
+wakes it, as the operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no
+gate shortens it, and only the operator's acts wake it: a message, a start or stop, a grant, or a config reload.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -78,8 +78,9 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     """Whether the tick that ended with `outcome` was idle, read from the journal (DESIGN §6, Idle pacing).
 
     It closed `ok`; it decided nothing but waits, skips, attention items, and refusals that lift by themselves; the
-    attention list and every ticket and unit are as `seen` before it; and no run started or ended and no operator
-    message was recorded after the previous tick read the journal. Without a previous tick that read it, not idle.
+    attention list and every ticket and unit are as `seen` before it; and no run started or ended, and the operator
+    recorded no message, started or stopped no ticket, and granted nothing, after the previous tick read the journal.
+    Without a previous tick that read it, not idle. A config reload is the loop's to count: it is in no journal.
 
     Returns:
         True if the tick was idle.
@@ -95,6 +96,8 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
         and db.tickets_snapshot(ctx.conn) == seen.tickets
         and not db.runs_moved_after(ctx.conn, str(previous["read_at"]))
         and db.latest_message_id(ctx.conn, source="operator") <= int(previous["message_id"])
+        and not db.starts_moved_after(ctx.conn, str(previous["read_at"]))
+        and not db.granted_after(ctx.conn, str(previous["read_at"]))
     )
 
 

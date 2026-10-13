@@ -149,6 +149,31 @@ def operator_reply(conn: sqlite3.Connection, _tick_id: int) -> None:
     db.insert_message(conn, db.SUBJECT_TICKET, KEY, source="operator", kind="reply", channel="cli", body="Go ahead.")
 
 
+def ticket_started(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.set_start(conn, db.SUBJECT_TICKET, KEY, status="started", channel="web")
+
+
+def ticket_stopped(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.set_start(conn, db.SUBJECT_TICKET, KEY, status="stopped", channel="cli")
+
+
+def started_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:
+    ticket_started(conn, tick_id)
+    conn.execute("UPDATE starts SET started_at = ?", (ago(hours=1),))
+
+
+def attempts_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.touch_ticket(conn, KEY, "/r")
+    conn.execute(
+        "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, 'r', 'fix-ci', 1, ?)",
+        (KEY, db.now()),
+    )
+
+
+def reviews_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
+    conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (PR, db.now()))
+
+
 def sets_ticket(*, phase: str | None = None, done: bool = False) -> Step:
     return lambda conn, _tick_id: db.set_ticket(conn, KEY, "/r", phase=phase, done=done)
 
@@ -178,6 +203,10 @@ def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(during=chore_starts), id="run started"),
         pytest.param(Case(setup=review_started_long_ago, during=review_ends), id="run ended"),
         pytest.param(Case(during=operator_reply), id="operator message"),
+        pytest.param(Case(during=ticket_started), id="ticket started"),
+        pytest.param(Case(setup=started_long_ago, during=ticket_stopped), id="ticket stopped"),
+        pytest.param(Case(during=attempts_granted), id="attempts granted"),
+        pytest.param(Case(during=reviews_granted), id="reviews granted"),
         pytest.param(Case(status="overseer_failed"), id="not ok"),
         pytest.param(Case(previous_read=False), id="no previous read"),
     ],
@@ -432,6 +461,64 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
     # Woken at once, but no sooner than a minute after the tick began, not fifteen.
     assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
     message = "an operator message ended the wait" if when == "an operator message" else "a run ending ended the wait"
+    assert len(log_lines(canopy_env, message)) == 1
+    assert "next tick in 15m 00s at" in out.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("act", "woken", "message"),
+    [
+        ("start", "starts", "a ticket started or stopped ended the wait"),
+        ("stop", "starts", "a ticket started or stopped ended the wait"),
+        ("grant attempts", "grant", "a grant ended the wait"),
+        ("grant reviews", "grant", "a grant ended the wait"),
+    ],
+)
+@pytest.mark.parametrize("pacing_on", [True, False], ids=["pacing on", "pacing off"])
+def test_the_operators_start_stop_and_grant_end_the_wait(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    act: str,
+    woken: str,
+    message: str,
+    pacing_on: bool,  # noqa: FBT001
+) -> None:
+    loop_config(canopy_env, interval=15, cap=120 if pacing_on else 15)
+    ctx = context(canopy_env)
+    if act == "stop":
+        assert main(["start", KEY]) == 0  # before the loop: its first tick sees it
+    overseer_does(monkeypatch)
+    time = FakeTime()
+
+    def at_first_wait() -> None:
+        if len(time.slept) != 1:
+            return
+        if act in {"start", "stop"}:
+            assert main([act, KEY]) == 0
+        elif act == "grant attempts":
+            attempts_granted(ctx.conn, 0)
+        else:
+            reviews_granted(ctx.conn, 0)
+
+    time.on_sleep = at_first_wait
+    term, out = console()
+    repeat.run(
+        ctx,
+        dry_run=True,
+        interval_minutes=None,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+    # Woken at once, but no sooner than a minute after the tick began, whatever the pacing; and the tick it woke is
+    # not idle.
+    assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+    assert recorded(canopy_env) == [(0, "start"), (0, woken)]
     assert len(log_lines(canopy_env, message)) == 1
     assert "next tick in 15m 00s at" in out.getvalue()
 

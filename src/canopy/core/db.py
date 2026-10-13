@@ -323,6 +323,28 @@ def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
     )
 
 
+def starts_moved_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether the operator started or stopped a subject after `since`, a time the journal wrote (§6, §22).
+
+    Returns:
+        True if a start record's latest start or stop is newer.
+    """
+    row = conn.execute("SELECT 1 FROM starts WHERE started_at > ? OR stopped_at > ? LIMIT 1", (since, since))
+    return row.fetchone() is not None
+
+
+def granted_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether the operator granted a ticket's attempts or a PR's reviews after `since`, a time the journal wrote (§6).
+
+    Returns:
+        True if at least one grant is newer.
+    """
+    return any(
+        conn.execute(f"SELECT 1 FROM {table} WHERE granted_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
+        for table in ("attempt_grants", "review_grants")
+    )
+
+
 def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
     """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6).
 
