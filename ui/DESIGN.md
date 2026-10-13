@@ -184,8 +184,9 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
 - The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
   left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
-  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. At rest the window is
-  empty, between headlines.
+  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. A headline starts
+  from the window's width as its pass begins and keeps it, so the readouts beside it changing width as a tick starts
+  or ends never move it back or on. At rest the window is empty, between headlines.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
