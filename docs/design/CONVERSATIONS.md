@@ -480,9 +480,13 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   command's output, the harness's markers, another session's events) is left out, and the file itself is never served.
 - Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
   call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
-  long it took; a `step_finish` is one model call's reason, tokens, and cost; an `error` is the runtime's. `step_start`
-  and any type canopy does not know are left out, and an event of a known type that does not validate is counted, not
-  shown.
+  long it took; a `step_finish` is one model call's reason, cost, and tokens, together and by kind (input, cache read,
+  cache write, output, reasoning); an `error` is the runtime's. `step_start` and any type canopy does not know are
+  left out, and an event of a known type that does not validate is counted, not shown.
+- A model call shows what the runtime prints of it. What it wrote and ran are the text and tool calls above it; its
+  reasoning only with OpenCode's `--thinking`, which the default templates leave out. What it was sent, the prompt
+  and the context, is not printed: OpenCode keeps it in its own storage (`opencode export <id>`), and canopy does not
+  read that.
 - Bounded: at most 32 MiB of the file, to its last whole line; at most 2000 entries and 2 million characters in all;
   each text, output, and error cut at 20,000 characters, and an input at 5,000. A cut says so. Control characters are
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened

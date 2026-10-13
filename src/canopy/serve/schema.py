@@ -439,6 +439,16 @@ class TranscriptTool(_Model):
     cut: bool = False
 
 
+class TranscriptTokens(_Model):
+    """One model call's tokens by kind, as the runtime counted them."""
+
+    input: int
+    output: int
+    reasoning: int
+    cache_read: int
+    cache_write: int
+
+
 class TranscriptStep(_Model):
     """One model call ended: why, and what it cost, when the runtime said."""
 
@@ -446,7 +456,9 @@ class TranscriptStep(_Model):
     at: datetime | None = None
     reason: str | None = None
     cost_usd: float | None = None
+    # Every kind together, and each apart.
     tokens: int | None = None
+    split: TranscriptTokens | None = None
 
 
 class TranscriptError(_Model):
