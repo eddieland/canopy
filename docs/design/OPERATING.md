@@ -258,13 +258,15 @@ custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DI
 agent, which allows everything (D040). `env` in the default templates is the ordinary program, not a shell.
 `notify.cmd` is split the same way, gets its input on stdin, and must not contain `{prompt}`.
 
-Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An override must keep what the guards rely
-on: an overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include
-`{{LABELS}}` and the authorization check that uses it (§8, D051); a worker override without it is refused as
-`bad_prompt`. The default is `prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME`
-says otherwise; an empty value means the default. `paths.*` values must be absolute or start with `~`, since canopy
-runs from the workspace root and a relative path would let a shared workspace supply them (TRUST_MODEL T7). There is
-no key for the state directory: it is always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
+Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An overseer override goes where the
+shipped prompt goes, into the overseer's definition in a snapshot of its own (§13), so a change to it reaches the next
+tick, and one canopy cannot read as UTF-8 refuses the snapshot. An override must keep what the guards rely on: an
+overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include `{{LABELS}}` and
+the authorization check that uses it (§8, D051); a worker override without it is refused as `bad_prompt`. The default is
+`prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise; an empty value
+means the default. `paths.*` values must be absolute or start with `~`, since canopy runs from the workspace root and a
+relative path would let a shared workspace supply them (TRUST_MODEL T7). There is no key for the state directory: it is
+always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
 
 `paths.worker_instructions` names a file of the operator's standing instructions, a few habits every worker should
 keep, such as how to commit review fixes. canopy renders it into every worker prompt but a split's, as
@@ -275,10 +277,11 @@ the dispatch as `bad_prompt` rather than running a worker without it. Like every
 serves every workspace the user file does.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, and every shipped skill is in the definitions directory (§13). `tracker.query` is how the
-overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue search), otherwise plain
-language. It finds tickets; it does not authorize them (§17). The repository's query usually omits the label; an
-operator can override it in the user file to include their labels and save the overseer reads.
+skill, and every shipped skill is in the definitions directory (§13). The one use canopy makes of it is to look up that
+skill by name and give it to the overseer in its definition, so it need not be loaded on every tick (§13).
+`tracker.query` is how the overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue
+search), otherwise plain language. It finds tickets; it does not authorize them (§17). The repository's query usually
+omits the label; an operator can override it in the user file to include their labels and save the overseer reads.
 
 ## 13. Agent runtime
 
@@ -365,16 +368,26 @@ title starts with a letter or digit (a key, `tick`, `chore:`, `review`), so not 
 Rationale in D040 and D044.
 
 canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents (`definitions.py`). One definition is rendered from the user config first: `canopy-worker-private` gets the
-tracker's MCP server and the tools of it a private worker may call (§22), so a change to those keys makes a new snapshot
-rather than changing one. A snapshot is written to a temporary directory, renamed into place, and never changed, so
-overlapping runs never load a partial set. The overseer run and each `_run` use the installed canopy's snapshot,
-creating it if missing. A snapshot canopy made is readable only by the operator; one that is a symlink, someone else's,
-or open to others (for example from a checkout of a shared workspace, §18) is refused: the overseer's refusal fails the
-tick, a worker's is a `crashed` run. When no run is live, reconcile removes other snapshots and temporary directories
-over an hour old; a live run may be an earlier canopy's, still loading its snapshot. OpenCode scans both `agent/` and
-`agents/` (and `skill/` and `skills/`) in a config directory, and writes a `.gitignore` and `node_modules/` into each
-one it loads, the snapshot included.
+contents (`definitions.py`). Two definitions are rendered from config first, so a change to what they are rendered from
+makes a new snapshot rather than changing one:
+
+- `canopy-worker-private` gets the tracker's MCP server and the tools of it a private worker may call (§22).
+- `canopy-overseer` gets the overseer's prompt, the operator's override if there is one (§12), as its body from a marked
+  line on, followed by the shipped `tracker-<provider>` skill for `tracker.provider`, without its frontmatter, when
+  canopy ships one. OpenCode sends an agent's body as its system prompt, which the provider caches across ticks with
+  the tool schemas; a tick's message is its state block alone (§6). The skill stays in `skills/` too, for the workers.
+  An override canopy cannot read refuses the snapshot, which fails the tick and every run started from it, as a
+  snapshot that is not private does (below): a run without its definitions would run without the prompt. A definition
+  canopy did not render, such as the shipped file loaded by hand, tells the overseer to print `no prompt supplied` and
+  exit.
+
+A snapshot is written to a temporary directory, renamed into place, and never changed, so overlapping runs never load a
+partial set. The overseer run and each `_run` use the installed canopy's snapshot, creating it if missing. A snapshot
+canopy made is readable only by the operator; one that is a symlink, someone else's, or open to others (for example from
+a checkout of a shared workspace, §18) is refused: the overseer's refusal fails the tick, a worker's is a `crashed` run.
+When no run is live, reconcile removes other snapshots and temporary directories over an hour old; a live run may be an
+earlier canopy's, still loading its snapshot. OpenCode scans both `agent/` and `agents/` (and `skill/` and `skills/`) in
+a config directory, and writes a `.gitignore` and `node_modules/` into each one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), required in every template that runs a
 canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §19's `chore_cmd`, §21's

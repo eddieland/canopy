@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, prompts, treehouse
+from canopy.core import agent_output, chore_view, conversation, db, definitions, treehouse
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
@@ -122,13 +122,13 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
     )
-    prompt = prompts.render_overseer(ctx.config, block)
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
         db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{CANOPY_UNAVAILABLE}", detail)
         return finish(CANOPY_UNAVAILABLE, unavailable)
-    failure, usage = _run_overseer(ctx, tick_id, prompt, dry_run=dry_run, log=log)
+    # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
+    failure, usage = _run_overseer(ctx, tick_id, block, dry_run=dry_run, log=log)
     if failure is not None:
         return finish("overseer_failed", failure, usage)
 
@@ -196,9 +196,9 @@ def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
 
 
 def _run_overseer(
-    ctx: Context, tick_id: int, prompt: str, *, dry_run: bool, log: logs.TickAdapter
+    ctx: Context, tick_id: int, block: str, *, dry_run: bool, log: logs.TickAdapter
 ) -> tuple[str | None, agent_output.Usage | None]:
-    """Run `overseer_cmd`.
+    """Run `overseer_cmd` with the state block `block` as its `{prompt}`.
 
     Output goes to `<state_dir>/ticks/<id>.log`. The session is recorded on the tick at the first event that names it,
     so a running tick shows it; the session and cost again when the overseer ends, failed or not.
@@ -217,7 +217,7 @@ def _run_overseer(
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e), None
-    argv = render_command(ctx.config.runtime.overseer_cmd, prompt, definitions_dir, f"tick {tick_id}")
+    argv = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, f"tick {tick_id}")
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     try:
