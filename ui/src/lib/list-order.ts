@@ -55,7 +55,7 @@ export function parseOrders(raw: string | null): Orders {
         return {}
     }
     const orders: Orders = {}
-    for (const [name, order] of Object.entries(value)) {
+    for (const [name, order] of Object.entries(value as Record<string, unknown>)) {
         if (Object.hasOwn(LISTS, name) && (order === 'oldest' || order === 'newest')) {
             orders[name as ListName] = order
         }
