@@ -1,11 +1,10 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, and the web UI) calls the
-functions here, so the guards live in one place: the subject is valid and supports the verb, the command does not run
-inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is within
-its bound. Agents never write a
-message: `_run` records a run's report and question from its result line (`close_run`), and nothing else a worker can
-call does.
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, and the web UI)
+calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the command does
+not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is
+within its bound. Agents never write a message: `_run` records a run's report and question from its result line
+(`close_run`), and nothing else a worker can call does.
 
 A private ticket's start record and its operator messages are canopy's own facts, so the harness checks them in code
 without reading the tracker (D003, D072). The overseer records the one other kind of message, a tracker comment it
@@ -24,14 +23,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, outbox
+from canopy.core import chore_view, contract, db, outbox
+from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.infra import lock
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from canopy.core.config import Config
+    from canopy.core.config import Chore, Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
 # other kind of reference can be read as one.
@@ -72,7 +72,7 @@ RUN = "run"
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
     PR: (),
-    CHORE: ("reply", "show"),
+    CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
 }
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
@@ -166,7 +166,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, pauses, or resumes",
+                "stops, replies, forgets, grants attempts, dismisses findings, pauses, or resumes",
             )
 
 
@@ -331,6 +331,42 @@ def reply(
         recorded = db.get_message(conn, message_id)
         answers = int(recorded["answers"]) if recorded is not None and recorded["answers"] is not None else None
     return Replied(message_id=message_id, answers=answers, new=new)
+
+
+def dismiss(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    finding_id: str,
+    *,
+    channel: str,
+    chores: Mapping[str, Chore],
+    undo: bool = False,
+) -> None:
+    """Dismiss one of a chore's open findings, keeping it off the attention list until it clears (DESIGN §19).
+
+    The chore's runs still report it and its page still shows it, marked dismissed. Once an `ok` run leaves it out the
+    dismissal is spent, so the finding is listed again if it comes back. Dismissing it again records the time anew.
+    `undo` takes a dismissal back, listing the finding again at once.
+
+    Raises:
+        Refused: `unsupported` for a subject that is not a chore, `unknown` for a chore not in `chores`, `bad_finding`
+            for an id no finding can have, `unknown` for a finding the chore does not have open, or, with `undo`, one
+            the operator has not dismissed.
+    """
+    check_verb(ref, "dismiss")
+    if ref.id not in chores:
+        raise Refused("unknown", f"no chore {ref.id!r} is defined for this workspace")
+    if len(finding_id) > MAX_ID or not FINDING_ID_RE.fullmatch(finding_id):
+        raise Refused("bad_finding", f"a finding id matches {FINDING_ID_RE.pattern}, at most {MAX_ID} characters")
+    with db.transaction(conn):
+        if undo:
+            if not db.delete_dismissal(conn, ref.id, finding_id):
+                raise Refused("unknown", f"{ref} has no dismissed finding {finding_id!r}")
+            return
+        state = chore_view.state_of(conn, ref.id, chores[ref.id])
+        if not any(f.finding.id == finding_id for f in state.findings()):
+            raise Refused("unknown", f"{ref} has no open finding {finding_id!r}")
+        db.set_dismissal(conn, ref.id, finding_id, channel=channel)
 
 
 @dataclass(frozen=True)

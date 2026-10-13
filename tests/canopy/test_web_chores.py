@@ -58,6 +58,7 @@ def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(back
         "link": "https://github.com/advisories/GHSA-35jh-r3h4-6jhm",
         # The first of the unbroken `ok` runs reporting it; the run before found nothing.
         "since": at(-240),
+        "dismissed": False,
     }
     assert deps["latest_note_id"] == 8
 
@@ -126,3 +127,39 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
     [_, deps] = c.get("/api/chores").json()
     assert deps["latest_note_id"] == 9
     assert [n["id"] for n in c.get("/api/chores/deps").json()["notes"]] == [8, 9]
+
+
+def test_a_finding_dismissed_from_the_web_leaves_the_attention_list_as_the_cli_dismisses_it(backend: Backend) -> None:
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+    url = "/api/chores/deps/dismissals"
+    body = {"finding": "lodash-advisory"}
+
+    def listed() -> list[str]:
+        return [i["reason"] for i in c.get("/api/attention").json() if i["chore"] == "deps"]
+
+    assert listed() == ["lodash-advisory"]
+    assert c.post(url, json=body, headers={"origin": headers["origin"]}).status_code == 403
+    for name, finding, guard in [
+        ("deps", "stuck/pr-7", "unknown"),
+        ("deps", "-bad", "bad_finding"),
+        ("nope", "x", "unknown"),
+    ]:
+        refused = c.post(f"/api/chores/{name}/dismissals", json={"finding": finding}, headers=headers)
+        assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
+
+    assert c.post(url, json=body, headers=headers).json() == {
+        "chore": "deps",
+        "finding": "lodash-advisory",
+        "dismissed": True,
+    }
+    assert listed() == []
+    [finding] = c.get("/api/chores/deps").json()["chore"]["findings"]
+    assert (finding["id"], finding["dismissed"]) == ("lodash-advisory", True)
+    with backend.open() as ctx:
+        row = ctx.conn.execute("SELECT channel FROM finding_dismissals WHERE chore = 'deps'").fetchone()
+        assert row["channel"] == "web"
+
+    undone = c.post(url, json={**body, "undo": True}, headers=headers).json()
+    assert undone["dismissed"] is False
+    assert listed() == ["lodash-advisory"]

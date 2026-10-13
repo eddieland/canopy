@@ -31,6 +31,8 @@ export type Stopped = Schemas['Stopped']
 export type Replied = Schemas['Replied']
 /** What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete. */
 export type Forgot = Schemas['Forgot']
+/** What a dismissal left: the chore's finding, and whether it is now dismissed. */
+export type Dismissed = Schemas['Dismissed']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
 /** One repository's treehouse pool, read when asked for. */

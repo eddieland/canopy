@@ -7,7 +7,8 @@ longer records it.
 
 A chore's open findings are on the list too, from its latest `ok` run, and a chore whose latest run failed has a
 `chore_failed` item the harness records each tick (DESIGN §19). Both are about a chore, named `chore:<name>` where a
-ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed (`listed`).
+ticket key would be, which no ticket key can equal. Only chores configured for this workspace are listed, and no
+finding the operator dismissed (`listed`).
 
 After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the list to the notification sinks
 (`canopy.notify`), each told about each open item once however many ticks it lasts (DESIGN §20).
@@ -137,7 +138,8 @@ def current(conn: sqlite3.Connection) -> list[Item]:
 def listed(ctx: Context) -> list[Item]:
     """Return the attention list as it is shown and notified: `current`, with the chores this workspace runs.
 
-    A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all (DESIGN §19).
+    A chore deleted from the config, or one whose workspaces leave this one out, is not listed at all, nor is a finding
+    the operator dismissed (DESIGN §19).
     """
     configured = set(chore_view.configured(ctx.config, ctx.workspace))
     items = [
@@ -156,6 +158,7 @@ def listed(ctx: Context) -> list[Item]:
             finding=True,
         )
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        if not f.dismissed
     ]
     return items + findings
 

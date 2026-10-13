@@ -108,6 +108,7 @@ export const mockChores: ChoreSummary[] = [
                 detail: "web's lockfile pins lodash 4.17.20 through an old date picker; 4.17.21 fixes it.",
                 link: 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm',
                 since: '2026-10-08T08:00:00Z',
+                dismissed: false,
             },
         ],
         latest_note_id: 8,

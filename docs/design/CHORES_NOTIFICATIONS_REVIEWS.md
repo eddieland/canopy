@@ -170,6 +170,24 @@ It is how the operator answers a finding without editing the prompt file: "leave
 - Notes reach neither the overseer's state block nor the attention list, and do not wake the loop.
 - `canopy show chore:<NAME>` lists them after the open findings, and the web UI's chore page beside them.
 
+### Dismissing a finding
+
+`canopy dismiss chore:<NAME> <ID>`, or Dismiss on the finding in the web UI (§22), keeps one open finding off the
+attention list while the chore goes on reporting it (asked for by the operator, 2026-10-13: a note changes what later
+runs are told, not what the latest run reported, so a finding stayed listed until a run left it out).
+
+- A dismissal covers the finding's unbroken sequence of `ok` runs (its age, below): it holds while later runs report
+  the id, and is spent once an `ok` run leaves it out, so a finding that clears and comes back is listed and notified
+  again. Nothing has to be cleaned up, and a dismissal never hides a recurrence the operator has not seen.
+- It changes what the operator is shown, nothing else: the chore's prompt still carries the finding so its id is
+  reused, the overseer's state block still lists it, and `canopy show chore:<NAME>` and the chore's page list it marked
+  dismissed. Leaving the list, it is notified as resolved (§14). To have the chore stop reporting it, write a note.
+- `--undo`, or List again on the chore's page, takes it back. Dismissing it again records the time anew.
+- Refused `unknown` for a chore not defined for this workspace or a finding it does not have open (with `--undo`, one
+  not dismissed), `bad_finding` for an id no finding can have, and `inside_run` as `reply` is: the overseer and
+  agents cannot hide a finding from the operator. A row in `finding_dismissals` per chore and finding id, with its
+  time and channel.
+
 ### Trying a chore
 
 `canopy chore try <NAME> [--context '<text>']` is the operator's, for writing a chore. It renders the prompt a
@@ -189,7 +207,7 @@ only on `ok`.
 ### Findings on the attention list
 
 - Open findings are those of the chore's latest `ok` run; one disappears when a later `ok` run omits its id (§14). A
-  non-`ok` run leaves them standing.
+  non-`ok` run leaves them standing. One the operator dismissed (above) is not listed.
 - A latest run ended `failed`, `unknown`, `timeout`, or `crashed` also raises a `chore_failed` item, after reconcile
   as for worker runs (§14), cleared by a later `ok` run.
 - `attention.md` gets a section per chore after the ticket items, headed `chore:<name>`, one line per finding: title,
@@ -207,6 +225,7 @@ only on `ok`.
   ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
   cost, and the web UI's spend counts chore runs.
 - `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
+- `finding_dismissals`: chore, finding id, when dismissed, and channel; at most one row per chore and finding.
 
 ### Trust model changes
 

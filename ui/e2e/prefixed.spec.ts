@@ -99,7 +99,8 @@ test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) =
     await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
 })
 
-test("a chore's finding is answered from the attention list with a note its next run reads", async ({ page }) => {
+// One story, so no other test in this file sees the finding gone from the list while it is dismissed.
+test("a chore's finding takes a note its next run reads, and is dismissed and listed again", async ({ page }) => {
     await page.goto('attention')
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
     const detail = page.getByTestId('attention-detail')
@@ -112,10 +113,25 @@ test("a chore's finding is answered from the attention list with a note its next
     await expect(mine).toContainText('via web')
     await expect(mine).toContainText('waiting for the next run')
 
-    await detail.getByRole('link', { name: 'chore:deps' }).click()
+    // Dismissed, it leaves the list while the chore still reports it.
+    await detail.getByTestId('dismiss-lodash-advisory').click()
+    const list = page.getByTestId('attention-list')
+    await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
+
+    await page.goto('chores/deps')
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
         'until 2026-10-15',
     )
+    const finding = page.getByTestId('finding-lodash-advisory')
+    await expect(finding).toContainText('dismissed')
+    await finding.getByTestId('undismiss-lodash-advisory').click()
+    await expect(finding.getByRole('status')).toHaveText(
+        'chore:deps lodash-advisory is listed again while the chore reports it.',
+    )
+    await expect(finding.getByTestId('dismiss-lodash-advisory')).toBeVisible()
+
+    await page.goto('attention')
+    await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(1)
 })
 
 test('the settings page asks the loop to read its config again and says what it found', async ({ page }) => {

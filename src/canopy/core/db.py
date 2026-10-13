@@ -830,6 +830,32 @@ def chore_runs(
     ).fetchall()
 
 
+def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
+    """Return when the operator dismissed each of `chore`'s findings it dismissed, by finding id (DESIGN §19)."""
+    rows = conn.execute("SELECT finding_id, dismissed_at FROM finding_dismissals WHERE chore = ?", (chore,))
+    return {str(r["finding_id"]): str(r["dismissed_at"]) for r in rows}
+
+
+def set_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str, *, channel: str) -> None:
+    """Record that the operator dismissed `chore`'s finding `finding_id` now, replacing an earlier dismissal of it."""
+    conn.execute(
+        "INSERT INTO finding_dismissals (chore, finding_id, dismissed_at, channel) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (chore, finding_id) DO UPDATE SET "
+        "dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+        (chore, finding_id, now(), channel),
+    )
+
+
+def delete_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str) -> bool:
+    """Take back the operator's dismissal of `chore`'s finding `finding_id`.
+
+    Returns:
+        Whether there was one to take back.
+    """
+    cur = conn.execute("DELETE FROM finding_dismissals WHERE chore = ? AND finding_id = ?", (chore, finding_id))
+    return cur.rowcount > 0
+
+
 # Review runs (DESIGN §21)
 
 

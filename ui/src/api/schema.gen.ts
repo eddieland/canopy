@@ -64,6 +64,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/{name}/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a chore's finding
+         * @description `canopy dismiss chore:NAME ID`: the finding is off the attention list until the chore stops reporting it.
+         *
+         *     With `undo`, `--undo`: the dismissal is taken back and the finding listed again (DESIGN §19).
+         */
+        post: operations["dismissFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores/{name}/replies": {
         parameters: {
             query?: never;
@@ -771,6 +793,12 @@ export type components = {
              */
             detail: string;
             /**
+             * Dismissed
+             * @description Whether the operator dismissed it since then: it is off the attention list until it clears.
+             * @default false
+             */
+            dismissed: boolean;
+            /**
              * Id
              * @description The finding's id, as the chore gave it: the same across runs that report it.
              */
@@ -1158,6 +1186,44 @@ export type components = {
          * @enum {string}
          */
         DiffLineKind: "add" | "del" | "ctx";
+        /**
+         * Dismissed
+         * @description What a dismissal left: the finding, and whether it is now dismissed.
+         */
+        Dismissed: {
+            /**
+             * Chore
+             * @description The chore's name.
+             */
+            chore: string;
+            /**
+             * Dismissed
+             * @description Whether it is now dismissed: false after an `undo`.
+             */
+            dismissed: boolean;
+            /**
+             * Finding
+             * @description The finding's id.
+             */
+            finding: string;
+        };
+        /**
+         * DismissRequest
+         * @description A dismissal of one of a chore's open findings, by its id, or with `undo` the taking back of one (DESIGN §19).
+         */
+        DismissRequest: {
+            /**
+             * Finding
+             * @description The finding's id, as the chore reported it; checked again in code against the finding id's pattern.
+             */
+            finding: string;
+            /**
+             * Undo
+             * @description Take the dismissal back, as `--undo` does: the finding is listed again.
+             * @default false
+             */
+            undo: boolean;
+        };
         /**
          * ErrorResponse
          * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, or a 404.
@@ -2658,6 +2724,69 @@ export interface operations {
             };
             /** @description No such chore defined for this workspace. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismissFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The chore's name, as `chore:NAME` names it. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dismissed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
