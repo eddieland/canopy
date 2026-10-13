@@ -49,6 +49,8 @@ export type LoopState = Schemas['LoopState']
 export type Pause = Schemas['Pause']
 /** What a pause or a resume did: whether the loop was already so, and the state it left. */
 export type PauseChanged = Schemas['PauseChanged']
+/** What asking the loop to read its config again found: the keys that change, and whether a tick must end first. */
+export type ConfigReload = Schemas['ConfigReload']
 /** One tick: what `canopy decisions ID` prints. */
 export type TickDetail = Schemas['TickDetail']
 /** One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals. */
@@ -65,7 +67,11 @@ export type ChoreDetail = Schemas['ChoreDetail']
 export type ChoreRun = Schemas['ChoreRun']
 /** An open finding: one the chore's latest `ok` run reported (DESIGN §19). */
 export type ChoreFinding = Schemas['ChoreFinding']
-/** What a run's log or a tick's output holds of its session, read back from its events (DESIGN §22). */
+/** One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22). */
+export type ChoreRunDetail = Schemas['ChoreRunDetail']
+/** A finding as one chore run reported it (DESIGN §19). */
+export type ChoreRunFinding = Schemas['ChoreRunFinding']
+/** What a run's or chore run's log, or a tick's output, holds of its session, read from its events (DESIGN §22). */
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
 export type TranscriptEntry = Transcript['entries'][number]

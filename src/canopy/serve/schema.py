@@ -262,6 +262,28 @@ class ChoreDetail(_Model):
     notes: list[Message]
 
 
+class ChoreRunFinding(_Model):
+    """A finding as one chore run reported it (DESIGN §19)."""
+
+    id: str
+    title: str
+    detail: str
+    link: str | None = None
+
+
+class ChoreRunDetail(_Model):
+    """One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22)."""
+
+    chore: str
+    run: ChoreRun
+    # The agent's summary, line breaks kept and not cut: its result bounded it at 2000 characters.
+    summary: str | None = None
+    # Why the harness decided the run's status, when it did: a timeout, a crash, a result that did not validate.
+    note: str | None = None
+    # An `ok` run's findings, as it listed them.
+    findings: list[ChoreRunFinding] = []
+
+
 class Started(_Model):
     """What a start did: whether it was already started, and a run already working it."""
 
@@ -505,6 +527,18 @@ class PauseChanged(_Model):
 
     already: bool
     loop: LoopState
+
+
+class ConfigReload(_Model):
+    """What asking the loop to read its config again found (DESIGN §6). It applies at once, or after a running tick."""
+
+    # Keys whose values differ from the config the loop runs on, as `section.key`; `workspace map` for the workspace
+    # file's repositories. Empty when the files say what the loop already runs on.
+    changed: list[str]
+    # The changed keys that take effect only when the loop restarts: the web UI's listener.
+    restart: list[str]
+    # A tick is running: it finishes on the config it started with, and the reload follows when it ends.
+    after_tick: bool
 
 
 class SpendWindow(_Model):

@@ -265,8 +265,10 @@ read its stdout, `opencode run --agent <name>`. MCP connectivity, OAuth, and too
 
 Agent definitions ship in `agents/`; agent runs load them from a directory canopy owns (below):
 
-- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`. MCP: the tracker,
-  GitHub.
+- `canopy-overseer`: read-only tools plus bash restricted to `canopy *` and `treehouse status*`, nothing outside the
+  workspace (`external_directory: deny`), and one command per bash call, as its prompt says: an `ask`, such as a `cd`
+  out of the workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a
+  `deny` costs only the call. MCP: the tracker, GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
   edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
@@ -290,8 +292,14 @@ the command templates. No interface.
 Every agent's output is read the same way (`core/agent_output.py`). A template either prints the agent's text on
 stdout, or asks OpenCode for `--format json`, which prints one JSON event per line. If any line of stdout is an event
 (a JSON object with a string `type` and a `sessionID`), the agent's text is the `part.text` of each `text` event, one
-per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is the
-last non-empty line of that text, so a template may switch formats without changing a prompt.
+per line; otherwise it is stdout itself. Every result contract (the overseer's done line, §8, §18, §19, §21) is read
+from that text, so a template may switch formats without changing a prompt.
+
+A JSON contract (§8, §18, §19, §21) is the last line of the text that starts with `{`, and lines after it that do not
+are passed over: a runtime, or a plugin the operator must load, may print a notice after the agent's last word, and a
+plain template, or one that sends stderr to stdout, puts it in the text. A last object that does not validate is no
+result; canopy never falls back to an earlier one, which may be an example the agent quoted or a result it took back.
+The overseer's done line is plain text, so it is still the last non-empty line.
 
 From events the harness also reads, each validated (D026):
 

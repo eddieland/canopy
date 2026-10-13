@@ -1,13 +1,14 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
-The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, and
-the pools' slots are stand-ins, since the first two belong to the loop and there is no treehouse to ask (backend.py).
+The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
+reload, and the pools' slots are stand-ins, since the first three belong to the loop and there is no treehouse to ask
+(backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
-ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Runs 39 and 40 and tick 2 left
-their sessions' events in their logs, as `--format json` prints them, for their transcripts (DESIGN §22). Times
-are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
+ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Runs 39 and 40, tick 2, and chore
+run 2 left their sessions' events in their logs, as `--format json` prints them, for their transcripts (DESIGN §22).
+Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
 
@@ -22,7 +23,7 @@ from canopy.core import config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
-from canopy.serve.backend import Backend
+from canopy.serve.backend import Backend, Reloading
 
 if TYPE_CHECKING:
     import sqlite3
@@ -208,6 +209,7 @@ def seed(directory: Path) -> Backend:
         workspace=ws,
         attention=lambda _ctx: list(ATTENTION),
         end_run=_end_run,
+        reload=_reload,
         mock=True,
         slots=slots,
         clock=lambda: T0,
@@ -227,6 +229,11 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
         return False
     note = json.dumps({"harness": "the operator stopped the ticket (mock: no process was killed)"})
     return conversation.close_run(ctx.conn, ctx.config, current, "stopped", note)
+
+
+def _reload(_ctx: Context) -> Reloading:
+    # No loop runs on the mock's config, so there is nothing to read again.
+    return Reloading(changed=(), restart=(), after_tick=False)
 
 
 async def changes(backend: Backend, seconds: float | None) -> None:
@@ -470,11 +477,11 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         "'557058:ann', ?)",
         (at(-50), "Please keep the old login route working until the mobile app ships. <b>Thanks!</b>", at(-52)),
     )
-    _chore_fixtures(conn)
+    _chore_fixtures(conn, root)
     _decisions(conn)
 
 
-def _chore_fixtures(conn: sqlite3.Connection) -> None:
+def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
     chore_runs = (
         # id, chore, started, ended, status, result, cost
         (1, CHORE, -480, -474, "ok", {"status": "ok", "summary": "No advisory touches the lockfiles."}, 0.21),
@@ -509,7 +516,7 @@ def _chore_fixtures(conn: sqlite3.Connection) -> None:
                 at(ended) if ended is not None else None,
                 status,
                 json.dumps(result) if result is not None else None,
-                f"/home/op/.canopy/chores/{run_id}.log",
+                str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chores" / f"{run_id}.log"),
                 f"ses_chore{run_id}",
                 cost,
                 int(cost * 40_000),
@@ -625,10 +632,10 @@ WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 100
 
 
 def _transcripts(state_dir: Path) -> None:
-    """Write the events of run 39's, run 40's, and tick 2's sessions where the loop would have written them."""
+    """Write the events of run 39's, run 40's, tick 2's, and chore run 2's sessions where the loop would write them."""
     # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
-    s39, s40, s2 = "ses_mock39", "ses_mock40", "ses_tick2"
+    s39, s40, s2, c2 = "ses_mock39", "ses_mock40", "ses_tick2", "ses_chore2"
     run_39 = [
         _event("step_start", s39, -90, part={"type": "step-start"}),
         _text(s39, -89.9, "I'll read the ticket, then the search box."),
@@ -726,6 +733,26 @@ def _transcripts(state_dir: Path) -> None:
         _step(s40, -72.5, 0.18),
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
+    chore_2 = [
+        _text(c2, -239.9, "Checking each repository's lockfile against the advisories."),
+        _done(
+            c2,
+            -238,
+            "Audit web's dependencies",
+            "npm audit --omit=dev",
+            "lodash  <=4.17.20\nSeverity: high\nPrototype Pollution - https://github.com/advisories/GHSA-35jh-r3h4-6jhm"
+            "\nfix available via `npm audit fix`\n\n1 high severity vulnerability\n",
+            seconds=6,
+        ),
+        _done(c2, -236, "Audit mobile's dependencies", "npm audit --omit=dev", "found 0 vulnerabilities\n", seconds=5),
+        _step(c2, -235.9, 0.14),
+        _text(
+            c2,
+            -233.1,
+            json.dumps({"status": "ok", "summary": "One advisory touches web's lockfile.", "findings": [_LODASH]}),
+        ),
+        _step(c2, -233, 0.12, reason="stop"),
+    ]
     tick_2 = [
         _text(s2, -60, "Reading the journal's state first."),
         _done(s2, -59.9, "Read the loop's state", "canopy state", "## Tickets\n- ABC-101 implementing (run 41)\n"),
@@ -747,6 +774,8 @@ def _transcripts(state_dir: Path) -> None:
         ("runs", "41", none),
         ("runs", "43", none),
         ("ticks", "2", tick_2),
+        ("chores", "2", chore_2),
+        ("chores", "4", none),
     )
     for directory, name, lines in written:
         (state_dir / directory).mkdir(mode=0o700, exist_ok=True)
@@ -755,6 +784,8 @@ def _transcripts(state_dir: Path) -> None:
             text = ""
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
+        elif directory == "chores":
+            text = f"--- chore stdout ---\n{stdout}\n--- chore stderr ---\n\n--- chore exit 0 ---\n"
         else:
             # What OpenCode printed on stderr, which only the tick's output shows.
             text = f"{stdout}\n--- stderr ---\n{_TICK_STDERR}"

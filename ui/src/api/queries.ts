@@ -21,6 +21,9 @@ export const keys = {
     ticket: (key: string) => ['ticket', key] as const,
     chores: ['chores'] as const,
     chore: (name: string) => ['chore', name] as const,
+    // A chore run, and its transcript: read again only when the stream says the run's status changed.
+    choreRun: (name: string, id: number) => ['chore-run', name, id] as const,
+    choreRunTranscript: (name: string, id: number) => ['transcript', 'chore-run', name, id] as const,
     // The ticks list and each tick's page share a prefix, so one invalidation marks both stale.
     ticks: ['ticks'] as const,
     tickDetail: (id: number) => ['ticks', id] as const,
@@ -154,6 +157,38 @@ export function choreQuery(name: string) {
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/chores/{name}', { params: { path: { name } }, signal })),
         placeholderData: undefined,
+    })
+}
+
+/**
+ * One run of a chore, with the whole of what it reported. It changes only as the run ends, so the stream marks it
+ * stale when the run's status changes (live.ts), as it does the run's transcript.
+ */
+export function choreRunQuery(name: string, id: number) {
+    return queryOptions({
+        queryKey: keys.choreRun(name, id),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/chores/{name}/runs/{run_id}', { params: { path: { name, run_id: id } }, signal }),
+            ),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** A chore run's session, read back from its log by the server on every fetch, as a run's is (DESIGN §22). */
+export function choreRunTranscriptQuery(name: string, id: number) {
+    return queryOptions({
+        queryKey: keys.choreRunTranscript(name, id),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/chores/{name}/runs/{run_id}/transcript', {
+                    params: { path: { name, run_id: id } },
+                    signal,
+                }),
+            ),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
     })
 }
 

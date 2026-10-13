@@ -401,7 +401,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
-  does, and pause and resume the loop as `canopy pause` and `canopy resume` do, nothing else. A forget must carry the
+  does, pause and resume the loop as `canopy pause` and `canopy resume` do, and ask the loop to read its config files
+  again as SIGHUP does, nothing else. It cannot write config: a reload reads only the operator's own files, and a
+  `serve.*` change waits for a restart, so the listener's bind and port never change under it. A forget must carry the
   ticket's key typed out, checked in code. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's

@@ -143,15 +143,40 @@ Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. Duri
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
 as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Dispatched workers are
 unaffected. A signal less than one second (`repeat.SAME_SIGNAL_SECONDS`, monotonic clock) after the first is the same
-keypress. The web UI's server stops with the loop.
+keypress. The web UI's server stops with the loop. SIGHUP does not stop the loop but reloads its config (below), unless
+the terminal hung up.
 
-Config is read once at loop start; restart to apply a change. Prompt files are read every tick.
+Reloading config (taken on request, 2026-10-13): the loop reads its config at start, and again when the operator asks,
+so a change needs no restart. The listener secret is not config: a new one still takes a restart (§22).
+
+- SIGHUP (`kill -HUP`, with the pid the header prints) or Reload on the web UI's settings page asks for it
+  (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
+  loop's own copy: the next tick's limits, the pace, and what the web UI serves. `--every` still holds.
+- A tick running when it is asked for finishes first, on the config it started with; the wait applies it at its next
+  step, so a reload during a wait does not wait for the deadline. The wait it comes in keeps its length, and the waits
+  after it follow the new pace. A reload never starts a tick.
+- The loop prints `config reloaded` with the keys that changed, the new pace if it changed, and any `serve.*` key that
+  changed: the listener started with the loop, so those take effect on a restart. A config that does not load leaves
+  the loop on the one it had, printing why. The web UI reads the files when asked, so it refuses one that does not load
+  (`config_invalid`) and asks nothing of the loop, and says what would change and whether a tick must end first.
+- A terminal hanging up sends SIGHUP too. The loop holds its controlling terminal open from the start and asks it at
+  each SIGHUP (`infra/hangup.py`): one that has hung up is no terminal any more, and the loop then ends as SIGHUP
+  always ended it, at once. Under `nohup`, which ignores SIGHUP, it reloads instead: that loop is meant to outlive its
+  terminal. With no controlling terminal, as under a service manager, every SIGHUP is a reload.
+- Every `canopy` command the overseer and workers run already reads the files when it starts, so a reload changes
+  nothing about what those can do: their guards read the operator's file, as before.
+- Rejected: reading the files before every tick (an edit half saved would apply itself; the operator chooses when),
+  and a journal row for the request, as the pause has (the request is for this process alone, and a signal already
+  reaches it from any shell).
+
+Prompt files are read every tick.
 
 Output uses rich (D043). On a terminal, a spinner with elapsed time shows during a tick and a countdown during the
 wait, redrawn in place and cleared when done. To a file or pipe, output is plain text, one block per tick. The JSON log
 gains `loop started` and `loop stopped` lines, with no tick id, a `loop defers its first tick` line with `--defer`, a
-`loop waits` line per tick, a line when a key, a message, or a run ending ends a wait, and `loop paused` and
-`loop resumed` lines with their channel.
+`loop waits` line per tick, a line when a key, a message, or a run ending ends a wait, `loop paused` and
+`loop resumed` lines with their channel, and `config reloaded` (with the keys that changed) or `config not reloaded`
+(with the error).
 
 Keys are read by `infra/keys.py`, only when output goes to a terminal and stdin is a terminal the loop holds in the
 foreground: the terminal is put in cbreak mode (no Enter, no echo; Ctrl-C and Ctrl-Z still signal) for as long as the
@@ -291,6 +316,10 @@ It is empty by default: nobody is trusted until listed, so a review bot's commen
   reviewers, and the newest item, and does not move the `review` cursor past it. It never dispatches for it on its own
   judgment. A trusted reviewer's feedback on the same unit still goes to a worker, with the cursor no further than the
   item before the first untrusted one.
+- An untrusted reviewer's approving review is not feedback, its body included: an approval asks for nothing, so there
+  is nothing for the operator to say yes or no to, and it raised an `untrusted_review` item that only waited to be
+  dismissed. The inline comments posted with it are review comments, and are feedback as any other. The overseer moves
+  the `review` cursor past such an approval when nothing before it waits.
 - The operator answers in canopy, with `canopy reply KEY` or the web UI (§22), never on the ticket. An operator message
   newer than the ticket's message cursor is an instruction, like an authorized reply. When it speaks to the untrusted
   feedback, however loosely ("use your best judgement on the bot's review"), the ticket is `human_replied`: a `resume`
@@ -447,10 +476,10 @@ dispatch names at least one, in a workspace of one repository too.
    joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
    process group. Its stdout and stderr go to the run log.
-4. Parse the last non-empty line of the worker's text as the result contract: its stdout, or the text of OpenCode's
-   JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`. Record the
-   session id and cost the events reported on the run at once, also after a timeout, so a git failure after this step
-   does not lose them.
+4. Parse the last line of the worker's text that starts with `{` as the result contract: its stdout, or the text of
+   OpenCode's JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`.
+   Record the session id and cost the events reported on the run at once, also after a timeout, so a git failure after
+   this step does not lose them.
 
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch, and runs no setup, since
    the splitter has no shell; step 3 runs `split_cmd` in the desk; step 4 parses and validates the split's result;

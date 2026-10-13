@@ -70,6 +70,40 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/{name}/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chore Run */
+        get: operations["getChoreRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chores/{name}/runs/{run_id}/transcript": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chore Run Transcript */
+        get: operations["getChoreRunTranscript"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -115,6 +149,23 @@ export type paths = {
         put?: never;
         /** Pause Loop */
         post: operations["pauseLoop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reload Config */
+        post: operations["reloadConfig"];
         delete?: never;
         options?: never;
         head?: never;
@@ -608,6 +659,38 @@ export type components = {
             tokens: number | null;
         };
         /**
+         * ChoreRunDetail
+         * @description One chore run: its row as its chore's page lists it, and the whole of what it reported (DESIGN §19, §22).
+         */
+        ChoreRunDetail: {
+            /** Chore */
+            chore: string;
+            /**
+             * Findings
+             * @default []
+             */
+            findings: components["schemas"]["ChoreRunFinding"][];
+            /** Note */
+            note: string | null;
+            run: components["schemas"]["ChoreRun"];
+            /** Summary */
+            summary: string | null;
+        };
+        /**
+         * ChoreRunFinding
+         * @description A finding as one chore run reported it (DESIGN §19).
+         */
+        ChoreRunFinding: {
+            /** Detail */
+            detail: string;
+            /** Id */
+            id: string;
+            /** Link */
+            link: string | null;
+            /** Title */
+            title: string;
+        };
+        /**
          * ChoreSummary
          * @description A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings.
          */
@@ -665,6 +748,18 @@ export type components = {
             id: string;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * ConfigReload
+         * @description What asking the loop to read its config again found (DESIGN §6). It applies at once, or after a running tick.
+         */
+        ConfigReload: {
+            /** After Tick */
+            after_tick: boolean;
+            /** Changed */
+            changed: string[];
+            /** Restart */
+            restart: string[];
         };
         /**
          * Decision
@@ -1698,6 +1793,84 @@ export interface operations {
             };
         };
     };
+    getChoreRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreRunDetail"];
+                };
+            };
+            /** @description No such run of this chore. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getChoreRunTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Transcript"];
+                };
+            };
+            /** @description No such run of this chore. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     streamEvents: {
         parameters: {
             query?: never;
@@ -1754,6 +1927,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PauseChanged"];
+                };
+            };
+        };
+    };
+    reloadConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigReload"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
         };

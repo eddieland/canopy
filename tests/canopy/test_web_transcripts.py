@@ -1,6 +1,7 @@
-"""The web UI's transcripts (DESIGN §13, §22): a run's page, and a run's or tick's session read back from the
-events its log holds. Reads only; every text in them is agent output."""
+"""The web UI's transcripts (DESIGN §13, §22): a run's and a chore run's pages, and a run's, chore run's, or tick's
+session read back from the events its log holds. Reads only; every text in them is agent output."""
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -140,3 +141,64 @@ def test_a_ticks_output_is_the_end_of_its_file_as_written_stderr_included(backen
     missing = c.get("/api/ticks/99/output")
     assert (missing.status_code, missing.json()["detail"]) == (404, "no tick 99")
     assert c.get("/api/ticks/0/output").status_code == 422
+
+
+def test_a_chore_runs_page_is_its_row_and_the_whole_of_what_it_reported(backend: Backend) -> None:
+    c = client(None, backend)
+    listed = {r["id"]: r for r in c.get("/api/chores/deps").json()["runs"]}
+    page = c.get("/api/chores/deps/runs/2").json()
+    assert (page["chore"], page["run"]) == ("deps", listed[2])
+    assert (page["summary"], page["note"]) == ("One advisory touches web's lockfile.", None)
+    assert [f["id"] for f in page["findings"]] == ["lodash-advisory"]
+    assert page["findings"][0]["link"] == "https://github.com/advisories/GHSA-35jh-r3h4-6jhm"
+
+    # The row's summary is cut for a list; the page's is the whole of it, and the harness's note is apart from it.
+    summary = "\n".join(f"- repository {i}: {' '.join(['clean'] * 20)}" for i in range(12))
+    note = "the chore's last line was not a valid result; its findings are not recorded"
+    with backend.open() as ctx:
+        ctx.conn.execute(
+            "UPDATE chore_runs SET result_json = ? WHERE id = 1",
+            (json.dumps({"status": "ok", "summary": summary, "findings": []}),),
+        )
+        ctx.conn.execute(
+            "UPDATE chore_runs SET status = 'unknown', result_json = ? WHERE id = 3", (json.dumps({"harness": note}),)
+        )
+    first = c.get("/api/chores/deps/runs/1").json()
+    assert len(first["run"]["summary"]) < len(summary) == len(first["summary"])
+    assert (first["note"], first["findings"]) == (None, [])
+    unknown = c.get("/api/chores/build-health/runs/3").json()
+    assert (unknown["run"]["state"], unknown["summary"], unknown["note"]) == ("failed", None, note)
+
+
+def test_a_chore_runs_transcript_is_its_sessions_events(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/chores/deps/runs/2/transcript").json()
+    assert (found["status"], found["session_id"]) == ("read", "ses_chore2")
+    commands = [json.loads(e["input"])["command"] for e in found["entries"] if e["kind"] == "tool"]
+    assert commands == ["npm audit --omit=dev", "npm audit --omit=dev"]
+    assert "Prototype Pollution" in found["entries"][1]["output"]
+    # Its last text is the result line the harness read; a running run's log holds no events yet.
+    assert json.loads(found["entries"][-2]["text"])["status"] == "ok"
+    assert c.get("/api/chores/build-health/runs/4/transcript").json()["entries"] == []
+    assert c.get("/api/chores/deps/runs/1/transcript").json()["status"] == "no_log"
+
+
+def test_a_chore_run_is_found_only_under_its_own_chore(backend: Backend) -> None:
+    c = client(None, backend)
+    for path in ("/api/chores/deps/runs/4", "/api/chores/deps/runs/4/transcript", "/api/chores/deps/runs/99"):
+        missing = c.get(path)
+        assert missing.status_code == 404, path
+    assert c.get("/api/chores/deps/runs/4").json()["detail"] == "chore 'deps' has no run 4"
+    assert c.get("/api/chores/deps/runs/0").status_code == 422
+    bad = c.get("/api/chores/Not_A_Name/runs/2")
+    assert (bad.status_code, bad.json()["detail"]["guard"]) == (409, "bad_ref")
+
+
+def test_a_chore_deleted_from_the_config_keeps_its_runs_pages(backend: Backend) -> None:
+    chores = {name: chore for name, chore in backend.config.chores.items() if name != "deps"}
+    deleted = dataclasses.replace(backend, config=backend.config.model_copy(update={"chores": chores}))
+    c = client(None, deleted)
+    # Its chore's page is gone, as `canopy show chore:deps` refuses it; the journal's history of it is not.
+    assert c.get("/api/chores/deps").status_code == 404
+    assert c.get("/api/chores/deps/runs/2").json()["run"]["id"] == 2
+    assert c.get("/api/chores/deps/runs/2/transcript").json()["session_id"] == "ses_chore2"
