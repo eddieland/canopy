@@ -1,4 +1,4 @@
-"""The chores (DESIGN §19): what `canopy status` and `canopy show chore:NAME` print, and the operator's notes.
+"""The chores (DESIGN §19): what `canopy status` and `canopy show chore:NAME` print, notes, and dismissed findings.
 
 Each run is readable on its own, with its session's transcript: untrusted text, read back from its log. Nothing here
 runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
@@ -13,7 +13,16 @@ from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, ChoreName, ChoreRunId, RefusedError, chore_ref, not_found
-from canopy.serve.schema import ChoreDetail, ChoreRunDetail, ChoreSummary, Replied, ReplyRequest, Transcript
+from canopy.serve.schema import (
+    ChoreDetail,
+    ChoreRunDetail,
+    ChoreSummary,
+    Dismissed,
+    DismissRequest,
+    Replied,
+    ReplyRequest,
+    Transcript,
+)
 
 TAG = "chores"
 router = APIRouter(tags=[TAG])
@@ -99,3 +108,28 @@ def note(name: ChoreName, body: ReplyRequest, backend: BackendDep) -> Replied:
             raise RefusedError(r) from None
     _log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
     return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
+
+
+@router.post(
+    "/chores/{name}/dismissals",
+    operation_id="dismissFinding",
+    summary="Dismiss a chore's finding",
+    responses=REFUSED,
+)
+def dismiss(name: ChoreName, body: DismissRequest, backend: BackendDep) -> Dismissed:
+    """`canopy dismiss chore:NAME ID`: the finding is off the attention list until the chore stops reporting it.
+
+    With `undo`, `--undo`: the dismissal is taken back and the finding listed again (DESIGN §19).
+    """
+    ref = chore_ref(name, "dismiss")
+    with backend.open() as ctx:
+        try:
+            defined = chore_view.defined(ctx.config, ctx.workspace)
+            conversation.dismiss(ctx.conn, ref, body.finding, channel=WEB, chores=defined, undo=body.undo)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "finding dismissal taken back" if body.undo else "finding dismissed",
+        extra={"chore": ref.id, "finding": body.finding, "channel": WEB},
+    )
+    return Dismissed(chore=ref.id, finding=body.finding, dismissed=not body.undo)

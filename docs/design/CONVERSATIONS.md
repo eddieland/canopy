@@ -224,7 +224,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
 | `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
-| `chore:NAME` | a chore (§19) | `reply` (its notes), `show` |
+| `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
 
 A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
@@ -282,8 +282,8 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget; notes to chores (M23); pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| web (M20) | reply, start, stop, forget; notes to chores (M23), dismissing findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -298,8 +298,8 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, `reply`, and `forget` with channel `web` (a note to a chore is a `reply`
-  on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
+  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, and `dismiss` with channel `web` (a note to a chore is a
+  `reply` on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
   `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
   the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
   the operator's to edit. A forget
@@ -321,7 +321,8 @@ Served by `canopy loop` from a thread (D073):
   it, chores (below), ticks (below), and search (below). The side rail shows the runs working now and the spend of the
   last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in
   view wherever the operator is.
-  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, and pausing and resuming
+  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, dismissing a chore's
+  finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
   from the settings page. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
@@ -391,6 +392,7 @@ The API, under `{base}/api`:
 | `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
+| `POST /chores/{name}/dismissals` | `canopy dismiss chore:NAME ID`, or with `undo` its `--undo`: the finding off the attention list until it clears (§19) |
 | `GET /chores/{name}/runs/{id}` | one run of that chore: its row, its whole summary, the harness's note, and its findings; 404 for no such run of it |
 | `GET /chores/{name}/runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run of that chore |
 | `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
@@ -451,7 +453,8 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 - `GET /chores` lists the chores `canopy status` lists: those configured for this workspace, none while
   `capacity.max_chores` is 0. Each has its `every_minutes`, `days`, `hours`, `timezone`, and `when`; its running run,
   or else its latest ended one; its `due_at` (§19, the `not_due` and `outside_hours` guards' earliest start, by the
-  server's clock); its open findings, each with when its unbroken sequence of `ok` runs began; and its newest note's id.
+  server's clock); its open findings, each with when its unbroken sequence of `ok` runs began and whether the
+  operator dismissed it; and its newest note's id.
 - `GET /chores/{name}` is one chore defined for this workspace, configured or not, as `canopy reply chore:NAME` takes
   a note to one: that summary, its latest 10 runs with status, summary, number of findings, session, cost, and log
   path, and the latest 10 notes, oldest first, which are what its next run's `## Run` section carries. A name no chore
@@ -459,6 +462,10 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 - `POST /chores/{name}/replies` takes the reply form's body and submission id, as a ticket's does, behind the same
   session token and `Origin` check, and records a note with channel `web`. Nothing in the web UI runs a chore: the
   overseer decides when one runs (§19), and `canopy chore try` stays in the CLI.
+- `POST /chores/{name}/dismissals` takes a finding's id and `undo`, behind the same checks, and dismisses the finding
+  as `canopy dismiss` does, or takes the dismissal back, with channel `web` (§19). A finding selected on the attention
+  list has a small `dismiss` beside its age; on the chore's page each open finding has one in its head line, or,
+  dismissed, a mark and `list again`.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
   detail are the agent's: untrusted text, rendered as text with control characters dropped.
 - A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its

@@ -108,8 +108,13 @@ Rules:
   beside its actions, work, and runs, and a chore's page puts its notes beside its schedule, findings, and runs.
 - Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding, one
   at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both
-  ends. It is the header's one piece of fun: written here, never journal text. Settings sets its speed (Off, Slow,
-  Normal, Spicy; Off hides it) and the seconds between headlines (0 by default).
+  ends. It is the header's one piece of fun: written here, never journal text. Tips for using canopy are mixed in
+  among the jokes, each opening with "Tip:" and without flair. Each headline is picked at random from the topics
+  turned on, never the one just shown, so a topic turns up as often as its share of the headlines. A tip names a
+  real key, command, or setting, in that command's own words; one that stops being true is fixed or dropped.
+  Settings sets its speed (Off, Slow, Normal, Spicy; Off hides it), the seconds between headlines (0 by default), and
+  its topics (Programming, Vibe coding, Tips), a checkbox each, all on by default. With every topic off the window is
+  gone, as with Off. A new topic is a name in `TICKER_TOPICS`, its headlines, and its label in Settings.
 - A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
   `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
@@ -174,8 +179,8 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
 - The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
   left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
-  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. The reel starts at a
-  different headline each day. At rest the window is empty, between headlines.
+  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. At rest the window is
+  empty, between headlines.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
@@ -199,10 +204,10 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent means system) and synced across tabs.
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
-inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
-`canopy-ticker` (`src/lib/ticker-settings.ts`), the key that sends a reply under `canopy-send-key`
+inline script and checks it against the store's key. The ticker's speed, gap, and hidden topics are kept the same
+way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), the key that sends a reply under `canopy-send-key`
 (`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
-tabs.
+tabs. The ticker keeps the topics left out, not those shown, so a topic added later shows until it is turned off.
 
 ## Patterns
 
@@ -256,9 +261,9 @@ tabs.
   `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
   reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The selection is
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation, the reply form,
-  and the ticket's actions; a chore's item (a finding or `chore_failed`) shows the chore's notes and the note form; an
-  item about neither shows its detail and nothing to answer. Under the list, Working
-  lists the running runs: ticket, kind, cost so far, and for how long.
+  and the ticket's actions; a chore's item (a finding or `chore_failed`) shows the chore's notes and the note form,
+  and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither shows its detail and
+  nothing to answer. Under the list, Working lists the running runs: ticket, kind, cost so far, and for how long.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
@@ -310,7 +315,10 @@ tabs.
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
-  how long it has been open.
+  how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
+  `dismissed` chip and `list again`: still reported, only off the attention list. A row's own action is a ghost `xs`
+  button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
+  goes under the row, once clicked.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
   header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per
@@ -325,6 +333,10 @@ tabs.
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
   label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **Options that are each on or off** (the ticker's topics) are a row of checkboxes (`Checkbox`,
+  `src/components/ui/checkbox.tsx`), each inside its label, so a click on the word toggles it too: a box on the raised
+  surface, filled with the accent and its foreground's tick when on. The row is a `fieldset` named by the line beside
+  it.
 - **A choice of a few fixed options** (a theme, the ticker's speed, the send key) is a segmented control
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
