@@ -259,13 +259,7 @@ function Workers() {
                             <RunDot state={run.state} />
                             <TicketLink ticketKey={run.ticket_key} className="w-20 truncate" />
                             <Chip word={run.kind} />
-                            <span
-                                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
-                                title={run.ticket_title ?? undefined}
-                            >
-                                {run.ticket_title}
-                            </span>
-                            <span className="flex items-center gap-3">
+                            <span className="ml-auto flex items-center gap-3">
                                 <span className="readout text-xs text-muted-foreground">
                                     {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
                                 </span>
