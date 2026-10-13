@@ -84,7 +84,7 @@ function RunPanel({ run }: { run: Run }) {
                 <Field label="ticket">
                     <span className="flex items-center gap-2">
                         <TicketLink ticketKey={run.ticket_key} />
-                        <Chip>{run.kind}</Chip>
+                        <Chip word={run.kind} />
                         {run.private && <Chip>private</Chip>}
                     </span>
                 </Field>

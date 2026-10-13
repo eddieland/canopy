@@ -33,7 +33,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                 </span>
                 <RunLink id={run.id} className="w-14" />
                 {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
-                <Chip>{run.kind}</Chip>
+                <Chip word={run.kind} />
                 {run.private && <Chip>private</Chip>}
                 <span className="ml-auto flex items-center gap-4">
                     <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">

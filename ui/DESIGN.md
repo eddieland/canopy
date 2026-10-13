@@ -170,7 +170,11 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
-- **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text.
+- **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
+  the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
+  spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
+  the CLI's spelling stays on hover, so it can still be found in `attention.md` or typed into the CLI
+  (`src/lib/words.ts`).
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
   attention, and spent in the last 24 hours and in the last 30 days from `GET /api/spend`, on the stream) and the
   worktrees page (working, held, needs a look, free, across every pool). Each is a label, the value, and one line

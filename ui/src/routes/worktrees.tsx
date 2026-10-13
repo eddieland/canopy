@@ -245,7 +245,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
         return (
             <span className="flex w-52 shrink-0 items-center gap-2">
                 <TicketLink ticketKey={w.run.ticket_key} className="truncate" />
-                <Chip>{w.run.kind}</Chip>
+                <Chip word={w.run.kind} />
                 <span className="readout text-xs text-muted-foreground">run:{w.run.id}</span>
             </span>
         )

@@ -24,7 +24,7 @@ export function WorkingNow({ ticketKey }: { ticketKey: string }) {
                     <RunDot state="running" />
                     <span className="text-status-running">working now</span>
                     <RunLink id={run.id} />
-                    <Chip>{run.kind}</Chip>
+                    <Chip word={run.kind} />
                     <span className="ml-auto flex items-center gap-3">
                         <span className="readout">{run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}</span>
                         <span className="flex items-center gap-1">

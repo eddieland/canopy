@@ -133,7 +133,7 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
 }
 
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return <Chip className={TONE[severity(item)]}>{item.reason}</Chip>
+    return <Chip className={TONE[severity(item)]} word={item.reason} />
 }
 
 /** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
@@ -258,7 +258,7 @@ function Workers() {
                         >
                             <RunDot state={run.state} />
                             <TicketLink ticketKey={run.ticket_key} className="w-20 truncate" />
-                            <Chip>{run.kind}</Chip>
+                            <Chip word={run.kind} />
                             <span className="ml-auto flex items-center gap-3">
                                 <span className="readout text-xs text-muted-foreground">
                                     {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
