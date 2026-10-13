@@ -136,6 +136,19 @@ def test_a_base_path_prefixes_everything(ui: Path, backend: Backend) -> None:
     assert c.get("/api/meta").status_code == 404
 
 
+def test_each_app_serves_its_own_backend_and_sessions(ui: Path, tmp_path: Path) -> None:
+    # The routers are shared by every app in the process; what a route is handed is bound per app.
+    first = client(ui, mock.seed(tmp_path / "first"))
+    second = client(ui, mock.seed(tmp_path / "second"), key=SECRET, base_path="/canopy")
+    assert second.get("/canopy/api/meta").status_code == 401
+    headers = signed_in(second, base="/canopy")
+    before = second.get("/canopy/api/loop", headers=headers).json()
+    paused = first.post("/api/loop/pause", headers={"origin": ORIGIN}).json()
+    assert paused["already"] is False
+    assert first.get("/api/loop").json() == paused["loop"] != before
+    assert second.get("/canopy/api/loop", headers=headers).json() == before
+
+
 @pytest.mark.parametrize("base_path", ["/", "canopy", "/canopy/", "/a/../b", '/"><script>'])
 def test_a_bad_base_path_is_refused(base_path: str) -> None:
     with pytest.raises(ValidationError):

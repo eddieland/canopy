@@ -5,24 +5,16 @@ Not on the event stream: each read runs `treehouse status` once per pool.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter
 
 from canopy.serve import worktrees
+from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema import Pool
 
-if TYPE_CHECKING:
-    from canopy.serve.backend import Backend
+router = APIRouter()
 
 
-def router(backend: Backend) -> APIRouter:
-    """Return the worktrees' route, reading through `backend`."""
-    api = APIRouter()
-
-    @api.get("/worktrees", operation_id="listWorktrees")
-    def pools() -> list[Pool]:
-        with backend.open() as ctx:
-            return worktrees.pools(backend, ctx)
-
-    return api
+@router.get("/worktrees", operation_id="listWorktrees")
+def pools(backend: BackendDep) -> list[Pool]:
+    with backend.open() as ctx:
+        return worktrees.pools(backend, ctx)
