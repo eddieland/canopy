@@ -118,6 +118,15 @@ test("a chore's finding is answered from the attention list with a note its next
     )
 })
 
+test('the settings page asks the loop to read its config again and says what it found', async ({ page }) => {
+    await page.goto('settings')
+    await page.getByTestId('config-reload').click()
+    // The mock runs no loop, so its config never changes.
+    await expect(page.getByRole('status').filter({ hasText: 'Nothing changed' })).toContainText(
+        'The loop runs on it from now on.',
+    )
+})
+
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
     await page.goto('settings')
     await page.getByTestId('send-key-mod-enter').click()

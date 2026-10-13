@@ -122,6 +122,7 @@ canopy (harness, Python)
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
     repeat.py      canopy loop: ticks one after another with a wait between them, its own lock, rich output
+    reread.py      reading the config again while the loop runs, on SIGHUP or from the web UI (§6)
     pacing.py      how long the loop waits: idle ticks, gates, and what wakes it early (§6, Idle pacing)
     web.py         the web UI for canopy loop: the listener secret checked, the server's backend wired, started
     state.py       the overseer's state block
@@ -163,8 +164,8 @@ canopy (harness, Python)
     api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, and the operator's verbs
     auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
     secret.py      the listener secret's file: read with its checks, written by `canopy secret`
-    backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
-                   request
+    backend.py     what the loop hands the server: config, journal, the attention list, ending a run, a reload; a
+                   Context per request
     views.py       journal rows as the API's models: attention items, runs, tickets, messages, search hits
     live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
@@ -208,6 +209,7 @@ canopy (harness, Python)
                    a child's PWD names its cwd (OpenCode runs tools in PWD); detached spawns and pid liveness
     lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
     stopping.py    SIGTERM, SIGHUP, and SIGINT become an exception the cleanup of _run and _chore catches
+    hangup.py      whether the controlling terminal hung up, to tell that SIGHUP from a reload's
     logs.py        JSON-lines logging to <state_dir>/canopy.log, stamped with the tick id; operator-only files and
                    directories
     resources.py   finds migrations/, .agents/, and the built UI in a source checkout or bundled in the wheel

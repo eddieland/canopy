@@ -121,6 +121,11 @@ relying on a permission they check.
   lines), waits reaching `loop.idle_max_minutes` after a quiet evening, back at `loop.interval_minutes` within one tick
   of the first morning activity, and each run's end followed by a tick within a couple of minutes. Re-measure
   afterwards with MEASUREMENTS' prompt; M29 waits on the result.
+- **S31. Reloading config** (M12). With `canopy loop` running in a terminal, change `capacity.max_workers` and
+  `kill -HUP` the loop during a tick, then press Reload on the web UI's settings page during the wait. Expect each tick
+  to finish first, `config reloaded  capacity.max_workers changed` under it, and the next tick's footer to count to the
+  new limit. Then close the terminal window: expect the loop gone, as before. Under `nohup`, expect it to outlive the
+  window and still reload on `kill -HUP`.
 
 ## The web UI
 

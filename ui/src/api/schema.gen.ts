@@ -121,6 +121,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reload Config */
+        post: operations["reloadConfig"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop/resume": {
         parameters: {
             query?: never;
@@ -614,6 +631,18 @@ export type components = {
             id: string;
             /** Truncated */
             truncated: boolean;
+        };
+        /**
+         * ConfigReload
+         * @description What asking the loop to read its config again found (DESIGN §6). It applies at once, or after a running tick.
+         */
+        ConfigReload: {
+            /** After Tick */
+            after_tick: boolean;
+            /** Changed */
+            changed: string[];
+            /** Restart */
+            restart: string[];
         };
         /**
          * Decision
@@ -1541,6 +1570,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PauseChanged"];
+                };
+            };
+        };
+    };
+    reloadConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigReload"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
         };

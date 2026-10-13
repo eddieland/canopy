@@ -12,8 +12,8 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import chore_view, contract, conversation, db, pause
-from canopy.infra import keys, lock
-from canopy.loop import attention, repeat, tick
+from canopy.infra import hangup, keys, lock
+from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ SUMMARY_WIDTH = 160
     "--every",
     type=click.IntRange(min=1),
     metavar="MINUTES",
-    help="Minutes to wait after each tick ends. Default: loop.interval_minutes.",
+    help="Minutes to wait after each tick ends, kept on a reload. Default: loop.interval_minutes.",
 )
 @click.option("--ticks", "max_ticks", type=click.IntRange(min=1), metavar="N", help="Stop after N ticks.")
 @click.option(
@@ -52,20 +52,29 @@ def cmd_loop(
     defer: int | None,
     no_serve: bool,
 ) -> int:
-    """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to."""
+    """Run ticks in the foreground, waiting between them, until stopped. Serves the web UI unless told not to.
+
+    SIGHUP reads the config again, once the running tick ends.
+    """
     ctx = open_context(click_ctx, migrate=False)  # the loop migrates under its own lock
     stop = repeat.Stop()
+    reload = reread.Reload()
     console = Console(highlight=False)
     # Keys only when the countdown is drawn: with output to a file, there is no one at the terminal to tell about them.
-    with repeat.signals(stop), keys.listen(sys.stdin if console.is_terminal else None) as pressed:
+    with (
+        hangup.watch() as hung_up,
+        repeat.signals(stop, reload, hung_up=hung_up),
+        keys.listen(sys.stdin if console.is_terminal else None) as pressed,
+    ):
         try:
             repeat.run(
                 ctx,
                 dry_run=dry_run,
-                interval_minutes=every or ctx.config.loop.interval_minutes,
+                interval_minutes=every,
                 max_ticks=max_ticks,
                 console=console,
                 stop=stop,
+                reload=reload,
                 serve=ctx.config.serve.enabled and not no_serve,
                 keys=pressed,
                 defer_minutes=defer,

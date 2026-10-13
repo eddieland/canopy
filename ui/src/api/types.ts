@@ -49,6 +49,8 @@ export type LoopState = Schemas['LoopState']
 export type Pause = Schemas['Pause']
 /** What a pause or a resume did: whether the loop was already so, and the state it left. */
 export type PauseChanged = Schemas['PauseChanged']
+/** What asking the loop to read its config again found: the keys that change, and whether a tick must end first. */
+export type ConfigReload = Schemas['ConfigReload']
 /** One tick: what `canopy decisions ID` prints. */
 export type TickDetail = Schemas['TickDetail']
 /** One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals. */

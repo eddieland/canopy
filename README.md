@@ -80,7 +80,8 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
   attention list. Press `t` while it waits to tick now, and `p` to pause it: no tick starts until you press `p` again,
   run `canopy resume`, or resume it in the web UI's header; `canopy pause` pauses it from another shell. Workers
   already running keep going. `canopy loop --defer 30` starts it waiting: the first tick runs in 30 minutes, or when
-  you press `t`.
+  you press `t`. After editing your config, `kill -HUP` the loop (its header prints the command) or press Reload on
+  the web UI's settings page: it reads the config again once the running tick ends.
 - Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
   every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
   finding with a note. Sign in once per browser with the secret `canopy secret` prints. `[serve]` in your user config
