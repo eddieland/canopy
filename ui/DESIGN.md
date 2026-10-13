@@ -92,7 +92,7 @@ Rules:
   state's color, the ticket's key, how long it has run (or `asks` in `status-blocked`), and the ticket's title under
   it, opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
-  is shown nowhere else. The footer (the search key and the version) sits at the rail's foot, not the window's: the
+  is shown nowhere else. The footer (the version) sits at the rail's foot, not the window's: the
   window's foot on a page that fits it, the page's foot on a longer one.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
