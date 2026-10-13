@@ -1008,6 +1008,17 @@ export type components = {
              */
             hours: number;
             /**
+             * Mean Usd
+             * @description What a run cost on average, over those that reported a cost; None when none did.
+             */
+            mean_usd: number | null;
+            /**
+             * P99 Usd
+             * @description The 99th percentile of what a run cost, by nearest rank over those that reported a cost: the dearest run when
+             *     fewer than 100 did. None when none did.
+             */
+            p99_usd: number | null;
+            /**
              * Priced
              * @description How many of those reported a cost.
              */

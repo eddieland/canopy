@@ -6,6 +6,7 @@ message bodies as `canopy show` drops them, run summaries are cut to one line, a
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -614,8 +615,15 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
 
 def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int) -> ChoreSpendWindow:
     since = db.format_time(now - timedelta(hours=hours))
-    runs, priced, cost = db.chore_spent_since(conn, name, since)
-    return ChoreSpendWindow(hours=hours, runs=runs, priced=priced, cost_usd=cost)
+    runs, costs = db.chore_costs_since(conn, name, since)
+    if not costs:
+        return ChoreSpendWindow(hours=hours, runs=runs, priced=0)
+    total = sum(costs)
+    # Nearest rank: the smallest cost at least 99% of the runs did not exceed.
+    p99 = costs[math.ceil(0.99 * len(costs)) - 1]
+    return ChoreSpendWindow(
+        hours=hours, runs=runs, priced=len(costs), cost_usd=total, mean_usd=total / len(costs), p99_usd=p99
+    )
 
 
 def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:

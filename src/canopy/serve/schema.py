@@ -342,6 +342,11 @@ class ChoreSpendWindow(_Model):
     """How many of those reported a cost."""
     cost_usd: float | None = None
     """What they cost, in US dollars; None when none reported a cost."""
+    mean_usd: float | None = None
+    """What a run cost on average, over those that reported a cost; None when none did."""
+    p99_usd: float | None = None
+    """The 99th percentile of what a run cost, by nearest rank over those that reported a cost: the dearest run when
+    fewer than 100 did. None when none did."""
 
 
 class ChoreSpend(_Model):

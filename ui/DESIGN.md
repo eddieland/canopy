@@ -313,8 +313,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then its window (`windowText`), its open findings, and what its runs cost in the last
-  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in words under its
-  runs (`spendText`: `$0.87 over 4 runs, $0.29 a run, 1 reported none`). A chore run is a row like a
+  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
+  runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, and p99. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain

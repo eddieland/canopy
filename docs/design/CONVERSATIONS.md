@@ -458,8 +458,9 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   server's clock); its open findings, each with when its unbroken sequence of `ok` runs began and whether the
   operator dismissed it; its newest note's id; and its spend (asked for by the operator, 2026-10-13): for the last
   24 hours and the last 30 days, by start as `GET /spend` counts, how many of its runs started, how many of them
-  reported a cost, and what they cost (§13). A window carries its length and not its start, which moves with the
-  clock and would change the list the stream sends on every read. The cost a run is over the runs that reported one.
+  reported a cost, what they cost (§13), and a run's average and 99th percentile cost over those that reported one,
+  the percentile by nearest rank, so under 100 runs it is the dearest. A window carries its length and not its
+  start, which moves with the clock and would change the list the stream sends on every read.
 - `GET /chores/{name}` is one chore defined for this workspace, configured or not, as `canopy reply chore:NAME` takes
   a note to one: that summary, its latest 10 runs with status, summary, number of findings, session, cost, and log
   path, and the latest 10 notes, oldest first, which are what its next run's `## Run` section carries. A name no chore

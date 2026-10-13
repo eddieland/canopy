@@ -3,7 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
 import { choreQuery } from '@/api/queries'
-import type { ChoreDetail, ChoreRun } from '@/api/types'
+import type { ChoreDetail, ChoreRun, ChoreSpend, ChoreSpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreNotes } from '@/components/chore-notes'
@@ -12,7 +12,7 @@ import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/comp
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
-import { choreLine, costText, spendText, windowText } from '@/lib/chores'
+import { choreLine, costText, runsText, windowText } from '@/lib/chores'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
@@ -123,12 +123,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                                 {costText(chore.spend.month.cost_usd)} in 30 days
                             </span>
                         </PanelHeader>
-                        <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
-                            <dt className="panel-label self-center">last 24 hours</dt>
-                            <dd className="font-mono text-xs">{spendText(chore.spend.day)}</dd>
-                            <dt className="panel-label self-center">last 30 days</dt>
-                            <dd className="font-mono text-xs">{spendText(chore.spend.month)}</dd>
-                        </dl>
+                        <SpendTable spend={chore.spend} />
                     </Panel>
                 </div>
                 <Panel data-testid="chore-notes">
@@ -180,5 +175,46 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                 <span title="the run's output">log {run.log_path}</span>
             </div>
         </li>
+    )
+}
+
+/**
+ * What a chore's runs cost in each window: how many, the total, and a run's average and 99th percentile. The average
+ * and percentile are over the runs that reported a cost; under 100 of them, the percentile is the dearest run.
+ */
+function SpendTable({ spend }: { spend: ChoreSpend }) {
+    const windows: [string, ChoreSpendWindow][] = [
+        ['last 24 hours', spend.day],
+        ['last 30 days', spend.month],
+    ]
+    return (
+        <div className="overflow-x-auto p-3">
+            <table className="border-collapse text-sm" data-testid="chore-spend-table">
+                <thead>
+                    <tr className="text-right">
+                        <th className="panel-label w-32 pb-1.5 text-left font-normal">window</th>
+                        <th className="panel-label w-24 pb-1.5 font-normal">runs</th>
+                        <th className="panel-label w-24 pb-1.5 font-normal">total</th>
+                        <th className="panel-label w-24 pb-1.5 font-normal">average</th>
+                        <th className="panel-label w-24 pb-1.5 font-normal" title="99th percentile of a run's cost">
+                            p99
+                        </th>
+                    </tr>
+                </thead>
+                <tbody className="font-mono text-xs">
+                    {windows.map(([label, window]) => (
+                        <tr key={label} className="text-right" data-testid={`chore-spend-${window.hours}h`}>
+                            <th scope="row" className="panel-label py-0.5 text-left font-normal">
+                                {label}
+                            </th>
+                            <td className="readout">{runsText(window)}</td>
+                            <td className="readout">{costText(window.cost_usd)}</td>
+                            <td className="readout">{costText(window.mean_usd)}</td>
+                            <td className="readout">{costText(window.p99_usd)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     )
 }

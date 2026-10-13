@@ -36,17 +36,8 @@ export function costText(cost: number | null): string {
     return cost === null ? '–' : `$${cost.toFixed(2)}`
 }
 
-/**
- * What a chore's runs in one window cost, in words: `$0.87 over 4 runs, $0.29 a run, 1 reported none`. The cost a
- * run is over the runs that reported one, so a run that reported nothing does not pull it down.
- */
-export function spendText(window: ChoreSpendWindow): string {
-    const runs = window.runs === 1 ? '1 run' : `${window.runs} runs`
-    if (window.runs === 0) return 'no runs'
-    if (window.cost_usd === null) return `${runs}, none reported a cost`
-    const parts = [`${costText(window.cost_usd)} over ${runs}`]
-    if (window.priced > 1) parts.push(`${costText(window.cost_usd / window.priced)} a run`)
+/** How many of a chore's runs started in a window, and how many of them reported no cost: `4, 1 unpriced`. */
+export function runsText(window: Pick<ChoreSpendWindow, 'runs' | 'priced'>): string {
     const unpriced = window.runs - window.priced
-    if (unpriced > 0) parts.push(`${unpriced} reported none`)
-    return parts.join(', ')
+    return unpriced > 0 ? `${window.runs}, ${unpriced} unpriced` : String(window.runs)
 }
