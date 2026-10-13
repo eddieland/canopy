@@ -112,3 +112,9 @@ SQL of its own.
 - `make check` passes (it runs `npm run check`), and `make ui-e2e` passes.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.
 - `DESIGN.md` here is updated for any new token, pattern, or rule.
+- The PR's description shows what changed, so a reviewer sees it without checking the branch out: the screenshot of
+  each page the PR adds or visibly changes, light theme, and dark too when it changes a token or anything
+  theme-specific. Embed the baselines the Screenshots workflow committed, pinned to that commit so the image never
+  moves: `![tickets, light](https://github.com/OWNER/REPO/blob/SHA/ui/e2e/screenshots.spec.ts-snapshots/NAME.png?raw=true)`.
+  A change no baseline shows (a hover, a state the mock lacks) gets a Playwright capture of its own, attached to the
+  PR. Update the images whenever a later push changes what they show.
