@@ -4,7 +4,7 @@ A tick is idle when the journal shows it found nothing new and changed nothing (
 row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`
 still ahead ends it sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`)
 wakes it, as the operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no
-gate shortens it, and only the operator's acts wake it: a message, a start or stop, a grant, or a config reload.
+gate shortens it, and only the operator's acts wake it: a message, a start or stop, or a grant.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -83,7 +83,7 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     It closed `ok`; it decided nothing but waits, skips, attention items, and refusals that lift by themselves; the
     attention list and every ticket and unit are as `seen` before it; and no run started or ended, and the operator
     recorded no message, started or stopped no ticket, and granted nothing, after the previous tick read the journal.
-    Without a previous tick that read it, not idle. A config reload is the loop's to count: it is in no journal.
+    Without a previous tick that read it, not idle.
 
     Returns:
         True if the tick was idle.
@@ -106,8 +106,8 @@ def churn(ctx: Context, outcome: tick.Outcome, seen: Before) -> list[str]:
 
     Measured, not acted on: an `ok` tick that changed a ticket's or unit's phase, or the attention list, when no run
     started or ended, the operator neither wrote, started, stopped, nor granted anything, and no gate opened since the
-    previous tick read the journal. The world may still have changed: only the decisions table tells a flap from a
-    real change. A config reload is the loop's to rule out.
+    previous tick read the journal. The world may still have changed, or the config, which the journal does not hold:
+    only the decisions table tells a flap from a real change.
 
     Returns:
         A line per phase changed and per attention item added (`+`) or dropped (`-`); none when the tick is not churn.
