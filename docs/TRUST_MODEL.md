@@ -389,7 +389,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - It also serves a run's or tick's transcript (DESIGN §22): its session's events, read back from the run's log or
   the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
-  following links; the file itself is never served, and nothing else under the state directory is read.
+  following links; nothing else under the state directory is read but a tick's output below.
+- It serves the end of a tick's output as written (DESIGN §22): at most its last 1 MiB, read the same way, its
+  control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
+  which may name the operator's paths and config, and every field of the overseer's events. A run's log is never
+  served this way.
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened

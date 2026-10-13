@@ -79,6 +79,8 @@ export type TranscriptEntry = Transcript['entries'][number]
 export type TranscriptTool = Schemas['TranscriptTool']
 /** One model call's end: why, what it cost, and its tokens together and by kind. */
 export type TranscriptStep = Schemas['TranscriptStep']
+/** The end of a tick's overseer output as written, stdout then stderr: what the transcript leaves out too. */
+export type TickOutput = Schemas['TickOutput']
 /** A search: the words it looked for, its hits by source and newest first, and the sources that had more. */
 export type SearchResults = Schemas['SearchResults']
 /** One row holding every word of a search, and where it opens. */

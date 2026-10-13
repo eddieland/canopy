@@ -126,6 +126,8 @@ Rules:
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`.
   The page header's trail starts in its section's color; a panel's label stays in `muted-foreground`.
+  Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
+  query: a pasted URL widened the page.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -280,6 +282,10 @@ tabs.
   model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
+- **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
+  line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
+  wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
+  at its end, where stderr is; the file's size is in the header, and a cut says so above the block.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
