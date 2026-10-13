@@ -3,7 +3,7 @@
 Every route but `/session` needs a signed-in session, and a write its token too (auth.py). Writes go through the
 functions the CLI's verbs call (`canopy.core.conversation`, and `canopy.core.pause` for the loop's pause), with channel
 `web`, so the guards are the same ones; a guard's refusal is a 409 naming it. A forget also carries the ticket's key as
-the operator typed it.
+the operator typed it. A reload asks the loop to read its config again, as SIGHUP does; it writes nothing.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import chore_view, conversation, pause, search
+from canopy.core import chore_view, config, conversation, pause, search
 from canopy.infra import logs
 from canopy.serve import live, reviews, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
@@ -25,6 +25,7 @@ from canopy.serve.schema import (
     ChoreDetail,
     ChoreRunDetail,
     ChoreSummary,
+    ConfigReload,
     ForgetRequest,
     Forgot,
     LastTick,
@@ -363,7 +364,10 @@ def _tick_routes(api: APIRouter, backend: Backend) -> None:
 
 
 def _loop_routes(api: APIRouter, backend: Backend) -> None:
-    """The loop's pause (DESIGN §6): `canopy pause` and `canopy resume`. The loop reads it at every step of its wait."""
+    """The loop's pause (DESIGN §6), `canopy pause` and `canopy resume`, and asking it to read its config again.
+
+    The loop reads both at every step of its wait.
+    """
     log = logs.for_tick(None)
 
     @api.get("/loop", operation_id="getLoop")
@@ -388,6 +392,16 @@ def _loop_routes(api: APIRouter, backend: Backend) -> None:
         if not already:
             log.info("loop resumed", extra={"channel": WEB})
         return PauseChanged(already=already, loop=state)
+
+    @api.post("/loop/reload", operation_id="reloadConfig", responses=_REFUSED)
+    def reload_config() -> ConfigReload:
+        with backend.open() as ctx:
+            try:
+                found = backend.reload(ctx)
+            except config.ConfigError as e:
+                raise refusal(conversation.Refused("config_invalid", str(e))) from None
+        log.info("config reload asked for", extra={"channel": WEB, "changed": list(found.changed)})
+        return ConfigReload(changed=list(found.changed), restart=list(found.restart), after_tick=found.after_tick)
 
 
 def _run_routes(api: APIRouter, backend: Backend) -> None:
