@@ -345,6 +345,20 @@ def granted_after(conn: sqlite3.Connection, since: str) -> bool:
     )
 
 
+def phases(conn: sqlite3.Connection) -> dict[tuple[str, str | None], str | None]:
+    """Every ticket's and unit's recorded phase, to tell which a tick changed (§6, churn).
+
+    Returns:
+        The phase by ticket key and repository: None for the ticket's own, the unit's repository for a unit's.
+    """
+    found: dict[tuple[str, str | None], str | None] = {}
+    for key, phase in conn.execute("SELECT key, phase FROM tickets"):
+        found[str(key), None] = None if phase is None else str(phase)
+    for key, repo, phase in conn.execute("SELECT ticket_key, repo, phase FROM ticket_units"):
+        found[str(key), str(repo)] = None if phase is None else str(phase)
+    return found
+
+
 def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
     """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6).
 
