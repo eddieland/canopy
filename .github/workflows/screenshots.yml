@@ -5,6 +5,14 @@ name: Screenshots
 # Actions tab, `gh workflow run screenshots.yml --ref BRANCH`, or the GitHub API, after a deliberate visual change.
 on:
   workflow_dispatch:
+    inputs:
+      update:
+        # `changed` (the default) rewrites only the images that fail the comparison. `all` rewrites every one: for a
+        # change subtle enough to pass within the threshold, which `changed` would leave showing the old look.
+        description: Which baselines to rewrite
+        type: choice
+        options: [changed, all]
+        default: changed
 
 permissions:
   contents: read
@@ -48,10 +56,13 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # `changed` rewrites only the images that fail the comparison, and writes missing ones, so antialiasing noise
-      # within the threshold does not churn the rest. Any other failing test fails the run and nothing is pushed.
+      # within the threshold does not churn the rest; `all` rewrites every image. Any other failing test fails the run
+      # and nothing is pushed.
       - name: Playwright, updating the baselines
         working-directory: ui
-        run: npm run test:e2e -- --update-snapshots=changed
+        env:
+          UPDATE: ${{ inputs.update || 'changed' }}
+        run: npm run test:e2e -- --update-snapshots="$UPDATE"
 
       - name: Keep the baselines
         uses: actions/upload-artifact@v7.0.2
