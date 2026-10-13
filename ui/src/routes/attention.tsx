@@ -10,6 +10,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
+import { DismissFinding } from '@/components/dismiss-finding'
 import { LinkedText } from '@/components/linked-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
@@ -145,8 +146,8 @@ function Answered() {
 }
 
 /**
- * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another; or for an
- * item about neither, what it says.
+ * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another, and for a
+ * finding the button to dismiss it; or for an item about neither, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
@@ -165,6 +166,9 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
                     <p className="text-sm text-muted-foreground" data-testid="answered-note">
                         You answered it. The item leaves at the next tick, when the loop reads your reply.
                     </p>
+                )}
+                {item.finding && item.chore !== null && (
+                    <DismissFinding chore={item.chore} finding={item.reason} dismissed={false} />
                 )}
             </div>
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}

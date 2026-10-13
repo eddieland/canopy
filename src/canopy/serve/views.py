@@ -597,6 +597,7 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
                 detail=conversation.printable(f.finding.detail),
                 link=f.finding.link,
                 since=db.parse_time(f.since),
+                dismissed=f.dismissed,
             )
             for f in state.findings()
         ],

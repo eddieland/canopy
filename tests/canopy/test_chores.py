@@ -522,6 +522,71 @@ def test_a_note_to_a_chore_reaches_its_next_runs(
     assert note in shown
 
 
+def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_reporting_it(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+    agent_log: Path,
+    notified: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    conn = journal(canopy_env)
+    page = canopy_env.state_dir / "attention.md"
+    run_inline(conn, monkeypatch, OK)
+    tick(monkeypatch)
+    assert FINDING["id"] in page.read_text()
+
+    # Only the operator dismisses, and only a finding the chore has open.
+    monkeypatch.setenv("CANOPY_TICK_ID", "1")
+    assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 1
+    assert "dismiss refused (inside_run)" in capsys.readouterr().err
+    monkeypatch.delenv("CANOPY_TICK_ID")
+    for ref, finding, guard in [
+        ("chore:build-health", "stuck/pr-7", "unknown"),
+        ("chore:build-health", "not an id", "bad_finding"),
+        ("chore:nope", FINDING["id"], "unknown"),
+        ("ABC-1", FINDING["id"], "unsupported"),
+    ]:
+        assert main(["dismiss", ref, finding]) == 1
+        assert f"dismiss refused ({guard})" in capsys.readouterr().err
+    assert main(["dismiss", "chore:build-health", FINDING["id"], "--undo"]) == 1
+    assert "has no dismissed finding" in capsys.readouterr().err
+
+    assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 0
+    assert "is dismissed: it is off the attention list" in capsys.readouterr().out
+    tick(monkeypatch)
+    assert "Nothing needs you." in page.read_text()
+    assert f"- chore:build-health {FINDING['id']}\n" in notified.read_text().split("--\n")[1]
+    assert main(["show", "chore:build-health"]) == 0
+    assert f"{FINDING['id']}  " in (shown := capsys.readouterr().out)
+    assert "(dismissed)" in shown
+
+    # A later run still reporting it leaves it dismissed.
+    backdate(conn, 120)
+    run_inline(conn, monkeypatch, OK)
+    tick(monkeypatch)
+    assert "Nothing needs you." in page.read_text()
+
+    # Once a run leaves it out, the dismissal is spent: the finding coming back is listed again.
+    backdate(conn, 120)
+    run_inline(conn, monkeypatch, {"status": "ok", "summary": "all clear"})
+    backdate(conn, 120)
+    run_inline(conn, monkeypatch, OK)
+    tick(monkeypatch)
+    assert FINDING["id"] in page.read_text()
+
+    # Undo lists it again at once.
+    assert main(["dismiss", "chore:build-health", FINDING["id"]]) == 0
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    [found] = view.open_findings(conn, cfg, workspace.load(canopy_env.root))
+    assert found.dismissed
+    assert main(["dismiss", "chore:build-health", FINDING["id"], "--undo"]) == 0
+    assert "is listed again" in capsys.readouterr().out
+    [found] = view.open_findings(conn, cfg, workspace.load(canopy_env.root))
+    assert not found.dismissed
+
+
 def test_a_chore_run_records_what_it_cost(
     canopy_env: CanopyEnv,
     chores: Path,

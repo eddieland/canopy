@@ -92,7 +92,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             <PanelScroll label="Open findings">
                                 <ul className="divide-y">
                                     {chore.findings.map((finding) => (
-                                        <ChoreFindingRow key={finding.id} finding={finding} />
+                                        <ChoreFindingRow key={finding.id} finding={finding} chore={chore.name} />
                                     ))}
                                 </ul>
                             </PanelScroll>

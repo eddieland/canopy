@@ -245,9 +245,9 @@ tabs.
   `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
   reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The selection is
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation, the reply form,
-  and the ticket's actions; a chore's item (a finding or `chore_failed`) shows the chore's notes and the note form; an
-  item about neither shows its detail and nothing to answer. Under the list, Working
-  lists the running runs: ticket, kind, cost so far, and for how long.
+  and the ticket's actions; a chore's item (a finding or `chore_failed`) shows the chore's notes and the note form,
+  and a finding Dismiss under its detail (`DismissFinding`); an item about neither shows its detail and nothing to
+  answer. Under the list, Working lists the running runs: ticket, kind, cost so far, and for how long.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
@@ -299,7 +299,8 @@ tabs.
   its latest run's state color, then its window (`windowText`) and its open findings. A chore run is a row like a
   run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
-  how long it has been open.
+  how long it has been open, and on the chore's page has Dismiss, or once dismissed a plain `dismissed` chip and List
+  again: still reported, only off the attention list.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
   header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per

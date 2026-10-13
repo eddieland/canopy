@@ -229,6 +229,8 @@ class ChoreFinding(_Model):
     link: str | None = None
     # When the unbroken run of `ok` runs reporting it began.
     since: datetime
+    # The operator dismissed it since then: it is off the attention list until it clears.
+    dismissed: bool = False
 
 
 class ChoreSummary(_Model):
@@ -334,6 +336,22 @@ class Replied(_Model):
     message_id: int
     answers: int | None = None
     new: bool
+
+
+class DismissRequest(_Model):
+    """A dismissal of one of a chore's open findings, by its id, or with `undo` the taking back of one (DESIGN §19)."""
+
+    # Checked again in code against the finding id's pattern.
+    finding: Annotated[str, Field(max_length=200)]
+    undo: bool = False
+
+
+class Dismissed(_Model):
+    """What a dismissal left: the finding, and whether it is now dismissed."""
+
+    chore: str
+    finding: str
+    dismissed: bool
 
 
 class Process(_Model):

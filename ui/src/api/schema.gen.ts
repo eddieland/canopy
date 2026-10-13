@@ -53,6 +53,23 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/{name}/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dismiss */
+        post: operations["dismissFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores/{name}/replies": {
         parameters: {
             query?: never;
@@ -613,6 +630,11 @@ export type components = {
         ChoreFinding: {
             /** Detail */
             detail: string;
+            /**
+             * Dismissed
+             * @default false
+             */
+            dismissed: boolean;
             /** Id */
             id: string;
             /** Link */
@@ -832,6 +854,31 @@ export type components = {
         };
         /** @enum {string} */
         DiffLineKind: "add" | "del" | "ctx";
+        /**
+         * Dismissed
+         * @description What a dismissal left: the finding, and whether it is now dismissed.
+         */
+        Dismissed: {
+            /** Chore */
+            chore: string;
+            /** Dismissed */
+            dismissed: boolean;
+            /** Finding */
+            finding: string;
+        };
+        /**
+         * DismissRequest
+         * @description A dismissal of one of a chore's open findings, by its id, or with `undo` the taking back of one (DESIGN §19).
+         */
+        DismissRequest: {
+            /** Finding */
+            finding: string;
+            /**
+             * Undo
+             * @default false
+             */
+            undo: boolean;
+        };
         /** @enum {string} */
         FindingSeverity: "blocking" | "major" | "minor";
         /**
@@ -1754,6 +1801,50 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismissFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dismissed"];
+                };
+            };
+            /** @description A guard refused it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

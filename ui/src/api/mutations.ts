@@ -2,12 +2,22 @@ import type { QueryClient } from '@tanstack/react-query'
 
 import { api, unwrap } from './client'
 import { keys } from './queries'
-import type { ConfigReload, Forgot, LoopState, PauseChanged, Replied, Session, Started, Stopped } from './types'
+import type {
+    ConfigReload,
+    Dismissed,
+    Forgot,
+    LoopState,
+    PauseChanged,
+    Replied,
+    Session,
+    Started,
+    Stopped,
+} from './types'
 
 /**
- * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, and pausing the loop. Each
- * goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`, `pause`, and `resume`,
- * with the same guards; a refusal is an ApiError naming its guard.
+ * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding, and
+ * pausing the loop. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
+ * `dismiss`, `pause`, and `resume`, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -49,6 +59,16 @@ export async function replyChore(name: string, body: string, submission: string)
     )
 }
 
+/**
+ * `canopy dismiss chore:NAME FINDING`: the finding is off the attention list until the chore stops reporting it. With
+ * `undo`, `--undo`: it is listed again.
+ */
+export async function dismissFinding(name: string, finding: string, undo: boolean): Promise<Dismissed> {
+    return unwrap(
+        await api.POST('/api/chores/{name}/dismissals', { params: { path: { name } }, body: { finding, undo } }),
+    )
+}
+
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
 export async function pauseLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/pause'))
@@ -75,6 +95,14 @@ export function showLoop(client: QueryClient, loop: LoopState): void {
 /** After a note to a chore: read it again now, rather than wait for the stream. */
 export function refreshChore(client: QueryClient, name: string): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.chore(name) })
+}
+
+/** After a dismissal: read the chore and the attention list again now, rather than wait for the stream. */
+export async function refreshFindings(client: QueryClient, name: string): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.chore(name) }),
+        client.invalidateQueries({ queryKey: keys.attention }),
+    ])
 }
 
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */

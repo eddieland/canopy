@@ -19,7 +19,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import config, conversation, db, treehouse, workspace
+from canopy.core import chore_view, config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
@@ -223,7 +223,7 @@ def seed(directory: Path) -> Backend:
     backend = Backend(
         config=cfg,
         workspace=ws,
-        attention=lambda _ctx: list(ATTENTION),
+        attention=_attention,
         end_run=_end_run,
         reload=_reload,
         mock=True,
@@ -237,6 +237,20 @@ def seed(directory: Path) -> Backend:
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
     _transcripts(ws.state_dir)
     return backend
+
+
+def _attention(ctx: Context) -> list[Item]:
+    """The fixtures' list, less a finding the operator dismissed, as `loop.attention.listed` leaves one out.
+
+    Returns:
+        `ATTENTION` without the findings dismissed in the mock journal.
+    """
+    dismissed = {
+        (f"chore:{f.chore}", f.finding.id)
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        if f.dismissed
+    }
+    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed]
 
 
 def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
