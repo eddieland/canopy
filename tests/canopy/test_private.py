@@ -24,7 +24,7 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
-from tests.conftest import CanopyEnv, GitPool
+from tests.conftest import CanopyEnv, GitPool, Journals
 
 KEY = "PROJ-1"
 BRANCH = f"agent/{KEY}-work"
@@ -432,8 +432,8 @@ def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
         assert write not in tools.allowed
 
 
-def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path) -> None:
-    conn = journal_at(tmp_path, 2)
+def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path, journals: Journals) -> None:
+    conn = journal_at(journals, tmp_path, 2)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     results = [

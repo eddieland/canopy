@@ -146,9 +146,6 @@ strict = true
 # Later entries win.
 filterwarnings = [
     "error",
-    # Leaked journal connections and files are shown, not failed, until the tests close what they open.
-    "default::ResourceWarning",
-    "default::pytest.PytestUnraisableExceptionWarning",
     # procs.spawn detaches its child on purpose, so Popen warns that it is still running.
     "ignore:subprocess \\d+ is still running:ResourceWarning",
 ]

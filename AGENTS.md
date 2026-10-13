@@ -129,6 +129,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   directory, with HOME pointed there; commands that name a repository pass `--repo repo`). Each fake's docstring lists
   the env vars and state keys it reads. The fake agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test
   plays an overseer calling `canopy decide`.
+- A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
+  `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
+  ResourceWarning, which fails the test like any other warning.
 - Every test directory has an `__init__.py`, `tests/` included (D019). ruff's `INP001` fails the lint on one that does
   not. The root one matters most: without it, `tests/canopy/` is imported as a package named `canopy` and shadows
   `src/canopy`.
