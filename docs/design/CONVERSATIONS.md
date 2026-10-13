@@ -491,6 +491,13 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8), as a chore
   run's do (§19); a running run's page says so. A subagent's calls are its own session's (§13), so a `task` call
   shows as one tool call with its answer.
+- A tool call's line says what it did and how it ended, so a tick reads without opening each call: a shell call's
+  command, not the description the agent gave it, and the call's other short values when the runtime gave it no title
+  (an MCP read's `owner=acme repo=web pullNumber=88`, where its first value alone was `get`); its error, or an output
+  of one short line, under it. OpenCode reports a shell call completed whatever its exit, so a canopy command the
+  harness refused, which prints `Error: <verb> refused (<guard>)` and exits 1, would show as done: the UI reads that
+  line from a canopy command's output and marks the call refused, with its guard. Only canopy's own lines are read so;
+  another command's output is what it printed.
 - It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
   again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
   `tick.updated` moves that tick's.

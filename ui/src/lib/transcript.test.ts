@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TranscriptEntry } from '@/api/types'
+import type { TranscriptEntry, TranscriptTool } from '@/api/types'
 
-import { duration, elapsed, hint, startOf, tally, tokenCount } from './transcript'
+import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from './transcript'
 
 describe('elapsed', () => {
     it('counts from the start, with hours only when there are some', () => {
@@ -26,7 +26,7 @@ describe('duration and tokenCount', () => {
     })
 })
 
-const tool = (status: 'completed' | 'error'): TranscriptEntry => ({
+const tool = (status: 'completed' | 'error', fields: Partial<TranscriptTool> = {}): TranscriptTool => ({
     kind: 'tool',
     at: '2026-10-08T10:31:00Z',
     tool: 'bash',
@@ -36,19 +36,24 @@ const tool = (status: 'completed' | 'error'): TranscriptEntry => ({
     output: '',
     duration_ms: null,
     cut: false,
+    ...fields,
 })
+
+const shell = (command: string, output: string): TranscriptTool =>
+    tool('completed', { input: JSON.stringify({ command, description: 'what the agent said' }), output })
 
 describe('tally and startOf', () => {
     const entries: TranscriptEntry[] = [
         { kind: 'text', at: null, text: 'hi', reasoning: false, cut: false },
         tool('completed'),
         tool('error'),
+        shell('canopy dispatch ABC-1', 'Error: dispatch refused (capacity): 2 of 2 running'),
         { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10 },
         { kind: 'error', at: null, name: 'APIError', message: '' },
     ]
 
-    it('counts tool calls, failed ones, model calls, and errors', () => {
-        expect(tally(entries)).toEqual({ tools: 2, failed: 1, calls: 1, errors: 1 })
+    it('counts tool calls, failed and refused ones, model calls, and errors', () => {
+        expect(tally(entries)).toEqual({ tools: 3, failed: 1, refused: 1, calls: 1, errors: 1 })
     })
 
     it('starts at the first entry with a time', () => {
@@ -57,15 +62,83 @@ describe('tally and startOf', () => {
     })
 })
 
-describe('hint', () => {
-    it('is the first string value of the input, on one line', () => {
-        expect(hint('{\n  "filePath": "/repo/src/a.ts",\n  "limit": 20\n}')).toBe('/repo/src/a.ts')
-        expect(hint('{"limit": 20, "command": "npm  test\\n  -- search"}')).toBe('npm test -- search')
+describe('summary', () => {
+    it("is a shell call's command, on one line, whatever its title says", () => {
+        const call = shell('canopy decide ABC-1 wait\n  --rationale "PR 8 waits"', '')
+        expect(summary({ ...call, title: 'Record wait on ABC-1' })).toBe(
+            'canopy decide ABC-1 wait --rationale "PR 8 waits"',
+        )
     })
 
-    it('is empty for an input with no string, or one cut short', () => {
-        expect(hint('{"limit": 20}')).toBe('')
-        expect(hint('{"command": "np')).toBe('')
-        expect(hint('[]')).toBe('')
+    it("is the runtime's title for any other call that has one", () => {
+        expect(summary(tool('completed', { title: 'src/a.ts', input: '{"filePath": "/repo/src/a.ts"}' }))).toBe(
+            'src/a.ts',
+        )
+    })
+
+    it("is an untitled call's short values, as key=value, quoted when they hold a space", () => {
+        const input = JSON.stringify({
+            method: 'get_status',
+            owner: 'acme',
+            pullNumber: 88,
+            draft: false,
+            jql: 'project = ABC',
+            fields: ['summary'],
+            body: 'x'.repeat(81),
+        })
+        expect(summary(tool('completed', { input }))).toBe(
+            'method=get_status owner=acme pullNumber=88 draft=false jql="project = ABC"',
+        )
+    })
+
+    it('is empty for an input with nothing short, or one cut short', () => {
+        expect(summary(tool('completed', { input: '{"fields": []}' }))).toBe('')
+        expect(summary(tool('completed', { input: '{"command": "np' }))).toBe('')
+        expect(summary(tool('completed', { input: '[]' }))).toBe('')
+    })
+})
+
+describe('outcome', () => {
+    it('names the guard of a canopy command the harness refused, though the runtime says it completed', () => {
+        const refused = shell('canopy dispatch ABC-1 --kind implement', 'Error: dispatch refused (capacity): 2 of 2')
+        expect(outcome(refused)).toEqual({
+            verdict: 'refused',
+            guard: 'capacity',
+            line: 'dispatch refused (capacity): 2 of 2',
+        })
+    })
+
+    it('fails a canopy command that printed any other error, and a call the runtime says failed', () => {
+        expect(outcome(shell('canopy decide ABC-1 wait', 'Error: no ticket ABC-1'))).toEqual({
+            verdict: 'failed',
+            guard: null,
+            line: 'no ticket ABC-1',
+        })
+        expect(outcome(tool('error', { output: '\nFile not found: /a.ts\nat read' }))).toEqual({
+            verdict: 'failed',
+            guard: null,
+            line: 'File not found: /a.ts',
+        })
+    })
+
+    it("reads only canopy's own errors: another command's output is what it printed", () => {
+        expect(outcome(shell('grep Error: log', 'Error: x')).verdict).toBe('done')
+    })
+
+    it('shows an output of one short line, and no line for a longer one or for JSON', () => {
+        expect(outcome(shell('canopy decide ABC-1 wait', 'recorded decision 8\n')).line).toBe('recorded decision 8')
+        expect(outcome(shell('git push', 'To github.com:a/b.git\n * [new branch]')).line).toBeNull()
+        expect(outcome(tool('completed', { output: 'x'.repeat(201) })).line).toBeNull()
+        expect(outcome(tool('completed', { output: '{"number": 88}' })).line).toBeNull()
+        expect(outcome(tool('completed')).line).toBeNull()
+    })
+})
+
+describe('pretty', () => {
+    it('indents JSON, and leaves anything else, a cut JSON included, as printed', () => {
+        expect(pretty('{"a": [1]}')).toBe('{\n  "a": [\n    1\n  ]\n}')
+        expect(pretty('{"a": [1')).toBe('{"a": [1')
+        expect(pretty('42')).toBe('42')
+        expect(pretty('PASS  2 tests')).toBe('PASS  2 tests')
     })
 })

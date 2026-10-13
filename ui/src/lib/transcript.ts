@@ -1,4 +1,8 @@
-import type { TranscriptEntry } from '@/api/types'
+import type { TranscriptEntry, TranscriptTool } from '@/api/types'
+
+// A value longer than this is left out of a call's summary; a summary or outcome line is cut at `MAX_LINE`.
+const MAX_VALUE = 80
+const MAX_LINE = 200
 
 /** How long after `start` an ISO time was, as a readout: `+0:42`, `+12:05`, `+1:02:09`. Empty without both times. */
 export function elapsed(at: string | null, start: string | null): string {
@@ -29,21 +33,25 @@ export function tokenCount(n: number): string {
 export interface Tally {
     /** Tool calls. */
     tools: number
-    /** Tool calls that ended in an error. */
+    /** Tool calls that ended in an error, a canopy command's refusals not included. */
     failed: number
+    /** canopy commands the harness refused. */
+    refused: number
     /** Model calls. */
     calls: number
     /** Errors the runtime reported. */
     errors: number
 }
 
-/** How many tool calls, failed tool calls, model calls, and runtime errors a transcript holds. */
+/** How many tool calls, failed and refused ones, model calls, and runtime errors a transcript holds. */
 export function tally(entries: TranscriptEntry[]): Tally {
-    const found: Tally = { tools: 0, failed: 0, calls: 0, errors: 0 }
+    const found: Tally = { tools: 0, failed: 0, refused: 0, calls: 0, errors: 0 }
     for (const entry of entries) {
         if (entry.kind === 'tool') {
             found.tools += 1
-            if (entry.status === 'error') found.failed += 1
+            const { verdict } = outcome(entry)
+            if (verdict === 'failed') found.failed += 1
+            if (verdict === 'refused') found.refused += 1
         } else if (entry.kind === 'step') {
             found.calls += 1
         } else if (entry.kind === 'error') {
@@ -59,17 +67,89 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 }
 
 /**
- * What a tool call was about, from its input when the runtime gave it no title: its first string value on one line,
- * as `{"filePath": "/x"}` reads `/x`. Empty when the input has none, or was cut and no longer parses.
+ * What a tool call did, on one line: a shell call's command, since its title is only what the agent said it was
+ * for; else the runtime's title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}`
+ * reads `repo=web pullNumber=88`. Empty when the input has none, or was cut and no longer parses.
  */
-export function hint(input: string): string {
-    let parsed: unknown
-    try {
-        parsed = JSON.parse(input)
-    } catch {
-        return ''
+export function summary(entry: TranscriptTool): string {
+    const input = parsed(entry.input)
+    const command = input?.['command']
+    if (typeof command === 'string') return oneLine(command)
+    if (entry.title !== null) return entry.title
+    if (input === null) return ''
+    const pairs = Object.entries(input).flatMap(([key, value]) => {
+        if (typeof value === 'number' || typeof value === 'boolean') return [`${key}=${value}`]
+        if (typeof value !== 'string') return []
+        const shown = oneLine(value)
+        if (shown === '' || shown.length > MAX_VALUE) return []
+        return [`${key}=${/\s/.test(shown) ? JSON.stringify(shown) : shown}`]
+    })
+    return pairs.join(' ').slice(0, MAX_LINE)
+}
+
+/** How a tool call ended: `refused` and `failed` say why, from the harness's own words when it was a canopy command. */
+export type Verdict = 'done' | 'failed' | 'refused'
+
+/** What a tool call's row says of how it ended. */
+export interface Outcome {
+    /** How it ended. */
+    verdict: Verdict
+    /** The guard that refused it, as the journal names it (`capacity`), when `refused`. */
+    guard: string | null
+    /** What it printed, when that fits on its row: its error's first line, or an output of one short line. */
+    line: string | null
+}
+
+/**
+ * How a tool call ended, and what it printed when that fits on a line. A canopy command that exits 1 prints
+ * `Error: <verb> refused (<guard>): <reason>` or `Error: <message>`, which the runtime still reports as a completed
+ * call, so its output decides: a refusal is `refused`, any other error `failed`. Output of several lines, or of one
+ * long one, has no line: the row opens to it.
+ */
+export function outcome(entry: TranscriptTool): Outcome {
+    if (entry.status === 'error') return { verdict: 'failed', guard: null, line: firstLine(entry.output) }
+    const input = parsed(entry.input)
+    const command = input?.['command']
+    if (typeof command === 'string' && /^\s*canopy\s/.test(command)) {
+        const error = /^Error: (.+)$/m.exec(entry.output)?.[1]
+        if (error !== undefined) {
+            const guard = /\brefused \(([^)]+)\)/.exec(error)?.[1] ?? null
+            return { verdict: guard === null ? 'failed' : 'refused', guard, line: oneLine(error).slice(0, MAX_LINE) }
+        }
     }
-    if (typeof parsed !== 'object' || parsed === null) return ''
-    const first = Object.values(parsed).find((v): v is string => typeof v === 'string')
-    return first === undefined ? '' : first.replace(/\s+/g, ' ').trim().slice(0, 200)
+    const lines = entry.output.split('\n').filter((l) => l.trim() !== '')
+    const only = lines.length === 1 ? oneLine(lines[0] ?? '') : ''
+    const fits = only !== '' && only.length <= MAX_LINE && !/^[[{]/.test(only)
+    return { verdict: 'done', guard: null, line: fits ? only : null }
+}
+
+/** A tool's output as it is shown opened: JSON indented, anything else as it was printed. */
+export function pretty(output: string): string {
+    const value = parsedJson(output)
+    return typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : output
+}
+
+function oneLine(text: string): string {
+    return text.replace(/\s+/g, ' ').trim()
+}
+
+function firstLine(text: string): string | null {
+    const line = text.split('\n').find((l) => l.trim() !== '')
+    return line === undefined ? null : oneLine(line).slice(0, MAX_LINE)
+}
+
+/** A tool's input as an object, or null when it is not one, or was cut and no longer parses. */
+function parsed(input: string): Record<string, unknown> | null {
+    const value = parsedJson(input)
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null
+}
+
+function parsedJson(text: string): unknown {
+    try {
+        return JSON.parse(text)
+    } catch {
+        return undefined
+    }
 }
