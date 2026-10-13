@@ -33,6 +33,8 @@ export type Replied = Schemas['Replied']
 export type Forgot = Schemas['Forgot']
 /** What a dismissal left: the chore's finding, and whether it is now dismissed. */
 export type Dismissed = Schemas['Dismissed']
+/** What a dismissal of a review's finding left: the run, the finding's number, and whether it is now dismissed. */
+export type ReviewDismissed = Schemas['ReviewDismissed']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
 /** One repository's treehouse pool, read when asked for. */
@@ -91,6 +93,10 @@ export type SearchHit = Schemas['SearchHit']
 export type SearchSource = Schemas['SearchSource']
 /** One review run of a PR at a commit (DESIGN §21): canopy's own review, never on the PR (D114). */
 export type ReviewSummary = Schemas['ReviewSummary']
+/** A PR the journal knows (DESIGN §22): one of the loop's own, by its ticket's unit, or one canopy reviewed. */
+export type PullRequest = Schemas['PullRequest']
+/** One PR: its review runs, newest first, and the decisions that name it. */
+export type PullRequestDetail = Schemas['PullRequestDetail']
 /** One review run in full: its summary, findings anchored on its diff, the diff, and the PR's other runs. */
 export type ReviewDetail = Schemas['ReviewDetail']
 /** One finding, with the file and new-side line it falls on in the diff, when the diff shows them. */

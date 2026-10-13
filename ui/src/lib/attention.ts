@@ -19,6 +19,10 @@ const FAILED = new Set([
 // Reasons that wait on the operator's own answer: a private ticket's question, an untrusted review's go-ahead (D089).
 const WAITING = new Set(['awaiting_reply', 'untrusted_review'])
 
+// Reasons for a PR that is done for now and waits on someone else: a reviewer, or the merge (DESIGN §7). Nothing is
+// stuck while one is open, so they never count as blocking.
+const PARKED = new Set(['needs_reviewer', 'ready_to_merge'])
+
 const RANK: Record<Severity, number> = { failed: 0, waiting: 1, other: 2, finding: 3 }
 
 /** An item's severity: a finding, a failure, a wait on the operator's answer, or anything else. */
@@ -27,6 +31,14 @@ export function severity(item: AttentionItem): Severity {
     if (FAILED.has(item.reason)) return 'failed'
     if (WAITING.has(item.reason)) return 'waiting'
     return 'other'
+}
+
+/**
+ * Whether the item holds work up until the operator acts: anything but a chore's finding, which reports, or a PR
+ * that waits on a reviewer or its merge.
+ */
+export function blocking(item: AttentionItem): boolean {
+    return !item.finding && !PARKED.has(item.reason)
 }
 
 /** How many of the items are of each severity. */

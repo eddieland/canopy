@@ -272,6 +272,51 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a PR
+         * @description One PR: the runs that pushed to it, its review runs, and the latest 20 decisions naming it.
+         *
+         *     A PR only decisions name, such as a `review.query` match no review has run on yet, has a page too.
+         *
+         *     Raises:
+         *         HTTPException: 422 when `url` is not a plain https:// URL, 404 when nothing in the journal names it.
+         */
+        get: operations["getPullRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pull-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the PRs
+         * @description The PRs the journal knows, at most 100, most recent activity first: a unit's, or one canopy reviewed.
+         */
+        get: operations["listPullRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews": {
         parameters: {
             query?: never;
@@ -306,6 +351,26 @@ export type paths = {
         get: operations["getReview"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a review's finding
+         * @description `canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21).
+         */
+        post: operations["dismissReviewFinding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1466,6 +1531,84 @@ export type components = {
             pid: number;
         };
         /**
+         * PullRequest
+         * @description A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is.
+         */
+        PullRequest: {
+            /**
+             * Active At
+             * Format: date-time
+             * @description The newest of its ticket's last sighting and its review runs' starts and ends.
+             */
+            active_at: string;
+            /**
+             * Branch
+             * @description The unit's branch; None for a PR no unit records.
+             */
+            branch: string | null;
+            /** @description Its newest review run, or None when canopy has not reviewed it. */
+            latest_review: components["schemas"]["ReviewSummary"] | null;
+            /**
+             * Phase
+             * @description The unit's phase as the overseer last derived it, for display; None for a PR no unit records.
+             */
+            phase: string | null;
+            /**
+             * Repo
+             * @description The PR's repository, as the workspace names it.
+             */
+            repo: string | null;
+            /**
+             * Reviews
+             * @description How many review runs it has had, however they ended.
+             * @default 0
+             */
+            reviews: number;
+            /**
+             * Running Run
+             * @description A run of its ticket working now, whose page it opens.
+             */
+            running_run: number | null;
+            /**
+             * Ticket Key
+             * @description The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns.
+             */
+            ticket_key: string | null;
+            /**
+             * Ticket Title
+             * @description That ticket's title, as the overseer named it; None until it does.
+             */
+            ticket_title: string | null;
+            /**
+             * Url
+             * @description The PR's URL: an opaque https:// string canopy never parses.
+             */
+            url: string;
+        };
+        /**
+         * PullRequestDetail
+         * @description One PR: the runs that pushed to it, canopy's reviews of it, and the decisions that name it.
+         */
+        PullRequestDetail: {
+            /**
+             * Decisions
+             * @description The latest 20 decisions naming it, across ticks, newest first.
+             */
+            decisions: components["schemas"]["Decision"][];
+            /** @description The PR, as the PRs list shows it. */
+            pull_request: components["schemas"]["PullRequest"];
+            /**
+             * Reviews
+             * @description Every review run of it, newest first; each opens its own page, with its findings on its diff.
+             */
+            reviews: components["schemas"]["ReviewSummary"][];
+            /**
+             * Runs
+             * @description Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20.
+             */
+            runs: components["schemas"]["Run"][];
+        };
+        /**
          * Refusal
          * @description A guard refused the operator's action: which guard, and why, as the CLI says it.
          */
@@ -1579,6 +1722,44 @@ export type components = {
             truncated: boolean;
         };
         /**
+         * ReviewDismissed
+         * @description What a dismissal of a review's finding left: the finding, and whether it is now dismissed.
+         */
+        ReviewDismissed: {
+            /**
+             * Dismissed
+             * @description Whether it is now dismissed: false after an `undo`.
+             */
+            dismissed: boolean;
+            /**
+             * Finding
+             * @description The finding's number in the review, from 1.
+             */
+            finding: number;
+            /**
+             * Run
+             * @description The review run's id.
+             */
+            run: number;
+        };
+        /**
+         * ReviewDismissRequest
+         * @description A dismissal of one of a review run's findings, by its number, or with `undo` the taking back of one.
+         */
+        ReviewDismissRequest: {
+            /**
+             * Finding
+             * @description The finding's number in the review, from 1.
+             */
+            finding: number;
+            /**
+             * Undo
+             * @description Take the dismissal back, as `--undo` does.
+             * @default false
+             */
+            undo: boolean;
+        };
+        /**
          * ReviewFinding
          * @description One finding, with where it falls in the diff: `file` indexes the diff's files, `line` is on the new side.
          *
@@ -1590,6 +1771,12 @@ export type components = {
              * @description Its detail, as the reviewer wrote it: untrusted text.
              */
             detail: string;
+            /**
+             * Dismissed
+             * @description Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21).
+             * @default false
+             */
+            dismissed: boolean;
             /**
              * File
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
@@ -3254,6 +3441,103 @@ export interface operations {
             };
         };
     };
+    getPullRequest: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequestDetail"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such PR. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listPullRequests: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequest"][];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listReviews: {
         parameters: {
             query?: never;
@@ -3338,6 +3622,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismissReviewFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDismissed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Validation Error */

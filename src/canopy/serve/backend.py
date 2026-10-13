@@ -66,6 +66,9 @@ class Backend:
     slots: Callable[[Context, treehouse.Pool], list[treehouse.Slot]] = field(default=_status)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
+    # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
+    # writes nothing.
+    write_attention: Callable[[Context], object] = field(default=lambda _ctx: None)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
 

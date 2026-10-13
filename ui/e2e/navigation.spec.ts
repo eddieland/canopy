@@ -12,11 +12,12 @@ test('the root redirects to the attention list', async ({ page }) => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Attention')
 })
 
-test('the tab names the page, after what needs the operator', async ({ page }) => {
+test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    const count = await page.getByTestId(/^attention-item-/).count()
-    expect(count).toBeGreaterThan(0)
+    // The mock's five items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/)).toHaveCount(5)
+    const count = 3
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })

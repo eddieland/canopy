@@ -245,14 +245,17 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
 @click.command("dismiss")
 @click.argument("ref", metavar="REF")
 @click.argument("finding")
-@click.option("--undo", is_flag=True, help="Take the dismissal back: the finding is listed again.")
+@click.option("--undo", is_flag=True, help="Take the dismissal back.")
 @click.pass_context
 def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool) -> int:
-    """Keep chore REF's open FINDING (its id) off the attention list until the chore stops reporting it.
+    """Dismiss a chore's open FINDING (`chore:NAME`, by its id) or a review's (`review:ID`, by its number).
 
-    The chore still reports it, and `canopy show chore:NAME` still lists it, marked dismissed. Once a run leaves it out
-    the dismissal is spent: if it comes back, it is listed again. To have the chore stop reporting it, write the chore
-    a note with `canopy reply chore:NAME`.
+    A chore's finding is off the attention list until the chore stops reporting it: `canopy show chore:NAME` still
+    lists it, marked dismissed, and if it comes back after a run leaves it out, it is listed again. To have the chore
+    stop reporting it, write the chore a note with `canopy reply chore:NAME`.
+
+    A review's finding stays in `canopy review show ID`, marked, and is left out of what a resume hands a worker and of
+    what the overseer reads. It is one run's finding: a new commit's review starts fresh.
     """
     _operator("dismiss")
     subject = _ref(ref, "dismiss")
@@ -263,10 +266,18 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
         )
     except conversation.Refused as r:
         raise CliError(f"dismiss refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info(
+    log = logs.for_tick(None)
+    log.info(
         "finding dismissal taken back" if undo else "finding dismissed",
-        extra={"chore": subject.id, "finding": finding, "channel": CLI},
+        extra={"subject": str(subject), "finding": finding, "channel": CLI},
     )
+    if subject.kind == conversation.REVIEW:
+        if undo:
+            click.echo(f"{subject} finding {finding} is no longer dismissed: a resume hands it to the worker again.")
+        else:
+            click.echo(f"{subject} finding {finding} is dismissed: no worker or tick acts on it.")
+        return 0
+    attention.write(ctx, log)
     if undo:
         click.echo(f"{subject} {finding} is listed again while the chore reports it.")
     else:

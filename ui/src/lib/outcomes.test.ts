@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { dismissedText, forgotText, notedText, reloadedText, repliedText, startedText, stoppedText } from './outcomes'
+import {
+    dismissedText,
+    forgotText,
+    notedText,
+    reloadedText,
+    repliedText,
+    reviewDismissedText,
+    startedText,
+    stoppedText,
+} from './outcomes'
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {
@@ -65,6 +74,15 @@ describe('outcomes', () => {
         )
         expect(dismissedText({ chore: 'deps', finding: 'lodash-advisory', dismissed: false })).toBe(
             'chore:deps lodash-advisory is listed again while the chore reports it.',
+        )
+    })
+
+    it("say what a dismissal of a review's finding did", () => {
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: true })).toBe(
+            'review:4 finding 2 is dismissed: no worker or tick acts on it.',
+        )
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false })).toBe(
+            'review:4 finding 2 is no longer dismissed: a resume hands it to the worker again.',
         )
     })
 

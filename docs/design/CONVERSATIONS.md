@@ -226,6 +226,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | `api#42`, or the PR's URL | a PR | all, once PR-scoped work exists (M14); refused before |
 | `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
+| `review:ID` | a review run (§21) | `dismiss` (one of its findings); `canopy review show ID` shows one |
 
 A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
 by subject (its kind and id), not by ticket key, so a new kind adds a row here, not a table. Every form is parsed and
@@ -283,7 +284,7 @@ next tick, at most once a minute. Every channel wakes it the same way, whether t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget; notes to chores (M23), dismissing findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget; notes to chores (M23), dismissing chores' and reviews' findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -318,9 +319,9 @@ Served by `canopy loop` from a thread (D073):
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
-  it, chores (below), ticks (below), and search (below). The side rail shows the runs working now and the spend of the
-  last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in
-  view wherever the operator is.
+  it, pull requests (below), chores (below), ticks (below), and search (below). The side rail shows the runs working now
+  and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and
+  what it costs stay in view wherever the operator is.
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, dismissing a chore's
   finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
@@ -397,7 +398,10 @@ The API, under `{base}/api`:
 | `GET /chores/{name}/runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run of that chore |
 | `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
 | `GET /reviews` | canopy's latest 100 review runs, newest first: PR, commit, ticket, status, verdict, impact, findings, cost (§21) |
-| `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, the diff, and the PR's other runs; 404 for no such run |
+| `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, each marked whether dismissed, the diff, and the PR's other runs; 404 for no such run |
+| `POST /reviews/{id}/dismissals` | `canopy dismiss review:ID N`, or with `undo` its `--undo`: no worker or tick acts on finding `N` (§21) |
+| `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
+| `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs, and the latest 20 decisions naming it; 404 for one nothing names |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
@@ -494,6 +498,26 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
   below).
 - The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
 
+The pull requests pages (ROADMAP M32, asked for by the operator, 2026-10-13): a PR is a subject of its own, so what
+the journal holds about one, spread over a ticket's units, its runs, the reviews (§21), and the decisions, is
+gathered on its page.
+
+- A PR is known by a ticket's unit (one of the loop's own, reviewed or not) or by a review run (either kind, §21).
+  `GET /pull-requests` lists each once, most recent activity first: the newest of the unit's ticket's last sighting and
+  the PR's review runs' starts and ends. Each has its URL, the ticket that owns it (a unit's, or else the one a review
+  named, as a forgotten ticket's review still does) with its title, its repository, the unit's branch and phase, the
+  run of its ticket working now, how many review runs it had, and its latest. Decisions are not a source for the
+  list: they are many and not indexed by PR, and the list is read again on every tick and every ticket change.
+- `GET /pull-request?url=` is one PR, named by its URL as a query parameter, since the URL is opaque (§21) and holds
+  slashes; only a plain `https://` URL of at most 300 characters is looked up, anything else is a 422. A PR only
+  decisions name (a `review.query` match no review has run on yet) has a page too, so it shows why (`wait`, a refusal).
+- Its page: the PR's fields and a link out to it; the runs that pushed to it, its ticket's runs whose result names it,
+  and any of its ticket's runs still working, which has no result yet; its review runs, each opening its review's page
+  with its findings on its diff; and the latest 20 decisions naming it. A decision about a PR no ticket owns links to
+  its page, and so does a review's page.
+- Reads only, and not on the event stream: the UI reads them again on `tick.updated` and `ticket.changed`. Nothing
+  here writes to a PR. Everything shown is journal text the other pages already serve, so T8 is unchanged.
+
 The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
 `opencode export`.
 
@@ -550,7 +574,8 @@ for a tick whose overseer failed.
 - Its end, not its start: stderr and the session's last events are where a failed tick says why, and the transcript
   has the session from its start.
 - An Output panel under the transcript, hidden until the operator shows it, so a tick's page reads the file only when
-  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text. Not on the event stream;
+  asked. It opens scrolled to its end. Everything in it is agent output, rendered as text; a line of JSON, which is
+  most of it, has its keys, strings, and values colored, as written. Not on the event stream;
   it is marked stale with the tick's transcript, as the tick ends.
 - A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
   until the operator asks for the rest.

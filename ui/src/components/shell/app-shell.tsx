@@ -6,9 +6,11 @@ import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
+import { useBuddy } from '@/lib/buddy'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
+import { Buddy } from './buddy'
 import { LiveReadouts } from './live-readouts'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
@@ -26,8 +28,8 @@ export const PAGE_SCROLLER = 'page'
 
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
- * spend, and a footer), and the routed page. Signed out, the sign-in page instead, whatever the route: every API route
- * but the session's needs a session (DESIGN §22).
+ * spend, and a footer), the routed page, and Sprig in the corner once Settings turns it on. Signed out, the sign-in
+ * page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
  *
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
@@ -42,6 +44,7 @@ export function AppShell() {
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
+    const buddy = useBuddy()
     if (session.data === undefined) return <div className="min-h-dvh" />
     if (!signedIn) return <SignIn />
     return (
@@ -78,17 +81,20 @@ export function AppShell() {
                 data-scroll-restoration-id={PAGE_SCROLLER}
                 className="page-scroll grid grid-cols-[13rem_minmax(0,1fr)] outline-none"
             >
-                {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav and what
-                    is under it stick, and the footer sits at the rail's foot. */}
-                <aside className="flex flex-col border-r bg-surface/60">
-                    <div className="sticky top-0">
-                        <SearchBox />
-                        <Nav />
-                        <RailWorking />
-                        <RailSpend />
-                    </div>
-                    <div className="mt-auto pt-3">
-                        <RailFooter />
+                {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds sticks,
+                    a column as tall as the window under the header (its 3rem row above), so the footer stays at the
+                    window's foot however long the page; the part above it scrolls on its own in a window too short. */}
+                <aside className="border-r bg-surface/60">
+                    <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
+                        <div className="panel-scroll min-h-0 flex-1">
+                            <SearchBox />
+                            <Nav />
+                            <RailWorking />
+                            <RailSpend />
+                        </div>
+                        <div className="pt-3">
+                            <RailFooter />
+                        </div>
                     </div>
                 </aside>
                 <main className="min-w-0 p-6">
@@ -99,6 +105,7 @@ export function AppShell() {
                     </ViewTransition>
                 </main>
             </div>
+            {buddy === 'on' && <Buddy />}
         </div>
     )
 }

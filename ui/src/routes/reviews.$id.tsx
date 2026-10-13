@@ -7,6 +7,7 @@ import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
@@ -62,7 +63,7 @@ function Loaded({ id }: { id: number }) {
                         <PanelHeader label="Not in the diff" />
                         <div className="flex flex-col gap-2 p-3">
                             {placed.elsewhere.map((f) => (
-                                <FindingCard key={f.n} numbered={f} />
+                                <FindingCard key={f.n} run={data.review.id} numbered={f} />
                             ))}
                         </div>
                     </Panel>
@@ -76,13 +77,13 @@ function Loaded({ id }: { id: number }) {
                         {placed.elsewhere.length > 0 && (
                             <div className="flex flex-col gap-2 border-t p-3">
                                 {placed.elsewhere.map((f) => (
-                                    <FindingCard key={f.n} numbered={f} />
+                                    <FindingCard key={f.n} run={data.review.id} numbered={f} />
                                 ))}
                             </div>
                         )}
                     </Panel>
                 ) : (
-                    <ReviewDiffPanels diff={data.diff} placed={placed} />
+                    <ReviewDiffPanels run={data.review.id} diff={data.diff} placed={placed} />
                 )}
             </div>
         </>
@@ -113,6 +114,9 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
             <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
                 <Field label="pull request" mono>
                     <TrackerLink href={review.pr_url} />
+                    <PullRequestLink url={review.pr_url} className="ml-3 font-sans">
+                        its page in canopy
+                    </PullRequestLink>
                 </Field>
                 <Field label="ticket">
                     {review.ticket_key === null ? (
@@ -199,6 +203,7 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                         >
                             {f.title}
                         </Link>
+                        {f.dismissed && <Chip>dismissed</Chip>}
                         <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
                             {f.line !== null ? 'on the diff' : f.file !== null ? 'on its file' : 'not in the diff'}
                         </span>

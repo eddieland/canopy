@@ -19,6 +19,7 @@ from canopy.serve.api import (
     events,
     loop,
     overview,
+    pull_requests,
     refs,
     reviews,
     runs,
@@ -34,7 +35,7 @@ from canopy.serve.api import (
 
 # A new resource's module goes here, so it needs a session like the rest and its tag is described; its router has
 # that tag, and each route a summary, a docstring, and every error it answers (test_serve.py checks).
-_RESOURCES = (overview, tickets, runs, ticks, chores, loop, worktrees, events, search, reviews)
+_RESOURCES = (overview, tickets, runs, ticks, chores, loop, worktrees, events, search, reviews, pull_requests)
 
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.
 TAGS: list[dict[str, Any]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]

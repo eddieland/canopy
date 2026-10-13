@@ -42,6 +42,7 @@ UNIT_PHASES = frozenset(
         "review_pending",
         "review_findings",
         "changes_requested",
+        "untrusted_review",
         "green_unreviewed",
         "approved",
         "merged",
@@ -892,6 +893,32 @@ def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     conn.execute("DELETE FROM review_runs WHERE id = ? AND pid IS NULL", (run_id,))
 
 
+def review_dismissals(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
+    """Return the numbers, from 1, of review run `run_id`'s findings the operator dismissed (DESIGN §21)."""
+    rows = conn.execute("SELECT finding FROM review_dismissals WHERE review_run_id = ?", (run_id,))
+    return frozenset(int(r[0]) for r in rows)
+
+
+def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *, channel: str) -> None:
+    """Record that the operator dismissed review run `run_id`'s finding number `finding` now."""
+    conn.execute(
+        "INSERT INTO review_dismissals (review_run_id, finding, dismissed_at, channel) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (review_run_id, finding) DO UPDATE SET "
+        "dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+        (run_id, finding, now(), channel),
+    )
+
+
+def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int) -> bool:
+    """Take back the operator's dismissal of review run `run_id`'s finding number `finding`.
+
+    Returns:
+        Whether there was one to take back.
+    """
+    cur = conn.execute("DELETE FROM review_dismissals WHERE review_run_id = ? AND finding = ?", (run_id, finding))
+    return cur.rowcount > 0
+
+
 def set_review_slot(
     conn: sqlite3.Connection, run_id: int, *, slot: Path, lease_id: str, lease_holder: str, base_branch: str
 ) -> None:
@@ -965,6 +992,38 @@ def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]
     return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
 
 
+def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[sqlite3.Row]]:
+    """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
+    found: dict[str, list[sqlite3.Row]] = {}
+    marks = ", ".join("?" * len(pr_urls))
+    query = f"SELECT * FROM review_runs WHERE pr_url IN ({marks}) ORDER BY id DESC"  # noqa: S608  (only `?`s)
+    # SQLite takes an empty list, `IN ()`, as matching nothing.
+    for row in conn.execute(query, tuple(pr_urls)):
+        found.setdefault(str(row["pr_url"]), []).append(row)
+    return found
+
+
+def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
+    """Return the `limit` PRs with the most recent activity, newest first; with `url`, only that one (DESIGN §22).
+
+    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, or by a review run, whose activity
+    is its start or end. Each row has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`,
+    and the ticket's `title`, all NULL for a PR no unit records. Decisions are not a source: they are many, and not
+    indexed by PR.
+    """
+    return conn.execute(
+        "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title "
+        "FROM ("
+        "  SELECT u.pr_url AS url, t.last_seen_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
+        "  WHERE u.pr_url IS NOT NULL"
+        "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
+        ") k "
+        "LEFT JOIN ticket_units u ON u.pr_url = k.url LEFT JOIN tickets t ON t.key = u.ticket_key "
+        "WHERE ? IS NULL OR k.url = ? GROUP BY k.url ORDER BY active_at DESC, k.url LIMIT ?",
+        (url, url, limit),
+    ).fetchall()
+
+
 # Split children
 
 
@@ -1014,6 +1073,11 @@ def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqli
     return conn.execute(
         "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
     ).fetchall()
+
+
+def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` decisions that name the PR at `url`, across ticks, newest first."""
+    return conn.execute("SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)).fetchall()
 
 
 def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
