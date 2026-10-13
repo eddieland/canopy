@@ -245,4 +245,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
+- **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
+  from anywhere but a text field. The search page has a panel per source with hits, in the server's order, its count
+  in the header (`newest 20` when the source has more). A hit is a row: where it opens (its ticket or chore with the
+  run that said it, or the tick that decided it), its label as a chip, the snippet with the query's words marked on
+  the accent's tint (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL
+  short. While the next query's hits load, the last ones stay, dimmed to 60%.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.

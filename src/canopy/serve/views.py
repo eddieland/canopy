@@ -1,4 +1,4 @@
-"""Journal rows as the API's models: the attention list, runs, tickets and their conversations, chores, and ticks.
+"""Journal rows as the API's models: attention, runs, tickets and their conversations, chores, ticks, search hits.
 
 Reads only. Every text that came from an agent or the tracker stays untrusted: control characters are dropped from
 message bodies as `canopy show` drops them, run summaries are cut to one line, and the UI renders all of it as text.
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_result, chore_view, contract, conversation, db, items, transcript
+from canopy.core import chore_result, chore_view, contract, conversation, db, items, search, transcript
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
@@ -26,6 +26,8 @@ from canopy.serve.schema import (
     MessageSource,
     Run,
     RunState,
+    SearchHit,
+    SearchResults,
     Spend,
     SpendWindow,
     StartStatus,
@@ -456,4 +458,26 @@ def chore_run(row: sqlite3.Row) -> ChoreRun:
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         tokens=tokens(row),
         log_path=str(row["log_path"]),
+    )
+
+
+def found(ctx: Context, query: str) -> SearchResults:
+    """The journal's rows holding every word of `query` (DESIGN §22, Search). Raises search.BadQueryError."""
+    result = search.search(ctx.conn, query)
+    return SearchResults(
+        words=list(result.words),
+        hits=[
+            SearchHit(
+                source=h.source,
+                at=db.parse_time(h.at),
+                snippet=h.snippet,
+                ticket_key=h.ticket_key,
+                chore=h.chore,
+                run_id=h.run_id,
+                tick_id=h.tick_id,
+                label=h.label,
+            )
+            for h in result.hits
+        ],
+        more=list(result.more),
     )

@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/use-theme'
 import { LiveReadouts } from './live-readouts'
 import { Mark } from './mark'
 import { Nav } from './nav'
+import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
 
@@ -62,6 +63,7 @@ export function AppShell() {
             {/* The rail spans the whole row, so its border and fill reach the page's foot; only the nav sticks. */}
             <aside className="border-r bg-surface/60">
                 <div className="sticky top-12">
+                    <SearchBox />
                     <Nav />
                 </div>
             </aside>

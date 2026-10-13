@@ -147,7 +147,7 @@ canopy (harness, Python)
     secret.py      the listener secret's file: read with its checks, written by `canopy secret`
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
                    request
-    views.py       journal rows as the API's models: attention items, runs, tickets, messages
+    views.py       journal rows as the API's models: attention items, runs, tickets, messages, search hits
     live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
@@ -167,6 +167,7 @@ canopy (harness, Python)
                    (§19), read by the loop, the CLI, chores, and the web UI
     chore_window.py a chore's days and hours: whether a run may start now, and when it next may
     chore_result.py a chore's result contract, validated with pydantic
+    search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
     config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
@@ -2588,10 +2589,10 @@ Served by `canopy loop` from a thread (D073):
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   the list, and the spend of the last 24 hours and the last 30 days, `ui/DESIGN.md`), runs (running, then the 50 that
   ended last, each with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets,
-  each with its conversation and the decisions about it, chores (below), and ticks (below). Actions: the CLI's verbs,
-  reply, start, and stop (with or without `now`), and a note to a chore. OpenCode's session attach (M15) is not in the
-  UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once M15 runs
-  workers against OpenCode's server.
+  each with its conversation and the decisions about it, chores (below), ticks (below), and search (below).
+  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), and a note to a chore. OpenCode's session
+  attach (M15) is not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and
+  attach joins once M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -2657,6 +2658,7 @@ The API, under `{base}/api`:
 | `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
+| `GET /search?q=` | the journal's tickets, messages, chore runs, decisions, and ticks that hold every word of `q`, at most 20 a source (below) |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /events` | the event stream, below |
 
@@ -2780,6 +2782,39 @@ event changes which running runs hold which worktrees (a run's cost moving does 
 every 10 seconds while a page shows it in a visible tab: what runs in a slot, whether it is dirty, and the slots
 a sync adds or removes never reach the journal, and a run's own refresh comes as it is recorded, before its worker has
 checked out its branch. Only an operator's read shows on the Read again button.
+
+Search (M31, asked for by the operator, 2026-10-13): one box that finds a ticket, or the run or tick that said
+something, without knowing which page holds it.
+
+- `GET /search?q=` reads the journal on each request (`core/search.py`). The query is 2 to 200 characters of at most
+  8 words, or a 422. A hit holds every word as a substring of one field, ASCII letters in either case (SQLite's
+  `LIKE`, with `%`, `_`, and `\` taken literally).
+- It searches, in this order: tickets, by key, branch, and their units' branches and PR URLs; messages, every
+  ticket's conversation and every chore's notes, so a run's report (its summary, or the harness's note, and its PRs)
+  and its question; chore runs, by summary, the harness's note, and their findings' titles and details; decisions, by
+  rationale; and ticks, by summary. A ticket's branch is `<prefix><KEY>-<slug>`, its slug from the ticket's title
+  (§8), so the slug is how a title's words are found.
+- Each source gives its 20 newest hits and says when it has more. A hit names where it is: the ticket, the chore, the
+  run that reported a message, the tick of a decision. Its snippet is one line of at most 160 characters around the
+  first match of any word, control characters dropped and whitespace collapsed, cut with `…`; the UI marks the words
+  in it, as text.
+- Not searched, since none can be done well yet:
+  - Ticket titles. The journal holds none: the tracker does, and world facts are re-read from their source (§11).
+    Recording one needs the overseer to report it, a prompt change; the branch's slug stands in.
+  - Transcripts. A run's log holds up to 32 MiB and is read whole on each request (above); reading every log for
+    every query is not reasonably efficient, and indexing them copies agent output into the journal, rejected above.
+  - Review runs. No page shows one yet, so a hit would have nowhere to open.
+- Without an index, a scan reads newest first and stops at a source's 21st hit, so a common word answers at once. A
+  query nothing matches reads each searched column whole: about 1.6 ms per MB of text (56 MB of messages in 90 ms,
+  on SQLite 3.45). Rejected for now: SQLite's FTS5.
+  Substring matching needs its trigram tokenizer, whose index is about three times the text, kept by triggers on five
+  tables in a migration, on a SQLite built with it. Revisit when a real journal's empty search takes more than a
+  quarter of a second.
+- Reads only, and not on the event stream: hits are read again when the query changes, not when the journal does.
+  It serves only journal text the other pages serve, behind the same session, so T8 is unchanged.
+- The search box sits atop the nav on every page; `/` focuses it from anywhere but a text field, and Escape leaves it.
+  Typing opens `/search?q=` once the operator pauses for 250 ms, replacing the history entry as the query grows, and
+  Enter opens it at once. The page groups hits by source, each a row that links to the page holding it.
 
 How it serves, built in M20's foundation and true of every page:
 

@@ -440,6 +440,8 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "Decision",
         "Transcript",
         "TranscriptStatus",
+        "SearchResults",
+        "SearchHit",
     }
     assert names <= set(schema["components"]["schemas"])
     paths = {
@@ -464,6 +466,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",
         "/api/worktrees",
+        "/api/search",
         "/api/events",
     }
     assert set(schema["paths"]) == paths

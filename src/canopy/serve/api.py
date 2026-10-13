@@ -12,10 +12,10 @@ from collections.abc import AsyncIterator
 from importlib.metadata import version
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from fastapi.sse import EventSourceResponse
 
-from canopy.core import chore_view, conversation
+from canopy.core import chore_view, conversation, search
 from canopy.infra import logs
 from canopy.serve import live, views, worktrees
 from canopy.serve.auth import FAILED_SIGN_IN_SECONDS, OPEN_TOKEN, SESSION_SECONDS
@@ -32,6 +32,7 @@ from canopy.serve.schema import (
     Replied,
     ReplyRequest,
     Run,
+    SearchResults,
     Session,
     SignIn,
     Spend,
@@ -94,6 +95,7 @@ def router(options: ServeOptions, backend: Backend, sessions: Sessions) -> APIRo
     _chore_routes(signed_in, backend)
     _tick_routes(signed_in, backend)
     _run_routes(signed_in, backend)
+    _search_routes(signed_in, backend)
     api.include_router(signed_in)
     return api
 
@@ -345,3 +347,17 @@ def _run_routes(api: APIRouter, backend: Backend) -> None:
         if found is None:
             raise HTTPException(status_code=404, detail=f"no run {run_id}")
         return found
+
+
+def _search_routes(api: APIRouter, backend: Backend) -> None:
+    """The search over the journal (DESIGN §22, Search). Reads only; every snippet is untrusted text."""
+
+    @api.get(
+        "/search", operation_id="search", responses={422: {"description": "Too short, too long, or too many words."}}
+    )
+    def find(q: Annotated[str, Query(min_length=search.MIN_QUERY, max_length=search.MAX_QUERY)]) -> SearchResults:
+        with backend.open() as ctx:
+            try:
+                return views.found(ctx, q)
+            except search.BadQueryError as e:
+                raise HTTPException(status_code=422, detail=str(e)) from None

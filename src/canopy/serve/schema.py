@@ -483,6 +483,37 @@ class Spend(_Model):
     month: SpendWindow
 
 
+# Where a search hit is (DESIGN §22, Search), in the order the search reads them.
+type SearchSource = Literal["ticket", "message", "chore_run", "decision", "tick"]
+
+
+class SearchHit(_Model):
+    """One row holding every word of a search, and where it opens."""
+
+    source: SearchSource
+    at: datetime
+    # The field that matched, on one line, cut around its first match: untrusted text.
+    snippet: str
+    # The ticket a hit is, or whose message or decision it is.
+    ticket_key: str | None = None
+    # The chore a run, note, or decision is about.
+    chore: str | None = None
+    # The run that reported a message, or a chore run's own id.
+    run_id: int | None = None
+    # A tick, or the tick that recorded a decision.
+    tick_id: int | None = None
+    # A fixed word: a message's kind (`note` for a chore's), a decision's action, a status, or a ticket's phase.
+    label: str | None = None
+
+
+class SearchResults(_Model):
+    """A search: the words it looked for, its hits by source and newest first, and the sources that had more."""
+
+    words: list[str]
+    hits: list[SearchHit]
+    more: list[SearchSource]
+
+
 class AttentionUpdated(_Model):
     """The attention list changed. The payload is the whole list."""
 
