@@ -1,7 +1,6 @@
 # canopy
 
-> Working name. `canopy` on PyPI is an unrelated project, so canopy installs from this repository (D046). Rename
-> before any index release.
+> Not on PyPI: `canopy` there is an unrelated project. canopy installs from this repository or its releases (D046).
 
 An unattended, local agent loop driven by your issue tracker.
 
@@ -14,8 +13,11 @@ attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds
 standing write access to your repositories, your tracker, or your internal tools.
 
-**Status:** pre-alpha, under construction. See [docs/ROADMAP.md](docs/ROADMAP.md). What it must do, and how far
-along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
+**Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
+notifications, and private tickets are built; sandboxed workers (M26) and cutting the overseer's spend (M28 to M30)
+are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still to run:
+[docs/SCENARIOS.md](docs/SCENARIOS.md); what it must do, and how far along each requirement is:
+[docs/REQUIREMENTS.md](docs/REQUIREMENTS.md).
 
 ## Why this exists
 
