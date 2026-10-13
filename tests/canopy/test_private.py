@@ -530,7 +530,7 @@ def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
     assert main(["start", KEY]) == 0
     assert main(["stop", KEY]) == 0
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     stopped = state_block(agent_log)
     assert stopped["stopped"] == [KEY]
