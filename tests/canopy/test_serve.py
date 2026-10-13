@@ -210,7 +210,7 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
 def test_a_wrong_secret_is_refused_slowly_and_sets_no_cookie(
     ui: Path, backend: Backend, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("canopy.serve.api.FAILED_SIGN_IN_SECONDS", 0.2)
+    monkeypatch.setattr("canopy.serve.api.session.FAILED_SIGN_IN_SECONDS", 0.2)
     c = client(ui, backend, key=SECRET)
     began = time.monotonic()
     response = c.post("/api/session", json={"secret": SECRET + "x"})

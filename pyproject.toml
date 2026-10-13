@@ -137,6 +137,9 @@ ban-relative-imports = "all"
 "hatch_build.py" = ["S603", "TID251"]
 # The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
 "packages/canopy-notify-slack/**" = ["TID251"]
+# FastAPI reads a route's annotations at runtime to validate and to build the schema: its models must be imported
+# for real, even where nothing else in the module uses them.
+"src/canopy/serve/api/*" = ["TC001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

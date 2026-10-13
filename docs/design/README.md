@@ -161,7 +161,8 @@ canopy (harness, Python)
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
-    api.py         the JSON and SSE routes: session, meta, attention, runs, tickets, and the operator's verbs
+    api/           the JSON and SSE routes, a router per resource: session, tickets and the operator's verbs on
+                   them, runs, ticks, chores, the loop, worktrees, events, search, reviews; refs.py what they share
     auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
     secret.py      the listener secret's file: read with its checks, written by `canopy secret`
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run, a reload; a
