@@ -233,6 +233,14 @@ decision since the ticket was last forgotten (`not recorded, last decision wait`
 only when there is none. The PR phases, `pushed_no_pr` to `merged`, are a unit's (§18), recorded in
 `ticket_units.phase`: `canopy ticket set` needs `--repo` for one.
 
+A ticket's title, `tickets.title`, is its name in canopy, for display only like its phase. The overseer gives it with
+`canopy ticket set <KEY> --title '<title>'`, a few words from the ticket's own title, the first tick the state block
+shows the ticket with no title, and again only when the ticket's own title changes. The CLI drops control characters,
+collapses whitespace to one line, refuses an empty title, and cuts it at 80 characters; a dry run records it, as it
+records a phase. It is shown beside the key (`PROJ-1: <title>`) in `canopy status`, `canopy show`, and the web UI, and
+it is the session title of the ticket's runs (§13). It never reaches `attention.md` or a notification: those go to
+sinks the operator may share (§20), and a title is model-written text. `canopy forget` keeps it.
+
 | Phase | Derived from | Next action |
 |---|---|---|
 | `ready` | one of `tracker.labels` present, not closed, no run active, no branch, no open blocker | dispatch `implement` |

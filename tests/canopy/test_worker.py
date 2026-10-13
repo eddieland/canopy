@@ -39,9 +39,12 @@ def dispatch_and_run(
     monkeypatch: pytest.MonkeyPatch,
     runner: InlineRunner | None = None,
     slug: str = "work",
+    title: str | None = None,
 ) -> sqlite3.Row:
     runner = runner or InlineRunner()
     tick_id = in_tick(conn, monkeypatch)
+    if title is not None:
+        assert main(["ticket", "set", "PROJ-1", "--title", title]) == 0
     assert (
         main(
             [
@@ -120,6 +123,32 @@ def test_worker_that_pushes_is_done(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert unit_of(conn, "PROJ-1")["pr_url"] == "https://example.test/pr/1"
     assert "run 1: done" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("title", "session_title"),
+    [(None, "PROJ-1 implement"), ("Fix the\nlogin loop\x1b[2J", "PROJ-1 implement: Fix the login loop [2J")],
+)
+def test_the_session_title_names_the_ticket_and_its_title(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    title: str | None,
+    session_title: str,
+) -> None:
+    """`{title}` is the run's session title, so the runtime's session list names the ticket (DESIGN §13)."""
+    template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
+    canopy_env.write_user(
+        re.sub(r"^worker_cmd = .*$", f"worker_cmd = '{template}'", canopy_env.user_file.read_text(), flags=re.MULTILINE)
+    )
+    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
+    dispatch_and_run(conn, monkeypatch, title=title)
+    [w] = agent_runs(agent_log)
+    argv = w["argv"]
+    assert isinstance(argv, list)
+    assert argv[3] == f"--title={session_title}"
 
 
 def test_a_run_makes_no_local_branch(

@@ -6,12 +6,13 @@ import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 /**
- * Runs, one row each: state, id (opening the run's page), ticket, kind, when, cost, and what it said. `ticket` leaves
- * out the ticket column.
+ * Runs, one row each: state, id (opening the run's page), ticket, kind, the ticket's title, when, cost, and what it
+ * said. `ticket` leaves out the ticket column and its title, for a ticket's own page.
  */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
@@ -35,6 +36,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                 {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
                 <Chip word={run.kind} />
                 {run.private && <Chip>private</Chip>}
+                {ticket && <TicketTitle title={run.ticket_title} className="flex-1" />}
                 <span className="ml-auto flex items-center gap-4">
                     <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
                         {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}

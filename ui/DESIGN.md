@@ -183,6 +183,9 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
   the CLI's spelling stays on hover, so it can still be found in `attention.md` or typed into the CLI
   (`src/lib/words.ts`).
+- **A ticket's title** (`TicketTitle`) follows its key, in medium weight, so it reads as the row's name and apart
+  from what a run said under it; one line, cut to fit, the whole on hover. A ticket's page heading sets the key in
+  muted mono before it. Nowhere too narrow to show more than a few letters of it: the Working panel leaves it out.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you,
   attention, and spent in the last 24 hours and in the last 30 days from `GET /api/spend`, on the stream) and the
   worktrees page (working, held, needs a look, free, across every pool). Each is a label, the value, and one line

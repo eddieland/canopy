@@ -242,6 +242,13 @@ class _Slot:
         )
 
 
+def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
+    """A run's session title: `<KEY> <kind>: <the ticket's title>`, or `<KEY> <kind>` before the overseer names it."""
+    ticket = db.get_ticket(conn, key)
+    title = ticket["title"] if ticket is not None else None
+    return f"{key} {kind}: {title}" if title else f"{key} {kind}"
+
+
 def _run_agent(
     ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter, *, template: str
 ) -> tuple[procs.Result, str]:
@@ -265,7 +272,8 @@ def _run_agent(
         naming = [found for place in places for found in definitions.naming_tools(place, tools.server)]
         if naming:
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))
-    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config))
+    title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
+    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config), title)
     if len(slots) > 1:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
     else:
