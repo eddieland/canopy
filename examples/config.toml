@@ -1,5 +1,5 @@
 # ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
-# Overrides each workspace's canopy-workspace.toml key by key, in every workspace. Keys marked user-only in DESIGN.md
+# Overrides each workspace's canopy-workspace.toml key by key, in every workspace. Keys marked user-only in DESIGN
 # §12 may be set only here. Every key, most at its default. `canopy init` writes only tracker.labels and the trust
 # lists: set the rest only to change them.
 

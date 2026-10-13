@@ -16,7 +16,7 @@ or reopen it, without knowing. In practice that is one of:
 
 Everything else goes where the next person to change that code will look:
 
-- why a feature behaves as it does, and what was rejected for it: `DESIGN.md`, next to the behavior;
+- why a feature behaves as it does, and what was rejected for it: the design (`design/`), next to the behavior;
 - why a line of code is the way it is: a comment at that line;
 - the story of a change: its PR;
 - progress, and what a milestone taught: its `Status:`, `Learned:`, and `Next:` lines in `ROADMAP.md`.
