@@ -3,7 +3,7 @@ import type { AttentionItem } from '@/api/types'
 /** How urgent an attention item is: the order the attention list shows it in, and its chip's color (DESIGN.md). */
 export type Severity = 'failed' | 'waiting' | 'other' | 'finding'
 
-// Reasons raised because something broke: a run, a chore, or a review (docs/DESIGN.md §14). A reason not named here
+// Reasons raised because something broke: a run, a chore, or a review (DESIGN §14). A reason not named here
 // or below, the overseer's phase-table reasons included, is `other`.
 const FAILED = new Set([
     'crashed',

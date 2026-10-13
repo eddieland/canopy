@@ -37,7 +37,7 @@ export async function replyTicket(key: string, body: string, submission: string)
     )
 }
 
-/** A note to a chore, as `canopy reply chore:NAME`: its next runs read it (docs/DESIGN.md §19). */
+/** A note to a chore, as `canopy reply chore:NAME`: its next runs read it (DESIGN §19). */
 export async function replyChore(name: string, body: string, submission: string): Promise<Replied> {
     return unwrap(
         await api.POST('/api/chores/{name}/replies', { params: { path: { name } }, body: { body, submission } }),
