@@ -244,7 +244,7 @@ def test_state_block_shows_attempts_and_the_cooldown(
     dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement")
     fix = dispatch_and_run(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "fix-ci")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)  # `_run` drops it
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
@@ -260,7 +260,7 @@ def test_state_block_shows_attempts_and_the_cooldown(
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str]) -> None:
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps([["canopy", *c] for c in commands]))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 def tick_decisions(conn: sqlite3.Connection) -> list[str]:

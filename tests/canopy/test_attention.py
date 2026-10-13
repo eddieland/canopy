@@ -55,7 +55,7 @@ def test_render_empty() -> None:
 def overseer_records(monkeypatch: pytest.MonkeyPatch, *items: tuple[str, str]) -> None:
     commands = [["canopy", "attention", key, reason, "--detail", f"{key} detail"] for key, reason in items]
     monkeypatch.setenv("FAKE_OVERSEER_COMMANDS", json.dumps(commands))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
 
 
 @pytest.fixture

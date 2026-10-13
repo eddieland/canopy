@@ -139,7 +139,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         "FAKE_AGENT_COMMANDS",
         json.dumps([["canopy", *dispatch("PROJ-1", "--repo", "api")], ["canopy", *dispatch("PROJ-2")]]),
     )
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
 
     [run] = [json.loads(line) for line in agent_log.read_text().splitlines()]
@@ -184,7 +184,7 @@ def test_items_about_two_repositories_are_two_items(
     notified = tmp_path / "notified.txt"
     user = Path(os.environ["XDG_CONFIG_HOME"]) / "canopy" / "config.toml"
     user.write_text(user.read_text() + f"\n[notify]\ncmd = 'sh -c \"cat >> {notified}\"'\n")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     assert [(i.subject, i.reason) for i in attention.current(ws.journal())] == [
         ("a", "repo_missing"),
@@ -297,7 +297,7 @@ def test_reconcile_returns_leases_in_each_pool(
     ).ok
     conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
     monkeypatch.delenv("CANOPY_TICK_ID")
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
 
     run = db.get_run(conn, 1)

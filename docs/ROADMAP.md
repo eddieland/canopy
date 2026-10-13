@@ -877,9 +877,9 @@ reasons keep idle pacing from counting a quiet tick as idle.
   environment. When it cannot, the tick closes without running the overseer, with a status of its own, and raises an
   attention item saying why. Settle which in DESIGN §6; the release launcher (`SCIE_BOOT`) and a source install both
   have to work.
-- `tick complete`: the overseer prompt's last step made harder to miss, with the operator's approval note in the PR.
-  Open: whether the harness should also accept a run that exited 0, recorded its decisions, and printed the done line
-  on its own line before a summary. That loosens DESIGN §6's contract, so it is a design change, not a prompt one.
+- The done line: the overseer ends its final message with a line `CANOPY_TICK_DONE`, and may summarize before or after
+  it; the harness accepts it as a line anywhere in that message, never in an earlier one. DESIGN §6, with the
+  operator's approval note in the PR for the prompt.
 - A ticket started or stopped from the web UI or the CLI (`starts`) ends the loop's wait as an operator message does,
   with the same one-minute floor, and counts against idleness the same way. DESIGN §6 (The loop, Idle pacing) and §22
   (Waking the loop).
@@ -887,13 +887,13 @@ reasons keep idle pacing from counting a quiet tick as idle.
   attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
   `decisions` table shows a pattern.
 - Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
-  the wait; a fake overseer that prints a summary after `tick complete` is handled as the contract settles.
+  the wait; a fake overseer that prints a summary after `CANOPY_TICK_DONE` closes the tick `ok`.
 
 Accept: the tests above pass. Live: a working session re-measured (MEASUREMENTS) has no tick that ran the overseer
 without a working `canopy`, no `overseer_failed` tick that recorded its decisions, and every web-UI start picked up
 within about a minute.
 
-Status: not started.
+Status: in progress.
 
 ## M29. Probe-gated overseer
 

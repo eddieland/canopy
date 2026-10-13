@@ -129,7 +129,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
 
     # The overseer sees which base each ticket's latest run started from.
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
@@ -275,7 +275,7 @@ def test_two_linked_tickets_are_worked_in_order(
     behavior: here a scripted overseer waits on the blocked ticket, then stacks it once the blocker's PR exists."""
     # Both tickets' workers run this, so neither pushes: `_run`'s own push puts each branch on origin (DESIGN §8).
     worker_does(monkeypatch, commit("the change"))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     monkeypatch.setenv(
         "FAKE_OVERSEER_COMMANDS",
         json.dumps(
@@ -343,7 +343,7 @@ def test_the_state_block_carries_the_stacking_policy(
     canopy_env: CanopyEnv, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def stacking() -> str:
-        monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+        monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
         assert main(["tick"]) == 0
         prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
         return json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])["policy"]["stacking"]

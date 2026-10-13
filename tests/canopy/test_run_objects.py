@@ -139,7 +139,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     if rewrites_link:
         (slot / ".git").write_text("gitdir: /somewhere/else\n")
 
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick"]) == 0
 
     run = db.get_run(conn, run_id)

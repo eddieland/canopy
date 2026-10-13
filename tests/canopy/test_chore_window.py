@@ -115,7 +115,7 @@ def next_midnight() -> str:
 def test_outside_its_window_a_chore_is_refused_and_not_due(
     canopy_env: CanopyEnv, closed: Path, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("FAKE_AGENT_RESULT", "tick complete")
+    monkeypatch.setenv("FAKE_AGENT_RESULT", "CANOPY_TICK_DONE")
     assert main(["tick", "--dry-run"]) == 0
     [section] = state_block(agent_log)["chores"]
     assert (section["due"], section["due_at"]) == (False, next_midnight())
