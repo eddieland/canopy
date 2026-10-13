@@ -20,10 +20,12 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   §6 step 3). Status is `running`, `ok`, `skipped`, `overseer_failed`, `reconcile_failed`, or `abandoned`. What the
   runtime reported about its overseer run (§13), in the same columns as `runs`: `session_id`, `cost_usd`, and tokens by
   kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it dispatched records its
-  own. `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its
-  decisions; `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a
-  dry run's plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a
-  ticket's page the latest decisions about it across ticks (§22). A tick that cannot take the lock writes no row.
+  own. On a tick `canopy loop` ran, whether it was idle and what ended the wait before it (`idle`, `woken_by`, §6 Idle
+  pacing), so spend can be split by what it bought; NULL on a hand-run tick. `canopy decisions [TICK]` prints a tick
+  (the latest by default), its overseer's session and cost, and its decisions; `--ticket KEY` filters decisions by exact
+  ticket key and reports when none match. This is the way to read a dry run's plan. The web UI shows the same: its ticks
+  page lists the latest 50, a tick's page its decisions, and a ticket's page the latest decisions about it across ticks
+  (§22). A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
