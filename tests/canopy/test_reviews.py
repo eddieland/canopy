@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.config import load
 from canopy.infra import procs
 from canopy.loop import attention
 from canopy.reviews import result
@@ -59,12 +60,14 @@ def reviewer_reports(monkeypatch: pytest.MonkeyPatch, report: object, *commands:
     monkeypatch.setenv("FAKE_REVIEWER_COMMANDS", json.dumps(list(commands)))
 
 
-def run_inline(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str, sha: str) -> int:
+def run_inline(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str, sha: str, runner: InlineRunner | None = None
+) -> int:
     """Start a review in its own tick and do its `_review` in this process, as the detached one would."""
     tick_id = in_tick(conn, monkeypatch)
     assert main(review(*args, sha=sha), runner=InlineRunner()) == 0
     run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
-    assert main(["_review", str(run_id)], runner=InlineRunner()) == 0
+    assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
     db.finish_tick(conn, tick_id, "ok", "test")
     monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
     return run_id
@@ -481,3 +484,47 @@ def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
     assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}, {{RUN_ID}}")
     assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
+
+
+def test_a_review_run_records_what_it_cost(
+    reviews: CanopyEnv, git_pool: GitPool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With OpenCode's JSON events, as the default `review_cmd` asks for, a review run records its session and cost."""
+    text = reviews.user_file.read_text()
+    reviews.write_user(
+        text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
+    )
+    reviewer_reports(monkeypatch, FINDINGS)
+    monkeypatch.setenv("FAKE_REVIEWER_SESSION", "ses_review")
+    conn = journal(reviews)
+    run_id = run_inline(conn, monkeypatch, sha=head(git_pool))
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "done", Path(row["log_path"]).read_text()  # the result line is read from the text events
+    assert row["session_id"] == "ses_review"
+    usage = db.usage_of(row)
+    assert usage is not None
+    assert usage.cost_usd == 0.25  # two model calls at 0.125
+    assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+
+
+def test_a_timed_out_review_records_what_it_reported_before_the_kill(
+    reviews: CanopyEnv, git_pool: GitPool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
+    events = [
+        {"type": "step_finish", "sessionID": "ses_slow", "part": {"cost": 0.5, "tokens": tokens}},
+        {"type": "text", "sessionID": "ses_slow", "part": {"type": "text", "text": "still reading"}},
+    ]
+    stdout = "".join(json.dumps(e) + "\n" for e in events)
+    conn = journal(reviews)
+    runner = InlineRunner(timeout_agent=True, timeout_stdout=stdout)
+    run_id = run_inline(conn, monkeypatch, sha=head(git_pool), runner=runner)
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "timeout"
+    assert (row["session_id"], row["cost_usd"], row["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
+
+
+def test_the_default_review_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
+    assert "--format json" in load(canopy_env.root, canopy_env.user_file).runtime.review_cmd

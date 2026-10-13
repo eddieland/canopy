@@ -129,9 +129,15 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.write(f"--- reviewer stdout ---\n{done.stdout}\n--- reviewer stderr ---\n{done.stderr}\n")
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
+    # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
+    output = agent_output.read(done.stdout)
+    if output.session_id is not None or output.usage is not None:
+        db.set_review_run_report(ctx.conn, run_id, output.session_id, output.usage)
+        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:
         return Outcome("timeout", None, f"the reviewer timed out after {timeout_minutes} minutes")
-    parsed = result.parse(agent_output.read(done.stdout).text)
+    parsed = result.parse(output.text)
     if parsed is None:
         return Outcome("unknown", None, "the reviewer's last line was not a valid result")
     return judged(ctx, run, parsed)
