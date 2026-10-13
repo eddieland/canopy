@@ -983,10 +983,18 @@ cannot be done well.
 Accept: the tests above pass. Live: on a journal from a week of `canopy loop`, the operator finds a ticket by a word
 of its title and a run by a phrase from its summary, and a search nothing matches answers in under a second.
 
-Status: in progress. Code, tests, and docs are in (2026-10-13). Measured before choosing a plain scan: SQLite's `LIKE`
-reads about 1.6 ms per MB of text when nothing matches (56 MB of messages in 90 ms), and stops at the limit when
-hits are many, so an FTS5 index, with its migration and triggers, waits until a real journal is slow. Waiting on the
-operator: the live search Accept describes.
+Status: done 2026-10-13.
+Learned:
+
+- Closed on the operator's real use, searching a real journal in the web UI, without the timed check Accept
+  describes, which is SCENARIOS S32.
+- A plain scan was chosen on a measurement, not a guess: SQLite's `LIKE` reads about 1.6 ms per MB of text when nothing
+  matches (56 MB of messages in 90 ms) and stops at a source's limit when hits are many, so an FTS5 index, with its
+  migration and triggers, was not needed to start.
+
+Next: FTS5 waits until a real journal's empty search takes more than a quarter of a second (DESIGN §22, Search); S32
+times one. Ticket titles become searchable only when the journal records them, which needs the overseer to report
+them.
 
 ## M32. Shadow PR reviews in the web UI
 
