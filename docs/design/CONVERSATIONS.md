@@ -415,8 +415,13 @@ newest note, so a note changes it, and a chore run's page when that list moves t
 carries how many decisions it has recorded, so `tick.updated` is sent as a running tick records them, and on it the UI
 reads again the ticks list, a tick's page, and a ticket's page, each only if a page shows it. The journal has no
 notifications, so reading one pragma every quarter second is the cheapest way to learn of a change, and quick enough
-that a change shows as it happens; nothing in the browser polls. An age on a page (`5m ago`) counts on a clock
-that ticks every second.
+that a change shows as it happens; nothing in the browser polls.
+A browser reconnects a dropped stream itself, but not always: it gives up on a refusal, such as a proxy's 502 while the
+loop restarts, and iOS Safari often stops retrying after the page was in the background. So the UI opens a new stream
+when one has been down 5 seconds, waiting twice as long after each try up to a minute; at once when the device is back
+online or the page is shown with its stream down; and when the page is shown after 30 seconds hidden, since the system
+may have cut the stream without telling it. A new stream starts with every list, so nothing is lost but the ticket a
+page shows, which it reads again. An age on a page (`5m ago`) counts on a clock that ticks every second.
 
 The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
 `canopy reply chore:NAME` does in the terminal.
