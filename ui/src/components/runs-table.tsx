@@ -6,6 +6,7 @@ import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
@@ -35,11 +36,7 @@ function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
                 {ticket && <TicketLink ticketKey={run.ticket_key} className="w-24 truncate" />}
                 <Chip word={run.kind} />
                 {run.private && <Chip>private</Chip>}
-                {ticket && (
-                    <span className="min-w-0 flex-1 truncate text-sm" title={run.ticket_title ?? undefined}>
-                        {run.ticket_title}
-                    </span>
-                )}
+                {ticket && <TicketTitle title={run.ticket_title} className="flex-1" />}
                 <span className="ml-auto flex items-center gap-4">
                     <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
                         {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}

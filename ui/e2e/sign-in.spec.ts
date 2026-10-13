@@ -22,7 +22,7 @@ test('a wrong secret is refused; the right one signs in and stays signed in', as
 
     await secret.fill(E2E_SECRET)
     await page.getByRole('button', { name: 'Sign in' }).click()
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102: Export reports as CSV')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102 Export reports as CSV')
     const cookies = await page.context().cookies()
     const session = cookies.find((c) => c.name.startsWith('canopy_session_'))
     expect(session?.httpOnly).toBe(true)
@@ -31,7 +31,7 @@ test('a wrong secret is refused; the right one signs in and stays signed in', as
     expect(await page.evaluate(() => JSON.stringify(window.localStorage))).not.toContain(E2E_SECRET)
 
     await page.reload()
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102: Export reports as CSV')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102 Export reports as CSV')
 })
 
 test('signing out returns to the sign-in page', async ({ page }) => {

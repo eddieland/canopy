@@ -8,6 +8,7 @@ import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { phaseLabel } from '@/lib/phase'
 
@@ -53,9 +54,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
     return (
         <li className="flex items-center gap-3 px-3 py-2.5" data-testid={`ticket-${ticket.key}`}>
             <TicketLink ticketKey={ticket.key} className="w-24 shrink-0 truncate" />
-            <span className="min-w-0 flex-1 truncate text-sm" title={ticket.title ?? undefined}>
-                {ticket.title}
-            </span>
+            <TicketTitle title={ticket.title} className="flex-1" />
             <span className="flex w-32">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>

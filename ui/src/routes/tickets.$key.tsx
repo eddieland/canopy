@@ -62,7 +62,17 @@ function Ticket({ detail }: { detail: TicketDetail }) {
         <>
             <PageHeader
                 label={ticket.private ? 'Private ticket' : 'Public ticket'}
-                title={ticket.title === null ? ticket.key : `${ticket.key}: ${ticket.title}`}
+                title={
+                    ticket.title === null ? (
+                        ticket.key
+                    ) : (
+                        // The key in its data face, quieter, so the title reads as the page's name (DESIGN §7).
+                        <>
+                            <span className="font-mono font-normal text-muted-foreground">{ticket.key}</span>{' '}
+                            {ticket.title}
+                        </>
+                    )
+                }
             >
                 {how}
             </PageHeader>

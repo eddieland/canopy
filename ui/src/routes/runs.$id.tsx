@@ -11,6 +11,7 @@ import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { TranscriptPanel } from '@/components/transcript'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -86,11 +87,7 @@ function RunPanel({ run }: { run: Run }) {
                         <TicketLink ticketKey={run.ticket_key} />
                         <Chip word={run.kind} />
                         {run.private && <Chip>private</Chip>}
-                        {run.ticket_title !== null && (
-                            <span className="min-w-0 truncate" title={run.ticket_title}>
-                                {run.ticket_title}
-                            </span>
-                        )}
+                        <TicketTitle title={run.ticket_title} />
                     </span>
                 </Field>
                 <Field label="branch" mono>
