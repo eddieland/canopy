@@ -55,10 +55,12 @@ export function AppShell() {
                     <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                 </div>
                 <Ticker />
-                <div className="flex items-center gap-4">
+                {/* Three groups, the action, the readouts, and the theme, a rule between each. */}
+                <div className="flex items-center gap-2">
                     <LoopPause />
+                    <Rule />
                     <LiveReadouts stream={stream} />
-                    <span aria-hidden className="h-5 w-px bg-border" />
+                    <Rule />
                     <ThemeToggle />
                 </div>
             </header>
@@ -84,4 +86,9 @@ export function AppShell() {
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
     return <Mark live={stream === 'open'} ticking={tick?.status === 'running'} beat={tick?.id} />
+}
+
+/** A hairline between the header's groups. */
+function Rule() {
+    return <span aria-hidden className="h-5 w-px bg-border" />
 }
