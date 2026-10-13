@@ -256,9 +256,10 @@ tabs.
   one short line that is not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a
   `refused: <guard>` chip in `status-failed`. It opens to its input and its output (or error), JSON indented, in
   monospace blocks at most 24rem tall. A model call is a muted line with its tokens and cost, and its reason only when
-  it is not `tool-calls`, as every call but the last is; a runtime error is tinted `status-failed`. Open all and Close
-  all are in the header, with the session id; above the rows, how many tool calls, failed and refused ones, and model
-  calls. A
+  it is not `tool-calls`, as every call but the last is; it opens the same way to its tokens by kind, each a label
+  and a readout on one line, and Open all leaves it closed. A runtime error is tinted `status-failed`. Open all and
+  Close all are in the header, with the session id; above the rows, how many tool calls, failed and refused ones, and
+  model calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
