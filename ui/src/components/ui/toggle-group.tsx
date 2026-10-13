@@ -1,6 +1,6 @@
 // shadcn/ui ToggleGroup, Radix base, ported by hand because the registry was unreachable. Trimmed to the one look
-// canopy uses, a segmented control: a row of items in a well, the picked one raised. Its variants, sizes, and spacing are
-// left out until a second look needs them; its per-theme overrides are tokens (ui/DESIGN.md).
+// canopy uses, a segmented control: a row of items in a well, the picked one raised. Its variants, sizes, and
+// spacing are left out until a second look needs them; its per-theme overrides are tokens (ui/DESIGN.md).
 import { ToggleGroup as ToggleGroupPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 
