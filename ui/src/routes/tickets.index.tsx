@@ -4,12 +4,14 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ticketsQuery } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { Age } from '@/components/age'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseLabel } from '@/lib/phase'
 
 /** Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. */
@@ -19,6 +21,7 @@ export const Route = createFileRoute('/tickets/')({
 
 function TicketsPage() {
     const { data } = useQuery(ticketsQuery)
+    const order = useListOrder('tickets')
     return (
         <>
             <PageHeader label="Conversations" title="Tickets">
@@ -30,7 +33,10 @@ function TicketsPage() {
             </Panel>
             <Panel>
                 <PanelHeader label="Tickets">
-                    <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                    <span className="flex items-center gap-2">
+                        {data !== undefined && data.length > 1 && <OrderToggle list="tickets" />}
+                        <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                    </span>
                 </PanelHeader>
                 {data === undefined ? (
                     <div className="flex min-h-72 flex-col gap-2 p-3">
@@ -41,7 +47,7 @@ function TicketsPage() {
                     <Placeholder>no tickets yet</Placeholder>
                 ) : (
                     <ul className="divide-y" data-testid="tickets">
-                        {data.map((ticket) => (
+                        {ordered('tickets', order, data).map((ticket) => (
                             <Row key={ticket.key} ticket={ticket} />
                         ))}
                     </ul>

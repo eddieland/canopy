@@ -39,6 +39,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
+| `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 
 Rules:
@@ -55,10 +56,10 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Chores orange,
-  Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go on the nav's
-  icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data: there a color
-  is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Reviews fuchsia,
+  Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from `useSection`). They go
+  on the nav's icons and highlight, the page header's label, and the header's aurora, and nowhere in a page's data:
+  there a color is a state's. A page in no section (the 404) takes the accent.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -175,14 +176,21 @@ Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent m
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. The ticker's speed and gap are kept the same way, as JSON under
-`canopy-ticker` (`src/lib/ticker-settings.ts`), and the key that sends a reply under `canopy-send-key`
-(`src/lib/send-key.ts`), both synced across tabs.
+`canopy-ticker` (`src/lib/ticker-settings.ts`), the key that sends a reply under `canopy-send-key`
+(`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
+tabs.
 
 ## Patterns
 
 - **Lists are rows in a panel**, divided by hairlines: a fixed-width key column (a ticket key, a state), then the
   text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
   the local time on hover.
+- **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a
+  conversation, a chore's notes, a transcript, the runs page and a ticket's or chore's recent runs, a ticket's or
+  tick's decisions, the ticks, and the tickets. The toggle is a ghost button before the count, an up-down arrow and
+  the order it is in, in words (`newest first`); a click shows the other. Each list starts in the order the server
+  sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on a
+  ticket's page is flipped in the inbox too. It shows only when the list has two items or more.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
@@ -221,10 +229,10 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
-  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it, on the
-  worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`, `working now` in
-  `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the runs on the
-  stream, so it rises in when the run starts and leaves when it ends.
+  at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
+  it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
+  `working now` in `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the
+  runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
@@ -273,6 +281,15 @@ inline script and checks it against the store's key. The ticker's speed and gap 
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
+- **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
+  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
+  monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
+  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel. A finding's
+  card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
+  line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
+  `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
+  text. The list of reviews is rows: the review's link, its state's dot and verdict in that state's color, its ticket
+  (or `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. The search page has a panel per source with hits, in the server's order, its count
   in the header (`newest 20` when the source has more). A hit is a row: where it opens (its ticket or chore with the

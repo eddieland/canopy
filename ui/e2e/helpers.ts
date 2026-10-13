@@ -12,6 +12,8 @@ export const ROUTES = [
     'worktrees',
     'tickets',
     'tickets/ABC-102',
+    'reviews',
+    'reviews/4',
     'chores',
     'chores/deps',
     'ticks',

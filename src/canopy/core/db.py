@@ -765,11 +765,13 @@ def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     conn.execute("DELETE FROM review_runs WHERE id = ? AND pid IS NULL", (run_id,))
 
 
-def set_review_slot(conn: sqlite3.Connection, run_id: int, *, slot: Path, lease_id: str, lease_holder: str) -> None:
-    """Record the slot a review run leased."""
+def set_review_slot(
+    conn: sqlite3.Connection, run_id: int, *, slot: Path, lease_id: str, lease_holder: str, base_branch: str
+) -> None:
+    """Record the slot a review run leased, and the base branch it was leased on."""
     conn.execute(
-        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ? WHERE id = ?",
-        (str(slot), lease_id, lease_holder, run_id),
+        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ?, base_branch = ? WHERE id = ?",
+        (str(slot), lease_id, lease_holder, base_branch, run_id),
     )
 
 
@@ -816,6 +818,11 @@ def running_review_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[sqlite3.Row]:
     """Return a PR's review runs, newest first."""
     return conn.execute("SELECT * FROM review_runs WHERE pr_url = ? ORDER BY id DESC", (pr_url,)).fetchall()
+
+
+def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+    """Return the latest `limit` review runs, newest first."""
+    return conn.execute("SELECT * FROM review_runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
 
 
 def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:

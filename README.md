@@ -13,6 +13,8 @@ attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds
 standing write access to your repositories, your tracker, or your internal tools.
 
+![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-light-root-linux.png)
+
 **Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
 notifications, and private tickets are built; sandboxed workers (M26) and cutting the overseer's spend (M28 to M30)
 are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still to run:
@@ -76,53 +78,29 @@ are not yet. Milestones: [docs/ROADMAP.md](docs/ROADMAP.md); live checks still t
 
 ## Daily surface
 
-- Keep `canopy loop` running in a terminal (tmux works). Each tick prints what it decided and what joined or left the
-  attention list. Press `t` while it waits to tick now, and `p` to pause it: no tick starts until you press `p` again,
-  run `canopy resume`, or resume it in the web UI's header; `canopy pause` pauses it from another shell. Workers
-  already running keep going. `canopy loop --defer 30` starts it waiting: the first tick runs in 30 minutes, or when
-  you press `t`.
-- Open the web UI it serves, `http://127.0.0.1:8765/` by default: the attention list, the runs, each pool's worktrees,
-  every ticket's conversation, where you reply, start, and stop as with the CLI, and your chores, where you answer a
-  finding with a note. Sign in once per browser with the secret `canopy secret` prints. `[serve]` in your user config
-  moves it, to a private address too, or turns it off; so does `canopy loop --no-serve` (DESIGN §22, TRUST_MODEL T8).
-- Find anything the journal holds from the search box atop the web UI's nav (`/` focuses it): a ticket by its key or a
-  word of its title, which its branch carries, or the run, chore, decision, or tick that said a phrase. Transcripts and
-  reviews are not searched (DESIGN §22).
-- Label tickets with your queue label. Each operator has their own, so two loops never work one ticket.
-- Answer the agent's questions as comments on the ticket. `canopy show KEY` shows any ticket's conversation, with
-  canopy's copy of its comments.
-- Or work a ticket privately, say one a client filed: `canopy start KEY` needs no label, and nothing canopy writes
-  reaches the ticket. Its workers' reports and questions stay in canopy: `canopy show KEY` reads them, `canopy reply
-  KEY 'answer'` answers, and `canopy stop KEY` stops it (DESIGN §22).
-- To have canopy start a ticket over, close its PR and delete its branch, then run `canopy forget KEY` (or Forget on
-  its page in the web UI): its next implement starts on a new branch. Its earlier runs still count toward the attempt
-  limits (DESIGN §22).
-- A ticket on the attention list as `attempt_limit` has used up a kind of run. To let the loop keep at it, run `canopy
-  grant KEY resume` (or `implement`, `fix-ci`): one more run of that kind, for that ticket only (DESIGN §22).
-- Review PRs. Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a
-  worker back to a PR on their own; anyone else's comments, a review bot's included, wait on the attention list as
-  `untrusted_review` until you say what to do with `canopy reply KEY 'use your judgement on the bot's review'` or the
-  web UI. The reply stays in canopy, never on the ticket (DESIGN §7).
-- Read the attention list: `canopy status`, or `.canopy/attention.md` in the workspace. To be told when it changes, add
-  a notification sink to your user config: `canopy-notify-desktop` for desktop notifications, `canopy-notify-slack` for
-  a Slack channel, or a command of your own; `canopy notify test` checks them (DESIGN §20).
-- Read what a tick decided and what its overseer cost, or what a dry run would have done: `canopy decisions [TICK]`;
-  add `--ticket KEY` to filter. The web UI's Ticks page shows the same, and each ticket's page the decisions about it.
-  `canopy loop` prints each tick's cost as it goes.
-- See what recent runs did: `canopy status` lists each one's outcome, PR, summary, cost, and OpenCode session id, which
-  `opencode export <id>` turns into its transcript. In the web UI, a run's page shows that transcript, each tool call
-  with its input and output, once the run ends.
-- Optionally, turn on reviews in your user config (`[review]`): a fresh agent reviews each new commit of the loop's own
-  PRs, or of PRs your query names. It posts nothing on the PR: read what it found with `canopy review show`, and the
-  loop's own PRs get a worker for its findings. It never approves (DESIGN §21).
-- Optionally, define chores in your user config: recurring checks, such as the health of the build queue, that the
-  overseer runs when due and that report findings to the attention list (DESIGN §19). `canopy chore try NAME` runs
-  one now and prints its result, for writing its prompt. To answer a finding, such as one to leave out until a fix
-  lands, note it to the chore: `canopy reply chore:NAME 'text'`, or the web UI's chore page; its next runs read it.
-  `examples/chores/README.md` lists chores worth writing, with a worked example.
-- Ask your own agent session about the loop. `canopy skill` prints a skill that teaches it canopy's commands, files,
-  and journal; save it where your runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again after
-  upgrading.
+Leave `canopy loop` running (tmux works) and work from the web UI it serves at `http://127.0.0.1:8765/`: the attention
+list, runs, worktrees, every ticket's conversation, canopy's reviews with their findings on the diff, and your chores,
+with a search box (`/`) over the whole journal.
+Label tickets with your queue label, answer the agents' questions on the ticket, and review their PRs. Humans approve
+and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR on their own;
+anyone else's comments wait on the attention list as `untrusted_review` until you reply.
+
+| To | Run |
+| --- | --- |
+| Tick now, or pause and resume the loop | `t` or `p` in its terminal; `canopy pause`, `canopy resume` |
+| Read the attention list | `canopy status`, or `.canopy/attention.md` |
+| Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
+| Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
+| Start a ticket over, once its PR is closed and its branch deleted | `canopy forget KEY` |
+| Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`, `fix-ci`) |
+| See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
+| Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
+| Teach your own agent session canopy | save `canopy skill` as `~/.agents/skills/canopy/SKILL.md` |
+
+Optional, in your user config: notification sinks for attention changes (`canopy-notify-desktop`,
+`canopy-notify-slack`; DESIGN §20), a reviewer agent on PRs (`[review]`; §21), and chores, recurring checks that report
+to the attention list (§19; see `examples/chores/README.md`). The details are in
+[docs/design/LOOP.md](docs/design/LOOP.md) and [docs/design/CONVERSATIONS.md](docs/design/CONVERSATIONS.md).
 
 ## Growing your setup
 

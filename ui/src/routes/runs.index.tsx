@@ -4,10 +4,12 @@ import type { ReactNode } from 'react'
 
 import { runsQuery } from '@/api/queries'
 import { RUN_STATES, type RunState } from '@/api/types'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RunsTable } from '@/components/runs-table'
 import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 
 interface RunsSearch {
@@ -28,6 +30,7 @@ function RunsPage() {
     const { state } = Route.useSearch()
     const { data } = useQuery(runsQuery)
     const shown = state === undefined ? data : data?.filter((r) => r.state === state)
+    const order = useListOrder('runs')
     return (
         <>
             <PageHeader label="Workers" title="Runs">
@@ -35,15 +38,18 @@ function RunsPage() {
             </PageHeader>
             <Panel>
                 <PanelHeader label="By state">
-                    <nav aria-label="Filter by state" className="flex items-center gap-1">
-                        <FilterLink search={{ state: undefined }}>all</FilterLink>
-                        {RUN_STATES.map((s) => (
-                            <FilterLink key={s} search={{ state: s }}>
-                                <RunDot state={s} />
-                                {s}
-                            </FilterLink>
-                        ))}
-                    </nav>
+                    <span className="flex items-center gap-3">
+                        <nav aria-label="Filter by state" className="flex items-center gap-1">
+                            <FilterLink search={{ state: undefined }}>all</FilterLink>
+                            {RUN_STATES.map((s) => (
+                                <FilterLink key={s} search={{ state: s }}>
+                                    <RunDot state={s} />
+                                    {s}
+                                </FilterLink>
+                            ))}
+                        </nav>
+                        {shown !== undefined && shown.length > 1 && <OrderToggle list="runs" />}
+                    </span>
                 </PanelHeader>
                 {shown === undefined ? (
                     <div className="flex min-h-72 flex-col gap-2 p-3">
@@ -53,7 +59,7 @@ function RunsPage() {
                 ) : shown.length === 0 ? (
                     <Placeholder>{state ? `no ${state} runs` : 'no runs yet'}</Placeholder>
                 ) : (
-                    <RunsTable runs={shown} />
+                    <RunsTable runs={ordered('runs', order, shown)} />
                 )}
             </Panel>
         </>
