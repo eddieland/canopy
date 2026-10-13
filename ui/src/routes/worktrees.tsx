@@ -16,6 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
+/** Each repository's treehouse pool: its slots, their states, and what holds each one. */
 export const Route = createFileRoute('/worktrees')({
     component: WorktreesPage,
 })

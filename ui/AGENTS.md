@@ -17,7 +17,7 @@ memory, and do not upgrade in passing.
   `npx shadcn docs <name>`. If the registry is unreachable, port the source from shadcn's repository by hand as
   `src/components/ui/button.tsx` was: style classes inlined, `dark:` overrides replaced with tokens.
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
-- oxlint (with the React Compiler's rules) and oxfmt, Vitest, Playwright.
+- oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's) and oxfmt, Vitest, Playwright.
 
 ## Commands
 
@@ -37,6 +37,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 
 - **Tokens only.** No raw colors and no `dark:` in components; a theme difference is a token change. The lint enforces
   it. See `DESIGN.md`.
+- **Every export has a JSDoc comment**, and so does each field of an exported interface: what it is or does, in
+  prose. No types in it (`@param {string}`): TypeScript has them. The lint enforces both (`jsdoc-js` in
+  `.oxlintrc.json`); a public member of an exported class needs one too, which the lint does not check.
 - **No hand-written memoization.** The compiler memoizes. `useMemo`, `useCallback`, and `memo` are banned by the lint.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
 - **Types come from the server.** API types are generated from `src/canopy/serve/schema.py`. To change a shape,
@@ -92,13 +95,15 @@ SQL of its own.
   server needs the listener secret (`e2e/secret.ts`; `signIn` in `e2e/helpers.ts`) and never changes its journal;
   tests that write run against the prefixed one. Every route gets a screenshot per theme in
   `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately and the PR says why; look at each
-  new image before it merges. The baselines are CI's Chromium and fonts, so regenerate them there: push the branch,
-  then run the Screenshots workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or
-  an agent's GitHub tools). It pushes a commit with the images that changed and starts CI on it; pull before going
-  on. It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold
-  (a token's small shift) leaves the old images in place: run it with `update` set to `all`
-  (`-f update=all`) to rewrite every one. `npx playwright test --update-snapshots=changed` does the same locally, on
-  a machine whose rendering may not match.
+  new image before it merges. Every screenshot applies `e2e/screenshot.css`, which hides what changes with the build
+  rather than the page (the rail's version, which names the commit). `README.md` shows `attention-light`: rename
+  it there too. The baselines are CI's Chromium and fonts, so
+  regenerate them there: push the branch, then run the Screenshots workflow on it
+  (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It pushes a commit
+  with the images that changed and starts CI on it; pull before going on. It rewrites only the images that fail the
+  comparison, so a change subtle enough to pass within the threshold (a token's small shift) leaves the old images in
+  place: run it with `update` set to `all` (`-f update=all`) to rewrite every one.
+  `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not match.
 - Playwright hides scrollbars in headless Chromium, so those screenshots never show one. `e2e/scrollbars.spec.ts`
   keeps them, for what a scrollbar is part of: a long list scrolling in its panel.
 

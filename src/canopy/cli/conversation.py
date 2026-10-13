@@ -1,9 +1,9 @@
-"""The operator's verbs (DESIGN §22, D075): `canopy start`, `stop`, `reply`, `forget`, `show`, `pause`, and `resume`.
+"""The operator's verbs (DESIGN §22, D075): `start`, `stop`, `reply`, `forget`, `grant`, `show`, `pause`, and `resume`.
 
 `pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
 or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, and
-`forget` write through `canopy.core.conversation`, which every channel shares, and `pause` and `resume` through
-`canopy.core.pause`; all six refuse inside canopy's own ticks and runs.
+`forget` write through `canopy.core.conversation`, which every channel shares, `grant` through `canopy.runs.policy`,
+and `pause` and `resume` through `canopy.core.pause`; all seven refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -15,7 +15,8 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.loop import chore_line, one_line, phase_of, prs_of, result_of, spent
+from canopy.cli.loop import chore_line, named, one_line, phase_of, prs_of, result_of, spent
+from canopy.cli.params import REPO
 from canopy.core import chore_view, conversation, db, pause
 from canopy.infra import logs
 from canopy.loop import attention
@@ -200,14 +201,43 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
             "Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and "
             "the ticket cannot start over."
         )
-    limit = ctx.config.policy.max_implement_attempts
+    granted = policy.grants(ctx.conn)
     for (key, repo), counts in sorted(policy.attempts(ctx.conn).items(), key=str):
+        limit = policy.unit_limits(ctx.config, granted.get((key, repo), {}))["implement"]
         if key == subject.id and counts["implement"] >= limit:
-            where = "" if repo is None else f" in {repo}"
+            where, flag = ("", "") if repo is None else (f" in {repo}", f" --repo {repo}")
             click.echo(
-                f"It has had {counts['implement']} implement runs{where}, and policy.max_implement_attempts is "
-                f"{limit}: raise it in your config for another."
+                f"It has had {counts['implement']} implement runs{where}, and its limit is {limit}: grant it "
+                f"another with `canopy grant {subject} implement{flag}`."
             )
+    return 0
+
+
+@click.command("grant")
+@click.argument("ref", metavar="REF")
+@click.argument("kind", type=click.Choice(policy.KINDS))
+@click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
+@click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
+@click.pass_context
+def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, runs: int) -> int:
+    """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository.
+
+    For a ticket at its attempt limit that you want the loop to keep working. Every run still counts toward the limit;
+    this raises that unit's limit, and only from your shell. The next tick decides whether to dispatch it.
+    """
+    subject = _ref(ref, "grant")
+    ctx = open_context(click_ctx)
+    try:
+        granted = policy.grant(ctx.conn, ctx.config, subject.id, kind, repo=repo, runs=runs)
+    except conversation.Refused as r:
+        raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "attempts granted", extra={"ticket": subject.id, "repo": granted.repo, "kind": kind, "runs": runs}
+    )
+    click.echo(
+        f"{subject} in {granted.repo} has had {granted.runs} {kind} runs, and may now have {granted.limit}. "
+        "The next tick decides whether to dispatch it."
+    )
     return 0
 
 
@@ -238,6 +268,8 @@ def _show_ticket(ctx: Context, key: str) -> None:
         since = record["started_at"] if record["status"] == "started" else record["stopped_at"]
         how = f"private, {record['status']} {attention.age(str(since))} ago"
     click.echo(f"{key}: {how}")
+    if ticket is not None and ticket["title"]:
+        click.echo(f"  title {one_line(str(ticket['title']))}")
     if ticket is not None:
         done = ", done" if ticket["done"] else ""
         click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket['branch'] or 'none yet'}")
@@ -303,7 +335,9 @@ def _show_run(ctx: Context, run_id: int) -> None:
     if run is None:
         raise CliError(f"no run {run_id}")
     private = ", private" if run["private"] else ""
-    click.echo(f"run:{run_id}: {run['kind']} of {run['ticket_key']}{private}, {run['status']}")
+    click.echo(
+        f"run:{run_id}: {run['kind']} of {named(run['ticket_key'], run['ticket_title'])}{private}, {run['status']}"
+    )
     click.echo(f"  started {run['started_at']}" + (f", ended {run['ended_at']}" if run["ended_at"] else ""))
     if run["branch"]:
         click.echo(f"  branch {run['branch']}")

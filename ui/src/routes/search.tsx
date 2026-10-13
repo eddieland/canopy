@@ -18,6 +18,7 @@ interface SearchParams {
     q?: string | undefined
 }
 
+/** Search across the journal, with the query kept in `?q=`. */
 export const Route = createFileRoute('/search')({
     // Typed search params: a query the server would refuse is dropped, so the page asks for one instead.
     validateSearch: (search: Record<string, unknown>): SearchParams => ({ q: searchQueryOf(search['q']) }),

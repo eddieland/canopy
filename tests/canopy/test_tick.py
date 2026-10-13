@@ -14,7 +14,7 @@ from tests.conftest import CanopyEnv
 
 
 def journal(env: CanopyEnv) -> sqlite3.Connection:
-    return db.connect(env.state_dir / "canopy.db")
+    return env.journal(migrate=False)
 
 
 def overseer_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str], last_line: str = "tick complete") -> None:

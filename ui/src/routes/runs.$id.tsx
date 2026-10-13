@@ -11,6 +11,7 @@ import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { TranscriptPanel } from '@/components/transcript'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -19,6 +20,7 @@ import { localTime } from '@/lib/time'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
+/** One run: what it worked on, how it ended, and its session's transcript. */
 export const Route = createFileRoute('/runs/$id')({
     component: RunPage,
 })
@@ -86,6 +88,7 @@ function RunPanel({ run }: { run: Run }) {
                         <TicketLink ticketKey={run.ticket_key} />
                         <Chip word={run.kind} />
                         {run.private && <Chip>private</Chip>}
+                        <TicketTitle title={run.ticket_title} />
                     </span>
                 </Field>
                 <Field label="branch" mono>

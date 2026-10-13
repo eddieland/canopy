@@ -88,6 +88,8 @@ class Run(_Model):
 
     id: int
     ticket_key: str
+    # The ticket's title, as the overseer named it (DESIGN §13); None until it does.
+    ticket_title: str | None = None
     # implement | fix-ci | resume | split
     kind: str
     # The journal's status: running, done, blocked, failed, crashed, unpushed, unknown, timeout, stopped.
@@ -114,6 +116,8 @@ class TicketSummary(_Model):
     """A ticket as the tickets list shows it."""
 
     key: str
+    # A short name the overseer gave it from the ticket's own title (DESIGN §13); None until it does.
+    title: str | None = None
     # Started in canopy (DESIGN §22): its conversation never reaches the tracker.
     private: bool
     start: StartStatus | None = None
@@ -536,6 +540,95 @@ class SearchResults(_Model):
     words: list[str]
     hits: list[SearchHit]
     more: list[SearchSource]
+
+
+# A review run's verdict and impact (DESIGN §21), and a finding's severity.
+type ReviewVerdict = Literal["clean", "findings"]
+type ReviewImpact = Literal["low", "normal", "high"]
+type FindingSeverity = Literal["blocking", "major", "minor"]
+type DiffLineKind = Literal["add", "del", "ctx"]
+
+
+class ReviewSummary(_Model):
+    """One review run of a PR at a commit (DESIGN §21): canopy's own review, which is never on the PR (D114)."""
+
+    id: int
+    # The PR's URL as the overseer gave it: an opaque https:// string.
+    pr_url: str
+    sha: str
+    ticket_key: str | None = None
+    repo: str | None = None
+    # The journal's status: running, done, failed, unknown, timeout, crashed.
+    status: str
+    # `done` is done; every other ending is failed.
+    state: RunState
+    verdict: ReviewVerdict | None = None
+    impact: ReviewImpact | None = None
+    findings: int = 0
+    started_at: datetime
+    ended_at: datetime | None = None
+    cost_usd: float | None = None
+
+
+class ReviewFinding(_Model):
+    """One finding, with where it falls in the diff: `file` indexes the diff's files, `line` is on the new side.
+
+    Both are None when the diff does not show the file; `line` alone is None when it does not show the line.
+    """
+
+    severity: FindingSeverity
+    title: str
+    location: str
+    detail: str
+    file: int | None = None
+    line: int | None = None
+
+
+class DiffLine(_Model):
+    """One line of a hunk, with its number on each side it is on."""
+
+    kind: DiffLineKind
+    old: int | None = None
+    new: int | None = None
+    text: str
+
+
+class DiffHunk(_Model):
+    """One hunk: what follows its `@@` ranges, such as a function's name, and its lines."""
+
+    header: str
+    lines: list[DiffLine]
+
+
+class DiffFile(_Model):
+    """One file the commit changes. `old_path` when it was renamed; `binary` when git shows no lines for it."""
+
+    path: str
+    old_path: str | None = None
+    binary: bool = False
+    hunks: list[DiffHunk]
+
+
+class ReviewDiff(_Model):
+    """The reviewed commit's diff against where it leaves its base branch: the PR's own text, untrusted, and bounded."""
+
+    files: list[DiffFile]
+    truncated: bool = False
+
+
+class ReviewDetail(_Model):
+    """One review run in full: its summary, findings, the diff they sit on, and the PR's other review runs."""
+
+    review: ReviewSummary
+    # The reviewer's summary, line breaks kept; the harness's note when it decided the status.
+    summary: str | None = None
+    note: str | None = None
+    base_branch: str | None = None
+    findings: list[ReviewFinding]
+    # None when there is no diff: a review from before diffs were kept, or one whose base could not be read.
+    diff: ReviewDiff | None = None
+    # Every review run of the same PR, newest first, this one included.
+    runs: list[ReviewSummary]
 
 
 class AttentionUpdated(_Model):

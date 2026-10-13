@@ -8,15 +8,18 @@ import type { ChoreDetail, ChoreFinding, ChoreRun } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreNotes } from '@/components/chore-notes'
 import { LinkedText } from '@/components/linked-text'
+import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import { choreLine, windowText } from '@/lib/chores'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+/** One chore: its schedule, its open findings, its recent runs, and the operator's notes to it. */
 export const Route = createFileRoute('/chores/$name')({
     component: ChorePage,
 })
@@ -50,6 +53,7 @@ function ChorePage() {
 function Chore({ detail }: { detail: ChoreDetail }) {
     const { chore, runs } = detail
     const now = useNow()
+    const runsOrder = useListOrder('chore-runs')
     return (
         <>
             <PageHeader label="Chore" title={`chore:${chore.name}`}>
@@ -97,14 +101,17 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     </Panel>
                     <Panel>
                         <PanelHeader label="Recent runs">
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                            <span className="flex items-center gap-2">
+                                {runs.length > 1 && <OrderToggle list="chore-runs" />}
+                                <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                            </span>
                         </PanelHeader>
                         {runs.length === 0 ? (
                             <Placeholder className="min-h-20">never run</Placeholder>
                         ) : (
                             <PanelScroll label="Recent runs">
                                 <ul className="divide-y" data-testid="chore-runs">
-                                    {runs.map((run) => (
+                                    {ordered('chore-runs', runsOrder, runs).map((run) => (
                                         <RunRow key={run.id} run={run} />
                                     ))}
                                 </ul>

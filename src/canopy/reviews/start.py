@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, outbox, prompts, treehouse
+from canopy.core import review_result as result
 from canopy.infra import lock, logs, procs
-from canopy.reviews import result
 
 if TYPE_CHECKING:
     import sqlite3
@@ -124,7 +124,14 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
         except treehouse.TreehouseError as e:
             db.delete_review_run(ctx.conn, run_id)
             raise Refusal("no_slot", str(e)) from e
-        db.set_review_slot(ctx.conn, run_id, slot=lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+        db.set_review_slot(
+            ctx.conn,
+            run_id,
+            slot=lease.path,
+            lease_id=lease.lease_id,
+            lease_holder=lease.lease_holder,
+            base_branch=lease.base_branch,
+        )
         try:
             return _spawn(ctx, run_id, request, lease, attempt=attempt, context=context)
         except BaseException:

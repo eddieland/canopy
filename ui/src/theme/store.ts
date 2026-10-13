@@ -6,11 +6,16 @@
  * afterwards, including when the system theme changes while the preference is `system`.
  */
 
+/** What the operator chose: a theme, or whatever the system uses. */
 export type ThemePreference = 'light' | 'dark' | 'system'
+/** The theme the page shows. */
 export type ResolvedTheme = 'light' | 'dark'
 
+/** The preference and the theme it resolves to, read together. */
 export interface ThemeSnapshot {
+    /** What the operator chose. */
     preference: ThemePreference
+    /** What the page shows: the preference, or the system's theme for `system`. */
     resolved: ResolvedTheme
 }
 
@@ -84,6 +89,7 @@ export function subscribe(listener: () => void): () => void {
     }
 }
 
+/** For useSyncExternalStore: the current snapshot, the same object until the preference or the system theme changes. */
 export function getSnapshot(): ThemeSnapshot {
     return snapshot
 }

@@ -11,6 +11,7 @@ from canopy.core import db
 from canopy.infra import resources
 from tests.canopy.helpers import journal_at, shipped_through, versions_after
 from tests.canopy.test_reconcile import DEAD_PID
+from tests.conftest import Journals
 
 # Each shipped migration's sha256, over LF line endings. A journal applies a migration once, so an edit to a shipped
 # one reaches only fresh journals and the two drift apart: a change to the schema is a new migration (AGENTS.md). A
@@ -29,6 +30,9 @@ SHIPPED = {
     11: "b5f91649b20c6783e4f915816ba930c0ff986cee619acce6f03c313d398ce941",
     12: "04410ef0faf97f97e28ffdfb7c8a6c0f86ec7878222ef10336fad518f89196f7",
     13: "995116e0a3010b31af0f183154266a6774a5241972aac2a48ae62be9bf80a49a",
+    14: "764761a8223991f778163245e702688715f2d9144de5573244c4fee8c74f533e",
+    15: "91667c9b816fde738ca9809286ad3d2b49dce1db8f6fdc9dc2cb1cac46d200ee",
+    16: "d8c8ca63da12108ce7fbca6f9e2baf36c8e6ba028db7598783fda0894d7167c6",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -73,11 +77,15 @@ SEED: Mapping[str, str] = {
         "VALUES ('ticket', 'OLD-1', 'started', 'x', 'cli')"
     ),
     "pause": "INSERT INTO pause (id, paused_at, channel) VALUES (1, 'x', 'cli')",
+    "attempt_grants": (
+        "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) "
+        "VALUES ('OLD-1', 'api', 'resume', 1, 'x')"
+    ),
 }
 
 
-def fresh(tmp_path: Path) -> sqlite3.Connection:
-    return db.connect(tmp_path / "canopy.db")
+def fresh(journals: Journals, tmp_path: Path) -> sqlite3.Connection:
+    return journals.open(tmp_path / "canopy.db", migrate=False)
 
 
 def tables(conn: sqlite3.Connection) -> list[str]:
@@ -104,9 +112,9 @@ def test_shipped_migrations_are_never_edited() -> None:
     assert found == SHIPPED
 
 
-def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
+def test_migrate_applies_once_and_records(tmp_path: Path, journals: Journals) -> None:
     shipped = db.discover(resources.migrations_dir())
-    conn = fresh(tmp_path)
+    conn = fresh(journals, tmp_path)
     assert db.migrate(conn, resources.migrations_dir()) == [m.version for m in shipped]
     assert db.migrate(conn, resources.migrations_dir()) == []
     rows = [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations ORDER BY version")]
@@ -115,7 +123,7 @@ def test_migrate_applies_once_and_records(tmp_path: Path) -> None:
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
 
 
-def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path) -> None:
+def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journals: Journals) -> None:
     """Applied one at a time to a journal with a row in every table, no migration loses a row, a column, or a value.
 
     A migration may add rows, as 0003's backfill does, and columns. One that means to drop or rewrite what it finds
@@ -123,7 +131,7 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path) -> No
     """
     migrations = tmp_path / "migrations"
     migrations.mkdir()
-    conn = fresh(tmp_path)
+    conn = fresh(journals, tmp_path)
     for m in db.discover(resources.migrations_dir()):
         before = contents(conn)
         (migrations / m.path.name).write_text(m.path.read_text())
@@ -144,26 +152,26 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path) -> No
                 conn.execute(insert)
 
 
-def test_new_migration_is_applied_and_recorded(tmp_path: Path) -> None:
+def test_new_migration_is_applied_and_recorded(tmp_path: Path, journals: Journals) -> None:
     migrations = shipped_through(tmp_path / "migrations", 1)
-    conn = fresh(tmp_path)
+    conn = fresh(journals, tmp_path)
     db.migrate(conn, migrations)
     (migrations / "0002_extra.sql").write_text("CREATE TABLE extra (id INTEGER PRIMARY KEY);\n")
     assert db.migrate(conn, migrations) == [2]
     assert conn.execute("SELECT name FROM schema_migrations WHERE version = 2").fetchone()[0] == "extra"
 
 
-def test_failed_migration_rolls_back(tmp_path: Path) -> None:
+def test_failed_migration_rolls_back(tmp_path: Path, journals: Journals) -> None:
     migrations = shipped_through(tmp_path / "migrations", 1)
     (migrations / "0002_bad.sql").write_text("CREATE TABLE half (id INTEGER);\nNOT SQL;\n")
-    conn = fresh(tmp_path)
+    conn = fresh(journals, tmp_path)
     with pytest.raises(sqlite3.Error):
         db.migrate(conn, migrations)
     assert conn.execute("SELECT name FROM sqlite_master WHERE name IN ('ticks', 'half')").fetchall() == []
 
 
-def test_a_failed_migration_rolls_back_every_pending_one(tmp_path: Path) -> None:
-    conn = journal_at(tmp_path, 1)
+def test_a_failed_migration_rolls_back_every_pending_one(tmp_path: Path, journals: Journals) -> None:
+    conn = journal_at(journals, tmp_path, 1)
     migrations = tmp_path / "migrations"
     (migrations / "0002_extra.sql").write_text("ALTER TABLE runs ADD COLUMN extra TEXT;\n")
     (migrations / "0003_bad.sql").write_text("NOT SQL;\n")
@@ -184,16 +192,16 @@ def test_migration_files_must_be_numbered_in_order(tmp_path: Path, names: list[s
         db.discover(tmp_path)
 
 
-def test_journal_newer_than_code_is_an_error(tmp_path: Path) -> None:
-    conn = fresh(tmp_path)
+def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
     conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'future')")
     with pytest.raises(db.MigrationError, match="does not know"):
         db.migrate(conn, resources.migrations_dir())
 
 
-def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
-    conn = fresh(tmp_path)
+def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
     stale = db.start_tick(conn, dry_run=False)
     assert db.abandon_unfinished_ticks(conn) == [stale]
@@ -219,9 +227,9 @@ def test_ticks_tickets_and_decisions(tmp_path: Path) -> None:
     assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
 
 
-def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
+def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path, journals: Journals) -> None:
     """D068: a journal this canopy cannot open names its live runs first, so it is not moved aside under one."""
-    conn = fresh(tmp_path)
+    conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
     conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'from_before_the_squash')")
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
@@ -238,9 +246,9 @@ def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: P
         db.migrate(conn, resources.migrations_dir())
 
 
-def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path) -> None:
+def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Path, journals: Journals) -> None:
     """A live `_run` of the old version would write the old schema, so the journal is not migrated under it."""
-    conn = journal_at(tmp_path, 1)
+    conn = journal_at(journals, tmp_path, 1)
     migrations = tmp_path / "migrations"
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     for key in ("OLD-1", "OLD-2", "OLD-3"):
@@ -265,8 +273,8 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
     assert db.migrate(conn, migrations) == []
 
 
-def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: Path) -> None:
-    conn = journal_at(tmp_path, 1)
+def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: Path, journals: Journals) -> None:
+    conn = journal_at(journals, tmp_path, 1)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     db.touch_ticket(conn, "OLD-1", "/r")
     conn.execute(

@@ -18,6 +18,7 @@ const withSecret = (args: string): string =>
     `sh -c 'umask 077 && d=$(mktemp -d) && printf %s ${E2E_SECRET} > "$d/secret" && ` +
     `exec ${serve(`--secret-file "$d/secret" ${args}`)}'`
 
+/** Playwright against the production build, served by FastAPI over the mock journal: never the Vite dev server. */
 export default defineConfig({
     testDir: './e2e',
     fullyParallel: true,
@@ -26,7 +27,13 @@ export default defineConfig({
     reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
     expect: {
         // Fonts are self-hosted and animations are frozen; what is left is antialiasing between Chromium builds.
-        toHaveScreenshot: { maxDiffPixelRatio: 0.01, animations: 'disabled', caret: 'hide' },
+        // The rail's version names the commit it was built from, so every commit would change every image: hidden.
+        toHaveScreenshot: {
+            maxDiffPixelRatio: 0.01,
+            animations: 'disabled',
+            caret: 'hide',
+            stylePath: './e2e/screenshot.css',
+        },
     },
     use: {
         ...devices['Desktop Chrome'],

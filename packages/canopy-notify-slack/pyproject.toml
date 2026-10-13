@@ -2,7 +2,7 @@
 name = "canopy-notify-slack"
 version = "0.0.1"
 description = "canopy's Slack notification sink: posts each message it reads on stdin to a Slack incoming webhook."
-license = "LicenseRef-Proprietary"
+license = "MIT"
 classifiers = ["Private :: Do Not Upload"]
 requires-python = ">=3.12"
 # Stdlib only, and nothing from canopy: it runs as its own process, as a sink command (DESIGN §20, D041).

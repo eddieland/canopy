@@ -2,10 +2,12 @@
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
 import type { AttentionItem, ChoreSummary, Run, SearchHit, TicketSummary } from './types'
 
+/** Two runs: one running, one blocked on a question. */
 export const mockRuns: Run[] = [
     {
         id: 41,
         ticket_key: 'ABC-101',
+        ticket_title: 'Sign in with SSO',
         kind: 'implement',
         status: 'running',
         state: 'running',
@@ -24,6 +26,7 @@ export const mockRuns: Run[] = [
     {
         id: 42,
         ticket_key: 'ABC-102',
+        ticket_title: 'Export reports as CSV',
         kind: 'implement',
         status: 'blocked',
         state: 'blocked',
@@ -41,6 +44,7 @@ export const mockRuns: Run[] = [
     },
 ]
 
+/** One attention item: the blocked run's question, awaiting a reply. */
 export const mockAttention: AttentionItem[] = [
     {
         id: 'a1',
@@ -55,9 +59,11 @@ export const mockAttention: AttentionItem[] = [
     },
 ]
 
+/** One ticket, started privately and waiting on the operator. */
 export const mockTickets: TicketSummary[] = [
     {
         key: 'ABC-102',
+        title: 'Export reports as CSV',
         private: true,
         start: 'started',
         phase: 'needs_human',
@@ -71,6 +77,7 @@ export const mockTickets: TicketSummary[] = [
     },
 ]
 
+/** One configured chore. */
 export const mockChores: ChoreSummary[] = [
     {
         name: 'deps',

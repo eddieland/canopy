@@ -111,8 +111,8 @@ canopy (harness, Python)
     setup.py       init, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     runs.py        dispatch, _run
-    conversation.py start, stop, reply, forget, show: the operator's verbs on a subject (§22); pause and resume, on
-                   the loop (§6)
+    conversation.py start, stop, reply, forget, grant, show: the operator's verbs on a subject (§22); pause and
+                   resume, on the loop (§6)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
@@ -129,7 +129,7 @@ canopy (harness, Python)
 
   runs/            worker runs on tickets (§8)
     dispatch.py    guards, leases (all or nothing), render the worker prompt, spawn detached _run
-    policy.py      attempt limits and the fix-ci cooldown per unit, derived from runs and run_slots
+    policy.py      attempt limits and the fix-ci cooldown per unit, derived from runs, run_slots, and grants
     worker.py      canopy _run: branch setup and the operator's setup command in each slot, the worker, result
                    parsing, push verification, slot return; a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
@@ -152,8 +152,8 @@ canopy (harness, Python)
 
   reviews/         adversarial reviews of PRs (§21)
     start.py       canopy review run: guards, the slot, the reviewer's prompt, spawn detached _review
-    execute.py     canopy _review: checkout at the commit, the reviewer outside it, result checks, slot return
-    result.py      the result contract, validated with pydantic
+    execute.py     canopy _review: checkout at the commit, its diff kept for the web UI, the reviewer outside it,
+                   result checks, slot return
     view.py        the state block's reviews
     findings.py    a review as a resumed worker and canopy review show read it, from the journal
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
@@ -166,6 +166,7 @@ canopy (harness, Python)
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run; a Context per
                    request
     views.py       journal rows as the API's models: attention items, runs, tickets, messages, search hits
+    reviews.py     review runs as the API's models: each one's findings anchored on its diff (§21)
     live.py        the event stream: data_version read 4 times a second, changed lists sent whole
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
@@ -173,6 +174,7 @@ canopy (harness, Python)
     options.py     ServeOptions: loopback or private host, port, base path, mock data
     server.py      the server's thread for canopy loop: uvicorn without signal handlers, restarted with a backoff
     mock.py        a journal seeded from fixtures, and the changes its stream shows
+    mock_reviews.py the mock journal's review runs and the diffs beside their logs
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
@@ -185,6 +187,8 @@ canopy (harness, Python)
                    (§19), read by the loop, the CLI, chores, and the web UI
     chore_window.py a chore's days and hours: whether a run may start now, and when it next may
     chore_result.py a chore's result contract, validated with pydantic
+    review_result.py a review's result contract, validated with pydantic (§21), read by reviews and the web UI
+    review_diff.py a review run's diff beside its log: read bounded, parsed, and each finding anchored on it (§21)
     search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
     config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner

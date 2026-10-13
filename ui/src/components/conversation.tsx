@@ -28,17 +28,20 @@ const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention 
 
 /** Which of the operator's messages nothing has read yet, and what the chip on each says and explains. */
 export interface Pending {
+    /** The chip's text. */
     label: string
+    /** The chip's tooltip: what the state means for the message. */
     title: string
+    /** Whether a message is in this state. */
     test: (message: Message) => boolean
 }
 
 /**
- * A ticket's conversation, or a chore's notes, oldest first (DESIGN §22). Every body is untrusted text, a tracker
- * comment's or an agent's included: it is rendered as React text, which escapes it, never as HTML. Bubbles pop in from
- * their own side, one after another, and a new one when it arrives. The operator's own messages that no `ok` tick has
- * read yet say so: the loop acts on them, and the attention list catches up, at the next tick. A chore's notes say
- * instead which its next run reads (`pending`).
+ * A ticket's conversation, or a chore's notes, in the order given: oldest first unless flipped (DESIGN §22). Every
+ * body is untrusted text, a tracker comment's or an agent's included: it is rendered as React text, which escapes it,
+ * never as HTML. Bubbles pop in from their own side, one after another, and a new one when it arrives. The operator's
+ * own messages that no `ok` tick has read yet say so: the loop acts on them, and the attention list catches up, at the
+ * next tick. A chore's notes say instead which its next run reads (`pending`).
  */
 export function Conversation({
     messages,

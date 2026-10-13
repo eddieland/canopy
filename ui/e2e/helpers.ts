@@ -2,8 +2,9 @@ import { expect, type Page } from '@playwright/test'
 
 import { E2E_SECRET } from './secret.ts'
 
+/** Where the page keeps the theme preference: the same key as src/theme/store.ts. */
 export const STORAGE_KEY = 'canopy-theme'
-// Every page, by its path and any query; a screenshot each per theme.
+/** Every page, by its path and any query; a screenshot each per theme. */
 export const ROUTES = [
     'attention',
     'runs',
@@ -11,6 +12,8 @@ export const ROUTES = [
     'worktrees',
     'tickets',
     'tickets/ABC-102',
+    'reviews',
+    'reviews/4',
     'chores',
     'chores/deps',
     'ticks',
@@ -18,8 +21,9 @@ export const ROUTES = [
     'settings',
     'search?q=web',
 ] as const
+/** The themes every page is screenshotted in. */
 export const THEMES = ['light', 'dark'] as const
-// Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run.
+/** Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run. */
 export const NOW = new Date('2026-10-08T12:30:00Z')
 
 /** Stores `theme` before any page script runs, as if chosen on an earlier visit. */
