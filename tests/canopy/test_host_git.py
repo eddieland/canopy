@@ -26,28 +26,28 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     return journal(canopy_env)
 
 
-def dispatch_and_run(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> sqlite3.Row:
+def dispatch_and_run(conn: sqlite3.Connection) -> sqlite3.Row:
     runner = InlineRunner()
-    tick_id = in_tick(conn, monkeypatch)
-    args = [
-        "dispatch",
-        "PROJ-1",
-        "--repo",
-        "repo",
-        "--label",
-        "agent-ready-tester",
-        "--kind",
-        "implement",
-        "--slug",
-        "work",
-    ]
-    assert main(args, runner=runner) == 0
-    db.finish_tick(conn, tick_id, "ok", "test")
-    run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-    assert main(["_run", str(run_id)], runner=runner) == 0
-    row = db.get_run(conn, run_id)
-    assert row is not None
-    return row
+    with in_tick(conn) as tick_id:
+        args = [
+            "dispatch",
+            "PROJ-1",
+            "--repo",
+            "repo",
+            "--label",
+            "agent-ready-tester",
+            "--kind",
+            "implement",
+            "--slug",
+            "work",
+        ]
+        assert main(args, runner=runner) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+        row = db.get_run(conn, run_id)
+        assert row is not None
+        return row
 
 
 def plant(primary: Path, fired: Path) -> None:
@@ -79,14 +79,13 @@ def test_host_git_runs_no_hook_or_monitor_from_the_shared_git_directory(
     agent_log: Path,
     conn: sqlite3.Connection,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     primary, _ = worktree_pool
     fired = tmp_path / "fired"
     plant(primary, fired)
     # Left unpushed, so `_run` fetches, checks out, reads refs, and pushes: every git step it has.
-    worker_does(monkeypatch, WORKER_COMMIT)
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(WORKER_COMMIT):
+        run = dispatch_and_run(conn)
     assert run["status"] == "done"
     slot = Path(slot_of(conn, run["id"])["slot_path"])
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
@@ -109,12 +108,11 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, slots = worktree_pool
     links = {slot: (slot / ".git").read_bytes() for slot in slots}
-    worker_does(monkeypatch, WORKER_COMMIT, ["sh", "-c", rewrite])
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(WORKER_COMMIT, ["sh", "-c", rewrite]):
+        run = dispatch_and_run(conn)
 
     assert run["status"] == "crashed"
     slot = Path(slot_of(conn, run["id"])["slot_path"])

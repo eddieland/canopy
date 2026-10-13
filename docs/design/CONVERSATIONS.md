@@ -570,7 +570,8 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
   `tick.updated` moves that tick's.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
-- Everything in a transcript is agent output: untrusted, rendered as text. It holds whatever a tool read or printed, a
+- Everything in a transcript is agent output: untrusted, rendered as text; a tool call's input, and an output that is
+  JSON, have their keys, strings, and values colored. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
 - Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
   OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving a run's

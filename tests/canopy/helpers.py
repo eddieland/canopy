@@ -4,11 +4,11 @@ import json
 import os
 import sqlite3
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-
-import pytest
+from unittest import mock
 
 from canopy.core import db
 from canopy.infra import procs, resources
@@ -41,10 +41,12 @@ def versions_after(version: int) -> list[int]:
     return [m.version for m in db.discover(resources.migrations_dir()) if m.version > version]
 
 
-def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *, dry_run: bool = False) -> int:
+@contextmanager
+def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False) -> Iterator[int]:
+    """Start a tick and act inside it, as the overseer does: CANOPY_TICK_ID names it until the block ends."""
     tick_id = db.start_tick(conn, dry_run=dry_run)
-    monkeypatch.setenv("CANOPY_TICK_ID", str(tick_id))
-    return tick_id
+    with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": str(tick_id)}):
+        yield tick_id
 
 
 def slot_of(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row:
@@ -59,9 +61,13 @@ def unit_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
     return row
 
 
-def worker_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str], result: str = WORKER_DONE) -> None:
-    monkeypatch.setenv("FAKE_WORKER_COMMANDS", json.dumps(list(commands)))
-    monkeypatch.setenv("FAKE_WORKER_RESULT", result)
+@contextmanager
+def worker_does(*commands: list[str], result: str = WORKER_DONE) -> Iterator[None]:
+    """Until the block ends, the fake worker runs `commands` and then prints `result`."""
+    with mock.patch.dict(
+        os.environ, {"FAKE_WORKER_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_RESULT": result}
+    ):
+        yield
 
 
 def commit_and_push(branch: str, message: str = "PROJ-1: the change") -> list[list[str]]:
