@@ -7,6 +7,7 @@ import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES } from '@/api/types'
 import type { Pool, Worktree, WorktreeState } from '@/api/types'
 import { Age } from '@/components/age'
+import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import type { Tone } from '@/components/counter'
 import { Notice } from '@/components/notice'
@@ -200,7 +201,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     const idle = w.state === 'idle'
     return (
         <li
-            className={cn('flex flex-col gap-1 px-3 py-2', idle && 'opacity-60')}
+            className={cn('group/copy flex flex-col gap-1 px-3 py-2', idle && 'opacity-60')}
             data-testid={`worktree-${w.name}`}
             data-state={w.state}
         >
@@ -212,8 +213,11 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                     <WorktreeDot state={w.state} />
                     {w.state === 'broken' ? w.status : w.state}
                 </span>
-                <span className="readout w-8 shrink-0 text-xs text-muted-foreground" title={w.path}>
-                    #{w.name}
+                <span className="flex shrink-0 items-center">
+                    <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
+                        #{w.name}
+                    </span>
+                    <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
                 </span>
                 {!idle && (
                     <>
@@ -238,6 +242,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                                 <ExternalLink aria-hidden className="size-3 shrink-0" />
                             </a>
                         )}
+                        {w.branch !== null && <CopyButton text={w.branch} label="branch" reveal />}
                     </>
                 )}
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}

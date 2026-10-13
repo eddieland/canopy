@@ -346,6 +346,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
   page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase. A worktree's branch
   links the same way, its name in the accent with the `ExternalLink` icon, when its repository has a branch link.
+- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
+  or PR's page, a run's worktrees and log path, a session id on a tick's page and in a transcript's header, and a
+  review's commit, whole though the page shows its first 7 characters. The button is a ghost `icon-xs` with the
+  `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
+  refuses, for 1.5 seconds, and names what happened (`Copied branch`). In a dense list (a worktree slot's path and
+  branch) it shows only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing
+  moves, and always on a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there
+  is no button and the text stays selectable.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
