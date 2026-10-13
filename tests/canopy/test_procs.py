@@ -64,25 +64,41 @@ def test_timeout_kills_and_keeps_partial_output(agent_log: Path, monkeypatch: py
 
 def test_timeout_leaves_no_descendant_behind(tmp_path: Path) -> None:
     """A wrapper's children die with it: what a sandbox prefix starts is in the group a timeout kills."""
-    pidfile = tmp_path / "pid"
-    # The grandchild's output is not the pipe's, so a survivor would show up here rather than hang the run. The pid is
-    # written whole by a rename, so the file never reads empty.
-    script = f"sleep 30 > /dev/null 2>&1 & echo $! > {pidfile}.tmp && mv {pidfile}.tmp {pidfile}; wait"
+    # The grandchild holds a FIFO's write end, not the run's pipes, so a survivor shows up here rather than hang the
+    # run. Its reader sees EOF only once every writer has exited: unlike asking after a pid, that cannot mistake a
+    # reused pid or an unreaped zombie for a survivor.
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo)
+    reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+    script = f"(echo up; exec sleep 30) > {fifo} 2> /dev/null & wait"
+
+    def read() -> bytes | None:
+        """What the FIFO holds: None while a writer is open with nothing written, b"" once none is."""
+        with contextlib.suppress(BlockingIOError):
+            return os.read(reader, 64)
+        return None
+
+    said: list[bytes] = []
 
     def await_grandchild(_pid: int) -> None:
-        # The timeout starts after this returns, so on a loaded machine it cannot kill the shell before it has
-        # started the grandchild and said which it is.
+        # The timeout starts after this returns, so on a loaded machine it cannot kill the shell before the grandchild
+        # is up. Until a writer opens the FIFO, a read sees no writer and returns b"" too.
         deadline = time.monotonic() + 10
-        while not pidfile.exists() and time.monotonic() < deadline:
+        while not said and time.monotonic() < deadline:
+            if line := read():
+                said.append(line)
             time.sleep(0.01)
 
-    result = SubprocessRunner().run(["sh", "-c", script], timeout=0.5, on_start=await_grandchild)
-    assert result.timed_out
-    grandchild = int(pidfile.read_text())
-    deadline = time.monotonic() + 5
-    while procs.alive(grandchild) and time.monotonic() < deadline:
-        time.sleep(0.05)
-    assert not procs.alive(grandchild)
+    try:
+        result = SubprocessRunner().run(["sh", "-c", script], timeout=0.5, on_start=await_grandchild)
+        assert result.timed_out
+        assert said == [b"up\n"]
+        deadline = time.monotonic() + 5
+        while (left := read()) != b"" and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert left == b"", "the grandchild outlived the timeout"
+    finally:
+        os.close(reader)
 
 
 def test_stdin_is_passed(fakes_on_path: Path, tmp_path: Path) -> None:
