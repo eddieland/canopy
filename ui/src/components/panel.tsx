@@ -9,7 +9,7 @@ import { useSection } from '@/hooks/use-section'
 import { blocking } from '@/lib/attention'
 import { pageTitle } from '@/lib/page-title'
 import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
-import { cn } from '@/lib/utils'
+import { cn, isBlank } from '@/lib/utils'
 
 /**
  * A page's title block: the trail to it, the title, any chips that qualify it, one line of description, and the page
@@ -101,7 +101,7 @@ export function PageHeader({
                 <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{title}</h1>
                 {chips}
             </div>
-            {children && (
+            {!isBlank(children) && (
                 // Balanced, so a two-line description splits evenly rather than leaving a word or two on its last line,
                 // and a command in it never breaks across lines.
                 <p className="max-w-3xl text-sm text-balance text-muted-foreground [&_code]:whitespace-nowrap">

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Eraser, Octagon, Play, Square } from 'lucide-react'
 import { useState } from 'react'
-import type { FormEvent } from 'react'
+import type { SubmitEvent } from 'react'
 
 import { forgetTicket, refreshTicket, startTicket, stopTicket } from '@/api/mutations'
 import type { TicketSummary } from '@/api/types'
@@ -116,7 +116,7 @@ function ForgetChallenge({
     const [typed, setTyped] = useState('')
     const matches = typed === ticketKey
 
-    function submit(event: FormEvent<HTMLFormElement>) {
+    function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
         if (matches) {
             onForget(typed)

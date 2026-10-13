@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Command, CornerDownLeft, Send } from 'lucide-react'
 import { useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { KeyboardEvent, SubmitEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
 import type { Replied } from '@/api/types'
@@ -63,7 +63,7 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
         },
     })
 
-    function submit(event: FormEvent<HTMLFormElement>) {
+    function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
         if (body.trim() && !mutation.isPending) {
             mutation.mutate(body)

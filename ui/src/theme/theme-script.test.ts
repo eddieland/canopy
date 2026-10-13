@@ -13,6 +13,8 @@ const script = /<script>([\s\S]*?)<\/script>/u.exec(html)?.[1]
 if (!script) {
     throw new Error('index.html has no inline theme script')
 }
+// The test is of that script's own text, so it runs from its source.
+// oxlint-disable-next-line typescript/no-implied-eval
 const run = new Function(script) as () => void
 
 beforeEach(() => {

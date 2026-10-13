@@ -117,7 +117,7 @@ function Figure({ cue }: { cue: string }) {
                 const box = eye.getBoundingClientRect()
                 const dx = event.clientX - (box.left + box.width / 2)
                 const dy = event.clientY - (box.top + box.height / 2)
-                const distance = Math.hypot(dx, dy) || 1
+                const distance = Math.max(Math.hypot(dx, dy), 1)
                 // At most 2.5 units off center, in the drawing's own units, and less for a pointer close by.
                 const reach = 2.5 * Math.min(1, distance / 120)
                 const x = ((dx / distance) * reach).toFixed(2)

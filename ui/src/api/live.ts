@@ -120,7 +120,7 @@ export function parseStreamEvent(data: string): StreamEvent | null {
     if (typeof value !== 'object' || value === null || !('type' in value)) {
         return null
     }
-    const type = (value as { type: unknown }).type
+    const type = value.type
     if (typeof type !== 'string') {
         return null
     }
@@ -133,7 +133,8 @@ export function parseStreamEvent(data: string): StreamEvent | null {
     }
     if (type === 'tick.updated') {
         const { tick, acknowledged } = value as { tick?: unknown; acknowledged?: unknown }
-        const known = tick === null || (typeof tick === 'object' && tick !== undefined)
+        // `typeof null` is 'object' too: a tick, or null for none.
+        const known = typeof tick === 'object'
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
     }
     if (type === 'loop.updated') {

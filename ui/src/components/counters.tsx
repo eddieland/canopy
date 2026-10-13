@@ -53,9 +53,9 @@ export function Counters() {
 function breakdown(counts: Record<Severity, number>): string {
     const rest = counts.other + counts.finding
     const parts = [
-        counts.failed && `${counts.failed} failed`,
-        counts.waiting && `${counts.waiting} waiting`,
-        rest && `${rest} more`,
+        counts.failed > 0 && `${counts.failed} failed`,
+        counts.waiting > 0 && `${counts.waiting} waiting`,
+        rest > 0 && `${rest} more`,
     ].filter(Boolean)
     return parts.length === 0 ? 'nothing' : parts.join(' · ')
 }

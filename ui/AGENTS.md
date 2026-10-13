@@ -17,7 +17,8 @@ memory, and do not upgrade in passing.
   `npx shadcn docs <name>`. If the registry is unreachable, port the source from shadcn's repository by hand as
   `src/components/ui/button.tsx` was: style classes inlined, `dark:` overrides replaced with tokens.
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
-- oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's) and oxfmt, Vitest, Playwright.
+- oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
+  and oxfmt, Vitest, Playwright.
 
 ## Commands
 
@@ -36,9 +37,10 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 ## Rules
 
 - **The lint is strict.** oxlint runs every rule in its correctness, suspicious, pedantic, and perf categories, and
-  the style and restriction rules `.oxlintrc.json` names one by one; a rule turned off there says why. Fix what it
-  finds. A line that must break a rule carries `oxlint-disable-next-line` with the rule's name and a comment saying
-  why.
+  the style and restriction rules `.oxlintrc.json` names one by one; a rule turned off there says why. It runs with
+  `--type-aware`, so the rules that need types run too: a floating promise, a deprecated API, a condition that is
+  always true, a switch that misses a case, a number tested for truth. Fix what it finds. A line that must break a
+  rule carries `oxlint-disable-next-line` with the rule's name and a comment saying why.
 - **Tokens only.** No raw colors and no `dark:` in components; a theme difference is a token change. The lint enforces
   it. See `DESIGN.md`.
 - **Every export has a JSDoc comment**, and so does each field of an exported interface: what it is or does, in

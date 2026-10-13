@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { KeyRound } from 'lucide-react'
-import type { FormEvent } from 'react'
+import type { SubmitEvent } from 'react'
 
 import { ApiError } from '@/api/client'
 import { signIn } from '@/api/mutations'
@@ -25,7 +25,7 @@ export function SignIn() {
         },
     })
 
-    function submit(event: FormEvent<HTMLFormElement>) {
+    function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
         const secret = new FormData(event.currentTarget).get('secret')
         if (typeof secret === 'string' && secret) {
