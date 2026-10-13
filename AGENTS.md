@@ -51,7 +51,8 @@ If code and `docs/DESIGN.md` disagree, the design doc wins until a decision entr
 - ruff selects every stable rule (D018). Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow
   `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
-- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it.
+- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, except on a pull request
+  that changes only docs, where every check passes without running; run `make all` before pushing one anyway.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - `make binary` builds `dist/canopy`, the single executable a release ships (D067), and
