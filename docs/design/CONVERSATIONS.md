@@ -409,8 +409,11 @@ a submission id the form drew when it was rendered, sent again unchanged when th
 `web:<id>`, so a retried submission records nothing new.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
-When another connection has committed since, it reads the attention list, the runs, the tickets, the chores, the
-spend, the latest tick, and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
+It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
+stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,
+held up every other request while the overseer worked. When another connection has committed since, it reads the
+attention list, the runs, the tickets, the chores, the spend, the latest tick, and the pause again, and sends each that
+changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
 `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
 read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
