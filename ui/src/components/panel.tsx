@@ -84,7 +84,7 @@ export function PageHeader({
                 </ol>
             </nav>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+                <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{title}</h1>
                 {chips}
             </div>
             {children && <p className="max-w-prose text-sm text-muted-foreground">{children}</p>}
