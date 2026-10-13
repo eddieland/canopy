@@ -94,7 +94,7 @@ class SplitResult(BaseModel):
 
 
 def parse_split(stdout: str) -> SplitResult | None:
-    """Parse the last non-empty line of `stdout` as a split's result. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as a split's result. None if it is missing or invalid."""
     return contract.last_line(SplitResult, stdout)
 
 
@@ -147,7 +147,7 @@ class Outcome:
 
 
 def parse_result(stdout: str) -> WorkerResult | None:
-    """Parse the last non-empty line of `stdout` as the result contract. None if it is missing or invalid."""
+    """Parse `stdout`'s result line (DESIGN §13) as the result contract. None if it is missing or invalid."""
     return contract.last_line(WorkerResult, stdout)
 
 

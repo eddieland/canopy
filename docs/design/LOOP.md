@@ -447,10 +447,10 @@ dispatch names at least one, in a workspace of one repository too.
    joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
    process group. Its stdout and stderr go to the run log.
-4. Parse the last non-empty line of the worker's text as the result contract: its stdout, or the text of OpenCode's
-   JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`. Record the
-   session id and cost the events reported on the run at once, also after a timeout, so a git failure after this step
-   does not lose them.
+4. Parse the last line of the worker's text that starts with `{` as the result contract: its stdout, or the text of
+   OpenCode's JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`.
+   Record the session id and cost the events reported on the run at once, also after a timeout, so a git failure after
+   this step does not lose them.
 
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch, and runs no setup, since
    the splitter has no shell; step 3 runs `split_cmd` in the desk; step 4 parses and validates the split's result;
