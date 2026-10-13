@@ -56,17 +56,28 @@ in order:
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
    needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
    repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
-   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; then
-   capacity, running workers and their repositories, the mirror limit and delimiter, tick id, current time, and whether
-   it is a dry run. Each ticket has its phase, branch, and comment, message, and mirror cursors (§22); its units (§18),
-   each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the runs of each kind the
-   operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run if still ahead; and its
-   latest run (id, kind, status, branch, each repository it leased in with its starting base, start and end). A ticket
-   the operator started has a `private` object (§22): when it was started, its message cursor, the operator's messages
-   newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the operator stopped, by key
-   alone: none is a candidate, whatever its labels, and the overseer records nothing for one, so a ticket stopped for
-   weeks adds no decision to every tick. `chores` (§19) is present only when chores are configured. `mirror` holds the
-   per-tick mirror limit and this tick's heredoc delimiter (§22).
+   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; the
+   overseer's open attention items (below); then capacity, running workers and their repositories, the mirror limit and
+   delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
+   message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
+   runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
+   and when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased
+   in with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
+   started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
+   `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
+   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
+   present only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
+   (§22).
+
+   `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
+   its repository, its reason, and since when, but not its detail, which may quote a comment. The harness's own
+   reasons and chores' items are left out, since the overseer never records them. An item stays open only while every
+   tick records it again, and on the first day the overseer left items out a tick and restored them the next (13
+   ticks, MEASUREMENTS 2026-10-13 F17): it could not see what it was dropping. With the list in front of it, the prompt
+   has it record each again unless it saw this tick that the cause is gone, and end a tick that could not read an
+   item's cause as `mcp_unavailable` rather than record a list without it. Settled (M28, the operator's choice): the
+   prompt, not a harness that keeps an item until the overseer resolves it, which would need a resolve verb in the
+   prompt anyway, and would leave a stale item standing whenever the overseer forgot to resolve one.
 5. **Check `canopy`, then run the overseer.** The overseer acts only through `canopy`, so a tick first runs
    `canopy --version` through `procs` as the overseer would find it: from the tick's PATH, in the workspace root, with
    `CANOPY_TICK_ID` set, for at most 60 seconds. When it does not start, exits other than 0, or times out, the tick

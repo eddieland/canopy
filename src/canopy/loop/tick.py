@@ -121,6 +121,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         private=private,
         operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
+        attention=attention.for_overseer(ctx.conn),
     )
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:

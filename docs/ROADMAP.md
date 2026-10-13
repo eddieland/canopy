@@ -894,9 +894,8 @@ in code can catch, and the same reasons keep idle pacing from counting a quiet t
 - Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
   attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
   `decisions` table shows a pattern. The first day shows one (2026-10-13 F17): the overseer leaves out an attention
-  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Open: whether that is a
-  prompt fix, or the harness keeps an item until the overseer resolves it or a tick that could see the world drops
-  it.
+  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Settled by the operator
+  (2026-10-13): a prompt fix, with the overseer's open items in its state block (DESIGN §6 step 4).
 - Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
   the wait; a fake overseer that prints a summary after `CANOPY_TICK_DONE` closes the tick `ok`.
 
