@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { splitLinks } from './links'
+import { onGitHub, splitLinks } from './links'
 
 describe('splitLinks', () => {
     it('leaves text without a URL whole', () => {
@@ -42,5 +42,15 @@ describe('splitLinks', () => {
             { text: 'https://x.test/a', href: 'https://x.test/a' },
             { text: '>"' },
         ])
+    })
+})
+
+describe('onGitHub', () => {
+    it('is true for a github.com URL alone', () => {
+        expect(onGitHub('https://github.com/acme/web/pull/88')).toBe(true)
+        expect(onGitHub('https://gitlab.com/acme/web/-/merge_requests/3')).toBe(false)
+        expect(onGitHub('https://github.com.evil.test/acme/web')).toBe(false)
+        expect(onGitHub('https://acme.atlassian.net/browse/ABC-1')).toBe(false)
+        expect(onGitHub('not a url')).toBe(false)
     })
 })

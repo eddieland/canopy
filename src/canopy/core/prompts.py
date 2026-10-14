@@ -62,11 +62,19 @@ REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
 # instead of dropping them. They are in every run's prompt, so they are bounded.
 REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
 MAX_STANDING_BYTES = 4096
-# The kinds whose workers commit, and the trailer they add when the runtime adds none (TRUST_MODEL T5). An override
-# written before it existed still serves an operator who keeps the default; once `trust.commit_trailer_name` or
-# `trust.commit_trailer_email` is changed, it fails to render instead of naming the old one.
+# The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
+# `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
+# or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
+# `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
+# `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
 COMMITS = ("implement", "fix-ci", "resume")
-REQUIRED_TRAILER = ("COMMIT_TRAILER",)
+REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
+REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
+# How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
+# (DESIGN §8). An override written before it existed says to merge, which still serves an operator who keeps the
+# default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
+# repositories refuse.
+REQUIRED_REBASE = ("BRANCH_UPDATE",)
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
@@ -102,6 +110,29 @@ def mark_comments(prefix: str, suffix: str) -> str:
 def commit_trailer(config: Config) -> str:
     """Return the trailer a worker adds to its commits when the agent runtime adds no attribution of its own."""
     return f"Co-authored-by: {config.trust.commit_trailer_name} <{config.trust.commit_trailer_email}>"
+
+
+def commit_attribution(config: Config) -> str:
+    """Return the instruction for a worker's commits: keep the runtime's trailer, or add canopy's while it is on."""
+    if not config.trust.commit_trailer:
+        return "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer."
+    return f"Keep the agent runtime's attribution trailer on commits, or add `{commit_trailer(config)}`."
+
+
+def branch_update(config: Config, branch: str) -> str:
+    """Return how a worker brings a base branch into `branch`: by merging, or with `trust.rebase`, by rebasing."""
+    if not config.trust.rebase:
+        return (
+            "To bring a base branch into yours, merge `origin/<base>` into it. Never rebase or otherwise rewrite a "
+            "commit that is already pushed: a push must never need force."
+        )
+    return (
+        "To bring a base branch into yours, rebase onto `origin/<base>`, and never merge it in: the operator's "
+        "repositories refuse merge commits. If this ticket was stacked on a PR that has since merged, rebase only this "
+        "ticket's own commits, with `git rebase --onto origin/<base> <the last commit of the branch it was stacked "
+        f"on>`. Push a rebased branch once, with `git push --force-with-lease origin HEAD:refs/heads/{branch}` in "
+        "place of the plain push. That is the only force you may use, and a rebase the only reason to use it."
+    )
 
 
 def open_pr(skill: str) -> str:
@@ -162,35 +193,46 @@ def render_worker(
     `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
     `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry `REQUIRED_PRIVATE` in place of
     `REQUIRED_WORKER`: it checks no label. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
-    `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_TRAILER}}` comes from the config
-    too, and with `trust.commit_trailer_*` changed from the default every prompt for a kind that commits must carry it.
+    `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_ATTRIBUTION}}` and
+    `{{COMMIT_TRAILER}}` come from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
+    changed from the default every prompt for a kind that commits must carry one of them, and with
+    `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
+    prompt must carry with `trust.rebase` set.
     """
     instructed = kind != "split"
     values = {
         **values,
         "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
+        "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
+        "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     standing = REQUIRED_STANDING if config.paths.worker_instructions is not None and instructed else ()
-    custom = (config.trust.commit_trailer_name, config.trust.commit_trailer_email) != (
-        DEFAULT_TRAILER_NAME,
-        DEFAULT_TRAILER_EMAIL,
-    )
-    trailer = REQUIRED_TRAILER if custom and kind in COMMITS else ()
-    required = (*pr_skill, *standing, *trailer, *required)
+    rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
+    required = (*pr_skill, *standing, *rebase, *required)
+    one_of = _required_attribution(config) if kind in COMMITS else ()
     if private:
-        return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required))
-    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required))
+        return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
+    return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)
 
 
-def render(config: Config, name: str, values: Mapping[str, str], *, required: Sequence[str] = ()) -> str:
+def render(
+    config: Config,
+    name: str,
+    values: Mapping[str, str],
+    *,
+    required: Sequence[str] = (),
+    one_of: Sequence[str] = (),
+) -> str:
     """Return prompt file `name` with every `{{NAME}}` replaced from `values`, in one pass.
 
-    A placeholder with no value is an error, and so is a prompt that lacks one of `required`.
+    A placeholder with no value is an error, and so is a prompt that lacks one of `required`, or, with `one_of` set,
+    every one of `one_of`.
 
     Raises:
-        PromptError: The prompt has a placeholder `values` has no value for, or lacks one of `required`.
+        PromptError: The prompt has a placeholder `values` has no value for, lacks one of `required`, or lacks every
+            one of `one_of`.
     """
     path = prompt_path(config, name)
     text = path.read_text(encoding="utf-8")
@@ -204,6 +246,19 @@ def render(config: Config, name: str, values: Mapping[str, str], *, required: Se
     rendered = _PLACEHOLDER_RE.sub(replace, text)
     used = set(_PLACEHOLDER_RE.findall(text))
     missing = [f"{{{{{n}}}}}" for n in required if n not in used]
+    if one_of and used.isdisjoint(one_of):
+        missing.append(" or ".join(f"{{{{{n}}}}}" for n in one_of))
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered
+
+
+def _required_attribution(config: Config) -> tuple[str, ...]:
+    # What a committing kind's prompt must carry, one of, for its commits to be attributed as configured.
+    if not config.trust.commit_trailer:
+        return REQUIRED_NO_TRAILER
+    custom = (config.trust.commit_trailer_name, config.trust.commit_trailer_email) != (
+        DEFAULT_TRAILER_NAME,
+        DEFAULT_TRAILER_EMAIL,
+    )
+    return REQUIRED_TRAILER if custom else ()

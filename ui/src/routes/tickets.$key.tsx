@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
@@ -200,7 +200,7 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
                         className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
                     >
                         {pr.replace(/^https:\/\//u, '')}
-                        <ExternalLink className="size-3" />
+                        <LinkOutIcon href={pr} />
                     </a>
                 ) : (
                     'none recorded'
