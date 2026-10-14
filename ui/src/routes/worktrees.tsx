@@ -132,7 +132,13 @@ function PoolSection({ pool }: { pool: Pool }) {
                         </span>
                     )}
                 </span>
-                <span className="flex items-center gap-3 font-mono text-xs text-muted-foreground">
+                {/* Each count whole: in a narrow panel they wrap, one under another, never a count split. */}
+                <span
+                    className={cn(
+                        'flex flex-wrap items-center justify-end gap-x-3 font-mono text-xs whitespace-nowrap',
+                        'text-muted-foreground',
+                    )}
+                >
                     {counts
                         .filter(([, n]) => n > 0)
                         .map(([state, n]) => (
@@ -175,7 +181,7 @@ function PoolSection({ pool }: { pool: Pool }) {
 /** A pool's head line inside the Pools panel: its repository, then what follows, on the panel's own surface. */
 function PoolHeader({ repo, children }: { repo: string; children: ReactNode }) {
     return (
-        <div className="flex h-9 items-center justify-between gap-3 border-b px-3">
+        <div className="flex min-h-9 items-center justify-between gap-3 border-b px-3 py-0.5">
             <span className="panel-label font-medium text-foreground">{repo}</span>
             {children}
         </div>

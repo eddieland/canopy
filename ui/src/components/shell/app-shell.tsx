@@ -1,12 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { Outlet } from '@tanstack/react-router'
-import { ViewTransition } from 'react'
+import { Menu } from 'lucide-react'
+import { useEffect, useState, ViewTransition } from 'react'
 
 import { sessionQuery, tickQuery } from '@/api/queries'
 import { SignIn } from '@/components/sign-in'
+import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
+import { useRailMode } from '@/hooks/use-rail-mode'
+import type { RailMode } from '@/hooks/use-rail-mode'
 import { useBuddy } from '@/lib/buddy'
+import { isSearchShortcut } from '@/lib/search'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
@@ -34,6 +40,10 @@ export const PAGE_SCROLLER = 'page'
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
  *
+ * Under `lg` the rail is a strip of the nav's icons (`useRailMode`): the button atop it opens the whole rail as a sheet
+ * over the page, as does `/`, which lands in its search box. A link followed or a search sent from the sheet closes
+ * it.
+ *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
  * after another (`stagger`).
@@ -45,6 +55,29 @@ export function AppShell() {
     const signedIn = session.data?.signed_in === true
     const stream = useLiveUpdates(signedIn)
     const buddy = useBuddy()
+    const mode = useRailMode()
+    const [railOpen, setRailOpen] = useState(false)
+    const sheet = mode !== 'full'
+    // Widened to a whole rail, the sheet is closed, so narrowing again does not bring it back by itself.
+    if (!sheet && railOpen) {
+        setRailOpen(false)
+    }
+    useEffect(() => {
+        if (!sheet) {
+            return
+        }
+        // The search box is in the sheet, so `/` opens it there; the sheet's first focus is the box.
+        function onKey(event: KeyboardEvent) {
+            if (isSearchShortcut(event, event.target)) {
+                event.preventDefault()
+                setRailOpen(true)
+            }
+        }
+        globalThis.addEventListener('keydown', onKey)
+        return () => {
+            globalThis.removeEventListener('keydown', onKey)
+        }
+    }, [sheet])
     if (session.data === undefined) {
         return <div className="min-h-dvh" />
     }
@@ -52,66 +85,134 @@ export function AppShell() {
         return <SignIn />
     }
     return (
-        <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
-            <header
-                data-testid="app-header"
-                className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
-            >
-                {/* The aurora: a hairline through the sections' colors along the header's foot, over its border. */}
-                <span
-                    aria-hidden
-                    className={cn(
-                        'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
-                        'bg-linear-to-r from-section-attention via-section-runs to-section-worktrees',
-                    )}
-                />
-                <div className="flex items-center gap-2.5">
-                    <LiveMark stream={stream} />
-                    <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
-                </div>
-                <Ticker />
-                {/* Three groups, the action, the readouts, and the theme, a rule between each. */}
-                <div className="flex items-center gap-2">
-                    <LoopPause />
-                    <Rule />
-                    <LiveReadouts stream={stream} />
-                    <Rule />
-                    <ThemeToggle />
-                </div>
-            </header>
-            <div
-                ref={takeKeys}
-                tabIndex={-1}
-                data-scroll-restoration-id={PAGE_SCROLLER}
-                className="page-scroll grid grid-cols-[13rem_minmax(0,1fr)] outline-none"
-            >
-                {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds sticks,
-                    a column as tall as the window under the header (its 3rem row above), so the footer stays at the
-                    window's foot however long the page; the part above it scrolls on its own in a window too short.
-                    The room left between them is Sprig's, when it is on. */}
-                <aside className="border-r bg-surface/60">
-                    <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
-                        <div className="panel-scroll min-h-0">
-                            <SearchBox />
-                            <Nav />
-                            <RailWorking />
-                            <RailSpend />
-                        </div>
-                        {buddy === 'on' ? <Buddy /> : <div className="flex-1" />}
-                        <div className="pt-3">
-                            <RailFooter />
-                        </div>
+        <Sheet open={sheet && railOpen} onOpenChange={setRailOpen}>
+            <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
+                <header
+                    data-testid="app-header"
+                    className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
+                >
+                    {/* The aurora: a hairline through the sections' colors along the header's foot, over its
+                        border. */}
+                    <span
+                        aria-hidden
+                        className={cn(
+                            'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
+                            'bg-linear-to-r from-section-attention via-section-runs to-section-worktrees',
+                        )}
+                    />
+                    <div className="flex items-center gap-2.5">
+                        <LiveMark stream={stream} />
+                        <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                     </div>
-                </aside>
-                <main className="min-w-0 p-6">
-                    <ViewTransition>
-                        <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
-                            <Outlet />
-                        </div>
-                    </ViewTransition>
-                </main>
+                    <Ticker />
+                    {/* Three groups, the action, the readouts, and the theme, a rule between each. */}
+                    <div className="flex items-center gap-2">
+                        <LoopPause />
+                        <Rule />
+                        <LiveReadouts stream={stream} />
+                        <Rule />
+                        <ThemeToggle />
+                    </div>
+                </header>
+                <div
+                    ref={takeKeys}
+                    tabIndex={-1}
+                    data-scroll-restoration-id={PAGE_SCROLLER}
+                    className={cn('page-scroll grid outline-none', COLUMNS[mode])}
+                >
+                    {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds
+                        sticks, a column as tall as the window under the header (its 3rem row above), so the footer
+                        stays at the window's foot however long the page; the part above it scrolls on its own in a
+                        window too short. The room left between them is Sprig's, when it is on. */}
+                    {mode === 'full' && (
+                        <aside className="border-r bg-surface/60">
+                            <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
+                                <RailColumn buddy={buddy === 'on'} />
+                            </div>
+                        </aside>
+                    )}
+                    {mode === 'strip' && (
+                        <aside className="border-r bg-surface/60" data-testid="rail-strip">
+                            <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
+                                <RailButton />
+                                <div className="w-full">
+                                    <Nav compact />
+                                </div>
+                            </div>
+                        </aside>
+                    )}
+                    <main className="min-w-0 p-6">
+                        <ViewTransition>
+                            <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
+                                <Outlet />
+                            </div>
+                        </ViewTransition>
+                    </main>
+                </div>
             </div>
-        </div>
+            {sheet && (
+                <SheetContent
+                    data-testid="rail-sheet"
+                    className="w-52"
+                    // A link followed or a search sent leaves for another page: the sheet would cover it.
+                    onClick={(event) => {
+                        if (event.target instanceof Element && event.target.closest('a') !== null) {
+                            setRailOpen(false)
+                        }
+                    }}
+                    onSubmit={() => {
+                        setRailOpen(false)
+                    }}
+                >
+                    <SheetTitle className="sr-only">Rail</SheetTitle>
+                    <SheetDescription className="sr-only">
+                        Search, the pages, the runs working now, and the spend
+                    </SheetDescription>
+                    <RailColumn buddy={buddy === 'on'} />
+                </SheetContent>
+            )}
+        </Sheet>
+    )
+}
+
+// The page's columns by how the rail shows: whole, or a strip.
+const COLUMNS: Record<RailMode, string> = {
+    full: 'grid-cols-[13rem_minmax(0,1fr)]',
+    strip: 'grid-cols-[3.5rem_minmax(0,1fr)]',
+}
+
+/** What the rail holds, top to bottom, whether beside the page or in the sheet: DESIGN's Shape and space. */
+function RailColumn({ buddy }: { buddy: boolean }) {
+    return (
+        <>
+            <div className="panel-scroll min-h-0">
+                <SearchBox />
+                <Nav />
+                <RailWorking />
+                <RailSpend />
+            </div>
+            {buddy ? <Buddy /> : <div className="flex-1" />}
+            <div className="pt-3">
+                <RailFooter />
+            </div>
+        </>
+    )
+}
+
+/** The button atop the strip that opens the whole rail in a sheet. */
+function RailButton() {
+    return (
+        <SheetTrigger asChild>
+            <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Open the rail"
+                title="Search, the runs working now, and the spend"
+                data-testid="rail-open"
+            >
+                <Menu aria-hidden />
+            </Button>
+        </SheetTrigger>
     )
 }
 

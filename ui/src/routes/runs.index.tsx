@@ -44,8 +44,8 @@ function RunsPage() {
             </PageHeader>
             <Panel>
                 <PanelHeader label="By state">
-                    <span className="flex items-center gap-3">
-                        <nav aria-label="Filter by state" className="flex items-center gap-1">
+                    <span className="flex flex-wrap items-center gap-x-3">
+                        <nav aria-label="Filter by state" className="flex flex-wrap items-center gap-1">
                             <FilterLink search={{ state: undefined }}>all</FilterLink>
                             {RUN_STATES.map((s) => (
                                 <FilterLink key={s} search={{ state: s }}>
