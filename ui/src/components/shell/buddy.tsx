@@ -97,10 +97,14 @@ function roomFor(slot: HTMLElement): Room | false {
  */
 function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnother: () => void }) {
     const [open, setOpen] = useState(true)
+    // Its time runs only while it shows: a tip waiting unseen in a tight slot is not used up before a roomier one.
     useEffect(() => {
+        if (!shown) {
+            return
+        }
         const timer = globalThis.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
         return () => globalThis.clearTimeout(timer)
-    }, [])
+    }, [shown])
     return (
         <div
             data-testid="buddy-tip"

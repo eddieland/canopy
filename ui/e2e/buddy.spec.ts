@@ -163,6 +163,22 @@ test.describe('turned on', () => {
         await expect(tip).toBeHidden()
     })
 
+    test('a tip waiting unseen in a tight rail still shows its full time once the rail has room', async ({ page }) => {
+        await page.clock.install()
+        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.goto('attention')
+        await settled(page)
+        const tip = page.getByTestId('buddy-tip')
+        await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
+        await page.clock.runFor(30_000)
+
+        await page.setViewportSize({ width: 1280, height: 1200 })
+        await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'roomy')
+        await expect(tip).toBeVisible()
+        await page.clock.runFor(21_000)
+        await expect(tip).toBeHidden()
+    })
+
     test("Sprig's hats are bought with what canopy has spent, and worn one at a time", async ({ page }) => {
         // $400 in all buys a beanie and a party hat, but not a propeller cap.
         await spentInAll(page, 400)
