@@ -60,8 +60,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
  * ticket's page keeps Tickets active, a PR's Pull requests, a review's Reviews, a chore's Chores, and a tick's Ticks.
  * Attention shows how many items it lists, on every page, split as its counter splits them. Hovering an item says what
  * its page holds.
+ *
+ * `compact`, in the rail's strip under `lg`, shows the icons alone, each still named for a screen reader and on hover,
+ * and Attention's count as one number on its icon's corner, in its most severe item's color.
  */
-export function Nav() {
+export function Nav({ compact = false }: { compact?: boolean }) {
     const attention = useQuery(attentionQuery)
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const section = useSection()
@@ -95,12 +98,13 @@ export function Nav() {
                 <Link
                     key={to}
                     to={to}
-                    title={hint}
+                    title={compact ? `${SECTION_LABEL[to]}: ${hint}` : hint}
                     activeOptions={{ exact: false }}
                     className={cn(
                         'group relative flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-sm text-muted-foreground',
                         'transition-colors hover:bg-surface-raised hover:text-foreground',
                         'data-[status=active]:text-foreground data-[status=active]:hover:bg-transparent',
+                        compact && 'justify-center',
                     )}
                 >
                     <Icon
@@ -109,8 +113,10 @@ export function Nav() {
                             SECTION_TEXT[to],
                         )}
                     />
-                    {SECTION_LABEL[to]}
-                    {to === '/attention' && counts !== undefined && <AttentionCount counts={counts} />}
+                    {compact ? <span className="sr-only">{SECTION_LABEL[to]}</span> : SECTION_LABEL[to]}
+                    {to === '/attention' && counts !== undefined && (
+                        <AttentionCount counts={counts} compact={compact} />
+                    )}
                 </Link>
             ))}
         </nav>
@@ -121,9 +127,10 @@ export function Nav() {
  * The attention list's count beside its nav item: what is broken in the failure color, what waits on the operator's
  * answer in theirs, and the rest muted, each shown only when there is one. Not the section's rose, which is too near
  * the failure color to tell apart at this size. Color alone does not say which number is which, so the numbers are
- * also said in words, on hover and to a screen reader (`1 broken, 1 waiting on you, 3 other`).
+ * also said in words, on hover and to a screen reader (`1 broken, 1 waiting on you, 3 other`). `compact`, the total
+ * alone on the icon's corner, in the first part's color: the most severe.
  */
-function AttentionCount({ counts }: { counts: Record<Severity, number> }) {
+function AttentionCount({ counts, compact }: { counts: Record<Severity, number>; compact: boolean }) {
     const parts = [
         { kind: 'failed', label: 'broken', count: counts.failed, tone: 'text-status-failed' },
         { kind: 'waiting', label: 'waiting on you', count: counts.waiting, tone: 'text-status-blocked' },
@@ -133,6 +140,19 @@ function AttentionCount({ counts }: { counts: Record<Severity, number> }) {
         return null
     }
     const said = parts.map(({ count, label }) => `${count} ${label}`).join(', ')
+    if (compact) {
+        const total = parts.reduce((sum, { count }) => sum + count, 0)
+        return (
+            <span
+                className={cn('absolute top-0 right-0.5 readout text-2xs', parts[0]?.tone)}
+                title={said}
+                data-testid="nav-attention-count"
+            >
+                <span aria-hidden>{total}</span>
+                <span className="sr-only">{said}</span>
+            </span>
+        )
+    }
     return (
         <span className="ml-auto flex gap-1.5 readout text-xs" title={said} data-testid="nav-attention-count">
             {parts.map(({ kind, count, tone }) => (

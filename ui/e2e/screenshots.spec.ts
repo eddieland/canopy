@@ -98,3 +98,19 @@ test.describe('on a wide screen', () => {
         })
     }
 })
+
+// Half of a second monitor: the rail a strip of the nav, each list showing the columns its width has room for.
+test.describe('at half a monitor', () => {
+    test.use({ viewport: { width: 820, height: 900 } })
+
+    for (const route of ['attention', 'tickets', 'runs', 'tickets/ABC-102'] as const) {
+        test(`${route} at half width`, async ({ page }) => {
+            await page.clock.setFixedTime(NOW)
+            await storeTheme(page, 'dark')
+            await signIn(page)
+            await page.goto(route)
+            await settled(page)
+            await screenshotWhole(page, `${route.replace('/', '-')}-half-dark.png`)
+        })
+    }
+})
