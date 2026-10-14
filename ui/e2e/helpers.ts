@@ -5,7 +5,7 @@ import { E2E_SECRET } from './secret.ts'
 
 /** Where the page keeps the theme preference: the same key as src/theme/store.ts. */
 export const STORAGE_KEY = 'canopy-theme'
-/** Every page, by its path and any query; a screenshot each per theme. */
+/** Every page, by its path and any query; a screenshot each in dark, of its main pane alone unless in WHOLE_ROUTES. */
 export const ROUTES = [
     'attention',
     'runs',
@@ -25,7 +25,19 @@ export const ROUTES = [
     'settings',
     'search?q=web',
 ] as const
-/** The themes every page is screenshotted in. */
+/** A page in ROUTES. */
+export type Route = (typeof ROUTES)[number]
+/**
+ * The pages screenshotted whole, the shell included: the ones README.md shows. The rest show their main pane alone, so
+ * a change to the header or the rail rewrites these images and not every one.
+ */
+export const WHOLE_ROUTES: readonly Route[] = ['attention', 'tickets/ABC-102', 'runs/39', 'reviews/4', 'ticks/2']
+/**
+ * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same
+ * tokens, so a few pages in light catch a light token gone wrong without doubling every image.
+ */
+export const LIGHT_ROUTES: readonly Route[] = ['attention', 'runs', 'tickets/ABC-102']
+/** The themes the app has; a page is screenshotted in light only if in LIGHT_ROUTES. */
 export const THEMES = ['light', 'dark'] as const
 /** Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run. */
 export const NOW = new Date('2026-10-08T12:30:00Z')
@@ -57,11 +69,23 @@ export async function settled(page: Page): Promise<void> {
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
 }
 
-/**
- * Screenshots the whole page as `name`. The page scrolls under the header, not the window (AppShell), so a full-page
- * capture would stop at the window's foot: the window grows to the page's height first.
- */
+/** Screenshots the whole page as `name`, the header and the rail included. */
 export async function screenshotWhole(page: Page, name: string): Promise<void> {
+    await growToPage(page)
+    await expect(page).toHaveScreenshot(name)
+}
+
+/** Screenshots the page's main pane as `name`, without the header and the rail around it. */
+export async function screenshotMain(page: Page, name: string): Promise<void> {
+    await growToPage(page)
+    await expect(page.locator('main')).toHaveScreenshot(name)
+}
+
+/**
+ * Grows the window to the page's height. The page scrolls under the header, not the window (AppShell), so a capture
+ * would stop at the window's foot.
+ */
+async function growToPage(page: Page): Promise<void> {
     const scroller = page.locator('[data-scroll-restoration-id=page]')
     const height = await scroller.evaluate((el) => el.getBoundingClientRect().top + el.scrollHeight)
     const viewport = page.viewportSize()
@@ -69,7 +93,6 @@ export async function screenshotWhole(page: Page, name: string): Promise<void> {
         throw new Error('the page has no viewport to grow')
     }
     await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
-    await expect(page).toHaveScreenshot(name)
 }
 
 /**
