@@ -738,6 +738,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/runs/{run_id}",
         "/api/runs/{run_id}/transcript",
         "/api/spend",
+        "/api/spend/breakdown",
         "/api/tick",
         "/api/tickets",
         "/api/tickets/{key}",

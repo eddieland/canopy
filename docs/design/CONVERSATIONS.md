@@ -345,11 +345,12 @@ Served by `canopy loop` from a thread (D073):
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
-  it, pull requests (below), chores (below), ticks (below), and search (below). The side rail shows the runs working now
-  and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and
-  what it costs stay in view wherever the operator is. In a window narrower than 1024px, as half of a second monitor
-  is, the rail is a strip of the nav's icons whose button opens it whole over the page, and each list shows the
-  columns its width has room for, its title always (`ui/DESIGN.md`).
+  it, pull requests (below), chores (below), ticks (below), search (below), and spend (below). The side rail shows the
+  runs working now and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the
+  loop is doing and what it costs stay in view wherever the operator is; either figure opens the spend page. In a
+  window narrower than 1024px, as half of a second monitor is, the rail is a strip of the nav's icons whose button
+  opens it whole over the page, and each list shows the columns its width has room for, its title always
+  (`ui/DESIGN.md`).
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
@@ -413,6 +414,7 @@ The API, under `{base}/api`:
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
+| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind, the ticks by what they bought and by what woke them, the runs that reported no cost, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -542,6 +544,21 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
   session's transcript under the decisions (below), and the file's end as written under that (The tick's output,
   below).
 - The ticks page is in the navigation, and the header's latest tick links to its page. Reads only.
+
+The spend page (ROADMAP M33, asked for by the operator, 2026-10-13): every agent run records its cost, and the loop
+records whether each tick was idle (§6, Idle pacing), so how much of the spend bought nothing is read from the journal
+rather than from a one-off analysis of the log.
+
+- `GET /spend/breakdown` is `canopy spend`'s breakdown (§11) as JSON, from the same code, so the page and the command
+  agree by construction; the server's clock picks the window, as it does for `GET /spend`. It adds the newest 20 live
+  idle ticks in the window, each as the ticks list shows it, which link the idle spend to the ticks behind it.
+- The page offers a week, the command's default, and 30 days (`?days=30`): its totals by kind with idle ticks' share
+  of the live overseer's, each day as a stacked bar of the kinds with idle overseer spend its own series on the
+  baseline, the same numbers as a table, the ticks by group and by what woke them, and the idle ticks. A window the
+  page does not offer reads as the week. Reads only.
+- The rail's two spend figures open it, the 24 hours' on the week and the 30 days' on the month: a link from them
+  rather than a nav item, since spend is a question the operator asks now and then, not a place they work.
+- `spend.updated` and `tick.updated` on the stream mark the breakdown stale, so a page left open follows the loop.
 
 The pull requests pages (ROADMAP M32, asked for by the operator, 2026-10-13): a PR is a subject of its own, so what
 the journal holds about one, spread over a ticket's units, its runs, the reviews (§21), and the decisions, is

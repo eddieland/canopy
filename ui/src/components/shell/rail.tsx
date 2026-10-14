@@ -75,14 +75,17 @@ export function RailWorking() {
     )
 }
 
-/** Under the working runs: what the last 24 hours and the last 30 days cost, as the attention page's counters say. */
+/**
+ * Under the working runs: what the last 24 hours and the last 30 days cost. Either opens the spend page, the week's or
+ * the 30 days' breakdown by day and by what it bought.
+ */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
     return (
         <RailSection label="Spent" testId="rail-spend">
             <div className="grid grid-cols-2 gap-2 px-2.5">
-                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours" />
-                <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days" />
+                <Spent window={spend?.day} label="24h" hint="Spent in the last 24 hours: the week by day" />
+                <Spent window={spend?.month} label="30d" hint="Spent in the last 30 days: the month by day" days={30} />
             </div>
         </RailSection>
     )
@@ -123,11 +126,27 @@ function RailSection({
     )
 }
 
-/** One window's cost: a dash when nothing in it reported one. */
-function Spent({ window, label, hint }: { window: SpendWindow | undefined; label: string; hint: string }) {
+/** One window's cost, a dash when nothing in it reported one, opening the spend page over `days`, a week by default. */
+function Spent({
+    window,
+    label,
+    hint,
+    days,
+}: {
+    window: SpendWindow | undefined
+    label: string
+    hint: string
+    days?: 30
+}) {
     const cost = window?.cost_usd ?? null
     return (
-        <div className="flex flex-col" title={hint}>
+        <Link
+            to="/spend"
+            search={{ days }}
+            className="-mx-1 flex flex-col rounded-sm px-1 hover:bg-surface-raised"
+            title={hint}
+            data-testid={`rail-spend-link-${label}`}
+        >
             {window === undefined ? (
                 <Skeleton className="h-5 w-14" />
             ) : (
@@ -136,6 +155,6 @@ function Spent({ window, label, hint }: { window: SpendWindow | undefined; label
                 </span>
             )}
             <span className="text-2xs text-muted-foreground">{label}</span>
-        </div>
+        </Link>
     )
 }

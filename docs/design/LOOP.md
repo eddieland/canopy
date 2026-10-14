@@ -311,7 +311,8 @@ this tick's). Otherwise, and on a tick that changed neither, it is empty. A tick
 churn. The list cannot tell a flap from the world or the config changing (a review the tracker's MCP read, CI going
 red): the `decisions` table can, by the rationales either side, and prompt changes follow only when it shows a pattern.
 
-The journal records the same on each tick the loop ran, for spend (ROADMAP M33): `ticks.idle`, whether the tick was idle
+The journal records the same on each tick the loop ran, for spend (ROADMAP M33; `canopy spend`, §11, and the web UI's
+spend page, §22, read it): `ticks.idle`, whether the tick was idle
 by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any
 `--defer` ran its length), `timer` (the wait ran its length), `gate` (a gate shortened it and it ran out), `message`,
 `starts` (a ticket started or stopped), `grant`, `run`, or `key`. A pause does not change it: a tick held past its

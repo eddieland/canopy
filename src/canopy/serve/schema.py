@@ -941,6 +941,104 @@ class Spend(_Model):
     """What every run in the journal cost, whenever it started, in US dollars; None when none reported a cost."""
 
 
+type SpendGroup = Annotated[
+    Literal["idle", "busy", "hand_run", "not_ok", "dry_run"],
+    Field(
+        description="What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's "
+        "word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and "
+        "`dry_run` a dry run, whatever the loop said of it."
+    ),
+]
+type SpendKind = Annotated[
+    Literal["overseer", "workers", "chores", "reviews"],
+    Field(description="A kind of agent run: each tick's overseer, worker and split runs, chore runs, review runs."),
+]
+
+
+class SpendCosts(_Model):
+    """What each kind of agent run cost, in US dollars, as the runtime reported it (§13); None where none reported."""
+
+    overseer: float | None = None
+    """The live ticks' overseers."""
+    idle: float | None = None
+    """The part of `overseer` idle ticks spent."""
+    dry_run: float | None = None
+    """Dry runs' overseers, apart from `overseer`."""
+    workers: float | None = None
+    """Worker and split runs."""
+    chores: float | None = None
+    """Chore runs, the operator's tries included."""
+    reviews: float | None = None
+    """Review runs."""
+    total: float | None = None
+    """Everything, dry runs included, as the 24 hour and 30 day counters count it."""
+
+
+class SpendDay(_Model):
+    """One UTC day's costs."""
+
+    day: str
+    """The day, `YYYY-MM-DD`, in UTC."""
+    costs: SpendCosts
+    """What the runs that started on it cost."""
+
+
+class SpendTicks(_Model):
+    """How many ended ticks of the window are in a group, and what their overseers cost."""
+
+    group: SpendGroup
+    """The group."""
+    ticks: int
+    """How many ticks."""
+    cost_usd: float | None = None
+    """What their overseers cost; None when none reported a cost."""
+
+
+class SpendWoken(_Model):
+    """How many of the loop's live ticks one cause woke (`ticks.woken_by`, DESIGN §6), and what they cost."""
+
+    by: str
+    """What ended the wait before them: start | timer | gate | message | starts | grant | run | key"""
+    ticks: int
+    """How many ticks."""
+    cost_usd: float | None = None
+    """What their overseers cost; None when none reported a cost."""
+
+
+class SpendUnpriced(_Model):
+    """How many of a kind's ended runs in the window reported no cost, of how many."""
+
+    kind: SpendKind
+    """The kind of run."""
+    runs: int
+    """How many ended in the window."""
+    unpriced: int
+    """How many of them reported no cost."""
+
+
+class SpendBreakdown(_Model):
+    """What a window of whole UTC days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33)."""
+
+    since: datetime
+    """When the window starts: midnight UTC on its first day."""
+    days: int
+    """How many days it spans."""
+    per_day: list[SpendDay]
+    """Every day in it, oldest first, those with nothing spent included."""
+    totals: SpendCosts
+    """The whole window's costs."""
+    ticks: list[SpendTicks]
+    """The ticks that ended in it, a row per group, in a fixed order: idle, busy, hand_run, not_ok, dry_run."""
+    woken: list[SpendWoken]
+    """The loop's live ticks by what woke them, the most common first."""
+    unpriced: list[SpendUnpriced]
+    """A row per kind of run, in a fixed order: overseer, workers, chores, reviews."""
+    idle_share: float | None = None
+    """Idle ticks' share of the live overseer's spend, from 0 to 1; None when the overseer reported no cost."""
+    idle_ticks: list[Tick]
+    """The newest live idle ticks in the window, at most 20, newest first: what idle spend bought."""
+
+
 type SearchSource = Annotated[
     Literal["ticket", "message", "chore_run", "decision", "tick"],
     Field(description="Where a search hit is (DESIGN §22, Search), in the order the search reads them."),

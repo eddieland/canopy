@@ -40,6 +40,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
+| `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
 | `syntax-key`, `-string`, `-number`, `-literal` | JSON's keys, strings, numbers, and literals, in agent output. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
@@ -70,6 +71,10 @@ Rules:
   Reviews fuchsia, Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from
   `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the header's
   aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+- **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
+  nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
+  spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
+  bar for a graphic, which `tokens.test.ts` measures.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -105,11 +110,11 @@ Rules:
   screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
-  covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
-  working runs are those running first, then those waiting on the operator's answer, each oldest first, a ticket's
-  latest run alone: a dot in its state's color, the ticket's key, how long it has run (or `waiting on you` in
-  `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
-  runs page, so the sticky part fits an 800px window.
+  covers, as a native `title`; a spend window opens the spend page over its week or month. Each block under the nav
+  is a hairline and a `panel-label` over its content. The working runs are those running first, then those waiting
+  on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color, the ticket's
+  key, how long it has run (or `waiting on you` in `status-blocked`), and the ticket's title under it, opening the
+  run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer (the
   version) sits at the foot of the sticky column, so at the window's foot however long the page; in a window too
@@ -424,6 +429,11 @@ list, an empty state, or a skeleton by hand.
   Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
+- **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
+  overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
+  A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
+  holds the same numbers for a screen reader, each a `Cost`. A week names every day on the axis; 30 days every fifth,
+  back from today. The window is a segmented control (`ToggleGroup`) in the totals' panel header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's

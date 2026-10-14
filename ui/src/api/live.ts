@@ -68,6 +68,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         }
         case 'spend.updated': {
             client.setQueryData(keys.spend, event.spend)
+            // The spend page's breakdown, which the stream does not carry: refetched only while a page shows it.
+            void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             break
         }
         case 'tick.updated': {
@@ -82,8 +84,9 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
-            // A PR's phase, decisions, and reviews move with the ticks too.
+            // A PR's phase, decisions, and reviews move with the ticks too, and the spend page's idle ticks.
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
+            void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             break
         }
         case 'loop.updated': {

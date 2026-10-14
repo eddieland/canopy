@@ -22,6 +22,14 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   `cost_usd`, and tokens by kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it
   dispatched records its own. On a tick `canopy loop` ran, whether it was idle and what ended the wait before it
   (`idle`, `woken_by`, §6 Idle pacing), so spend can be split by what it bought; NULL on a hand-run tick.
+  `canopy spend [--days N] [--json]` reads that split (`core/spend.py`): for each of the last N UTC days, 7 by
+  default and at most 366, today's so far included, what the live ticks' overseers, idle ticks' among them, dry runs'
+  overseers, worker and split runs, chore runs, and review runs cost, each run on the day it started; the ticks that
+  ended in the window in five groups, each tick in one (a dry run, whatever the loop said of it; a live tick that did
+  not close `ok`; an `ok` one the loop called idle; one it called not idle; one no loop ran), with the count and cost
+  of each and idle ticks' share of the live overseer's spend; the live ticks the loop ran by `woken_by`; and how many
+  ended runs of each kind reported no cost. `--json` prints the same as one object, for a re-measurement
+  (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it (§22).
   `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its decisions;
   `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a dry run's
   plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a ticket's page

@@ -532,6 +532,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/spend/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the spend by day and by what it bought
+         * @description What each day of the window cost, by kind; the ticks by what they bought; and the newest idle ticks.
+         */
+        get: operations["getSpendBreakdown"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tick": {
         parameters: {
             query?: never;
@@ -2347,6 +2367,155 @@ export type components = {
             total_usd: number | null;
         };
         /**
+         * SpendBreakdown
+         * @description What a window of whole UTC days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
+         */
+        SpendBreakdown: {
+            /**
+             * Days
+             * @description How many days it spans.
+             */
+            days: number;
+            /**
+             * Idle Share
+             * @description Idle ticks' share of the live overseer's spend, from 0 to 1; None when the overseer reported no cost.
+             */
+            idle_share: number | null;
+            /**
+             * Idle Ticks
+             * @description The newest live idle ticks in the window, at most 20, newest first: what idle spend bought.
+             */
+            idle_ticks: components["schemas"]["Tick"][];
+            /**
+             * Per Day
+             * @description Every day in it, oldest first, those with nothing spent included.
+             */
+            per_day: components["schemas"]["SpendDay"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: midnight UTC on its first day.
+             */
+            since: string;
+            /**
+             * Ticks
+             * @description The ticks that ended in it, a row per group, in a fixed order: idle, busy, hand_run, not_ok, dry_run.
+             */
+            ticks: components["schemas"]["SpendTicks"][];
+            /** @description The whole window's costs. */
+            totals: components["schemas"]["SpendCosts"];
+            /**
+             * Unpriced
+             * @description A row per kind of run, in a fixed order: overseer, workers, chores, reviews.
+             */
+            unpriced: components["schemas"]["SpendUnpriced"][];
+            /**
+             * Woken
+             * @description The loop's live ticks by what woke them, the most common first.
+             */
+            woken: components["schemas"]["SpendWoken"][];
+        };
+        /**
+         * SpendCosts
+         * @description What each kind of agent run cost, in US dollars, as the runtime reported it (§13); None where none reported.
+         */
+        SpendCosts: {
+            /**
+             * Chores
+             * @description Chore runs, the operator's tries included.
+             */
+            chores: number | null;
+            /**
+             * Dry Run
+             * @description Dry runs' overseers, apart from `overseer`.
+             */
+            dry_run: number | null;
+            /**
+             * Idle
+             * @description The part of `overseer` idle ticks spent.
+             */
+            idle: number | null;
+            /**
+             * Overseer
+             * @description The live ticks' overseers.
+             */
+            overseer: number | null;
+            /**
+             * Reviews
+             * @description Review runs.
+             */
+            reviews: number | null;
+            /**
+             * Total
+             * @description Everything, dry runs included, as the 24 hour and 30 day counters count it.
+             */
+            total: number | null;
+            /**
+             * Workers
+             * @description Worker and split runs.
+             */
+            workers: number | null;
+        };
+        /**
+         * SpendDay
+         * @description One UTC day's costs.
+         */
+        SpendDay: {
+            /** @description What the runs that started on it cost. */
+            costs: components["schemas"]["SpendCosts"];
+            /**
+             * Day
+             * @description The day, `YYYY-MM-DD`, in UTC.
+             */
+            day: string;
+        };
+        /**
+         * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
+         * @enum {string}
+         */
+        SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
+        /**
+         * @description A kind of agent run: each tick's overseer, worker and split runs, chore runs, review runs.
+         * @enum {string}
+         */
+        SpendKind: "overseer" | "workers" | "chores" | "reviews";
+        /**
+         * SpendTicks
+         * @description How many ended ticks of the window are in a group, and what their overseers cost.
+         */
+        SpendTicks: {
+            /**
+             * Cost Usd
+             * @description What their overseers cost; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /** @description The group. */
+            group: components["schemas"]["SpendGroup"];
+            /**
+             * Ticks
+             * @description How many ticks.
+             */
+            ticks: number;
+        };
+        /**
+         * SpendUnpriced
+         * @description How many of a kind's ended runs in the window reported no cost, of how many.
+         */
+        SpendUnpriced: {
+            /** @description The kind of run. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Runs
+             * @description How many ended in the window.
+             */
+            runs: number;
+            /**
+             * Unpriced
+             * @description How many of them reported no cost.
+             */
+            unpriced: number;
+        };
+        /**
          * SpendUpdated
          * @description What a window cost changed. The payload is both windows, as `GET /spend` returns them.
          */
@@ -2382,6 +2551,27 @@ export type components = {
              * @description When the window starts.
              */
             since: string;
+        };
+        /**
+         * SpendWoken
+         * @description How many of the loop's live ticks one cause woke (`ticks.woken_by`, DESIGN §6), and what they cost.
+         */
+        SpendWoken: {
+            /**
+             * By
+             * @description What ended the wait before them: start | timer | gate | message | starts | grant | run | key
+             */
+            by: string;
+            /**
+             * Cost Usd
+             * @description What their overseers cost; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Ticks
+             * @description How many ticks.
+             */
+            ticks: number;
         };
         /**
          * Started
@@ -4389,6 +4579,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getSpendBreakdown: {
+        parameters: {
+            query?: {
+                /** @description How many UTC days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendBreakdown"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
