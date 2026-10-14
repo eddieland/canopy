@@ -347,7 +347,9 @@ Served by `canopy loop` from a thread (D073):
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
   it, pull requests (below), chores (below), ticks (below), and search (below). The side rail shows the runs working now
   and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and
-  what it costs stay in view wherever the operator is.
+  what it costs stay in view wherever the operator is. In a window narrower than 1024px, as half of a second monitor
+  is, the rail is a strip of the nav's icons whose button opens it whole over the page, and each list shows the
+  columns its width has room for, its title always (`ui/DESIGN.md`).
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
@@ -401,7 +403,7 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), and each repository's branch link template |
+| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), each repository's branch link template, and the workspace root |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
@@ -410,7 +412,7 @@ The API, under `{base}/api`:
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
-| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
+| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -665,8 +667,9 @@ with uncommitted changes), `idle` (available), and `broken` (damaged, unverified
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
 names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
 is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here, in the runs page's worktrees, and for a run's log and
-a tick's output. When a pool's slots
-share a directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
+a tick's output. A copy button beside one copies it whole, joined to `/meta`'s workspace root, since the shell it is
+pasted into need not be in the workspace; until that root is read there is no button. When a pool's slots share a
+directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
 read), and free; each pool's header has a square per slot in its state's color.

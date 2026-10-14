@@ -20,6 +20,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
+import { useWholePath } from '@/hooks/use-whole-path'
 import { runRef } from '@/lib/refs'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
@@ -132,7 +133,13 @@ function PoolSection({ pool }: { pool: Pool }) {
                         </span>
                     )}
                 </span>
-                <span className="flex items-center gap-3 font-mono text-xs text-muted-foreground">
+                {/* Each count whole: in a narrow panel they wrap, one under another, never a count split. */}
+                <span
+                    className={cn(
+                        'flex flex-wrap items-center justify-end gap-x-3 font-mono text-xs whitespace-nowrap',
+                        'text-muted-foreground',
+                    )}
+                >
                     {counts
                         .filter(([, n]) => n > 0)
                         .map(([state, n]) => (
@@ -175,7 +182,7 @@ function PoolSection({ pool }: { pool: Pool }) {
 /** A pool's head line inside the Pools panel: its repository, then what follows, on the panel's own surface. */
 function PoolHeader({ repo, children }: { repo: string; children: ReactNode }) {
     return (
-        <div className="flex h-9 items-center justify-between gap-3 border-b px-3">
+        <div className="flex min-h-9 items-center justify-between gap-3 border-b px-3 py-0.5">
             <span className="panel-label font-medium text-foreground">{repo}</span>
             {children}
         </div>
@@ -213,6 +220,7 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
 function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
     const branchUrl = useBranchUrls()
     const branchHref = w.branch === null ? undefined : branchUrl(repo, w.branch)
+    const whole = useWholePath()
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
@@ -228,7 +236,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                 <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
                     #{w.name}
                 </span>
-                <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
+                {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
             {idle ? <span /> : <Holder worktree={w} />}
             {/* The branch, path, and processes share what the row leaves: each is cut to fit, the age never. */}

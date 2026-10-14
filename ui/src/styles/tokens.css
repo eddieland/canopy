@@ -66,6 +66,12 @@
     --buddy-eye: oklch(0.99 0 0);
     --buddy-pupil: oklch(0.2 0.01 277);
     --buddy-leaf: oklch(0.6 0.15 145);
+    /* Sprig's hats (src/lib/hats.ts): felt, a band, gold, cloth, and a wizard's blue. */
+    --buddy-hat: oklch(0.3 0.02 277);
+    --buddy-hat-band: oklch(0.56 0.2 27);
+    --buddy-hat-gold: oklch(0.8 0.15 85);
+    --buddy-hat-cloth: oklch(0.98 0.005 90);
+    --buddy-hat-blue: oklch(0.5 0.17 265);
 
     --radius: 0.5rem;
 }
@@ -119,6 +125,11 @@
     --buddy-eye: oklch(0.97 0.005 260);
     --buddy-pupil: oklch(0.163 0.012 261);
     --buddy-leaf: oklch(0.74 0.16 145);
+    --buddy-hat: oklch(0.45 0.02 260);
+    --buddy-hat-band: oklch(0.66 0.19 27);
+    --buddy-hat-gold: oklch(0.84 0.14 85);
+    --buddy-hat-cloth: oklch(0.93 0.01 90);
+    --buddy-hat-blue: oklch(0.6 0.15 265);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -168,6 +179,11 @@
     --color-buddy-eye: var(--buddy-eye);
     --color-buddy-pupil: var(--buddy-pupil);
     --color-buddy-leaf: var(--buddy-leaf);
+    --color-buddy-hat: var(--buddy-hat);
+    --color-buddy-hat-band: var(--buddy-hat-band);
+    --color-buddy-hat-gold: var(--buddy-hat-gold);
+    --color-buddy-hat-cloth: var(--buddy-hat-cloth);
+    --color-buddy-hat-blue: var(--buddy-hat-blue);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names

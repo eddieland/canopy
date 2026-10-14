@@ -16,12 +16,13 @@ router = APIRouter(tags=[TAG])
 
 @router.get("/meta", operation_id="getMeta", summary="Get the server's meta")
 def meta(backend: BackendDep) -> Meta:
-    """The version of canopy serving, whether the data is mock, `tracker.ticket_url`, and the branch link templates."""
+    """The server's version, whether its data is mock, `tracker.ticket_url`, link templates, and the workspace root."""
     return Meta(
         version=version("canopy"),
         mock=backend.mock,
         ticket_url=backend.config.tracker.ticket_url or None,
         branch_urls={r.name: r.branch_url for r in backend.workspace.repos if r.branch_url},
+        workspace_root=str(backend.workspace.root),
     )
 
 
