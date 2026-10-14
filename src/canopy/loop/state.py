@@ -25,7 +25,8 @@ if TYPE_CHECKING:
 class OverseerState(TypedDict):
     """The state block's JSON: what the journal knows, the config the overseer decides by, and this tick.
 
-    It has `chores` only when chores are configured, and `reviews` only when reviews are on.
+    It has `chores` only when chores are configured, `reviews` only when reviews are on, and no `mirror` in a
+    private-only queue (DESIGN §22).
     """
 
     repository: str
@@ -42,7 +43,7 @@ class OverseerState(TypedDict):
     attention: list[OpenItem]
     capacity: CapacityState
     running_workers: list[RunningWorker]
-    mirror: MirrorState
+    mirror: NotRequired[MirrorState]
     tick_id: int
     now: str
     dry_run: bool
@@ -105,12 +106,13 @@ class WorkspaceState(TypedDict):
 
 
 class TrackerState(TypedDict):
-    """The tracker settings the overseer queries and labels by."""
+    """The tracker settings the overseer queries and labels by: only the provider in a private-only queue."""
 
     provider: str
-    query: str
-    labels: list[str]
-    needs_human_label: str
+    query: NotRequired[str]
+    labels: NotRequired[list[str]]
+    needs_human_label: NotRequired[str]
+    private_only: NotRequired[bool]
 
 
 class TrustState(TypedDict):
@@ -231,11 +233,17 @@ def state_block(
     `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one out
     drops (ROADMAP M28).
 
+    With `tracker.private_only`, the block carries only the tickets the operator started, and none of what finds or
+    authorizes a public one: no query, labels, operator messages on a public ticket, or split children; and no `mirror`,
+    since nothing is mirrored (DESIGN §22).
+
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
     """
     private = private or {}
     operator = operator or {}
+    private_only = config.tracker.private_only
+    tickets, operator, split_children = _queue(tickets, private, operator, split_children, private_only=private_only)
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def unit_summary(key: str, u: sqlite3.Row) -> UnitState:
@@ -298,12 +306,7 @@ def state_block(
             "name": workspace.name,
             "map": str(workspace.map_prose) if workspace.map_prose is not None else None,
         },
-        "tracker": {
-            "provider": config.tracker.provider,
-            "query": config.tracker.query,
-            "labels": list(config.tracker.labels),
-            "needs_human_label": config.tracker.needs_human_label,
-        },
+        "tracker": _tracker(config),
         "trust": {
             "authorized_repliers": list(config.trust.authorized_repliers),
             "trusted_reviewers": list(config.trust.trusted_reviewers),
@@ -372,8 +375,12 @@ def state_block(
             }
             for r in running
         ],
-        # Tracker comments the overseer copies into the journal (DESIGN §22).
-        "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
+        # Tracker comments the overseer copies into the journal, none in a private-only queue (DESIGN §22).
+        **(
+            {}
+            if private_only
+            else {"mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter}}
+        ),
         "tick_id": tick_id,
         "now": db.format_time(now),
         "dry_run": dry_run,
@@ -402,6 +409,35 @@ def state_block(
             "",
         ]
     )
+
+
+def _queue(
+    tickets: list[sqlite3.Row],
+    private: Mapping[str, conversation.PrivateSection],
+    operator: Mapping[str, conversation.OperatorSection],
+    split_children: list[sqlite3.Row],
+    *,
+    private_only: bool,
+) -> tuple[list[sqlite3.Row], Mapping[str, conversation.OperatorSection], list[sqlite3.Row]]:
+    """Return the tickets, public operator messages, and split children the overseer sees.
+
+    A private-only queue sees only started tickets, and none of a public one's (DESIGN §22).
+    """
+    if not private_only:
+        return tickets, operator, split_children
+    return [t for t in tickets if str(t["key"]) in private], {}, []
+
+
+def _tracker(config: Config) -> TrackerState:
+    """Return the tracker config the overseer finds and authorizes tickets with: none in a private-only queue."""
+    if config.tracker.private_only:
+        return {"provider": config.tracker.provider, "private_only": True}
+    return {
+        "provider": config.tracker.provider,
+        "query": config.tracker.query,
+        "labels": list(config.tracker.labels),
+        "needs_human_label": config.tracker.needs_human_label,
+    }
 
 
 def _stamp(moment: datetime | None) -> str | None:

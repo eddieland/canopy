@@ -169,6 +169,34 @@ separate `list`.
   ticket with a public run still going, it says so: that run may still write to the ticket, and `_run` ends any public
   run that had not started its worker yet `stopped`.
 
+### A private-only queue (M35)
+
+An operator who works only the tickets they start sets `tracker.private_only = true` in the user file. The overseer
+then stops looking for work on the tracker: in the first live session every ticket was started from the web UI, and
+tracker searches were 29% of what the overseer read each tick, all of it for tickets nobody would dispatch
+(MEASUREMENTS 2026-10-12, F6).
+
+- The state block carries only started and stopped tickets, and the tracker config as its provider and `private_only`.
+  No query, labels, or needs-human label, no public ticket's operator messages, no split children, and no `mirror`
+  (§6 step 4). The journal keeps every public ticket's rows; they are left out, not forgotten.
+- `canopy dispatch` refuses any ticket without a start record (`private_only`), with a queue label or without: in
+  code, so an overseer that runs the query anyway can dispatch nothing from it. A stopped ticket is still `stopped`.
+- The overseer runs no tracker query. It reads a started ticket in the tracker only while the ticket has no branch: what
+  it asks (the slug, the repositories), whether it is closed, and its blockers (§10). A closed one is marked done, so
+  no later tick reads it. Once it has a branch, its phases come from the journal (§22's own phases) and GitHub (the PR
+  phases) alone, and it is done when every unit's PR has merged. Closing it in the tracker after that is not seen; the
+  operator stops it instead.
+- Nothing is mirrored (M19): the overseer reads no comments. The conversation that matters on a private ticket is the
+  journal's already.
+- A tracker that fails matters only to tickets that needed a read that tick: each waits (`mcp_unavailable: tracker`),
+  and the rest are decided. GitHub failing still skips the tick.
+- Public work in flight when the key is set is left where it is: a running worker finishes and its run's attention
+  items still come, but the overseer follows none of its PRs. `tracker.labels` is still required, since setting the
+  key back to false must find a queue.
+- Why a key and not an empty `tracker.query`: the query is shared, and the workspace's file sets it for everyone; which
+  tickets this operator works is the operator's own, as `tracker.labels` is (§12). And the guard needs a flag in code,
+  where a query is only prose for the overseer.
+
 ### Forgetting a ticket's work
 
 `canopy forget REF` has canopy drop a ticket's work so the loop starts it over (D086). It takes a ticket, public or

@@ -63,6 +63,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
     "section_key",
     [
         ("tracker", 'labels = ["x"]'),
+        ("tracker", "private_only = true"),
         ("trust", 'authorized_repliers = ["mallory"]'),
         ("trust", 'trusted_reviewers = ["review-bot[bot]"]'),
         ("trust", 'comment_prefix = "Please"'),

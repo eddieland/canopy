@@ -27,7 +27,8 @@ if TYPE_CHECKING:
     "--label",
     metavar="LABEL",
     help="The configured queue label you read on the ticket just now. Required for a public ticket: without one of "
-    "tracker.labels the dispatch is refused as unauthorized. A ticket the operator started needs none.",
+    "tracker.labels the dispatch is refused as unauthorized. A ticket the operator started needs none, and with "
+    "tracker.private_only only such a ticket is dispatched.",
 )
 @click.option(
     "--repo",

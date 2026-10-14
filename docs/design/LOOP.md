@@ -67,7 +67,8 @@ in order:
    `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
    overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
    present only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
-   (§22).
+   (§22). With `tracker.private_only` (§22), the tracker config is the provider and `private_only` alone, `tickets`
+   holds only started tickets, and there is no `mirror`, `operator`, or split child.
 
    `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
    its repository, its reason, and since when, but not its detail, which may quote a comment. The harness's own

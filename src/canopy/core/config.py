@@ -395,6 +395,9 @@ class Tracker(Section):
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
     ticket_url: Annotated[StrictStr, Scope.SHARED, link_template(TICKET_KEY)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    # Work only the tickets the operator started (DESIGN §22): the overseer runs no query and reads a ticket only while
+    # it has no branch, and a dispatch of any other ticket is refused. User-only: it defines this operator's queue.
+    private_only: Annotated[StrictBool, Scope.USER] = False
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
     # write, which a shared workspace file must not (TRUST_MODEL T7).

@@ -159,6 +159,8 @@ workers can only read the tracker; questions reach the attention list (`awaiting
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries the commit attribution TRUST_MODEL T5 gives it: privacy covers the conversation, not authorship.
+An operator who works only tickets they started can set `tracker.private_only`, so the overseer runs no tracker query
+and dispatches nothing else (M35).
 
 ### R12. One record of every ticket's conversation
 
