@@ -30,7 +30,7 @@ import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the fun, the send key, the session), and reloading the loop's config. */
+/** What this browser keeps (the theme, the send key, the fun, the session), and reloading the loop's config. */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -64,7 +64,7 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the fun, and the send key are kept in this browser. Everything else canopy reads from its
+                The theme, the send key, and the fun are kept in this browser. Everything else canopy reads from its
                 config files.
             </PageHeader>
             <Panel>
@@ -89,9 +89,10 @@ function SettingsPage() {
                     </ToggleGroup>
                 </div>
             </Panel>
-            <FunPanel />
             <SendKeyPanel />
             <ConfigPanel />
+            {/* Second to last: below what changes how canopy works, above signing out. */}
+            <FunPanel />
             <SessionPanel />
         </>
     )

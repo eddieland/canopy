@@ -199,8 +199,8 @@ journal text: the ticker, Sprig, and the empty inbox. They share these rules:
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`) or the accent, never a
   status color, so nothing in it reads as a run's state.
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same.
-- **Settings has one Fun panel**: an on/off for each, as checkboxes, then each one's details. Everything in it is
-  kept in this browser (Themes, below).
+- **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
+  an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
 
 The ticker:
 
