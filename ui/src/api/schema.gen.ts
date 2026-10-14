@@ -261,7 +261,7 @@ export type paths = {
         };
         /**
          * Get the server's meta
-         * @description The version of canopy serving, whether the data is mock, `tracker.ticket_url`, and the branch link templates.
+         * @description The server's version, whether its data is mock, `tracker.ticket_url`, link templates, and the workspace root.
          */
         get: operations["getMeta"];
         put?: never;
@@ -1669,6 +1669,11 @@ export type components = {
              * @description canopy's version, as the installed package reports it.
              */
             version: string;
+            /**
+             * Workspace Root
+             * @description The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole.
+             */
+            workspace_root: string;
         };
         /**
          * Pause
@@ -2328,13 +2333,18 @@ export type components = {
         };
         /**
          * Spend
-         * @description What the last day and the last 30 days cost, read together, so a month never shows less than its day.
+         * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
         Spend: {
             /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
             /** @description The last 30 days. */
             month: components["schemas"]["SpendWindow"];
+            /**
+             * Total Usd
+             * @description What every run in the journal cost, whenever it started, in US dollars; None when none reported a cost.
+             */
+            total_usd: number | null;
         };
         /**
          * SpendUpdated

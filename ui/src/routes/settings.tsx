@@ -2,17 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useState } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
-import { keys, sessionQuery } from '@/api/queries'
+import { keys, sessionQuery, spendQuery } from '@/api/queries'
+import { Cost } from '@/components/cost'
+import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
-import type { BuddySetting } from '@/lib/buddy'
+import { costText } from '@/lib/cost-total'
+import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
+import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setSendKey, useSendKey } from '@/lib/send-key'
@@ -23,7 +30,7 @@ import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the ticker, the send key, the session), and reloading the loop's config. */
+/** What this browser keeps (the theme, the fun, the send key, the session), and reloading the loop's config. */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -35,7 +42,6 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
-    { value: 'off', label: 'Off' },
     { value: 'slow', label: 'Slow' },
     { value: 'normal', label: 'Normal' },
     { value: 'spicy', label: 'Spicy' },
@@ -45,11 +51,6 @@ const TOPICS: { value: TickerTopic; label: string }[] = [
     { value: 'programming', label: 'Programming' },
     { value: 'vibes', label: 'Vibe coding' },
     { value: 'tips', label: 'Tips' },
-]
-
-const BUDDY: { value: BuddySetting; label: string }[] = [
-    { value: 'on', label: 'On' },
-    { value: 'off', label: 'Off' },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -63,8 +64,8 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the ticker, Sprig, and the send key are kept in this browser. Everything else canopy reads
-                from its config files.
+                The theme, the fun, and the send key are kept in this browser. Everything else canopy reads from its
+                config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -88,8 +89,7 @@ function SettingsPage() {
                     </ToggleGroup>
                 </div>
             </Panel>
-            <TickerPanel />
-            <BuddyPanel />
+            <FunPanel />
             <SendKeyPanel />
             <ConfigPanel />
             <SessionPanel />
@@ -97,20 +97,51 @@ function SettingsPage() {
     )
 }
 
-/** The header ticker's pace, the pause between its headlines, and the topics they are drawn from. */
-function TickerPanel() {
-    const { speed, gap, hidden } = useTickerSettings()
+/**
+ * The fun, in one place: an on/off for the ticker and for Sprig, then the ticker's pace, the pause between its
+ * headlines, and the topics they are drawn from.
+ */
+function FunPanel() {
+    const { on, speed, gap, hidden } = useTickerSettings()
+    const buddy = useBuddy()
     return (
         <Panel>
-            <PanelHeader label="Ticker" />
+            <PanelHeader label="Fun" />
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p id="fun-items" className="text-sm text-muted-foreground">
+                    The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, has a tip
+                    for every page; none of them help. Each sits out a window with no room for it.
+                </p>
+                <fieldset aria-labelledby="fun-items" className="flex shrink-0 items-center gap-4">
+                    <label htmlFor="fun-ticker" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-ticker"
+                            checked={on}
+                            data-testid="fun-ticker"
+                            onCheckedChange={(checked) => setTickerSettings({ on: checked === true })}
+                        />
+                        Ticker
+                    </label>
+                    <label htmlFor="fun-sprig" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-sprig"
+                            checked={buddy === 'on'}
+                            data-testid="fun-sprig"
+                            onCheckedChange={(checked) => setBuddy(checked === true ? 'on' : 'off')}
+                        />
+                        Sprig
+                    </label>
+                </fieldset>
+            </div>
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p className="text-sm text-muted-foreground">
-                    How fast the headlines in the header crawl, one at a time. Off hides them.
+                    How fast the ticker&apos;s headlines crawl, one at a time.
                 </p>
                 <ToggleGroup
                     type="single"
                     value={speed}
                     aria-label="Ticker speed"
+                    disabled={!on}
                     onValueChange={(value) => {
                         const picked = SPEEDS.find((s) => s.value === value)
                         if (picked) {
@@ -138,7 +169,7 @@ function TickerPanel() {
                         max={MAX_GAP}
                         step={1}
                         defaultValue={gap}
-                        disabled={speed === 'off'}
+                        disabled={!on}
                         className="readout h-8 w-20 text-right"
                         data-testid="ticker-gap"
                         onChange={(event) => {
@@ -159,14 +190,14 @@ function TickerPanel() {
             </div>
             <div className="flex items-center justify-between gap-4 p-3">
                 <p id="ticker-topics" className="text-sm text-muted-foreground">
-                    Which headlines it shows. Tips about canopy are mixed in with the jokes.
+                    Which headlines the ticker shows. Tips about canopy are mixed in with the jokes.
                 </p>
                 <fieldset aria-labelledby="ticker-topics" className="flex shrink-0 items-center gap-4">
                     {TOPICS.map(({ value, label }) => (
                         <label key={value} className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
                             <Checkbox
                                 checked={!hidden.includes(value)}
-                                disabled={speed === 'off'}
+                                disabled={!on}
                                 data-testid={`ticker-topic-${value}`}
                                 onCheckedChange={(checked) =>
                                     setTickerSettings({ hidden: withTopic(hidden, value, checked === true) })
@@ -177,40 +208,121 @@ function TickerPanel() {
                     ))}
                 </fieldset>
             </div>
+            <HatShop />
         </Panel>
     )
 }
 
-/** Whether Sprig sits in the corner offering tips. */
-function BuddyPanel() {
-    const buddy = useBuddy()
+/**
+ * Sprig's hat shop, the last of the Fun panel's details, folded under its wallet until opened. The wallet is
+ * everything canopy has spent, as `GET /api/spend` totals it, less every hat bought: each dollar the agent runtime
+ * reports is a dollar for hats. A hat bought goes on at once; one owned goes on or comes off with a click. All sales
+ * are final.
+ */
+function HatShop() {
+    const total = useQuery(spendQuery).data?.total_usd
+    const loaded = total !== undefined
+    const wardrobe = useWardrobe()
+    const left = balanceCents(total, wardrobe.owned)
+    // Folded until asked for: eight hats are a lot of Settings for something most visits leave alone.
+    const [open, setOpen] = useState(false)
     return (
-        <Panel>
-            <PanelHeader label="Sprig" />
-            <div className="flex items-center justify-between gap-4 p-3">
-                <p className="text-sm text-muted-foreground">
-                    The helper in the bottom-left corner, with a tip for every page. None of them help. Off hides it.
-                </p>
-                <ToggleGroup
-                    type="single"
-                    value={buddy}
-                    aria-label="Sprig"
-                    className="shrink-0"
-                    onValueChange={(value) => {
-                        const picked = BUDDY.find((b) => b.value === value)
-                        if (picked) {
-                            setBuddy(picked.value)
-                        }
-                    }}
-                >
-                    {BUDDY.map(({ value, label }) => (
-                        <ToggleGroupItem key={value} value={value} data-testid={`buddy-${value}`}>
-                            {label}
-                        </ToggleGroupItem>
-                    ))}
-                </ToggleGroup>
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <div className="border-t" data-testid="hats">
+                <div className="flex items-center justify-between gap-4 p-3">
+                    <p className="text-sm text-muted-foreground">
+                        Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while
+                        it is on. All sales are final.
+                    </p>
+                    <div className="flex shrink-0 flex-col items-end" data-testid="hats-wallet">
+                        {loaded ? (
+                            <Cost usd={left / 100} className="text-sm text-foreground" />
+                        ) : (
+                            <Skeleton className="h-5 w-14" />
+                        )}
+                        <span className="text-2xs text-muted-foreground">
+                            left of {loaded ? <Cost usd={total} /> : '…'} spent
+                        </span>
+                    </div>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="xs" data-testid="hats-toggle">
+                            {open ? 'Hide hats' : 'Show hats'}
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent asChild>
+                    <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
+                        {HATS.map((hat) => (
+                            <HatItem
+                                key={hat.id}
+                                hat={hat}
+                                owned={wardrobe.owned.includes(hat.id)}
+                                worn={wardrobe.worn === hat.id}
+                                shortCents={loaded ? Math.max(0, hat.price * 100 - left) : undefined}
+                                onBuy={() => {
+                                    const next = buy(wardrobe, hat.id, total)
+                                    if (next) {
+                                        setWardrobe(next)
+                                    }
+                                }}
+                                onWear={(on) => setWardrobe({ ...wardrobe, worn: on ? hat.id : null })}
+                            />
+                        ))}
+                    </ul>
+                </CollapsibleContent>
             </div>
-        </Panel>
+        </Collapsible>
+    )
+}
+
+/** One hat in the shop: what it looks like and costs, and Buy, or Wear and Take off once owned. */
+function HatItem({
+    hat,
+    owned,
+    worn,
+    shortCents,
+    onBuy,
+    onWear,
+}: {
+    hat: Hat
+    owned: boolean
+    worn: boolean
+    shortCents: number | undefined
+    onBuy: () => void
+    onWear: (on: boolean) => void
+}) {
+    return (
+        <li
+            className="flex flex-col items-center gap-1 rounded-md border p-2 text-center"
+            data-testid={`hat-${hat.id}`}
+        >
+            <HatPreview id={hat.id} className="h-10 w-12" />
+            <span className="text-xs text-foreground">{hat.name}</span>
+            <span className="grow text-2xs text-muted-foreground">{hat.blurb}</span>
+            {owned ? (
+                <Button
+                    variant={worn ? 'secondary' : 'outline'}
+                    size="xs"
+                    onClick={() => onWear(!worn)}
+                    data-testid={`hat-${hat.id}-wear`}
+                >
+                    {worn ? 'Take off' : 'Wear'}
+                </Button>
+            ) : (
+                <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={shortCents !== 0}
+                    title={
+                        shortCents !== undefined && shortCents > 0 ? `${costText(shortCents / 100)} short` : undefined
+                    }
+                    onClick={onBuy}
+                    data-testid={`hat-${hat.id}-buy`}
+                >
+                    Buy <span className="readout">${hat.price}</span>
+                </Button>
+            )}
+        </li>
     )
 }
 

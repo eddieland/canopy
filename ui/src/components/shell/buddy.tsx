@@ -2,70 +2,89 @@ import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { sectionOf, setBuddy, tipFor } from '@/lib/buddy'
-import type { Section } from '@/lib/buddy'
+import { HatDrawing } from '@/components/hat'
+import { useFits } from '@/hooks/use-fits'
+import { pageOf, setBuddy, tipFor } from '@/lib/buddy'
+import type { Page } from '@/lib/buddy'
+import { useWardrobe } from '@/lib/hats'
+import type { HatId } from '@/lib/hats'
 import { cn } from '@/lib/utils'
 
 /** How long a tip stays up before Sprig takes the hint. */
 const TIP_SECONDS = 20
 
 /**
- * Sprig, the helper in the bottom-left corner, in the side rail under the nav and above its footer, where it covers
- * nothing: a bent wire with a sprig on top and googly eyes that follow the pointer. On every page it offers a tip
- * about that page, the dumber the better (`TIPS` in src/lib/buddy.ts); clicking it offers another. The tip closes with
- * its button, or by itself after a while. Settings turns Sprig off, and so does the tip's "Don't show me tips again".
+ * Sprig, the helper at the foot of the side rail: a bent wire with a sprig on top and googly eyes that follow the
+ * pointer. On every page it offers a tip about that page, the dumber the better (`TIPS` in src/lib/buddy.ts); clicking
+ * it offers another. The tip closes with its button, or by itself after a while. Settings turns Sprig off, and so
+ * does the tip's "Don't show me tips again".
+ *
+ * It has a slot of its own in the rail's column, between what the rail holds and its footer, so it covers nothing:
+ * the slot is the room left under the rail's blocks, and Sprig stands at its foot. A rail with too little room for
+ * Sprig and its bubble leaves it out, rather than squeeze the blocks above. The bubble keeps its room once closed, so
+ * closing it never brings in a Sprig that had no room.
  */
 export function Buddy() {
     const pathname = useRouterState({ select: (state) => state.location.pathname })
-    const section = sectionOf(pathname)
+    const page = pageOf(pathname)
     // Read once per page load, as the ticker's reel is: the tip must not change under the reader.
     const [today] = useState(() => Date.now())
-    // How many more tips the reader asked for, counted per section: a new section starts at its own first tip.
-    const [asked, setAsked] = useState<{ section: Section | undefined; n: number }>({ section, n: 0 })
-    const n = asked.section === section ? asked.n : 0
-    const another = () => setAsked({ section, n: n + 1 })
+    // How many more tips the reader asked for, counted per page: a new one starts at its own first tip.
+    const [asked, setAsked] = useState<{ page: Page | undefined; n: number }>({ page, n: 0 })
+    const n = asked.page === page ? asked.n : 0
+    const another = () => setAsked({ page, n: n + 1 })
     const tip = tipFor(pathname, n, today)
+    const [slot, fits] = useFits(sprigFits)
+    const { worn } = useWardrobe()
     // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
     // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed.
     return (
-        <aside
-            aria-label="Sprig"
-            data-testid="buddy"
-            className="pointer-events-none fixed bottom-12 left-3 z-20 flex w-48 flex-col items-start gap-2"
-        >
-            <Bubble key={tip} tip={tip} onAnother={another} />
-            <button
-                type="button"
-                aria-label="Ask Sprig for a tip"
-                data-testid="buddy-sprig"
-                onClick={another}
-                className={cn(
-                    'pointer-events-auto rounded-md p-1 transition-transform',
-                    'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
-                )}
+        <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden print:hidden">
+            <aside
+                aria-label="Sprig"
+                data-testid="buddy"
+                className={cn('flex shrink-0 flex-col items-start gap-2 px-3 pt-3 pb-1', !fits && 'invisible')}
             >
-                <Figure cue={tip} />
-            </button>
-        </aside>
+                <Bubble key={tip} tip={tip} onAnother={another} />
+                <button
+                    type="button"
+                    aria-label="Ask Sprig for a tip"
+                    data-testid="buddy-sprig"
+                    onClick={another}
+                    className={cn(
+                        'rounded-md p-1 transition-transform',
+                        'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
+                    )}
+                >
+                    <Figure cue={tip} hat={worn} />
+                </button>
+            </aside>
+        </div>
     )
 }
 
-/** The speech bubble above Sprig: the tip, another, and the way out. Its tail points down at Sprig. */
+/** Whether Sprig, the slot's one child, has the room it needs. */
+function sprigFits(slot: HTMLElement): boolean {
+    const sprig = slot.firstElementChild
+    return sprig instanceof HTMLElement && sprig.offsetHeight <= slot.clientHeight
+}
+
+/**
+ * The speech bubble above Sprig: the tip, another, and the way out. Its tail points down at Sprig. Closed, it is
+ * hidden but keeps its room, so Sprig does not move.
+ */
 function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
     const [open, setOpen] = useState(true)
     useEffect(() => {
         const timer = globalThis.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
         return () => globalThis.clearTimeout(timer)
     }, [])
-    if (!open) {
-        return null
-    }
     return (
         <div
             data-testid="buddy-tip"
             className={cn(
-                'animate-buddy-tip pointer-events-auto relative w-full rounded-md border bg-surface-raised p-3',
-                'text-sm',
+                'animate-buddy-tip relative w-full rounded-md border bg-surface-raised p-3 text-sm',
+                !open && 'invisible',
             )}
         >
             <p className="panel-label mb-1">Sprig</p>
@@ -108,10 +127,11 @@ function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
 }
 
 /**
- * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, and googly eyes under brows that rise with each new
- * tip. The eyes blink now and then and look toward the pointer, but under reduced motion, which keeps them still.
+ * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, the hat it wears (bought in Settings), and googly eyes
+ * under brows that rise with each new tip. The eyes blink now and then and look toward the pointer, but under reduced
+ * motion, which keeps them still.
  */
-function Figure({ cue }: { cue: string }) {
+function Figure({ cue, hat }: { cue: string; hat: HatId | null }) {
     const figure = useRef<SVGSVGElement>(null)
     useEffect(() => {
         const svg = figure.current
@@ -159,6 +179,7 @@ function Figure({ cue }: { cue: string }) {
                 strokeLinejoin="round"
                 className="text-muted-foreground"
             />
+            {hat === null ? null : <HatDrawing id={hat} />}
             <g key={cue} className="animate-buddy-brows text-foreground">
                 <path
                     d="M10 25 Q15 21 20 24"

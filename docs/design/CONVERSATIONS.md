@@ -347,7 +347,9 @@ Served by `canopy loop` from a thread (D073):
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
   it, pull requests (below), chores (below), ticks (below), and search (below). The side rail shows the runs working now
   and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and
-  what it costs stay in view wherever the operator is.
+  what it costs stay in view wherever the operator is. In a window narrower than 1024px, as half of a second monitor
+  is, the rail is a strip of the nav's icons whose button opens it whole over the page, and each list shows the
+  columns its width has room for, its title always (`ui/DESIGN.md`).
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
@@ -370,10 +372,10 @@ Served by `canopy loop` from a thread (D073):
   finding's detail) is shown as a link whose text is the URL as written, opening in a new tab with no referrer (D113).
   No other scheme is linked, and nothing else in the text becomes markup but the layout above; a URL inside `code`
   stays text. A row that is itself a link (an attention item in the list) links nothing inside it.
-- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
-  `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
-  `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
-  and calls out to nothing, so T2's "no outbound call" stands.
+- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`,
+  `uvicorn`, or `anyio`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in
+  `cli/`. The ban on `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket
+  itself. It listens and calls out to nothing, so T2's "no outbound call" stands.
 
 Signing in:
 
@@ -401,7 +403,7 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), and each repository's branch link template |
+| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), each repository's branch link template, and the workspace root |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
@@ -410,7 +412,7 @@ The API, under `{base}/api`:
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
-| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
+| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -454,15 +456,17 @@ words included. Every model, field, path parameter, and named type is described;
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
 stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,
-held up every other request while the overseer worked. When another connection has committed since, or the loop has
-read its config again (§6), it reads the attention list, the runs, the tickets, the chores, the spend, the latest tick,
-and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
-`tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
-`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
-read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
-summary in a list still in the order from before it. A reload commits nothing, yet the chores and the attention list
-are read through the config, so the stream holds the loop's config as the server's requests do, taking the new one at
-its next read: a chore added and reloaded shows on an open page without a refresh.
+held up every other request while the overseer worked. The route closes the connection, on that thread, from a
+dependency's teardown, which FastAPI runs however the stream ended: a client leaving while the first events were sent
+left the stream's generator suspended, never finished, and the connection open until the server exited. When another
+connection has committed since, or the loop has read its config again (§6), it reads the attention list, the runs, the
+tickets, the chores, the spend, the latest tick, and the pause again, and sends each that changed, whole:
+`attention.updated`, `runs.updated`, `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the
+windows move with the clock), `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary
+changed. It reads them all in one read transaction, so they are one snapshot: a commit landing between two of its
+queries cannot send a ticket's new summary in a list still in the order from before it. A reload commits nothing, yet
+the chores and the attention list are read through the config, so the stream holds the loop's config as the server's
+requests do, taking the new one at its next read: a chore added and reloaded shows on an open page without a refresh.
 A new stream starts with every list, the spend, the latest
 tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
@@ -472,6 +476,12 @@ carries how many decisions it has recorded, so `tick.updated` is sent as a runni
 reads again the ticks list, a tick's page, and a ticket's page, each only if a page shows it. The journal has no
 notifications, so reading one pragma every quarter second is the cheapest way to learn of a change, and quick enough
 that a change shows as it happens; nothing in the browser polls.
+A client leaving a stream is not an error, so it logs none. FastAPI's SSE support closes a stream's receiving end before
+it cancels the task feeding it, so a client that leaves while that task sends makes it raise `BrokenResourceError`,
+which uvicorn logged as `Exception in ASGI application` with its traceback, in canopy.log at ERROR under the loop. An
+ASGI wrapper around the whole app (`serve/sse.py`) absorbs that error only when it is all there is: the response is an
+event stream, uvicorn has told the app its client left, and every exception in the group is a `BrokenResourceError`.
+Anything else is raised unchanged, so a real failure in a stream logs as before, with nothing added to its traceback.
 A browser reconnects a dropped stream itself, but not always: it gives up on a refusal, such as a proxy's 502 while the
 loop restarts, and iOS Safari often stops retrying after the page was in the background. So the UI opens a new stream
 when one has been down 5 seconds, waiting twice as long after each try up to a minute; at once when the device is back
@@ -663,8 +673,9 @@ with uncommitted changes), `idle` (available), and `broken` (damaged, unverified
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
 names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
 is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here, in the runs page's worktrees, and for a run's log and
-a tick's output. When a pool's slots
-share a directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
+a tick's output. A copy button beside one copies it whole, joined to `/meta`'s workspace root, since the shell it is
+pasted into need not be in the workspace; until that root is read there is no button. When a pool's slots share a
+directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
 read), and free; each pool's header has a square per slot in its state's color.

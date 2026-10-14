@@ -323,6 +323,13 @@ def test_spawn_refuses_while_another_process_holds_the_lifelock(tmp_path: Path) 
     assert not lock.held(procs.lifelock(log))
 
 
+def test_a_spawn_that_starts_nothing_leaves_no_lifelock(tmp_path: Path) -> None:
+    log = tmp_path / "7.log"
+    with pytest.raises(CommandNotFoundError):
+        SubprocessRunner().spawn(["canopy-no-such-command"], cwd=tmp_path, log_path=log)
+    assert not procs.lifelock(log).exists()
+
+
 def test_running_asks_after_the_pid_only_without_a_lifelock(tmp_path: Path) -> None:
     log = tmp_path / "7.log"
     # Started by a canopy from before lifelocks: the pid is all there is.

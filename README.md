@@ -15,8 +15,8 @@ repositories, your tracker, or your internal tools.
 ![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
 
 **Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
-notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend (M28 to M30) are
-not yet.
+notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend (M28, M34,
+M36 to M39) are not yet.
 
 - Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)
 - Live checks still to run: [docs/SCENARIOS.md](docs/SCENARIOS.md)
@@ -135,7 +135,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | To | Run |
 | --- | --- |
 | Tick now, or pause and resume the loop | `t` or `p` in its terminal; `canopy pause`, `canopy resume` |
-| Read your config again after editing it | `kill -HUP` the loop (its header prints the pid), or Reload in the web UI's settings |
+| Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |

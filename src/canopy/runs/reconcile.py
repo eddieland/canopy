@@ -116,6 +116,7 @@ def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.Ti
     if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
         log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
     conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"harness": note}))
+    procs.drop_lifelock(Path(run["log_path"]))
     outcomes: list[str] = []
     objects = tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
     tidied = True

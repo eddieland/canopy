@@ -143,6 +143,11 @@ moments from death, without reading `/proc`. A run started by a canopy from befo
 pid is asked instead, as before: a zombie counts as dead, and a pid reused by an unrelated process reads as alive. A
 run with neither a lock nor a recorded pid is gone.
 
+The file is removed once the run's row is closed, by whichever process closed it: the run's own, or reconcile, or
+`canopy stop --now`. A spawn that starts nothing removes it too. Only a `running` row is ever asked whether its process
+lives, so a closed one needs no file, and without this every run would leave an empty `<id>.lock` beside its log for
+good. It is never removed earlier: a `running` row with no file would be asked after by its pid instead.
+
 ### The loop
 
 `canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run
@@ -203,8 +208,8 @@ the terminal hung up.
 Reloading config (taken on request, 2026-10-13): the loop reads its config at start, and again when the operator asks,
 so a change needs no restart. The listener secret is not config: a new one still takes a restart (§22).
 
-- SIGHUP (`kill -HUP`, with the pid the header prints) or Reload on the web UI's settings page asks for it
-  (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
+- SIGHUP (`kill -HUP`, with the pid in the `loop started` log line) or Reload on the web UI's settings page asks for
+  it (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
   loop's own copy: the next tick's limits, the pace, and what the web UI serves. `--every` still holds.
 - A tick running when it is asked for finishes first, on the config it started with; the wait applies it at its next
   step, so a reload during a wait does not wait for the deadline. The wait it comes in keeps its length, and the waits
@@ -291,7 +296,7 @@ canopy's own work.
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
 tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
 trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
-the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h 00m at 03:41` (no count after a
+the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h at 03:41` (no count after a
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
 records whether it was idle, the count, the wait chosen, in seconds, and `churn`, below.
 
@@ -428,6 +433,16 @@ ambiguous as before.
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
+
+A closed ticket is not a candidate, and it has no phase: the overseer marks it done (decision `done`, rationale
+`closed`, then `canopy ticket set --done`, so a tick cut off between the two records the decision again rather than
+losing it), whatever its labels, branch, or PR, unless a worker is running for it, which it waits out: a tick after the
+run ends marks it done. Without that, a ticket closed before it reached `merged`
+(closed by hand, or by the tracker when its PR merged) stayed in the state block, which carries every ticket not marked
+done, and every tick read it again and recorded a `skip` for it. A closed ticket that only the query returns, not in
+the state block, gets no decision at all, so a query that matches closed tickets adds nothing to every tick. A PR
+still open on a closed ticket is the operator's, like the tracker transition. A reopened ticket is found again by the
+configured query; a private one (§22) comes back when the operator starts it again, which clears done.
 
 ## 8. Dispatch and the worker contract
 
@@ -629,10 +644,10 @@ read for a run in one repository.
 
 Worker obligations, stated in every worker prompt:
 
-- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
-  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker
-  that brings its base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it
-  rebases onto `origin/<base>` instead, never merging, and pushes the rebased branch with
+- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, as
+  `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker that brings its
+  base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it rebases onto
+  `origin/<base>` instead, never merging, and pushes the rebased branch with
   `git push --force-with-lease origin HEAD:refs/heads/<branch>`: the one force the worker's definition then allows
   (TRUST_MODEL T1). `{{BRANCH_UPDATE}}` says which, in every prompt of a kind that commits; with `trust.rebase` set,
   an override without it fails to render rather than have the worker make merge commits the operator's repositories
@@ -651,7 +666,8 @@ Worker obligations, stated in every worker prompt:
   and `question` are its report and question (§22).
 - Never approve, merge, close PRs, or transition the ticket to Done, including indirectly: no closing keywords
   (`Fixes #12`) or tracker commands (Jira smart commits) in commit messages, PR titles, or PR bodies.
-- Push once. Do not poll CI. Do not retry.
+- Push again for anything fixed after a push, in a new commit, never an amend (D116). Do not poll CI. Do not retry a
+  rejected push.
 
 Everything posts as the operator (D010), who is usually an authorized replier, so without a mark a worker's PR reply
 would read back as new review feedback and spend a `resume` attempt, and its ticket comment could pass for an

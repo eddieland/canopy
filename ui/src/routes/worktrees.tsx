@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
@@ -19,6 +20,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
+import { useWholePath } from '@/hooks/use-whole-path'
 import { runRef } from '@/lib/refs'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
@@ -48,29 +50,35 @@ function WorktreesPage() {
                 whenever a run starts or ends.
             </PageHeader>
             <PoolCounters pools={data} />
-            <div className="flex items-center justify-between gap-4">
-                <Notice error={error} />
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto"
-                    onClick={() => void readAgain()}
-                    disabled={reading}
-                    title={`Read every ${WORKTREES_REFRESH_MS / 1000} seconds while this page is open`}
-                    data-testid="worktrees-refresh"
-                >
-                    <RotateCw />
-                    {reading ? 'Reading' : 'Read again'}
-                </Button>
-            </div>
-            {data === undefined ? (
-                <Panel>
-                    <PanelHeader label="Loading" />
+            {/* One panel of every pool, so the read that covers them all sits in its header, as Open all does. */}
+            <Panel data-testid="pools">
+                <PanelHeader label="Pools">
+                    <span className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => void readAgain()}
+                            disabled={reading}
+                            title={`Read every ${WORKTREES_REFRESH_MS / 1000} seconds while this page is open`}
+                            data-testid="worktrees-refresh"
+                        >
+                            <RotateCw />
+                            {reading ? 'Reading' : 'Read again'}
+                        </Button>
+                        <span className="readout text-xs text-muted-foreground">{data?.length}</span>
+                    </span>
+                </PanelHeader>
+                <Notice error={error} className="border-b px-3 py-2" />
+                {data === undefined ? (
                     <PanelSkeleton className="min-h-40" />
-                </Panel>
-            ) : (
-                data.map((pool) => <PoolPanel key={pool.repo} pool={pool} />)
-            )}
+                ) : (
+                    <div className="divide-y">
+                        {data.map((pool) => (
+                            <PoolSection key={pool.repo} pool={pool} />
+                        ))}
+                    </div>
+                )}
+            </Panel>
         </>
     )
 }
@@ -109,13 +117,14 @@ function looked(dirty: number, broken: number, unread: number): string {
     return `${dirty} dirty · ${broken} broken${pools}`
 }
 
-function PoolPanel({ pool }: { pool: Pool }) {
+/** One pool in the Pools panel: its header, any slots past its size, and a line per slot. */
+function PoolSection({ pool }: { pool: Pool }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
     const over = overSize(pool)
     const root = slotsRoot(pool.worktrees)
     return (
-        <Panel data-testid={`pool-${pool.repo}`}>
-            <PanelHeader label={pool.repo}>
+        <section aria-label={pool.repo} data-testid={`pool-${pool.repo}`}>
+            <PoolHeader repo={pool.repo}>
                 <span className="mr-auto ml-3 flex min-w-0 items-center gap-3">
                     <SlotStrip worktrees={pool.worktrees} />
                     {root !== null && (
@@ -124,7 +133,13 @@ function PoolPanel({ pool }: { pool: Pool }) {
                         </span>
                     )}
                 </span>
-                <span className="flex items-center gap-3 font-mono text-xs text-muted-foreground">
+                {/* Each count whole: in a narrow panel they wrap, one under another, never a count split. */}
+                <span
+                    className={cn(
+                        'flex flex-wrap items-center justify-end gap-x-3 font-mono text-xs whitespace-nowrap',
+                        'text-muted-foreground',
+                    )}
+                >
                     {counts
                         .filter(([, n]) => n > 0)
                         .map(([state, n]) => (
@@ -139,7 +154,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
                         </span>
                     )}
                 </span>
-            </PanelHeader>
+            </PoolHeader>
             {over > 0 && (
                 <p className="border-b px-3 py-2 text-xs text-status-blocked" data-testid="pool-over">
                     {over === 1 ? '1 slot' : `${over} slots`} past the declared size.{' '}
@@ -160,7 +175,17 @@ function PoolPanel({ pool }: { pool: Pool }) {
             ) : (
                 <Notice error={pool.error} className="px-3 py-2.5" />
             )}
-        </Panel>
+        </section>
+    )
+}
+
+/** A pool's head line inside the Pools panel: its repository, then what follows, on the panel's own surface. */
+function PoolHeader({ repo, children }: { repo: string; children: ReactNode }) {
+    return (
+        <div className="flex min-h-9 items-center justify-between gap-3 border-b px-3 py-0.5">
+            <span className="panel-label font-medium text-foreground">{repo}</span>
+            {children}
+        </div>
     )
 }
 
@@ -190,20 +215,16 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
 /**
  * One slot on one line: its state, number, what holds it, its branch, what runs in it, and for how long. Our state
  * word, with treehouse's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
- * line, since it is something to act on. An idle slot is the state and number alone, dimmed.
+ * line, since it is something to act on. An idle slot is the state and number alone, muted.
  */
 function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
     const branchUrl = useBranchUrls()
     const branchHref = w.branch === null ? undefined : branchUrl(repo, w.branch)
+    const whole = useWholePath()
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
-        <ListRow
-            kind="worktree"
-            className={cn('group/copy py-2', idle && 'opacity-60')}
-            data-testid={`worktree-${w.name}`}
-            data-state={w.state}
-        >
+        <ListRow kind="worktree" className="group/copy py-2" data-testid={`worktree-${w.name}`} data-state={w.state}>
             <span
                 className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
                 title={`treehouse: ${w.status}`}
@@ -215,7 +236,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                 <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
                     #{w.name}
                 </span>
-                <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
+                {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
             {idle ? <span /> : <Holder worktree={w} />}
             {/* The branch, path, and processes share what the row leaves: each is cut to fit, the age never. */}

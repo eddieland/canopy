@@ -16,6 +16,7 @@ from tests.canopy.helpers import (
     commit_and_push,
     in_tick,
     journal,
+    lifelock_left,
     pool,
     slot_of,
     wait_for_run,
@@ -195,6 +196,7 @@ def test_detached_run_finishes_on_its_own(
         log = Path(run["log_path"])
         assert log.stat().st_mode & 0o777 == 0o600
         assert "--- worker stdout ---" in log.read_text()
+        assert not lifelock_left(run)
 
 
 def test_capacity_guard(

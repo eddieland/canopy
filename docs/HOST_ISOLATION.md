@@ -4,7 +4,7 @@ Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MOD
 Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
 explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
 so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates ship with canopy, in
-`packages/canopy-sandbox` (D116); `canopy sandbox setup` installs them and the pinned `srt`, and `docs/SANDBOX.md` is
+`packages/canopy-sandbox` (D117); `canopy sandbox setup` installs them and the pinned `srt`, and `docs/SANDBOX.md` is
 the operator's guide.
 The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against
 the version the operator pins.
@@ -85,7 +85,7 @@ worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_C
 ```
 
 `canopy-sandbox` is a short program that canopy installs beside itself, a uv workspace member of its own, not harness
-code (D041, D116). Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
+code (D041, D117). Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
 `~/.config/canopy/sandbox/<role>.json`; `--read` names a path the command may read, which is how canopy's agent
 definitions, `<state_dir>/runtime/<digest>/`, are re-allowed: pass it `{definitions_dir}`. Name the wrapper by its
 absolute path when `PATH` has a relative entry: canopy runs the template from the slot, where `.` finds what the

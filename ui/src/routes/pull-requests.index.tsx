@@ -74,7 +74,7 @@ function Row({ pr }: { pr: PullRequest }) {
                         <TicketTitle title={pr.ticket_title} />
                     </span>
                 )}
-                {pr.phase && <Chip word={pr.phase} />}
+                {pr.phase && <Chip word={pr.phase} className="min-w-0 shrink" />}
             </span>
             <span className="flex items-center gap-1.5 font-mono text-xs" data-testid="pull-request-run">
                 {pr.running_run !== null && (

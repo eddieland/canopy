@@ -5,6 +5,17 @@
 @import '@fontsource/ibm-plex-mono/600.css';
 @import './styles/tokens.css';
 
+/*
+ * The classes a list's row picks its columns with by its list's width, built at run time from its kind's columns
+ * (`rowLayout` in src/lib/rows.ts), so Tailwind finds them here: a template per tier, and a cell hidden by its place.
+ * The tiers are `ROW_TIERS`; seven places are the most columns a kind has.
+ */
+@source inline('grid-cols-(--row) @sm:grid-cols-(--row-sm) @md:grid-cols-(--row-md) @lg:grid-cols-(--row-lg)');
+@source inline('@xl:grid-cols-(--row-xl) @2xl:grid-cols-(--row-2xl)');
+@source inline('@3xl:grid-cols-(--row-3xl) @4xl:grid-cols-(--row-4xl)');
+@source inline('{@max-sm,@max-md,@max-lg,@max-xl}:[&>:nth-child({1,2,3,4,5,6,7})]:hidden');
+@source inline('{@max-2xl,@max-3xl,@max-4xl}:[&>:nth-child({1,2,3,4,5,6,7})]:hidden');
+
 /* Defined so shadcn output compiles; `npm run lint` refuses it in our code. Themes change tokens, not components. */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -215,6 +226,53 @@
     }
 }
 
+/*
+ * A cleared attention item (src/routes/attention.tsx): its row fades, then folds shut, while a leaf, the empty
+ * inbox's, drifts off it. Under 700ms, and none of it under reduced motion, where the row is not shown at all. The
+ * fold fills forwards, the one animation that does: the row is let go once it has played, and must not spring open
+ * before it is.
+ */
+@keyframes leave {
+    40% {
+        grid-template-rows: 1fr;
+        opacity: 0;
+    }
+    to {
+        grid-template-rows: 0fr;
+        opacity: 0;
+    }
+}
+
+@keyframes leaf-off {
+    0% {
+        opacity: 1;
+        transform: translate(0, 0) rotate(0deg);
+    }
+    70% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(14px, 26px) rotate(160deg);
+    }
+}
+
+@utility animate-leave {
+    grid-template-rows: 1fr;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: leave 600ms ease-in-out forwards;
+    }
+}
+
+@utility animate-leaf-off {
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: leaf-off 600ms cubic-bezier(0.2, 0, 0, 1);
+    }
+}
+
 /* One digit of a rolling readout (src/components/rolling-number.tsx): a strip of 0 to 9 behind a one-line window. */
 @utility roll-window {
     display: inline-block;
@@ -300,9 +358,9 @@
 }
 
 /*
- * Sprig, the helper in the corner (src/components/shell/buddy.tsx). Its tip pops in a moment after a page arrives, as
- * if it had been waiting; its brows rise once with each tip; its eyes blink now and then. Each rests where a still
- * page shows it: the tip in place, the brows down, the eyes open.
+ * Sprig, the helper at the foot of the side rail (src/components/shell/buddy.tsx). Its tip pops in a moment after a
+ * page arrives, as if it had been waiting; its brows rise once with each tip; its eyes blink now and then. Each rests
+ * where a still page shows it: the tip in place, the brows down, the eyes open.
  */
 @keyframes buddy-brows {
     30%,
@@ -332,6 +390,21 @@
 @utility animate-buddy-brows {
     @media (prefers-reduced-motion: no-preference) {
         animation: buddy-brows 700ms cubic-bezier(0.2, 0, 0, 1) 600ms backwards;
+    }
+}
+
+/* The propeller cap's propeller turns, flat as if seen from the side. */
+@keyframes buddy-propeller {
+    50% {
+        transform: scaleX(-1);
+    }
+}
+
+@utility animate-buddy-propeller {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-propeller 400ms linear infinite;
     }
 }
 

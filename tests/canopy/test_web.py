@@ -73,6 +73,36 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
+    # The UI copies a path whole by joining what a page shows to /meta's root: the two must agree.
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    db.touch_ticket(ctx.conn, KEY, ctx.repo)
+    slot = ctx.workspace.root / ".treehouse" / "repo-3f9c2a1b" / "1" / "repo"
+    run_id = db.insert_run(
+        ctx.conn,
+        tick_id=tick_id,
+        key=KEY,
+        kind="implement",
+        branch=f"agent/{KEY}-work",
+        slots=[
+            db.RunSlot(repo="repo", slot_path=slot, lease_id="lease-1", lease_holder="canopy:x", base_branch="main")
+        ],
+        runs_dir=ctx.state_dir / "runs",
+        private=False,
+    )
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    stored = db.get_run(ctx.conn, run_id)
+    assert stored is not None
+
+    c, _ = signed_in_client(ctx)
+    root = Path(c.get("/api/meta").json()["workspace_root"])
+    run = c.get(f"/api/runs/{run_id}").json()
+    assert root.is_absolute()
+    assert not Path(run["log_path"]).is_absolute()
+    assert root / run["log_path"] == Path(stored["log_path"])
+    assert [root / w for w in run["worktrees"]] == [slot]
+
+
 def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get("/api/meta").json()["branch_urls"] == {}
@@ -425,11 +455,11 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
     assert [d["rationale"] for d in detail["decisions"]] == ["Checks running:\n  - lint"]
 
 
-def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_days_cost(ctx: Context) -> None:
+def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_and_ever_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
     backend = dataclasses.replace(web.backend(ctx, reread.Reload()), clock=lambda: now)
     nothing = views.spend(backend, ctx)
-    assert (nothing.day.cost_usd, nothing.month.cost_usd) == (None, None)  # nothing reported yet
+    assert (nothing.day.cost_usd, nothing.month.cost_usd, nothing.total_usd) == (None, None, None)  # nothing yet
 
     def started(table: str, row_id: int, hours_ago: float, cost: float | None) -> None:
         at = db.format_time(now - timedelta(hours=hours_ago))
@@ -445,6 +475,7 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_da
     day, month = spend.day, spend.month
     assert (day.hours, day.since, day.cost_usd) == (24, now - timedelta(hours=24), pytest.approx(1.75))
     assert (month.hours, month.since, month.cost_usd) == (720, now - timedelta(days=30), pytest.approx(10.75))
+    assert spend.total_usd == pytest.approx(50.75)  # everything, the run before both windows included
 
 
 def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Context) -> None:

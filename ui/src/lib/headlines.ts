@@ -56,7 +56,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'purple:Model hallucinates a library; library is published by lunch',
         'Treehouse at capacity; squirrels displaced',
         'Overseer reminds workers it can see them',
-        'Worker pushes once and exits, as is its way',
+        'Worker pushes, spots its own lint error, pushes again',
         'Code review approved with a single "lgtm, vibes are immaculate"',
         'Agent "fixes" flaky test by deleting the flake, and the test',
         'glow2:Agent hits 99 Debugging; bug still at large',
@@ -99,7 +99,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'Tip: canopy notify test sends a test message to every sink and changes nothing in the journal',
         'Tip: canopy workspace sync --dry-run says what sync would clone, make, and remove',
         'Tip: canopy workspace add URL adds a repository to the map, then syncs',
-        'Tip: Settings turns on Sprig, the helper in the bottom-left corner; none of its tips help',
+        'Tip: Settings turns on Sprig, the helper at the foot of the side rail; none of its tips help',
     ],
 }
 

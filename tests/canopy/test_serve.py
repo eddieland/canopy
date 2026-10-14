@@ -3,21 +3,26 @@ the mock journal. The API over a real journal, and the loop serving it, are in t
 
 import asyncio
 import json
+import logging
 import re
 import sqlite3
 import stat
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from importlib.metadata import version
 from pathlib import Path
+from typing import override
 from unittest import mock
 
+import anyio
 import httpx2
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+from starlette.types import Message, Receive, Scope, Send
 
 from canopy.core import db
 from canopy.core.context import Context
@@ -43,6 +48,7 @@ from canopy.serve.schema import (
     TickUpdated,
 )
 from canopy.serve.spa import content_security_policy
+from canopy.serve.sse import QuietLeaving
 
 INDEX = """<!doctype html>
 <html lang="en">
@@ -339,6 +345,13 @@ def test_canopy_secret_files_are_the_operators_alone(tmp_path: Path) -> None:
 @pytest.fixture
 def served(ui: Path, backend: Backend) -> Iterator[int]:
     """The mock app on a real socket, on a port the OS picks: TestClient waits for an endless stream to end."""
+    with serving(ui, backend) as port:
+        yield port
+
+
+@contextmanager
+def serving(ui: Path, backend: Backend) -> Iterator[int]:
+    """Serve the mock app until the block ends, then stop: uvicorn waits for every request to end first."""
     options = ServeOptions(ui_dir=ui, mock=True, mock_event_seconds=0.05)
     sessions = Sessions(None, port=options.port, base_path="", hosts=options.hosts)
     config = uvicorn.Config(create_app(options, backend, sessions), host="127.0.0.1", port=0, log_level="warning")
@@ -353,6 +366,7 @@ def served(ui: Path, backend: Backend) -> Iterator[int]:
     finally:
         server.should_exit = True
         thread.join(timeout=10)
+        assert not thread.is_alive(), "the server did not stop"
 
 
 def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
@@ -396,6 +410,8 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
         assert now.cost_usd is not None
         assert was.cost_usd is not None
         assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
+    assert spend.spend.total_usd is not None
+    assert spent.spend.total_usd == pytest.approx(spend.spend.total_usd + after.cost_usd - before.cost_usd)
 
 
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
@@ -430,12 +446,13 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
 
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
-        stream = live.events(backend, poll_seconds=0.01)
-        first = [await anext(stream) for _ in range(7)]
-        # A reload commits nothing to the journal: the stream sees it in the config it serves.
-        chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
-        backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
-        after = await asyncio.wait_for(anext(stream), timeout=5)
+        with closing(live.Stream(backend)) as opened:
+            stream = opened.events(poll_seconds=0.01)
+            first = [await anext(stream) for _ in range(7)]
+            # A reload commits nothing to the journal: the stream sees it in the config it serves.
+            chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
+            backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
+            after = await asyncio.wait_for(anext(stream), timeout=5)
         return first, after
 
     first, after = asyncio.run(first_and_after_a_reload())
@@ -467,6 +484,174 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     lists = [e.root for e in found if isinstance(e.root, TicketsUpdated)]
     assert len(lists) == 2
     assert lists[1].tickets[0].key == "ABC-103"
+
+
+def test_a_stream_dropped_during_its_first_events_closes_its_connection(served: int) -> None:
+    """Issue 337: a client gone while the first events were still being sent left its journal connection open."""
+    real = Backend.open
+    opened: list[Context] = []
+    closed: list[Context] = []
+
+    @contextmanager
+    def counted(self: Backend) -> Iterator[Context]:
+        # The mock's writer and the other requests open connections of their own: only the streams' are counted.
+        stream = threading.current_thread().name.startswith("canopy-stream")
+        with real(self) as ctx:
+            if stream:
+                opened.append(ctx)
+            yield ctx
+        # Not reached when closing the connection raised, as it did off the thread that opened it.
+        if stream:
+            closed.append(ctx)
+
+    with (
+        mock.patch.object(Backend, "open", autospec=True, side_effect=counted),
+        mock.patch.object(live._Reader, "read", autospec=True, side_effect=a_long_burst),  # noqa: SLF001
+    ):
+        for _ in range(10):
+            read_events(served, 1)
+        deadline = time.monotonic() + 10
+        while len(closed) < len(opened) and time.monotonic() < deadline:
+            time.sleep(0.05)
+    assert len(opened) == 10
+    assert len(closed) == 10
+
+
+def test_a_client_leaving_a_stream_mid_send_logs_no_error(ui: Path, backend: Backend) -> None:
+    """Issue 338: FastAPI's SSE teardown raises when a client leaves while it sends, and uvicorn logged it as an error.
+
+    With a long burst, the client always leaves while the task feeding the stream waits to send, which is when FastAPI
+    raises `BrokenResourceError`: without `sse.QuietLeaving`, every stream here logs `Exception in ASGI application`.
+    """
+    errors = _Records()
+    uvicorn_log = logging.getLogger("uvicorn.error")
+    with mock.patch.object(live._Reader, "read", autospec=True, side_effect=a_long_burst):  # noqa: SLF001
+        try:
+            # Added once serving, since uvicorn's config replaces its loggers' handlers, and kept until the server has
+            # stopped, which waits for every stream's teardown.
+            with serving(ui, backend) as port:
+                uvicorn_log.addHandler(errors)
+                for _ in range(10):
+                    read_events(port, 1)
+        finally:
+            uvicorn_log.removeHandler(errors)
+    assert [r.getMessage() for r in errors.records if r.levelno >= logging.ERROR] == []
+
+
+_READ = live._Reader.read  # noqa: SLF001  (the stream's reads, on its own thread)
+
+
+def a_long_burst(reader: live._Reader) -> list[StreamEvent]:
+    """A stream's read, with each burst ending in more events than the server sends before it sees its client gone.
+
+    So the task reading them is always waiting to send one when the client leaves, never inside the generator, where a
+    cancel would have finished it.
+    """
+    events = _READ(reader)
+    return events + [StreamEvent(LoopUpdated(paused=None))] * 2000 if events else events
+
+
+def _teardown() -> ExceptionGroup[anyio.BrokenResourceError]:
+    return ExceptionGroup("unhandled errors in a TaskGroup", [anyio.BrokenResourceError()])
+
+
+@pytest.mark.parametrize(
+    ("content_type", "left", "error", "absorbed"),
+    [
+        pytest.param("text/event-stream", True, _teardown(), True, id="a stream's teardown after its client left"),
+        pytest.param("text/event-stream", True, anyio.BrokenResourceError(), True, id="the same error, ungrouped"),
+        pytest.param("text/event-stream", False, _teardown(), False, id="the client is still there"),
+        pytest.param("application/json", True, _teardown(), False, id="not an event stream"),
+        pytest.param(
+            "text/event-stream",
+            True,
+            ExceptionGroup("unhandled errors in a TaskGroup", [anyio.BrokenResourceError(), ValueError("a real one")]),
+            False,
+            id="with a real failure beside it",
+        ),
+    ],
+)
+def test_quiet_leaving_absorbs_only_a_streams_teardown_once_its_client_left(
+    content_type: str,
+    left: bool,  # noqa: FBT001  (a parameter)
+    error: BaseException,
+    absorbed: bool,  # noqa: FBT001  (a parameter)
+) -> None:
+    """Anything else is raised as it came: the same exception, so its traceback and context are untouched."""
+
+    async def app(_scope: Scope, receive: Receive, send: Send) -> None:
+        await send(
+            {"type": "http.response.start", "status": 200, "headers": [(b"content-type", content_type.encode())]}
+        )
+        await receive()
+        raise error
+
+    async def receive() -> Message:
+        return {"type": "http.disconnect"} if left else {"type": "http.request", "body": b"", "more_body": True}
+
+    async def send(_message: Message) -> None:
+        pass
+
+    run = QuietLeaving(app)({"type": "http"}, receive, send)
+    if absorbed:
+        asyncio.run(run)
+        return
+    with pytest.raises(type(error)) as raised:
+        asyncio.run(run)
+    assert raised.value is error
+
+
+def test_a_stream_that_cannot_close_its_connection_logs_why(backend: Backend) -> None:
+    """Nothing waits on the close, queued on the stream's thread: an error in it is logged, not lost."""
+    handler = _Records()
+    records = handler.records
+    log = logging.getLogger("canopy")
+    log.addHandler(handler)
+    close = live._Reader.close  # noqa: SLF001  (closes the stream's connection, on its own thread)
+
+    def closes_then_fails(self: live._Reader) -> None:
+        close(self)
+        raise sqlite3.ProgrammingError("closed on the wrong thread")
+
+    try:
+        with mock.patch.object(live._Reader, "close", autospec=True, side_effect=closes_then_fails):  # noqa: SLF001
+            asyncio.run(read_once_and_close(backend))
+        deadline = time.monotonic() + 5
+        while not records and time.monotonic() < deadline:
+            time.sleep(0.01)
+    finally:
+        log.removeHandler(handler)
+    [record] = records
+    assert record.levelno == logging.ERROR
+    assert record.error == "ProgrammingError: closed on the wrong thread"  # pyrefly: ignore[missing-attribute]
+
+
+def test_a_stream_closed_before_its_first_read_has_nothing_to_close(backend: Backend) -> None:
+    """A request torn down before its stream read anything queues no close, and a second close does nothing."""
+    with mock.patch.object(live._Reader, "close", autospec=True) as close:  # noqa: SLF001
+        stream = live.Stream(backend)
+        stream.close()
+        stream.close()
+    close.assert_not_called()
+
+
+async def read_once_and_close(backend: Backend) -> None:
+    with closing(live.Stream(backend)) as stream:
+        events = stream.events()
+        await anext(events)
+        await events.aclose()  # pyrefly: ignore[missing-attribute]
+
+
+class _Records(logging.Handler):
+    """Keeps the records it is handed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
 
 
 def test_a_streams_read_never_holds_up_a_request(served: int) -> None:
