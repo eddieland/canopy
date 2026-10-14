@@ -282,6 +282,13 @@ function Thread({ ticketKey }: { ticketKey: string }) {
     const { ticket, messages } = data
     return (
         <>
+            {/* What holds the ticket up sits under the item, before its conversation, where it is read first. */}
+            <GrantLimits
+                key={`limits-${ticket.key}`}
+                limits={data.limits}
+                ticketKey={ticket.key}
+                className="border-b"
+            />
             <PanelHeader label="Conversation">
                 <span className="flex items-center gap-2">
                     {messages.length > 1 && <OrderToggle list="conversation" />}
@@ -306,12 +313,6 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             <div className="border-t">
                 <TicketActions key={ticket.key} ticket={ticket} />
             </div>
-            <GrantLimits
-                key={`limits-${ticket.key}`}
-                limits={data.limits}
-                ticketKey={ticket.key}
-                className="border-t"
-            />
         </>
     )
 }
