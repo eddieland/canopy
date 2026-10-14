@@ -153,9 +153,12 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: uv run canopy sandbox setup
 
+      # One case runs under the temp directory canopy itself would have, which on macOS is a deep one per user.
       - name: Canary
         if: needs.changes.outputs.code != 'false'
-        run: make sandbox-canary
+        run: |
+          uv run python -c 'import tempfile; print("system temp directory:", tempfile.gettempdir())'
+          make sandbox-canary
 
   # The web UI end to end: Playwright against the build, served by FastAPI (ui/AGENTS.md).
   ui-e2e:
