@@ -6,9 +6,10 @@ github.com, the shipped template's first allowed host, and to run as the operato
 in, a missing piece fails the run instead of skipping it, so a CI job cannot pass without sandboxing anything.
 
 Each attempt below is a plain shell command run through `canopy-sandbox worker`, in a linked worktree under the HOME the
-template denies, as a treehouse slot is. Every attempt must fail, and a write is checked on the host, never by the
-attempt's exit status: under a denied directory, `srt`'s tmpfs takes the write and drops it when the run ends. The
-positive controls must succeed, so a sandbox that refuses everything cannot pass.
+template denies, as a treehouse slot is. The attempts on HOME and the state directory run as `setup` there too, and as
+`chore` in a chore's default directory under the state directory. Every attempt must fail, and a write is checked on
+the host, never by the attempt's exit status: under a denied directory, `srt`'s tmpfs takes the write and drops it when
+the run ends. The positive controls must succeed, so a sandbox that refuses everything cannot pass.
 """
 
 import contextlib
@@ -44,18 +45,23 @@ WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
 ROLES = ("worker", "setup", "chore")
 # Where `canopy sandbox setup` put srt for the operator running the tests, found before a fixture moves HOME.
 PINNED_SRT = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
+# Found before a fixture puts tests/fakes, and its fake srt, first on PATH.
+SRT = str(PINNED_SRT) if PINNED_SRT.is_file() else shutil.which("srt")
+# A parent short enough on Linux and macOS alike for the sockets srt makes under the wrapper's run directory.
+SHORT_TMP = "/tmp"  # noqa: S108  (the run directories under it are private to the user; the wrapper checks)
 PLANTED = "canary-planted-7f3a"
 # On the shipped template's allowlist, and not; and the cloud metadata address, which no policy should reach.
 ALLOWED_URL = "https://github.com"
 DENIED_URL = "https://example.com"
 METADATA_URL = "http://169.254.169.254/latest/meta-data/"
 # The two ways out: through srt's proxy, even for the addresses srt's NO_PROXY names (loopback, link-local), and around
-# it. The proxy refuses with a 403; around it, the sandbox has no route, so the name does not resolve or the connection
-# fails. Anything else, a TLS or certificate error say, is not the policy refusing and fails the test.
-VIA_PROXY = "--noproxy ''"
+# it. srt's proxy refuses with a header no other proxy sends, which curl prints with the response's; around it, the
+# sandbox has no route, so the name does not resolve or the connection fails. Anything else, a certificate error or
+# another proxy's 403 say, is not the policy refusing and fails the test.
+VIA_PROXY = "--noproxy '' -D -"
 DIRECT = "--noproxy '*'"
 ROUTES = [pytest.param(VIA_PROXY, id="through-the-proxy"), pytest.param(DIRECT, id="direct")]
-CURL_HTTP_ERROR, CURL_PROXY_ERROR = 22, 56
+SRT_REFUSAL = "X-Proxy-Error: blocked-by-allowlist"
 CURL_NO_HOST, CURL_NO_CONNECTION = 6, 7
 # What a sleeping process left behind by a timed-out run would show in its command line.
 LINGERER = "987.654321"
@@ -84,11 +90,16 @@ class Canary:
     def own(self) -> Path:
         return self.common / "worktrees" / self.slot.name
 
-    def run(self, script: str, *args: str, timeout: float | None = None) -> procs.Result:
-        """Run `sh -c script` as a worker in the slot, through the wrapper and srt, and check that it started."""
-        argv = [str(WRAPPER), "worker", "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
-        env = {"CANOPY_GIT_OBJECTS": str(self.objects)}
-        done = SubprocessRunner().run(argv, cwd=self.slot, env=env, timeout=timeout)
+    def run(self, script: str, *args: str, role: str = "worker", timeout: float | None = None) -> procs.Result:
+        """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started."""
+        argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
+        cwd = self.slot
+        env: dict[str, str] = {"CANOPY_GIT_OBJECTS": str(self.objects)}
+        if role == "chore":
+            cwd = self.state_dir / "chores" / "canary"
+            env = {}
+            cwd.mkdir(parents=True, exist_ok=True)
+        done = SubprocessRunner().run(argv, cwd=cwd, env=env, timeout=timeout)
         assert done.stdout.startswith(f"{RAN}\n"), done.stderr
         return done
 
@@ -102,14 +113,14 @@ class Canary:
 def sandbox_runtime(fakes_on_path: Path) -> Iterator[Path]:
     """The real srt on PATH, the operator's own user, and a temp directory of the test's for the wrapper's runs.
 
-    Not under tmp_path: srt makes its Unix sockets in the run's temp directory, and a path that deep is too long.
+    Under /tmp, not tmp_path or the system temp directory, which on macOS is deep too: srt makes its Unix sockets in
+    the run's temp directory, and a deep path is too long for one.
     """
     assert os.geteuid() != 0, "run the canary as yourself: under root, srt's sandbox keeps every capability"
-    srt = PINNED_SRT if PINNED_SRT.is_file() else shutil.which("srt")
-    assert srt is not None, "srt is not installed; run `canopy sandbox setup`"
-    path = os.pathsep.join([str(Path(srt).parent), os.environ["PATH"]])
+    assert SRT is not None, "srt is not installed; run `canopy sandbox setup`"
+    path = os.pathsep.join([str(Path(SRT).parent), os.environ["PATH"]])
     with (
-        tempfile.TemporaryDirectory(prefix="canary.") as tmp,
+        tempfile.TemporaryDirectory(prefix="canary.", dir=SHORT_TMP) as tmp,
         mock.patch.dict(os.environ, {"PATH": path, "TMPDIR": tmp, **HERMETIC_GIT}),
     ):
         yield Path(tmp)
@@ -160,8 +171,9 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Cana
         pytest.param(f'grep -r {PLANTED.removeprefix("canary-")} "$HOME" "$1"', id="search"),
     ],
 )
-def test_a_worker_cannot_read_home_or_the_state_dir(canary: Canary, script: str) -> None:
-    done = canary.run(script, str(canary.state_dir))
+@pytest.mark.parametrize("role", ROLES)
+def test_a_run_cannot_read_home_or_the_state_dir(canary: Canary, script: str, role: str) -> None:
+    done = canary.run(script, str(canary.state_dir), role=role)
 
     assert PLANTED not in done.stdout + done.stderr
 
@@ -176,11 +188,12 @@ def test_a_worker_cannot_read_home_or_the_state_dir(canary: Canary, script: str)
         pytest.param('echo pwned > "$1/runs/planted"', "{state}/runs/planted", id="state-runs"),
     ],
 )
-def test_a_worker_cannot_write_home_or_the_state_dir(canary: Canary, script: str, target: str) -> None:
+@pytest.mark.parametrize("role", ROLES)
+def test_a_run_cannot_write_home_or_the_state_dir(canary: Canary, script: str, target: str, role: str) -> None:
     path = Path(target.replace("~", str(canary.home)).replace("{state}", str(canary.state_dir)))
     before = path.read_bytes() if path.exists() else None
 
-    canary.run(script, str(canary.state_dir))
+    canary.run(script, str(canary.state_dir), role=role)
 
     assert (path.read_bytes() if path.exists() else None) == before
 
@@ -238,7 +251,7 @@ def test_a_worker_cannot_write_what_runs_on_the_host_or_in_another_slot(
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("url", [DENIED_URL, METADATA_URL], ids=["host-not-allowed", "metadata"])
 def test_a_worker_cannot_reach_a_host_off_the_allowlist(canary: Canary, route: str, url: str) -> None:
-    done = canary.run(f"curl -fsS -m 10 -o /dev/null {route} {url}")
+    done = canary.run(f"curl -sS -m 10 -o /dev/null {route} {url}")
 
     assert refused(done, route), done.stderr
 
@@ -248,7 +261,7 @@ def test_a_worker_cannot_reach_the_hosts_loopback(canary: Canary, route: str) ->
     with listening() as server:
         port = server.getsockname()[1]
 
-        done = canary.run(f"curl -fsS -m 5 -o /dev/null {route} http://127.0.0.1:{port}/")
+        done = canary.run(f"curl -sS -m 5 -o /dev/null {route} http://127.0.0.1:{port}/")
 
         assert refused(done, route), done.stderr
         with pytest.raises(BlockingIOError):
@@ -350,9 +363,9 @@ def listening() -> Iterator[socket.socket]:
 
 
 def refused(done: procs.Result, route: str) -> bool:
-    """Whether curl, run with `-f`, was refused the way `route` refuses: by srt's proxy, or for want of a route."""
+    """Whether curl was refused the way `route` refuses: by srt's proxy, or for want of a route."""
     if route == VIA_PROXY:
-        return done.returncode in {CURL_HTTP_ERROR, CURL_PROXY_ERROR} and "403" in done.stderr
+        return SRT_REFUSAL in done.stdout
     return done.returncode in {CURL_NO_HOST, CURL_NO_CONNECTION}
 
 

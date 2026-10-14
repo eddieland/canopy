@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check treehouse
+.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary treehouse
 
 ##@ General
 

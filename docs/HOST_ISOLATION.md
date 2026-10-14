@@ -327,12 +327,15 @@ the machine up the way docs/SANDBOX.md tells the operator to and runs `canopy sa
 templates unchanged, and a primary clone and two slots under the fake `$HOME`, as treehouse lays them out, so the
 template's denied `$HOME` and the binds that re-allow the slot are what is tested. Each case is its own run, and every
 run prints a marker first, so an attempt that failed because nothing ran fails the test. What the slots share is
-compared file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows. A connection is
-tried both through `srt`'s proxy and around it, and must be refused the way that route refuses, with the proxy's 403 or
-with no route at all, so a certificate error or a sandbox with no network passes nothing. `srt` sets `NO_PROXY` to
-loopback and link-local addresses, so curl tries those around the proxy unless told not to. A run of the
-canary against the fake `srt`, which sandboxes nothing, fails every case but the positive controls, and the two that
-try a host off the allowlist when the machine's own proxy refuses that host too. A sleeper the run
+compared file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows. The attempts on
+`$HOME` and the state directory run as `setup` and as `chore` too, a chore in its default directory under the state
+directory, which is how the wrapper finds the state directory for a workspace outside `$HOME`. A connection is tried
+both through `srt`'s proxy and around it, and must be refused the way that route refuses: through the proxy, with the
+`X-Proxy-Error: blocked-by-allowlist` header `srt` sends and no other proxy does; around it, with no route at all. So a
+certificate error, another proxy's 403, or a sandbox with no network passes nothing. `srt` sets `NO_PROXY` to loopback
+and link-local addresses, so curl tries those around the proxy unless told not to. A run of the canary against the fake
+`srt`, which sandboxes nothing, fails every case but the positive controls, and, on a machine with no direct route to
+the internet, the direct attempt on a host off the allowlist. A sleeper the run
 leaves must not hold its output, or a sandbox that lets one outlive the run hangs the test instead of failing it. On
 macOS there is no `setsid` command, so the timeout case there checks only the processes that stay in the sandbox's
 group (§5 item 4).

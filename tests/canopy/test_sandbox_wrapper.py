@@ -59,7 +59,7 @@ class Sandbox:
 def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Iterator[Sandbox]:
     """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's.
 
-    Not under tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
+    Under /tmp, not tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
     """
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -67,7 +67,7 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
         shutil.copy(canopy_sandbox.TEMPLATES / f"{role}.json", templates)
     log = tmp_path / "srt.jsonl"
     with (
-        tempfile.TemporaryDirectory(prefix="sandbox.") as tmp,
+        tempfile.TemporaryDirectory(prefix="sandbox.", dir="/tmp") as tmp,
         mock.patch.dict(os.environ, {"FAKE_SRT_LOG": str(log), "TMPDIR": tmp, **HERMETIC_GIT}),
     ):
         yield Sandbox(log, templates, Path(tmp))
