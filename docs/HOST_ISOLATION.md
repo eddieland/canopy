@@ -322,8 +322,9 @@ And the positive controls must succeed, so a sandbox that blocks everything cann
 On Linux this can also run in CI, since it needs only bubblewrap and unprivileged user namespaces. Ubuntu 24.04 and
 later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`), which the operator docs must say.
 
-Built: `tests/canopy/test_sandbox_canary.py`, run by `make sandbox-canary` and by CI's `sandbox-canary` job, which sets
-the machine up the way docs/SANDBOX.md tells the operator to and runs `canopy sandbox setup` first. It uses the shipped
+Built: `tests/canopy/test_sandbox_canary.py`, run by `make sandbox-canary` and by CI's `sandbox-canary` job on Linux and
+macOS, which sets the machine up the way docs/SANDBOX.md tells the operator to and runs `canopy sandbox setup` first.
+Every case runs under a short temp directory of its own but one, which runs under the system's (§7). It uses the shipped
 templates unchanged, and a primary clone and two slots under the fake `$HOME`, as treehouse lays them out, so the
 template's denied `$HOME` and the binds that re-allow the slot are what is tested. Each case is its own run, and every
 run prints a marker first, so an attempt that failed because nothing ran fails the test. What the slots share is
@@ -335,10 +336,9 @@ both through `srt`'s proxy and around it, and must be refused the way that route
 certificate error, another proxy's 403, or a sandbox with no network passes nothing. `srt` sets `NO_PROXY` to loopback
 and link-local addresses, so curl tries those around the proxy unless told not to. A run of the canary against the fake
 `srt`, which sandboxes nothing, fails every case but the positive controls, and, on a machine with no direct route to
-the internet, the direct attempt on a host off the allowlist. A sleeper the run
-leaves must not hold its output, or a sandbox that lets one outlive the run hangs the test instead of failing it. On
-macOS there is no `setsid` command, so the timeout case there checks only the processes that stay in the sandbox's
-group (§5 item 4).
+the internet, the direct attempt on a host off the allowlist. A sleeper the run leaves must not hold its output, or a
+sandbox that lets one outlive the run hangs the test instead of failing it. On macOS there is no `setsid` command, so
+the timeout case there checks only the processes that stay in the sandbox's group (§5 item 4).
 
 Running it under `srt` 0.0.79 and bubblewrap 0.9 found that `srt` makes its network sockets in the `TMPDIR` the wrapper
 gives it (§4.1 step 4): under pytest's own temp directory the path is too long, and every run failed with `srt`'s
@@ -375,11 +375,10 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
   through it. The wrapper moves `TMPDIR` to a directory of the run's own, but cannot close that one. The rest of the
   system temp directory stays readable, as other system paths do; denying it breaks tools that write there without
   reading `TMPDIR`.
-- The length of the temp directory's path on macOS. `srt` makes a Unix socket there too, `srt-mux-<pid>-<n>.sock`,
-  and macOS caps a socket's path at 103 bytes. The per-user temp directory macOS sets in `TMPDIR` is about 48 bytes,
-  which with the wrapper's run directory leaves too little room, so a sandboxed run may fail there unless canopy runs
-  with `TMPDIR=/tmp`. The canary's run on the operator's Mac settles it; if so, the wrapper should check it as it does
-  on Linux, or make its run directories under `/tmp`.
+- The length of the temp directory's path on macOS: answered, it is not a problem. Reading `srt`'s source suggested
+  that a socket it makes there, with macOS's 103-byte limit, would not fit under the per-user temp directory macOS
+  sets in `TMPDIR`. The canary's macOS CI job runs one case under the runner's own, `/var/folders/.../T` (48 bytes),
+  and it passes with `srt` 0.0.79, so the wrapper's check stays Linux-only.
 - `review_cmd` (DESIGN §21) is not in §4.4. The reviewer reads a PR's diff and checkout, which an untrusted author
   wrote, from `<state_dir>/reviews/<id>/`; whether it gets a role and a template of its own is open.
 - Where this sits in the ROADMAP: the trigger says before a second team adopts canopy. It needs M2's real worker to be

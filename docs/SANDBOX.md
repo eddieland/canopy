@@ -8,7 +8,7 @@ For why it works this way and what it was checked against, see [HOST_ISOLATION.m
 does and does not defend against, TRUST_MODEL T4 and T6.
 
 The sandbox is opt-in and not yet proven: ROADMAP M26 is open. The canary that checks every property (HOST_ISOLATION
-§6) runs in CI on Linux; it has yet to pass on the operator's own machines. Try it on yours with the check below
+§6) runs in CI on Linux and macOS; it has yet to pass on the operator's own machines. Try it on yours with the check below
 before you rely on it.
 
 ## What a sandboxed run can do
