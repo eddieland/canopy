@@ -24,6 +24,7 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.trust.trusted_reviewers == ()
     assert cfg.trust.comment_prefix == "CANOPY:"
     assert cfg.trust.comment_suffix == ""
+    assert cfg.trust.commit_trailer is True
     assert cfg.trust.commit_trailer_name == "canopy worker"
     assert cfg.trust.commit_trailer_email == "noreply@canopy.invalid"
     assert cfg.capacity.max_workers == 2
@@ -65,6 +66,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("trust", 'authorized_repliers = ["mallory"]'),
         ("trust", 'trusted_reviewers = ["review-bot[bot]"]'),
         ("trust", 'comment_prefix = "Please"'),
+        ("trust", "commit_trailer = false"),
         ("trust", 'commit_trailer_name = "Alice Example"'),
         ("trust", 'commit_trailer_email = "alice@example.com"'),
         ("trust", "rebase = true"),

@@ -158,7 +158,7 @@ Shape (§22, D072): the operator starts the ticket in canopy (`canopy start`) in
 workers can only read the tracker; questions reach the attention list (`awaiting_reply`) and `canopy show`, and the
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
-The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
+The PR still carries the commit attribution TRUST_MODEL T5 gives it: privacy covers the conversation, not authorship.
 
 ### R12. One record of every ticket's conversation
 

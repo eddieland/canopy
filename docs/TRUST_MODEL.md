@@ -235,7 +235,11 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden.
+  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden: a
+  worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
+  user-only), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
+  that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
+  neither turn it off nor rename it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -296,7 +300,7 @@ A private ticket's privacy rests on the tool lists: a tool listed as read that w
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
 denied by name (D076's root cause: workers run as the operator until HOST_ISOLATION). A private ticket hides the
-conversation, not authorship or the work: commits keep their attribution trailer (T5), and its branch and PR title name
+conversation, not authorship or the work: commits keep the attribution T5 gives them, and its branch and PR title name
 the ticket key, which a tracker's VCS integration may link to the ticket.
 An operator message on a public ticket (D089, D093) is kept off the ticket only by the worker's prompt: a public worker
 can comment on the ticket and its PRs, so one that disregards the prompt, or is steered by what it read, can repeat the
