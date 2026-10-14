@@ -81,9 +81,10 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
     }
 
     const chore = target.kind === 'chore'
-    let label = chore ? 'Your note' : 'Your reply'
+    // The form's noun, as its button names it.
+    let label = chore ? 'Note' : 'Reply'
     if (waiting !== null) {
-        label = `Your answer to message ${waiting}`
+        label = `Reply to message ${waiting}`
     }
     let placeholder = 'The next worker reads it as an instruction.'
     if (chore) {

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { runsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
 import { workingOn } from '@/lib/run-state'
@@ -26,10 +27,8 @@ export function WorkingNow({ ticketKey }: { ticketKey: string }) {
                     <RunLink id={run.id} />
                     <Chip word={run.kind} />
                     <span className="ml-auto flex items-center gap-3">
-                        <span className="readout">{run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}</span>
-                        <span className="flex items-center gap-1">
-                            for <Age at={run.started_at} />
-                        </span>
+                        <Cost usd={run.cost_usd} />
+                        <Age variant="span" started={run.started_at} ended={null} />
                     </span>
                 </li>
             ))}

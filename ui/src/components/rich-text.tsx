@@ -1,7 +1,7 @@
 import { Fragment, useState } from 'react'
 
 import { LinkedText } from '@/components/linked-text'
-import { clamp, parse } from '@/lib/rich-text'
+import { clamp, codeSpans, parse } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +40,20 @@ export function RichText({ text, lines, className }: { text: string; lines?: num
                 </button>
             )}
         </div>
+    )
+}
+
+/**
+ * A line the harness wrote, an attention item's detail, with its `code` spans set as code and nothing else read: the
+ * rest stays text, its URLs linked unless `links` is false, as inside an element that is already a link.
+ */
+export function InlineCode({ text, links = true }: { text: string; links?: boolean }) {
+    return codeSpans(text).map((piece, i) =>
+        piece.kind === 'code' ? (
+            <Code key={i} text={piece.text} />
+        ) : (
+            <Fragment key={i}>{links ? <LinkedText text={piece.text} /> : piece.text}</Fragment>
+        ),
     )
 }
 
@@ -111,7 +125,11 @@ function InlineView({ piece }: { piece: Inline }) {
             )
         }
         case 'code': {
-            return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.85em]">{piece.text}</code>
+            return <Code text={piece.text} />
         }
     }
+}
+
+function Code({ text }: { text: string }) {
+    return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.85em]">{text}</code>
 }

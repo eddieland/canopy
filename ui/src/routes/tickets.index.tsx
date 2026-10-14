@@ -12,7 +12,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { phaseLabel } from '@/lib/phase'
+import { phaseLabel, phaseWord } from '@/lib/phase'
 import { runRef } from '@/lib/refs'
 
 /** Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. */
@@ -58,7 +58,7 @@ function TicketsPage() {
 }
 
 function Row({ ticket }: { ticket: TicketSummary }) {
-    const phase = `${phaseLabel(ticket)}${ticket.done ? ', done' : ''}`
+    const done = ticket.done ? ', done' : ''
     return (
         <ListRow kind="ticket" data-testid={`ticket-${ticket.key}`}>
             <TicketLink ticketKey={ticket.key} className="truncate" />
@@ -66,8 +66,9 @@ function Row({ ticket }: { ticket: TicketSummary }) {
             <span className="flex">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
-            <span className="truncate font-mono text-xs text-muted-foreground" title={phase}>
-                {phase}
+            {/* Cut to fit, the whole on hover in the CLI's spelling. */}
+            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket) + done}>
+                {phaseLabel(ticket) + done}
             </span>
             <span className="flex flex-col gap-0.5 whitespace-nowrap">
                 {ticket.running_run !== null && (
@@ -83,7 +84,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                     </span>
                 )}
             </span>
-            <Age at={ticket.active_at} className="text-right" />
+            <Age at={ticket.active_at} variant="ago" className="text-right" />
         </ListRow>
     )
 }

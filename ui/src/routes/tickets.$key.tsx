@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
+import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
@@ -16,16 +17,15 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
-import { Chip } from '@/components/status'
+import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLinks } from '@/components/ticket-links'
 import { WorkingNow } from '@/components/working-now'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { phaseLabel } from '@/lib/phase'
+import { phaseLabel, phaseWord } from '@/lib/phase'
 
 /** One ticket: the operator's actions on it, its work, its recent runs and decisions, and its conversation. */
 export const Route = createFileRoute('/tickets/$key')({
@@ -63,7 +63,6 @@ function TicketPage() {
 
 function Ticket({ detail }: { detail: TicketDetail }) {
     const { ticket, units, limits, runs, messages, decisions, cost } = detail
-    const now = useNow()
     const tracker = useTicketUrl(ticket.key)
     const branchUrl = useBranchUrls()
     const branch = ticket.branch
@@ -112,13 +111,13 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     </Panel>
                     <Panel>
                         <PanelHeader label="Work">
-                            <span className="readout text-xs text-muted-foreground">
-                                active {age(ticket.active_at, now)} ago
+                            <span className="text-xs text-muted-foreground">
+                                active <Age at={ticket.active_at} variant="ago" />
                             </span>
                         </PanelHeader>
                         <Fields>
                             <Field label="phase" mono>
-                                {phaseLabel(ticket)}
+                                <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
                                 {ticket.done ? ', done' : ''}
                             </Field>
                             <Field label="branch" mono>
@@ -194,7 +193,7 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
     return (
         <Field label={repo ? `PR in ${repo}` : 'PR'} mono className="flex items-baseline gap-3">
             {pr ? <PullRequestLink url={pr} className="text-sm" /> : 'none recorded'}
-            {phase && <span className="text-muted-foreground">{phase}</span>}
+            {phase && <Word word={phase} className="text-muted-foreground" />}
         </Field>
     )
 }

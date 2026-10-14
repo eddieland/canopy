@@ -6,18 +6,20 @@ import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
 import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
+import { Cost } from '@/components/cost'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
-import { Chip } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TickOutputPanel } from '@/components/tick-output'
+import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tickRef } from '@/lib/refs'
-import { localTime } from '@/lib/time'
-import { TICK_TONE, tickId } from '@/lib/ticks'
+import { RUN_TEXT } from '@/lib/run-state'
+import { tickId, tickState } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
 
 /** One tick: the decisions it recorded, the overseer's transcript, and its output as written. */
@@ -78,19 +80,25 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
             <div className="stagger flex flex-col gap-6">
                 <Panel>
                     <PanelHeader label="Tick">
-                        <span className={cn('font-mono text-xs', TICK_TONE[tick.status] ?? 'text-muted-foreground')}>
-                            {tick.status}
+                        <span
+                            className={cn(
+                                'flex items-center gap-1.5 font-mono text-xs',
+                                RUN_TEXT[tickState(tick.status)],
+                            )}
+                        >
+                            <RunDot state={tickState(tick.status)} />
+                            <Word word={tick.status} />
                         </span>
                     </PanelHeader>
                     <Fields>
                         <Field label="started" mono>
-                            <span className="flex items-center gap-2">
-                                <span title={localTime(tick.started_at)}>{tick.started_at}</span>
-                                <Age at={tick.started_at} />
+                            <span className="flex items-baseline gap-2">
+                                <Timestamp at={tick.started_at} />
+                                <Age at={tick.started_at} variant="ago" />
                             </span>
                         </Field>
                         <Field label="ended" mono>
-                            {tick.ended_at ?? 'still running'}
+                            {tick.ended_at === null ? 'still running' : <Timestamp at={tick.ended_at} />}
                         </Field>
                         <Field label="summary">{tick.summary ? <RichText text={tick.summary} /> : 'none'}</Field>
                         <Field label="overseer" mono>
@@ -101,7 +109,9 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             ) : (
                                 'no session reported'
                             )}
-                            {tick.cost_usd === null ? '' : `  $${tick.cost_usd.toFixed(2)}`}
+                        </Field>
+                        <Field label="spent" mono>
+                            <Cost usd={tick.cost_usd} />
                         </Field>
                         <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
                             {output ?? 'none kept'}
