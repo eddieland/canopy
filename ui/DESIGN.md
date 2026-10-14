@@ -273,10 +273,11 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
   reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The selection is
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation, the reply form,
-  the ticket's actions, and what it is stuck at (below); an item about a PR no ticket owns, its review limit; a
-  chore's item (a finding or `chore_failed`) shows the chore's notes and the note form,
-  and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither shows its detail and
-  nothing to answer. Under the list, Working lists the running runs: ticket, kind, cost so far, and for how long.
+  the ticket's actions, with what it is stuck at (below) between the item and its conversation; an item about a PR
+  no ticket owns, its review limit; a chore's item (a finding or `chore_failed`) shows the chore's notes and the
+  note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither shows its
+  detail and nothing to answer. Under the list, Working lists the running runs: ticket, kind, cost so far, and for
+  how long.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
@@ -399,12 +400,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
-- **A limit something is stuck at** (`GrantLimits`) sits under the actions of its ticket, on its page and its attention
-  item, and under a PR's reviews: one muted line saying what a limit does, then a row per limit whose runs have reached
-  it, what it counts in monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed`
-  (`1 of 1 runs`, and `, N granted` past the policy's), and a ghost `allow one more` at the row's end, the CLI's
-  command on hover. What the grant did goes under the rows (`Notice`); the row leaves once the limit is above its runs.
-  A limit with room left shows nothing.
+- **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions on its page, under the item's head on
+  its attention item, above the conversation, and under a PR's reviews. While something is stuck it is a block on the
+  `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
+  led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
+  monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed` (`1 of 1 runs`, and `, N
+  granted` past the policy's), and an outline `Allow one more` button at the row's end, as an Actions panel's are, the
+  CLI's command on hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
+  leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
