@@ -14,6 +14,7 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
     detail: '',
     since,
     finding,
+    pr: null,
 })
 
 describe('blocking', () => {

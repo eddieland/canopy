@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
     dismissedText,
     forgotText,
+    grantedText,
     notedText,
     reloadedText,
     repliedText,
@@ -57,6 +58,16 @@ describe('outcomes', () => {
         const said = forgotText('A-1', { branch: 'agent/A-1-x', prs: ['https://example.test/pr/1'] })
         expect(said).toContain('canopy no longer tracks branch agent/A-1-x, https://example.test/pr/1.')
         expect(said).toContain('delete its branch on origin yourself')
+    })
+
+    it('say what a grant did, as canopy grant does: the runs so far still count', () => {
+        expect(grantedText('A-1', { kind: 'fix-ci', repo: 'web', runs: 2, limit: 3 })).toBe(
+            'A-1 in web has had 2 fix-ci runs, and may now have 3. The next tick decides whether to dispatch it.',
+        )
+        expect(grantedText('https://example.test/o/r/pull/1', { kind: 'review', repo: null, runs: 3, limit: 4 })).toBe(
+            'https://example.test/o/r/pull/1 has had 3 review runs, and may now have 4. ' +
+                'The next tick decides whether to review it.',
+        )
     })
 
     it('say what a note to a chore did, and that its next run reads it', () => {

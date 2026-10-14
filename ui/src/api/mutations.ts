@@ -6,6 +6,8 @@ import type {
     ConfigReload,
     Dismissed,
     Forgot,
+    Granted,
+    Limit,
     LoopState,
     PauseChanged,
     Replied,
@@ -16,9 +18,10 @@ import type {
 } from './types'
 
 /**
- * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding, and
- * pausing the loop. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
- * `dismiss`, `pause`, and `resume`, with the same guards; a refusal is an ApiError naming its guard.
+ * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding,
+ * granting a run past a limit, and pausing the loop. Each goes through the same function on the server as
+ * `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `grant`, `pause`, and `resume`, with the same guards; a
+ * refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -44,6 +47,28 @@ export async function stopTicket(key: string, now: boolean): Promise<Stopped> {
 /** `canopy forget`, with the key as the operator typed it: the server refuses `not_confirmed` unless it matches. */
 export async function forgetTicket(key: string, confirm: string): Promise<Forgot> {
     return unwrap(await api.POST('/api/tickets/{key}/forget', { params: { path: { key } }, body: { confirm } }))
+}
+
+/**
+ * `canopy grant` for one more run past `limit`: `canopy grant KEY KIND --repo NAME` for a ticket's unit, or
+ * `canopy grant URL review` for a PR's reviews. Every run still counts; the next tick decides whether to use it.
+ */
+export async function grantLimit(ticketKey: string | null, limit: Limit): Promise<Granted> {
+    if (limit.kind === 'review') {
+        if (limit.pr_url === null) {
+            throw new Error('a review limit names its PR')
+        }
+        return unwrap(await api.POST('/api/pull-request/grants', { params: { query: { url: limit.pr_url } } }))
+    }
+    if (ticketKey === null) {
+        throw new Error("a unit's limit names its ticket")
+    }
+    return unwrap(
+        await api.POST('/api/tickets/{key}/grants', {
+            params: { path: { key: ticketKey } },
+            body: { kind: limit.kind, repo: limit.repo },
+        }),
+    )
 }
 
 /** `canopy reply`: a message on the ticket for the next tick to read. `submission` makes a resend a no-op. */
@@ -122,6 +147,14 @@ export async function refreshFindings(client: QueryClient, name: string): Promis
 /** After a dismissal of a review's finding: read the review again now. */
 export function refreshReview(client: QueryClient, run: number): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.review(run) })
+}
+
+/** After a grant: read the ticket and the PR the limit is on again now; the stream sends neither for a grant. */
+export async function refreshLimits(client: QueryClient, ticketKey: string | null, limit: Limit): Promise<void> {
+    await Promise.all([
+        ...(ticketKey === null ? [] : [client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })]),
+        ...(limit.pr_url === null ? [] : [client.invalidateQueries({ queryKey: keys.pullRequest(limit.pr_url) })]),
+    ])
 }
 
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */

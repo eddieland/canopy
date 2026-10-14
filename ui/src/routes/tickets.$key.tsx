@@ -9,6 +9,7 @@ import { Conversation } from '@/components/conversation'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
@@ -61,7 +62,7 @@ function TicketPage() {
 }
 
 function Ticket({ detail }: { detail: TicketDetail }) {
-    const { ticket, units, runs, messages, decisions, cost } = detail
+    const { ticket, units, limits, runs, messages, decisions, cost } = detail
     const now = useNow()
     const tracker = useTicketUrl(ticket.key)
     const branchUrl = useBranchUrls()
@@ -107,6 +108,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <Panel>
                         <PanelHeader label="Actions" />
                         <TicketActions ticket={ticket} />
+                        <GrantLimits limits={limits} ticketKey={ticket.key} className="border-t" />
                     </Panel>
                     <Panel>
                         <PanelHeader label="Work">

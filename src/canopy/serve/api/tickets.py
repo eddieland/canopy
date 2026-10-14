@@ -1,4 +1,4 @@
-"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget."""
+"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget, grant."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TicketKey, not_fou
 from canopy.serve.schema import (
     ForgetRequest,
     Forgot,
+    Granted,
+    GrantRequest,
     Replied,
     ReplyRequest,
     Started,
@@ -46,7 +48,7 @@ def ticket(key: TicketKey, backend: BackendDep) -> TicketDetail:
     """
     ref = ticket_ref(key, "show")
     with backend.open() as ctx:
-        found = views.ticket(ctx, ref.id)
+        found = views.ticket(backend, ctx, ref.id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"canopy has no record of {ref}")
     return found
@@ -120,3 +122,25 @@ def forget(key: TicketKey, body: ForgetRequest, backend: BackendDep) -> Forgot:
             raise RefusedError(r) from None
     _log.info("ticket forgotten", extra={"ticket": ref.id, "branch": forgot.branch, "prs": forgot.prs, "channel": WEB})
     return Forgot(branch=forgot.branch, prs=forgot.prs)
+
+
+@router.post(
+    "/tickets/{key}/grants", operation_id="grantTicket", summary="Grant a ticket's unit a run", responses=REFUSED
+)
+def grant(key: TicketKey, body: GrantRequest, backend: BackendDep) -> Granted:
+    """`canopy grant KEY KIND --repo NAME`, for one more run: the unit may have one more run of the kind than now.
+
+    Every run still counts (D030), and it dispatches nothing: the next tick decides. `repo` may be left out when the
+    ticket has had runs in one repository only; else it is refused `unknown_repo`, as a ticket with no runs is.
+    """
+    ref = ticket_ref(key, "grant")
+    with backend.open() as ctx:
+        try:
+            granted = backend.grant(ctx, ref, body.kind, body.repo)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "attempts granted",
+        extra={"ticket": ref.id, "repo": granted.repo, "kind": body.kind, "runs": 1, "channel": WEB},
+    )
+    return Granted(kind=body.kind, repo=granted.repo, runs=granted.runs, limit=granted.limit)

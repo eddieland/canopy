@@ -1,13 +1,15 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, and the pools' slots are stand-ins, since the first three belong to the loop and there is no treehouse to ask
-(backend.py).
+reload, the attempt and review limits and their grants, and the pools' slots are stand-ins, since the first four belong
+to the loop, `runs`, and `reviews`, and there is no treehouse to ask (backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
-ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Runs 39 and 40, tick 2, and chore
-run 2 left their sessions' events in their logs, as `--format json` prints them, for their transcripts (DESIGN §22).
+ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The workspace's policy allows one
+fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at its review limit (§22's grants). Runs 39
+and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
+transcripts (DESIGN §22).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -23,7 +25,7 @@ from canopy.core import chore_view, config, conversation, db, treehouse, workspa
 from canopy.core.items import Item
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
-from canopy.serve.backend import Backend, Reloading
+from canopy.serve.backend import Backend, Granted, Limit, Reloading
 
 if TYPE_CHECKING:
     import sqlite3
@@ -55,6 +57,10 @@ summary = "The web app."
 provider = "jira"
 query = "project = ABC"
 ticket_url = "https://jira.example/browse/{key}"
+
+[policy]
+max_fix_ci_attempts = 1
+max_reviews_per_pr = 2
 """
 
 _USER_TOML = """\
@@ -226,6 +232,9 @@ def seed(directory: Path) -> Backend:
         attention=_attention,
         end_run=_end_run,
         reload=_reload,
+        limits=_limits,
+        review_limit=_review_limit,
+        grant=_grant,
         mock=True,
         slots=slots,
         clock=lambda: T0,
@@ -264,6 +273,76 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
 def _reload(_ctx: Context) -> Reloading:
     # No loop runs on the mock's config, so there is nothing to read again.
     return Reloading(changed=(), restart=(), after_tick=False)
+
+
+def _limits(ctx: Context, key: str) -> list[Limit]:
+    """Each kind's limit of each unit of `key`'s, counted as `runs.policy` counts them: every run in each repository.
+
+    Returns:
+        Every kind of every unit, by repository.
+    """
+    p = ctx.config.policy
+    base = {"implement": p.max_implement_attempts, "fix-ci": p.max_fix_ci_attempts, "resume": p.max_resume_attempts}
+    counts: dict[str, dict[str, int]] = {}
+    for repo, kind, runs in ctx.conn.execute(
+        "SELECT s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
+        "WHERE r.ticket_key = ? AND r.kind != 'split' AND s.repo IS NOT NULL GROUP BY s.repo, r.kind",
+        (key,),
+    ):
+        counts.setdefault(str(repo), dict.fromkeys(base, 0))[str(kind)] = int(runs)
+    granted = {
+        (str(r[0]), str(r[1])): int(r[2])
+        for r in ctx.conn.execute(
+            "SELECT repo, kind, sum(runs) FROM attempt_grants WHERE ticket_key = ? GROUP BY repo, kind", (key,)
+        )
+    }
+    return [
+        Limit(kind, repo, None, runs, granted.get((repo, kind), 0), base[kind] + granted.get((repo, kind), 0))
+        for repo, of in sorted(counts.items())
+        for kind, runs in of.items()
+    ]
+
+
+def _review_limit(ctx: Context, url: str) -> Limit | None:
+    runs = len(db.review_runs_of(ctx.conn, url))
+    if runs == 0:
+        return None
+    row = ctx.conn.execute("SELECT coalesce(sum(runs), 0) FROM review_grants WHERE pr_url = ?", (url,)).fetchone()
+    granted = int(row[0])
+    return Limit("review", None, url, runs, granted, ctx.config.policy.max_reviews_per_pr + granted)
+
+
+def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> Granted:
+    """One more run, as `canopy grant` records it, with its `unknown` and `unknown_repo` guards and none of the rest.
+
+    Returns:
+        The unit's repository (none for a PR), its runs, and its limit with the grant counted.
+
+    Raises:
+        Refused: `unknown` for a PR never reviewed, `unknown_repo` for a unit the ticket has had no runs in.
+    """
+    if kind == "review":
+        reviewed = _review_limit(ctx, ref.id)
+        if reviewed is None:
+            raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant")
+        with db.transaction(ctx.conn):
+            ctx.conn.execute(
+                "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (ref.id, db.format_time(T0))
+            )
+        return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
+    units = {(found.repo, found.kind): found for found in _limits(ctx, ref.id)}
+    repos = {r for r, _ in units}
+    if repo is None and len(repos) == 1:
+        [repo] = repos
+    current = units.get((repo, kind))
+    if repo is None or current is None:
+        raise conversation.Refused("unknown_repo", f"{ref} has had no runs in {repo or 'one repository only'}")
+    with db.transaction(ctx.conn):
+        ctx.conn.execute(
+            "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, 1, ?)",
+            (ref.id, repo, kind, db.format_time(T0)),
+        )
+    return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
 
 
 async def changes(backend: Backend, seconds: float | None) -> None:
@@ -430,7 +509,9 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             ),
         )
     run_slots = (
-        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile
+        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
+        (37, "web", 4, "lease-37", "canopy:ABC-100"),
+        (40, "web", 4, "lease-40", "canopy:ABC-100"),
         (LIVE_RUN, "web", 1, "lease-1", "canopy:ABC-101"),
         (43, "web", 2, "lease-2", "canopy:ABC-104"),
         (43, "mobile", 1, "lease-3", "canopy:ABC-104"),
