@@ -7,11 +7,12 @@ import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RunLink } from '@/components/run-link'
+import { MarkedText } from '@/components/marked-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
-import { bySource, marked, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
+import { bySource, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
 import { cn } from '@/lib/utils'
 
 interface SearchParams {
@@ -105,16 +106,7 @@ function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
             {hit.label !== null && <Chip className="w-32 justify-center truncate" word={hit.label} />}
             {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
             <p className="min-w-0 flex-1 text-sm break-words">
-                {/* A snippet's pieces never reorder, so their index is their key. */}
-                {marked(hit.snippet, words).map((piece, i) =>
-                    piece.mark ? (
-                        <mark key={i} className="rounded-xs bg-accent/20 text-foreground">
-                            {piece.text}
-                        </mark>
-                    ) : (
-                        <span key={i}>{piece.text}</span>
-                    ),
-                )}
+                <MarkedText text={hit.snippet} words={words} />
             </p>
             <span className="flex w-20 shrink-0 justify-end gap-1 text-xs text-muted-foreground">
                 <Age at={hit.at} /> ago

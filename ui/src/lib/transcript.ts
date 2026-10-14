@@ -1,5 +1,6 @@
 import type { TranscriptEntry, TranscriptStep, TranscriptTokens, TranscriptTool } from '@/api/types'
 import { indent, tokenize } from '@/lib/json-lines'
+import { literal } from '@/lib/search'
 
 // A value longer than this is left out of a call's summary; a summary or outcome line is cut at `MAX_LINE`.
 const MAX_VALUE = 80
@@ -245,6 +246,53 @@ export function pretty(output: string): string {
     return indent(tokenize(output))
         .map((token) => token.text)
         .join('')
+}
+
+/** A tool call's output as its opened row shows it: `pretty`, or `no output`. */
+export function shownOutput(entry: TranscriptTool): string {
+    return entry.output ? pretty(entry.output) : 'no output'
+}
+
+/** A transcript's search as typed, its ends trimmed, or null when that leaves nothing to find. */
+export function findQueryOf(raw: string): string | null {
+    const query = raw.trim()
+    return query === '' ? null : query
+}
+
+/** How many lines of an entry hold a search's query. */
+export interface Hits {
+    /** Lines of its row: the agent's text, a tool call's name and line, an error. */
+    row: number
+    /** Lines of what it opens to: a tool call's input and output, as shown. */
+    body: number
+}
+
+/**
+ * How many of an entry's lines hold `query`, letters in either case, its characters taken literally. Lines are read
+ * as the page shows them, so a match never spans a line break, and each line counts once however often it matches. A
+ * model call is numbers alone, and never matches.
+ */
+export function hitsIn(entry: TranscriptEntry, query: string): Hits {
+    switch (entry.kind) {
+        case 'text': {
+            return { row: linesHolding([entry.text], query), body: 0 }
+        }
+        case 'tool': {
+            const row = [entry.tool, summary(entry), outcome(entry).line ?? '']
+            return { row: linesHolding(row, query), body: linesHolding([entry.input, shownOutput(entry)], query) }
+        }
+        case 'step': {
+            return { row: 0, body: 0 }
+        }
+        case 'error': {
+            return { row: linesHolding([entry.name, entry.message], query), body: 0 }
+        }
+    }
+}
+
+function linesHolding(texts: string[], query: string): number {
+    const pattern = new RegExp(literal(query), 'iu')
+    return texts.flatMap((text) => text.split('\n')).filter((line) => pattern.test(line)).length
 }
 
 function oneLine(text: string): string {

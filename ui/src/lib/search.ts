@@ -60,12 +60,50 @@ export function marked(text: string, words: readonly string[]): Piece[] {
     if (terms.length === 0) {
         return text ? [{ text, mark: false }] : []
     }
-    const pattern = new RegExp(`(${terms.map((w) => w.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('|')})`, 'iu')
+    const pattern = new RegExp(`(${terms.map((w) => literal(w)).join('|')})`, 'iu')
     // A split on a capturing group puts each match at an odd index.
     return text
         .split(pattern)
         .map((part, i) => ({ text: part, mark: i % 2 === 1 }))
         .filter((p) => p.text !== '')
+}
+
+/**
+ * Tokens (a tool call's colored JSON, say) cut where `marked` would cut their joined text, each piece keeping its
+ * token's fields: a match marked across the tokens it spans, so `"key": "val` is found in a key and a string alike.
+ */
+export function markedTokens<T extends { text: string }>(
+    tokens: readonly T[],
+    words: readonly string[],
+): (T & { mark: boolean })[] {
+    const pieces = marked(tokens.map((t) => t.text).join(''), words)
+    const out: (T & { mark: boolean })[] = []
+    // Where the walk is in the pieces: which one, and how far into it.
+    let at = 0
+    let into = 0
+    for (const token of tokens) {
+        let rest = token.text
+        while (rest !== '') {
+            const piece = pieces[at]
+            if (piece === undefined) {
+                break
+            }
+            const take = Math.min(rest.length, piece.text.length - into)
+            out.push({ ...token, text: rest.slice(0, take), mark: piece.mark })
+            rest = rest.slice(take)
+            into += take
+            if (into === piece.text.length) {
+                at += 1
+                into = 0
+            }
+        }
+    }
+    return out
+}
+
+/** `text` as a regular expression that matches it character for character. */
+export function literal(text: string): string {
+    return text.replaceAll(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 
 /** The hits of each source that has any, in the server's order. */

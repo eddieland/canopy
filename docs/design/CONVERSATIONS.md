@@ -590,6 +590,11 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
   `tick.updated` moves that tick's.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
+- A transcript finds lines in itself (taken on request, 2026-10-13), in the browser over the entries already read, so
+  it asks the server nothing: a search keeps the rows with a line that holds it, its matches marked, and opens a tool
+  call whose input or output holds it. A line is one as the page shows it (an output's indented JSON included), so
+  a match never spans a line break; the search is one string, letters in either case, its characters taken literally,
+  not words as the journal's search takes them. It searches the events in order; By call keeps its calls whole.
 - Everything in a transcript is agent output: untrusted, rendered as text; a tool call's input, and an output that is
   JSON, have their keys, strings, and values colored. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
@@ -696,6 +701,7 @@ something, without knowing which page holds it.
     Recording one needs the overseer to report it, a prompt change; the branch's slug stands in.
   - Transcripts. A run's log holds up to 32 MiB and is read whole on each request (above); reading every log for
     every query is not reasonably efficient, and indexing them copies agent output into the journal, rejected above.
+    A transcript's page finds lines in its own (above).
   - Review runs. No page shows one yet, so a hit would have nowhere to open.
 - Without an index, a scan reads newest first and stops at a source's 21st hit, so a common word answers at once. A
   query nothing matches reads each searched column whole: about 1.6 ms per MB of text (56 MB of messages in 90 ms,
