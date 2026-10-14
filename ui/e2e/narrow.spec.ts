@@ -3,34 +3,24 @@ import type { Page } from '@playwright/test'
 
 import { NOW, ROUTES, settled, signIn } from './helpers.ts'
 
-// Half of a second monitor, where the UI often sits, and a phone: the rail a strip of icons, then gone.
+// Half of a second monitor, where the UI often sits: the rail a strip of icons.
 const HALF = { width: 820, height: 900 }
-const PHONE = { width: 390, height: 844 }
 
 test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW)
     await signIn(page)
 })
 
-for (const [name, viewport] of [
-    ['half a monitor', HALF],
-    ['a phone', PHONE],
-] as const) {
-    test.describe(`on ${name}`, () => {
-        test.use({ viewport })
-
-        for (const route of ROUTES) {
-            test(`${route} fits the window's width`, async ({ page }) => {
-                await page.goto(route)
-                await settled(page)
-                expect(await sideways(page)).toEqual({ window: 0, page: 0 })
-            })
-        }
-    })
-}
-
 test.describe('on half a monitor', () => {
     test.use({ viewport: HALF })
+
+    for (const route of ROUTES) {
+        test(`${route} fits the window's width`, async ({ page }) => {
+            await page.goto(route)
+            await settled(page)
+            expect(await sideways(page)).toEqual({ window: 0, page: 0 })
+        })
+    }
 
     test("the tickets list keeps each ticket's title, its run, and its age, and lets its phase go", async ({
         page,
@@ -77,28 +67,6 @@ test.describe('on half a monitor', () => {
         await search.press('Enter')
         await expect(page).toHaveURL(/\/search\?q=web$/u)
         await expect(page.getByRole('dialog', { name: 'Rail' })).toHaveCount(0)
-    })
-})
-
-test.describe('on a phone', () => {
-    test.use({ viewport: PHONE })
-
-    test('the rail is gone, and the header opens it; the header keeps the readouts that matter', async ({ page }) => {
-        await page.goto('attention')
-        await settled(page)
-        await expect(page.getByTestId('rail-strip')).toHaveCount(0)
-        await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0)
-        await expect(page.getByTestId('last-tick')).toBeHidden()
-        await expect(page.getByTestId('stream-status')).toBeInViewport({ ratio: 1 })
-        await expect(page.getByTestId('stream-status')).toContainText('mock')
-
-        await page.getByTestId('app-header').getByRole('button', { name: 'Open the rail' }).click()
-        const sheet = page.getByRole('dialog', { name: 'Rail' })
-        await sheet.getByRole('link', { name: 'Tickets' }).click()
-        await expect(page).toHaveURL(/\/tickets$/u)
-        await expect(sheet).toHaveCount(0)
-        // Back where the sheet opened from.
-        await expect(page.getByRole('button', { name: 'Open the rail' })).toBeFocused()
     })
 })
 

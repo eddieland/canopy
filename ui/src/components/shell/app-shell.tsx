@@ -40,9 +40,9 @@ export const PAGE_SCROLLER = 'page'
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
  *
- * Under `lg` the rail is a strip of the nav's icons, and under `sm` it is gone (`useRailMode`): its button, atop the
- * strip or at the header's start, opens the whole rail as a sheet over the page, as does `/`, which lands in its
- * search box. A link followed or a search sent from the sheet closes it.
+ * Under `lg` the rail is a strip of the nav's icons (`useRailMode`): the button atop it opens the whole rail as a sheet
+ * over the page, as does `/`, which lands in its search box. A link followed or a search sent from the sheet closes
+ * it.
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
@@ -86,7 +86,7 @@ export function AppShell() {
     }
     return (
         <Sheet open={sheet && railOpen} onOpenChange={setRailOpen}>
-            <div className="grid h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
+            <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
                 <header
                     data-testid="app-header"
                     className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
@@ -101,10 +101,8 @@ export function AppShell() {
                         )}
                     />
                     <div className="flex items-center gap-2.5">
-                        {mode === 'hidden' && <RailButton className="-ml-2" />}
                         <LiveMark stream={stream} />
-                        {/* Under `sm` the mark alone: the room is the readouts'. */}
-                        <span className="font-mono text-sm font-medium tracking-tight max-sm:sr-only">canopy</span>
+                        <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                     </div>
                     <Ticker />
                     {/* Three groups, the action, the readouts, and the theme, a rule between each. */}
@@ -143,7 +141,7 @@ export function AppShell() {
                             </div>
                         </aside>
                     )}
-                    <main className="min-w-0 p-4 sm:p-6">
+                    <main className="min-w-0 p-6">
                         <ViewTransition>
                             <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
                                 <Outlet />
@@ -177,11 +175,10 @@ export function AppShell() {
     )
 }
 
-// The page's columns by how the rail shows: whole, a strip, or none.
+// The page's columns by how the rail shows: whole, or a strip.
 const COLUMNS: Record<RailMode, string> = {
     full: 'grid-cols-[13rem_minmax(0,1fr)]',
     strip: 'grid-cols-[3.5rem_minmax(0,1fr)]',
-    hidden: 'grid-cols-[minmax(0,1fr)]',
 }
 
 /** What the rail holds, top to bottom, whether beside the page or in the sheet: DESIGN's Shape and space. */
@@ -202,8 +199,8 @@ function RailColumn({ buddy }: { buddy: boolean }) {
     )
 }
 
-/** The button that opens the whole rail in a sheet, atop the strip or at the header's start. */
-function RailButton({ className }: { className?: string }) {
+/** The button atop the strip that opens the whole rail in a sheet. */
+function RailButton() {
     return (
         <SheetTrigger asChild>
             <Button
@@ -211,7 +208,6 @@ function RailButton({ className }: { className?: string }) {
                 size="icon-sm"
                 aria-label="Open the rail"
                 title="Search, the runs working now, and the spend"
-                className={className}
                 data-testid="rail-open"
             >
                 <Menu aria-hidden />

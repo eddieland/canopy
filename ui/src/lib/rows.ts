@@ -8,7 +8,7 @@ const FREE = `minmax(${FLOOR_REM}rem,1fr)`
 
 /**
  * The container sizes a column can show from (Tailwind's, in rem), narrowest first. A list's width picks one, so a row
- * fits the panel it is in, wherever the panel sits: half a monitor, a phone, beside a ticket's thread.
+ * fits the panel it is in, wherever the panel sits: half a monitor, beside a ticket's thread.
  */
 export const ROW_TIERS = [
     ['sm', 24],
@@ -23,10 +23,7 @@ export const ROW_TIERS = [
 /** A container size a column shows from. */
 export type RowTier = (typeof ROW_TIERS)[number][0]
 
-/**
- * How wide a list is under the first tier, in rem: a 390px phone's, the narrowest a list is made to fit. A column that
- * fits there shows at any width.
- */
+/** The room a column needs, in rem, to show at any width, under the first tier as well. */
 const BASE_REM = 22
 
 // A row's own room beside its columns: the gap between two (`gap-x-3`) and its padding (`px-3`).

@@ -18,7 +18,7 @@ const STREAM_LABEL: Record<StreamStatus, string> = {
 
 /**
  * The header's readouts: the latest tick, the stream's state, and `mock` over fixture data. The counters are the
- * attention page's. Under `sm` the latest tick gives way: whether the page is live, and whether it is mock, stay.
+ * attention page's.
  */
 export function LiveReadouts({ stream }: { stream: StreamStatus }) {
     const meta = useQuery(metaQuery)
@@ -50,10 +50,7 @@ function LastTick({ tick }: { tick: Tick }) {
     const shown = tick.status === 'ok' ? null : tick.status
     return (
         <span
-            className={cn(
-                'readout text-xs whitespace-nowrap max-sm:hidden',
-                TICK_TONE[tick.status] ?? 'text-muted-foreground',
-            )}
+            className={cn('readout text-xs whitespace-nowrap', TICK_TONE[tick.status] ?? 'text-muted-foreground')}
             title={tick.summary ?? undefined}
             data-testid="last-tick"
         >
