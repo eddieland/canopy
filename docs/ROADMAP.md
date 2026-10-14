@@ -1083,6 +1083,39 @@ one before, and a median such tick at least 15% cheaper at the same price, with 
 Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
 the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
 
+## M35. Temporary notices to workers
+
+REQUIREMENTS R15. Needs M12 and M20. Asked for by the operator (2026-10-14): a way to tell workers about a passing
+condition, such as "Artifactory is having issues and CI builds will likely fail". `paths.worker_instructions` (§12)
+carries it today, but it never lapses, the overseer never sees it, and nothing shows it is in force, so it outlives the
+outage or is forgotten.
+
+- A notice is a journal fact, like the pause (§6, The loop): its text, when and through which channel it was set, and
+  when it lapses. One at a time; setting another replaces it. It is bounded like the standing instructions, since every
+  run's prompt carries it. A lapsed notice reads as none, so nothing has to delete it.
+- `canopy notice 'TEXT' [--for DURATION]` sets it, `canopy notice --clear` lifts it, and `canopy notice` alone prints
+  the one in force. Without `--for` it lapses after a default.
+- Workers: it renders into `{{STANDING_INSTRUCTIONS}}`, after the file's text, under a line that says it is temporary
+  and when it was set, so the shipped prompts and the operator's overrides carry it unchanged. A split's prompt carries
+  none, as today, and a worker already running keeps the prompt it started with.
+- The overseer: the state block carries the notice in force, and the overseer prompt says how to weigh it, such as
+  holding `fix-ci` on a red check the notice explains. An overseer prompt change, with the operator's approval note in
+  the PR. No guard in code: whether a failure is the one the notice names is judgment.
+- `canopy status` and the web UI show the notice while it is in force, and the web UI sets and clears it, the
+  operator's own input like a pause or a reply (TRUST_MODEL T8).
+- DESIGN §6, §8, §11, §12, and §22 say what changes in them.
+- Tests with the fakes: a notice reaches an `implement` prompt and not a split's; it follows the standing
+  instructions' file when both are set, and renders alone when the file is not; a lapsed or cleared notice reaches no
+  prompt; a dry-run tick's state block carries it; the web route sets and clears it; Playwright for its banner.
+- Open: the default lifetime; whether a notice can name repositories, so an outage in one repository's CI does not
+  reach workers in another.
+
+Accept: the tests above pass. Live: during a CI outage, real or staged, the operator sets a notice from the CLI or the
+web UI; the next worker's summary takes it into account, the overseer holds `fix-ci` on a red check the notice
+explains, and once the notice lapses the next worker's prompt does not carry it.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.

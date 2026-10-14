@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09), and
-where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it must meet. Where
-the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the
-design doc stays normative until then (AGENTS.md).
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 on
+2026-10-14), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it
+must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry
+settles it, and the design doc stays normative until then (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -192,6 +192,14 @@ Shape (§23): a `triage-ci` run comes before `fix-ci` on a new failure. It reads
 named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
 edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
 the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
+
+### R15. Tell every worker about a passing condition, for as long as it lasts
+
+Gap (M35). Written down 2026-10-14. When something outside the work goes wrong for a while (an artifact registry
+outage, so CI builds will likely fail), the operator should be able to say so once and have every worker hear it until
+it is over, without editing a file and remembering to edit it back. The overseer should hear it too, so it does not
+spend `fix-ci` attempts, which never reset (D030), on failures the notice explains. `paths.worker_instructions` (§12)
+carries text to every worker today, but it never lapses, the overseer never reads it, and nothing shows it is in force.
 
 ## Nice to have
 
