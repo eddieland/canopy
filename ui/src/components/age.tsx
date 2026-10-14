@@ -10,3 +10,17 @@ export function Age({ at, className }: { at: string; className?: string }) {
         </time>
     )
 }
+
+/**
+ * When something that runs ended, `ended 3m ago`, or while it still runs, `for 3m`: a run's, a tick's, a chore run's.
+ * Right-aligned, for a list's `age` column.
+ */
+export function Ended({ started, ended }: { started: string; ended: string | null }) {
+    return (
+        <span className="flex justify-end gap-1 text-xs text-muted-foreground">
+            {ended === null ? 'for' : 'ended'}
+            <Age at={ended ?? started} />
+            {ended === null ? '' : 'ago'}
+        </span>
+    )
+}

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
 import { choreRunQuery, choreRunTranscriptQuery } from '@/api/queries'
@@ -8,11 +7,11 @@ import type { ChoreRunDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Field, Fields } from '@/components/fields'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { RunDot } from '@/components/status'
 import { TranscriptPanel } from '@/components/transcript'
-import { Skeleton } from '@/components/ui/skeleton'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { localTime } from '@/lib/time'
@@ -55,8 +54,8 @@ function Loaded({ name, id }: { name: string; id: number }) {
         return (
             <>
                 <PageHeader parents={<ChoreCrumb name={name} />} title={title} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -92,7 +91,7 @@ function NoRun({ name, title, children }: { name: string; title: string; childre
         <>
             <PageHeader parents={<ChoreCrumb name={name} />} title={title} />
             <Panel>
-                <Placeholder className="min-h-40">{children}</Placeholder>
+                <Empty size="panel">{children}</Empty>
             </Panel>
         </>
     )
@@ -116,7 +115,7 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
                     {run.status}
                 </span>
             </PanelHeader>
-            <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
+            <Fields>
                 <Field label="chore">
                     <ChoreLink name={detail.chore} />
                 </Field>
@@ -138,16 +137,7 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
                 <Field label="log" mono>
                     <span title="the chore's stdout and stderr: yours alone">{run.log_path}</span>
                 </Field>
-            </dl>
+            </Fields>
         </Panel>
-    )
-}
-
-function Field({ label, mono = false, children }: { label: string; mono?: boolean; children: ReactNode }) {
-    return (
-        <>
-            <dt className="panel-label self-center">{label}</dt>
-            <dd className={cn('min-w-0 break-words', mono ? 'font-mono text-xs break-all' : 'text-sm')}>{children}</dd>
-        </>
     )
 }

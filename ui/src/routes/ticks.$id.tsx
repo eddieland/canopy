@@ -7,13 +7,13 @@ import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { TickOutputPanel } from '@/components/tick-output'
 import { TranscriptPanel } from '@/components/transcript'
-import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { localTime } from '@/lib/time'
 import { TICK_TONE, tickId } from '@/lib/ticks'
@@ -43,8 +43,8 @@ function Loaded({ id }: { id: number }) {
         return (
             <>
                 <PageHeader title={`tick ${id}`} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -57,7 +57,7 @@ function NoTick({ title, children }: { title: string; children: string }) {
         <>
             <PageHeader title={title} />
             <Panel>
-                <Placeholder className="min-h-40">{children}</Placeholder>
+                <Empty size="panel">{children}</Empty>
             </Panel>
         </>
     )
@@ -81,20 +81,18 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             {tick.status}
                         </span>
                     </PanelHeader>
-                    <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
-                        <dt className="panel-label self-center">started</dt>
-                        <dd className="flex items-center gap-2 font-mono text-xs">
-                            <span title={localTime(tick.started_at)}>{tick.started_at}</span>
-                            <Age at={tick.started_at} />
-                        </dd>
-                        <dt className="panel-label self-center">ended</dt>
-                        <dd className="font-mono text-xs">{tick.ended_at ?? 'still running'}</dd>
-                        <dt className="panel-label">summary</dt>
-                        <dd>
-                            {tick.summary ? <RichText text={tick.summary} /> : <span className="text-sm">none</span>}
-                        </dd>
-                        <dt className="panel-label self-center">overseer</dt>
-                        <dd className="font-mono text-xs">
+                    <Fields>
+                        <Field label="started" mono>
+                            <span className="flex items-center gap-2">
+                                <span title={localTime(tick.started_at)}>{tick.started_at}</span>
+                                <Age at={tick.started_at} />
+                            </span>
+                        </Field>
+                        <Field label="ended" mono>
+                            {tick.ended_at ?? 'still running'}
+                        </Field>
+                        <Field label="summary">{tick.summary ? <RichText text={tick.summary} /> : 'none'}</Field>
+                        <Field label="overseer" mono>
                             {tick.session_id ? (
                                 <Copyable text={tick.session_id} label="session id">
                                     session {tick.session_id}
@@ -103,15 +101,11 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                                 'no session reported'
                             )}
                             {tick.cost_usd === null ? '' : `  $${tick.cost_usd.toFixed(2)}`}
-                        </dd>
-                        <dt className="panel-label self-center">output</dt>
-                        <dd
-                            className="font-mono text-xs break-all"
-                            title="the overseer's stdout and stderr: yours alone"
-                        >
+                        </Field>
+                        <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
                             {output ?? 'none kept'}
-                        </dd>
-                    </dl>
+                        </Field>
+                    </Fields>
                 </Panel>
                 <Panel>
                     <PanelHeader label="Decisions">
@@ -121,7 +115,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         </span>
                     </PanelHeader>
                     {decisions.length === 0 ? (
-                        <Placeholder className="min-h-20">none</Placeholder>
+                        <Empty>no decisions yet: its overseer has recorded none</Empty>
                     ) : (
                         <Decisions decisions={ordered('tick-decisions', decisionsOrder, decisions)} />
                     )}

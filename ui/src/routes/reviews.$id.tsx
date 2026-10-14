@@ -1,21 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
 import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Field, Fields } from '@/components/fields'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
+import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TrackerLink } from '@/components/tracker-link'
-import { Skeleton } from '@/components/ui/skeleton'
 import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
@@ -45,8 +45,8 @@ function Loaded({ id }: { id: number }) {
         return (
             <>
                 <PageHeader title={`review ${id}`} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -74,9 +74,9 @@ function Loaded({ id }: { id: number }) {
                 {data.diff === null ? (
                     <Panel>
                         <PanelHeader label="Diff" />
-                        <Placeholder className="min-h-24">
+                        <Empty>
                             no diff kept for this review: it is older than kept diffs, or its base could not be read
-                        </Placeholder>
+                        </Empty>
                         {placed.elsewhere.length > 0 && (
                             <div className="flex flex-col gap-2 border-t p-3">
                                 {placed.elsewhere.map((f) => (
@@ -98,7 +98,7 @@ function NoReview({ title, children }: { title: string; children: string }) {
         <>
             <PageHeader title={title} />
             <Panel>
-                <Placeholder className="min-h-40">{children}</Placeholder>
+                <Empty size="panel">{children}</Empty>
             </Panel>
         </>
     )
@@ -114,7 +114,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                     {review.status}
                 </span>
             </PanelHeader>
-            <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
+            <Fields>
                 <Field label="pull request" mono>
                     <TrackerLink href={review.pr_url} />
                     <PullRequestLink url={review.pr_url} className="ml-3 font-sans">
@@ -182,7 +182,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                         </span>
                     </Field>
                 )}
-            </dl>
+            </Fields>
         </Panel>
     )
 }
@@ -196,34 +196,27 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
             </PanelHeader>
             <ol className="divide-y">
                 {detail.findings.map((f, i) => (
-                    <li key={i} className="flex items-center gap-3 px-3 py-2 text-sm">
-                        <span className="readout w-4 text-xs text-muted-foreground">{i + 1}</span>
-                        <Chip className={cn('w-16 justify-center', SEVERITY_TEXT[f.severity])}>{f.severity}</Chip>
-                        {/* A router link, not a bare `#` href, which the page's <base> would send to the root. */}
-                        <Link
-                            to="/reviews/$id"
-                            params={{ id: String(detail.review.id) }}
-                            hash={findingAnchor(i + 1)}
-                            className="min-w-0 truncate text-accent underline-offset-4 hover:underline"
-                        >
-                            {f.title}
-                        </Link>
-                        {f.dismissed && <Chip>dismissed</Chip>}
-                        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
+                    <ListRow key={i} kind="review-finding" className="py-2 text-sm">
+                        <span className="readout text-xs text-muted-foreground">{i + 1}</span>
+                        <Chip className={cn('justify-center', SEVERITY_TEXT[f.severity])}>{f.severity}</Chip>
+                        <span className="flex min-w-0 items-center gap-3">
+                            {/* A router link, not a bare `#` href, which the page's <base> would send to the root. */}
+                            <Link
+                                to="/reviews/$id"
+                                params={{ id: String(detail.review.id) }}
+                                hash={findingAnchor(i + 1)}
+                                className="min-w-0 truncate text-accent underline-offset-4 hover:underline"
+                            >
+                                {f.title}
+                            </Link>
+                            {f.dismissed && <Chip>dismissed</Chip>}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground">
                             {f.line === null ? (f.file === null ? 'not in the diff' : 'on its file') : 'on the diff'}
                         </span>
-                    </li>
+                    </ListRow>
                 ))}
             </ol>
         </Panel>
-    )
-}
-
-function Field({ label, mono = false, children }: { label: string; mono?: boolean; children: ReactNode }) {
-    return (
-        <>
-            <dt className="panel-label self-center">{label}</dt>
-            <dd className={cn('min-w-0 break-words', mono ? 'font-mono text-xs break-all' : 'text-sm')}>{children}</dd>
-        </>
     )
 }
