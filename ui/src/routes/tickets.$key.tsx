@@ -9,16 +9,16 @@ import { Conversation } from '@/components/conversation'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
-import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLinks } from '@/components/ticket-links'
-import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -43,7 +43,7 @@ function TicketPage() {
             <>
                 <PageHeader title={key} />
                 <Panel>
-                    <Placeholder className="min-h-40">{error.message}</Placeholder>
+                    <Empty size="panel">{error.message}</Empty>
                 </Panel>
             </>
         )
@@ -52,8 +52,8 @@ function TicketPage() {
         return (
             <>
                 <PageHeader title={key} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -116,21 +116,19 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                                 active {age(ticket.active_at, now)} ago
                             </span>
                         </PanelHeader>
-                        <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
-                            <dt className="panel-label self-center">phase</dt>
-                            <dd className="font-mono text-xs">
+                        <Fields>
+                            <Field label="phase" mono>
                                 {phaseLabel(ticket)}
                                 {ticket.done ? ', done' : ''}
-                            </dd>
-                            <dt className="panel-label self-center">branch</dt>
-                            <dd className="min-w-0 font-mono text-xs">
+                            </Field>
+                            <Field label="branch" mono>
                                 {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
-                            </dd>
+                            </Field>
                             {units.map((unit) => (
                                 <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
                             ))}
                             <CostTotalRow cost={cost} />
-                        </dl>
+                        </Fields>
                     </Panel>
                     <Panel>
                         <PanelHeader label="Recent runs">
@@ -140,7 +138,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             </span>
                         </PanelHeader>
                         {runs.length === 0 ? (
-                            <Placeholder className="min-h-20">none</Placeholder>
+                            <Empty>no runs yet: none has worked it</Empty>
                         ) : (
                             <PanelScroll label="Recent runs">
                                 <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
@@ -155,7 +153,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             </span>
                         </PanelHeader>
                         {decisions.length === 0 ? (
-                            <Placeholder className="min-h-20">no tick has decided anything about it yet</Placeholder>
+                            <Empty>no decisions yet: no tick has decided anything about it</Empty>
                         ) : (
                             <PanelScroll label="Decisions">
                                 <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
@@ -173,7 +171,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
                     {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
                     {messages.length === 0 ? (
-                        <Placeholder className="min-h-20">no messages yet</Placeholder>
+                        <Empty>no messages yet: what you and its workers say shows here</Empty>
                     ) : (
                         <Conversation
                             messages={ordered('conversation', conversationOrder, messages)}
@@ -194,25 +192,22 @@ function Ticket({ detail }: { detail: TicketDetail }) {
 
 function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; phase: string | null }) {
     return (
-        <>
-            <dt className="panel-label self-center">{repo ? `PR in ${repo}` : 'PR'}</dt>
-            <dd className="flex items-center gap-3 font-mono text-xs">
-                {pr ? (
-                    <a
-                        href={pr}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
-                    >
-                        {pr.replace(/^https:\/\//u, '')}
-                        <LinkOutIcon href={pr} />
-                    </a>
-                ) : (
-                    'none recorded'
-                )}
-                {phase && <span className="text-muted-foreground">{phase}</span>}
-            </dd>
-        </>
+        <Field label={repo ? `PR in ${repo}` : 'PR'} mono className="flex items-baseline gap-3">
+            {pr ? (
+                <a
+                    href={pr}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
+                >
+                    {pr.replace(/^https:\/\//u, '')}
+                    <LinkOutIcon href={pr} />
+                </a>
+            ) : (
+                'none recorded'
+            )}
+            {phase && <span className="text-muted-foreground">{phase}</span>}
+        </Field>
     )
 }
 

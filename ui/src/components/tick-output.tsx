@@ -5,10 +5,9 @@ import { Fragment, useState } from 'react'
 import { tickOutputQuery } from '@/api/queries'
 import type { TickOutput } from '@/api/types'
 import { JsonTokens } from '@/components/json-text'
-import { Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
+import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
 import { jsonLines } from '@/lib/json-lines'
 import { setPrettyOutput, usePrettyOutput } from '@/lib/pretty-output'
@@ -56,20 +55,11 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                     </span>
                 </PanelHeader>
                 {path === null ? (
-                    <Placeholder className="min-h-20">
-                        {running ? 'the overseer’s output is written when it ends' : 'none kept'}
-                    </Placeholder>
+                    <Empty>{running ? 'no output yet: the overseer’s is written when it ends' : 'none kept'}</Empty>
                 ) : (
                     <>
                         <CollapsibleContent>
-                            {data === undefined ? (
-                                <div className="flex flex-col gap-2 p-3">
-                                    <Skeleton className="h-4 w-2/3" />
-                                    <Skeleton className="h-4 w-1/2" />
-                                </div>
-                            ) : (
-                                <Body output={data} pretty={pretty} />
-                            )}
+                            {data === undefined ? <PanelSkeleton /> : <Body output={data} pretty={pretty} />}
                         </CollapsibleContent>
                         {!shown && (
                             <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
@@ -85,10 +75,10 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
 
 function Body({ output, pretty }: { output: TickOutput; pretty: boolean }) {
     if (output.status === 'no_output') {
-        return <Placeholder className="min-h-20">its output is gone, or is not a file canopy reads</Placeholder>
+        return <Empty>its output is gone, or is not a file canopy reads</Empty>
     }
     if (output.text === '') {
-        return <Placeholder className="min-h-20">empty</Placeholder>
+        return <Empty>empty: the overseer wrote nothing</Empty>
     }
     return (
         <>
