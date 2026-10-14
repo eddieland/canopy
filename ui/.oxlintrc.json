@@ -95,6 +95,16 @@
             "name": "react",
             "importNames": ["useMemo", "useCallback", "memo"],
             "message": "The React Compiler memoizes; do not hand-write useMemo, useCallback, or memo (ui/AGENTS.md)."
+          },
+          {
+            "name": "radix-ui",
+            "message": "Use a wrapper from src/components/ui/, or add one there; only it imports Radix (ui/AGENTS.md)."
+          }
+        ],
+        "patterns": [
+          {
+            "group": ["@radix-ui/*"],
+            "message": "Radix comes from the one radix-ui package, through src/components/ui/ (ui/AGENTS.md)."
           }
         ]
       }
@@ -229,9 +239,28 @@
       }
     },
     {
+      // The shadcn wrappers are the one place that imports Radix: the radix-ui package, never @radix-ui/*.
       "files": ["src/components/ui/**"],
       "rules": {
-        "react/only-export-components": "off"
+        "react/only-export-components": "off",
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "importNames": ["useMemo", "useCallback", "memo"],
+                "message": "The React Compiler memoizes; do not hand-write useMemo, useCallback, or memo."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@radix-ui/*"],
+                "message": "Radix comes from the one radix-ui package, through src/components/ui/ (ui/AGENTS.md)."
+              }
+            ]
+          }
+        ]
       }
     },
     {

@@ -51,8 +51,7 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 ## Obligations
 
 - Stay inside {{SLOT}}. Do not touch files outside it.
-- Commit with clear messages. Keep the agent runtime's attribution trailer, or add
-  `{{COMMIT_TRAILER}}`: agent work is never disguised as human work.
+- Commit with clear messages. {{COMMIT_ATTRIBUTION}} Never disguise agent work as human work.
 - Push only to `{{BRANCH}}`, with `git push origin HEAD:refs/heads/{{BRANCH}}` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch. {{BRANCH_UPDATE}}
 - Open a PR for each repository you changed, against that repository's base branch listed above, with the ticket key
