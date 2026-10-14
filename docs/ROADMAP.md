@@ -392,46 +392,15 @@ Next: watching a run live needs the worker's stdout streamed to its log.
 
 ## M28. Overseer reliability from the first live session
 
-MEASUREMENTS 2026-10-12, F1 to F3 and F5; 2026-10-13, F15, F17, and F20. Needs M12 and M21's code. Asked for by
-the operator (2026-10-12): a quarter of the first session's overseer spend bought nothing, mostly for reasons a check
-in code can catch, and the same reasons keep idle pacing from counting a quiet tick as idle.
-
-- The overseer's `canopy` works before the overseer is paid for. The tick either puts this canopy's own launcher
-  first on the overseer's PATH, or checks, through `procs`, that `canopy --version` runs from the overseer's
-  environment. When it cannot, the tick closes without running the overseer, with a status of its own, and raises an
-  attention item saying why. Settle which in DESIGN §6; every way of installing canopy has to work.
-- The done line: the overseer ends its final message with a line `CANOPY_TICK_DONE`, and may summarize before or after
-  it; the harness accepts it as a line anywhere in that message, never in an earlier one. DESIGN §6, with the
-  operator's approval note in the PR for the prompt.
-- A ticket started or stopped from the web UI or the CLI (`starts`) and attempts granted (`canopy grant`) each end the
-  loop's wait as an operator message does, with the same one-minute floor, count against idleness the same way, and
-  are recorded as what woke the tick (`ticks.woken_by`). DESIGN §6 (The loop, Idle pacing) and §22 (Waking the loop).
-  A config reload does not: the operator declined it (2026-10-13).
-- Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
-  attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
-  `decisions` table shows a pattern. The first day shows one (2026-10-13 F17): the overseer leaves out an attention
-  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Settled by the operator
-  (2026-10-13): a prompt fix, with the overseer's open items in its state block (DESIGN §6 step 4).
-- Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
-  the wait; a fake overseer that prints a summary after `CANOPY_TICK_DONE` closes the tick `ok`.
-
-Accept: the tests above pass. Live: a working session re-measured (MEASUREMENTS) has no tick that ran the overseer
-without a working `canopy`, no `overseer_failed` tick that recorded its decisions, and every web-UI start picked up
-within about a minute.
+A check that the overseer's `canopy` works before the overseer runs, the `CANOPY_TICK_DONE` line anywhere in the final
+message, starts and grants ending the loop's wait, churn in the `loop waits` line, and the overseer's open attention
+items in its state block.
 
 Status: done 2026-10-14.
-Learned:
-
-- Closed on the operator's request, with every fakes-based test above passing, before the live re-measurement Accept
-  describes, which is SCENARIOS S34.
-- A check beat putting this canopy's launcher first on the overseer's PATH: prepending catches only a missing `canopy`,
-  not a launcher whose environment is gone, and no install names its launcher reliably (DESIGN §6 step 5).
-- The first day's churn was mostly the overseer dropping attention items it could not see. It was settled in the
-  prompt, with its open items in the state block, not by the harness holding items until resolved (DESIGN §6 step 4).
-- A config reload does not end the wait: the operator declined it (2026-10-13).
-
-Next: S34's re-measurement, with S27's overnight run, is what M29 waits on. The `loop waits` lines' `churn` says
-whether the overseer still flaps after the prompt fix; further prompt changes follow only on a pattern in `decisions`.
+Learned: closed on the operator's request before the live re-measurement, which is SCENARIOS S34. A check beat putting
+canopy's launcher first on PATH, which misses a launcher whose environment is gone (DESIGN §6 step 5). The first day's
+churn was the overseer dropping items it could not see, fixed in the prompt (DESIGN §6 step 4).
+Next: M29 waits on S34's re-measurement and S27's overnight run.
 
 ## M29. Probe-gated overseer
 
