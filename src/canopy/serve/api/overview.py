@@ -1,14 +1,16 @@
-"""What every page reads beside its own resource: the server's meta, the attention list, and the spend."""
+"""What every page reads beside its own resource: the server's meta, the attention list, the spend, and its days."""
 
 from __future__ import annotations
 
 from importlib.metadata import version
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
+from canopy.core import spend as spending
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep, SpaDep
-from canopy.serve.schema import AttentionItem, Meta, Spend
+from canopy.serve.schema import AttentionItem, Meta, Spend, SpendBreakdown
 
 TAG = "overview"
 router = APIRouter(tags=[TAG])
@@ -39,3 +41,20 @@ def spend(backend: BackendDep) -> Spend:
     """What the last 24 hours and the last 30 days each cost, as the agent runtime reported it."""
     with backend.open() as ctx:
         return views.spend(backend, ctx)
+
+
+@router.get("/spend/breakdown", operation_id="getSpendBreakdown", summary="Get the spend by day and by what it bought")
+def spend_breakdown(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spending.MAX_DAYS,
+            description=f"How many UTC days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+        ),
+    ] = spending.DEFAULT_DAYS,
+) -> SpendBreakdown:
+    """What each day of the window cost, by kind; the ticks by what they bought; and the newest idle ticks."""
+    with backend.open() as ctx:
+        return views.spend_breakdown(backend, ctx, days)

@@ -2,19 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ticksQuery } from '@/api/queries'
-import type { Tick } from '@/api/types'
-import { Age } from '@/components/age'
-import { Cost } from '@/components/cost'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
-import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { ListRow } from '@/components/rows'
-import { Chip, Word } from '@/components/status'
-import { TickLink } from '@/components/tick-link'
+import { TickRow } from '@/components/tick-row'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { rowLineFrom } from '@/lib/rows'
-import { TICK_TONE } from '@/lib/ticks'
-import { cn } from '@/lib/utils'
 
 /** The latest ticks, newest first, as `canopy decisions` prints them. */
 export const Route = createFileRoute('/ticks/')({
@@ -47,32 +38,11 @@ function TicksPage() {
                 ) : (
                     <ul className="stagger divide-y" data-testid="ticks">
                         {ordered('ticks', order, data).map((tick) => (
-                            <Row key={tick.id} tick={tick} />
+                            <TickRow key={tick.id} tick={tick} />
                         ))}
                     </ul>
                 )}
             </Panel>
         </>
-    )
-}
-
-function Row({ tick }: { tick: Tick }) {
-    return (
-        <ListRow kind="tick" data-testid={`tick-${tick.id}`}>
-            <TickLink id={tick.id} />
-            <span className="flex min-w-0 items-center gap-3">
-                <Word
-                    word={tick.status}
-                    className={cn('font-mono text-xs', TICK_TONE[tick.status] ?? 'text-muted-foreground')}
-                />
-                {tick.dry_run && <Chip>dry run</Chip>}
-            </span>
-            <span className="readout text-right text-xs text-muted-foreground" data-testid="tick-decisions">
-                {tick.decisions === 1 ? '1 decision' : `${tick.decisions} decisions`}
-            </span>
-            <Cost usd={tick.cost_usd} className="text-right text-xs text-muted-foreground" />
-            <Age variant="span" started={tick.started_at} ended={tick.ended_at} className="text-right" />
-            {tick.summary && <RichText text={tick.summary} lines={SUMMARY_LINES} className={rowLineFrom('state')} />}
-        </ListRow>
     )
 }

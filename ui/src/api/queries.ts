@@ -29,6 +29,8 @@ export const keys = {
     tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
     spend: ['spend'] as const,
+    // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
+    spendBreakdown: (days: number) => ['spend', 'breakdown', days] as const,
     tick: ['tick'] as const,
     search: (q: string) => ['search', q] as const,
     // The reviews list and each review's page share a prefix, so one invalidation marks both stale.
@@ -120,6 +122,18 @@ export const spendQuery = queryOptions({
     queryKey: keys.spend,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/spend', { signal })),
 })
+
+/**
+ * What the last `days` UTC days cost, by day and by what the ticks bought, as `canopy spend --days` prints it. The
+ * stream's `spend.updated` marks it stale.
+ */
+export function spendBreakdownQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.spendBreakdown(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/spend/breakdown', { params: { query: { days } }, signal })),
+    })
+}
 
 /** The latest tick. The stream sends it again whenever a tick starts or ends. */
 export const tickQuery = queryOptions({

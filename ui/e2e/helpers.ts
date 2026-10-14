@@ -22,6 +22,7 @@ export const ROUTES = [
     'chores/deps/runs/2',
     'ticks',
     'ticks/2',
+    'spend',
     'settings',
     'search?q=web',
 ] as const

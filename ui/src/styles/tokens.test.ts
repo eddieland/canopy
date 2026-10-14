@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest'
 // is the token at that strength over its base, as Tailwind's `bg-status-failed/12` paints it.
 
 const AA = 4.5
+// WCAG's non-text contrast: a chart's marks against what they sit on.
+const GRAPHICS = 3
 
 type Rgb = [number, number, number]
 type Theme = Record<string, Rgb>
@@ -42,6 +44,9 @@ const TEXT = [
     'syntax-literal',
 ]
 const BASES = ['background', 'surface', 'surface-raised']
+
+// The spend chart's series: fills on a panel's surface, never text (ui/DESIGN.md, "Tokens").
+const SERIES = ['spend-overseer', 'spend-idle', 'spend-workers', 'spend-chores', 'spend-reviews', 'spend-dry-run']
 
 // A status word also sits on its own tint: a chip (10%) in a selected inbox row (the accent at 14%), a destructive
 // button (12%, 20% hovered), a question's bubble (12%) on a raised surface.
@@ -80,6 +85,14 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
         const low = ['diff-add', 'diff-del']
             .map((name) => below(`${name} on its 12%`, token(name), over(token(name), 0.12, token('surface'))))
             .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    it("sets the spend chart's series apart from the surface they sit on", () => {
+        const low = SERIES.map((name) => {
+            const ratio = contrast(token(name), token('surface'))
+            return ratio < GRAPHICS ? `${name} on surface: ${ratio.toFixed(2)}:1` : null
+        }).filter((line) => line !== null)
         expect(low).toEqual([])
     })
 

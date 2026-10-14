@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_result, chore_view, contract, conversation, db, items, pause, search, transcript
+from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
     AttentionItem,
@@ -39,7 +40,13 @@ from canopy.serve.schema import (
     SearchHit,
     SearchResults,
     Spend,
+    SpendBreakdown,
+    SpendCosts,
+    SpendDay,
+    SpendTicks,
+    SpendUnpriced,
     SpendWindow,
+    SpendWoken,
     StartStatus,
     Tick,
     TickDetail,
@@ -139,6 +146,40 @@ def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
     return SpendWindow(since=since, hours=hours, cost_usd=db.spent_since(ctx.conn, db.format_time(since)))
 
 
+def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown:
+    """What the last `days` UTC days cost, by the backend's clock, as `canopy spend --days` prints it.
+
+    Returns:
+        The breakdown, with the newest idle ticks in the window.
+    """
+    found = spending.breakdown(ctx.conn, backend.clock(), days)
+    return SpendBreakdown(
+        since=db.parse_time(found.since),
+        days=found.days,
+        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs)) for d in found.per_day],
+        totals=_spend_costs(found.totals),
+        ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
+        woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
+        unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
+        idle_share=found.idle_share,
+        idle_ticks=[
+            tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since, found.until)
+        ],
+    )
+
+
+def _spend_costs(costs: spending.Costs) -> SpendCosts:
+    return SpendCosts(
+        overseer=costs.overseer,
+        idle=costs.idle,
+        dry_run=costs.dry_run,
+        workers=costs.workers,
+        chores=costs.chores,
+        reviews=costs.reviews,
+        total=costs.total,
+    )
+
+
 def last_tick(ctx: Context) -> LastTick:
     """The latest tick, and the newest message the latest `ok` tick read.
 
@@ -188,6 +229,8 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         decisions=decisions,
+        idle=None if row["idle"] is None else bool(row["idle"]),
+        woken_by=str(row["woken_by"]) if row["woken_by"] is not None else None,
     )
 
 

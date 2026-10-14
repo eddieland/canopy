@@ -49,6 +49,14 @@ export type Pool = Schemas['Pool']
 export type Spend = Schemas['Spend']
 /** What the agent runtime reported spending in the last `hours` hours (DESIGN §13). */
 export type SpendWindow = Schemas['SpendWindow']
+/** What a window of whole UTC days cost, by day, by kind, and by what its ticks bought, as `canopy spend` prints. */
+export type SpendBreakdown = Schemas['SpendBreakdown']
+/** What each kind of agent run cost: the overseer (idle ticks' part of it too), dry runs, workers, chores, reviews. */
+export type SpendCosts = Schemas['SpendCosts']
+/** One UTC day's costs. */
+export type SpendDay = Schemas['SpendDay']
+/** What a group of ticks bought (DESIGN §6, Idle pacing): idle, busy, hand-run, not ok, or a dry run. */
+export type SpendGroup = Schemas['SpendGroup']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

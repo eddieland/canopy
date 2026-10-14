@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AttentionRouteImport } from './routes/attention'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SpendRouteImport } from './routes/spend'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
@@ -46,6 +47,11 @@ const SearchRoute = SearchRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SpendRoute = SpendRouteImport.update({
+  id: '/spend',
+  path: '/spend',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorktreesRoute = WorktreesRouteImport.update({
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/attention': typeof AttentionRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/spend': typeof SpendRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByTo {
   '/attention': typeof AttentionRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/spend': typeof SpendRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
@@ -165,6 +173,7 @@ export interface FileRoutesById {
   '/attention': typeof AttentionRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
+  '/spend': typeof SpendRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/attention'
     | '/search'
     | '/settings'
+    | '/spend'
     | '/worktrees'
     | '/chores/$name'
     | '/pull-requests/pr'
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/attention'
     | '/search'
     | '/settings'
+    | '/spend'
     | '/worktrees'
     | '/chores/$name'
     | '/pull-requests/pr'
@@ -227,6 +238,7 @@ export interface FileRouteTypes {
     | '/attention'
     | '/search'
     | '/settings'
+    | '/spend'
     | '/worktrees'
     | '/chores/$name'
     | '/pull-requests/pr'
@@ -248,6 +260,7 @@ export interface RootRouteChildren {
   AttentionRoute: typeof AttentionRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
+  SpendRoute: typeof SpendRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
   PullRequestsPrRoute: typeof PullRequestsPrRoute
@@ -292,6 +305,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/spend': {
+      id: '/spend'
+      path: '/spend'
+      fullPath: '/spend'
+      preLoaderRoute: typeof SpendRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/worktrees': {
@@ -400,6 +420,7 @@ const rootRouteChildren: RootRouteChildren = {
   AttentionRoute: AttentionRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
+  SpendRoute: SpendRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
   PullRequestsPrRoute: PullRequestsPrRoute,

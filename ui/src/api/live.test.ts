@@ -34,6 +34,39 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryData(keys.tickets)).toEqual(mockTickets)
     })
 
+    it("marks every window's spend breakdown stale on a spend or a tick, and keeps the spend's own data", () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.spendBreakdown(7), { days: 7 })
+        client.setQueryData(keys.spendBreakdown(30), { days: 30 })
+        const spend = {
+            day: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 },
+            month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
+            total_usd: 120.75,
+        }
+        applyStreamEvent(client, { type: 'spend.updated', spend })
+        expect(client.getQueryState(keys.spendBreakdown(7))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.spendBreakdown(30))?.isInvalidated).toBe(true)
+        expect(client.getQueryData(keys.spend)).toEqual(spend)
+
+        client.setQueryData(keys.spendBreakdown(7), { days: 7 })
+        applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: null })
+        expect(client.getQueryState(keys.spendBreakdown(7))?.isInvalidated).toBe(true)
+    })
+
+    it('marks the spend breakdown stale when a run starts or ends, not when a cost moves', () => {
+        const client = new QueryClient()
+        const [first] = mockRuns
+        if (!first) {
+            throw new Error('fixtures are empty')
+        }
+        client.setQueryData(keys.runs, [first])
+        client.setQueryData(keys.spendBreakdown(7), { days: 7 })
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, cost_usd: (first.cost_usd ?? 0) + 1 }] })
+        expect(client.getQueryState(keys.spendBreakdown(7))?.isInvalidated).toBe(false)
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, state: 'failed' }] })
+        expect(client.getQueryState(keys.spendBreakdown(7))?.isInvalidated).toBe(true)
+    })
+
     it('marks a changed ticket stale and leaves the others alone', () => {
         const client = new QueryClient()
         const detail = { ticket: mockTickets[0], units: [], runs: [], messages: [] } as unknown as TicketDetail
@@ -138,6 +171,8 @@ describe('applyStreamEvent', () => {
             session_id: null,
             cost_usd: null,
             decisions: 0,
+            idle: null,
+            woken_by: null,
         }
         client.setQueryData(keys.tick, { tick: running, acknowledged: null })
         client.setQueryData(keys.tickTranscript(3), empty)

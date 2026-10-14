@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 import click
 
-from canopy.cli import chores, conversation, journal, loop, notify, reviews, runs, setup, workspace
+from canopy.cli import chores, conversation, journal, loop, notify, reviews, runs, setup, spend, workspace
 from canopy.cli.common import Obj
 from canopy.core import config, db
 from canopy.infra import procs
@@ -57,6 +57,7 @@ for command in (
     loop.cmd_tick,
     loop.cmd_status,
     loop.cmd_decisions,
+    spend.cmd_spend,
     conversation.cmd_pause,
     conversation.cmd_resume,
     conversation.cmd_start,
