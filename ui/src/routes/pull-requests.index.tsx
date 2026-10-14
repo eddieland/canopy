@@ -14,7 +14,6 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { pullRequestLabel } from '@/lib/pull-request-label'
 import { verdictText } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -66,9 +65,7 @@ function Row({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
     return (
         <ListRow kind="pull-request" data-testid="pull-request">
-            <PullRequestLink url={pr.url} className="truncate">
-                {pullRequestLabel(pr.url)}
-            </PullRequestLink>
+            <PullRequestLink url={pr.url} />
             <span className="flex min-w-0 items-center gap-3">
                 {pr.ticket_key === null ? (
                     <span className="font-mono text-xs text-muted-foreground">no ticket</span>

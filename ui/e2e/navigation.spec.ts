@@ -22,7 +22,7 @@ test('the tab names the page, after what blocks on the operator', async ({ page 
 
     const nav = page.getByRole('navigation', { name: 'Main' })
     await nav.getByRole('link', { name: 'Tickets' }).click()
-    await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
+    await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102', exact: true }).click()
     await expect(page).toHaveTitle(`(${count}) ABC-102 Export reports as CSV · canopy`)
 })
 
@@ -50,7 +50,7 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets')
     // A ticket the overseer named shows its title beside its key (DESIGN §7).
     await expect(page.getByTestId('ticket-ABC-102')).toContainText('Export reports as CSV')
-    await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
+    await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102', exact: true }).click()
     await expect(page).toHaveURL(/\/tickets\/ABC-102$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102 Export reports as CSV')
     await expect(nav.getByRole('link', { name: 'Tickets' })).toHaveAttribute('data-status', 'active')
@@ -218,12 +218,8 @@ test("a ticket's page links to its PR and its branch under its title, beside the
     await page.goto('tickets/ABC-103')
     const links = page.locator('main header').getByRole('navigation', { name: 'Links out' })
     const branch = 'github.com/acme/web/tree/agent/ABC-103-billing-v2'
-    await expect(links.getByRole('link')).toHaveText([
-        'jira.example/browse/ABC-103',
-        'github.com/acme/web/pull/91',
-        branch,
-    ])
-    await expect(links.getByRole('link', { name: 'github.com/acme/web/pull/91' })).toHaveAttribute(
+    await expect(links.getByRole('link')).toHaveText(['jira.example/browse/ABC-103', 'acme/web#91', branch])
+    await expect(links.getByRole('link', { name: 'acme/web#91' })).toHaveAttribute(
         'href',
         'https://github.com/acme/web/pull/91',
     )
@@ -371,7 +367,7 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
 test('the header names the latest tick and how long ago it ended', async ({ page }) => {
     await page.goto('runs')
     await settled(page)
-    await expect(page.getByTestId('last-tick')).toHaveText(/^tick 2 · \d+[a-z]+ ago$/u)
+    await expect(page.getByTestId('last-tick')).toHaveText(/^tick:2 · \d+[a-z]+ ago$/u)
     await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
 })
 
@@ -380,9 +376,9 @@ test("the header's tick opens its decisions, each about its subject, the oversee
 }) => {
     await page.goto('runs')
     await settled(page)
-    await page.getByTestId('last-tick').getByRole('link', { name: 'tick 2' }).click()
+    await page.getByTestId('last-tick').getByRole('link', { name: 'tick:2' }).click()
     await expect(page).toHaveURL(/\/ticks\/2$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick 2')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
         'data-status',
         'active',
@@ -395,9 +391,9 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     await expect(decisions.nth(2)).toContainText('The ticket says <b>keep</b> the old route: left for the worker.')
     await expect(decisions.nth(2).locator('b')).toHaveCount(0)
     await expect(decisions.nth(3)).toContainText('ABC-099 (web)')
-    await expect(decisions.nth(4)).toContainText('github.com/acme/api/pull/12')
+    await expect(decisions.nth(4)).toContainText('acme/api#12')
 
-    await decisions.nth(0).getByRole('link', { name: 'ABC-102' }).click()
+    await decisions.nth(0).getByRole('link', { name: 'ABC-102', exact: true }).click()
     await expect(page).toHaveURL(/\/tickets\/ABC-102$/u)
 })
 
@@ -414,9 +410,9 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await settled(page)
     const decisions = page.getByTestId('ticket-decisions').getByTestId('decisions').locator(':scope > li')
     await expect(decisions).toHaveCount(2)
-    await expect(decisions.nth(0)).toContainText('tick 2')
+    await expect(decisions.nth(0)).toContainText('tick:2')
     await expect(decisions.nth(1)).toContainText('dispatch: implement')
-    await decisions.nth(1).getByRole('link', { name: 'tick 1' }).click()
+    await decisions.nth(1).getByRole('link', { name: 'tick:1' }).click()
     await expect(page).toHaveURL(/\/ticks\/1$/u)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
 })

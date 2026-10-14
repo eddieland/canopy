@@ -13,6 +13,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseLabel } from '@/lib/phase'
+import { runRef } from '@/lib/refs'
 
 /** Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. */
 export const Route = createFileRoute('/tickets/')({
@@ -72,7 +73,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                 {ticket.running_run !== null && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
                         <RunDot state="running" />
-                        run:{ticket.running_run}
+                        {runRef(ticket.running_run)}
                     </span>
                 )}
                 {ticket.awaiting !== null && (

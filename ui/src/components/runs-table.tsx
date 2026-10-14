@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import type { Run } from '@/api/types'
 import { Ended } from '@/components/age'
 import { LinkedText } from '@/components/linked-text'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
@@ -131,16 +131,7 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {run.prs.map((pr) => (
-                        <a
-                            key={pr}
-                            href={pr}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
-                        >
-                            {pr.replace(/^https:\/\//u, '')}
-                            <LinkOutIcon href={pr} />
-                        </a>
+                        <PullRequestLink key={pr} url={pr} />
                     ))}
                     {run.worktrees.map((path) => (
                         <span key={path} className="text-muted-foreground" title="the worktree it holds">

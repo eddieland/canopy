@@ -7,6 +7,7 @@ import { useDismissFinding } from '@/components/dismiss-finding'
 import { LinkedText } from '@/components/linked-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
+import { addressOf } from '@/lib/links'
 import { cn } from '@/lib/utils'
 
 /**
@@ -61,7 +62,7 @@ function FindingRow({
                             'hover:underline',
                         )}
                     >
-                        {finding.link.replace(/^https:\/\//u, '')}
+                        {addressOf(finding.link)}
                         <LinkOutIcon href={finding.link} />
                     </a>
                 </RowLine>

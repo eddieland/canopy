@@ -42,7 +42,7 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
 }
 
 /**
- * `tick 12 · 3m ago`, with its status when it is not `ok`, as `canopy status`'s first line names it. The tick opens its
+ * `tick:12 · 3m ago`, with its status when it is not `ok`, as `canopy status`'s first line names it. The tick opens its
  * page: what it decided and why.
  */
 function LastTick({ tick }: { tick: Tick }) {

@@ -122,7 +122,7 @@ Rules:
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
   headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
   of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
-- The header carries the loop's pause (`LoopPause`), the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in
+- The header carries the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
   `mock`), and the theme toggle, in three groups with a hairline rule between each: the pause, the readouts, the theme.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
@@ -323,7 +323,7 @@ list, an empty state, or a skeleton by hand.
   runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
-  new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
+  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below).
 - **A chore's notes** are a conversation of the operator's words alone, under the chore's runs and findings, with a
   note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
@@ -360,7 +360,7 @@ list, an empty state, or a skeleton by hand.
   tool, and its summary over its output's block. The output is the call's rows as above, in a bordered list. A call's
   body is built only when opened, and Open all opens the calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
-  (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
+  (`chore:NAME#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
   line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
   wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
@@ -383,23 +383,37 @@ list, an empty state, or a skeleton by hand.
   its latest run's state color, then its window (`windowText`), its open findings, and what its runs cost in the last
   24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
-  run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
+  run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
   `dismissed` chip and `list again`: still reported, only off the attention list; its detail and link start under
   its title. A row's own action is a ghost `xs`
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
+- **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
+  trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the
+  CLI takes no reference for. A chore run has no reference of its own, so it is its chore's and its number,
+  `chore:deps#2`, as GitHub writes an issue's. Each has a link component that opens its page (`RunLink`, `TickLink`,
+  `ReviewLink`, `ChoreLink`); a page's title calls the same function. A PR is named as GitHub writes a reference,
+  `org/repo#123` (`pullRequestLabel`; any other host's URL as written without `https://`), and only through
+  `PullRequestLink`.
+- **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
+  then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
+  hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when
+  `tracker.ticket_url` is set. So one click from any run, review, decision, worktree, or ticket that names a PR
+  reaches the PR's page, and one more its host.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
-  shows its address without `https://`, and ends in one icon (`LinkOutIcon`): GitHub's mark for github.com, bundled
-  since Lucide has no brand icons, and `ExternalLink` anywhere else. A link never wears two icons. A ticket's links
-  out sit in its page's header, under the title and its line, so they are the first thing found (`TicketLinks`): an
-  outline button per link, in the accent's monospace, its one icon first: GitHub's mark for github.com, else what it
-  opens (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch` for a branch), and what it opens on hover.
+  shows its address without `https://` (`addressOf`) when it shows one, and ends in one icon (`LinkOutIcon`): GitHub's
+  mark for github.com, bundled since Lucide has no brand icons, and `ExternalLink` anywhere else. A link never wears
+  two icons. A ticket's links out sit in its page's header, under the title and its line, so they are the first thing
+  found (`TicketLinks`): an outline button per link, in the accent's monospace, its one icon first: GitHub's mark for
+  github.com, else what it opens (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch` for a branch), its
+  label the address or, for a PR, its name, and what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
-  page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase. A worktree's branch
-  links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a branch link.
+  page shows the tracker's alone. The Work panel keeps each repository's PR, a `PullRequestLink`, beside its phase.
+  A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a
+  branch link.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
   or PR's page, a run's worktrees and log path, a session id on a tick's page and in a transcript's header, and a
   review's commit, whole though the page shows its first 7 characters. The button is a ghost `icon-xs` with the
@@ -452,15 +466,15 @@ list, an empty state, or a skeleton by hand.
   text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
   its title muted, `keep` in place of `dismiss`, and the same chip in the findings list. The list of reviews is a
   `ReviewsTable`: the review's link, its state's dot and verdict in that state's color, its ticket (or
-  `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
-- **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
-  its page, named `org/repo#123` when it is GitHub's, as GitHub writes a reference (`pullRequestLabel`, the URL on
-  hover), its ticket and title (or `no ticket`, muted) and its unit's phase as a chip in the free column, then the run
-  working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
-  state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
-  a link out under it as a ticket's page has, then panels for its fields and total cost, the runs that pushed to it
-  (`RunsTable`), its reviews (`ReviewsTable`), and its decisions. A review's page links to its PR's (`its page in
-  canopy`).
+  `review.query`), the PR (`PullRequestLink`), the commit's first 7 characters, its impact, cost, and age.
+- **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR
+  (`PullRequestLink`, the URL on hover), its ticket and title (or `no ticket`, muted) and its unit's phase as a chip in
+  the free column, then the run working it now (a pulsing dot and `run:N`), its latest review (its state's dot,
+  `review:N`, and its verdict, in the state's color; `not reviewed` muted), and its age. Its page: the PR's name
+  (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page has, saying where it
+  goes (`on GitHub`) rather than repeating the title, then panels for its fields and total cost, the runs that pushed
+  to it (`RunsTable`), its reviews (`ReviewsTable`), and its decisions. The journal keeps no PR's own title, so the
+  page has none to show.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
   when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.

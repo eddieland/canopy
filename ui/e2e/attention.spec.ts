@@ -21,7 +21,7 @@ test('the list is most severe first, and the most severe ticket opens beside it'
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
-    await expect(detail.getByRole('link', { name: 'ABC-100' })).toBeVisible()
+    await expect(detail.getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
     await expect(detail.getByRole('form', { name: 'Reply' })).toBeVisible()
 })
 
@@ -33,7 +33,7 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
 
     await expect(page).toHaveURL(/\/attention\?item=/u)
     const detail = page.getByTestId('attention-detail')
-    await expect(detail.getByRole('link', { name: 'ABC-102' })).toBeVisible()
+    await expect(detail.getByRole('link', { name: 'ABC-102', exact: true })).toBeVisible()
     await expect(detail.getByTestId('message-5')).toContainText('Should the export button be red or blue?')
     await expect(detail.getByText('Your answer to message 5')).toBeVisible()
 

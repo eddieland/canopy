@@ -15,6 +15,7 @@ import { ListRow, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { choreLine, costText, runsText, windowText } from '@/lib/chores'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { choreRef, choreRunRef } from '@/lib/refs'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
@@ -31,7 +32,7 @@ function ChorePage() {
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         return (
             <>
-                <PageHeader title={`chore:${name}`} />
+                <PageHeader title={choreRef(name)} />
                 <Panel>
                     <Empty size="panel">{error.message}</Empty>
                 </Panel>
@@ -41,7 +42,7 @@ function ChorePage() {
     if (data === undefined) {
         return (
             <>
-                <PageHeader title={`chore:${name}`} />
+                <PageHeader title={choreRef(name)} />
                 <Panel>
                     <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
@@ -57,7 +58,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
     const runsOrder = useListOrder('chore-runs')
     return (
         <>
-            <PageHeader title={`chore:${chore.name}`}>
+            <PageHeader title={choreRef(chore.name)}>
                 Recurring work the overseer runs when it is due. What it finds reaches the attention list; your notes
                 reach its next runs.
             </PageHeader>
@@ -149,9 +150,9 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                 <Link
                     to="/chores/$name/runs/$id"
                     params={{ name, id: String(run.id) }}
-                    className="readout w-14 text-xs text-accent underline-offset-4 hover:underline"
+                    className="readout min-w-28 text-xs text-accent underline-offset-4 hover:underline"
                 >
-                    #{run.id}
+                    {choreRunRef(name, run.id)}
                 </Link>
                 {run.status === 'ok' && <Chip>{run.findings === 1 ? '1 finding' : `${run.findings} findings`}</Chip>}
             </span>

@@ -1,10 +1,10 @@
 import type { ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { TrackerLink } from '@/components/tracker-link'
 import { shortSha, verdictText } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -52,7 +52,7 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
                         )}
                     </span>
                     <span className="flex min-w-0 items-center gap-3">
-                        <TrackerLink href={review.pr_url} className="min-w-0 truncate font-mono text-xs" />
+                        <PullRequestLink url={review.pr_url} />
                         {sha}
                     </span>
                 </>

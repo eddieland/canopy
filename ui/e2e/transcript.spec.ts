@@ -48,7 +48,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await transcript.getByRole('button', { name: 'Close all' }).click()
     await expect(transcript.locator('details[open]')).toHaveCount(0)
 
-    await page.getByRole('link', { name: 'ABC-099' }).first().click()
+    await page.getByRole('link', { name: 'ABC-099', exact: true }).first().click()
     await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
 })
 
@@ -258,9 +258,9 @@ test("a tick's output lays its JSON out when asked, and that tick's panel rememb
 test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
     await page.goto('chores/deps')
     await settled(page)
-    await page.getByTestId('chore-run-2').getByRole('link', { name: '#2' }).click()
+    await page.getByTestId('chore-run-2').getByRole('link', { name: 'chore:deps#2' }).click()
     await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps #2')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps#2')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chores' })).toHaveAttribute(
         'data-status',
         'active',

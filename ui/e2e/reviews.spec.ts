@@ -15,9 +15,9 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     // The operator's own PR, matched by review.query, has no ticket.
     await expect(page.getByTestId('review-2')).toContainText('review.query')
 
-    await page.getByTestId('review-4').getByRole('link', { name: 'review 4' }).click()
+    await page.getByTestId('review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review 4')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4')
     await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
 
     const files = page.getByTestId('diff-file')
@@ -42,7 +42,7 @@ test('a review from before diffs were kept lists its findings without one', asyn
     await expect(page.getByText('no diff kept for this review')).toBeVisible()
     await expect(page.getByTestId('finding')).toHaveCount(1)
     // The PR's other review links to its newer one.
-    await page.getByRole('link', { name: 'review 4' }).click()
+    await page.getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
 })
 

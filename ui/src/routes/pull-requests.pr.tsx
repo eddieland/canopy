@@ -21,7 +21,9 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
+import { addressOf, onGitHub } from '@/lib/links'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 
 interface PullRequestSearch {
     url?: string | undefined
@@ -48,7 +50,7 @@ function PullRequestPage() {
 
 function Loaded({ url }: { url: string }) {
     const { data, error } = useQuery(pullRequestQuery(url))
-    const title = url.replace(/^https:\/\//u, '')
+    const title = pullRequestLabel(url)
     if (error instanceof ApiError && (error.status === 404 || error.status === 422)) {
         return <Missing title={title}>{error.message}</Missing>
     }
@@ -178,7 +180,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
     )
 }
 
-/** The PR on its host, as a ticket's page shows its links out. */
+/** The PR on its host, as a ticket's page shows its links out; the title names it, so this says where it goes. */
 function PullRequestOut({ url }: { url: string }) {
     return (
         <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
@@ -190,7 +192,7 @@ function PullRequestOut({ url }: { url: string }) {
             >
                 <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
                     <LinkOutIcon href={url} icon={GitPullRequest} className="size-4" />
-                    <span className="truncate">{url.replace(/^https:\/\//u, '')}</span>
+                    <span className="truncate">{onGitHub(url) ? 'on GitHub' : addressOf(url)}</span>
                 </a>
             </Button>
         </nav>

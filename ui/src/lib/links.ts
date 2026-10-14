@@ -56,3 +56,8 @@ function count(text: string, char: string): number {
 export function onGitHub(href: string): boolean {
     return URL.canParse(href) && new URL(href).hostname === 'github.com'
 }
+
+/** A link out's address as a page shows it: as written, without `https://`. */
+export function addressOf(href: string): string {
+    return href.replace(/^https:\/\//u, '')
+}

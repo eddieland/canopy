@@ -62,7 +62,7 @@ test.describe('turned on', () => {
         await tip.evaluate((el) => {
             el.dataset.kept = ''
         })
-        await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
+        await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102', exact: true }).click()
         await expect(page).toHaveURL(/tickets\/ABC-102$/u)
         await expect(tip).toHaveText(shown ?? '')
         await expect(tip).toHaveAttribute('data-kept', '')

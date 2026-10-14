@@ -12,6 +12,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/componen
 import { RichText } from '@/components/rich-text'
 import { RunDot } from '@/components/status'
 import { TranscriptPanel } from '@/components/transcript'
+import { choreRef, choreRunRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { localTime } from '@/lib/time'
@@ -25,7 +26,7 @@ export const Route = createFileRoute('/chores/$name_/runs/$id')({
 
 function ChoreRunPage() {
     const { name, id } = Route.useParams()
-    const title = `chore:${name} #${id}`
+    const title = choreRunRef(name, id)
     // A chore run's id is a positive number, as a run's is.
     const parsed = tickId(id)
     if (parsed === null) {
@@ -42,7 +43,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
     const { data, error } = useQuery(choreRunQuery(name, id))
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(choreRunTranscriptQuery(name, id))
-    const title = `chore:${name} #${id}`
+    const title = choreRunRef(name, id)
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         return (
             <NoRun name={name} title={title}>
@@ -100,7 +101,7 @@ function NoRun({ name, title, children }: { name: string; title: string; childre
 function ChoreCrumb({ name }: { name: string }) {
     return (
         <Link to="/chores/$name" params={{ name }} activeOptions={{ exact: true }}>
-            chore:{name}
+            {choreRef(name)}
         </Link>
     )
 }
