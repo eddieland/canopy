@@ -864,6 +864,68 @@ and the user file keeps its comments, with only those two values changed.
 
 Status: not started.
 
+## M42. Other people's PRs, reviewed on request
+
+REQUIREMENTS R17, DESIGN §21 and §22. Needs M11 and M20. Asked for by the operator (2026-10-14): hand canopy a
+coworker's PR to review, once or for as long as it is open, without writing a search into `review.query`. Today a PR
+is reviewed only as the loop's own (`review.agent_prs`) or as a match of that standing query, which lives in the user
+file and reads one repository's PRs.
+
+- A review request is a journal fact, like a start record (§22): the PR's URL, its repository, `once` or `watch`, when
+  and through which channel it was made, and when and why it ended. At most one open request per PR; a new one
+  replaces its mode. A `once` request ends when a review of the PR ends `done`. A `watch` ends when the PR merges or
+  closes, or the operator stops it.
+- `canopy start URL --review --repo NAME [--watch]` makes one, D075's verb on a PR reference; `canopy stop URL` ends it,
+  a running review finishing; `canopy show URL` shows it with its reviews, and `canopy status` lists the open ones.
+  `--repo` names the repository whose clone fetches the commit and whose pool leases the slot, as for
+  `canopy review run`. `start` on a PR without `--review` stays M14's, so a missing flag never turns a review into work
+  on someone else's branch.
+- Like `start`, `reply`, and `grant`, it refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. A
+  request authorizes reviews as `review.query` does, so an agent steered by a PR's text could otherwise point the
+  reviewer, and the operator's spend, at any PR. It also refuses, recording nothing: `reviews_off` when
+  `capacity.max_reviews` is 0, `bad_pr` for a URL `canopy review run` would refuse, `unknown_repo`, and `loop_pr` for a
+  PR a ticket's run pushed to, which `review.agent_prs` covers. An open request turns reviews on without `agent_prs`
+  or `query` (§21, Off unless configured).
+- The overseer: the state block's `reviews` gains each open request: URL, repository, mode, review runs so far, and
+  its latest review run. Each tick it reads each requested PR through MCP, as it reads `review.query`'s matches. For an
+  open PR whose head commit has no `done` review, it runs `canopy review run --pr URL --sha SHA --repo NAME` or
+  records `canopy review wait` (checks still running, a draft). For a merged or closed PR, it records
+  `canopy review end --pr URL --reason merged|closed`, which needs `CANOPY_TICK_ID` and ends only a `watch`. A steered
+  overseer could end a watch early; that costs reviews, never adds one, and the PR's page shows who ended it and why.
+- The harness ends a `once` request when its review ends `done`. A review that ends otherwise leaves it open, so a
+  later tick retries within the per-PR limit, as `review_failed` says today. Every guard of `canopy review run` holds
+  unchanged: one `done` review per commit, `policy.max_reviews_per_pr` (a watched PR pushed to often reaches it, and
+  `review_limit` names `canopy grant URL review`), the daily limit, and capacity.
+- What follows a review is what follows a `review.query` review: findings in the journal, posted nowhere (D114), no
+  worker, no ticket, and `review.ended` (§20) to the operator's sinks. A PR from a fork is reviewed like any other;
+  `_review` fetches its commit from the repository's `origin` and pushes nothing.
+- Web UI: the pull requests page takes a PR's URL and a repository, with `Review once` and `Watch`; a PR's page shows
+  its request, with `Stop`. `POST /pull-request/start?url=` and `POST /pull-request/stop?url=`, through the same code
+  as the CLI, so with the same refusals.
+- Journal: a migration adds `review_requests`: id, URL, repository, mode, created at and channel, ended at, and end
+  reason (`reviewed`, `merged`, `closed`, `stopped`, or `replaced`), with at most one open row per URL. Its hash joins
+  `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
+- TRUST_MODEL: T1 says a review request authorizes a review as `review.query` does, made only through the operator's
+  channels and refused inside a run; T8 adds making and ending one to the web channel's writes; §7's note that
+  `review.query` may review other people's PRs covers requests too. With the operator's approval note in the PR, for
+  those and the overseer prompt.
+- DESIGN §21 (requests beside `agent_prs` and `query`, the overseer's part, Off unless configured, the journal) and
+  §22 (the references table's PR row, the verbs, the routes and pages) say what changes.
+- Tests with the fakes: a `once` request is reviewed at its head and ends `reviewed`; a `watch` is reviewed again at a
+  new head and ends on `review end`; a failed review leaves a `once` request open; `start --review` refuses inside a
+  run, with reviews off, for a loop PR, and for an unknown repository; `review end` refuses without `CANOPY_TICK_ID`
+  and on a `once` request; a dry-run tick's state block carries the requests; with no request, no query, and
+  `agent_prs` off, it has no `reviews` key; the web routes start and stop one; Playwright for the form.
+- Open: whether `REPO#N` works, which needs a PR's URL from the repository's map (M14's references); a bound on open
+  watches, since the overseer reads each one every tick, and whether a watch lapses after some days with no new
+  commit; whether a watched PR's review waits for its checks to pass.
+
+Accept: the tests above pass. Live: the operator asks for one coworker's open PR to be reviewed once from the CLI, and
+another watched from the web UI. The first is reviewed at its head and its request ends. The second is reviewed,
+reviewed again after its author pushes, and its watch ends when it merges. Nothing is posted on either PR.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.
