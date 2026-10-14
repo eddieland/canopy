@@ -23,7 +23,7 @@ function ReviewsPage() {
                 their findings are the only places they are.
             </PageHeader>
             <Panel>
-                <PanelHeader label="Review runs">
+                <PanelHeader label="Reviews">
                     <span className="flex items-center gap-2">
                         {data !== undefined && data.length > 1 && <OrderToggle list="reviews" />}
                         <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>

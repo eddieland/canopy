@@ -1,5 +1,10 @@
 import type { CostTotal } from '@/api/types'
 
+/** A cost in dollars, as every cost in the UI is shown, or a dash when nothing reported one. */
+export function costText(cost: number | null): string {
+    return cost === null ? '–' : `$${cost.toFixed(2)}`
+}
+
 /**
  * What a total cost counted, and how many of those reported no cost: `over 3 runs and 1 review, 1 unpriced`. A total
  * that counted nothing says so: `nothing has run`.

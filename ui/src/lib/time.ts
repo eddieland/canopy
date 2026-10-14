@@ -22,6 +22,20 @@ export function localTime(iso: string): string {
     return new Date(iso).toLocaleString()
 }
 
+const STAMP = new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+})
+
+/** An ISO time as a short local stamp, its month in the operator's language: `Oct 8 10:30`. */
+export function stamp(iso: string): string {
+    const parts = Object.fromEntries(STAMP.formatToParts(new Date(iso)).map((p) => [p.type, p.value]))
+    return `${parts['month'] ?? ''} ${parts['day'] ?? ''} ${parts['hour'] ?? ''}:${parts['minute'] ?? ''}`
+}
+
 // One clock for every age on the page: it ticks every second while something reads it, so an age in seconds counts.
 const TICK_MS = 1_000
 let now = Date.now()

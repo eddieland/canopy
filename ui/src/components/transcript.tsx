@@ -11,6 +11,7 @@ import type {
     TranscriptTool,
 } from '@/api/types'
 import { Copyable } from '@/components/copy-button'
+import { Cost } from '@/components/cost'
 import { JsonTokens } from '@/components/json-text'
 import { MarkedText } from '@/components/marked-text'
 import { OrderToggle } from '@/components/order-toggle'
@@ -460,9 +461,7 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
             {/* Every call but the last ends in tool calls: only another reason says something. */}
             {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
             <span className="readout ml-auto">{entry.tokens === null ? '' : `${tokenCount(entry.tokens)} tokens`}</span>
-            <span className="readout w-14 shrink-0 text-right">
-                {entry.cost_usd === null ? '' : `$${entry.cost_usd.toFixed(2)}`}
-            </span>
+            <Cost usd={entry.cost_usd} className="w-14 shrink-0 text-right" />
         </>
     )
     const muted = 'flex items-center gap-3 px-3 py-1 font-mono text-xs text-muted-foreground'
@@ -560,9 +559,10 @@ function CallRow({
                             ? ''
                             : `${tokenCount(sentTokens(split))} in · ${tokenCount(wroteTokens(split))} out`}
                     </span>
-                    <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">
-                        {end === null || end.cost_usd === null ? '' : `$${end.cost_usd.toFixed(2)}`}
-                    </span>
+                    <Cost
+                        usd={end?.cost_usd ?? null}
+                        className="w-14 shrink-0 text-right text-xs text-muted-foreground"
+                    />
                     <ChevronRight
                         className={cn(
                             'size-3.5 shrink-0 text-muted-foreground',

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { countedText } from './cost-total'
+import { costText, countedText } from './cost-total'
+
+describe('costText', () => {
+    it('shows dollars to the cent, or a dash when nothing reported a cost', () => {
+        expect(costText(0.4)).toBe('$0.40')
+        expect(costText(null)).toBe('–')
+    })
+})
 
 describe('countedText', () => {
     it('names the runs and reviews a total counted', () => {

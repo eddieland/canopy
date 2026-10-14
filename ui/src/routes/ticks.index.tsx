@@ -3,12 +3,13 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { ticksQuery } from '@/api/queries'
 import type { Tick } from '@/api/types'
-import { Ended } from '@/components/age'
+import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow } from '@/components/rows'
-import { Chip } from '@/components/status'
+import { Chip, Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { rowLineFrom } from '@/lib/rows'
@@ -60,18 +61,17 @@ function Row({ tick }: { tick: Tick }) {
         <ListRow kind="tick" data-testid={`tick-${tick.id}`}>
             <TickLink id={tick.id} />
             <span className="flex min-w-0 items-center gap-3">
-                <span className={cn('font-mono text-xs', TICK_TONE[tick.status] ?? 'text-muted-foreground')}>
-                    {tick.status}
-                </span>
+                <Word
+                    word={tick.status}
+                    className={cn('font-mono text-xs', TICK_TONE[tick.status] ?? 'text-muted-foreground')}
+                />
                 {tick.dry_run && <Chip>dry run</Chip>}
             </span>
             <span className="readout text-right text-xs text-muted-foreground" data-testid="tick-decisions">
                 {tick.decisions === 1 ? '1 decision' : `${tick.decisions} decisions`}
             </span>
-            <span className="readout text-right text-xs text-muted-foreground">
-                {tick.cost_usd === null ? '' : `$${tick.cost_usd.toFixed(2)}`}
-            </span>
-            <Ended started={tick.started_at} ended={tick.ended_at} />
+            <Cost usd={tick.cost_usd} className="text-right text-xs text-muted-foreground" />
+            <Age variant="span" started={tick.started_at} ended={tick.ended_at} className="text-right" />
             {tick.summary && <RichText text={tick.summary} lines={SUMMARY_LINES} className={rowLineFrom('state')} />}
         </ListRow>
     )

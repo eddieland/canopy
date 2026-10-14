@@ -22,7 +22,8 @@ export function RunDot({ state, className }: { state: RunState; className?: stri
 
 /**
  * A small bordered label: a reason, a kind, private or public. Pass a word from the journal as `word`: it reads with
- * spaces for underscores, and keeps its spelling, the one the CLI prints, on hover.
+ * spaces for underscores, and keeps its spelling, the one the CLI prints, on hover. A chip given room to shrink
+ * (`min-w-0 shrink`) cuts its word to fit.
  */
 export function Chip({ className, word, children }: { className?: string; word?: string; children?: ReactNode }) {
     const text = word === undefined ? undefined : readable(word)
@@ -35,7 +36,21 @@ export function Chip({ className, word, children }: { className?: string; word?:
                 className,
             )}
         >
-            {text ?? children}
+            {text === undefined ? children : <span className="truncate">{text}</span>}
+        </span>
+    )
+}
+
+/**
+ * A word from the journal in running text, not a chip: a phase, a status. It reads as words, as a chip's does
+ * (`ci_failing` reads `ci failing`), with the CLI's spelling on hover. `text` stands in for a word already made
+ * readable, such as a phase with what qualifies it.
+ */
+export function Word({ word, text, className }: { word: string; text?: string; className?: string }) {
+    const shown = text ?? readable(word)
+    return (
+        <span title={word === shown ? undefined : word} className={className}>
+            {shown}
         </span>
     )
 }

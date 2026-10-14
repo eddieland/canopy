@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { clamp, inline, lineCount, parse } from '@/lib/rich-text'
+import { clamp, codeSpans, inline, lineCount, parse } from '@/lib/rich-text'
 
 const text = (value: string) => ({ kind: 'text', text: value })
 
@@ -72,6 +72,20 @@ describe('parse', () => {
         expect(parse('<b>hi</b> [link](https://example.test)')).toEqual([
             { kind: 'paragraph', lines: [[text('<b>hi</b> [link](https://example.test)')]] },
         ])
+    })
+})
+
+describe('codeSpans', () => {
+    it('reads code spans alone, leaving asterisks as written', () => {
+        expect(codeSpans('run `canopy workspace sync`, **then** wait')).toEqual([
+            text('run '),
+            { kind: 'code', text: 'canopy workspace sync' },
+            text(', **then** wait'),
+        ])
+    })
+
+    it('never carries a span across a line', () => {
+        expect(codeSpans('a `b\nc` d')).toEqual([text('a `b\nc` d')])
     })
 })
 

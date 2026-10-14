@@ -6,6 +6,7 @@ import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
+import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -13,10 +14,11 @@ import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
-import { Chip, RunDot } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Timestamp } from '@/components/timestamp'
 import { reviewRef } from '@/lib/refs'
-import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText } from '@/lib/reviews'
+import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
@@ -111,7 +113,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
             <PanelHeader label="Review">
                 <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[review.state])}>
                     <RunDot state={review.state} />
-                    {review.status}
+                    <Word word={review.status} />
                 </span>
             </PanelHeader>
             <Fields>
@@ -135,7 +137,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                 </Field>
                 <Field label="verdict">
                     <span className="flex items-center gap-2">
-                        <span className="font-mono text-xs">{verdictText(review)}</span>
+                        <span className={cn('font-mono text-xs', verdictTone(review))}>{verdictText(review)}</span>
                         {review.impact !== null && <Chip word={`${review.impact} impact`} />}
                     </span>
                 </Field>
@@ -153,14 +155,14 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                     {review.ended_at === null ? (
                         'still reviewing'
                     ) : (
-                        <span className="flex gap-1">
-                            <Age at={review.ended_at} />
-                            ago
+                        <span className="flex items-baseline gap-2">
+                            <Timestamp at={review.ended_at} />
+                            <Age at={review.ended_at} variant="ago" />
                         </span>
                     )}
                 </Field>
                 <Field label="spent" mono>
-                    {review.cost_usd === null ? 'none reported' : `$${review.cost_usd.toFixed(2)}`}
+                    <Cost usd={review.cost_usd} />
                 </Field>
                 {detail.runs.length > 1 && (
                     <Field label="this PR's reviews">

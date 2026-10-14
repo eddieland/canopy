@@ -45,7 +45,7 @@ export const ROW_COLUMNS = {
         ['pr', FREE],
         ['impact', '7rem'],
         ['cost', '3.5rem'],
-        ['age', '5rem'],
+        ['age', '6rem'],
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
@@ -54,7 +54,7 @@ export const ROW_COLUMNS = {
         ['commit', FREE],
         ['impact', '7rem'],
         ['cost', '3.5rem'],
-        ['age', '5rem'],
+        ['age', '6rem'],
     ],
     /** A PR: the PR, its ticket and title and phase, the run working it, its latest review, and its age. */
     'pull-request': [
@@ -71,7 +71,7 @@ export const ROW_COLUMNS = {
         ['access', '9rem'],
         ['phase', '10rem'],
         ['run', '8rem'],
-        ['age', '2.5rem'],
+        ['age', '4rem'],
     ],
     /** A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. */
     worktree: [
@@ -90,7 +90,7 @@ export const ROW_COLUMNS = {
     'own-decision': [
         ['id', '4rem'],
         ['action', FREE],
-        ['age', '3rem'],
+        ['age', '4rem'],
     ],
     /** A chore's finding: its id, its title, and what it says of itself at the end. Ids differ in length. */
     finding: [
@@ -118,7 +118,7 @@ export const ROW_COLUMNS = {
         ['key', '5rem'],
         ['facts', FREE],
         ['cost', 'auto'],
-        ['age', '2rem'],
+        ['age', '3.5rem'],
     ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [

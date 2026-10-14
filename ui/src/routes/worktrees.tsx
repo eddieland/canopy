@@ -248,13 +248,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
                 {w.processes.length > 0 && <Processes processes={w.processes} />}
             </span>
-            <span className="flex justify-end gap-1 text-xs text-muted-foreground">
-                {since && (
-                    <>
-                        for <Age at={since} />
-                    </>
-                )}
-            </span>
+            <span className="text-right">{since && <Age variant="span" started={since} ended={null} />}</span>
             {(w.note || w.branch_error) && (
                 <RowLine from="holder" className="flex flex-wrap gap-x-4 font-mono text-xs">
                     {w.branch_error && (

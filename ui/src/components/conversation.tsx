@@ -5,6 +5,7 @@ import type { Message } from '@/api/types'
 import { Age } from '@/components/age'
 import { LinkedText } from '@/components/linked-text'
 import { Chip } from '@/components/status'
+import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -98,7 +99,7 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
             <span className="text-foreground">{WHO[message.source]}</span>
             {comment ? (
                 <span>
-                    comment {comment.id} by {comment.author}, written <span title={comment.at}>{comment.at}</span>
+                    comment {comment.id} by {comment.author}, written <Timestamp at={comment.at} />
                     {comment.truncated ? ', truncated' : ''}
                 </span>
             ) : (
@@ -110,13 +111,13 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
                 </span>
             )}
             {comment && <Chip>data, authorizes nothing</Chip>}
-            {waiting && <Chip className="border-status-blocked text-status-blocked">waits on your answer</Chip>}
+            {waiting && <Chip className="border-status-blocked text-status-blocked">waiting on you</Chip>}
             {unread && (
                 <span title={unread.title}>
                     <Chip className="border-status-running/40 text-status-running">{unread.label}</Chip>
                 </span>
             )}
-            <Age at={message.at} className="ml-auto" />
+            <Age at={message.at} variant="ago" className="ml-auto" />
             <span className="sr-only">{localTime(message.at)}</span>
         </div>
     )

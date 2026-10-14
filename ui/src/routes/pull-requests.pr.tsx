@@ -17,7 +17,7 @@ import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
-import { Chip } from '@/components/status'
+import { Chip, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
@@ -96,8 +96,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
             <div className="stagger flex flex-col gap-6">
                 <Panel>
                     <PanelHeader label="Pull request">
-                        <span className="flex gap-1 text-xs text-muted-foreground">
-                            active <Age at={pr.active_at} /> ago
+                        <span className="text-xs text-muted-foreground">
+                            active <Age at={pr.active_at} variant="ago" />
                         </span>
                     </PanelHeader>
                     <Fields>
@@ -123,7 +123,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         )}
                         {pr.phase && (
                             <Field label="phase" mono>
-                                {pr.phase}
+                                <Word word={pr.phase} />
                             </Field>
                         )}
                         <CostTotalRow cost={cost} />

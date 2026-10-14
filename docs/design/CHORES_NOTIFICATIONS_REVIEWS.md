@@ -729,7 +729,7 @@ is wrong often enough that the operator wants to rule a finding out before a wor
   which count it in `dismissed_findings`. A `resume` for a review whose findings are all dismissed refuses as
   `bad_review`, and the PR, having none left to classify, moves on as a clean review would.
 - It is one run's finding. A finding has no id that lasts from one commit's review to the next, so a new commit's
-  review starts fresh (Open, below). `--undo`, or `keep` on its card, takes it back.
+  review starts fresh (Open, below). `--undo`, or `undo` on its card, takes it back.
 - Refused `unknown` for a review run that does not exist, did not end `done` with findings, or has no finding `N` (with
   `--undo`, one not dismissed), `bad_finding` for a number that is not 1 to 20, and `inside_run` as `reply` is: the
   overseer and agents cannot hold a finding back from a worker. A row in `review_dismissals` per run and number, with

@@ -1,13 +1,14 @@
 import { useState } from 'react'
 
 import type { Run } from '@/api/types'
-import { Ended } from '@/components/age'
+import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { Chip, RunDot } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -163,7 +164,7 @@ function RunStatus({ run }: { run: Run }) {
     return (
         <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
             <RunDot state={run.state} />
-            {run.status}
+            <Word word={run.status} />
         </span>
     )
 }
@@ -172,10 +173,10 @@ function RunStatus({ run }: { run: Run }) {
 function RunReadouts({ run }: { run: Run }) {
     return (
         <>
-            <span className="readout text-right text-xs text-muted-foreground" data-testid="run-cost">
-                {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
+            <span className="text-right text-xs text-muted-foreground" data-testid="run-cost">
+                <Cost usd={run.cost_usd} />
             </span>
-            <Ended started={run.started_at} ended={run.ended_at} />
+            <Age variant="span" started={run.started_at} ended={run.ended_at} className="text-right" />
         </>
     )
 }

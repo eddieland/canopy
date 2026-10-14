@@ -125,24 +125,35 @@ function depthOf(indent: number): number {
 
 /** A line's `code` spans and **strong** runs; anything unclosed stays as it was written. */
 export function inline(text: string): Line {
-    const pieces: Line = []
-    const pattern = /`([^`]+)`|\*\*(.+?)\*\*/gu
+    return pieces(text, /`([^`]+)`|\*\*(.+?)\*\*/gu)
+}
+
+/**
+ * Text's `code` spans and nothing else, for a line the harness writes (an attention item's detail): asterisks and line
+ * breaks stay as written, and a span never crosses a line.
+ */
+export function codeSpans(text: string): Line {
+    return pieces(text, /`([^`\n]+)`/gu)
+}
+
+function pieces(text: string, pattern: RegExp): Line {
+    const line: Line = []
     let last = 0
     for (const match of text.matchAll(pattern)) {
         if (match.index > last) {
-            pieces.push({ kind: 'text', text: text.slice(last, match.index) })
+            line.push({ kind: 'text', text: text.slice(last, match.index) })
         }
         if (match[1] === undefined) {
-            pieces.push({ kind: 'strong', text: match[2] ?? '' })
+            line.push({ kind: 'strong', text: match[2] ?? '' })
         } else {
-            pieces.push({ kind: 'code', text: match[1] })
+            line.push({ kind: 'code', text: match[1] })
         }
         last = match.index + match[0].length
     }
     if (last < text.length) {
-        pieces.push({ kind: 'text', text: text.slice(last) })
+        line.push({ kind: 'text', text: text.slice(last) })
     }
-    return pieces
+    return line
 }
 
 /** How many lines `blocks` take, before wrapping: a list item's or a code block's each count. */

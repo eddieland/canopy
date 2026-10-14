@@ -1,6 +1,6 @@
 import type { CostTotal } from '@/api/types'
 import { Field } from '@/components/fields'
-import { costText } from '@/lib/chores'
+import { Cost } from '@/components/cost'
 import { countedText } from '@/lib/cost-total'
 
 /**
@@ -10,7 +10,7 @@ import { countedText } from '@/lib/cost-total'
 export function CostTotalRow({ cost }: { cost: CostTotal }) {
     return (
         <Field label="total cost" className="flex items-baseline gap-2 text-xs" data-testid="cost-total">
-            <span className="readout">{costText(cost.cost_usd)}</span>
+            <Cost usd={cost.cost_usd} />
             <span className="text-muted-foreground">{countedText(cost)}</span>
         </Field>
     )

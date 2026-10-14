@@ -10,17 +10,18 @@ import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
+import { Cost } from '@/components/cost'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { GrantLimits } from '@/components/grant-limits'
-import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow } from '@/components/rows'
 import { ReplyForm } from '@/components/reply-form'
-import { Chip, RunDot } from '@/components/status'
+import { InlineCode } from '@/components/rich-text'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { WorkingNow } from '@/components/working-now'
@@ -29,7 +30,7 @@ import { bySeverity, severity } from '@/lib/attention'
 import type { Severity } from '@/lib/attention'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
-import { phaseLabel } from '@/lib/phase'
+import { phaseLabel, phaseWord } from '@/lib/phase'
 
 interface AttentionSearch {
     item?: string | undefined
@@ -78,7 +79,7 @@ function AttentionPage() {
                 <div className="flex flex-wrap items-start gap-6">
                     <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md">
                         <Panel data-testid="attention-list">
-                            <PanelHeader label="Needs you">
+                            <PanelHeader label="Attention">
                                 <span className="readout text-xs text-muted-foreground">{items?.length}</span>
                             </PanelHeader>
                             {items === undefined ? (
@@ -129,17 +130,26 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
                 <span className="flex items-center gap-2">
                     <ReasonChip item={item} />
                     {done && <Answered />}
-                    <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{item.subject}</span>
+                    <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                        {item.subject}
+                        {item.finding ? ` ${item.reason}` : ''}
+                    </span>
                     <Age at={item.since} className="ml-auto" />
                 </span>
-                <span className="line-clamp-2 text-sm break-words">{item.detail}</span>
+                <span className="line-clamp-2 text-sm break-words">
+                    <InlineCode text={item.detail} links={false} />
+                </span>
             </Link>
         </li>
     )
 }
 
+/**
+ * The item's reason as a chip. A chore's finding has the agent's own id for its reason, which is journal text, so its
+ * chip says `finding` and the head line names the id beside its chore.
+ */
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return <Chip className={TONE[severity(item)]} word={item.reason} />
+    return item.finding ? <Chip>finding</Chip> : <Chip className={TONE[severity(item)]} word={item.reason} />
 }
 
 /** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
@@ -190,7 +200,7 @@ function Head({
                 {action}
             </div>
             <p className="text-sm break-words whitespace-pre-wrap">
-                <LinkedText text={item.detail} />
+                <InlineCode text={item.detail} />
             </p>
             {done && (
                 <p className="text-sm text-muted-foreground" data-testid="answered-note">
@@ -213,7 +223,12 @@ function Subject({ item }: { item: AttentionItem }) {
         return <TicketLink ticketKey={item.ticket_key} />
     }
     if (item.chore !== null) {
-        return <ChoreLink name={item.chore} />
+        return (
+            <>
+                <ChoreLink name={item.chore} />
+                {item.finding && <span className="font-mono text-xs text-muted-foreground">{item.reason}</span>}
+            </>
+        )
     }
     if (item.pr !== null) {
         return <PullRequestLink url={item.pr} />
@@ -277,7 +292,7 @@ function Thread({ ticketKey }: { ticketKey: string }) {
                 <span className="flex items-center gap-2">
                     {messages.length > 1 && <OrderToggle list="conversation" />}
                     <span className="readout text-xs text-muted-foreground">
-                        {phaseLabel(ticket)} · {messages.length}
+                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {messages.length}
                     </span>
                 </span>
             </PanelHeader>
@@ -323,10 +338,8 @@ function Workers() {
                             <span className="flex">
                                 <Chip word={run.kind} />
                             </span>
-                            <span className="readout text-xs text-muted-foreground">
-                                {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
-                            </span>
-                            <Age at={run.started_at} className="text-right" />
+                            <Cost usd={run.cost_usd} className="text-xs text-muted-foreground" />
+                            <Age variant="span" started={run.started_at} ended={null} className="text-right" />
                         </ListRow>
                     ))}
                 </ul>

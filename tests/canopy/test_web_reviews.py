@@ -28,6 +28,8 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     ]
     assert (listed[0]["sha"], listed[0]["ticket_key"], listed[0]["repo"]) == (mock_reviews.SHA_88, "ABC-099", "web")
     assert listed[2]["ticket_key"] is None  # a PR review.query matched, with no ticket
+    # Its worst finding, which colors its verdict: none for a clean review or one that reported nothing.
+    assert [r["worst"] for r in listed] == ["major", None, None, "blocking"]
 
 
 def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:

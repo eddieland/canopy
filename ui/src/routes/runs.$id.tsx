@@ -6,18 +6,19 @@ import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
+import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
-import { Chip, RunDot } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
-import { localTime } from '@/lib/time'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
@@ -84,7 +85,7 @@ function RunPanel({ run }: { run: Run }) {
             <PanelHeader label="Run">
                 <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                     <RunDot state={run.state} />
-                    {run.status}
+                    <Word word={run.status} />
                 </span>
             </PanelHeader>
             <Fields>
@@ -100,13 +101,13 @@ function RunPanel({ run }: { run: Run }) {
                     {run.branch === null ? 'none' : <Copyable text={run.branch} label="branch" />}
                 </Field>
                 <Field label="started" mono>
-                    <span className="flex items-center gap-2">
-                        <span title={localTime(run.started_at)}>{run.started_at}</span>
-                        <Age at={run.started_at} />
+                    <span className="flex items-baseline gap-2">
+                        <Timestamp at={run.started_at} />
+                        <Age at={run.started_at} variant="ago" />
                     </span>
                 </Field>
                 <Field label="ended" mono>
-                    {run.ended_at ?? 'still running'}
+                    {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
                 </Field>
                 <Field label="summary">{run.summary ? <RichText text={run.summary} /> : 'none'}</Field>
                 {run.prs.length > 0 && (
@@ -119,7 +120,7 @@ function RunPanel({ run }: { run: Run }) {
                     </Field>
                 )}
                 <Field label="spent" mono>
-                    {run.cost_usd === null ? 'none reported' : `$${run.cost_usd.toFixed(2)}`}
+                    <Cost usd={run.cost_usd} />
                     {run.tokens === null ? '' : `, ${tokenCount(run.tokens)} tokens`}
                 </Field>
                 {run.worktrees.length > 0 && (

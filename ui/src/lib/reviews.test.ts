@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ReviewFinding, ReviewSummary } from '@/api/types'
 
-import { placeFindings, shortSha, verdictText } from './reviews'
+import { placeFindings, shortSha, verdictText, verdictTone } from './reviews'
 
 function finding(title: string, file: number | null, line: number | null): ReviewFinding {
     return { severity: 'minor', title, location: '', detail: '', file, line, dismissed: false }
@@ -19,6 +19,7 @@ const REVIEW: ReviewSummary = {
     verdict: 'findings',
     impact: 'normal',
     findings: 3,
+    worst: 'major',
     started_at: '2026-10-08T11:02:00Z',
     ended_at: '2026-10-08T11:04:00Z',
     cost_usd: 0.24,
@@ -57,6 +58,15 @@ describe('verdictText', () => {
         expect(verdictText({ ...REVIEW, verdict: 'clean', findings: 0 })).toBe('clean')
         expect(verdictText({ ...REVIEW, verdict: null, state: 'failed', findings: 0 })).toBe('no verdict')
         expect(verdictText({ ...REVIEW, verdict: null, state: 'running', findings: 0 })).toBe('reviewing')
+    })
+})
+
+describe('verdictTone', () => {
+    it('colors a verdict by its worst finding, not by how its run ended', () => {
+        expect(verdictTone({ worst: 'blocking' })).toBe('text-status-failed')
+        expect(verdictTone({ worst: 'major' })).toBe('text-status-blocked')
+        expect(verdictTone({ worst: 'minor' })).toBe('')
+        expect(verdictTone({ worst: null })).toBe('')
     })
 })
 
