@@ -49,6 +49,7 @@ wheels = [
 name = "canopy"
 source = { editable = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "canopy-notify-slack" },
     { name = "click" },
     { name = "fastapi" },
@@ -73,6 +74,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = ">=4.15.1" },
     { name = "canopy-notify-slack", editable = "packages/canopy-notify-slack" },
     { name = "click", specifier = ">=8.5.0" },
     { name = "fastapi", specifier = ">=0.142.4" },
