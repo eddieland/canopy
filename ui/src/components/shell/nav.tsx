@@ -50,7 +50,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     {
         to: '/settings',
         icon: SlidersHorizontal,
-        hint: 'The theme, the fun, the send key, and the session',
+        hint: 'The theme, the send key, the fun, and the session',
     },
 ]
 
