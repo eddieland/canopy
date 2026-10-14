@@ -232,7 +232,9 @@ Sprig:
   spent. The hats bought and the one worn are kept in this browser. A hat bought goes on at once; one owned goes on
   and comes off with a click; there are no refunds. Each hat is drawn in Sprig's own units, its brim on the top of the
   wire and under the brows, in the `buddy-hat-*` tokens, and drawn after the leaf, which shows behind the crown like
-  a feather. A new hat is an id in `HatId`, a row in `HATS` (cheapest first), and its drawing.
+  a feather. Hats are priced for an operator who spends about $2,000 a month, $50 to $25,000: the first inside a
+  day, the last after about a year. A new hat is an id in `HatId`, a row in `HATS` (cheapest first), and its
+  drawing.
 
 The empty inbox, and an item clearing:
 

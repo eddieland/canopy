@@ -23,16 +23,19 @@ export interface Hat {
     blurb: string
 }
 
-/** The shop, cheapest first. */
+/**
+ * The shop, cheapest first, priced for an operator who spends about $2,000 a month: a party hat inside a day, a top hat
+ * in about two weeks, and the halo after about a year.
+ */
 export const HATS: readonly Hat[] = [
-    { id: 'party', name: 'Party hat', price: 1, blurb: 'For the first dollar. Every first dollar is a party.' },
-    { id: 'beanie', name: 'Beanie', price: 5, blurb: 'Keeps the wire warm through a long tick.' },
-    { id: 'propeller', name: 'Propeller cap', price: 10, blurb: "Vibe coding's official headwear." },
-    { id: 'top', name: 'Top hat', price: 25, blurb: 'For reading diffs with a monocle.' },
-    { id: 'toque', name: "Chef's toque", price: 50, blurb: 'Let it cook.' },
-    { id: 'wizard', name: 'Wizard hat', price: 100, blurb: 'Any sufficiently advanced agent run is a hat.' },
-    { id: 'crown', name: 'Crown', price: 250, blurb: 'Rules over three worktrees, benevolently.' },
-    { id: 'halo', name: 'Halo', price: 1000, blurb: 'You have given enough. Sprig thanks you.' },
+    { id: 'party', name: 'Party hat', price: 50, blurb: 'For the first fifty dollars. Every one of them was a party.' },
+    { id: 'beanie', name: 'Beanie', price: 250, blurb: 'Keeps the wire warm through a long tick.' },
+    { id: 'propeller', name: 'Propeller cap', price: 500, blurb: "Vibe coding's official headwear." },
+    { id: 'top', name: 'Top hat', price: 1000, blurb: 'For reading diffs with a monocle.' },
+    { id: 'toque', name: "Chef's toque", price: 2500, blurb: 'Let it cook.' },
+    { id: 'wizard', name: 'Wizard hat', price: 5000, blurb: 'Any sufficiently advanced agent run is a hat.' },
+    { id: 'crown', name: 'Crown', price: 10_000, blurb: 'Rules over three worktrees, benevolently.' },
+    { id: 'halo', name: 'Halo', price: 25_000, blurb: 'You have given enough. Sprig thanks you.' },
 ]
 
 /** The hats bought, and the one worn. */

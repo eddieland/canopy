@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, screenshotWhole, settled, signIn, storeTheme, THEMES } from './helpers.ts'
+import { NOW, screenshotWhole, settled, signIn, spentInAll, storeTheme, THEMES } from './helpers.ts'
 
 // Tall enough that the rail has room for Sprig and its bubble under the mock's three working runs.
 test.use({ viewport: { width: 1280, height: 1200 } })
@@ -143,31 +143,40 @@ test.describe('turned on', () => {
     })
 
     test("Sprig's hats are bought with what canopy has spent, and worn one at a time", async ({ page }) => {
-        // The mock journal has spent $9.23 in all: a party hat and a beanie, but no propeller cap.
+        // $400 in all buys a beanie and a party hat, but not a propeller cap.
+        await spentInAll(page, 400)
         await page.goto('settings')
         await settled(page)
         const wallet = page.getByTestId('hats-wallet')
-        await expect(wallet).toContainText('$9.23')
+        await expect(wallet).toContainText('left of $400.00 spent')
         await expect(page.getByTestId('hat-propeller-buy')).toBeDisabled()
         await expect(page.locator('[data-testid=buddy] [data-hat]')).toHaveCount(0)
 
         await page.getByTestId('hat-beanie-buy').click()
-        await expect(wallet).toContainText('$4.23')
+        await expect(wallet).toContainText('$150.00')
         await expect(page.locator('[data-testid=buddy] [data-hat=beanie]')).toHaveCount(1)
         await page.getByTestId('hat-party-buy').click()
-        await expect(wallet).toContainText('$3.23')
+        await expect(wallet).toContainText('$100.00')
         await expect(page.locator('[data-testid=buddy] [data-hat=party]')).toHaveCount(1)
-        await expect(page.getByTestId('hat-toque-buy')).toBeDisabled()
+        await expect(page.getByTestId('hat-propeller-buy')).toBeDisabled()
 
         // Owned, a hat goes on and comes off without spending again, and the wardrobe outlasts a reload.
         await page.getByTestId('hat-beanie-wear').click()
         await expect(page.locator('[data-testid=buddy] [data-hat=beanie]')).toHaveCount(1)
         await page.reload()
         await settled(page)
-        await expect(wallet).toContainText('$3.23')
+        await expect(wallet).toContainText('$100.00')
         await page.getByTestId('hat-beanie-wear').click()
         await expect(page.locator('[data-testid=buddy] [data-hat]')).toHaveCount(0)
         await expect(page.getByTestId('hat-party-wear')).toHaveText('Wear')
+    })
+
+    test('the mock has spent too little for any hat', async ({ page }) => {
+        await page.goto('settings')
+        await settled(page)
+        await expect(page.getByTestId('hats-wallet')).toContainText('$9.23')
+        await expect(page.getByTestId('hat-party-buy')).toBeDisabled()
+        await expect(page.getByTestId('hat-party-buy')).toHaveAttribute('title', '$40.77 short')
     })
 
     for (const theme of THEMES) {
