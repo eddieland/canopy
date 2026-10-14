@@ -132,6 +132,11 @@ relying on a permission they check.
   a few thousand tokens, and its read to hold the prompt, the provider skill, and the tools; the first tick, cold,
   writes them all. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
   change where OpenCode puts an agent's body. Record the numbers in `MEASUREMENTS.md`.
+- **S34. Overseer reliability re-measured** (M28). After a working session of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect no tick that ran the overseer without a working
+  `canopy` (each such tick closes `canopy_unavailable` with its attention item instead), no `overseer_failed` tick
+  that recorded decisions, and every start from the web UI picked up within about a minute (`ticks.woken_by` is
+  `starts`). Record the numbers in `MEASUREMENTS.md`.
 
 ## The web UI
 
