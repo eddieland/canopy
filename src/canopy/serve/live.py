@@ -180,5 +180,5 @@ def _snapshot(ctx: Context) -> Iterator[None]:
     ctx.conn.execute("COMMIT")
 
 
-def _costs(spend: Spend) -> tuple[float | None, float | None]:
-    return spend.day.cost_usd, spend.month.cost_usd
+def _costs(spend: Spend) -> tuple[float | None, float | None, float | None]:
+    return spend.day.cost_usd, spend.month.cost_usd, spend.total_usd
