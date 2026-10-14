@@ -35,9 +35,7 @@ def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
     Raises:
         RuntimeError: The command was not run through `canopy.cli.main`, so there is no `Obj` to read.
     """
-    obj = click_ctx.find_object(Obj)
-    if obj is None:
-        raise RuntimeError("canopy commands run through canopy.cli.main")
+    runner = runner_of(click_ctx)
     ws = workspace.find(Path.cwd())
     cfg = config.load(ws.root)
     # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
@@ -48,7 +46,22 @@ def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
     if migrate:
         # The tick migrates under its lock; everything else migrates on open, which is a no-op inside a tick.
         db.migrate(conn, resources.migrations_dir())
-    return Context(config=cfg, conn=conn, runner=obj.runner, ws=ws)
+    return Context(config=cfg, conn=conn, runner=runner, ws=ws)
+
+
+def runner_of(click_ctx: click.Context) -> procs.Runner:
+    """Return the runner `main` handed the command, for one that needs no workspace.
+
+    Returns:
+        The runner every external process goes through.
+
+    Raises:
+        RuntimeError: The command was not run through `canopy.cli.main`, so there is no `Obj` to read.
+    """
+    obj = click_ctx.find_object(Obj)
+    if obj is None:
+        raise RuntimeError("canopy commands run through canopy.cli.main")
+    return obj.runner
 
 
 def optional_tick(ctx: Context) -> sqlite3.Row | None:

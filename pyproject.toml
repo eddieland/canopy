@@ -31,6 +31,7 @@ classifiers = [
 requires-python = ">=3.12"
 dependencies = [
     "canopy-notify-slack",
+    "canopy-sandbox",
     "click>=8.5.0",
     "fastapi>=0.142.4",
     "pydantic>=2.13.5",
@@ -44,6 +45,8 @@ canopy = "canopy.cli.main:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
+# The sandbox wrapper, a workspace member too: the prefix on a sandboxed run's command template (HOST_ISOLATION §4.1).
+canopy-sandbox = "canopy_sandbox:main"
 
 [project.urls]
 Homepage = "https://github.com/eddieland/canopy"
@@ -97,6 +100,7 @@ cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true 
 
 [tool.uv.sources]
 canopy-notify-slack = { workspace = true }
+canopy-sandbox = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -115,12 +119,8 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-# The fakes and the sandbox wrapper are extensionless executables; lint and format them as Python too.
-extend-include = ["tests/fakes/agent", "tests/fakes/srt", "tests/fakes/treehouse", "examples/sandbox/canopy-sandbox"]
-
-[tool.ruff.per-file-target-version]
-# The sandbox wrapper runs under the operator's own python3, which on macOS is 3.9 (HOST_ISOLATION §4.1).
-"examples/sandbox/canopy-sandbox" = "py39"
+# The fakes are extensionless executables; lint and format them as Python too.
+extend-include = ["tests/fakes/agent", "tests/fakes/srt", "tests/fakes/treehouse"]
 
 [tool.ruff.lint]
 # Every stable rule (D018). Opt out below with a reason, never by narrowing `select`. Preview rules stay off, except
@@ -182,9 +182,9 @@ banned-from = ["unittest.mock"]
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
-# The sandbox wrapper is an example program of its own, not canopy (HOST_ISOLATION §4.1): it runs git and srt, and
-# reports on stderr.
-"examples/sandbox/canopy-sandbox" = ["T201", "TID251"]
+# The sandbox wrapper is a separate program, not canopy (HOST_ISOLATION §4.1): it runs git and srt, and reports on
+# stderr.
+"packages/canopy-sandbox/**" = ["T201", "TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.
 "hatch_build.py" = ["S603", "TID251"]
 # The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
@@ -216,10 +216,9 @@ project-includes = [
     "tests/fakes/agent",
     "tests/fakes/srt",
     "tests/fakes/treehouse",
-    "examples/sandbox/canopy-sandbox",
 ]
 # Tests are packages under the repository root (D019) and import shared helpers from `tests.conftest`.
-search-path = ["src", "packages/canopy-notify-slack/src", "."]
+search-path = ["src", "packages/canopy-notify-slack/src", "packages/canopy-sandbox/src", "."]
 
 # Markdown: every default rule. Tables and code blocks may run past the line length: neither can be wrapped.
 [tool.rumdl]

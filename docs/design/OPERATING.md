@@ -251,7 +251,15 @@ Rules:
   `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
   of the workspace root and of each cloned repository, which stop runs (§13). Unless `worker_cmd` already starts with
   `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for the user file, pointing to
-  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `srt` installed first (HOST_ISOLATION §5).
+  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (HOST_ISOLATION
+  §5).
+- `canopy sandbox setup` needs no workspace. It copies `canopy-sandbox`'s policy templates to
+  `<user config dir>/sandbox/` (0700), never over one that is there; installs `srt` with `npm ci --ignore-scripts`
+  from the lockfile the wrapper ships, into `$XDG_DATA_HOME/canopy/sandbox-runtime/`, unless that lockfile is already
+  installed and its `srt` answers the pinned version; and checks what it never runs because it needs root: on Linux
+  bubblewrap, socat, and ripgrep, and that bubblewrap can make a user namespace (naming the AppArmor sysctl when that
+  is why not), on macOS ripgrep, and that canopy is not root. It prints each thing left to do and exits 1 while there
+  is one; it writes no config, and prints the `worker_cmd` line `canopy init` does (D116).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.

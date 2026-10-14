@@ -40,13 +40,20 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
 """
 
-# The wrapper docs/SANDBOX.md installs, and the prefix it gives a worker's template (HOST_ISOLATION §4.1).
+# The wrapper canopy installs beside itself, and the prefix it gives a worker's template (HOST_ISOLATION §4.1).
 SANDBOX_WRAPPER = "canopy-sandbox"
 SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
 SANDBOX_SUGGESTION = """\
-Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Install
-srt and canopy-sandbox as https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md says, then set this in
+Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Run
+`canopy sandbox setup` (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md), then set this in
 {user_file}, with the same prefix on private_worker_cmd and split_cmd:
+  [runtime]
+  {line}
+"""
+# What `canopy sandbox setup` prints instead, having just done that.
+SANDBOX_NEXT = """\
+Then set this in {user_file}, with the same prefix on private_worker_cmd and split_cmd
+(https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md, step 5):
   [runtime]
   {line}
 """
@@ -81,10 +88,12 @@ def ssh_push_urls(runner: procs.Runner, clone: Path) -> list[str]:
     return [url for url in result.stdout.split() if is_ssh_url(url)]
 
 
-def sandbox_suggestion(worker_cmd: str, user_file: Path) -> str:
+def sandbox_suggestion(worker_cmd: str, user_file: Path, *, text: str = SANDBOX_SUGGESTION) -> str:
     """Return how to sandbox workers: `worker_cmd` behind `canopy-sandbox`'s prefix, as a line of `user_file`.
 
-    Printed, never written: the sandbox is opt-in, and needs `srt` and the wrapper installed first (HOST_ISOLATION §5).
+    `text` says it, with `{user_file}` and `{line}` in it: `canopy init`'s, by default.
+
+    Printed, never written: the sandbox is opt-in, and needs `canopy sandbox setup` run first (HOST_ISOLATION §5).
 
     Returns:
         The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`.
@@ -96,8 +105,8 @@ def sandbox_suggestion(worker_cmd: str, user_file: Path) -> str:
     # A template TOML read from a basic string can hold what a literal one cannot: three quotes, a control character.
     with contextlib.suppress(tomllib.TOMLDecodeError):
         if tomllib.loads(line)["worker_cmd"] == value:
-            return SANDBOX_SUGGESTION.format(user_file=user_file, line=line)
-    return SANDBOX_SUGGESTION.format(user_file=user_file, line=f"worker_cmd = {json.dumps(value, ensure_ascii=False)}")
+            return text.format(user_file=user_file, line=line)
+    return text.format(user_file=user_file, line=f"worker_cmd = {json.dumps(value, ensure_ascii=False)}")
 
 
 @dataclass

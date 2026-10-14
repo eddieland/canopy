@@ -1,4 +1,4 @@
-"""examples/sandbox/canopy-sandbox, the prefix a sandboxed run's command starts with (HOST_ISOLATION §4.1).
+"""`canopy-sandbox`, the prefix a sandboxed run's command starts with (HOST_ISOLATION §4.1).
 
 The fake `srt` on PATH records the policy and environment the wrapper hands it, then runs the command unsandboxed.
 These tests check what the wrapper asks of the sandbox, not that the sandbox holds: that is the canary's job (§6).
@@ -8,12 +8,14 @@ import json
 import os
 import shutil
 import sqlite3
+import sys
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
@@ -23,8 +25,12 @@ from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
-WRAPPER = Path(__file__).resolve().parents[2] / "examples" / "sandbox" / "canopy-sandbox"
+# The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
+# slot's own directory first on the import path.
+WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
 ROLES = ("worker", "setup", "chore")
+FAKES = Path(__file__).resolve().parents[1] / "fakes"
+SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 DEAD_PID = 4_194_305  # above Linux's largest pid_max
 # Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
 PROMPT = 'it\'s "quoted"\n$(touch pwned) `id` $HOME \\ ; | & *'
@@ -54,7 +60,7 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
     for role in ROLES:
-        shutil.copy(WRAPPER.parent / f"{role}.json", templates)
+        shutil.copy(canopy_sandbox.TEMPLATES / f"{role}.json", templates)
     tmp = tmp_path / "tmp"
     tmp.mkdir()
     log = tmp_path / "srt.jsonl"
@@ -170,6 +176,7 @@ def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sa
         "CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)),
         "GIT_DIR": str(primary / ".git" / "worktrees" / "other"),
         "PATH": f"bin{os.pathsep}{os.environ['PATH']}",
+        "SCIE_BOOT": "canopy-sandbox",  # a release's launcher sets it; a `canopy` in the run would be the wrapper
     }
 
     done = wrap("worker", "true", cwd=slot, env=env)
@@ -178,6 +185,7 @@ def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sa
     assert not (tmp_path / "planted-ran").exists()
     call = sandbox.only_call()
     assert "GIT_DIR" not in call["env"]
+    assert "SCIE_BOOT" not in call["env"]
     assert call["settings"]["filesystem"]["allowWrite"][0] == str(slot)
     assert str(other.resolve()) not in call["settings"]["filesystem"]["allowWrite"]
 
@@ -233,6 +241,37 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
     assert str(cwd.resolve()) not in filesystem["allowWrite"]
     assert filesystem["denyWrite"] == []
     assert "GIT_OBJECT_DIRECTORY" not in call["env"]
+
+
+def test_the_srt_canopy_installed_runs_and_reads_its_own_vendor_directory(
+    sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path
+) -> None:
+    """`canopy sandbox setup`'s srt wins over PATH's, and the seccomp helper under the denied HOME stays runnable."""
+    package = canopy_env.home / ".local" / "share" / "canopy" / "sandbox-runtime" / "node_modules" / SRT_PACKAGE
+    (package / "dist").mkdir(parents=True)
+    (package / "vendor" / "seccomp").mkdir(parents=True)
+    (package / "package.json").write_text(json.dumps({"name": SRT_PACKAGE, "version": "0.0.79"}))
+    shutil.copy(FAKES / "srt", package / "dist" / "cli.js")
+    link = package.parents[1] / ".bin" / "srt"
+    link.parent.mkdir()
+    link.symlink_to(Path("..") / SRT_PACKAGE / "dist" / "cli.js")
+
+    assert wrap("chore", "true", cwd=tmp_path).ok
+
+    call = sandbox.only_call()
+    assert call["settings"]["filesystem"]["allowRead"][-1] == str((package / "vendor").resolve())
+
+
+@pytest.mark.usefixtures("sandbox")
+def test_without_srt_nothing_runs(tmp_path: Path) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=tmp_path, env={"PATH": str(empty)})
+
+    assert done.returncode == 2
+    assert "srt is not installed; run `canopy sandbox setup`" in done.stderr
+    assert not (tmp_path / "ran").exists()
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:

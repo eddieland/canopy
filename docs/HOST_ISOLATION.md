@@ -3,8 +3,9 @@
 Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
 Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
 explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
-so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates are in `examples/sandbox/`,
-and the operator's guide to them is `docs/SANDBOX.md`.
+so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates ship with canopy, in
+`packages/canopy-sandbox` (D116); `canopy sandbox setup` installs them and the pinned `srt`, and `docs/SANDBOX.md` is
+the operator's guide.
 The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against
 the version the operator pins.
 
@@ -83,8 +84,8 @@ worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_C
     opencode run --agent canopy-worker --format json {prompt}'''
 ```
 
-`canopy-sandbox` is a short script the operator installs; canopy ships it as an example, `examples/sandbox/`, not as
-harness code. Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
+`canopy-sandbox` is a short program that canopy installs beside itself, a uv workspace member of its own, not harness
+code (D041, D116). Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
 `~/.config/canopy/sandbox/<role>.json`; `--read` names a path the command may read, which is how canopy's agent
 definitions, `<state_dir>/runtime/<digest>/`, are re-allowed: pass it `{definitions_dir}`. Name the wrapper by its
 absolute path when `PATH` has a relative entry: canopy runs the template from the slot, where `.` finds what the
@@ -179,7 +180,7 @@ wrapper's `@GIT_SHARED@` therefore names what the common directory holds, entry 
 binds an empty file over it, which bubblewrap creates on the host and `srt` removes when the run ends (a run killed
 with SIGKILL leaves it empty, which git ignores without `extensions.worktreeConfig`).
 
-Checked with `srt` 0.0.79, bubblewrap, and git 2.43, through `examples/sandbox/canopy-sandbox worker` and the shipped
+Checked with `srt` 0.0.79, bubblewrap, and git 2.43, through `canopy-sandbox worker` and the shipped
 `worker.json` in a slot of a pool under a fake `$HOME`: a commit in the slot works, its objects only in the per-run
 object directory, and so do writes in the slot and in `TMPDIR`; reading `~/.ssh`, the user config, or the journal,
 writing the user config, the `.git` link, `config.worktree`, the common `config`, a hook, or another slot, reading
@@ -291,8 +292,8 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    directory, passed as `CANOPY_GIT_OBJECTS`, read by step 5, and tidied away on every exit path and by reconcile, as
    §4.2 describes. Only the wrapper (§4.1) sets git's variables from it.
 
-No new config keys. `canopy init` prints a suggested `worker_cmd` and points to `docs/SANDBOX.md` for the install,
-but writes neither. The sandbox stays opt-in until the canary has passed on real machines.
+No new config keys. `canopy sandbox setup` installs what it can without root, and `canopy init` prints a suggested
+`worker_cmd`; neither writes the config. The sandbox stays opt-in until the canary has passed on real machines.
 
 ## 6. The canary
 

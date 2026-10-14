@@ -2,7 +2,8 @@
 
 How to run canopy's workers, setup commands, and chores inside an OS sandbox, so that a worker steered by text in a
 ticket cannot read your secrets, rewrite canopy's config, or reach hosts you did not list. Everything here is your own
-config and two files you install: canopy sees only the command templates, and none of this is required to run it.
+config and what `canopy sandbox setup` installs: the loop sees only the command templates, and none of this is
+required to run it.
 For why it works this way and what it was checked against, see [HOST_ISOLATION.md](HOST_ISOLATION.md); for what it
 does and does not defend against, TRUST_MODEL T4 and T6.
 
@@ -11,10 +12,10 @@ The sandbox is opt-in and not yet proven: ROADMAP M26 is open, and the canary th
 
 ## What a sandboxed run can do
 
-A run's command starts in `canopy-sandbox`, a short wrapper canopy ships as an example. The wrapper writes a policy
+A run's command starts in `canopy-sandbox`, a short wrapper canopy installs beside itself. The wrapper writes a policy
 for that run from a template of yours and runs the command under `srt`, Anthropic's sandbox runtime, which uses
 bubblewrap on Linux and `sandbox-exec` on macOS and sends all network traffic through a proxy that enforces a domain
-allowlist. Under the example templates:
+allowlist. Under the shipped templates:
 
 | | Allowed | Refused |
 | --- | --- | --- |
@@ -29,47 +30,53 @@ What it does not cover: a worker can still send anything to a host you allowed, 
 your GitHub token; the overseer and the reviewer (`review_cmd`) are not wrapped; and the sandbox shares the kernel,
 so it is no defense against an exploit written to escape it (HOST_ISOLATION §2, §4.3, §4.4).
 
-## 1. Install `srt` and what it needs
+## 1. Run `canopy sandbox setup`
 
-`srt` is a beta. Pin the version HOST_ISOLATION was checked against, and re-read its claims before you move to another.
+```sh
+canopy sandbox setup
+```
 
-On Linux, install bubblewrap, socat, and ripgrep with your package manager, for example:
+It installs what it can without root, prints what is left as `To do:` lines, and exits 1 until nothing is. Run it
+again after each upgrade of canopy: it keeps your templates and installs a new `srt` when canopy pins one. It:
+
+- copies the policy templates to `~/.config/canopy/sandbox/`, never over one that is there;
+- installs `srt`, pinned by a lockfile canopy ships, with `npm ci`, into `~/.local/share/canopy/sandbox-runtime/`. That
+  needs Node 22.12 or later and npm on `PATH`. A worker cannot write there, and the wrapper prefers that `srt` to any
+  other on `PATH`;
+- checks what needs root, which it never runs, and prints the commands for it (below).
+
+On Linux, `srt` needs bubblewrap, socat, and ripgrep:
 
 ```sh
 sudo apt-get install bubblewrap socat ripgrep
 ```
 
-On macOS, install ripgrep (`brew install ripgrep`); `sandbox-exec` comes with the system.
+On macOS it needs ripgrep (`brew install ripgrep`); `sandbox-exec` comes with the system.
 
-Then, on both, with Node 22.12 or later:
-
-```sh
-npm install -g @anthropic-ai/sandbox-runtime@0.0.79
-srt --version    # 0.0.79
-```
-
-Run canopy as yourself, not as root. On Ubuntu 24.04 and later, AppArmor restricts unprivileged user namespaces
-(`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Lift the restriction, or give
-`bwrap` an AppArmor profile that allows `userns`:
+On Ubuntu 24.04 and later, AppArmor restricts unprivileged user namespaces
+(`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Setup tries bubblewrap, and when
+it fails this way, says to lift the restriction, now and at boot, or give `bwrap` an AppArmor profile that allows
+`userns`:
 
 ```sh
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf
 ```
 
-## 2. Install the wrapper and the policy templates
+Run canopy as yourself, not as root.
 
-Both are in canopy's repository, under `examples/sandbox/`, and are not in a release's executable. From a checkout at
-the version of canopy you run:
+## 2. What setup installed
+
+`canopy-sandbox` comes with canopy: `uv tool install` puts it on `PATH` beside `canopy`. From a release's single
+executable, setup tells you to put a script on `PATH` that runs it, as README does for the notification sinks:
 
 ```sh
-install -m 755 examples/sandbox/canopy-sandbox ~/.local/bin/canopy-sandbox
-mkdir -p ~/.config/canopy/sandbox
-cp examples/sandbox/worker.json examples/sandbox/setup.json examples/sandbox/chore.json ~/.config/canopy/sandbox/
+#!/bin/sh
+exec env SCIE_BOOT=canopy-sandbox /path/to/canopy "$@"
 ```
 
-The wrapper needs `python3`, 3.9 or later, which macOS's command line tools ship. It reads the template for its role
-from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when that is unset):
+The wrapper reads the template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when
+that is unset):
 
 | Template | Used for |
 | --- | --- |
@@ -77,7 +84,13 @@ from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when that i
 | `setup.json` | `setup_cmd` |
 | `chore.json` | `chore_cmd` and each chore's own `cmd` |
 
-The wrapper drops every relative entry from `PATH`, so `srt` and `git` must be on `PATH` through an absolute one.
+It runs the `srt` in `~/.local/share/canopy/sandbox-runtime/` (under `$XDG_DATA_HOME` when that is set), or else the
+first on `PATH`. It drops every relative entry from `PATH`, so `git`, and any other `srt`, must be on `PATH` through
+an absolute one. `srt` runs its seccomp helper inside the sandbox, so the wrapper lets each run read `srt`'s own
+`vendor/` directory, wherever `srt` is installed.
+
+`srt` is a beta. canopy pins the version HOST_ISOLATION was checked against; to try another, install it on `PATH`
+and remove canopy's, and re-read HOST_ISOLATION's claims first.
 
 ## 3. Fill in the templates
 
@@ -192,7 +205,7 @@ use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket an
 
 ## Troubleshooting
 
-- **`canopy-sandbox: no policy template at ...`:** copy the role's template there (step 2).
+- **`canopy-sandbox: no policy template at ...`** or **`srt is not installed`:** run `canopy sandbox setup`.
 - **`CANOPY_GIT_OBJECTS is not set`:** the wrapper's `worker` or `setup` role is on a command canopy does not run as
   a worker or setup, such as `review_cmd`. Remove it there.
 - **`... is not a linked worktree`:** a worker or setup ran outside one of treehouse's slots. canopy always runs them

@@ -184,6 +184,7 @@ canopy (harness, Python)
 
   setup/
     init.py        canopy init: the user config, branch protection text, the SSH push URL check, the sandbox hint
+    sandbox.py     canopy sandbox setup: the wrapper's templates, the pinned srt, and what needs root
     workspace.py   canopy init: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
@@ -234,6 +235,7 @@ operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessio
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
+  canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (HOST_ISOLATION §4, D116)
 scripts/         build-binary.sh: the single executable a release ships (D067)
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
@@ -243,15 +245,15 @@ hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist
 them, with `migrations/`, under `canopy/_data/` through hatch's `force-include`, so a new runtime directory needs a
 line there.
 
-A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack, and the
-dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the operator's cache once, so
+A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack, canopy-sandbox,
+and the dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the operator's cache once, so
 `resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch, chores, and reviews need to
 start `_run`, `_chore`, and `_review` via `python -m canopy`. `SCIE_BOOT` picks the command: unset, `canopy`; set to
-`canopy-notify-desktop` or `canopy-notify-slack`, that sink. A link named for a sink can run canopy itself instead, so
-README installs each sink as a script that sets it. `make binary` builds it for the current platform; the release
-workflow builds each platform's, runs the install check on each, and attaches them to the tag's release. The version
-is the tag's (D085): pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one
-and its commit.
+`canopy-notify-desktop` or `canopy-notify-slack`, that sink, and to `canopy-sandbox`, the wrapper. A link named for one
+can run canopy itself instead, so README installs each sink as a script that sets it, and `canopy sandbox setup` says to
+do the same for the wrapper. `make binary` builds it for the current platform; the release workflow builds each
+platform's, runs the install check on each, and attaches them to the tag's release. The version is the tag's (D085):
+pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one and its commit.
 
 Where later work goes:
 
@@ -260,8 +262,9 @@ Where later work goes:
 - A feature others write to keeps its writing half in `core`: dispatch, `_run`, `_chore`, and reconcile record §20's
   events through `core.outbox`; `notify` delivers them.
 - Code that runs in its own process and must not share the harness's imports or dependencies is a uv workspace member
-  under `packages/`, such as §20's Slack sink. `canopy`, the workspace root, lists the sink's script among its own, so
-  one install puts both on `PATH`.
+  under `packages/`, such as §20's Slack sink and the sandbox wrapper. `canopy`, the workspace root, lists each one's
+  script among its own, so one install puts them all on `PATH`. canopy reads the wrapper's bundled templates and
+  lockfile, and never runs it: only a command template does.
 - A module that takes on a second concern splits into a same-named package in the same layer, as `cli.py` did.
 
 Roles:

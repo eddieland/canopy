@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run an agent command inside `srt` with a policy made for this run (HOST_ISOLATION §4).
 
 A prefix on a command template in canopy's user config:
@@ -6,23 +5,29 @@ A prefix on a command template in canopy's user config:
     canopy-sandbox ROLE [--read PATH]... [--] COMMAND [ARG]...
 
 ROLE is `worker`, `setup`, or `chore`, and picks the policy template `ROLE.json` in `$XDG_CONFIG_HOME/canopy/sandbox/`
-(`~/.config/canopy/sandbox/` when that is unset). `--read PATH`, which may repeat, names a path the command may read:
-pass the template's `{definitions_dir}`, so the agent can load canopy's agent definitions. COMMAND and its arguments
-reach `srt` unchanged, after a `--`, so none of them is ever read as an option of the wrapper's or of `srt`'s.
+(`~/.config/canopy/sandbox/` when that is unset), where `canopy sandbox setup` copies the templates in `templates/`.
+`--read PATH`, which may repeat, names a path the command may read: pass the template's `{definitions_dir}`, so the
+agent can load canopy's agent definitions. COMMAND and its arguments reach `srt` unchanged, after a `--`, so none of
+them is ever read as an option of the wrapper's or of `srt`'s.
 
 In order, it:
 
 1. Drops from its own environment what would point git at another repository (`GIT_DIR` and its kind), every
-   relative `PATH` entry, which would find `git` or `srt` in the checkout, and `BASH_ENV` and `ENV`, which the shell
-   `srt` starts would source. The command inherits the same.
+   relative `PATH` entry, which would find `git` or `srt` in the checkout, `BASH_ENV` and `ENV`, which the shell
+   `srt` starts would source, and `SCIE_BOOT`, which would make a release's `canopy` run as this wrapper. The command
+   inherits the same.
 2. Finds the worktrees the run works in, for a worker or setup: the cwd, or each worktree a joint run's desk links to,
    and each one's own and shared git directories. A chore has none.
 3. Fills the template's placeholders with those paths and writes the policy to a private directory of its own, with
    the run's temp directory beside it. Whatever the template says, the policy denies reading the directory that holds
    every run's, so no run reads another's temp directory, and the workspace's `.canopy/` when the run's directories
-   name it, in case the workspace is outside the HOME the template denies.
+   name it, in case the workspace is outside the HOME the template denies. It allows reading `srt`'s own `vendor/`
+   directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
 4. Points git at the run's object directory, `CANOPY_GIT_OBJECTS`, with each worktree's shared objects as alternates.
 5. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
+   The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
+   `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
+   the first on `PATH`.
 
 A placeholder is a whole string in one of the template's lists, and expands to zero or more paths:
 
@@ -48,8 +53,8 @@ a command with no restrictions outside any sandbox at all.
 The directory a run killed with SIGKILL leaves behind (canopy kills a timed-out run's whole process group) is removed
 by the next run, once the process that made it is gone.
 
-An example, not part of canopy: canopy sees only the command template. Stdlib only, and Python 3.9 or later, which is
-what macOS's command line tools ship.
+A program of its own, installed beside canopy, not part of the harness: canopy sees only the command template (D041).
+Stdlib only.
 """
 
 from __future__ import annotations
@@ -70,6 +75,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping
 
 ROLES = ("worker", "setup", "chore")
+# The policy templates `canopy sandbox setup` copies for each role, and the package and lockfile it installs srt from.
+TEMPLATES = Path(__file__).resolve().parent / "templates"
+RUNTIME_SPEC = Path(__file__).resolve().parent / "runtime"
 OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
 # What canopy leaves in a joint run's desk (DESIGN §18); every other entry there links to a worktree.
 DESK_MARKER = ".canopy-desk"
@@ -93,6 +101,9 @@ SAFE_GIT = (
 UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
 SHELL_STARTUP = ("BASH_ENV", "ENV")
+# Picks the command a release's single executable runs (D067): left set, a `canopy` the run starts would be this
+# wrapper.
+LAUNCHER = ("SCIE_BOOT",)
 # Name a repository other than the one git finds from the cwd, for the wrapper's git and the command's alike.
 GIT_LOCATION = (
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -108,6 +119,8 @@ GIT_LOCATION = (
     "GIT_SHALLOW_FILE",
     "GIT_WORK_TREE",
 )
+# The npm package srt comes in; its `vendor/` holds the seccomp helper the sandbox runs (find_srt, vendor_dirs).
+SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 # Where srt puts the sandbox's TMPDIR. Unset, it is /tmp/claude, which every sandboxed run shares.
 SRT_TMPDIR = "CLAUDE_CODE_TMPDIR"
 
@@ -124,7 +137,16 @@ class Worktree(NamedTuple):
     shared: Path
 
 
-def main(argv: list[str]) -> int:
+def main() -> int:
+    """The `canopy-sandbox` command.
+
+    Returns:
+        The exit status: `srt`'s, or 2 when the command could not be sandboxed and did not run.
+    """
+    return run(sys.argv[1:])
+
+
+def run(argv: list[str]) -> int:
     """Run the command `argv` names in the sandbox, and return the exit status to exit with.
 
     Returns:
@@ -137,6 +159,7 @@ def main(argv: list[str]) -> int:
         cwd = Path.cwd()
         trees = worktrees(cwd) if role != "chore" else []
         template = load_template(role)
+        srt = find_srt()
         run_dir = make_run_dir()
     except SandboxError as e:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
@@ -145,10 +168,10 @@ def main(argv: list[str]) -> int:
         tmp = run_dir / "tmp"
         tmp.mkdir(mode=0o700)
         policy = fill(template, placeholders(cwd, trees, objects, tmp, reads))
-        check(policy, [run_dir.parent, *state_dirs(objects, cwd)])
+        check(policy, [run_dir.parent, *state_dirs(objects, cwd)], vendor_dirs(srt))
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
-        return run_srt(settings, command, environment(os.environ, trees, objects, tmp))
+        return run_srt(srt, settings, command, environment(os.environ, trees, objects, tmp))
     except SandboxError as e:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
         return 2
@@ -162,7 +185,7 @@ def scrub(env: MutableMapping[str, str]) -> None:
     canopy starts the wrapper in a checkout, so a relative entry such as `.` would find a `git` or `srt` the branch
     committed, and run it on the host.
     """
-    for name in (*GIT_LOCATION, *SHELL_STARTUP):
+    for name in (*GIT_LOCATION, *SHELL_STARTUP, *LAUNCHER):
         env.pop(name, None)
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if Path(p).is_absolute())
 
@@ -256,9 +279,37 @@ def load_template(role: str) -> object:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        raise SandboxError(f"no policy template at {path}; copy one from canopy's examples/sandbox/") from None
+        raise SandboxError(f"no policy template at {path}; run `canopy sandbox setup`") from None
     except (OSError, ValueError) as e:
         raise SandboxError(f"the policy template {path} could not be read: {e}") from None
+
+
+def find_srt() -> Path:
+    """Find the `srt` to run: the one `canopy sandbox setup` installed, or else the first on `PATH`.
+
+    Returns:
+        Its path.
+
+    Raises:
+        SandboxError: there is neither.
+    """
+    pinned = runtime_dir() / "node_modules" / ".bin" / "srt"
+    if pinned.is_file():
+        return pinned
+    found = shutil.which("srt")
+    if found is None:
+        raise SandboxError("srt is not installed; run `canopy sandbox setup`")
+    return Path(found).absolute()
+
+
+def runtime_dir() -> Path:
+    """Return where `canopy sandbox setup` installs `srt`: `$XDG_DATA_HOME/canopy/sandbox-runtime`.
+
+    Returns:
+        The directory, under `~/.local/share` when XDG_DATA_HOME is unset or empty. It may not exist.
+    """
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base).expanduser() / "canopy" / "sandbox-runtime"
 
 
 def make_run_dir() -> Path:
@@ -357,15 +408,16 @@ def fill(node: object, values: dict[str, list[str]]) -> object:
     return node
 
 
-def check(policy: object, denied: list[Path]) -> None:
-    """Refuse a policy `srt` would run without a sandbox, or with the network open, and deny reading `denied`.
+def check(policy: object, denied: list[Path], readable: list[Path]) -> None:
+    """Refuse a policy `srt` would run without a sandbox, or with the network open; deny `denied`, allow `readable`.
 
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
     run could read another's temp directory, a private ticket's included. It holds the workspace's `.canopy/` too, when
-    known, for a workspace outside HOME. The run's own directories in them are re-allowed by the template.
+    known, for a workspace outside HOME. The run's own directories in them are re-allowed by the template. `readable`
+    holds what `srt` itself runs inside the sandbox, which may be under the HOME the template denies.
 
     Raises:
-        SandboxError: it denies no reads, or has no network allowlist.
+        SandboxError: it denies no reads, has no network allowlist, or its allowRead is not a list.
     """
     sections: dict[object, object] = policy if isinstance(policy, dict) else {}
     filesystem = sections.get("filesystem")
@@ -378,6 +430,10 @@ def check(policy: object, denied: list[Path]) -> None:
     if not isinstance(network, dict) or not isinstance(network.get("allowedDomains"), list):
         raise SandboxError("the policy template has no network.allowedDomains list")
     deny.extend(str(p) for p in denied if str(p) not in deny)
+    allow: object = filesystem.setdefault("allowRead", [])
+    if not isinstance(allow, list):
+        raise SandboxError("the policy template's filesystem.allowRead is not a list")
+    allow.extend(str(p) for p in readable if str(p) not in allow)
 
 
 def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:
@@ -390,6 +446,21 @@ def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:
         if place is not None and place.parent.name in {"runs", "chores"} and place.parent.parent.name == STATE_DIR:
             return [place.parent.parent]
     return []
+
+
+def vendor_dirs(srt: Path) -> list[Path]:
+    """Find the `vendor/` directory of the `srt` package at `srt`, whose seccomp helper runs inside the sandbox.
+
+    Returns:
+        The directory, or nothing when `srt` is not an installed copy of the package.
+    """
+    root = srt.resolve().parent.parent
+    try:
+        name = json.loads((root / "package.json").read_text(encoding="utf-8")).get("name")
+    except (OSError, ValueError, AttributeError):
+        return []
+    vendor = root / "vendor"
+    return [vendor] if name == SRT_PACKAGE and vendor.is_dir() else []
 
 
 def environment(current: Mapping[str, str], trees: list[Worktree], objects: Path | None, tmp: Path) -> dict[str, str]:
@@ -414,13 +485,13 @@ def environment(current: Mapping[str, str], trees: list[Worktree], objects: Path
     return env
 
 
-def run_srt(settings: Path, command: list[str], env: dict[str, str]) -> int:
+def run_srt(srt: Path, settings: Path, command: list[str], env: dict[str, str]) -> int:
     """Run `command` under `srt` with the policy at `settings`, passing on a signal the wrapper alone is sent.
 
     Returns:
         `srt`'s exit status, or 128 plus the signal that ended it.
     """
-    child = subprocess.Popen(["srt", "--settings", str(settings), "--", *command], env=env)  # noqa: S603, S607
+    child = subprocess.Popen([str(srt), "--settings", str(settings), "--", *command], env=env)  # noqa: S603
 
     def forward(signum: int, _frame: object) -> None:
         child.send_signal(signum)
@@ -486,7 +557,3 @@ def alive(pid_file: Path) -> bool:
     except PermissionError:
         return True
     return True
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
