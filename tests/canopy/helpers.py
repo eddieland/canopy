@@ -99,6 +99,17 @@ def wait_for_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> 
     raise AssertionError(f"run {run_id} still running after {timeout}s")
 
 
+def lifelock_left(row: sqlite3.Row, timeout: float = 30) -> bool:
+    """Whether the lifelock file of a closed run is still there once its process has exited.
+
+    The process closes its row, then removes the file, then exits, so the file is looked for only after the exit.
+    """
+    deadline = time.monotonic() + timeout
+    while procs.alive(int(row["pid"])) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    return procs.lifelock(Path(row["log_path"])).exists()
+
+
 @dataclass
 class InlineRunner:
     """Runs processes for real, but `spawn` starts nothing and returns this process's pid.

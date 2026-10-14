@@ -18,14 +18,13 @@ from canopy.core import agent_output, conversation, db, definitions, outbox
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core.config import render_command
-from canopy.infra import logs, stopping
+from canopy.infra import logs, procs, stopping
 
 if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.config import Chore
     from canopy.core.context import Context
-    from canopy.infra import procs
 
 
 class ChoreError(Exception):
@@ -100,6 +99,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             ended = outbox.chore_ended(ctx.config, run, outcome.status, stored)
             if not db.finish_chore_run(ctx.conn, run_id, outcome.status, stored, event=ended):
                 log.warning("chore run was already closed; its outcome is not recorded", extra=fields)
+            procs.drop_lifelock(Path(run["log_path"]))
             log.info("chore run finished", extra={**fields, "status": outcome.status})
     return outcome
 

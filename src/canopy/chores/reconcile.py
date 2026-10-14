@@ -32,6 +32,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         note = json.dumps({"harness": "the chore process is gone"})
         ended = outbox.chore_ended(ctx.config, row, "crashed", note)
         if db.finish_chore_run(ctx.conn, int(row["id"]), "crashed", note, event=ended):
+            procs.drop_lifelock(Path(row["log_path"]))
             closed.append(int(row["id"]))
             log.warning("chore process is gone; chore run marked crashed", extra=fields)
     return closed
