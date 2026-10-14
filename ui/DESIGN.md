@@ -401,11 +401,13 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions on its page, under the item's head on
-  its attention item, above the conversation, and under a PR's reviews: one muted line saying what a limit does, then a
-  row per limit whose runs have reached it, what it counts in monospace (`fix-ci in web`, `reviews of web#88`), its runs
-  against it in `status-failed` (`1 of 1 runs`, and `, N granted` past the policy's), and a ghost `allow one more` at
-  the row's end, the CLI's command on hover. What the grant did goes under the rows (`Notice`); the row leaves once the
-  limit is above its runs. A limit with room left shows nothing.
+  its attention item, above the conversation, and under a PR's reviews. While something is stuck it is a block on the
+  `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
+  led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
+  monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed` (`1 of 1 runs`, and `, N
+  granted` past the policy's), and an outline `Allow one more` button at the row's end, as an Actions panel's are, the
+  CLI's command on hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
+  leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
