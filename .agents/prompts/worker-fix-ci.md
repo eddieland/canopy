@@ -48,7 +48,8 @@ commit message.
 ## Obligations
 
 Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, with
-`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
+`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, a new commit and push for anything you fix after a
+push (never an amend), no CI polling or push retry loops, never
 merge or approve, comment on each PR you pushed to describing the fix. {{BRANCH_UPDATE}} {{MARK_COMMENTS}} You post
 as the operator, so that is how canopy knows the comment is yours and never reads it back as review feedback.
 {{COMMIT_ATTRIBUTION}} Never transition the ticket, including indirectly: refer to it by key only, with no closing

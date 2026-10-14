@@ -84,7 +84,8 @@ commit message.
 ## Obligations
 
 Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, with
-`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
+`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, a new commit and push for anything you fix after a
+push (never an amend), no CI polling or push retry loops, never
 merge or approve, never transition the ticket directly or through closing keywords. {{COMMIT_ATTRIBUTION}}
 The tracker is
 {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it before touching the ticket.

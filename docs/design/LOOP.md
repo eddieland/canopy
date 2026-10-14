@@ -629,10 +629,10 @@ read for a run in one repository.
 
 Worker obligations, stated in every worker prompt:
 
-- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
-  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker
-  that brings its base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it
-  rebases onto `origin/<base>` instead, never merging, and pushes the rebased branch with
+- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, as
+  `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker that brings its
+  base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it rebases onto
+  `origin/<base>` instead, never merging, and pushes the rebased branch with
   `git push --force-with-lease origin HEAD:refs/heads/<branch>`: the one force the worker's definition then allows
   (TRUST_MODEL T1). `{{BRANCH_UPDATE}}` says which, in every prompt of a kind that commits; with `trust.rebase` set,
   an override without it fails to render rather than have the worker make merge commits the operator's repositories
@@ -651,7 +651,8 @@ Worker obligations, stated in every worker prompt:
   and `question` are its report and question (§22).
 - Never approve, merge, close PRs, or transition the ticket to Done, including indirectly: no closing keywords
   (`Fixes #12`) or tracker commands (Jira smart commits) in commit messages, PR titles, or PR bodies.
-- Push once. Do not poll CI. Do not retry.
+- Push again for anything fixed after a push, in a new commit, never an amend (D116). Do not poll CI. Do not retry a
+  rejected push.
 
 Everything posts as the operator (D010), who is usually an authorized replier, so without a mark a worker's PR reply
 would read back as new review feedback and spend a `resume` attempt, and its ticket comment could pass for an
