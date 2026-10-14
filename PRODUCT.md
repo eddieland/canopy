@@ -27,7 +27,9 @@ human), the runs, the worktrees, every ticket's conversation, canopy's reviews w
 and a search over the whole journal.
 
 Success means the operator sees at a glance whether anything needs them, and acts on it without a terminal: answer,
-grant, stop, reply. Everything that doesn't need them stays quiet.
+grant, stop, reply. Everything that doesn't need them stays quiet. It also means the work is a little fun. Shepherding
+thousands of tickets through agents is drudgery by default, and canopy should make it more enjoyable to do, not just
+faster.
 
 ## Positioning
 
@@ -65,8 +67,11 @@ grant, stop, reply. Everything that doesn't need them stays quiet.
 - The name is lowercase: canopy.
 - Voice: plain, direct, factual. Say what an action did in the CLI's words (`src/lib/outcomes.ts`). No marketing
   tone in the product.
-- The UI has a little play in it, within limits (`ui/DESIGN.md`). Each nav section has its own color, and the
-  header ticker has its flair. None of it ever marks state.
+- canopy should be a little fun to use. This is a goal, not a garnish: the operator manages a huge volume of tasks,
+  and the product should lighten that. Play shows up in the details: the section colors, the header ticker's flair,
+  the words, moments of small reward when work clears. Today's instances are in `ui/DESIGN.md`. The limit is that
+  fun never hides or fakes state, never slows an action, and never gets in the way of reading what needs the
+  operator.
 
 ## Evidence on Hand
 
@@ -87,3 +92,5 @@ grant, stop, reply. Everything that doesn't need them stays quiet.
    restating it.
 4. Local and trustworthy. Nothing leaves the machine, and untrusted text stays text.
 5. One record. A ticket's whole conversation, runs, and reviews read as one story.
+6. A little fun. Managing thousands of tasks shouldn't feel like a chore. Look for places to add delight, as long as
+   it stays clear and never costs the operator time.
