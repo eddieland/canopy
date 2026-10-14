@@ -26,7 +26,9 @@ from canopy.serve.guard import allowed_origin
 COOKIE_PREFIX = "canopy_session_"
 TOKEN_HEADER = "x-canopy-token"  # noqa: S105  (a header name, not a credential)
 SESSION_SECONDS = 30 * 24 * 3600
-# A wrong secret is answered after this long: guessing one is slow even if the operator wrote a weak one.
+# A wrong secret is answered after this long. It slows one client guessing in turn, not many guessing at once, so the
+# secret's length is the real defense: `canopy secret` writes 32 random bytes, and `secret.read` refuses fewer than 32
+# characters.
 FAILED_SIGN_IN_SECONDS = 1.0
 # What `GET /api/session` gives a page when nobody signs in (mock data only).
 OPEN_TOKEN = "open"  # noqa: S105  (not a credential: the open server checks none)
