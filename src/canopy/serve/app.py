@@ -56,7 +56,8 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     )
     app.include_router(api.router, prefix=f"{base}/api")
     app.add_exception_handler(sqlite3.OperationalError, refs.journal_busy)
-    deps.bind(app, backend, sessions)
+    spa = SinglePageApp(options.ui_dir, base_path=base)
+    deps.bind(app, backend, sessions, spa)
     if base:
 
         @app.get(base, include_in_schema=False)
@@ -64,7 +65,6 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
             return RedirectResponse(f"{base}/")
 
     # Last, so every API route, including an unknown one, is matched before it.
-    spa = SinglePageApp(options.ui_dir, base_path=base)
     app.add_route(f"{base}/{{path:path}}", spa.respond, methods=["GET", "HEAD"], include_in_schema=False)
     app.add_middleware(QuietLeaving)
     app.add_middleware(Guard, api_prefix=f"{base}/api", hosts=options.hosts)

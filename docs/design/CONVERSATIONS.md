@@ -764,6 +764,11 @@ How it serves, built in M20's foundation and true of every page:
 - The fallback to `index.html` never answers under `{base}/api` (an unknown API path is a JSON 404) or for a path
   with a file extension (a missing asset is a 404, not a page). `index.html` is sent `no-cache`, so an upgrade never
   shows a stale UI; hashed assets are cached as immutable.
+- `index.html` carries its build's id, a digest of the file, which names every hashed asset, in a `canopy-build` meta
+  tag, and `GET /api/meta` reports the id of the build on disk now. A page open across an upgrade keeps its old build,
+  whose lazily loaded pages may no longer be served, so the page reads the meta again whenever its stream comes back,
+  as it does after the loop restarts, and offers a Reload in the header while the two differ. It never reloads on its
+  own: the operator may be typing.
 - Every response refuses framing and MIME sniffing and sends no Referer. `index.html` carries a CSP that allows only
   this origin, plus the inline theme script by its hash, computed from the file served.
 - The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`

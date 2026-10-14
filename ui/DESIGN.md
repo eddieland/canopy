@@ -146,11 +146,16 @@ Rules:
   rest muted, each only when there is one. Never in the section's rose, too near the failure color to tell apart at that
   size. Since color alone tells the numbers apart, they are said in words on hover and to a screen reader
   (`1 broken, 1 waiting on you, 3 other`).
-- **The pause** is the one action in the header, since it is about the loop, not a page's subject: a ghost Pause
+- **The pause** is the header's standing action, since it is about the loop, not a page's subject: a ghost Pause
   button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
+- **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
+  (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
+  reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
+  server writes into index.html, and the server's from `GET /api/meta`, read again whenever the stream comes back:
+  a loop restarted on an upgrade drops it.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`,
   on `surface-raised` at half strength with its label in `foreground` at weight 500, so it stands apart from the rows
   under it; half, so a ghost button's hover in it still shows. In a panel too narrow for one line, what is on its

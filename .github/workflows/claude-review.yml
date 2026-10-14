@@ -40,9 +40,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
-      - name: Install bubblewrap
-        # The env scrub above runs each of Claude's commands under bwrap, which ubuntu-latest lacks.
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+      - name: Install the sandbox's tools
+        # The env scrub above runs each of Claude's commands in its sandbox, which needs bwrap and socat; ubuntu-latest
+        # has neither. Without socat Claude Code starts, but every Bash command fails, `gh pr diff` included.
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
 
       - name: Review with Claude
         # Pinned to a commit, not the movable v1 tag, because this step holds the subscription token.

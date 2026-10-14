@@ -53,6 +53,13 @@ sudo apt-get install bubblewrap socat ripgrep
 
 On macOS it needs ripgrep (`brew install ripgrep`); `sandbox-exec` comes with the system.
 
+Setup also checks two things `srt` only warns about in its debug log, and runs anyway:
+
+- bubblewrap 0.5.0 or later. On an older one, `srt` cannot hide a socket, fifo, or device a template denies reading,
+  and leaves on the host the mount points of a sandbox that was killed. Ubuntu 20.04 and Debian 11 ship older ones.
+- an x86_64 or aarch64 machine. `srt` ships its seccomp filter, which blocks making Unix sockets, for those alone;
+  elsewhere a sandboxed command can reach your SSH agent, or Docker's socket. Do not rely on the sandbox there.
+
 On Ubuntu 24.04 and later, AppArmor restricts unprivileged user namespaces
 (`kernel.apparmor_restrict_unprivileged_userns`), and bubblewrap fails without them. Setup tries bubblewrap, and when
 it fails this way, says to lift the restriction, now and at boot, or give `bwrap` an AppArmor profile that allows

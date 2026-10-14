@@ -9,7 +9,7 @@ from fastapi import APIRouter, Query
 
 from canopy.core import spend as spending
 from canopy.serve import views
-from canopy.serve.api.deps import BackendDep
+from canopy.serve.api.deps import BackendDep, SpaDep
 from canopy.serve.schema import AttentionItem, Meta, Spend, SpendBreakdown
 
 TAG = "overview"
@@ -17,10 +17,11 @@ router = APIRouter(tags=[TAG])
 
 
 @router.get("/meta", operation_id="getMeta", summary="Get the server's meta")
-def meta(backend: BackendDep) -> Meta:
-    """The server's version, whether its data is mock, `tracker.ticket_url`, link templates, and the workspace root."""
+def meta(backend: BackendDep, spa: SpaDep) -> Meta:
+    """The server's version and UI build, whether its data is mock, its link templates, and the workspace root."""
     return Meta(
         version=version("canopy"),
+        build=spa.build(),
         mock=backend.mock,
         ticket_url=backend.config.tracker.ticket_url or None,
         branch_urls={r.name: r.branch_url for r in backend.workspace.repos if r.branch_url},
