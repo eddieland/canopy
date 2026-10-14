@@ -108,3 +108,36 @@ export async function padDecisions(page: Page, ticketKey: string, count: number)
         await route.fulfill({ response, json: body })
     })
 }
+
+/**
+ * Makes canopy's lifetime spend `usd`, as `GET /api/spend` and the event stream report it, for the hat shop: the mock
+ * has spent too little to buy a hat. The stream's messages are rewritten in the page, as each is read, since a stream
+ * never ends for a route to read whole.
+ */
+export async function spentInAll(page: Page, usd: number): Promise<void> {
+    await page.route('**/api/spend', async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as { total_usd: number | null }
+        body.total_usd = usd
+        await route.fulfill({ response, json: body })
+    })
+    await page.addInitScript((total) => {
+        // The getter is only ever called with `.call` on an event, so it never loses its `this`.
+        // oxlint-disable-next-line typescript/unbound-method
+        const read = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data')?.get
+        Object.defineProperty(MessageEvent.prototype, 'data', {
+            get(this: MessageEvent): unknown {
+                const data: unknown = read?.call(this)
+                if (!(this.target instanceof EventSource) || typeof data !== 'string') {
+                    return data
+                }
+                const parsed = JSON.parse(data) as { type?: string; spend?: { total_usd: number | null } }
+                if (parsed.type !== 'spend.updated' || parsed.spend === undefined) {
+                    return data
+                }
+                parsed.spend.total_usd = total
+                return JSON.stringify(parsed)
+            },
+        })
+    }, usd)
+}
