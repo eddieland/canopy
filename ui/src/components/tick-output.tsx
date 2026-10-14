@@ -7,7 +7,9 @@ import type { TickOutput } from '@/api/types'
 import { JsonTokens } from '@/components/json-text'
 import { Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Toggle } from '@/components/ui/toggle'
 import { jsonLines } from '@/lib/json-lines'
 import { setPrettyOutput, usePrettyOutput } from '@/lib/pretty-output'
 import { byteSize } from '@/lib/ticks'
@@ -24,51 +26,60 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
     const { data } = useQuery({ ...tickOutputQuery(id), enabled: shown && path !== null })
     const pretty = usePrettyOutput(id)
     return (
-        <Panel data-testid="tick-output">
-            <PanelHeader label="Output">
-                <span className="flex items-center gap-3">
-                    {shown && data?.status === 'read' && (
-                        <span className="readout text-xs text-muted-foreground">{byteSize(data.size)}</span>
-                    )}
-                    {shown && data?.status === 'read' && data.text !== '' && (
-                        <Button
-                            variant="ghost"
-                            size="xs"
-                            aria-pressed={pretty}
-                            title={pretty ? 'Show each event on one line, as written' : 'Lay each event out, indented'}
-                            className="aria-pressed:bg-surface-raised aria-pressed:text-foreground"
-                            onClick={() => setPrettyOutput(id, !pretty)}
-                        >
-                            <Braces />
-                            Pretty
-                        </Button>
-                    )}
-                    {path !== null && (
-                        <Button variant="ghost" size="xs" aria-expanded={shown} onClick={() => setShown((s) => !s)}>
-                            {shown ? 'Hide' : 'Show'}
-                        </Button>
-                    )}
-                </span>
-            </PanelHeader>
-            {path === null ? (
-                <Placeholder className="min-h-20">
-                    {running ? 'the overseer’s output is written when it ends' : 'none kept'}
-                </Placeholder>
-            ) : shown ? (
-                data === undefined ? (
-                    <div className="flex flex-col gap-2 p-3">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+        <Collapsible asChild open={shown} onOpenChange={setShown}>
+            <Panel data-testid="tick-output">
+                <PanelHeader label="Output">
+                    <span className="flex items-center gap-3">
+                        {shown && data?.status === 'read' && (
+                            <span className="readout text-xs text-muted-foreground">{byteSize(data.size)}</span>
+                        )}
+                        {shown && data?.status === 'read' && data.text !== '' && (
+                            <Toggle
+                                size="xs"
+                                pressed={pretty}
+                                onPressedChange={(on) => setPrettyOutput(id, on)}
+                                title={
+                                    pretty ? 'Show each event on one line, as written' : 'Lay each event out, indented'
+                                }
+                            >
+                                <Braces />
+                                Pretty
+                            </Toggle>
+                        )}
+                        {path !== null && (
+                            <CollapsibleTrigger asChild>
+                                <Button variant="ghost" size="xs">
+                                    {shown ? 'Hide' : 'Show'}
+                                </Button>
+                            </CollapsibleTrigger>
+                        )}
+                    </span>
+                </PanelHeader>
+                {path === null ? (
+                    <Placeholder className="min-h-20">
+                        {running ? 'the overseer’s output is written when it ends' : 'none kept'}
+                    </Placeholder>
                 ) : (
-                    <Body output={data} pretty={pretty} />
-                )
-            ) : (
-                <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                    <span className="break-all">{path}</span> as written: stdout, then stderr
-                </p>
-            )}
-        </Panel>
+                    <>
+                        <CollapsibleContent>
+                            {data === undefined ? (
+                                <div className="flex flex-col gap-2 p-3">
+                                    <Skeleton className="h-4 w-2/3" />
+                                    <Skeleton className="h-4 w-1/2" />
+                                </div>
+                            ) : (
+                                <Body output={data} pretty={pretty} />
+                            )}
+                        </CollapsibleContent>
+                        {!shown && (
+                            <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                                <span className="break-all">{path}</span> as written: stdout, then stderr
+                            </p>
+                        )}
+                    </>
+                )}
+            </Panel>
+        </Collapsible>
     )
 }
 
