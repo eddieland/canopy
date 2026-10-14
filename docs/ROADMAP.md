@@ -564,6 +564,57 @@ one before, and a median such tick at least 15% cheaper at the same price, with 
 Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
 the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
 
+## M35. Temporary notices to workers
+
+REQUIREMENTS R15. Needs M12 and M20. Asked for by the operator (2026-10-14): a way to tell workers about a passing
+condition, such as "Artifactory is having issues and CI builds will likely fail". `paths.worker_instructions` (§12)
+carries it today, but it never lapses, the overseer never sees it, and nothing shows it is in force, so it outlives the
+outage or is forgotten.
+
+- A notice is a journal fact, like the pause (§6, The loop): its text, when and through which channel it was set, and
+  when it lapses. One at a time; setting another replaces it. A lapsed notice reads as none, so nothing has to delete
+  it. It has its own bound, apart from the standing instructions' 4 KiB, checked when it is set, so no dispatch fails
+  on a notice's size.
+- `canopy notice 'TEXT' [--for DURATION]` sets it, `canopy notice --clear` lifts it, and `canopy notice` alone prints
+  the one in force. Without `--for` it lapses after a default. Like `pause`, `reply`, and `grant`, it refuses as
+  `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set: a notice reaches every later run's prompt, so an agent
+  steered by one ticket's text could otherwise write instructions into every other ticket's runs.
+- Who hears it: every run that builds, tests, or reads CI. That is `implement`, `fix-ci`, and `resume` workers,
+  reviews (§21), chores (§19), and M25's `triage-ci` once built. A split hears none: it reads and writes the ticket
+  and builds nothing. A run already running keeps the prompt it started with.
+- How: a `{{NOTICE}}` section of its own in each of those shipped prompts, `None.` without one, and a key in a chore's
+  generated `## Run` object, which the operator's file cannot drop. While a notice is in force, a prompt without
+  `{{NOTICE}}` is `bad_prompt`, as an override without `{{STANDING_INSTRUCTIONS}}` is once that file is set, so an
+  override written before notices existed cannot drop one silently. `canopy notice` names each such override when it
+  sets one, and the kinds that will refuse until the override gains the placeholder or the notice lapses.
+- The overseer: the state block carries the notice in force, and the overseer prompt says how to weigh it. A failed
+  check whose run started while the notice was in force, and that the notice explains, is held: neither fixed nor
+  triaged. It stays held after the notice lapses until a newer run of that check exists, so a lapse alone never sends
+  `fix-ci` at the outage's failure and spends an attempt that never resets (D030). Once the notice has lapsed, M25's
+  `triage-ci` reruns it where triage is on; elsewhere the PR goes on the attention list, under a reason this milestone
+  adds, for the operator to rerun. No guard in code: whether a failure is the one the notice names is judgment.
+- Idle pacing (§6): setting or clearing a notice is an operator act, like a message. It wakes the loop, keeps the next
+  tick from counting as idle, and is recorded as `woken_by` `notice`. A notice's lapse is a gate the wait ends at, like
+  a `fix-ci` cooldown's end, so held work resumes when the notice lapses, not up to `loop.idle_max_minutes` later.
+- `canopy status` and the web UI show the notice while it is in force, and the web UI sets and clears it.
+- TRUST_MODEL: T1 adds `notice` to the commands that refuse inside a run, and T8 adds setting and clearing a notice to
+  the web channel's list of writes. With the operator's approval note in the PR, for those and the overseer prompt.
+- DESIGN §6, §8, §11, §12, §19, §21, and §22 say what changes in them, and §23 too if M25 is built first.
+- Tests with the fakes: a notice reaches an `implement`, `fix-ci`, `resume`, and review prompt and a chore's `## Run`
+  object, and not a split's; a lapsed or cleared notice reaches no prompt; an override without `{{NOTICE}}` renders
+  with no notice in force and is `bad_prompt` with one, and `canopy notice` names it; text over the bound is refused
+  when set; `canopy notice` refuses inside a run; a dry-run tick's state block carries it; setting one wakes the loop,
+  and a lapse ends the wait; the web route sets and clears it; Playwright for its banner.
+- Open: the bound and the default lifetime; whether a notice can name repositories, so an outage in one repository's
+  CI does not reach runs in another.
+
+Accept: the tests above pass. Live: during a CI outage, real or staged, the operator sets a notice from the CLI or the
+web UI; the next worker's summary takes it into account; the overseer holds `fix-ci` on a check the outage failed, and
+after the notice lapses that check is rerun, by `triage-ci` or by the operator from the attention list, before any
+`fix-ci`; and the next worker's prompt after the lapse does not carry the notice.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.
