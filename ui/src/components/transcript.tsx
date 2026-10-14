@@ -1,8 +1,15 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Rows3 } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import type { Transcript, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
+import type {
+    Transcript,
+    TranscriptEntry,
+    TranscriptPrompt,
+    TranscriptStep,
+    TranscriptTokens,
+    TranscriptTool,
+} from '@/api/types'
 import { JsonTokens } from '@/components/json-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
@@ -12,20 +19,38 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
 import { localTime } from '@/lib/time'
-import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from '@/lib/transcript'
+import {
+    byCall,
+    callLine,
+    duration,
+    elapsed,
+    outcome,
+    pretty,
+    sentTokens,
+    startOf,
+    summary,
+    tally,
+    tokenCount,
+    wroteTokens,
+} from '@/lib/transcript'
+import type { ModelCall as Call } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
- * printed them. All of it is agent output, rendered as text. `running` says the session's events have not reached the
- * log yet: they do when its run or tick ends.
+ * printed them. By call, the same entries are grouped by the model call they came from, each opening to what it was
+ * sent and what it did. All of it is agent output, rendered as text. `running` says the session's events have not
+ * reached the log yet: they do when its run or tick ends.
  */
 export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
     // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own.
     const [opened, setOpened] = useState({ open: false, round: 0 })
+    const [grouped, setGrouped] = useState(false)
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
+    const calls = byCall(entries)
+    const callView = grouped && calls.calls.length > 0
     const tools = entries.some((e) => e.kind === 'tool')
     const order = useListOrder('transcript')
     // Each entry with its place in the log, which is its identity: a log only ever grows at the end.
@@ -39,6 +64,19 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
             <PanelHeader label="Transcript">
                 <span className="flex items-center gap-3">
                     {entries.length > 1 && <OrderToggle list="transcript" />}
+                    {calls.calls.length > 0 && (
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            aria-pressed={grouped}
+                            title={grouped ? 'Show each event in order' : 'Group the events by model call'}
+                            className="aria-pressed:bg-surface-raised aria-pressed:text-foreground"
+                            onClick={() => setGrouped((g) => !g)}
+                        >
+                            <Rows3 />
+                            By call
+                        </Button>
+                    )}
                     {transcript?.session_id && (
                         <span
                             className="readout hidden text-xs text-muted-foreground sm:inline"
@@ -47,7 +85,7 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                             session {transcript.session_id}
                         </span>
                     )}
-                    {tools && (
+                    {(tools || callView) && (
                         <span className="flex items-center">
                             {(['open', 'close'] as const).map((verb) => (
                                 <Button
@@ -97,16 +135,35 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                         {transcript.truncated && <span>cut: the log holds more than a page shows</span>}
                         {transcript.unreadable > 0 && <span>{transcript.unreadable} events could not be read</span>}
                     </p>
-                    <ol className="divide-y" data-testid="transcript-entries">
-                        {numbered.map(({ entry, i }) => (
-                            <Entry
-                                key={`${i}-${opened.round}`}
-                                entry={entry}
-                                start={startOf(entries)}
-                                open={opened.open}
-                            />
-                        ))}
-                    </ol>
+                    {callView ? (
+                        <ol className="divide-y" data-testid="transcript-calls">
+                            {ordered('transcript', order, [
+                                ...calls.before.map((entry, i) => (
+                                    <Entry key={`before-${i}`} entry={entry} start={startOf(entries)} open={false} />
+                                )),
+                                ...calls.calls.map((call) => (
+                                    <CallRow
+                                        key={`${call.n}-${opened.round}`}
+                                        call={call}
+                                        prompt={transcript.prompt}
+                                        start={startOf(entries)}
+                                        open={opened.open}
+                                    />
+                                )),
+                            ])}
+                        </ol>
+                    ) : (
+                        <ol className="divide-y" data-testid="transcript-entries">
+                            {numbered.map(({ entry, i }) => (
+                                <Entry
+                                    key={`${i}-${opened.round}`}
+                                    entry={entry}
+                                    start={startOf(entries)}
+                                    open={opened.open}
+                                />
+                            ))}
+                        </ol>
+                    )}
                 </>
             )}
         </Panel>
@@ -328,19 +385,181 @@ const TOKEN_KINDS = [
     ['reasoning', 'reasoning'],
 ] as const
 
+/**
+ * A model call, by call: one line, its number, what it did, and its tokens in and out and its cost, that opens to its
+ * input and its output. The first call's input is the prompt canopy kept; what is new in a later call's is what its
+ * tools returned to the call before it. Ahead of all of it the runtime sends the agent's definition and its own
+ * system prompt and tools, which no file records. The body is built only once opened: a long session's calls would
+ * hold every output twice.
+ */
+function CallRow({
+    call,
+    prompt,
+    start,
+    open,
+}: {
+    call: Call
+    prompt: TranscriptPrompt | null
+    start: string | null
+    open: boolean
+}) {
+    const [shown, setShown] = useState(open)
+    const end = call.end
+    const split = end?.split ?? null
+    const first = call.output[0]?.at ?? end?.at ?? null
+    return (
+        <li data-testid="transcript-call">
+            <details open={open} className="group/call" onToggle={(e) => setShown(e.currentTarget.open)}>
+                <summary
+                    className={cn(
+                        'flex cursor-pointer list-none items-center gap-3 px-3 py-2 hover:bg-surface-raised',
+                        '[&::-webkit-details-marker]:hidden',
+                    )}
+                >
+                    <When at={first} start={start} />
+                    <span className="w-14 shrink-0 font-mono text-xs">call {call.n}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={callLine(call)}>
+                        {callLine(call)}
+                    </span>
+                    {end === null && <Chip word="unfinished" />}
+                    {end?.reason && end.reason !== 'tool-calls' && <Chip word={end.reason} />}
+                    <span className="readout hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                        {split === null
+                            ? ''
+                            : `${tokenCount(sentTokens(split))} in · ${tokenCount(wroteTokens(split))} out`}
+                    </span>
+                    <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">
+                        {end === null || end.cost_usd === null ? '' : `$${end.cost_usd.toFixed(2)}`}
+                    </span>
+                    <ChevronRight
+                        className={cn(
+                            'size-3.5 shrink-0 text-muted-foreground',
+                            'transition-transform group-open/call:rotate-90',
+                        )}
+                    />
+                </summary>
+                {shown && <CallBody call={call} prompt={prompt} start={start} split={split} />}
+            </details>
+        </li>
+    )
+}
+
+function CallBody({
+    call,
+    prompt,
+    start,
+    split,
+}: {
+    call: Call
+    prompt: TranscriptPrompt | null
+    start: string | null
+    split: TranscriptTokens | null
+}) {
+    return (
+        <div className="flex flex-col gap-3 pr-3 pb-3 pl-3 sm:pl-[5.25rem]" data-testid="transcript-call-body">
+            <section className="flex flex-col gap-2" aria-label={`call ${call.n} input`}>
+                <Heading
+                    label="input"
+                    tokens={split === null ? null : sentTokens(split)}
+                    detail={split === null ? null : `${tokenCount(split.cache_read)} read from the cache`}
+                />
+                {call.n === 1 ? (
+                    prompt === null ? (
+                        <p className="text-xs text-muted-foreground">canopy kept no prompt for this session</p>
+                    ) : (
+                        <Block label={prompt.truncated ? 'prompt, cut' : 'prompt'}>{prompt.text}</Block>
+                    )
+                ) : (
+                    <>
+                        <p className="text-xs text-muted-foreground">
+                            {call.returned.length === 0
+                                ? `call ${call.n - 1}’s input and output, and nothing returned since`
+                                : `call ${call.n - 1}’s input and output, then what its tools returned:`}
+                        </p>
+                        {call.returned.map((tool, i) => (
+                            // oxlint-disable-next-line react/no-array-index-key -- a call's tools never reorder
+                            <Returned key={i} tool={tool} />
+                        ))}
+                    </>
+                )}
+                {call.n === 1 && (
+                    <p className="text-xs text-muted-foreground">
+                        sent after the agent’s definition and the runtime’s own system prompt and tools, which no file
+                        records
+                    </p>
+                )}
+            </section>
+            <section className="flex flex-col gap-2" aria-label={`call ${call.n} output`}>
+                <Heading
+                    label="output"
+                    tokens={split === null ? null : wroteTokens(split)}
+                    detail={split === null || split.reasoning === 0 ? null : `${tokenCount(split.reasoning)} reasoning`}
+                />
+                {call.output.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">nothing printed</p>
+                ) : (
+                    <ol className="divide-y rounded-sm border">
+                        {call.output.map((entry, i) => (
+                            // oxlint-disable-next-line react/no-array-index-key -- a call's entries never reorder
+                            <Entry key={i} entry={entry} start={start} open={false} />
+                        ))}
+                    </ol>
+                )}
+            </section>
+        </div>
+    )
+}
+
+/** A call's input or output label, with its tokens when the runtime counted them. */
+function Heading({ label, tokens, detail }: { label: string; tokens: number | null; detail: string | null }) {
+    return (
+        <span className="flex items-baseline gap-3">
+            <span className="panel-label">{label}</span>
+            {tokens !== null && (
+                <span className="readout text-xs text-muted-foreground" title={`${tokens} tokens`}>
+                    {tokenCount(tokens)} tokens{detail === null ? '' : `, ${detail}`}
+                </span>
+            )}
+        </span>
+    )
+}
+
+/** What one tool call returned, as the next model call was sent it: the call on one line, then its output or error. */
+function Returned({ tool }: { tool: TranscriptTool }) {
+    const failed = outcome(tool).verdict !== 'done'
+    return (
+        <div className="flex flex-col gap-1">
+            <span className="flex min-w-0 items-baseline gap-2 font-mono text-xs">
+                <RunDot state={failed ? 'failed' : 'done'} />
+                <span className="shrink-0">{tool.tool}</span>
+                <span className="truncate text-muted-foreground" title={summary(tool)}>
+                    {summary(tool)}
+                </span>
+            </span>
+            <Pre failed={failed}>{tool.output ? pretty(tool.output) : 'no output'}</Pre>
+        </div>
+    )
+}
+
 function Block({ label, failed = false, children }: { label: string; failed?: boolean; children: string }) {
     return (
         <div className="flex flex-col gap-1">
             <span className={cn('panel-label', failed && 'text-status-failed')}>{label}</span>
-            <pre
-                className={cn(
-                    'max-h-96 overflow-auto rounded-sm border bg-background p-2',
-                    'font-mono text-xs break-words whitespace-pre-wrap',
-                    failed && 'border-status-failed/40',
-                )}
-            >
-                <JsonTokens tokens={tokenize(children)} />
-            </pre>
+            <Pre failed={failed}>{children}</Pre>
         </div>
+    )
+}
+
+function Pre({ failed = false, children }: { failed?: boolean; children: string }) {
+    return (
+        <pre
+            className={cn(
+                'max-h-96 overflow-auto rounded-sm border bg-background p-2',
+                'font-mono text-xs break-words whitespace-pre-wrap',
+                failed && 'border-status-failed/40',
+            )}
+        >
+            <JsonTokens tokens={tokenize(children)} />
+        </pre>
     )
 }

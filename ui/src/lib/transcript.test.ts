@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TranscriptEntry, TranscriptTool } from '@/api/types'
+import type { TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
 
-import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from './transcript'
+import {
+    byCall,
+    callLine,
+    duration,
+    elapsed,
+    outcome,
+    pretty,
+    sentTokens,
+    startOf,
+    summary,
+    tally,
+    tokenCount,
+    wroteTokens,
+} from './transcript'
 
 describe('elapsed', () => {
     it('counts from the start, with hours only when there are some', () => {
@@ -36,6 +49,7 @@ const tool = (status: 'completed' | 'error', fields: Partial<TranscriptTool> = {
     output: '',
     duration_ms: null,
     cut: false,
+    call: 1,
     ...fields,
 })
 
@@ -44,12 +58,12 @@ const shell = (command: string, output: string): TranscriptTool =>
 
 describe('tally and startOf', () => {
     const entries: TranscriptEntry[] = [
-        { kind: 'text', at: null, text: 'hi', reasoning: false, cut: false },
+        { kind: 'text', at: null, text: 'hi', reasoning: false, cut: false, call: 1 },
         tool('completed'),
         tool('error'),
         shell('canopy dispatch ABC-1', 'Error: dispatch refused (capacity): 2 of 2 running'),
-        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null },
-        { kind: 'error', at: null, name: 'APIError', message: '' },
+        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null, call: 1 },
+        { kind: 'error', at: null, name: 'APIError', message: '', call: 1 },
     ]
 
     it('counts tool calls, failed and refused ones, model calls, and errors', () => {
@@ -146,5 +160,76 @@ describe('pretty', () => {
         expect(pretty('{"id":12345678901234567890,"n":1.10}')).toBe('{\n  "id": 12345678901234567890,\n  "n": 1.10\n}')
         expect(pretty('["caf\\u00e9"]')).toBe('[\n  "caf\\u00e9"\n]')
         expect(pretty('{\n    "a": {}\n}')).toBe('{\n  "a": {}\n}')
+    })
+})
+
+const text = (value: string, call: number | null, reasoning = false): TranscriptEntry => ({
+    kind: 'text',
+    at: null,
+    text: value,
+    reasoning,
+    cut: false,
+    call,
+})
+
+const step = (call: number, reason = 'tool-calls'): TranscriptStep => ({
+    kind: 'step',
+    at: null,
+    reason,
+    cost_usd: 0.1,
+    tokens: 10,
+    split: null,
+    call,
+})
+
+describe('byCall', () => {
+    it('gives each call after the first what its tools returned to the call before, and keeps its end apart', () => {
+        const read = tool('completed', { tool: 'read', output: 'file', call: 1 })
+        const failed = tool('error', { tool: 'read', output: 'not found', call: 1 })
+        const early: TranscriptEntry = { kind: 'error', at: null, name: 'early', message: '', call: null }
+        const { before, calls } = byCall([
+            early,
+            text('reading', 1),
+            read,
+            failed,
+            step(1),
+            text('done', 2),
+            step(2, 'stop'),
+        ])
+        expect(before).toEqual([early])
+        expect(calls).toEqual([
+            { n: 1, returned: [], output: [text('reading', 1), read, failed], end: step(1) },
+            { n: 2, returned: [read, failed], output: [text('done', 2)], end: step(2, 'stop') },
+        ])
+    })
+
+    it('leaves a call the session ended in without an end', () => {
+        const { calls } = byCall([text('one', 1), step(1), text('two', 2)])
+        expect(calls.map((c) => [c.n, c.end])).toEqual([
+            [1, step(1)],
+            [2, null],
+        ])
+        expect(byCall([text('no calls marked', null)]).calls).toEqual([])
+    })
+})
+
+describe('callLine', () => {
+    it("is a call's first text, then its tools by name, counted, then its errors", () => {
+        const [call] = byCall([
+            text('thinking it over', 1, true),
+            text('I will read\nboth files.', 1),
+            tool('completed', { tool: 'read' }),
+            tool('completed', { tool: 'read' }),
+            tool('completed', { tool: 'bash' }),
+            { kind: 'error', at: null, name: 'APIError', message: '', call: 1 },
+        ]).calls
+        expect(call && callLine(call)).toBe('I will read both files. · read ×2, bash · 1 runtime error')
+    })
+})
+
+describe('sentTokens and wroteTokens', () => {
+    it('count what a call was sent, cached or not, and what it wrote, reasoning included', () => {
+        const split = { input: 10, cache_read: 300, cache_write: 20, output: 5, reasoning: 2 }
+        expect([sentTokens(split), wroteTokens(split)]).toEqual([330, 7])
     })
 })

@@ -550,12 +550,11 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
 - Each event is validated (D026). A `text` or `reasoning` event is the agent's text; a `tool_use` event is one tool
   call, printed once it completed or failed, with its name, title, input (as indented JSON), output or error, and how
   long it took; a `step_finish` is one model call's reason, cost, and tokens, together and by kind (input, cache read,
-  cache write, output, reasoning); an `error` is the runtime's. `step_start` and any type canopy does not know are
-  left out, and an event of a known type that does not validate is counted, not shown.
+  cache write, output, reasoning); an `error` is the runtime's. A `step_start` starts a model call: it is not shown,
+  but every entry after it carries that call's number, from 1. Any type canopy does not know is left out, and an
+  event of a known type that does not validate is counted, not shown.
 - A model call shows what the runtime prints of it. What it wrote and ran are the text and tool calls above it; its
-  reasoning only with OpenCode's `--thinking`, which the default templates leave out. What it was sent, the prompt
-  and the context, is not printed: OpenCode keeps it in its own storage (`opencode export <id>`), and canopy does not
-  read that.
+  reasoning only with OpenCode's `--thinking`, which the default templates leave out. What it was sent is below.
 - Bounded: at most 32 MiB of the file, to its last whole line; at most 2000 entries and 2 million characters in all;
   each text, output, and error cut at 20,000 characters, and an input at 5,000. A cut says so. Control characters are
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
@@ -582,6 +581,31 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving a run's
   log, or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed
   to its log, or when a second runtime prints another shape.
+
+Model calls (taken on request, 2026-10-13): to explore what each model call was sent and what it did, not only what
+it cost.
+
+- A call is sent everything before it: the agent's definition and the runtime's own system prompt and tools, the
+  prompt canopy gave the runtime, and every earlier call's output and what its tools returned. So what is new in a
+  call's input is, for the first, the prompt, and for each later one, what the call before it asked its tools for.
+  The log holds all of that but the prompt, which canopy keeps beside it, and the part ahead of the prompt.
+- The prompt is the `{prompt}` the agent command was given: `<id>.prompt` beside the log, as a run's or a chore run's
+  prompt already was, and a tick's state block, which the tick now writes to `ticks/<id>.prompt` before its
+  overseer starts, mode 600. A transcript carries it whatever its status, read on each request as a log is (a regular
+  file opened without following links), at most 1 MiB of it, control characters dropped, with `truncated` past that;
+  no file, or one canopy refuses, is none.
+- The UI's transcript groups its entries by call when the operator asks (By call, ui/DESIGN.md): each call a
+  line, opening to its input (the prompt, or what the call before it got back from its tools, each tool's output in
+  full) and its output (its text, reasoning, tool calls, and errors), each with its tokens. An entry before the first
+  `step_start`, such as an error starting the session, stays a row of its own.
+- What no file records is said, not guessed: the agent's definition, OpenCode's system prompt, and its tool
+  definitions. With OpenCode 1.19.0 against a model server that recorded each request (2026-10-13), those were about
+  95% of a short session's third request, by characters. `opencode export <id>` holds the session's messages, one
+  assistant message per call with the same parts the log prints, and the prompt as its first user message, but none
+  of that either; nor does OpenCode's DEBUG log. Recording it needs a proxy between the runtime and the provider,
+  which no milestone lists.
+- Rejected: `opencode export` on request, again. Beside what the log and the prompt hold, it would add only a running
+  session's calls before its run ends, for a runtime process behind the listener.
 
 The tick's output (taken on request, 2026-10-13): the transcript keeps only the overseer's session, so what the
 runtime printed on stderr, and any line that is not one of its events, sent the operator back to the file, most of all
@@ -702,6 +726,9 @@ and the residuals they leave, needing the operator's approval note in M20's PR.
 
 The overseer prompt's changes, private tickets' phases from the state block and no `--label` for them (M18), and
 mirroring each new comment (M19), are in the prompt.
+
+Model calls (2026-10-13) changed T8: the listener reads a session's prompt beside its log too. Their PR carries the
+operator's approval note.
 
 Replies on public tickets and trusted reviewers (D089) changed T1: an operator message authorizes a public ticket's
 `resume`, as an authorized reply does, and an untrusted reviewer's feedback starts no run without one. Their PR carries

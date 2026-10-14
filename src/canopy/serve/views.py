@@ -47,6 +47,7 @@ from canopy.serve.schema import (
     Transcript,
     TranscriptEntry,
     TranscriptError,
+    TranscriptPrompt,
     TranscriptStep,
     TranscriptText,
     TranscriptTokens,
@@ -274,19 +275,22 @@ def session_transcript(path: Path, session: object) -> Transcript:
 
     Returns:
         The entries read, with status `no_session` when the journal recorded no session, or `no_log` when the file is
-        missing or not a regular file.
+        missing or not a regular file; and the prompt kept beside the file, whatever the status.
     """
+    kept = transcript.prompt(transcript.prompt_path(path))
+    prompt = TranscriptPrompt(text=kept.text, truncated=kept.truncated) if kept is not None else None
     if not isinstance(session, str) or not session:
-        return Transcript(status="no_session")
+        return Transcript(status="no_session", prompt=prompt)
     found = transcript.read(path, session)
     if found is None:
-        return Transcript(status="no_log", session_id=session)
+        return Transcript(status="no_log", session_id=session, prompt=prompt)
     return Transcript(
         status="read",
         session_id=session,
         entries=[transcript_entry(e) for e in found.entries],
         truncated=found.truncated,
         unreadable=found.unreadable,
+        prompt=prompt,
     )
 
 
@@ -298,7 +302,9 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
     """
     match entry:
         case transcript.Text():
-            return TranscriptText(at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut)
+            return TranscriptText(
+                at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut, call=entry.call
+            )
         case transcript.ToolCall():
             return TranscriptTool(
                 at=entry.at,
@@ -309,6 +315,7 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 output=entry.output,
                 duration_ms=entry.duration_ms,
                 cut=entry.cut,
+                call=entry.call,
             )
         case transcript.Step():
             t = entry.tokens
@@ -318,9 +325,10 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 cost_usd=entry.cost_usd,
                 tokens=t.total if t is not None else None,
                 split=TranscriptTokens(**vars(t)) if t is not None else None,
+                call=entry.call,
             )
         case transcript.Error():
-            return TranscriptError(at=entry.at, name=entry.name, message=entry.message)
+            return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)
 
 
 def decision(row: sqlite3.Row) -> Decision:

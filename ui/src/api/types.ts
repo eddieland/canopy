@@ -87,6 +87,10 @@ export type TranscriptEntry = Transcript['entries'][number]
 export type TranscriptTool = Schemas['TranscriptTool']
 /** One model call's end: why, what it cost, and its tokens together and by kind. */
 export type TranscriptStep = Schemas['TranscriptStep']
+/** One model call's tokens by kind: what it was sent, from the cache or not, and what it wrote. */
+export type TranscriptTokens = Schemas['TranscriptTokens']
+/** The message canopy gave the runtime to start a session: its first model call's input, as far as any file says. */
+export type TranscriptPrompt = Schemas['TranscriptPrompt']
 /** The end of a tick's overseer output as written, stdout then stderr: what the transcript leaves out too. */
 export type TickOutput = Schemas['TickOutput']
 /** A search: the words it looked for, its hits by source and newest first, and the sources that had more. */
