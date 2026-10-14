@@ -7,8 +7,9 @@ required to run it.
 For why it works this way and what it was checked against, see [HOST_ISOLATION.md](HOST_ISOLATION.md); for what it
 does and does not defend against, TRUST_MODEL T4 and T6.
 
-The sandbox is opt-in and not yet proven: ROADMAP M26 is open, and the canary that checks every property in CI
-(HOST_ISOLATION §6) is still to come. Try it on your machine with the check below before you rely on it.
+The sandbox is opt-in and not yet proven: ROADMAP M26 is open. The canary that checks every property (HOST_ISOLATION
+§6) runs in CI on Linux; it has yet to pass on the operator's own machines. Try it on yours with the check below
+before you rely on it.
 
 ## What a sandboxed run can do
 
@@ -195,6 +196,10 @@ Every line but the last two should say `refused`, and the last two `allowed`. If
 use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket and read the run's log,
 `.canopy/runs/<id>.log`: the worker should push and open its PR as before.
 
+From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
+every denial and positive control HOST_ISOLATION §6 lists, with the shipped templates unchanged. It needs to reach
+github.com.
+
 ## Troubleshooting
 
 - **`canopy-sandbox: no policy template at ...`** or **`srt is not installed`:** run `canopy sandbox setup`.
@@ -202,6 +207,9 @@ use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket an
   a worker or setup, such as `review_cmd`. Remove it there.
 - **`... is not a linked worktree`:** a worker or setup ran outside one of treehouse's slots. canopy always runs them
   in one; in the check above, run it in the worktree it makes.
+- **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,
+  `srt` makes the sockets that carry the sandbox's network in the run's temp directory, under the system one, and a
+  socket's path holds at most 107 bytes. Run canopy with `TMPDIR` set to a shorter directory, such as `/tmp`.
 - **bubblewrap fails with a permission error setting up the user namespace:** the Ubuntu restriction in step 1, or
   canopy running as root.
 - **The worker cannot push:** an SSH remote (step 4), or a credential helper whose files are not in `allowRead`

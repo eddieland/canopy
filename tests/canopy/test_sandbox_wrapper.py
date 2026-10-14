@@ -9,6 +9,7 @@ import os
 import shutil
 import sqlite3
 import sys
+import tempfile
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,16 +57,20 @@ class Sandbox:
 
 @pytest.fixture
 def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Iterator[Sandbox]:
-    """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's."""
+    """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's.
+
+    Not under tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
+    """
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
     for role in ROLES:
         shutil.copy(canopy_sandbox.TEMPLATES / f"{role}.json", templates)
-    tmp = tmp_path / "tmp"
-    tmp.mkdir()
     log = tmp_path / "srt.jsonl"
-    with mock.patch.dict(os.environ, {"FAKE_SRT_LOG": str(log), "TMPDIR": str(tmp), **HERMETIC_GIT}):
-        yield Sandbox(log, templates, tmp)
+    with (
+        tempfile.TemporaryDirectory(prefix="sandbox.") as tmp,
+        mock.patch.dict(os.environ, {"FAKE_SRT_LOG": str(log), "TMPDIR": tmp, **HERMETIC_GIT}),
+    ):
+        yield Sandbox(log, templates, Path(tmp))
 
 
 def wrap(*args: str, cwd: Path, env: Mapping[str, str] | None = None) -> procs.Result:
@@ -270,6 +275,20 @@ def test_without_srt_nothing_runs(tmp_path: Path) -> None:
     assert done.returncode == 2
     assert "srt is not installed; run `canopy sandbox setup`" in done.stderr
     assert not (tmp_path / "ran").exists()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="srt bridges the network over Unix sockets on Linux")
+def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
+    """srt makes its sockets in the run's temp directory, and says only that it could not when the path is too long."""
+    deep = sandbox.tmp / ("d" * 60)
+    deep.mkdir()
+
+    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=tmp_path, env={"TMPDIR": str(deep)})
+
+    assert done.returncode == 2
+    assert f"the temp directory {deep} has too long a path for srt's sockets" in done.stderr
+    assert not sandbox.log.exists()
+    assert list((deep / f"canopy-sandbox-{os.getuid()}").iterdir()) == []
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:

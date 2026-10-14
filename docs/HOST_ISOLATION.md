@@ -105,8 +105,11 @@ branch committed. It runs in the worker's cwd, which `_run` sets to the slot or 
    allowlist: `srt` runs a command whose policy restricts nothing outside any sandbox (§7).
 4. Sets the command's `TMPDIR`. `srt` passes the caller's environment through and adds its own: the proxy variables,
    `GIT_SSH_COMMAND`, `GIT_CONFIG_PARAMETERS`, and `TMPDIR`, which it takes from `CLAUDE_CODE_TMPDIR`, or else
-   `/tmp/claude`, shared by every sandboxed process, so the wrapper sets that to the run's temp directory. It turns
-   `CANOPY_GIT_OBJECTS` into git's variables (§4.2).
+   `/tmp/claude`, shared by every sandboxed process, so the wrapper sets that to the run's temp directory. It sets
+   `srt`'s own `TMPDIR` there too, so what `srt` makes for the run goes when the run's directory does. On Linux that
+   includes the Unix sockets that carry the sandbox's network, whose path holds at most 107 bytes, so the wrapper
+   refuses a system temp directory too long to leave room for them; `srt` says only that it could not make them. It
+   turns `CANOPY_GIT_OBJECTS` into git's variables (§4.2).
 5. Runs the sandbox with that policy and the rest of its arguments unchanged, after a `--`: `srt --settings <policy> --
    "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms too) anywhere in its
    arguments, and `-c` takes its value as a shell command, unquoted. It waits rather than `exec`, so that it can remove
@@ -187,8 +190,8 @@ writing the user config, the `.git` link, `config.worktree`, the common `config`
 another run's temp directory, and moving a branch all fail, as does a connection to a host not on the allowlist or to
 `169.254.169.254`. Writing `~/canary` succeeds inside the sandbox but never reaches the host: `srt` hides a denied
 directory under an empty, writable `tmpfs`, and what is written there is gone when the run ends (§6). Reaching an
-allowed host was not checked there: that machine reached the network only through a proxy of its own, which the canary's
-CI job will not have.
+allowed host was not checked there: that machine reached the network only through a proxy of its own. The canary's CI
+job checks it.
 
 The per-run object directory needs two things the first draft of this section missed:
 
@@ -319,6 +322,22 @@ And the positive controls must succeed, so a sandbox that blocks everything cann
 On Linux this can also run in CI, since it needs only bubblewrap and unprivileged user namespaces. Ubuntu 24.04 and
 later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`), which the operator docs must say.
 
+Built: `tests/canopy/test_sandbox_canary.py`, run by `make sandbox-canary` and by CI's `sandbox-canary` job, which sets
+the machine up the way docs/SANDBOX.md tells the operator to and runs `canopy sandbox setup` first. It uses the shipped
+templates unchanged, and a primary clone and two slots under the fake `$HOME`, as treehouse lays them out, so the
+template's denied `$HOME` and the binds that re-allow the slot are what is tested. Each case is its own run, and every
+run prints a marker first, so an attempt that failed because nothing ran fails the test. What the slots share is
+compared file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows. A run of the
+canary against the fake `srt`, which sandboxes nothing, fails every case but the positive controls, and the two that
+try a host off the allowlist when the machine's own proxy refuses that host too. A sleeper the run
+leaves must not hold its output, or a sandbox that lets one outlive the run hangs the test instead of failing it. On
+macOS there is no `setsid` command, so the timeout case there checks only the processes that stay in the sandbox's
+group (§5 item 4).
+
+Running it under `srt` 0.0.79 and bubblewrap 0.9 found that `srt` makes its network sockets in the `TMPDIR` the wrapper
+gives it (§4.1 step 4): under pytest's own temp directory the path is too long, and every run failed with `srt`'s
+"Failed to create bridge sockets". The canary and the wrapper's tests use a short temp directory of their own.
+
 ## 7. Open questions
 
 - Fetching inside a run: answered. The worker cannot update shared remote-tracking refs, so every plain `git fetch`
@@ -350,6 +369,11 @@ later restrict those by default (`kernel.apparmor_restrict_unprivileged_userns`)
   through it. The wrapper moves `TMPDIR` to a directory of the run's own, but cannot close that one. The rest of the
   system temp directory stays readable, as other system paths do; denying it breaks tools that write there without
   reading `TMPDIR`.
+- The length of the temp directory's path on macOS. `srt` makes a Unix socket there too, `srt-mux-<pid>-<n>.sock`,
+  and macOS caps a socket's path at 103 bytes. The per-user temp directory macOS sets in `TMPDIR` is about 48 bytes,
+  which with the wrapper's run directory leaves too little room, so a sandboxed run may fail there unless canopy runs
+  with `TMPDIR=/tmp`. The canary's run on the operator's Mac settles it; if so, the wrapper should check it as it does
+  on Linux, or make its run directories under `/tmp`.
 - `review_cmd` (DESIGN §21) is not in §4.4. The reviewer reads a PR's diff and checkout, which an untrusted author
   wrote, from `<state_dir>/reviews/<id>/`; whether it gets a role and a template of its own is open.
 - Where this sits in the ROADMAP: the trigger says before a second team adopts canopy. It needs M2's real worker to be

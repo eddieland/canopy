@@ -59,6 +59,11 @@ ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by Fas
 install-check: ## Install canopy into an empty HOME and run it against the fakes (INSTALL_SOURCE: default this checkout)
 	tests/install-check.sh $(INSTALL_SOURCE)
 
+# Not part of check: it needs what `canopy sandbox setup` installs and checks, and runs as you, not root. CI runs it as
+# its own job, on Linux (HOST_ISOLATION §6, docs/SANDBOX.md).
+sandbox-canary: ## Check that the sandbox holds: the shipped wrapper and templates under the real srt
+	CANOPY_SANDBOX_CANARY=1 uv run pytest -q -n auto tests/canopy/test_sandbox_canary.py
+
 ##@ Setup
 
 TREEHOUSE_REPO := https://github.com/kunchenguid/treehouse

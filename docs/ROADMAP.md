@@ -389,8 +389,13 @@ guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run throu
 a worktree of its own, since nothing tidies a slot it commits in, and that a process started with `setsid` inside the
 sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in `~/.local/share/canopy/`; trying it
 found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a template denies it is not found
-unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does wherever `srt` is installed.
-Next: the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
+unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does wherever `srt` is installed. The
+canary is `tests/canopy/test_sandbox_canary.py` (`make sandbox-canary`), and CI's `sandbox-canary` job runs it on Linux
+after `canopy sandbox setup`. Running it under `srt` 0.0.79 and bubblewrap 0.9 found that `srt` makes its network
+sockets in the run's temp directory, so a long system temp directory fails every run; the wrapper now refuses one on
+Linux with a message that says so, and whether macOS's default is too long is open (HOST_ISOLATION §7). Run against a
+fake `srt` that sandboxes nothing, the canary fails every case but its positive controls.
+Next: the canary green in CI, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 
