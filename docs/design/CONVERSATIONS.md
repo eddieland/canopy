@@ -435,10 +435,6 @@ The API, under `{base}/api`:
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
 | `GET /events` | the event stream, below |
 
-A path under the workspace, a worktree's or a log's, is sent from its root, so a page reads `.treehouse/web-3f9c2a1b/1/web`
-rather than the whole of it; one outside it is sent whole. A copy button beside such a path joins it to `/meta`'s
-workspace root, since the shell it is pasted into need not be in the workspace.
-
 A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message
 the latest `ok` tick read (§6 step 3), or none before the first. The attention list is that tick's, so until then a
 reply has not reached the loop's decisions or the list: the conversation marks each of the operator's messages after it
@@ -667,8 +663,9 @@ with uncommitted changes), `idle` (available), and `broken` (damaged, unverified
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
 names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
 is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here, in the runs page's worktrees, and for a run's log and
-a tick's output. When a pool's slots
-share a directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
+a tick's output. A copy button beside one copies it whole, joined to `/meta`'s workspace root, since the shell it is
+pasted into need not be in the workspace; until that root is read there is no button. When a pool's slots share a
+directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
 read), and free; each pool's header has a square per slot in its state's color.

@@ -5,7 +5,7 @@ import { ApiError } from '@/api/client'
 import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
-import { Copyable } from '@/components/copy-button'
+import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
@@ -16,7 +16,6 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
-import { useWholePath } from '@/hooks/use-whole-path'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
@@ -81,7 +80,6 @@ function NoRun({ title, children }: { title: string; children: string }) {
 }
 
 function RunPanel({ run }: { run: Run }) {
-    const whole = useWholePath()
     return (
         <Panel>
             <PanelHeader label="Run">
@@ -129,17 +127,15 @@ function RunPanel({ run }: { run: Run }) {
                     <Field label="worktrees" mono>
                         <span className="flex flex-wrap gap-x-4">
                             {run.worktrees.map((path) => (
-                                <Copyable key={path} text={whole(path)} label="worktree path">
-                                    {path}
-                                </Copyable>
+                                <CopyablePath key={path} path={path} label="worktree path" />
                             ))}
                         </span>
                     </Field>
                 )}
                 <Field label="log" mono>
-                    <Copyable text={whole(run.log_path)} label="log path">
+                    <CopyablePath path={run.log_path} label="log path">
                         <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
-                    </Copyable>
+                    </CopyablePath>
                 </Field>
             </Fields>
         </Panel>

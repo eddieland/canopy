@@ -212,7 +212,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                 <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
                     #{w.name}
                 </span>
-                <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />
+                {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
             {idle ? <span /> : <Holder worktree={w} />}
             {/* The branch, path, and processes share what the row leaves: each is cut to fit, the age never. */}

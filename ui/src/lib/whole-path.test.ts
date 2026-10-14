@@ -18,8 +18,4 @@ describe('wholePath', () => {
     it('leaves a path outside the workspace as the server sent it', () => {
         expect(wholePath('/home/op/.canopy/runs/41.log', '/home/op/work')).toBe('/home/op/.canopy/runs/41.log')
     })
-
-    it('leaves the path as shown while the root is not read yet', () => {
-        expect(wholePath('desks/ABC-1', undefined)).toBe('desks/ABC-1')
-    })
 })

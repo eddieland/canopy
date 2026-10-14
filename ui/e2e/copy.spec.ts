@@ -38,18 +38,35 @@ test("a slot's copy buttons show only while its row is hovered, and copy its pat
     expect(await clipboard(page)).toBe('agent/ABC-101-login')
     // Whole, though the page shows it from the workspace root: a shell it is pasted into may be anywhere.
     await slot.getByRole('button', { name: "Copy slot 1's path" }).click()
-    expect(await clipboard(page)).toMatch(/^\/.+\/\.treehouse\/web-3f9c2a1b\/1\/web$/u)
+    expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.treehouse/web-3f9c2a1b/1/web`)
 })
 
 test("a run's worktree and log paths copy whole, though the page shows them from the workspace root", async ({
     page,
 }) => {
     await page.goto('runs/41')
+    const root = await workspaceRoot(page)
     await page.getByRole('button', { name: 'Copy worktree path' }).click()
-    expect(await clipboard(page)).toMatch(/^\/.+\/\.treehouse\/web-3f9c2a1b\/\d+\/web$/u)
+    expect(await clipboard(page)).toBe(`${root}/.treehouse/web-3f9c2a1b/1/web`)
     await page.getByRole('button', { name: 'Copy log path' }).click()
-    expect(await clipboard(page)).toMatch(/^\/.+\/41\.log$/u)
+    expect(await clipboard(page)).toBe(`${root}/.canopy/runs/41.log`)
 })
+
+test("a run's paths have no copy button while the server's meta cannot be read, not one copying them short", async ({
+    page,
+}) => {
+    await page.route('**/api/meta', (route) => route.abort())
+    await page.goto('runs/41')
+    await expect(page.getByText('.canopy/runs/41.log')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Copy log path' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Copy worktree path' })).toHaveCount(0)
+})
+
+/** The workspace root the server's meta gives, which a path shown from it is joined to when copied. */
+async function workspaceRoot(page: Page): Promise<string> {
+    const meta = (await (await page.request.get('api/meta')).json()) as { workspace_root: string }
+    return meta.workspace_root
+}
 
 /** What the page's clipboard holds. */
 function clipboard(page: Page): Promise<string> {
