@@ -432,26 +432,12 @@ events = ["attention", "loop", "runs"]   # runs: a blocked worker's question arr
 - Linux: `notify-send --app-name=canopy -- TITLE BODY`. macOS: `osascript` with a fixed script reading title and body
   from its arguments. Neither is built into a shell command or script, so agent or org-member text runs nothing.
 - Exit 0 when the tool succeeded, 1 when it failed, 2 when it is not installed or stdin is empty.
-- From a release's single executable it runs with `SCIE_BOOT=canopy-notify-desktop` (§5). So that `cmd` can name
-  it, README's install puts a script of that name on `PATH`; `--help` prints it:
-
-  ```sh
-  #!/bin/sh
-  exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy "$@"
-  ```
 
 ### The Slack sink
 
 `canopy-notify-slack` is its own distribution, a uv workspace member (D041): `packages/canopy-notify-slack/`, module
 `canopy_notify_slack`, stdlib only (`urllib.request`, `json`), importing nothing from `canopy`. `canopy` depends on it
-and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`. A
-release's single executable carries it too, run with `SCIE_BOOT=canopy-notify-slack` (§5); README's install puts
-a script of that name on `PATH` so that `cmd` can name it, and `--help` prints it:
-
-```sh
-#!/bin/sh
-exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
-```
+and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`.
 
 - It reads `json` on stdin, posts one message to a Slack incoming webhook, and exits 0 on 2xx, else 1 with Slack's
   reply on stderr. A rate-limited post is retried next tick like any failure.
@@ -743,7 +729,7 @@ is wrong often enough that the operator wants to rule a finding out before a wor
   which count it in `dismissed_findings`. A `resume` for a review whose findings are all dismissed refuses as
   `bad_review`, and the PR, having none left to classify, moves on as a clean review would.
 - It is one run's finding. A finding has no id that lasts from one commit's review to the next, so a new commit's
-  review starts fresh (Open, below). `--undo`, or `keep` on its card, takes it back.
+  review starts fresh (Open, below). `--undo`, or `undo` on its card, takes it back.
 - Refused `unknown` for a review run that does not exist, did not end `done` with findings, or has no finding `N` (with
   `--undo`, one not dismissed), `bad_finding` for a number that is not 1 to 20, and `inside_run` as `reply` is: the
   overseer and agents cannot hold a finding back from a worker. A row in `review_dismissals` per run and number, with

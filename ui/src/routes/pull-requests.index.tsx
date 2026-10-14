@@ -4,17 +4,17 @@ import { createFileRoute } from '@tanstack/react-router'
 import { pullRequestsQuery } from '@/api/queries'
 import type { PullRequest } from '@/api/types'
 import { Age } from '@/components/age'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { OrderToggle } from '@/components/order-toggle'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
+import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Skeleton } from '@/components/ui/skeleton'
-import { pullRequestLabel } from '@/lib/pull-request-label'
-import { verdictText } from '@/lib/reviews'
-import { RUN_TEXT } from '@/lib/run-state'
+import { ordered, useListOrder } from '@/lib/list-order'
+import { verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 /** Every PR the journal knows, most recent activity first, whoever's it is. */
@@ -24,6 +24,7 @@ export const Route = createFileRoute('/pull-requests/')({
 
 function PullRequestsPage() {
     const { data } = useQuery(pullRequestsQuery)
+    const order = useListOrder('pull-requests')
     return (
         <>
             <PageHeader title="Pull requests">
@@ -32,20 +33,20 @@ function PullRequestsPage() {
             </PageHeader>
             <Panel>
                 <PanelHeader label="Pull requests">
-                    <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                    <span className="flex items-center gap-2">
+                        {data !== undefined && data.length > 1 && <OrderToggle list="pull-requests" />}
+                        <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
+                    </span>
                 </PanelHeader>
                 {data === undefined ? (
-                    <div className="flex min-h-72 flex-col gap-2 p-3">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+                    <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
-                    <Placeholder>
+                    <Empty size="panel">
                         no PRs yet: none of the loop&apos;s tickets has one, and nothing was reviewed
-                    </Placeholder>
+                    </Empty>
                 ) : (
                     <ul className="stagger divide-y" data-testid="pull-requests">
-                        {data.map((pr) => (
+                        {ordered('pull-requests', order, data).map((pr) => (
                             <Row key={pr.url} pr={pr} />
                         ))}
                     </ul>
@@ -62,50 +63,46 @@ function PullRequestsPage() {
 function Row({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
     return (
-        <li className="flex items-center gap-3 px-3 py-2.5" data-testid="pull-request">
-            <PullRequestLink url={pr.url} className="w-64 shrink-0 truncate">
-                {pullRequestLabel(pr.url)}
-            </PullRequestLink>
-            {pr.ticket_key === null ? (
-                <span className="font-mono text-xs text-muted-foreground">no ticket</span>
-            ) : (
-                <span className="flex min-w-0 items-center gap-2">
-                    <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
-                    <TicketTitle title={pr.ticket_title} />
-                </span>
-            )}
-            {pr.phase && <Chip word={pr.phase} />}
-            <span className="ml-auto flex shrink-0 items-center gap-4">
-                <span className="flex w-20 items-center gap-1.5 font-mono text-xs" data-testid="pull-request-run">
-                    {pr.running_run !== null && (
-                        <>
-                            <RunDot state="running" />
-                            <RunLink id={pr.running_run} />
-                        </>
-                    )}
-                </span>
-                <span
-                    className={cn(
-                        'flex w-44 items-center gap-1.5 font-mono text-xs whitespace-nowrap',
-                        review ? RUN_TEXT[review.state] : 'text-muted-foreground',
-                    )}
-                    data-testid="pull-request-review"
-                >
-                    {review ? (
-                        <>
-                            <RunDot state={review.state} />
-                            <ReviewLink id={review.id} />
-                            {verdictText(review)}
-                        </>
-                    ) : (
-                        'not reviewed'
-                    )}
-                </span>
-                <span className="flex w-20 justify-end gap-1 text-xs text-muted-foreground">
-                    <Age at={pr.active_at} />
-                    ago
-                </span>
+        <ListRow kind="pull-request" data-testid="pull-request">
+            <PullRequestLink url={pr.url} />
+            <span className="flex min-w-0 items-center gap-3">
+                {pr.ticket_key === null ? (
+                    <span className="font-mono text-xs text-muted-foreground">no ticket</span>
+                ) : (
+                    <span className="flex min-w-0 items-center gap-2">
+                        <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
+                        <TicketTitle title={pr.ticket_title} />
+                    </span>
+                )}
+                {pr.phase && <Chip word={pr.phase} />}
             </span>
-        </li>
+            <span className="flex items-center gap-1.5 font-mono text-xs" data-testid="pull-request-run">
+                {pr.running_run !== null && (
+                    <>
+                        <RunDot state="running" />
+                        <RunLink id={pr.running_run} />
+                    </>
+                )}
+            </span>
+            {/* The dot is how the review's run ended; the verdict's color, its worst finding. */}
+            <span
+                className={cn(
+                    'flex items-center gap-1.5 font-mono text-xs whitespace-nowrap',
+                    review ? verdictTone(review) : 'text-muted-foreground',
+                )}
+                data-testid="pull-request-review"
+            >
+                {review ? (
+                    <>
+                        <RunDot state={review.state} />
+                        <ReviewLink id={review.id} />
+                        {verdictText(review)}
+                    </>
+                ) : (
+                    'not reviewed'
+                )}
+            </span>
+            <Age at={pr.active_at} variant="ago" className="text-right" />
+        </ListRow>
     )
 }

@@ -1,23 +1,24 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Cost } from '@/components/cost'
+import { Field, Fields } from '@/components/fields'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
-import { Chip, RunDot } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
-import { Skeleton } from '@/components/ui/skeleton'
+import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
-import { localTime } from '@/lib/time'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
@@ -31,7 +32,7 @@ function RunPage() {
     // A run's id is a positive number, as a tick's is.
     const parsed = tickId(id)
     if (parsed === null) {
-        return <NoRun title={`run:${id}`}>not a run: a run&apos;s id is a positive number</NoRun>
+        return <NoRun title={runRef(id)}>not a run: a run&apos;s id is a positive number</NoRun>
     }
     return <Loaded id={parsed} />
 }
@@ -41,21 +42,21 @@ function Loaded({ id }: { id: number }) {
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(runTranscriptQuery(id))
     if (error instanceof ApiError && error.status === 404) {
-        return <NoRun title={`run:${id}`}>{error.message}</NoRun>
+        return <NoRun title={runRef(id)}>{error.message}</NoRun>
     }
     if (data === undefined) {
         return (
             <>
-                <PageHeader title={`run:${id}`} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <PageHeader title={runRef(id)} />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
     }
     return (
         <>
-            <PageHeader title={`run:${data.id}`} chips={data.private && <Chip>private</Chip>}>
+            <PageHeader title={runRef(data.id)} chips={data.private && <Chip>private</Chip>}>
                 What the worker did, from its session&apos;s events in the run&apos;s log: its text, each tool call with
                 its input and output, and what each model call cost.
             </PageHeader>
@@ -72,7 +73,7 @@ function NoRun({ title, children }: { title: string; children: string }) {
         <>
             <PageHeader title={title} />
             <Panel>
-                <Placeholder className="min-h-40">{children}</Placeholder>
+                <Empty size="panel">{children}</Empty>
             </Panel>
         </>
     )
@@ -84,10 +85,10 @@ function RunPanel({ run }: { run: Run }) {
             <PanelHeader label="Run">
                 <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                     <RunDot state={run.state} />
-                    {run.status}
+                    <Word word={run.status} />
                 </span>
             </PanelHeader>
-            <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
+            <Fields>
                 <Field label="ticket">
                     <span className="flex items-center gap-2">
                         <TicketLink ticketKey={run.ticket_key} />
@@ -100,38 +101,26 @@ function RunPanel({ run }: { run: Run }) {
                     {run.branch === null ? 'none' : <Copyable text={run.branch} label="branch" />}
                 </Field>
                 <Field label="started" mono>
-                    <span className="flex items-center gap-2">
-                        <span title={localTime(run.started_at)}>{run.started_at}</span>
-                        <Age at={run.started_at} />
+                    <span className="flex items-baseline gap-2">
+                        <Timestamp at={run.started_at} />
+                        <Age at={run.started_at} variant="ago" />
                     </span>
                 </Field>
                 <Field label="ended" mono>
-                    {run.ended_at ?? 'still running'}
+                    {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
                 </Field>
                 <Field label="summary">{run.summary ? <RichText text={run.summary} /> : 'none'}</Field>
                 {run.prs.length > 0 && (
                     <Field label="pull requests" mono>
                         <span className="flex flex-wrap gap-x-4">
                             {run.prs.map((pr) => (
-                                <a
-                                    key={pr}
-                                    href={pr}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className={cn(
-                                        'inline-flex items-center gap-1 text-accent',
-                                        'underline-offset-4 hover:underline',
-                                    )}
-                                >
-                                    {pr.replace(/^https:\/\//u, '')}
-                                    <LinkOutIcon href={pr} />
-                                </a>
+                                <PullRequestLink key={pr} url={pr} className="text-sm" />
                             ))}
                         </span>
                     </Field>
                 )}
                 <Field label="spent" mono>
-                    {run.cost_usd === null ? 'none reported' : `$${run.cost_usd.toFixed(2)}`}
+                    <Cost usd={run.cost_usd} />
                     {run.tokens === null ? '' : `, ${tokenCount(run.tokens)} tokens`}
                 </Field>
                 {run.worktrees.length > 0 && (
@@ -148,16 +137,7 @@ function RunPanel({ run }: { run: Run }) {
                         <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
                     </Copyable>
                 </Field>
-            </dl>
+            </Fields>
         </Panel>
-    )
-}
-
-function Field({ label, mono = false, children }: { label: string; mono?: boolean; children: ReactNode }) {
-    return (
-        <>
-            <dt className="panel-label self-center">{label}</dt>
-            <dd className={cn('min-w-0 break-words', mono ? 'font-mono text-xs break-all' : 'text-sm')}>{children}</dd>
-        </>
     )
 }

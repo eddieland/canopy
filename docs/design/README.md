@@ -236,7 +236,6 @@ migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
   canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (HOST_ISOLATION §4, D116)
-scripts/         build-binary.sh: the single executable a release ships (D067)
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```
@@ -245,15 +244,10 @@ hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist
 them, with `migrations/`, under `canopy/_data/` through hatch's `force-include`, so a new runtime directory needs a
 line there.
 
-A release is one executable per platform (D067): a pex in venv mode holding canopy, canopy-notify-slack, canopy-sandbox,
-and the dependencies `uv.lock` pins, inside a scie with its own Python. It unpacks into the operator's cache once, so
-`resources.py` finds the bundled files, and `sys.executable` imports canopy, as dispatch, chores, and reviews need to
-start `_run`, `_chore`, and `_review` via `python -m canopy`. `SCIE_BOOT` picks the command: unset, `canopy`; set to
-`canopy-notify-desktop` or `canopy-notify-slack`, that sink, and to `canopy-sandbox`, the wrapper. A link named for one
-can run canopy itself instead, so README installs each sink as a script that sets it, and `canopy sandbox setup` says to
-do the same for the wrapper. `make binary` builds it for the current platform; the release workflow builds each
-platform's, runs the install check on each, and attaches them to the tag's release. The version is the tag's (D085):
-pushing `v0.2.0` releases 0.2.0, and a build between tags names its distance from the last one and its commit.
+canopy installs from git with `uv tool install` (D046), which builds the wheel and so the web UI, and puts `canopy`,
+both sinks, and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
+`sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it. The version is the tag's
+(D085): a build at `v0.2.0` is 0.2.0, and a build between tags names its distance from the last one and its commit.
 
 Where later work goes:
 

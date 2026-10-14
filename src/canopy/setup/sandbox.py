@@ -33,11 +33,9 @@ USERNS_FIX = """\
 bubblewrap cannot make a user namespace: AppArmor restricts unprivileged ones. Lift the restriction, now and at boot:
     sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
     echo 'kernel.apparmor_restrict_unprivileged_userns = 0' | sudo tee /etc/sysctl.d/60-canopy-sandbox.conf"""
-RELEASE_LAUNCHER = """\
-canopy-sandbox is not on PATH. From a release's single executable, put this script on PATH as canopy-sandbox, with
-the path to your canopy, and make it executable:
-    #!/bin/sh
-    exec env SCIE_BOOT=canopy-sandbox /path/to/canopy "$@\""""
+WRAPPER_MISSING = """\
+canopy-sandbox is not on PATH. It installs with canopy: run the install again, with --reinstall, and put uv's tool
+directory on PATH (`uv tool update-shell`)."""
 # npm ci installs exactly the lockfile, and checks each package's integrity hash. srt has no install scripts, and none
 # of its dependencies may run one. A Node older than a package's `engines` fails the install instead of only warning.
 NPM_CI = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--no-fund")
@@ -73,7 +71,7 @@ def run_setup(runner: procs.Runner, platform: str = sys.platform) -> Report:
             "command keeps every capability inside the sandbox's namespace."
         )
     if not _answers(runner, ["canopy-sandbox"]):
-        report.todo.append(RELEASE_LAUNCHER)
+        report.todo.append(WRAPPER_MISSING)
     return report
 
 

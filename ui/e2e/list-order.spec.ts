@@ -39,3 +39,20 @@ test("a list's order flips from its header, keeps across a reload, and leaves ot
     await page.getByTestId('order-ticks').click()
     expect(await testIds(page.getByTestId('ticks').locator('> li'))).toEqual(['tick-1', 'tick-2'])
 })
+
+test("the reviews, and a PR's reviews, flip like any list in time", async ({ page }) => {
+    await page.goto('reviews')
+    await settled(page)
+    const reviews = page.getByTestId('reviews').locator('> li')
+    const first = await testIds(reviews)
+    await expect(page.getByTestId('order-reviews')).toHaveText('newest first')
+    await page.getByTestId('order-reviews').click()
+    expect(await testIds(reviews)).toEqual(first.toReversed())
+
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await settled(page)
+    const own = page.getByTestId('pull-request-reviews').getByTestId('reviews').locator('> li')
+    expect(await testIds(own)).toEqual(['pull-request-review-4', 'pull-request-review-1'])
+    await page.getByTestId('order-pr-reviews').click()
+    expect(await testIds(own)).toEqual(['pull-request-review-1', 'pull-request-review-4'])
+})

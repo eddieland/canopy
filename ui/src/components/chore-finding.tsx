@@ -5,7 +5,9 @@ import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { LinkedText } from '@/components/linked-text'
+import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
+import { addressOf } from '@/lib/links'
 import { cn } from '@/lib/utils'
 
 /**
@@ -36,34 +38,40 @@ function FindingRow({
 }) {
     const open = 'since' in finding ? finding : null
     return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`finding-${finding.id}`}>
-            <div className="flex items-center gap-3">
-                <Chip>{finding.id}</Chip>
-                <span className="min-w-0 truncate text-sm">{finding.title}</span>
+        <ListRow kind="finding" data-testid={`finding-${finding.id}`}>
+            {/* The agent's own id for it: journal text, so muted data, never a chip. */}
+            <span className="font-mono text-xs text-muted-foreground">{finding.id}</span>
+            <span className="truncate text-sm">{finding.title}</span>
+            <span className="flex items-center justify-end gap-3">
                 {open?.dismissed && <Chip>dismissed</Chip>}
-                {open && <Age at={open.since} className="ml-auto" />}
+                {open && <Age at={open.since} />}
                 {action}
-            </div>
+            </span>
             {finding.detail && (
-                <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
+                <RowLine from="title" className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
                     <LinkedText text={finding.detail} />
-                </p>
+                </RowLine>
             )}
             {finding.link && (
-                <a
-                    href={finding.link}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className={cn(
-                        'inline-flex items-center gap-1 self-start font-mono text-xs text-accent underline-offset-4',
-                        'hover:underline',
-                    )}
-                >
-                    {finding.link.replace(/^https:\/\//u, '')}
-                    <LinkOutIcon href={finding.link} />
-                </a>
+                <RowLine from="title">
+                    <a
+                        href={finding.link}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className={cn(
+                            'inline-flex items-center gap-1 font-mono text-xs text-accent underline-offset-4',
+                            'hover:underline',
+                        )}
+                    >
+                        {addressOf(finding.link)}
+                        <LinkOutIcon href={finding.link} />
+                    </a>
+                </RowLine>
             )}
-            {notice}
-        </li>
+            {/* Hidden while the notice says nothing, so it adds no gap under the row. */}
+            <RowLine from="title" className="empty:hidden">
+                {notice}
+            </RowLine>
+        </ListRow>
     )
 }

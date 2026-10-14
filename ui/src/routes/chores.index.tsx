@@ -4,10 +4,11 @@ import { createFileRoute } from '@tanstack/react-router'
 import { choresQuery } from '@/api/queries'
 import type { ChoreSummary } from '@/api/types'
 import { ChoreLink } from '@/components/chore-link'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { ListRow, RowLine } from '@/components/rows'
 import { RunDot } from '@/components/status'
-import { Skeleton } from '@/components/ui/skeleton'
-import { choreLine, costText, windowText } from '@/lib/chores'
+import { choreLine, windowText } from '@/lib/chores'
+import { costText } from '@/lib/cost-total'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -30,14 +31,11 @@ function ChoresPage() {
                     <span className="readout text-xs text-muted-foreground">{data?.length ?? ''}</span>
                 </PanelHeader>
                 {data === undefined ? (
-                    <div className="flex min-h-40 flex-col gap-2 p-3">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+                    <PanelSkeleton className="min-h-40" />
                 ) : data.length === 0 ? (
-                    <Placeholder className="min-h-40">
-                        no chores run here: define [chores.NAME] in your user config, with capacity.max_chores above 0
-                    </Placeholder>
+                    <Empty size="panel">
+                        no chores yet: define [chores.NAME] in your user config, with capacity.max_chores above 0
+                    </Empty>
                 ) : (
                     <ul className="stagger divide-y" data-testid="chores">
                         {data.map((chore) => (
@@ -55,29 +53,30 @@ function Row({ chore }: { chore: ChoreSummary }) {
     const run = chore.running ?? chore.latest
     const findings = chore.findings.length
     return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`chore-${chore.name}`}>
-            <div className="flex items-center gap-3">
-                <ChoreLink name={chore.name} className="w-40 truncate" />
-                <span
-                    className={cn(
-                        'flex items-center gap-1.5 font-mono text-xs',
-                        run ? RUN_TEXT[run.state] : 'text-muted-foreground',
-                    )}
-                >
-                    {run && <RunDot state={run.state} />}
-                    {choreLine(chore, now)}
-                </span>
-                <span
-                    className={cn(
-                        'ml-auto font-mono text-xs',
-                        findings > 0 ? 'text-foreground' : 'text-muted-foreground',
-                    )}
-                    data-testid="chore-findings"
-                >
-                    {findings === 1 ? '1 open finding' : `${findings} open findings`}
-                </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-3 pl-[11.75rem] font-mono text-xs text-muted-foreground">
+        <ListRow kind="chore" data-testid={`chore-${chore.name}`}>
+            <ChoreLink name={chore.name} className="truncate" />
+            <span
+                className={cn(
+                    'flex items-center gap-1.5 font-mono text-xs',
+                    run ? RUN_TEXT[run.state] : 'text-muted-foreground',
+                )}
+            >
+                {run && <RunDot state={run.state} />}
+                {choreLine(chore, now)}
+            </span>
+            <span
+                className={cn(
+                    'text-right font-mono text-xs',
+                    findings > 0 ? 'text-foreground' : 'text-muted-foreground',
+                )}
+                data-testid="chore-findings"
+            >
+                {findings === 1 ? '1 open finding' : `${findings} open findings`}
+            </span>
+            <RowLine
+                from="state"
+                className="flex flex-wrap items-center gap-x-3 font-mono text-xs text-muted-foreground"
+            >
                 <span>
                     at most every {chore.every_minutes}m · {windowText(chore)}
                 </span>
@@ -88,7 +87,7 @@ function Row({ chore }: { chore: ChoreSummary }) {
                 >
                     {costText(chore.spend.day.cost_usd)} 24h · {costText(chore.spend.month.cost_usd)} 30d
                 </span>
-            </div>
-        </li>
+            </RowLine>
+        </ListRow>
     )
 }

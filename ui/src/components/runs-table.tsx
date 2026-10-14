@@ -1,22 +1,21 @@
 import { useState } from 'react'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { LinkedText } from '@/components/linked-text'
+import { PullRequestLink } from '@/components/pull-request-link'
+import { ListRow, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { Chip, RunDot } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
-
-// Where a ticket's row starts what goes under its head line, so it lines up with the ticket's title: past the state's
-// column, the key's, and the gap after each.
-const UNDER_TITLE = 'pl-[12.5rem]'
 
 /**
  * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
@@ -48,9 +47,9 @@ export function TicketRunsTable({ groups }: { groups: TicketRuns[] }) {
 
 function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
     return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${run.id}`}>
+        <ListRow kind={ticket ? 'run' : 'own-run'} data-testid={`run-${run.id}`}>
             <RunBody run={run} ticket={ticket} />
-        </li>
+        </ListRow>
     )
 }
 
@@ -59,11 +58,11 @@ function TicketRow({ group }: { group: TicketRuns }) {
     const { latest, earlier } = group
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
-            <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${latest.id}`}>
+            <ListRow kind="run" data-testid={`run-${latest.id}`}>
                 <RunBody run={latest} ticket />
                 {earlier.length > 0 && (
                     <>
-                        <div className={UNDER_TITLE}>
+                        <RowLine from="title">
                             <CollapsibleTrigger
                                 className={cn(
                                     'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
@@ -74,10 +73,10 @@ function TicketRow({ group }: { group: TicketRuns }) {
                                     ? 'hide earlier runs'
                                     : `${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
                             </CollapsibleTrigger>
-                        </div>
+                        </RowLine>
                         <CollapsibleContent asChild>
                             <ul
-                                className="flex flex-col gap-1.5 pt-1"
+                                className={cn('flex flex-col gap-1.5 pt-1', rowLineFrom('state'))}
                                 data-testid={`earlier-runs-${latest.ticket_key}`}
                             >
                                 {earlier.map((run) => (
@@ -87,7 +86,7 @@ function TicketRow({ group }: { group: TicketRuns }) {
                         </CollapsibleContent>
                     </>
                 )}
-            </li>
+            </ListRow>
         </Collapsible>
     )
 }
@@ -99,54 +98,41 @@ function TicketRow({ group }: { group: TicketRuns }) {
 function EarlierRow({ run }: { run: Run }) {
     const said = run.summary?.split('\n', 1)[0] ?? ''
     return (
-        <li className="flex items-center gap-3" data-testid={`run-${run.id}`}>
+        <ListRow kind="run" className="p-0" data-testid={`run-${run.id}`}>
             <RunStatus run={run} />
-            <span className="w-24 shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground" title={said || undefined}>
+            <span />
+            <span className="truncate text-sm text-muted-foreground" title={said || undefined}>
                 <LinkedText text={said} />
             </span>
-            <span className="flex w-56 shrink-0 items-center gap-3">
+            <span className="flex items-center gap-3">
                 <RunFacts run={run} />
             </span>
             <RunReadouts run={run} />
-        </li>
+        </ListRow>
     )
 }
 
 function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
-    const indent = ticket ? UNDER_TITLE : 'pl-[6.75rem]'
+    // What goes under the head line starts under the ticket's title, or under the run's id on its subject's page.
+    const under = ticket ? 'title' : 'facts'
     return (
         <>
-            <div className="flex items-center gap-3">
-                <RunStatus run={run} />
-                {ticket ? (
-                    <>
-                        <TicketLink ticketKey={run.ticket_key} className="w-24 shrink-0 truncate" />
-                        <TicketTitle title={run.ticket_title} className="flex-1" />
-                        {/* Fixed width, so every row's run id lines up, whatever chips follow it. */}
-                        <span className="flex w-56 shrink-0 items-center gap-3">
-                            <RunFacts run={run} />
-                        </span>
-                    </>
-                ) : (
-                    <RunFacts run={run} />
-                )}
-                <RunReadouts run={run} />
-            </div>
-            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={indent} />}
+            <RunStatus run={run} />
+            {ticket && (
+                <>
+                    <TicketLink ticketKey={run.ticket_key} className="truncate" />
+                    <TicketTitle title={run.ticket_title} />
+                </>
+            )}
+            <span className="flex items-center gap-3">
+                <RunFacts run={run} />
+            </span>
+            <RunReadouts run={run} />
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom(under)} />}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
-                <div className={cn('flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs', indent)}>
+                <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {run.prs.map((pr) => (
-                        <a
-                            key={pr}
-                            href={pr}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
-                        >
-                            {pr.replace(/^https:\/\//u, '')}
-                            <LinkOutIcon href={pr} />
-                        </a>
+                        <PullRequestLink key={pr} url={pr} />
                     ))}
                     {run.worktrees.map((path) => (
                         <span key={path} className="text-muted-foreground" title="the worktree it holds">
@@ -158,7 +144,7 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                             session {run.session_id}
                         </span>
                     )}
-                </div>
+                </RowLine>
             )}
         </>
     )
@@ -176,24 +162,21 @@ function RunFacts({ run }: { run: Run }) {
 
 function RunStatus({ run }: { run: Run }) {
     return (
-        <span className={cn('flex w-20 shrink-0 items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
+        <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
             <RunDot state={run.state} />
-            {run.status}
+            <Word word={run.status} />
         </span>
     )
 }
 
+/** A run's cost and when, a cell each, in the row's `cost` and `age` columns. */
 function RunReadouts({ run }: { run: Run }) {
     return (
-        <span className="ml-auto flex items-center gap-4">
-            <span className="readout w-16 text-right text-xs text-muted-foreground" data-testid="run-cost">
-                {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
+        <>
+            <span className="text-right text-xs text-muted-foreground" data-testid="run-cost">
+                <Cost usd={run.cost_usd} />
             </span>
-            <span className="flex w-24 justify-end gap-1 text-xs text-muted-foreground">
-                {run.ended_at === null ? 'for' : 'ended'}
-                <Age at={run.ended_at ?? run.started_at} />
-                {run.ended_at === null ? '' : 'ago'}
-            </span>
-        </span>
+            <Age variant="span" started={run.started_at} ended={run.ended_at} className="text-right" />
+        </>
     )
 }

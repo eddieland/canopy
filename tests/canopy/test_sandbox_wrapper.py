@@ -176,7 +176,6 @@ def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sa
         "CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)),
         "GIT_DIR": str(primary / ".git" / "worktrees" / "other"),
         "PATH": f"bin{os.pathsep}{os.environ['PATH']}",
-        "SCIE_BOOT": "canopy-sandbox",  # a release's launcher sets it; a `canopy` in the run would be the wrapper
     }
 
     done = wrap("worker", "true", cwd=slot, env=env)
@@ -185,7 +184,6 @@ def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sa
     assert not (tmp_path / "planted-ran").exists()
     call = sandbox.only_call()
     assert "GIT_DIR" not in call["env"]
-    assert "SCIE_BOOT" not in call["env"]
     assert call["settings"]["filesystem"]["allowWrite"][0] == str(slot)
     assert str(other.resolve()) not in call["settings"]["filesystem"]["allowWrite"]
 

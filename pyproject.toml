@@ -53,7 +53,6 @@ Homepage = "https://github.com/eddieland/canopy"
 Documentation = "https://github.com/eddieland/canopy/tree/main/docs"
 Repository = "https://github.com/eddieland/canopy"
 Issues = "https://github.com/eddieland/canopy/issues"
-Releases = "https://github.com/eddieland/canopy/releases"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]

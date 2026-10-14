@@ -67,16 +67,8 @@ Run canopy as yourself, not as root.
 
 ## 2. What setup installed
 
-`canopy-sandbox` comes with canopy: `uv tool install` puts it on `PATH` beside `canopy`. From a release's single
-executable, setup tells you to put a script on `PATH` that runs it, as README does for the notification sinks:
-
-```sh
-#!/bin/sh
-exec env SCIE_BOOT=canopy-sandbox /path/to/canopy "$@"
-```
-
-The wrapper reads the template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when
-that is unset):
+`canopy-sandbox` comes with canopy: `uv tool install` puts it on `PATH` beside `canopy`. The wrapper reads the
+template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when that is unset):
 
 | Template | Used for |
 | --- | --- |

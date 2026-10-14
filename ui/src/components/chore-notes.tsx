@@ -2,7 +2,7 @@ import type { ChoreDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
 import type { Pending } from '@/components/conversation'
 import { OrderToggle } from '@/components/order-toggle'
-import { PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PanelHeader } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { awaitsRun } from '@/lib/chores'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -23,14 +23,14 @@ export function ChoreNotes({ detail }: { detail: ChoreDetail }) {
     }
     return (
         <>
-            <PanelHeader label="Your notes">
+            <PanelHeader label="Notes">
                 <span className="flex items-center gap-2">
                     {notes.length > 1 && <OrderToggle list="notes" />}
                     <span className="readout text-xs text-muted-foreground">{notes.length}</span>
                 </span>
             </PanelHeader>
             {notes.length === 0 ? (
-                <Placeholder className="min-h-20">no notes yet: its runs follow its prompt file alone</Placeholder>
+                <Empty>no notes yet: its runs follow its prompt file alone</Empty>
             ) : (
                 <Conversation messages={ordered('notes', order, notes)} pending={pending} />
             )}

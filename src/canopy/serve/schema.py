@@ -29,6 +29,14 @@ type MessageSource = Annotated[
 type MessageKind = Annotated[
     Literal["report", "question", "reply", "comment"], Field(description="What a message is (DESIGN §22).")
 ]
+type GrantKind = Annotated[
+    Literal["implement", "fix-ci", "resume"],
+    Field(description="A kind of run a ticket's unit is limited in, which `canopy grant` raises (DESIGN §8, §22)."),
+]
+type LimitKind = Annotated[
+    Literal["implement", "fix-ci", "resume", "review"],
+    Field(description="What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs."),
+]
 type StartStatus = Annotated[
     Literal["started", "stopped"],
     Field(description="Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22)."),
@@ -125,6 +133,8 @@ class AttentionItem(_Model):
     """When the unbroken run of ticks that recorded it began."""
     finding: bool = False
     """A chore's finding rather than a ticket's item."""
+    pr: str | None = None
+    """The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found."""
 
 
 class Run(_Model):
@@ -269,6 +279,27 @@ class Decision(_Model):
     when it was recorded."""
 
 
+class Limit(_Model):
+    """A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22).
+
+    Every run counts, however it ended (D030), so `runs` only grows; at `limit` the loop does no more of the kind until
+    the operator grants more or raises the policy.
+    """
+
+    kind: LimitKind
+    """What it counts."""
+    repo: str | None = None
+    """The unit's repository; for a review limit, the repository of the unit whose PR it is, if any."""
+    pr_url: str | None = None
+    """The PR, for a review limit."""
+    runs: int
+    """Its runs of the kind so far."""
+    granted: int
+    """The runs the operator granted it past the policy's limit."""
+    limit: int
+    """The most runs of the kind it may have: the policy's limit plus `granted`."""
+
+
 class CostTotal(_Model):
     """What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran."""
 
@@ -289,6 +320,9 @@ class TicketDetail(_Model):
     """The ticket, as the tickets list shows it."""
     units: list[Unit]
     """Its work in each repository."""
+    limits: list[Limit] = []
+    """Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
+    has reviewed."""
     runs: list[Run]
     """Its latest runs, newest first."""
     messages: list[Message]
@@ -486,6 +520,28 @@ class Forgot(_Model):
     """The branch the ticket's work was on."""
     prs: list[str]
     """The URLs of its units' PRs."""
+
+
+class GrantRequest(_Model):
+    """A grant of one more run of a kind to one of a ticket's units, as `canopy grant KEY KIND --repo NAME` does."""
+
+    kind: GrantKind
+    """The kind of run to allow one more of."""
+    repo: Annotated[str | None, Field(max_length=200)] = None
+    """The unit's repository; may be left out when the ticket has had runs in one repository only."""
+
+
+class Granted(_Model):
+    """What a grant recorded: one more run allowed, every earlier one still counted (D030). The next tick decides."""
+
+    kind: LimitKind
+    """The kind it allows one more of."""
+    repo: str | None = None
+    """The unit's repository, named or found; None for a PR's reviews."""
+    runs: int
+    """Its runs of the kind so far, unchanged by the grant."""
+    limit: int
+    """Its limit now, the grant counted."""
 
 
 class ReplyRequest(_Model):
@@ -955,6 +1011,8 @@ class ReviewSummary(_Model):
     """The change's impact, once it reported one."""
     findings: int = 0
     """How many findings it reported."""
+    worst: FindingSeverity | None = None
+    """The severity of the worst finding it reported, which colors its verdict; None when it reported none."""
     started_at: datetime
     """When it started."""
     ended_at: datetime | None = None
@@ -1078,6 +1136,8 @@ class PullRequestDetail(_Model):
 
     pull_request: PullRequest
     """The PR, as the PRs list shows it."""
+    review_limit: Limit | None = None
+    """Its review runs against its limit (DESIGN §21); None when canopy has never reviewed it."""
     runs: list[Run]
     """Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20."""
     reviews: list[ReviewSummary]

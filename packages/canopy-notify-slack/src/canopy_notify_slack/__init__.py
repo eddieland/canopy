@@ -16,9 +16,6 @@ but 0 on its next tick.
 
 Stdlib only, importing nothing from canopy: canopy runs it as a command, so the process that holds the journal and
 enforces the guards never opens a connection or reads this secret (D035).
-
-In a release's single executable (D067), run a sink with `SCIE_BOOT` set to its name; `RELEASE_HELP`, below, which
-`--help` prints, has a wrapper script for `PATH`.
 """
 
 from __future__ import annotations
@@ -38,14 +35,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
-RELEASE_HELP = """\
-In a release's single executable, run this sink with SCIE_BOOT set to its name: SCIE_BOOT=canopy-notify-slack
-/path/to/canopy. A link named canopy-notify-slack can run canopy itself instead. So that a sink's cmd can name
-canopy-notify-slack, put this script on PATH under that name, with the path to your canopy, and make it executable:
-
-    #!/bin/sh
-    exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
-"""
 SLACK_PREFIX = "https://hooks.slack.com/"
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
 # A bot token: a user token (`xoxp-`) acts as the operator, with every scope they granted it.
@@ -643,8 +632,6 @@ def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: 
     parser = argparse.ArgumentParser(
         prog="canopy-notify-slack",
         description=__doc__.split("\n", 1)[0],
-        epilog=RELEASE_HELP,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--webhook-file", type=Path, default=None, help="default: " + str(default_webhook_file()))
     parser.add_argument("--channel", default=None, help="post with a bot token to this channel id, not a webhook")

@@ -227,6 +227,14 @@ review again. A PR's review limit is the PR's own, not a unit's, so it:
 - resets no count (D030). The state block shows the PR's `granted` beside its `review_runs`, and `canopy review run`'s
   `review_limit` guard and the reviewer's `{{MAX_ATTEMPTS}}` include it. It reviews nothing: the next tick decides.
 
+The web UI grants too (asked for by the operator, 2026-10-13: a ticket stuck at its limit sent them to the terminal),
+through the same `policy.grant` and `grants.grant`, so with the same guards, and one run a click, where the stuck thing
+is shown: a ticket's page and its attention item list each of its units' kinds at their limit, and the review limit of
+each of its units' PRs canopy has reviewed, each with `allow one more`; a PR's page, and an item about a PR no ticket
+owns, its review limit. A limit under its runs shows nothing, so the button appears only once the loop is held by it.
+It needs no confirmation: one more run of a kind the loop already ran is the least a grant can do, the overseer still
+decides whether to use it, and every guard on the run still holds. `--runs N` stays the CLI's.
+
 ### References
 
 A reference names a subject by its shape, so no kind needs a flag and no form can be read as another's: a ticket key
@@ -301,7 +309,7 @@ tick. Before M28 only a message woke it, so a start from the web UI waited for t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget; notes to chores (M23), dismissing chores' and reviews' findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -318,17 +326,18 @@ Served by `canopy loop` from a thread (D073):
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
   CLI uses: `conversation.start`, `stop`, `reply`, `forget`, and `dismiss` with channel `web` (a note to a chore is a
   `reply` on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`, and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
+  `canopy stop --now`, for a grant `runs.policy.grant` and `reviews.grants.grant` as `canopy grant`, one run each,
+  and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
   the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
   the operator's to edit. A forget
   cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
   `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
   Stop now asks, is too easy to give by mistake. Its outcome
   names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
-  `serve` is a feature and cannot import `runs` or `loop`, so the loop hands it that function and the attention list's
-  (`loop.attention.listed`), and a way to ask for a reload (`loop.reread`), when it starts the server
-  (`serve.backend`); a reload hands the server the new config, which each request reads as it opens. The one process
-  it runs is
+  `serve` is a feature and cannot import `runs`, `reviews`, or `loop`, so the loop hands it that function and the
+  attention list's (`loop.attention.listed`), a way to ask for a reload (`loop.reread`), and the grants with the
+  limits they raise (`runs.policy`, `reviews.grants`), when it starts the server (`serve.backend`); a reload hands
+  the server the new config, which each request reads as it opens. The one process it runs is
   `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
@@ -339,8 +348,8 @@ Served by `canopy loop` from a thread (D073):
   it, pull requests (below), chores (below), ticks (below), and search (below). The side rail shows the runs working now
   and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and
   what it costs stay in view wherever the operator is.
-  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), a note to a chore, dismissing a chore's
-  finding or listing it again, and pausing and resuming
+  Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
+  limit (below), a note to a chore, dismissing a chore's finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
   from the settings page. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
@@ -403,10 +412,11 @@ The API, under `{base}/api`:
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
-| `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, its latest 20 decisions, and its total cost |
+| `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
 | `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
+| `POST /tickets/{key}/grants` | `canopy grant KEY KIND [--repo NAME]`, for one run: `implement`, `fix-ci`, or `resume` |
 | `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
@@ -418,7 +428,8 @@ The API, under `{base}/api`:
 | `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, each marked whether dismissed, the diff, and the PR's other runs; 404 for no such run |
 | `POST /reviews/{id}/dismissals` | `canopy dismiss review:ID N`, or with `undo` its `--undo`: no worker or tick acts on finding `N` (§21) |
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
-| `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
+| `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs and limit, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
+| `POST /pull-request/grants?url=` | `canopy grant URL review`, for one review run |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
@@ -490,7 +501,7 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 - `POST /chores/{name}/dismissals` takes a finding's id and `undo`, behind the same checks, and dismisses the finding
   as `canopy dismiss` does, or takes the dismissal back, with channel `web` (§19). A finding selected on the attention
   list has a small `dismiss` beside its age; on the chore's page each open finding has one in its head line, or,
-  dismissed, a mark and `list again`.
+  dismissed, a mark and `undo`, as `--undo` takes it back.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
   detail are the agent's: untrusted text, rendered as text with control characters dropped.
 - A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its
@@ -579,6 +590,11 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
   `tick.updated` moves that tick's.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
+- A transcript finds lines in itself (taken on request, 2026-10-13), in the browser over the entries already read, so
+  it asks the server nothing: a search keeps the rows with a line that holds it, its matches marked, and opens a tool
+  call whose input or output holds it. A line is one as the page shows it (an output's indented JSON included), so
+  a match never spans a line break; the search is one string, letters in either case, its characters taken literally,
+  not words as the journal's search takes them. It searches the events in order; By call keeps its calls whole.
 - Everything in a transcript is agent output: untrusted, rendered as text; a tool call's input, and an output that is
   JSON, have their keys, strings, and values colored. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
@@ -685,6 +701,7 @@ something, without knowing which page holds it.
     Recording one needs the overseer to report it, a prompt change; the branch's slug stands in.
   - Transcripts. A run's log holds up to 32 MiB and is read whole on each request (above); reading every log for
     every query is not reasonably efficient, and indexing them copies agent output into the journal, rejected above.
+    A transcript's page finds lines in its own (above).
   - Review runs. No page shows one yet, so a hit would have nowhere to open.
 - Without an index, a scan reads newest first and stops at a source's 21st hit, so a common word answers at once. A
   query nothing matches reads each searched column whole: about 1.6 ms per MB of text (56 MB of messages in 90 ms,
@@ -745,7 +762,6 @@ the operator's approval note.
   elsewhere; the overseer's `--context` holds 2000 characters.
 - Whether a private ticket's PR body and branch should name the ticket key.
 - Deleting a ticket's conversation, for client data the operator must not keep. `forget` keeps it.
-- `grant` in the web UI. It is the CLI's only; the web channel would call the same function, as Forget does.
 - A forgotten ticket's attempt counts are not in the state block, which shows them per unit, so the overseer learns a
   limit from the `attempt_limit` refusal rather than before dispatching.
 - Mirrored comments edited or deleted after the mirror.

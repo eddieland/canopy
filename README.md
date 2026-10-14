@@ -10,9 +10,9 @@ running attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds standing write access to your
 repositories, your tracker, or your internal tools.
 
-> Not on PyPI: `canopy` there is an unrelated project. Install canopy from this repository or its releases.
+> Not on PyPI: `canopy` there is an unrelated project. Install canopy from this repository.
 
-![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-light-root-linux.png)
+![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
 
 **Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
 notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend (M28 to M30) are
@@ -73,30 +73,8 @@ posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
    In a canopy checkout, `make treehouse` does the same. Do not use a release or `treehouse update`: no release has the
    lease output canopy reads yet, and the release binary needs glibc 2.34+.
 
-2. **Install canopy**, from a release or from git.
-
-   **From a release** (D067). The machine that runs canopy needs no credential, Python, or uv.
-   1. Download `canopy-<platform>` from the [latest release](https://github.com/eddieland/canopy/releases/latest), or
-      run `gh release download --repo eddieland/canopy --pattern 'canopy-linux-x86_64*'`.
-   2. Check it against its `.sha256`.
-   3. Copy it to the machine as `~/.local/bin/canopy`. Run `mkdir -p ~/.local/bin` first if that directory is missing,
-      and put it on `PATH` if it is not.
-   4. Make it executable, and add the notification sinks beside it as scripts that run it with `SCIE_BOOT` set to their
-      name (a link to it would run canopy itself instead):
-
-      ```sh
-      cd ~/.local/bin && chmod +x canopy
-      for sink in canopy-notify-desktop canopy-notify-slack; do
-          rm -f "$sink" && printf '#!/bin/sh\nexec env SCIE_BOOT=%s "%s/canopy" "$@"\n' "$sink" "$PWD" >"$sink"
-          chmod +x "$sink"
-      done
-      ```
-
-   On macOS, a file downloaded in a browser also needs `xattr -d com.apple.quarantine canopy`. To upgrade, replace the
-   file.
-
-   **From git**, which needs Node 22.12+ and npm on `PATH` (with nvm: `nvm install 22`), because the install builds the
-   web UI:
+2. **Install canopy** from git, with [uv](https://docs.astral.sh/uv/). It needs Node 22.12+ and npm on `PATH` (with
+   nvm: `nvm install 22`), because the install builds the web UI:
 
    ```sh
    uv tool install git+https://github.com/eddieland/canopy
@@ -148,6 +126,12 @@ Your part is to label tickets with your queue label, answer the agents' question
 Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR
 on their own; anyone else's comments wait on the attention list as `untrusted_review` until you reply.
 
+| A ticket's conversation, waiting on your answer | A run's transcript: each tool call, and what it cost |
+| --- | --- |
+| ![A private ticket's page: its work, runs, decisions, and the worker's question waiting on your answer](ui/e2e/screenshots.spec.ts-snapshots/tickets-ABC-102-dark-root-linux.png) | ![A run's page: its summary and PR, then the transcript of the worker's tool and model calls](ui/e2e/screenshots.spec.ts-snapshots/runs-39-dark-root-linux.png) |
+| **canopy's review of a PR, its findings on the diff** | **What the overseer decided in a tick, and why** |
+| ![A review's page: its verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/ticks-2-dark-root-linux.png) |
+
 | To | Run |
 | --- | --- |
 | Tick now, or pause and resume the loop | `t` or `p` in its terminal; `canopy pause`, `canopy resume` |
@@ -156,8 +140,8 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
 | Start a ticket over, once its PR is closed and its branch deleted | `canopy forget KEY` |
-| Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`, `fix-ci`) |
-| Allow one more review past a `review_limit` | `canopy grant PR_URL review` |
+| Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`, `fix-ci`), or the ticket's page |
+| Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
 | Teach your own agent session canopy | save `canopy skill` as `~/.agents/skills/canopy/SKILL.md` |

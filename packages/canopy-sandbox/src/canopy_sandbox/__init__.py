@@ -13,9 +13,8 @@ them is ever read as an option of the wrapper's or of `srt`'s.
 In order, it:
 
 1. Drops from its own environment what would point git at another repository (`GIT_DIR` and its kind), every
-   relative `PATH` entry, which would find `git` or `srt` in the checkout, `BASH_ENV` and `ENV`, which the shell
-   `srt` starts would source, and `SCIE_BOOT`, which would make a release's `canopy` run as this wrapper. The command
-   inherits the same.
+   relative `PATH` entry, which would find `git` or `srt` in the checkout, and `BASH_ENV` and `ENV`, which the shell
+   `srt` starts would source. The command inherits the same.
 2. Finds the worktrees the run works in, for a worker or setup: the cwd, or each worktree a joint run's desk links to,
    and each one's own and shared git directories. A chore has none.
 3. Fills the template's placeholders with those paths and writes the policy to a private directory of its own, with
@@ -101,9 +100,6 @@ SAFE_GIT = (
 UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
 SHELL_STARTUP = ("BASH_ENV", "ENV")
-# Picks the command a release's single executable runs (D067): left set, a `canopy` the run starts would be this
-# wrapper.
-LAUNCHER = ("SCIE_BOOT",)
 # Name a repository other than the one git finds from the cwd, for the wrapper's git and the command's alike.
 GIT_LOCATION = (
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -185,7 +181,7 @@ def scrub(env: MutableMapping[str, str]) -> None:
     canopy starts the wrapper in a checkout, so a relative entry such as `.` would find a `git` or `srt` the branch
     committed, and run it on the host.
     """
-    for name in (*GIT_LOCATION, *SHELL_STARTUP, *LAUNCHER):
+    for name in (*GIT_LOCATION, *SHELL_STARTUP):
         env.pop(name, None)
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if Path(p).is_absolute())
 

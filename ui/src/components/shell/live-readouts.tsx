@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { metaQuery, tickQuery } from '@/api/queries'
 import type { Tick } from '@/api/types'
 import { Age } from '@/components/age'
+import { Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { TICK_TONE } from '@/lib/ticks'
@@ -42,11 +43,11 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
 }
 
 /**
- * `tick 12 · 3m ago`, with its status when it is not `ok`, as `canopy status`'s first line names it. The tick opens its
+ * `tick:12 · 3m ago`, with its status when it is not `ok`, as `canopy status`'s first line names it. The tick opens its
  * page: what it decided and why.
  */
 function LastTick({ tick }: { tick: Tick }) {
-    const shown = tick.status === 'ok' ? null : tick.status.replace('_', ' ')
+    const shown = tick.status === 'ok' ? null : tick.status
     return (
         <span
             className={cn('readout text-xs whitespace-nowrap', TICK_TONE[tick.status] ?? 'text-muted-foreground')}
@@ -55,9 +56,19 @@ function LastTick({ tick }: { tick: Tick }) {
         >
             <TickLink id={tick.id} className="text-inherit" />
             {tick.dry_run ? ' (dry run)' : ''}
-            {shown ? ` ${shown}` : ''} · {tick.ended_at === null ? 'for ' : ''}
-            <Age at={tick.ended_at ?? tick.started_at} className="text-inherit" />
-            {tick.ended_at === null ? '' : ' ago'}
+            {shown && (
+                <>
+                    {' '}
+                    <Word word={shown} />
+                </>
+            )}
+            {' · '}
+            {/* `3m ago` once it ended: the header's line is short, so it leaves the span's `ended` out. */}
+            {tick.ended_at === null ? (
+                <Age variant="span" started={tick.started_at} ended={null} className="text-inherit" />
+            ) : (
+                <Age at={tick.ended_at} variant="ago" className="text-inherit" />
+            )}
         </span>
     )
 }

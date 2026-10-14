@@ -41,7 +41,7 @@ test('stream events update the cache without refetching', async ({ page }) => {
 
 test('a reply answers the waiting question, and a retry records nothing new', async ({ page }) => {
     await page.goto('tickets/ABC-102')
-    await expect(page.getByText('waits on your answer')).toBeVisible()
+    await expect(page.getByTestId('conversation').getByText('waiting on you')).toBeVisible()
     const form = page.getByRole('form', { name: 'Reply' })
     await form.getByRole('textbox').fill('Blue, to match the toolbar.')
     await form.getByRole('button', { name: 'Reply' }).click()
@@ -50,7 +50,7 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     const mine = conversation.locator('[data-source=operator]').last()
     await expect(mine).toContainText('Blue, to match the toolbar.')
     await expect(mine).toContainText('via web')
-    await expect(page.getByText('waits on your answer')).toHaveCount(0)
+    await expect(page.getByTestId('conversation').getByText('waiting on you')).toHaveCount(0)
 
     // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
     await expect(mine).toContainText('waiting for the next tick')
@@ -237,4 +237,34 @@ test("a review's finding is dismissed on its card, and kept again", async ({ pag
     await card.getByTestId('undismiss-finding-2').click()
     await expect(card).not.toHaveAttribute('data-dismissed', 'true')
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
+})
+
+test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
+    await page.goto('tickets/ABC-100')
+    const limits = page.getByTestId('grant-limits')
+    await expect(limits).toContainText('fix-ci in web')
+    await expect(limits).toContainText('1 of 1 runs')
+    const grant = limits.getByTestId('grant-fix-ci in web')
+    await expect(grant).toHaveAttribute('title', 'canopy grant ABC-100 fix-ci --repo web')
+    await grant.click()
+    await expect(limits.getByRole('status')).toHaveText(
+        'ABC-100 in web has had 1 fix-ci runs, and may now have 2. The next tick decides whether to dispatch it.',
+    )
+    // No longer at its limit, so its row is gone; what the grant did stays said.
+    await expect(grant).toHaveCount(0)
+})
+
+test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
+    await page.goto('attention')
+    await page.getByTestId('attention-list').getByText('pull/88 waits on a reviewer').click()
+    const limits = page.getByTestId('attention-detail').getByTestId('grant-limits')
+    await expect(limits).toContainText('reviews of web#88')
+    await limits.getByTestId('grant-reviews of web#88').click()
+    await expect(limits.getByRole('status')).toHaveText(
+        'https://github.com/acme/web/pull/88 has had 2 review runs, and may now have 3. ' +
+            'The next tick decides whether to review it.',
+    )
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    await expect(page.getByTestId('pull-request-reviews')).toBeVisible()
+    await expect(page.getByTestId('grant-limits')).toHaveCount(0)
 })

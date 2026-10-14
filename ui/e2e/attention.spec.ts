@@ -18,10 +18,12 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     }
     // A reason reads as words, and keeps the CLI's spelling on hover.
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
+    // A finding's id is the agent's text: its chip says `finding`, and the id sits beside its chore.
+    await expect(rows.nth(4).getByText('finding', { exact: true })).toBeVisible()
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
-    await expect(detail.getByRole('link', { name: 'ABC-100' })).toBeVisible()
+    await expect(detail.getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
     await expect(detail.getByRole('form', { name: 'Reply' })).toBeVisible()
 })
 
@@ -33,9 +35,9 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
 
     await expect(page).toHaveURL(/\/attention\?item=/u)
     const detail = page.getByTestId('attention-detail')
-    await expect(detail.getByRole('link', { name: 'ABC-102' })).toBeVisible()
+    await expect(detail.getByRole('link', { name: 'ABC-102', exact: true })).toBeVisible()
     await expect(detail.getByTestId('message-5')).toContainText('Should the export button be red or blue?')
-    await expect(detail.getByText('Your answer to message 5')).toBeVisible()
+    await expect(detail.getByText('Reply to message 5')).toBeVisible()
 
     await page.reload()
     await expect(list.getByRole('link').filter({ hasText: 'awaiting reply' })).toHaveAttribute('aria-current', 'page')
@@ -61,7 +63,7 @@ test('an item about no ticket says so, with nothing to answer', async ({ page })
 
     const detail = page.getByTestId('attention-detail')
     await expect(detail).toContainText('api is in the workspace map but has no clone')
-    await expect(detail).toContainText('Nothing to answer here')
+    await expect(detail).toContainText('nothing to answer here')
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 

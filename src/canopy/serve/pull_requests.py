@@ -13,12 +13,13 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, conversation, db
 from canopy.serve.reviews import summary
 from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail
-from canopy.serve.views import decision, run
+from canopy.serve.views import decision, limit, run
 
 if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.context import Context
+    from canopy.serve.backend import Backend
 
 # The PRs list, by most recent activity, and how many runs and decisions a PR's page carries.
 PULL_REQUESTS = 100
@@ -37,8 +38,8 @@ def pull_requests(ctx: Context) -> list[PullRequest]:
     return [_pull_request(ctx.conn, r, reviews.get(str(r["url"]), [])) for r in rows]
 
 
-def pull_request(ctx: Context, url: str) -> PullRequestDetail | None:
-    """One PR: the runs that pushed to it, its review runs, and the decisions naming it.
+def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail | None:
+    """One PR: the runs that pushed to it, its review runs and limit, and the decisions naming it.
 
     Returns:
         The PR's page, or None when no unit, review run, or decision names it. One that only decisions name, such as
@@ -54,8 +55,10 @@ def pull_request(ctx: Context, url: str) -> PullRequestDetail | None:
     else:
         return None
     runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
+    reviewed = backend.review_limit(ctx, url)
     return PullRequestDetail(
         pull_request=found,
+        review_limit=limit(reviewed, repo=found.repo) if reviewed is not None else None,
         runs=[run(r, ctx.workspace.root) for r in runs[:PR_RUNS]],
         reviews=[summary(r) for r in reviews],
         decisions=[decision(d) for d in decisions],

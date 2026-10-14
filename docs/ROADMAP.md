@@ -629,6 +629,8 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI. Forget too, behind the ticket's key typed out (§22). Taken on request
   (2026-10-12).
+- Grant too, one run a click, for a unit or a PR at its limit, where the stuck ticket or PR is shown (§22). Taken on
+  request (2026-10-13).
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
   while it is open, with the running run or review holding each. Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
@@ -899,8 +901,7 @@ in code can catch, and the same reasons keep idle pacing from counting a quiet t
 - The overseer's `canopy` works before the overseer is paid for. The tick either puts this canopy's own launcher
   first on the overseer's PATH, or checks, through `procs`, that `canopy --version` runs from the overseer's
   environment. When it cannot, the tick closes without running the overseer, with a status of its own, and raises an
-  attention item saying why. Settle which in DESIGN §6; the release launcher (`SCIE_BOOT`) and a source install both
-  have to work.
+  attention item saying why. Settle which in DESIGN §6; every way of installing canopy has to work.
 - The done line: the overseer ends its final message with a line `CANOPY_TICK_DONE`, and may summarize before or after
   it; the harness accepts it as a line anywhere in that message, never in an earlier one. DESIGN §6, with the
   operator's approval note in the PR for the prompt.

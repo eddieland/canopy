@@ -3,30 +3,34 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, choreQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
+import { attentionQuery, choreQuery, pullRequestQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
+import { Cost } from '@/components/cost'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
-import { LinkedText } from '@/components/linked-text'
+import { GrantLimits } from '@/components/grant-limits'
+import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
+import { ListRow } from '@/components/rows'
 import { ReplyForm } from '@/components/reply-form'
-import { Chip, RunDot } from '@/components/status'
+import { InlineCode } from '@/components/rich-text'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
-import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity } from '@/lib/attention'
 import type { Severity } from '@/lib/attention'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
-import { phaseLabel } from '@/lib/phase'
+import { phaseLabel, phaseWord } from '@/lib/phase'
 
 interface AttentionSearch {
     item?: string | undefined
@@ -75,14 +79,11 @@ function AttentionPage() {
                 <div className="flex flex-wrap items-start gap-6">
                     <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md">
                         <Panel data-testid="attention-list">
-                            <PanelHeader label="Needs you">
+                            <PanelHeader label="Attention">
                                 <span className="readout text-xs text-muted-foreground">{items?.length}</span>
                             </PanelHeader>
                             {items === undefined ? (
-                                <div className="flex flex-col gap-2 p-3">
-                                    <Skeleton className="h-4 w-2/3" />
-                                    <Skeleton className="h-4 w-1/2" />
-                                </div>
+                                <PanelSkeleton />
                             ) : (
                                 <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                     {items.map((item) => (
@@ -100,8 +101,8 @@ function AttentionPage() {
                     </div>
                     <div className="flex min-w-0 flex-[999_1_28rem] flex-col gap-6">
                         {selected === undefined ? (
-                            <Panel className="min-h-72 p-3">
-                                <Skeleton className="h-4 w-1/2" />
+                            <Panel>
+                                <PanelSkeleton rows={1} className="min-h-72" />
                             </Panel>
                         ) : (
                             <Detail key={selected.id} item={selected} done={answered(selected, tickets)} />
@@ -129,17 +130,26 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
                 <span className="flex items-center gap-2">
                     <ReasonChip item={item} />
                     {done && <Answered />}
-                    <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{item.subject}</span>
+                    <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+                        {item.subject}
+                        {item.finding ? ` ${item.reason}` : ''}
+                    </span>
                     <Age at={item.since} className="ml-auto" />
                 </span>
-                <span className="line-clamp-2 text-sm break-words">{item.detail}</span>
+                <span className="line-clamp-2 text-sm break-words">
+                    <InlineCode text={item.detail} links={false} />
+                </span>
             </Link>
         </li>
     )
 }
 
+/**
+ * The item's reason as a chip. A chore's finding has the agent's own id for its reason, which is journal text, so its
+ * chip says `finding` and the head line names the id beside its chore.
+ */
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return <Chip className={TONE[severity(item)]} word={item.reason} />
+    return item.finding ? <Chip>finding</Chip> : <Chip className={TONE[severity(item)]} word={item.reason} />
 }
 
 /** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
@@ -148,8 +158,9 @@ function Answered() {
 }
 
 /**
- * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another, and for a
- * finding the button to dismiss it; or for an item about neither, what it says.
+ * The selected item: its ticket's conversation, the reply form, and the ticket's actions, with a grant for each limit
+ * it is stuck at; a chore's notes and the form for another, and for a finding the button to dismiss it; a PR's review
+ * limit and its grant, for an item about a PR no ticket owns; or for an item about none of them, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
@@ -161,11 +172,8 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
             )}
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
             {item.chore !== null && <ChoreThread name={item.chore} />}
-            {item.ticket_key === null && item.chore === null && (
-                <Placeholder className="min-h-24">
-                    Nothing to answer here: it leaves when its cause is gone.
-                </Placeholder>
-            )}
+            {item.pr !== null && <PullRequestLimits url={item.pr} />}
+            {item.ticket_key === null && item.chore === null && item.pr === null && <NothingToAnswer />}
         </Panel>
     )
 }
@@ -192,7 +200,7 @@ function Head({
                 {action}
             </div>
             <p className="text-sm break-words whitespace-pre-wrap">
-                <LinkedText text={item.detail} />
+                <InlineCode text={item.detail} />
             </p>
             {done && (
                 <p className="text-sm text-muted-foreground" data-testid="answered-note">
@@ -215,24 +223,48 @@ function Subject({ item }: { item: AttentionItem }) {
         return <TicketLink ticketKey={item.ticket_key} />
     }
     if (item.chore !== null) {
-        return <ChoreLink name={item.chore} />
+        return (
+            <>
+                <ChoreLink name={item.chore} />
+                {item.finding && <span className="font-mono text-xs text-muted-foreground">{item.reason}</span>}
+            </>
+        )
+    }
+    if (item.pr !== null) {
+        return <PullRequestLink url={item.pr} />
     }
     return <span className="font-mono text-xs">{item.subject}</span>
+}
+
+function NothingToAnswer() {
+    return <Empty>nothing to answer here: it leaves when its cause is gone</Empty>
+}
+
+/** A PR's item: a grant of one more review when the PR is at its review limit (DESIGN §21), else nothing to answer. */
+function PullRequestLimits({ url }: { url: string }) {
+    const { data, error } = useQuery(pullRequestQuery(url))
+    if (error instanceof ApiError) {
+        return <Notice error={error} className="p-3" />
+    }
+    if (data === undefined) {
+        return <PanelSkeleton rows={1} className="min-h-24" />
+    }
+    const limits = data.review_limit === null ? [] : [data.review_limit]
+    return limits.some((limit) => limit.runs >= limit.limit) ? (
+        <GrantLimits limits={limits} ticketKey={null} />
+    ) : (
+        <NothingToAnswer />
+    )
 }
 
 /** A chore's item: the chore's notes, which its next runs read, and the form for another (DESIGN §19). */
 function ChoreThread({ name }: { name: string }) {
     const { data, error } = useQuery(choreQuery(name))
     if (error instanceof ApiError) {
-        return <Placeholder className="min-h-40">{error.message}</Placeholder>
+        return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return (
-            <div className="flex min-h-60 flex-col gap-2 p-3">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-4 w-1/2" />
-            </div>
-        )
+        return <PanelSkeleton className="min-h-60" />
     }
     return <ChoreNotes detail={data} />
 }
@@ -241,31 +273,33 @@ function Thread({ ticketKey }: { ticketKey: string }) {
     const { data, error } = useQuery(ticketQuery(ticketKey))
     const order = useListOrder('conversation')
     if (error instanceof ApiError) {
-        return <Placeholder className="min-h-40">{error.message}</Placeholder>
+        return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return (
-            <div className="flex min-h-60 flex-col gap-2 p-3">
-                <Skeleton className="h-4 w-2/3" />
-                <Skeleton className="h-4 w-1/2" />
-            </div>
-        )
+        return <PanelSkeleton className="min-h-60" />
     }
     const { ticket, messages } = data
     return (
         <>
+            {/* What holds the ticket up sits under the item, before its conversation, where it is read first. */}
+            <GrantLimits
+                key={`limits-${ticket.key}`}
+                limits={data.limits}
+                ticketKey={ticket.key}
+                className="border-b"
+            />
             <PanelHeader label="Conversation">
                 <span className="flex items-center gap-2">
                     {messages.length > 1 && <OrderToggle list="conversation" />}
                     <span className="readout text-xs text-muted-foreground">
-                        {phaseLabel(ticket)} · {messages.length}
+                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {messages.length}
                     </span>
                 </span>
             </PanelHeader>
             {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
             {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
             {messages.length === 0 ? (
-                <Placeholder className="min-h-20">no messages yet</Placeholder>
+                <Empty>no messages yet: what you and its workers say shows here</Empty>
             ) : (
                 <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
             )}
@@ -292,29 +326,21 @@ function Workers() {
                 <span className="readout text-xs text-muted-foreground">{running?.length}</span>
             </PanelHeader>
             {running === undefined ? (
-                <div className="p-3">
-                    <Skeleton className="h-4 w-1/2" />
-                </div>
+                <PanelSkeleton rows={1} />
             ) : running.length === 0 ? (
-                <Placeholder className="min-h-16">no worker running</Placeholder>
+                <Empty>no runs working now: the overseer starts them at a tick</Empty>
             ) : (
                 <ul className="stagger divide-y">
                     {running.map((run) => (
-                        <li
-                            key={run.id}
-                            className="flex items-center gap-2.5 px-3 py-2"
-                            data-testid={`worker-${run.id}`}
-                        >
+                        <ListRow key={run.id} kind="worker" className="py-2" data-testid={`worker-${run.id}`}>
                             <RunDot state={run.state} />
-                            <TicketLink ticketKey={run.ticket_key} className="w-20 truncate" />
-                            <Chip word={run.kind} />
-                            <span className="ml-auto flex items-center gap-3">
-                                <span className="readout text-xs text-muted-foreground">
-                                    {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
-                                </span>
-                                <Age at={run.started_at} className="w-8 text-right" />
+                            <TicketLink ticketKey={run.ticket_key} className="truncate" />
+                            <span className="flex">
+                                <Chip word={run.kind} />
                             </span>
-                        </li>
+                            <Cost usd={run.cost_usd} className="text-xs text-muted-foreground" />
+                            <Age variant="span" started={run.started_at} ended={null} className="text-right" />
+                        </ListRow>
                     ))}
                 </ul>
             )}

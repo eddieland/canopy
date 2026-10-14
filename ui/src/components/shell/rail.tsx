@@ -5,8 +5,10 @@ import type { ReactNode } from 'react'
 import { metaQuery, runsQuery, spendQuery } from '@/api/queries'
 import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
+import { runRef } from '@/lib/refs'
 import { railRuns } from '@/lib/run-state'
 
 // Rows the rail lists before `+N more`: with the nav and the spend, four keep the sticky part within an 800px window.
@@ -33,16 +35,18 @@ export function RailWorking() {
                             <Link
                                 to="/runs/$id"
                                 params={{ id: String(run.id) }}
-                                title={`run:${run.id} ${run.kind}`}
+                                title={`${runRef(run.id)} ${run.kind}`}
                                 className="flex flex-col gap-0.5 rounded-sm px-2.5 py-1.5 hover:bg-surface-raised"
                                 data-testid={`rail-run-${run.id}`}
                             >
                                 <span className="flex items-center gap-2 font-mono text-xs">
                                     <RunDot state={run.state} />
-                                    <span className="text-foreground">{run.ticket_key}</span>
+                                    <span className="shrink-0 text-foreground">{run.ticket_key}</span>
                                     <span className="ml-auto">
                                         {run.state === 'blocked' ? (
-                                            <span className="readout text-xs text-status-blocked">asks</span>
+                                            <span className="font-sans whitespace-nowrap text-status-blocked">
+                                                waiting on you
+                                            </span>
                                         ) : (
                                             <Age at={run.started_at} />
                                         )}
@@ -131,7 +135,7 @@ function Spent({ window, label, hint }: { window: SpendWindow | undefined; label
                 <Skeleton className="h-5 w-14" />
             ) : (
                 <span className="readout text-sm text-foreground" data-testid={`rail-spend-${label}`}>
-                    {cost === null ? '–' : `$${cost.toFixed(2)}`}
+                    <Cost usd={cost} />
                 </span>
             )}
             <span className="text-[0.6875rem] text-muted-foreground">{label}</span>

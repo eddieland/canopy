@@ -213,13 +213,13 @@ def test_macos_needs_ripgrep_and_no_bubblewrap(machine: Machine) -> None:
     assert machine.calls("bwrap") == []
 
 
-def test_root_and_a_release_without_the_wrapper_on_path_are_told_what_to_do(machine: Machine) -> None:
+def test_root_and_an_install_without_the_wrapper_on_path_are_told_what_to_do(machine: Machine) -> None:
     machine.install("bwrap", "socat", "rg", "npm")
     machine.geteuid.return_value = 0
 
     report = sandbox.run_setup(SubprocessRunner(), "linux")
 
-    assert report.todo == [mock.ANY, sandbox.RELEASE_LAUNCHER]
+    assert report.todo == [mock.ANY, sandbox.WRAPPER_MISSING]
     assert report.todo[0].startswith("canopy is running as root")
 
 

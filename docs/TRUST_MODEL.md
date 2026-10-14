@@ -100,11 +100,11 @@ Controls:
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
   harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
   journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
-  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind, or one PR's review
-  limit, and resets no count (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when
-  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent canopy runs has, so no agent can lift a limit that
-  bounds it. So do `pause` and `resume`, the
-  loop's pause (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
+  `canopy grant` is the operator's alone as well, from the shell or the web UI behind the listener secret (T8): it
+  raises one unit's attempt limit for one kind, or one PR's review limit, and resets no count (DESIGN §22). `start`,
+  `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
+  canopy runs has, so no agent can lift a limit that bounds it. So do `pause` and `resume`, the loop's pause
+  (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
   it could undo the operator's pause. So does `dismiss`, which keeps a chore's finding off the attention list until it
   clears (DESIGN §19), or holds a review's finding back from workers and the overseer (§21): an agent that could
   dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
@@ -418,12 +418,13 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
-  reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
-  does, dismiss a chore's or a review's finding or take that back as `canopy dismiss` does, pause and resume the loop as
-  `canopy pause` and `canopy resume` do, and ask the loop to read its config files
-  again as SIGHUP does, nothing else. It cannot write config: a reload reads only the operator's own files, and a
-  `serve.*` change waits for a restart, so the listener's bind and port never change under it. A forget must carry the
-  ticket's key typed out, checked in code. It cannot run a chore.
+  reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
+  note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
+  back as `canopy dismiss` does, pause and resume the loop as `canopy pause` and `canopy resume` do, and ask the loop
+  to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
+  operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
+  it. A forget must carry the ticket's key typed out, checked in code. A grant allows one more run a request, with
+  `canopy grant`'s guards. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a

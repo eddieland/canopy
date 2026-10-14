@@ -5,14 +5,15 @@ import { ticketsQuery } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { Age } from '@/components/age'
 import { OrderToggle } from '@/components/order-toggle'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { ListRow } from '@/components/rows'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { phaseLabel } from '@/lib/phase'
+import { phaseLabel, phaseWord } from '@/lib/phase'
+import { runRef } from '@/lib/refs'
 
 /** Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. */
 export const Route = createFileRoute('/tickets/')({
@@ -39,12 +40,11 @@ function TicketsPage() {
                     </span>
                 </PanelHeader>
                 {data === undefined ? (
-                    <div className="flex min-h-72 flex-col gap-2 p-3">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+                    <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
-                    <Placeholder>no tickets yet</Placeholder>
+                    <Empty size="panel">
+                        no tickets yet: start one above, or give one the queue label in the tracker
+                    </Empty>
                 ) : (
                     <ul className="divide-y" data-testid="tickets">
                         {ordered('tickets', order, data).map((ticket) => (
@@ -58,23 +58,23 @@ function TicketsPage() {
 }
 
 function Row({ ticket }: { ticket: TicketSummary }) {
-    const phase = `${phaseLabel(ticket)}${ticket.done ? ', done' : ''}`
+    const done = ticket.done ? ', done' : ''
     return (
-        <li className="flex items-center gap-3 px-3 py-2.5" data-testid={`ticket-${ticket.key}`}>
-            <TicketLink ticketKey={ticket.key} className="w-24 shrink-0 truncate" />
-            <TicketTitle title={ticket.title} className="flex-1" />
-            {/* Fixed widths from here on, so every row's chip, phase, and run line up whatever the others say. */}
-            <span className="flex w-36 shrink-0">
+        <ListRow kind="ticket" data-testid={`ticket-${ticket.key}`}>
+            <TicketLink ticketKey={ticket.key} className="truncate" />
+            <TicketTitle title={ticket.title} />
+            <span className="flex">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
-            <span className="w-40 shrink-0 truncate font-mono text-xs text-muted-foreground" title={phase}>
-                {phase}
+            {/* Cut to fit, the whole on hover in the CLI's spelling. */}
+            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket) + done}>
+                {phaseLabel(ticket) + done}
             </span>
-            <span className="flex w-32 shrink-0 flex-col gap-0.5 whitespace-nowrap">
+            <span className="flex flex-col gap-0.5 whitespace-nowrap">
                 {ticket.running_run !== null && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
                         <RunDot state="running" />
-                        run:{ticket.running_run}
+                        {runRef(ticket.running_run)}
                     </span>
                 )}
                 {ticket.awaiting !== null && (
@@ -84,7 +84,7 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                     </span>
                 )}
             </span>
-            <Age at={ticket.active_at} className="w-10 shrink-0 text-right" />
-        </li>
+            <Age at={ticket.active_at} variant="ago" className="text-right" />
+        </ListRow>
     )
 }

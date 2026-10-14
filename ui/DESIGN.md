@@ -96,7 +96,7 @@ Rules:
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
   working runs are those running first, then those waiting on the operator's answer, each oldest first, a ticket's
-  latest run alone: a dot in its state's color, the ticket's key, how long it has run (or `asks` in
+  latest run alone: a dot in its state's color, the ticket's key, how long it has run (or `waiting on you` in
   `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
   runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
@@ -122,7 +122,7 @@ Rules:
   ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
   headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
   of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
-- The header carries the loop's pause (`LoopPause`), the latest tick (`tick 12 · 3m ago`, its status when not `ok`, in
+- The header carries the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
   `mock`), and the theme toggle, in three groups with a hairline rule between each: the pause, the readouts, the theme.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
@@ -138,7 +138,8 @@ Rules:
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`,
   on `surface-raised` at half strength with its label in `foreground` at weight 500, so it stands apart from the rows
   under it; half, so a ghost button's hover in it still shows. The page header's trail starts in its section's color;
-  a panel's label never takes one.
+  a panel's label never takes one. A page's main list is named for its page's noun (Reviews on Reviews, Attention on
+  Attention), and a chore's notes are Notes.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
   query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
   a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
@@ -202,7 +203,7 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
   move.
 - Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
-- A skeleton (`Skeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
+- A skeleton (`PanelSkeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
   screen.
 
 ## Themes
@@ -215,17 +216,60 @@ way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), the key that 
 (`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
 tabs. The ticker keeps the topics left out, not those shown, so a topic added later shows until it is turned off.
 
+## Primitives
+
+Every list and detail page is built from the same few pieces, so a new page lines up with the others without anyone
+measuring. A page that needs something they do not offer extends them here first; it never builds a row, a field
+list, an empty state, or a skeleton by hand.
+
+- **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
+  `src/lib/rows.ts`). Each column is a named grid line and a width; every one is fixed but one free column, which
+  takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The head line's
+  cells fill the columns in order, so a cell that may be empty still renders (an empty `span`). What goes under the
+  head line, a summary, its links, an earlier run, is a **`RowLine`** that spans from a named column to the row's end
+  (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A summary starts
+  under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's status, a
+  decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same kind with a
+  `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
+- **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
+  the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
+  The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
+  a list of reviews), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
+- **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
+  page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
+  kind of their own (`own-review`, `own-run`).
+- **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
+  sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
+  around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
+  it is due`); `now` for what comes and goes rather than `yet` (`no open findings now`). A search that finds nothing
+  says so; a page whose subject is missing says why. An error is never an `Empty`, and never a red sentence in a
+  panel: it is a `Notice`, which names a refusal's guard.
+- **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
+  shimmering bars, each shorter than the last. It takes the minimum height its content will (`min-h-72` for a page's
+  main panel), so nothing moves when the data lands.
+
 ## Patterns
 
-- **Lists are rows in a panel**, divided by hairlines: a fixed-width key column (a ticket key, a state), then the
-  text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
-  the local time on hover.
-- **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a
-  conversation, a chore's notes, a transcript, the runs page and a ticket's or chore's recent runs, a ticket's or
-  tick's decisions, the ticks, and the tickets. The toggle is a ghost button before the count, an up-down arrow and
-  the order it is in, in words (`newest first`); a click shows the other. Each list starts in the order the server
-  sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on a
-  ticket's page is flipped in the inbox too. It shows only when the list has two items or more.
+- **Lists are rows in a panel** (`ListRow`), divided by hairlines: a key column (a ticket key, a state), then the
+  text in the free column, then readouts (cost, age) right-aligned, each as Readouts (below) says.
+- **Readouts** say an age, a moment, or a cost one way on every page (`src/components/age.tsx`, `timestamp.tsx`,
+  `cost.tsx`). An age is `Age`, the CLI's largest whole unit with the local time on hover, in the variant for what it
+  measures: `ago` for a moment (`3m ago`: a message, a decision, a search hit, a ticket's or PR's last activity),
+  `span` for something that runs (`for 3m`, then `ended 3m ago`: a run, a review, a tick, a chore run, a held
+  worktree), and `bare` for how long an item has stood open, where its place says so (`3m`: an attention item, an open
+  finding, the rail's runs, the oldest question). The header's tick is the one exception: `3m ago` once it ended, so
+  its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
+  keeps on hover, beside its age on a run's, tick's, chore run's, or review's page; a raw ISO string is never shown. A
+  cost is `Cost`: `$0.42` as a readout, or a dash when nothing reported one, `none reported` on hover; never formatted
+  in place.
+- **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
+  in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
+  PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
+  toggle is a ghost button before the count, an up-down arrow and the order it is in, in words (`newest first`); a
+  click shows the other. Each list starts in the order the server sends it and keeps the operator's choice for that
+  list alone, wherever it appears: a conversation flipped on a ticket's page is flipped in the inbox too. It shows only
+  when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
+  read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
@@ -233,27 +277,35 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   not: the page scrolls instead.
 - **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's latest
   run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs before it,
-  newest first, each one line in the row's own columns: its state, the first line of what it said in muted text where
-  the title is, its id and chips, cost, and when; the rest is on its run's page. The head line leads with the ticket:
-  the state, the key, and the title, which takes the free width, then the run's id and chips in a fixed-width column, so
-  every row's title and run id line up whatever chips a run has. What goes under it (the summary, the PRs, the toggle)
-  starts under the title. A ticket that asked, got its answer, and asked again is one blocked row, not two. The state
+  newest first, each one line in the row's own columns (a `ListRow` of the same kind): its state, the first line of
+  what it said in muted text where the title is, its id and chips, cost, and when; the rest is on its run's page. The
+  head line leads with the ticket: the state, the key, and the title in the free column, then the run's id and chips.
+  What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one blocked row,
+  not two. The state
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
   there is the same ticket's.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
-- **The tickets list** keeps every column but the title at a fixed width: the key, the title in the free width, then
-  the `public` or `private, started` chip, the phase (cut to fit, the whole on hover), the running run or `waiting on
-  you`, and the age. So each row's chip, phase, and run line up whatever the others say.
+- **The tickets list**: the key, the title in the free column, the `public` or `private, started` chip, the phase (cut
+  to fit, the whole on hover), the running run or `waiting on you`, and the age.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
   the CLI's spelling stays on hover, so it can still be found in `attention.md` or typed into the CLI
-  (`src/lib/words.ts`).
+  (`src/lib/words.ts`). Outside a chip, a phase in a field or a list and a status in a header or a row read the same
+  way (`Word`, `phaseLabel`); no journal word shows with its underscores. Journal text that is not a fixed word (a
+  chore finding's id, `review.query`) and a count (`1 finding`) are muted monospace, never a chip. A chip with a
+  long word in a narrow column cuts it to fit (`min-w-0 shrink`), as the search page's labels do; none is stretched
+  to its column.
+- **A status in a detail page's header** (a run's, a chore run's, a review's, a tick's) is a dot in its state's color
+  and its word in that color. A run's journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's
+  word for its own, kept as it prints it, and both wear `status-done`, as a tick's `skipped` does (`tickState` in
+  `src/lib/ticks.ts`).
 - **A ticket's title** (`TicketTitle`) follows its key, in medium weight, so it reads as the row's name and apart
-  from what a run said under it; one line, cut to fit, the whole on hover. A ticket's page heading sets the key in
+  from what a run said under it; one line, cut to fit, the whole on hover. A ticket with none yet reads `untitled`,
+  muted, so its cell is never blank. A ticket's page heading sets the key in
   muted mono before it. Nowhere too narrow to show more than a few letters of it: the Working panel leaves it out.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
   attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
@@ -263,22 +315,29 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
-  number). Columns keep their width on every row, the age's included. An idle slot shows its state and number
-  alone, dimmed; only a note or an unreadable branch takes a second line, wrapped to the panel. The branch and the
-  processes treehouse found share what the row leaves, each cut to fit with the whole on hover: an agent can start
-  a dozen, and the line still ends at the age.
+  number). An idle slot shows its state and number alone, dimmed; only a note or an unreadable branch takes a second
+  line, from the holder's column. The branch and the processes treehouse found share the free column, each cut to fit
+  with the whole on hover: an agent can start a dozen, and the line still ends at the age. A pool treehouse could not
+  read says why as a `Notice`.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
-  reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. The selection is
+  reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. A finding's reason is its
+  id, the agent's text, so its chip says `finding` and the id follows its chore in muted monospace. An item's detail
+  is the harness's line, with its `code` spans set as code and nothing else read (`InlineCode`). The list is
+  Attention, as the page and its counter are; what waits on the operator's answer is `waiting on you` wherever it
+  shows: the counter, a question's chip in a conversation, the tickets list, and the rail. The selection is
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows its conversation, the reply form,
-  and the ticket's actions; a chore's item (a finding or `chore_failed`) shows the chore's notes and the note form,
-  and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither shows its detail and
-  nothing to answer. Under the list, Working lists the running runs: ticket, kind, cost so far, and for how long.
+  the ticket's actions, with what it is stuck at (below) between the item and its conversation; an item about a PR
+  no ticket owns, its review limit; a chore's item (a finding or `chore_failed`) shows the chore's notes and the
+  note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither shows its
+  detail and nothing to answer. Under the list, Working lists the running runs: ticket, kind, cost so far, and for
+  how long.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
+  The question still open carries a `waiting on you` chip in `status-blocked`.
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
@@ -288,15 +347,15 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
-  new tab. A PR shown in its own place (a run's or decision's PR) stays the compact link with its icon.
+  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below).
 - **A chore's notes** are a conversation of the operator's words alone, under the chore's runs and findings, with a
   note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
-  (on a ticket's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale under
-  them as rich text. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
-  (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
-  colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
+  (on its subject's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale
+  under them as rich text, from the action's column. A `refused:` action's chip is in `status-failed` and an
+  `attention:` one's in `status-blocked` (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a
+  link, its status in the header's tick colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
   with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
   breaks, its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line
@@ -310,8 +369,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
   same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
   is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
-  tool calls, failed and refused ones, and model calls. A By call `Toggle` in the header, as Pretty is, groups the
-  rows by the model call they came from (`byCall` in `src/lib/transcript.ts`): each call a `Collapsible` row, its
+  tool calls, failed and refused ones, and model calls, and at that line's end a search field (`Find lines`) on
+  `surface-raised`, as the nav's is. A search keeps only the rows with a line that holds it, letters in either case and
+  every character taken literally, and says how many lines and rows that is in the field; its matches are marked on the
+  accent's tint as the search page's are (`MarkedText`), inside a block's colored JSON too (`markedTokens`). A tool
+  call whose input or output holds it opens to it, until Open all or Close all is used; a model call is numbers alone
+  and is never kept. Escape or the clear button empties it, and a search nothing matches says so in place of the rows.
+  A By call `Toggle` in the header, as Pretty is, groups the rows by the model call they came from (`byCall` in
+  `src/lib/transcript.ts`), hiding the search, which is the rows' in order: each call a `Collapsible` row, its
   number, what it did (its first text, then its tools by name, `read ×2`), an `unfinished` chip
   when the session ended first, its reason as above, its tokens `in · out`, and its cost. It opens to an input and an
   output section, each a `panel-label` with its tokens: the first call's input is the prompt canopy kept, in a block,
@@ -319,7 +384,7 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   tool, and its summary over its output's block. The output is the call's rows as above, in a bordered list. A call's
   body is built only when opened, and Open all opens the calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
-  (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
+  (`chore:NAME#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
   line naming the file until a ghost Show button in the header opens it. Open, it is one monospace block, its lines
   wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
@@ -342,22 +407,37 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   its latest run's state color, then its window (`windowText`), its open findings, and what its runs cost in the last
   24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
-  run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
+  run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
-  `dismissed` chip and `list again`: still reported, only off the attention list. A row's own action is a ghost `xs`
+  `dismissed` chip and `undo`: still reported, only off the attention list; its detail and link start under
+  its title. Its id leads the row in muted monospace. A row's own action is a ghost `xs`
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
+- **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
+  trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the
+  CLI takes no reference for. A chore run has no reference of its own, so it is its chore's and its number,
+  `chore:deps#2`, as GitHub writes an issue's. Each has a link component that opens its page (`RunLink`, `TickLink`,
+  `ReviewLink`, `ChoreLink`); a page's title calls the same function. A PR is named as GitHub writes a reference,
+  `org/repo#123` (`pullRequestLabel`; any other host's URL as written without `https://`), and only through
+  `PullRequestLink`.
+- **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
+  then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
+  hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when
+  `tracker.ticket_url` is set. So one click from any run, review, decision, worktree, or ticket that names a PR
+  reaches the PR's page, and one more its host.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
-  shows its address without `https://`, and ends in one icon (`LinkOutIcon`): GitHub's mark for github.com, bundled
-  since Lucide has no brand icons, and `ExternalLink` anywhere else. A link never wears two icons. A ticket's links
-  out sit in its page's header, under the title and its line, so they are the first thing found (`TicketLinks`): an
-  outline button per link, in the accent's monospace, its one icon first: GitHub's mark for github.com, else what it
-  opens (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch` for a branch), and what it opens on hover.
+  shows its address without `https://` (`addressOf`) when it shows one, and ends in one icon (`LinkOutIcon`): GitHub's
+  mark for github.com, bundled since Lucide has no brand icons, and `ExternalLink` anywhere else. A link never wears
+  two icons. A ticket's links out sit in its page's header, under the title and its line, so they are the first thing
+  found (`TicketLinks`): an outline button per link, in the accent's monospace, its one icon first: GitHub's mark for
+  github.com, else what it opens (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch` for a branch), its
+  label the address or, for a PR, its name, and what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
-  page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase. A worktree's branch
-  links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a branch link.
+  page shows the tracker's alone. The Work panel keeps each repository's PR, a `PullRequestLink`, beside its phase.
+  A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a
+  branch link.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
   or PR's page, a run's worktrees and log path, a session id on a tick's page and in a transcript's header, and a
   review's commit, whole though the page shows its first 7 characters. The button is a ghost `icon-xs` with the
@@ -368,9 +448,10 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   is no button and the text stays selectable.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
-  composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
-  label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
-  The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+  composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:
+  `Reply`, `Note`, or `Reply to message 5` while a question waits. The send button names its key in a keycap (`Kbd`)
+  after its label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only
+  shows none. The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
 - **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the
   lint refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens
   under its button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper), an option that
@@ -392,6 +473,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly.
+- **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions on its page, under the item's head on
+  its attention item, above the conversation, and under a PR's reviews. While something is stuck it is a block on the
+  `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
+  led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
+  monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed` (`1 of 1 runs`, and `, N
+  granted` past the policy's), and an outline `Allow one more` button at the row's end, as an Actions panel's are, the
+  CLI's command on hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
+  leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
@@ -400,18 +489,20 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
   text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
-  its title muted, `keep` in place of `dismiss`, and the same chip in the findings list. The list of reviews is rows:
-  the review's link, its state's dot and verdict in that state's color, its ticket (or `review.query`), the PR as a
-  link out, the commit's first 7 characters, its impact, cost, and age.
-- **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
-  its page, named `org/repo#123` when it is GitHub's, as GitHub writes a reference (`pullRequestLabel`, the URL on
-  hover), its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
-  working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
-  state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
-  a link out under it as a ticket's page has, then panels for its fields and total cost, the runs that pushed to it
-  (`RunsTable`), its
-  reviews as rows each opening the review, and its decisions. A review's page links to its PR's (`its page in
-  canopy`).
+  its title muted, `undo` in place of `dismiss` (as on a chore's finding, and as `canopy dismiss --undo`), and the
+  same chip in the findings list. The list of reviews is a `ReviewsTable`: the review's link, its run state's dot and
+  its verdict in its worst finding's color (`verdictTone`: a blocking one's `status-failed`, a major one's
+  `status-blocked`, else plain), so a review with a blocking finding never reads as calm as a clean one; its ticket
+  (or `review.query`, muted), the PR (`PullRequestLink`), the commit's first 7 characters, its impact, cost, and age.
+  A review's page colors its verdict the same way.
+- **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR
+  (`PullRequestLink`, the URL on hover), its ticket and title (or `no ticket`, muted) and its unit's phase as a chip in
+  the free column, then the run working it now (a pulsing dot and `run:N`), its latest review (its state's dot,
+  `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted), and its age. Its page: the PR's
+  name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page has, saying where
+  it goes (`on GitHub`) rather than repeating the title, then panels for its fields and total cost, the runs that
+  pushed to it (`RunsTable`), its reviews (`ReviewsTable`), and its decisions. The journal keeps no PR's own title, so
+  the page has none to show.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
   when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.

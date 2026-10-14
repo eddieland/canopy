@@ -5,13 +5,14 @@ import { searchQuery } from '@/api/queries'
 import type { SearchHit, SearchSource } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
+import { MarkedText } from '@/components/marked-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
-import { Skeleton } from '@/components/ui/skeleton'
-import { bySource, marked, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
+import { bySource, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
 import { cn } from '@/lib/utils'
 
 interface SearchParams {
@@ -39,7 +40,9 @@ function SearchPage() {
             </PageHeader>
             {q === undefined ? (
                 <Panel>
-                    <Placeholder>type at least {SEARCH_MIN} characters in the search box, or press /</Placeholder>
+                    <Empty size="panel">
+                        no search yet: type at least {SEARCH_MIN} characters in the search box, or press /
+                    </Empty>
                 </Panel>
             ) : (
                 <Results q={q} />
@@ -53,10 +56,7 @@ function Results({ q }: { q: string }) {
     if (data === undefined) {
         return (
             <Panel>
-                <div className="flex min-h-72 flex-col gap-2 p-3">
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                </div>
+                <PanelSkeleton className="min-h-72" />
             </Panel>
         )
     }
@@ -64,7 +64,7 @@ function Results({ q }: { q: string }) {
     if (groups.length === 0) {
         return (
             <Panel>
-                <Placeholder>nothing in the journal holds every word</Placeholder>
+                <Empty size="panel">nothing in the journal holds every word</Empty>
             </Panel>
         )
     }
@@ -98,28 +98,19 @@ function rowKey(hit: SearchHit) {
 
 function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
     return (
-        <li className="flex items-baseline gap-3 px-3 py-2.5" data-testid="search-hit">
-            <span className="flex w-36 shrink-0 flex-col gap-0.5">
+        <ListRow kind="search-hit" className="items-baseline" data-testid="search-hit">
+            <span className="flex min-w-0 flex-col gap-0.5">
                 <Where hit={hit} />
             </span>
-            {hit.label !== null && <Chip className="w-32 justify-center truncate" word={hit.label} />}
-            {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
-            <p className="min-w-0 flex-1 text-sm break-words">
-                {/* A snippet's pieces never reorder, so their index is their key. */}
-                {marked(hit.snippet, words).map((piece, i) =>
-                    piece.mark ? (
-                        <mark key={i} className="rounded-xs bg-accent/20 text-foreground">
-                            {piece.text}
-                        </mark>
-                    ) : (
-                        <span key={i}>{piece.text}</span>
-                    ),
-                )}
-            </p>
-            <span className="flex w-20 shrink-0 justify-end gap-1 text-xs text-muted-foreground">
-                <Age at={hit.at} /> ago
+            <span className="flex min-w-0">
+                {hit.label !== null && <Chip className="min-w-0 shrink" word={hit.label} />}
             </span>
-        </li>
+            {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
+            <p className="text-sm break-words">
+                <MarkedText text={hit.snippet} words={words} />
+            </p>
+            <Age at={hit.at} variant="ago" className="text-right" />
+        </ListRow>
     )
 }
 
