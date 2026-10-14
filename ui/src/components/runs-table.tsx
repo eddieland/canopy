@@ -1,6 +1,6 @@
-import { ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { LinkedText } from '@/components/linked-text'
@@ -140,7 +140,7 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                             className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
                         >
                             {pr.replace(/^https:\/\//u, '')}
-                            <ExternalLink className="size-3" />
+                            <LinkOutIcon href={pr} />
                         </a>
                     ))}
                     {run.worktrees.map((path) => (

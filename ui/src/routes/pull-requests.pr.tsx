@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink, GitPullRequest } from 'lucide-react'
+import { GitPullRequest } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { pullRequestQuery } from '@/api/queries'
 import type { PullRequestDetail, ReviewSummary } from '@/api/types'
@@ -178,9 +179,8 @@ function PullRequestOut({ url }: { url: string }) {
                 className="max-w-full gap-1.5 font-mono text-xs font-normal text-accent"
             >
                 <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
-                    <GitPullRequest aria-hidden />
+                    <LinkOutIcon href={url} icon={GitPullRequest} className="size-4" />
                     <span className="truncate">{url.replace(/^https:\/\//u, '')}</span>
-                    <ExternalLink aria-hidden className="size-3" />
                 </a>
             </Button>
         </nav>
