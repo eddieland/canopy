@@ -269,6 +269,8 @@ def _user_path(value: Path) -> Path:
 # bool is an int subclass; Strict* types reject `max_workers = true` and quoted numbers.
 NonBlank = Annotated[StrictStr, AfterValidator(_non_blank)]
 Count = Annotated[StrictInt, Field(ge=0)]
+# The longest `review.settle_minutes`: a week (DESIGN §21, Settling).
+MAX_SETTLE_MINUTES = 7 * 24 * 60
 Minutes = Annotated[StrictInt, Field(ge=1)]
 CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
 AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
@@ -565,6 +567,9 @@ class Review(Section):
     query: Annotated[StrictStr, Scope.USER] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
     low_impact: Annotated[StrictStr, Scope.USER] = ""
+    # How long a PR's head commit must have been seen before it is reviewed; a new push starts over. 0 reviews at once.
+    # At most a week: a longer wait is a reason to turn the review off, and the clock's arithmetic stays in range.
+    settle_minutes: Annotated[StrictInt, Field(ge=0, le=MAX_SETTLE_MINUTES), Scope.USER] = 0
 
 
 class Loop(Section):

@@ -387,6 +387,9 @@ Learned:
 - Reviews post nothing on the PR (D114): findings reach a worker through `--review-run` and the operator through
   `canopy review show`. Use added `canopy dismiss review:ID N`, which keeps a finding from any worker or tick, and
   `canopy grant URL review`, which raises one PR's review limit.
+- Reviewing at every commit spent reviews on heads a push soon replaced. Use added `review.settle_minutes`
+  (2026-10-14): a head is reviewed once canopy has seen it that long, and a push starts the wait over (DESIGN §21,
+  Settling).
 
 Next: the next spend measurement counts review runs ending `unknown`, to confirm F18 is gone. M32 shows reviews in the
 web UI.

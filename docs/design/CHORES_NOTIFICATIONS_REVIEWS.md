@@ -553,6 +553,7 @@ Every review key is user-only (§12), except the per-PR limit, a shared policy t
 agent_prs = true
 query = 'repo:acme/api is:pr is:open author:@me -is:draft'
 low_impact = """Only docs, comments, or tests change; or one dependency moves by a patch version."""
+settle_minutes = 30        # a head commit is reviewed once seen this long; a new push starts over; 0, at once
 
 [runtime]
 # the default
@@ -575,6 +576,7 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
 - `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended.
+- `settle_minutes` defaults to 0, which reviews a head commit as soon as the overseer asks. See Settling, below.
 
 ### Off unless configured
 
@@ -598,12 +600,15 @@ commit the overseer read. `--ticket` links an agent PR to its ticket. Under the 
 - `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and impact.
 - `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, plus any the operator granted it with
   `canopy grant URL review` (§22), however they ended. Also records the `review_limit` attention item.
+- `settling`: with `review.settle_minutes` above 0, the commit was first seen less than that long ago, or is first
+  seen now (Settling, below). The refusal says when it settles.
 - `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
 - `review_capacity`: `capacity.max_reviews` review runs are running.
 - `capacity`: `max_workers` runs and review runs, together, are running.
 
 A dry run checks the same guards, counting reviews recorded in this tick as running, records `dispatch:review` with
-rationale `dry run: not dispatched; would review <SHA>`, and starts nothing (D036). Worker dispatches also count a
+rationale `dry run: not dispatched; would review <SHA>`, and starts nothing (D036). It records no head as seen: a head
+a live tick never saw is `settling` in a dry run, as it would be in a live one. Worker dispatches also count a
 running review toward `capacity` (§8).
 
 Once the guards pass, the command inserts a `review_runs` row, leases a slot with holder `canopy:review:<run_id>` (a
@@ -651,6 +656,37 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 - `low` without `review.low_impact` is recorded as `normal`, with a harness note.
 - Anything else is `unknown`. `review_runs` status is `running`, `done`, `failed`, `unknown`, `timeout`, or `crashed`.
 
+### Settling
+
+`review.settle_minutes` delays a review until the PR's head commit has been its head for that long, as canopy saw it
+(asked for by the operator, 2026-10-14). It is a debounce: a push before then is a new head, whose wait starts over, so
+a PR a worker pushes to three times in twenty minutes is reviewed once, at its last commit, not three times. The wait
+also lets a red check, or a push answering a reviewer, replace the head before it is reviewed. For an agent PR it
+delays the human ask too: `needs_reviewer` is raised from `green_unreviewed`, which comes after the review (§7), so
+only a reviewer who reads the PR unprompted gets in first.
+
+- **The clock.** The harness cannot read the PR (principle 5), so it cannot know when a commit was pushed. It knows
+  when the overseer asked `canopy review run` for the commit: `review_heads` keeps one row per PR, the head canopy last
+  saw and since when. The overseer asks only once a head is ready to review, its checks passed, so the wait runs
+  from the first tick that saw it green. A different commit replaces the row, a force push back to an earlier one
+  included, so its wait starts over. The commit's own dates are not used: an author sets them, and a rebase or a late
+  push keeps them.
+- **The guard.** `canopy review run` records the head if it is not the one the row holds, then refuses `settling`
+  until `seen_at` plus `settle_minutes`. So the first request for every new head is refused, once, and that refusal
+  starts its wait. Changing `settle_minutes` moves every head's settle time, since it is read when checked, not
+  stored. It is at most 10080, a week.
+- **The state block.** `reviews.limits.settle_minutes`, and `reviews.settling`: the heads still settling, newest
+  first, each with its PR, commit, `seen_at`, and `settles_at`. The overseer records `canopy review wait` for a PR
+  whose head is listed, rather than be refused again, and asks for a review of any other unreviewed head that is
+  ready for one. A head that settled, or whose review failed, is not listed: the next request runs the review.
+- **Pacing.** The earliest `settles_at` still ahead is a gate (§6, Idle pacing), so an idle loop wakes when a head
+  settles, not up to `loop.idle_max_minutes` later. `settling` is a refusal that lifts by itself, so a tick that
+  records it may be idle.
+- **Off.** At 0, nothing is recorded, `settling` is empty, and no review is refused `settling`.
+
+The wait is at least `settle_minutes` from the push, plus up to one tick's wait before the overseer first sees the
+head green, plus up to one more before it sees the head settled; the settle gate keeps the second short.
+
 ### The verdict, and automating on it
 
 canopy never approves (TRUST_MODEL §6): a review changes no GitHub review state and cannot satisfy a required
@@ -661,10 +697,11 @@ reviewer. A repository that wants that needs a verdict it can trust, which waits
 ### The overseer's part
 
 The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
-and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, the
-review runs the operator granted it past the policy's limit if any (`granted`, §22), and latest run: id, commit, status,
-verdict, impact, the titles of the findings the operator has not dismissed and how many were (`dismissed_findings`,
-Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7).
+the heads still settling (Settling, above), and for each PR reviewed in the last 14 days (at most 50,
+newest first) its URL, linked ticket, review runs so far, the review runs the operator granted it past the policy's
+limit if any (`granted`, §22), and latest run: id, commit, status, verdict, impact, the titles of the findings the
+operator has not dismissed and how many were (`dismissed_findings`, Dismissing a finding below), start and end, and
+`reviewed_at`, its end in the `review` cursor's form (§7).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -672,7 +709,7 @@ they are `untrusted_review` and wait for the operator's go-ahead like any untrus
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `review_pending` | checks pass, no approval, no `done` review of the head commit, under the per-PR limit | `canopy review run --ticket KEY` |
+| `review_pending` | checks pass, no approval, no `done` review of the head commit, under the per-PR limit | `canopy review run --ticket KEY`, or `review wait` while it settles |
 | `review_findings` | the head commit's `done` review has findings the operator has not dismissed, newer than the `review` cursor | classify as review comments (§7): dispatch `resume --review-run <id>`, or `needs_author` |
 
 A clean review, or a PR at its review limit, moves on to `green_unreviewed`, whose `needs_reviewer` item names the
@@ -690,7 +727,8 @@ to reply to. The `review` cursor's time for a review run is its `reviewed_at`.
 For PRs from `review.query`, the overseer runs the query each tick and keeps only PRs of this repository (the one whose
 PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
 `repo:` qualifier saves the reads. For each open match whose head commit has no `done` review, it runs a review or
-records `canopy review wait --pr URL --rationale "<text>"` (say, checks still running, or a draft). Nothing else is
+records `canopy review wait --pr URL --rationale "<text>"`: while checks run or fail, since a push is likely to follow,
+for a draft, or while a head that passed its checks settles. Nothing else is
 decided about these PRs.
 
 Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`,
@@ -787,6 +825,8 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
 - `review_dismissals`: review run, finding number, when dismissed, and channel; at most one row per run and number.
+- `review_heads`: PR URL, the head commit canopy last saw, and since when; one row per PR (0022). Written only by a
+  live tick's `review run`, and only with `settle_minutes` above 0.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=` with the run's `reviewed_at`.
 

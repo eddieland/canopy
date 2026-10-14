@@ -1052,6 +1052,43 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     return found
 
 
+def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) -> str:
+    """Record that `sha` was the PR's head at `at`, unless it already was the head canopy last saw (DESIGN §21).
+
+    A different commit replaces the PR's row, so its wait starts at `at`: a push, or a force push back to an earlier
+    commit, starts over.
+
+    Returns:
+        Since when `sha` has been the head: `at`, or the time it was first seen if it still was the head.
+    """
+    conn.execute(
+        "INSERT INTO review_heads (pr_url, sha, seen_at) VALUES (?, ?, ?) "
+        "ON CONFLICT (pr_url) DO UPDATE SET sha = excluded.sha, seen_at = excluded.seen_at "
+        "WHERE review_heads.sha != excluded.sha",
+        (pr_url, sha, at),
+    )
+    return review_head_seen_at(conn, pr_url, sha) or at
+
+
+def review_head_seen_at(conn: sqlite3.Connection, pr_url: str, sha: str) -> str | None:
+    """Return since when `sha` has been the PR's head canopy last saw, or None if that head is another commit."""
+    row = conn.execute("SELECT seen_at FROM review_heads WHERE pr_url = ? AND sha = ?", (pr_url, sha)).fetchone()
+    return None if row is None else str(row[0])
+
+
+def review_heads_seen_after(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+    """Return the PR heads seen after `since` with no `done` review of them, newest first.
+
+    Each row has `pr_url`, `sha`, and `seen_at`.
+    """
+    return conn.execute(
+        "SELECT h.pr_url, h.sha, h.seen_at FROM review_heads h WHERE h.seen_at > ? AND NOT EXISTS "
+        "(SELECT 1 FROM review_runs r WHERE r.pr_url = h.pr_url AND r.sha = h.sha AND r.status = 'done') "
+        "ORDER BY h.seen_at DESC, h.pr_url",
+        (since,),
+    ).fetchall()
+
+
 def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
     """Return the `limit` PRs with the most recent activity, newest first; with `url`, only that one (DESIGN §22).
 

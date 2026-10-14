@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import db
 from canopy.core import review_result as result
-from canopy.reviews import grants
+from canopy.reviews import grants, settle
 
 if TYPE_CHECKING:
     import sqlite3
@@ -25,6 +25,7 @@ class Limits(TypedDict):
     max_reviews: int
     max_reviews_per_day: int
     max_reviews_per_pr: int
+    settle_minutes: int
     started_last_24h: int
 
 
@@ -53,6 +54,15 @@ class LatestReview(TypedDict):
     reviewed_at: str | None
 
 
+class SettlingHead(TypedDict):
+    """A PR's head commit the overseer asked to review, still settling, and when a review of it may start."""
+
+    pr: str
+    sha: str
+    seen_at: str
+    settles_at: str
+
+
 class ReviewedPR(TypedDict):
     """A PR reviewed recently. Only one the operator granted more reviews has `granted`."""
 
@@ -71,6 +81,7 @@ class ReviewsSection(TypedDict):
     low_impact: bool
     limits: Limits
     running: list[RunningReview]
+    settling: list[SettlingHead]
     prs: list[ReviewedPR]
 
 
@@ -92,6 +103,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
             "max_reviews": config.capacity.max_reviews,
             "max_reviews_per_day": config.capacity.max_reviews_per_day,
             "max_reviews_per_pr": config.policy.max_reviews_per_pr,
+            "settle_minutes": config.review.settle_minutes,
             "started_last_24h": started_today,
         },
         "running": [
@@ -103,6 +115,16 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
                 "started_at": r["started_at"],
             }
             for r in db.running_review_runs(conn)
+        ],
+        # Empty with settling off: no head is recorded then (DESIGN §21, Settling).
+        "settling": [
+            {
+                "pr": h.pr,
+                "sha": h.sha,
+                "seen_at": db.format_time(h.seen_at),
+                "settles_at": db.format_time(h.settles_at),
+            }
+            for h in settle.settling(conn, config, now)
         ],
         "prs": prs,
     }

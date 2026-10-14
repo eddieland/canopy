@@ -398,6 +398,28 @@ def test_a_gate_still_ahead_ends_the_wait_and_one_already_open_does_not(
     assert pacing.wait(ctx, pacing.Pace(900, 900), 2, now) == 900
 
 
+@pytest.mark.parametrize(
+    ("heads", "expected"),
+    [
+        # Settling for 30 minutes: a head seen 20 minutes ago settles in 10.
+        pytest.param([20], 600, id="settling"),
+        pytest.param([40], 3600, id="settled"),
+        # A push 5 minutes ago superseded the head seen 25 minutes ago: only the newer one gates.
+        pytest.param([25, 5], 1500, id="superseded"),
+    ],
+)
+def test_a_head_still_settling_ends_the_wait(canopy_env: CanopyEnv, heads: list[int], expected: float) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[review]\nagent_prs = true\nsettle_minutes = 30\n")
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    now = datetime.now(UTC)
+    for i, minutes_ago in enumerate(heads):
+        db.see_review_head(ctx.conn, PR, f"{i}" * 40, stamp(now - timedelta(minutes=minutes_ago)))
+    assert pacing.wait(ctx, pacing.Pace(base_seconds=900, cap_seconds=7200), 2, now) == pytest.approx(
+        expected, abs=0.01
+    )
+
+
 # The loop.
 
 
