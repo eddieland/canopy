@@ -122,8 +122,9 @@ def test_index_html_carries_the_build_meta_reports_and_a_rebuild_changes_it(ui: 
     assert f'content="{rebuilt}"' in c.get("/").text
 
 
-def test_meta_reports_no_build_when_the_ui_is_not_built(backend: Backend) -> None:
+def test_meta_reports_no_build_when_the_ui_is_not_built(tmp_path: Path, backend: Backend) -> None:
     assert client(None, backend).get("/api/meta").json()["build"] is None
+    assert client(tmp_path, backend).get("/api/meta").json()["build"] is None
 
 
 def test_the_csp_hashes_each_inline_script_and_no_external_one() -> None:

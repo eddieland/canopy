@@ -91,10 +91,13 @@ class SinglePageApp:
         Returns:
             A digest of index.html as it is on disk, which names every hashed asset, so it changes with any of them.
         """
-        index = self.ui_dir / "index.html" if self.ui_dir is not None else None
-        if index is None or not index.is_file():
+        if self.ui_dir is None:
             return None
-        return _build_id(index.read_bytes())
+        # Read without checking first: an upgrade may replace the file between a check and the read.
+        try:
+            return _build_id((self.ui_dir / "index.html").read_bytes())
+        except OSError:
+            return None
 
     def _index(self, ui_dir: Path) -> Response:
         raw = (ui_dir / "index.html").read_bytes()
