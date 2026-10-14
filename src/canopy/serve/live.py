@@ -13,7 +13,7 @@ The connection is opened, read, and closed on a thread of the stream's own, neve
 journal with months of history one read of the lists takes tens of milliseconds, every open stream reads them on each
 commit, and a tick commits each decision it records, so reading them on the event loop held up every other request
 while the overseer worked. One thread per stream keeps its connection on one thread, as sqlite3 requires. The route
-closes it from a dependency's teardown (`stream`), never from the events' generator, which a client leaving can leave
+closes it from a dependency's teardown (`Stream`), never from the events' generator, which a client leaving can leave
 unfinished.
 """
 
@@ -52,33 +52,22 @@ if TYPE_CHECKING:
 POLL_SECONDS = 0.25
 
 
-@contextmanager
-def stream(backend: Backend) -> Iterator[Stream]:
-    """One stream's thread and journal reader, closed when the block ends, however its events ended.
-
-    The route holds this in a dependency with `yield`, not in `Stream.events`: FastAPI cancels the task reading a
-    stream's events when its client leaves, and when that lands while the task waits to send an event, the generators
-    are left suspended at a `yield`, and no `finally` in them runs. The garbage collector then closed them on the event
-    loop's thread, where sqlite3 refuses to close the connection, so it stayed open until the server exited. A
-    dependency's teardown runs on the request's exit stack whatever state the generators are in.
-
-    Yields:
-        The stream, whose `events` a route sends.
-    """
-    opened = Stream(backend)
-    try:
-        yield opened
-    finally:
-        opened.close()
-
-
 class Stream:
-    """One stream's thread, and its reader, which is used only on that thread."""
+    """One stream's thread, and its reader, which is used only on that thread.
+
+    The route closes it from a dependency with `yield` (`api/events.py`), never from `events`: FastAPI cancels the task
+    reading a stream's events when its client leaves, and when that lands while the task waits to send an event, the
+    generators are left suspended at a `yield`, and no `finally` in them runs. The garbage collector then closed them on
+    the event loop's thread, where sqlite3 refuses to close the connection, so it stayed open until the server exited.
+    """
 
     def __init__(self, backend: Backend) -> None:
-        """Start the stream's thread; the first read opens the connection on it."""
+        """Make the stream's thread, which its first read starts, and which opens the connection."""
         self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="canopy-stream")
         self._reader = _Reader(backend)
+        # Both set and read only on the event loop, so `close` never races a read for them.
+        self._read = False
+        self._closed = False
 
     async def events(self, *, poll_seconds: float = POLL_SECONDS) -> AsyncIterator[StreamEvent]:
         """Yield every list, the spend, the latest tick, and the pause at once, then whatever changes, until the end.
@@ -88,16 +77,21 @@ class Stream:
         """
         loop = asyncio.get_running_loop()
         while True:
+            self._read = True
             for event in await loop.run_in_executor(self._thread, self._reader.read):
                 yield event
             await asyncio.sleep(poll_seconds)
 
     def close(self) -> None:
-        """Close the connection on the stream's own thread, and let the thread end."""
-        # Queued behind a read still running when the client left, so the connection closes on its own thread, and
-        # without waiting for that read here, on the event loop.
-        closing = self._thread.submit(self._reader.close)
-        closing.add_done_callback(_log_failure)
+        """Close the connection on the stream's own thread, and let the thread end. Closing it again does nothing."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._read:
+            # Queued behind a read still running when the client left, so the connection closes on its own thread,
+            # and without waiting for that read here, on the event loop.
+            closing = self._thread.submit(self._reader.close)
+            closing.add_done_callback(_log_failure)
         self._thread.shutdown(wait=False)
 
 

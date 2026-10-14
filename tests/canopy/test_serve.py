@@ -2,7 +2,6 @@
 the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
 
 import asyncio
-import gc
 import json
 import logging
 import re
@@ -11,7 +10,7 @@ import stat
 import threading
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from importlib.metadata import version
 from pathlib import Path
 from typing import override
@@ -434,7 +433,7 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
 
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
-        with live.stream(backend) as opened:
+        with closing(live.Stream(backend)) as opened:
             stream = opened.events(poll_seconds=0.01)
             first = [await anext(stream) for _ in range(7)]
             # A reload commits nothing to the journal: the stream sees it in the config it serves.
@@ -492,12 +491,22 @@ def test_a_stream_dropped_during_its_first_events_closes_its_connection(served: 
         if stream:
             closed.append(ctx)
 
-    with mock.patch.object(Backend, "open", autospec=True, side_effect=counted):
+    read = live._Reader.read  # noqa: SLF001  (the stream's reads, on its own thread)
+
+    def a_long_burst(self: live._Reader) -> list[StreamEvent]:
+        # Each burst ends with more events than the server sends before it sees the client gone, so the task reading
+        # them is always waiting to send one then, never inside the generator, where a cancel would have finished it.
+        events = read(self)
+        return events + [StreamEvent(LoopUpdated(paused=None))] * 2000 if events else events
+
+    with (
+        mock.patch.object(Backend, "open", autospec=True, side_effect=counted),
+        mock.patch.object(live._Reader, "read", autospec=True, side_effect=a_long_burst),  # noqa: SLF001
+    ):
         for _ in range(10):
             read_events(served, 1)
         deadline = time.monotonic() + 10
         while len(closed) < len(opened) and time.monotonic() < deadline:
-            gc.collect()
             time.sleep(0.05)
     assert len(opened) == 10
     assert len(closed) == 10
@@ -509,10 +518,15 @@ def test_a_stream_that_cannot_close_its_connection_logs_why(backend: Backend) ->
     records = handler.records
     log = logging.getLogger("canopy")
     log.addHandler(handler)
-    error = sqlite3.ProgrammingError("closed on the wrong thread")
+    close = live._Reader.close  # noqa: SLF001  (closes the stream's connection, on its own thread)
+
+    def closes_then_fails(self: live._Reader) -> None:
+        close(self)
+        raise sqlite3.ProgrammingError("closed on the wrong thread")
+
     try:
-        with mock.patch.object(live._Reader, "close", autospec=True, side_effect=error), live.stream(backend):  # noqa: SLF001
-            pass
+        with mock.patch.object(live._Reader, "close", autospec=True, side_effect=closes_then_fails):  # noqa: SLF001
+            asyncio.run(read_once_and_close(backend))
         deadline = time.monotonic() + 5
         while not records and time.monotonic() < deadline:
             time.sleep(0.01)
@@ -521,6 +535,22 @@ def test_a_stream_that_cannot_close_its_connection_logs_why(backend: Backend) ->
     [record] = records
     assert record.levelno == logging.ERROR
     assert record.error == "ProgrammingError: closed on the wrong thread"  # pyrefly: ignore[missing-attribute]
+
+
+def test_a_stream_closed_before_its_first_read_has_nothing_to_close(backend: Backend) -> None:
+    """A request torn down before its stream read anything queues no close, and a second close does nothing."""
+    with mock.patch.object(live._Reader, "close", autospec=True) as close:  # noqa: SLF001
+        stream = live.Stream(backend)
+        stream.close()
+        stream.close()
+    close.assert_not_called()
+
+
+async def read_once_and_close(backend: Backend) -> None:
+    with closing(live.Stream(backend)) as stream:
+        events = stream.events()
+        await anext(events)
+        await events.aclose()  # pyrefly: ignore[missing-attribute]
 
 
 class _Records(logging.Handler):

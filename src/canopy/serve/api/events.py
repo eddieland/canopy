@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from contextlib import closing
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -17,16 +18,20 @@ router = APIRouter(tags=[TAG])
 
 
 async def provide_stream(backend: BackendDep) -> AsyncIterator[live.Stream]:
-    """The request's stream, closed by the request's teardown, not by its events' generator (`live.stream`).
+    """The request's stream, closed by the request's teardown, however its events' generator ended (`live.Stream`).
 
     Yields:
         The stream.
     """
-    with live.stream(backend) as stream:
+    with closing(live.Stream(backend)) as stream:
         yield stream
 
 
-StreamDep = Annotated[live.Stream, Depends(provide_stream)]
+# `request` is FastAPI's default for a dependency with `yield`, named here because the stream relies on it: the
+# request's exit stack closes the stream after it cancels the SSE producer reading its events, which was entered on that
+# stack later. With `function`, it would close before the response is sent, under a producer still reading. The
+# provider is async, so the stream closes on the event loop, where its events run.
+StreamDep = Annotated[live.Stream, Depends(provide_stream, scope="request")]
 
 
 # FastAPI's SSE support sends `Cache-Control: no-cache` and `X-Accel-Buffering: no`, so a proxy or an SSH forward

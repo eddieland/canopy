@@ -457,15 +457,14 @@ stream reads the lists again on each commit, and on a journal with months of his
 held up every other request while the overseer worked. The route closes the connection, on that thread, from a
 dependency's teardown, which FastAPI runs however the stream ended: a client leaving while the first events were sent
 left the stream's generator suspended, never finished, and the connection open until the server exited. When another
-connection has committed since, or the loop has
-read its config again (§6), it reads the attention list, the runs, the tickets, the chores, the spend, the latest tick,
-and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
-`tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
-`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
-read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
-summary in a list still in the order from before it. A reload commits nothing, yet the chores and the attention list
-are read through the config, so the stream holds the loop's config as the server's requests do, taking the new one at
-its next read: a chore added and reloaded shows on an open page without a refresh.
+connection has committed since, or the loop has read its config again (§6), it reads the attention list, the runs, the
+tickets, the chores, the spend, the latest tick, and the pause again, and sends each that changed, whole:
+`attention.updated`, `runs.updated`, `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the
+windows move with the clock), `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary
+changed. It reads them all in one read transaction, so they are one snapshot: a commit landing between two of its
+queries cannot send a ticket's new summary in a list still in the order from before it. A reload commits nothing, yet
+the chores and the attention list are read through the config, so the stream holds the loop's config as the server's
+requests do, taking the new one at its next read: a chore added and reloaded shows on an open page without a refresh.
 A new stream starts with every list, the spend, the latest
 tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
