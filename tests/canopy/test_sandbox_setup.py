@@ -221,7 +221,12 @@ def test_a_bubblewrap_older_than_srt_fully_supports_is_to_be_upgraded(
     with mock.patch.dict(os.environ, {"FAKE_STDOUT_BWRAP": says}):
         report = sandbox.run_setup(SubprocessRunner(), "linux")
 
-    assert report.todo == ([sandbox.OLD_BWRAP.format(version=too_old)] if too_old else [])
+    if too_old is None:
+        assert report.todo == []
+        return
+    [todo] = report.todo
+    assert todo.startswith(f"bubblewrap {too_old} is older than 0.5.0, the oldest srt fully supports.")
+    assert "Install\nbubblewrap 0.5.0 or later" in todo
 
 
 def test_a_machine_srt_has_no_seccomp_filter_for_is_said(machine: Machine) -> None:
