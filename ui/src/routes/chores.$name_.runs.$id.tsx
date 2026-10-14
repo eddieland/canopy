@@ -7,15 +7,16 @@ import type { ChoreRunDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
+import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
-import { RunDot } from '@/components/status'
+import { RunDot, Word } from '@/components/status'
+import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
-import { localTime } from '@/lib/time'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
@@ -113,7 +114,7 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
             <PanelHeader label="Run">
                 <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                     <RunDot state={run.state} />
-                    {run.status}
+                    <Word word={run.status} />
                 </span>
             </PanelHeader>
             <Fields>
@@ -121,18 +122,18 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
                     <ChoreLink name={detail.chore} />
                 </Field>
                 <Field label="started" mono>
-                    <span className="flex items-center gap-2">
-                        <span title={localTime(run.started_at)}>{run.started_at}</span>
-                        <Age at={run.started_at} />
+                    <span className="flex items-baseline gap-2">
+                        <Timestamp at={run.started_at} />
+                        <Age at={run.started_at} variant="ago" />
                     </span>
                 </Field>
                 <Field label="ended" mono>
-                    {run.ended_at ?? 'still running'}
+                    {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
                 </Field>
                 {detail.note && <Field label="harness">{detail.note}</Field>}
                 <Field label="summary">{detail.summary ? <RichText text={detail.summary} /> : 'none'}</Field>
                 <Field label="spent" mono>
-                    {run.cost_usd === null ? 'none reported' : `$${run.cost_usd.toFixed(2)}`}
+                    <Cost usd={run.cost_usd} />
                     {run.tokens === null ? '' : `, ${tokenCount(run.tokens)} tokens`}
                 </Field>
                 <Field label="log" mono>

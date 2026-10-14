@@ -37,11 +37,6 @@ export function awaitsRun(note: Pick<Message, 'at'>, chore: Pick<ChoreSummary, '
     return last === undefined || Date.parse(note.at) > Date.parse(last)
 }
 
-/** A cost in dollars, as every cost in the UI is shown, or a dash when nothing reported one. */
-export function costText(cost: number | null): string {
-    return cost === null ? '–' : `$${cost.toFixed(2)}`
-}
-
 /** How many of a chore's runs started in a window, and how many of them reported no cost: `4, 1 unpriced`. */
 export function runsText(window: Pick<ChoreSpendWindow, 'runs' | 'priced'>): string {
     const unpriced = window.runs - window.priced

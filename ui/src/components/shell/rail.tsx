@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { metaQuery, runsQuery, spendQuery } from '@/api/queries'
 import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
 import { runRef } from '@/lib/refs'
@@ -40,10 +41,12 @@ export function RailWorking() {
                             >
                                 <span className="flex items-center gap-2 font-mono text-xs">
                                     <RunDot state={run.state} />
-                                    <span className="text-foreground">{run.ticket_key}</span>
+                                    <span className="shrink-0 text-foreground">{run.ticket_key}</span>
                                     <span className="ml-auto">
                                         {run.state === 'blocked' ? (
-                                            <span className="readout text-xs text-status-blocked">asks</span>
+                                            <span className="font-sans whitespace-nowrap text-status-blocked">
+                                                waiting on you
+                                            </span>
                                         ) : (
                                             <Age at={run.started_at} />
                                         )}
@@ -132,7 +135,7 @@ function Spent({ window, label, hint }: { window: SpendWindow | undefined; label
                 <Skeleton className="h-5 w-14" />
             ) : (
                 <span className="readout text-sm text-foreground" data-testid={`rail-spend-${label}`}>
-                    {cost === null ? '–' : `$${cost.toFixed(2)}`}
+                    <Cost usd={cost} />
                 </span>
             )}
             <span className="text-[0.6875rem] text-muted-foreground">{label}</span>

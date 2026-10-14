@@ -2109,6 +2109,8 @@ export type components = {
             ticket_key: string | null;
             /** @description Its verdict, once it reported one. */
             verdict: components["schemas"]["ReviewVerdict"] | null;
+            /** @description The severity of the worst finding it reported, which colors its verdict; None when it reported none. */
+            worst: components["schemas"]["FindingSeverity"] | null;
         };
         /**
          * @description A review run's verdict (DESIGN §21).

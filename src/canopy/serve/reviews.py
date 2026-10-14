@@ -15,6 +15,7 @@ from canopy.serve.schema import (
     DiffFile,
     DiffHunk,
     DiffLine,
+    FindingSeverity,
     ReviewDetail,
     ReviewDiff,
     ReviewFinding,
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
 # How many review runs the reviews list carries, newest first.
 RECENT_REVIEWS = 100
 _STATES: dict[str, RunState] = {"running": "running", "done": "done"}
+# Most severe first: a review's worst finding is the first of these it reported.
+_SEVERITIES: tuple[FindingSeverity, ...] = ("blocking", "major", "minor")
 
 
 def reviews(ctx: Context) -> list[ReviewSummary]:
@@ -89,10 +92,16 @@ def summary(row: sqlite3.Row) -> ReviewSummary:
         verdict=stored.verdict if stored is not None else None,
         impact=stored.impact if stored is not None else None,
         findings=len(stored.findings) if stored is not None else 0,
+        worst=_worst(stored.findings) if stored is not None else None,
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
     )
+
+
+def _worst(findings: list[result.Finding]) -> FindingSeverity | None:
+    found = {f.severity for f in findings}
+    return next((s for s in _SEVERITIES if s in found), None)
 
 
 def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) -> ReviewFinding:  # noqa: FBT001
