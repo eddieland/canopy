@@ -81,3 +81,32 @@ def test_a_ticket_page_lists_the_latest_decisions_about_it_across_ticks(backend:
     unit = c.get("/api/tickets/ABC-099").json()["decisions"]
     assert [(d["tick_id"], d["subject"]) for d in unit] == [(2, "ABC-099 (web)"), (1, "ABC-099 (web)")]
     assert c.get("/api/tickets/ABC-103").json()["decisions"] == []
+
+
+def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/spend/breakdown", params={"days": 2}).json()
+    assert (found["since"], found["days"]) == ("2026-10-07T00:00:00Z", 2)
+    assert [d["day"] for d in found["per_day"]] == ["2026-10-07", "2026-10-08"]
+    assert found["per_day"][0]["costs"]["total"] is None  # nothing the day before
+    today = found["per_day"][1]["costs"]
+    # Both ticks the loop ran, the second idle; the rest is the mock's runs, chore runs, and reviews.
+    assert (today["overseer"], today["idle"], today["dry_run"]) == (pytest.approx(0.59), 0.31, None)
+    assert today == found["totals"]
+    with backend.open() as ctx:
+        assert today["total"] == pytest.approx(db.spent_ever(ctx.conn))  # everything the mock journal holds
+    groups = {g["group"]: (g["ticks"], g["cost_usd"]) for g in found["ticks"]}
+    assert (groups["idle"], groups["busy"], groups["hand_run"]) == ((1, 0.31), (1, 0.28), (0, None))
+    assert found["idle_share"] == pytest.approx(0.31 / 0.59)
+    assert sorted((w["by"], w["ticks"]) for w in found["woken"]) == [("start", 1), ("timer", 1)]
+    # What idle spend bought, each opening its tick's page, with what the loop said of it, as every tick carries.
+    assert [(t["id"], t["decisions"], t["idle"], t["woken_by"]) for t in found["idle_ticks"]] == [(2, 5, True, "timer")]
+    assert [(t["id"], t["idle"], t["woken_by"]) for t in c.get("/api/ticks").json()] == [
+        (2, True, "timer"),
+        (1, False, "start"),
+    ]
+    assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "chores", "reviews"]
+
+    assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default
+    assert c.get("/api/spend/breakdown", params={"days": 0}).status_code == 422
+    assert c.get("/api/spend/breakdown", params={"days": 367}).status_code == 422

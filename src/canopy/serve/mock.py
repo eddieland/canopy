@@ -360,9 +360,10 @@ async def changes(backend: Backend, seconds: float | None) -> None:
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     repo = str(root)
     conn.executemany(
-        # The second read every seeded message: a reply the operator adds waits for the next tick.
-        "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id, session_id, cost_usd) "
-        "VALUES (?, ?, ?, 'ok', ?, ?, ?, ?)",
+        # The second read every seeded message: a reply the operator adds waits for the next tick. The loop ran both:
+        # the first as it started, the second, idle, when its wait ran out (DESIGN §6, Idle pacing).
+        "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id, session_id, cost_usd, idle, "
+        "woken_by) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?, ?, ?)",
         [
             (
                 1,
@@ -372,8 +373,10 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 3,
                 "ses_tick1",
                 0.28,
+                0,
+                "start",
             ),
-            (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31),
+            (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31, 1, "timer"),
         ],
     )
     tickets = (

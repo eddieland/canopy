@@ -1,0 +1,65 @@
+import { describe, expect, it } from 'vitest'
+
+import type { SpendCosts, SpendDay } from '@/api/types'
+
+import { axisNames, chartTop, dayHint, dayLabel, seriesCost, SERIES, shareText, spendWindow } from './spend'
+
+const NONE: SpendCosts = {
+    overseer: null,
+    idle: null,
+    dry_run: null,
+    workers: null,
+    chores: null,
+    reviews: null,
+    total: null,
+}
+
+function day(name: string, costs: Partial<SpendCosts>): SpendDay {
+    return { day: name, costs: { ...NONE, ...costs } }
+}
+
+describe('spend', () => {
+    it("takes idle ticks' part out of the overseer's, so the series sum to the day's total", () => {
+        const costs: SpendCosts = { ...NONE, overseer: 1.5, idle: 0.5, workers: 2, dry_run: 0.25, total: 3.75 }
+        expect(seriesCost(costs, 'idle')).toBe(0.5)
+        expect(seriesCost(costs, 'overseer')).toBe(1)
+        expect(SERIES.reduce((sum, s) => sum + seriesCost(costs, s.key), 0)).toBe(3.75)
+        expect(seriesCost(NONE, 'overseer')).toBe(0)
+    })
+
+    it("tops the chart at the dearest day's total, or 0 for a window with nothing reported", () => {
+        expect(chartTop([day('2026-10-07', { total: 1 }), day('2026-10-08', { total: 4.5 })])).toBe(4.5)
+        expect(chartTop([day('2026-10-08', {})])).toBe(0)
+        expect(chartTop([])).toBe(0)
+    })
+
+    it('says a day on hover with each series it has', () => {
+        expect(dayHint(day('2026-10-07', { overseer: 1, idle: 0.25, reviews: 0.5, total: 1.5 }))).toBe(
+            'Oct 7: $1.50, idle ticks $0.25, other ticks $0.75, reviews $0.50',
+        )
+        expect(dayHint(day('2026-10-02', {}))).toBe('Oct 2: nothing reported')
+    })
+
+    it('names a UTC day as the axis does, whatever the zone', () => {
+        expect(dayLabel('2026-10-01')).toBe('Oct 1')
+        expect(dayLabel('2026-12-31')).toBe('Dec 31')
+    })
+
+    it("names every day of a week, and every fifth of a month back from today's", () => {
+        expect(Array.from({ length: 7 }, (_, i) => axisNames(i, 7))).toEqual(Array.from({ length: 7 }, () => true))
+        const month = Array.from({ length: 30 }, (_, i) => i).filter((i) => axisNames(i, 30))
+        expect(month).toEqual([4, 9, 14, 19, 24, 29])
+    })
+
+    it('takes only the windows the page offers', () => {
+        expect(spendWindow('30')).toBe(30)
+        expect(spendWindow(7)).toBe(7)
+        expect(spendWindow('8')).toBeUndefined()
+        expect(spendWindow(undefined)).toBeUndefined()
+    })
+
+    it('says a share as a whole percent', () => {
+        expect(shareText(0.4123)).toBe('41%')
+        expect(shareText(null)).toBe('–')
+    })
+})

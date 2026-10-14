@@ -110,6 +110,7 @@ canopy (harness, Python)
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
     setup.py       init, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
+    spend.py       spend: each day's cost by kind, and the ticks by what they bought (§11)
     runs.py        dispatch, _run
     conversation.py start, stop, reply, forget, grant, show: the operator's verbs on a subject (§22); pause and
                    resume, on the loop (§6)
@@ -197,6 +198,7 @@ canopy (harness, Python)
     review_result.py a review's result contract, validated with pydantic (§21), read by reviews and the web UI
     review_diff.py a review run's diff beside its log: read bounded, parsed, and each finding anchored on it (§21)
     search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
+    spend.py       what agent runs cost by day, kind, and what the ticks bought, for canopy spend and the web UI (§11)
     config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line

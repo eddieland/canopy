@@ -511,29 +511,16 @@ worker from the page; then the live check, a real review's page against its PR's
 
 ## M33. Spend by what it bought
 
-MEASUREMENTS 2026-10-12 (Ticks by what they did). Needs M13's recorded cost and M21. Asked for by the operator
-(2026-10-13): better cost analysis in canopy and the web UI, starting with how much goes to ticks that do nothing.
-Every agent run records its cost, but whether a tick was idle was only in the log, so that split took a one-off
-analysis session.
+Each tick the loop runs records `ticks.idle` and `ticks.woken_by`; `canopy spend [--days N] [--json]` and the web UI's
+spend page read them with every run's cost: per UTC day by kind, idle overseer spend as its own series, the ticks by
+what they bought and by what woke them, and the runs that reported no cost (DESIGN §11, §22; `core/spend.py`).
 
-- Each tick `canopy loop` runs records whether it was idle by `pacing.idle` and what ended the wait before it
-  (`ticks.idle`, `ticks.woken_by`), with idle pacing off too. DESIGN §6 (Idle pacing) and §11.
-- `canopy spend [--days N]` reads the journal: per day, what the overseer, workers and splits, chores, and reviews
-  cost, live and dry runs apart; ticks by idle, not idle, and not `ok`, with the count and spend of each and idle
-  ticks' share of overseer spend; ticks by what woke them; and how many runs reported no cost.
-- The web UI: the same breakdown from a route over a window, and a spend page with daily spend by kind, idle overseer
-  spend as its own series, and links to the ticks behind it.
-- Not here: churn, which M28 measures first, and a budget or pacing by cost, which stay M13's.
-- Tests with the fakes: the loop records `idle` and `woken_by` for each cause and a hand-run tick records neither;
-  `canopy spend` over a journal written by hand; the route over the mock journal; Playwright for the page.
-- Open: whether the spend page replaces the attention page's two counters or links from them; whether `canopy spend`
-  takes `--json` so a re-measurement (MEASUREMENTS) can start from it.
-
-Accept: the tests above pass. Live: after a day of `canopy loop` against the real queue, the operator reads idle
-ticks' share of overseer spend from `canopy spend` and from the web UI, and both agree with a query on the journal.
-
-Status: in progress. Each tick the loop runs records `idle` and `woken_by` (2026-10-13). What keeps it open:
-`canopy spend` and the web UI's spend page.
+Status: done 2026-10-14.
+Learned: closed on the operator's request before the day-long live check, which is SCENARIOS S35. One module behind the
+command and the route makes them agree by construction, so the check is against the journal. The open questions
+settled small: the rail's two counters stay and open the page, and `--json` is in, for a re-measurement to start from.
+Next: a re-measurement (MEASUREMENTS) can take idle share and `woken_by` from `canopy spend --json` rather than an
+analysis session; M13's budget can read the same breakdown.
 
 ## M34. A cacheable overseer prompt
 

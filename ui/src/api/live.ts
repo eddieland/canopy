@@ -23,6 +23,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             if (before !== undefined && holding(before) !== holding(event.runs)) {
                 void client.invalidateQueries({ queryKey: keys.worktrees, refetchType: 'active' })
             }
+            // A run that started or ended changes the spend page's counts of runs, even one that reported no cost.
+            if (before !== undefined && statuses(before) !== statuses(event.runs)) {
+                void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
+            }
             // A run a page holds is written whole; its transcript is read again only when its status moves, since a
             // run's events reach its log when it ends and its cost moves more often than that.
             for (const run of event.runs) {
@@ -44,6 +48,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         case 'chores.updated': {
             client.setQueryData(keys.chores, event.chores)
             void client.invalidateQueries({ queryKey: ['chore'], refetchType: 'active' })
+            // A chore run that ended changes the spend page's counts of runs, even one that reported no cost.
+            void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             // A chore run's page and transcript change only as it ends, when its status moves.
             for (const chore of event.chores) {
                 for (const run of [chore.running, chore.latest]) {
@@ -68,6 +74,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         }
         case 'spend.updated': {
             client.setQueryData(keys.spend, event.spend)
+            // The spend page's breakdown, which the stream does not carry: refetched only while a page shows it.
+            void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             break
         }
         case 'tick.updated': {
@@ -82,8 +90,9 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
-            // A PR's phase, decisions, and reviews move with the ticks too.
+            // A PR's phase, decisions, and reviews move with the ticks too, and the spend page's idle ticks.
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
+            void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             break
         }
         case 'loop.updated': {
@@ -91,6 +100,11 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         }
     }
+}
+
+/** Each run's state, as one comparable string: a run starting or ending changes it, a cost going up does not. */
+function statuses(runs: Run[]): string {
+    return runs.map((run) => `${run.id}:${run.state}`).join(',')
 }
 
 /** Which running runs hold which worktrees, as one comparable string: a cost going up leaves it alone. */

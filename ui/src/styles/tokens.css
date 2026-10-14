@@ -54,6 +54,15 @@
     --syntax-number: oklch(0.53 0.11 70);
     --syntax-literal: oklch(0.52 0.17 315);
 
+    /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, as fills, never text and never state.
+     * Idle overseer spend is the overseer's own hue, lighter, so it reads as a part of it. */
+    --spend-overseer: oklch(0.45 0.15 265);
+    --spend-idle: oklch(0.62 0.12 265);
+    --spend-workers: oklch(0.55 0.1 185);
+    --spend-chores: oklch(0.6 0.14 55);
+    --spend-reviews: oklch(0.55 0.18 330);
+    --spend-dry-run: oklch(0.6 0.02 275);
+
     /* The header ticker's RuneScape chat colors: flair only, never state. Darker here, to read on white. */
     --flair-yellow: oklch(0.62 0.13 85);
     --flair-red: oklch(0.56 0.2 27);
@@ -115,6 +124,13 @@
     --syntax-number: oklch(0.82 0.12 75);
     --syntax-literal: oklch(0.76 0.14 315);
 
+    --spend-overseer: oklch(0.62 0.15 265);
+    --spend-idle: oklch(0.82 0.08 265);
+    --spend-workers: oklch(0.74 0.11 185);
+    --spend-chores: oklch(0.78 0.13 55);
+    --spend-reviews: oklch(0.72 0.16 330);
+    --spend-dry-run: oklch(0.6 0.02 270);
+
     --flair-yellow: oklch(0.9 0.17 100);
     --flair-red: oklch(0.68 0.21 27);
     --flair-green: oklch(0.82 0.2 142);
@@ -168,6 +184,13 @@
     --color-syntax-string: var(--syntax-string);
     --color-syntax-number: var(--syntax-number);
     --color-syntax-literal: var(--syntax-literal);
+
+    --color-spend-overseer: var(--spend-overseer);
+    --color-spend-idle: var(--spend-idle);
+    --color-spend-workers: var(--spend-workers);
+    --color-spend-chores: var(--spend-chores);
+    --color-spend-reviews: var(--spend-reviews);
+    --color-spend-dry-run: var(--spend-dry-run);
 
     --color-flair-yellow: var(--flair-yellow);
     --color-flair-red: var(--flair-red);
