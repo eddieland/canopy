@@ -70,6 +70,11 @@ test('a search keeps the rows with a line that holds it, marked, and opens the c
     const pr = rows.filter({ hasText: 'github_create_pull_request' })
     await expect(pr.locator('pre mark')).toHaveText('debounce')
     await expect(pr.locator('pre mark .text-syntax-string')).toHaveText('debounce')
+    // Close all closes them too, and a new search opens what it finds again.
+    await transcript.getByRole('button', { name: 'Close all' }).click()
+    await expect(transcript.locator('details[open]')).toHaveCount(0)
+    await find.fill('debounces input')
+    await expect(transcript.locator('details[open]')).toHaveCount(1)
 
     // Characters, never a pattern: a dot matches only a dot.
     await find.fill('push.origin')

@@ -1,5 +1,5 @@
 import { ChevronRight, Search, X } from 'lucide-react'
-import { useState } from 'react'
+import { useDeferredValue, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { Transcript, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
@@ -36,10 +36,16 @@ import { cn } from '@/lib/utils'
  * reached the log yet: they do when its run or tick ends.
  */
 export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
-    // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own.
-    const [opened, setOpened] = useState({ open: false, round: 0 })
     const [typed, setTyped] = useState('')
-    const query = findQueryOf(typed)
+    // A long transcript is searched behind the field, so typing never waits on it.
+    const query = findQueryOf(useDeferredValue(typed))
+    // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own. It wins over the
+    // search it was made under; a new search opens the calls it finds again.
+    const [opened, setOpened] = useState<{ open: boolean; round: number; query: string | null }>({
+        open: false,
+        round: 0,
+        query: null,
+    })
     const words = query === null ? [] : [query]
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
@@ -73,7 +79,9 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                                     key={verb}
                                     variant="ghost"
                                     size="xs"
-                                    onClick={() => setOpened((o) => ({ open: verb === 'open', round: o.round + 1 }))}
+                                    onClick={() =>
+                                        setOpened((o) => ({ open: verb === 'open', round: o.round + 1, query }))
+                                    }
                                 >
                                     {verb === 'open' ? 'Open all' : 'Close all'}
                                 </Button>
@@ -129,14 +137,16 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                     ) : (
                         <ol className="divide-y" data-testid="transcript-entries">
                             {shown.map(({ entry, i, hits }) => {
-                                // A search opens a call whose input or output holds it; one that moves that remounts.
+                                // A search opens a call whose input or output holds it, until Open all or Close all is
+                                // used under it; a row whose place changes remounts to it.
                                 const inBody = hits !== null && hits.body > 0
+                                const open = opened.open || (inBody && opened.query !== query)
                                 return (
                                     <Entry
-                                        key={`${i}-${opened.round}-${inBody}`}
+                                        key={`${i}-${opened.round}-${open}`}
                                         entry={entry}
                                         start={startOf(entries)}
-                                        open={opened.open || inBody}
+                                        open={open}
                                         words={words}
                                     />
                                 )
