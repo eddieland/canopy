@@ -280,6 +280,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Only `canopy.serve` imports it. Rejected: `http.server` (routing, forms, escaping left to us, in the browser-facing
   package).
+- `anyio`, which both run on, is declared too, and confined the same way: `serve` names its exceptions to tell a client
+  leaving an event stream from a failure.
 
 ## D075. Operator commands are top-level verbs taking a reference to any subject
 

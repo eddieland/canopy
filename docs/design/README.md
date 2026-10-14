@@ -160,7 +160,7 @@ canopy (harness, Python)
     findings.py    a review as a resumed worker and canopy review show read it, from the journal
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
 
-  serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, or uvicorn
+  serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
     api/           the JSON and SSE routes, a router per resource: session, tickets and the operator's verbs on
                    them, runs, ticks, chores, the loop, worktrees, events, search, reviews, pull requests; deps.py the backend
@@ -173,6 +173,7 @@ canopy (harness, Python)
     reviews.py     review runs as the API's models: each one's findings anchored on its diff (§21)
     pull_requests.py the PRs the journal knows, each with the runs that pushed to it, its reviews, and its decisions
     live.py        the event stream: data_version read 4 times a second, changed lists sent whole
+    sse.py         an event stream whose client left ends without FastAPI's teardown error in the log
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
     guard.py       Host and Origin checks, and security headers on every response

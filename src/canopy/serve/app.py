@@ -16,6 +16,7 @@ from canopy.serve import api, mock
 from canopy.serve.api import deps
 from canopy.serve.guard import Guard
 from canopy.serve.spa import SinglePageApp
+from canopy.serve.sse import QuietLeaving
 
 if TYPE_CHECKING:
     from canopy.serve.auth import Sessions
@@ -63,5 +64,6 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     # Last, so every API route, including an unknown one, is matched before it.
     spa = SinglePageApp(options.ui_dir, base_path=base)
     app.add_route(f"{base}/{{path:path}}", spa.respond, methods=["GET", "HEAD"], include_in_schema=False)
+    app.add_middleware(QuietLeaving)
     app.add_middleware(Guard, api_prefix=f"{base}/api", hosts=options.hosts)
     return app

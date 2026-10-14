@@ -30,6 +30,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "anyio>=4.15.1",
     "canopy-notify-slack",
     "click>=8.5.0",
     "fastapi>=0.142.4",

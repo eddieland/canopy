@@ -372,10 +372,10 @@ Served by `canopy loop` from a thread (D073):
   finding's detail) is shown as a link whose text is the URL as written, opening in a new tab with no referrer (D113).
   No other scheme is linked, and nothing else in the text becomes markup but the layout above; a URL inside `code`
   stays text. A row that is itself a link (an attention item in the list) links nothing inside it.
-- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`, or
-  `uvicorn`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in `cli/`. The ban on
-  `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket itself. It listens
-  and calls out to nothing, so T2's "no outbound call" stands.
+- It lives in `src/canopy/serve/`, a features-layer package, the only one that imports `fastapi`, `starlette`,
+  `uvicorn`, or `anyio`; `tests/canopy/test_layers.py` fails on an import of them anywhere else, as for click in
+  `cli/`. The ban on `socket`, `http.client`, and `urllib.request` (§20) stays absolute: canopy's code opens no socket
+  itself. It listens and calls out to nothing, so T2's "no outbound call" stands.
 
 Signing in:
 
@@ -476,6 +476,12 @@ carries how many decisions it has recorded, so `tick.updated` is sent as a runni
 reads again the ticks list, a tick's page, and a ticket's page, each only if a page shows it. The journal has no
 notifications, so reading one pragma every quarter second is the cheapest way to learn of a change, and quick enough
 that a change shows as it happens; nothing in the browser polls.
+A client leaving a stream is not an error, so it logs none. FastAPI's SSE support closes a stream's receiving end before
+it cancels the task feeding it, so a client that leaves while that task sends makes it raise `BrokenResourceError`,
+which uvicorn logged as `Exception in ASGI application` with its traceback, in canopy.log at ERROR under the loop. An
+ASGI wrapper around the whole app (`serve/sse.py`) absorbs that error only when it is all there is: the response is an
+event stream, uvicorn has told the app its client left, and every exception in the group is a `BrokenResourceError`.
+Anything else is raised unchanged, so a real failure in a stream logs as before, with nothing added to its traceback.
 A browser reconnects a dropped stream itself, but not always: it gives up on a refusal, such as a proxy's 502 while the
 loop restarts, and iOS Safari often stops retrying after the page was in the background. So the UI opens a new stream
 when one has been down 5 seconds, waiting twice as long after each try up to a minute; at once when the device is back
