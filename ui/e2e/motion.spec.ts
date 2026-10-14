@@ -86,6 +86,28 @@ test('the header ticker crawls one headline at a time, at the speed and gap set 
     await expect(page.getByTestId('ticker-gap')).toBeDisabled()
 })
 
+test('the ticker holds its headline in place when the readouts beside it change width', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const frame = page.getByTestId('ticker')
+    const headline = page.getByTestId('ticker-headline')
+    // Held mid-pass, then the latest tick's readout widens, as it does when a tick starts: the window narrows.
+    await headline.evaluate(async (element) => {
+        const [crawl] = element.getAnimations()
+        crawl?.pause()
+        await crawl?.ready
+    })
+    const where = (): Promise<number | undefined> =>
+        headline.evaluate((element) => element.firstElementChild?.getBoundingClientRect().left)
+    const before = await where()
+    const wide = (await frame.boundingBox())?.width ?? 0
+    await page.getByTestId('last-tick').evaluate((element) => {
+        element.append(' running · for 12s')
+    })
+    await expect.poll(async () => (await frame.boundingBox())?.width).toBeLessThan(wide)
+    expect(await where()).toBeCloseTo(before ?? Number.NaN, 0)
+})
+
 test('the ticker leaves out the topics turned off in Settings', async ({ page }) => {
     await page.goto('settings')
     await settled(page)

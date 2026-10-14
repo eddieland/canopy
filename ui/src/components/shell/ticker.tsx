@@ -69,8 +69,11 @@ export function Ticker() {
 /**
  * One headline's pass. The line is padded by the window's width before the text and the gap's distance after it, and
  * slides its own width: in from the right, out to the left, then the gap's worth of empty window. The duration is
- * that width over the rate, so every headline moves at the same pace. The crawl loops, and the first loop's end
- * moves on to the next headline, so a screenshot that freezes animations sees one still frame.
+ * that width over the rate, so every headline moves at the same pace. The width is the window's as the pass starts,
+ * held for the whole pass: the window gives way to the readouts beside it, which change width as a tick starts and
+ * ends, and a padding that followed it would jump the headline back or ahead and change its pace. The crawl loops,
+ * and the first loop's end moves on to the next headline, so a screenshot that freezes animations sees one still
+ * frame.
  */
 function Crawl({ headline, rate, gap, onDone }: { headline: Headline; rate: number; gap: number; onDone: () => void }) {
     const line = useRef<HTMLSpanElement>(null)
@@ -80,6 +83,7 @@ function Crawl({ headline, rate, gap, onDone }: { headline: Headline; rate: numb
             return
         }
         const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+        element.style.setProperty('--ticker-start', `${element.parentElement?.clientWidth ?? 0}px`)
         element.style.animationDuration = `${element.offsetWidth / (rate * rem)}s`
     }, [rate])
     const style = { '--ticker-gap': gap, '--ticker-rate': `${rate}rem` } as CSSProperties
