@@ -120,7 +120,7 @@ test.describe('turned on', () => {
     test('Sprig sits out a window whose rail has no room for it, and covers nothing in one that has', async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 800 })
+        await page.setViewportSize({ width: 1280, height: 700 })
         await page.goto('attention')
         await settled(page)
         const buddy = page.getByTestId('buddy')
@@ -128,18 +128,55 @@ test.describe('turned on', () => {
         await expect(page.getByTestId('buddy-sprig')).toBeHidden()
 
         await page.setViewportSize({ width: 1280, height: 1200 })
-        await expect(buddy).toBeVisible()
+        await expect(buddy).toHaveAttribute('data-room', 'roomy')
+        await expect(page.getByTestId('buddy-tip')).toBeVisible()
         const sprig = await buddy.boundingBox()
         const spend = await page.getByTestId('rail-spend').boundingBox()
         if (sprig === null || spend === null) {
             throw new Error('Sprig or the rail spend is not shown')
         }
         expect(spend.y + spend.height).toBeLessThanOrEqual(sprig.y)
+    })
 
-        // A closed bubble keeps its room, so closing it never brings in a Sprig that had none.
+    test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.goto('attention')
+        await settled(page)
+        await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
+        const figure = page.getByTestId('buddy-sprig')
+        await expect(figure).toBeVisible()
+        // The tip would cover the runs working now, so it waits to be asked for.
+        const tip = page.getByTestId('buddy-tip')
+        await expect(tip).toBeHidden()
+        const sprig = await figure.boundingBox()
+        const spend = await page.getByTestId('rail-spend').boundingBox()
+        if (sprig === null || spend === null) {
+            throw new Error('Sprig or the rail spend is not shown')
+        }
+        expect(spend.y + spend.height - sprig.y).toBeLessThanOrEqual(40)
+
+        await figure.click()
+        await expect(tip).toBeVisible()
         await page.getByTestId('buddy-close').click()
-        await page.setViewportSize({ width: 1280, height: 800 })
-        await expect(buddy).toBeHidden()
+        await expect(tip).toBeHidden()
+    })
+
+    test('a tip waiting unseen in a tight rail still shows its full time once the rail has room', async ({ page }) => {
+        await page.clock.install()
+        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.goto('attention')
+        await settled(page)
+        const tip = page.getByTestId('buddy-tip')
+        await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
+        await page.clock.runFor(30_000)
+
+        await page.setViewportSize({ width: 1280, height: 1200 })
+        await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'roomy')
+        await expect(tip).toBeVisible()
+        await page.clock.runFor(21_000)
+        await expect(tip).toBeHidden()
     })
 
     test("Sprig's hats are bought with what canopy has spent, and worn one at a time", async ({ page }) => {
