@@ -416,6 +416,51 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
     assert [a["ticket"] for a in sent["attention"]["added"]] == ([] if urgent == "blocked" else ["PROJ-8"])
 
 
+def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "desk.txt"
+    add_sink(canopy_env, sink_script, "desk", out, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n')
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    run_worker(journal(canopy_env), "PROJ-1")
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
+        tick(ok=False)
+        tick(ok=False)
+        assert len(messages(out)) == 1  # the runs are held
+        tick(ok=False)
+    [_, sent] = json_messages(out)
+    assert [e["kind"] for e in sent["events"]] == ["run.started", "run.ended", "loop.failing"]
+
+
+def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    down, desk = tmp_path / "alerts.txt", tmp_path / "desk.txt"
+    add_sink(canopy_env, sink_script, "alerts", down)  # before desk in name order, so desk hears it the same tick
+    add_sink(
+        canopy_env, sink_script, "desk", desk, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n'
+    )
+    Path(f"{down}.exit").write_text("1")
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    run_worker(journal(canopy_env), "PROJ-1")
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+        assert len(messages(desk)) == 1  # the runs are held
+        tick()  # alerts' third failure in a row
+    [_, sent] = json_messages(desk)
+    assert [e["kind"] for e in sent["events"]] == ["run.started", "run.ended", "loop.sink_failing"]
+
+
 def test_a_json_digest_names_each_ticket_by_its_title(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
