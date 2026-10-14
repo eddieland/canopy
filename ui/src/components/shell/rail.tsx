@@ -92,10 +92,7 @@ export function RailSpend() {
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (
-        <div
-            className="mx-2 flex border-t px-2.5 py-3 text-[0.6875rem] text-muted-foreground"
-            data-testid="rail-footer"
-        >
+        <div className="mx-2 flex border-t px-2.5 py-3 text-2xs text-muted-foreground" data-testid="rail-footer">
             <span className="readout min-h-4 truncate" title={meta?.version} data-testid="rail-version">
                 {meta === undefined ? '' : `canopy ${meta.version}`}
             </span>
@@ -118,8 +115,8 @@ function RailSection({
     return (
         <section aria-label={label} className="mx-2 mt-3 border-t pt-3" data-testid={testId}>
             <div className="flex items-center justify-between px-2.5 pb-1.5">
-                <span className="panel-label text-[0.625rem]">{label}</span>
-                {count !== undefined && <span className="readout text-[0.625rem] text-muted-foreground">{count}</span>}
+                <span className="panel-label">{label}</span>
+                {count !== undefined && <span className="readout text-2xs text-muted-foreground">{count}</span>}
             </div>
             {children}
         </section>
@@ -138,7 +135,7 @@ function Spent({ window, label, hint }: { window: SpendWindow | undefined; label
                     <Cost usd={cost} />
                 </span>
             )}
-            <span className="text-[0.6875rem] text-muted-foreground">{label}</span>
+            <span className="text-2xs text-muted-foreground">{label}</span>
         </div>
     )
 }
