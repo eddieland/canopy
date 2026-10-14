@@ -383,3 +383,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: most workspaces are GitHub, and a link that needs a template per repository is a link nobody configures.
 - Rejected: templates only (more config for the common case); formats for other hosts (a template covers them).
 - Revisit: if a second host is common enough to want its own default.
+
+## D116. A worker may push more than once in a run; it still never polls CI or retries a rejected push
+
+- A worker pushes again for anything it fixes after a push, in a new commit, never an amend. Settled by the operator.
+- Why: under "push once", a worker that found its own lint error after pushing left it for a `fix-ci` run, or
+  for nobody when the check is not in CI. Extra pushes cost a CI run each; the run timeout still bounds them.
+- Unchanged: no CI polling, no retry loop on a rejected push, and the harness's own fallback push happens once.

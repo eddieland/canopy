@@ -45,7 +45,8 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 ## Obligations
 
 Stay in {{SLOT}}, push only to `{{BRANCH}}`, with
-`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
+`git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, a new commit and push for anything you fix after a
+push (never an amend), no CI polling or push retry loops, never
 merge or approve. {{BRANCH_UPDATE}} Post no
 comments: describe the fix in your summary. {{COMMIT_ATTRIBUTION}}
 Never transition the ticket, including indirectly: refer to
