@@ -403,7 +403,7 @@ function Tool({
                 >
                     <When at={entry.at} start={start} />
                     <RunDot state={failed ? 'failed' : 'done'} />
-                    <span className="w-32 shrink-0 truncate font-mono text-xs sm:w-56" title={entry.tool}>
+                    <span className="w-28 shrink-0 truncate font-mono text-xs sm:w-56" title={entry.tool}>
                         <MarkedText text={entry.tool} words={words} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col">
@@ -421,7 +421,10 @@ function Tool({
                         )}
                     </span>
                     {verdict === 'refused' && (
-                        <Chip className="border-status-failed/40 text-status-failed" word={`refused:${guard ?? ''}`} />
+                        <Chip
+                            className="min-w-0 shrink border-status-failed/40 text-status-failed"
+                            word={`refused:${guard ?? ''}`}
+                        />
                     )}
                     {entry.cut && <Chip>cut</Chip>}
                     <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">

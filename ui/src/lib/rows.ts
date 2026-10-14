@@ -1,10 +1,45 @@
-/** The free column: whatever width the fixed ones leave, and never less than nothing, so its text is cut to fit. */
-const FREE = 'minmax(0,1fr)'
+import type { CSSProperties } from 'react'
+
+/** The narrowest the free column gets, in rem: it holds a row's name, which never vanishes. */
+const FLOOR_REM = 8
+
+/** The free column: whatever width the fixed ones leave, never under the floor, and its text cut to fit. */
+const FREE = `minmax(${FLOOR_REM}rem,1fr)`
+
+/**
+ * The container sizes a column can show from (Tailwind's, in rem), narrowest first. A list's width picks one, so a row
+ * fits the panel it is in, wherever the panel sits: half a monitor, a phone, beside a ticket's thread.
+ */
+export const ROW_TIERS = [
+    ['sm', 24],
+    ['md', 28],
+    ['lg', 32],
+    ['xl', 36],
+    ['2xl', 42],
+    ['3xl', 48],
+    ['4xl', 56],
+] as const
+
+/** A container size a column shows from. */
+export type RowTier = (typeof ROW_TIERS)[number][0]
+
+/**
+ * How wide a list is under the first tier, in rem: a 390px phone's, the narrowest a list is made to fit. A column that
+ * fits there shows at any width.
+ */
+const BASE_REM = 22
+
+// A row's own room beside its columns: the gap between two (`gap-x-3`) and its padding (`px-3`).
+const GAP_REM = 0.75
+const PADDING_REM = 1.5
 
 /**
  * Every list's columns, by kind, each a named grid line and a width. Every column but one is fixed, so each row of a
- * list lines up with the others whatever its cells hold; the free one takes the rest. What goes under a row's head
- * line starts at a named column (`RowLine`), never at a hand-computed indent.
+ * list lines up with the others whatever its cells hold; the free one takes the rest, and never less than the floor.
+ * What goes under a row's head line starts at a named column (`RowLine`), never at a hand-computed indent.
+ *
+ * A column with a third entry gives way on a narrow list, in that order: 1 goes first. It shows only where the list
+ * has room for it, every column that gives way after it, and the ones that never do (`rowTiers`).
  */
 export const ROW_COLUMNS = {
     /** A run with its ticket, on the runs page: the state, the ticket and its title, the run's id and chips. */
@@ -12,74 +47,74 @@ export const ROW_COLUMNS = {
         ['state', '5rem'],
         ['key', '6rem'],
         ['title', FREE],
-        ['facts', '14rem'],
-        ['cost', '4rem'],
-        ['age', '6rem'],
+        ['facts', '14rem', 3],
+        ['cost', '4rem', 1],
+        ['age', '6rem', 2],
     ],
     /** A run under its subject (a ticket's, a PR's, a chore's): the state, then the run's id and chips. */
     'own-run': [
         ['state', '5rem'],
         ['facts', FREE],
-        ['cost', '4rem'],
-        ['age', '6rem'],
+        ['cost', '4rem', 1],
+        ['age', '6rem', 2],
     ],
     /** A tick: its id, its status, how many decisions, its cost, and when. */
     tick: [
         ['id', '5rem'],
         ['state', FREE],
-        ['decisions', '6rem'],
-        ['cost', '4rem'],
-        ['age', '6rem'],
+        ['decisions', '6rem', 2],
+        ['cost', '4rem', 1],
+        ['age', '6rem', 3],
     ],
     /** A chore: its name, its line in `canopy status`'s words, and its open findings. */
     chore: [
         ['name', '10rem'],
         ['state', FREE],
-        ['findings', '8rem'],
+        ['findings', '8rem', 1],
     ],
     /** A review run on the reviews page: its id, verdict, ticket, PR and commit, impact, cost, and when. */
     review: [
         ['id', '5rem'],
-        ['verdict', '7rem'],
-        ['key', '6rem'],
+        ['verdict', '7rem', 5],
+        ['key', '6rem', 3],
         ['pr', FREE],
-        ['impact', '7rem'],
-        ['cost', '3.5rem'],
-        ['age', '6rem'],
+        ['impact', '7rem', 2],
+        ['cost', '3.5rem', 1],
+        ['age', '6rem', 4],
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
         ['id', '5rem'],
-        ['verdict', '7rem'],
+        ['verdict', '7rem', 4],
         ['commit', FREE],
-        ['impact', '7rem'],
-        ['cost', '3.5rem'],
-        ['age', '6rem'],
+        ['impact', '7rem', 2],
+        ['cost', '3.5rem', 1],
+        ['age', '6rem', 3],
     ],
     /** A PR: the PR, its ticket and title and phase, the run working it, its latest review, and its age. */
     'pull-request': [
-        ['pr', '16rem'],
+        ['pr', '11rem'],
         ['key', FREE],
-        ['run', '5rem'],
-        ['review', '11rem'],
-        ['age', '5rem'],
+        ['run', '5rem', 1],
+        ['review', '11rem', 3],
+        ['age', '5rem', 2],
     ],
     /** A ticket: its key, its title, public or private, its phase, its run or `waiting on you`, and its age. */
     ticket: [
         ['key', '6rem'],
         ['title', FREE],
-        ['access', '9rem'],
-        ['phase', '10rem'],
-        ['run', '8rem'],
-        ['age', '4rem'],
+        ['access', '9rem', 2],
+        ['phase', '10rem', 1],
+        ['run', '8rem', 4],
+        ['age', '4rem', 3],
     ],
     /** A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. */
     worktree: [
         ['state', '5rem'],
         ['slot', '3.5rem'],
-        ['holder', '13rem'],
+        ['holder', '13rem', 2],
         ['branch', FREE],
-        ['age', '5rem'],
+        ['age', '5rem', 1],
     ],
     /** A decision in a tick: its subject, then its action and PR. */
     decision: [
@@ -108,9 +143,9 @@ export const ROW_COLUMNS = {
     /** A search hit: where it opens, its label, the snippet, and its age. */
     'search-hit': [
         ['subject', '9rem'],
-        ['label', '8rem'],
+        ['label', '8rem', 2],
         ['text', FREE],
-        ['age', '5rem'],
+        ['age', '5rem', 1],
     ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
@@ -118,7 +153,7 @@ export const ROW_COLUMNS = {
         ['mark', '0.5rem'],
         ['text', FREE],
     ],
-} as const satisfies Record<string, readonly (readonly [string, string])[]>
+} as const satisfies Record<string, readonly (readonly [string, string] | readonly [string, string, number])[]>
 
 /** A kind of list, by the columns its rows share. */
 export type RowKind = keyof typeof ROW_COLUMNS
@@ -126,9 +161,101 @@ export type RowKind = keyof typeof ROW_COLUMNS
 /** A column a line under a row's head can start at: any list's. */
 export type RowColumn = (typeof ROW_COLUMNS)[RowKind][number][0]
 
-/** A kind's `grid-template-columns`: each column's name before its width, and `end` after the last. */
-export function rowTemplate(kind: RowKind): string {
-    return [...ROW_COLUMNS[kind].map(([name, width]) => `[${name}] ${width}`), '[end]'].join(' ')
+/**
+ * A kind's `grid-template-columns` on a list at least `tier` wide, or under the first tier when there is none: each
+ * column it shows, its name before its width, and `end` after the last. A column it leaves out lends its name to the
+ * next one shown, so a line under the row that starts there still has a place.
+ */
+export function rowTemplate(kind: RowKind, tier?: RowTier): string {
+    const tiers = rowTiers(kind)
+    const parts: string[] = []
+    let names: string[] = []
+    for (const [name, width] of ROW_COLUMNS[kind]) {
+        names.push(name)
+        if (shownAt(tiers.get(name), tier)) {
+            parts.push(`[${names.join(' ')}] ${width}`)
+            names = []
+        }
+    }
+    parts.push(`[${[...names, 'end'].join(' ')}]`)
+    return parts.join(' ')
+}
+
+/**
+ * The tier from which each column that gives way shows: the narrowest with room for it, every column that gives way
+ * after it, and those that never do, at their least width. A column with room for it under the first tier is not in
+ * the map: it shows at any width, as a column that never gives way does.
+ *
+ * @throws {Error} When a column needs more room than the widest tier, or the kind's widths cannot be summed.
+ */
+export function rowTiers(kind: RowKind): Map<string, RowTier> {
+    const columns: readonly (readonly [string, string, number?])[] = ROW_COLUMNS[kind]
+    const tiers = new Map<string, RowTier>()
+    for (const [name, , order] of columns) {
+        if (order === undefined) {
+            continue
+        }
+        const kept = columns.filter(([, , other]) => other === undefined || other >= order)
+        const need = kept.reduce((sum, [, width]) => sum + leastRem(width), PADDING_REM + GAP_REM * (kept.length - 1))
+        if (need <= BASE_REM) {
+            continue
+        }
+        const tier = ROW_TIERS.find(([, rem]) => rem >= need)
+        if (tier === undefined) {
+            throw new Error(`${kind}'s ${name} column needs ${need}rem, more than any tier`)
+        }
+        tiers.set(name, tier[0])
+    }
+    return tiers
+}
+
+/**
+ * What lays a row of `kind` out: its columns' template at each tier, as custom properties, and the classes that pick
+ * one by the width of the list it is in (the nearest `@container`, a `Panel`) and hide the cells of the columns it
+ * leaves out. The classes are built here, so `index.css` lists them for Tailwind (`@source inline`).
+ */
+export function rowLayout(kind: RowKind): { className: string; style: CSSProperties } {
+    const tiers = rowTiers(kind)
+    const used = ROW_TIERS.filter(([tier]) => [...tiers.values()].includes(tier)).map(([tier]) => tier)
+    const style: Record<string, string> = { '--row': rowTemplate(kind) }
+    const classes = ['grid-cols-(--row)']
+    for (const tier of used) {
+        style[`--row-${tier}`] = rowTemplate(kind, tier)
+        classes.push(`@${tier}:grid-cols-(--row-${tier})`)
+    }
+    // A cell fills the column of its place among the row's children: the head line's come first.
+    ROW_COLUMNS[kind].forEach(([name], i) => {
+        const tier = tiers.get(name)
+        if (tier !== undefined) {
+            classes.push(`@max-${tier}:[&>:nth-child(${i + 1})]:hidden`)
+        }
+    })
+    return { className: classes.join(' '), style }
+}
+
+/** Whether a column that shows from `from` (any width when undefined) shows on a list at least `tier` wide. */
+function shownAt(from: RowTier | undefined, tier: RowTier | undefined): boolean {
+    if (from === undefined) {
+        return true
+    }
+    return tier !== undefined && tierIndex(tier) >= tierIndex(from)
+}
+
+function tierIndex(tier: RowTier): number {
+    return ROW_TIERS.findIndex(([name]) => name === tier)
+}
+
+/**
+ * The least a column's width can be, in rem: a fixed width or the free column's floor.
+ *
+ * @throws {Error} When the width is not in rem, as `auto` is not: a kind whose columns give way cannot have one.
+ */
+function leastRem(width: string): number {
+    const match = /^(?:minmax\()?([\d.]+)rem\b/u.exec(width)
+    if (match?.[1] === undefined) {
+        throw new Error(`no least width in rem for ${width}`)
+    }
+    return Number(match[1])
 }
 
 // Written out so Tailwind finds them: from the column's line to the row's end.
