@@ -929,12 +929,14 @@ class SpendWindow(_Model):
 
 
 class Spend(_Model):
-    """What the last day and the last 30 days cost, read together, so a month never shows less than its day."""
+    """What the last day, 30 days, and all time cost, read together, so a month never shows less than its day."""
 
     day: SpendWindow
     """The last 24 hours."""
     month: SpendWindow
     """The last 30 days."""
+    total_usd: float | None = None
+    """What every run in the journal cost, whenever it started, in US dollars; None when none reported a cost."""
 
 
 type SearchSource = Annotated[

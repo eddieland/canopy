@@ -2,9 +2,12 @@ import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
 import { pageOf, setBuddy, tipFor } from '@/lib/buddy'
 import type { Page } from '@/lib/buddy'
+import { useWardrobe } from '@/lib/hats'
+import type { HatId } from '@/lib/hats'
 import { cn } from '@/lib/utils'
 
 /** How long a tip stays up before Sprig takes the hint. */
@@ -32,6 +35,7 @@ export function Buddy() {
     const another = () => setAsked({ page, n: n + 1 })
     const tip = tipFor(pathname, n, today)
     const [slot, fits] = useFits(sprigFits)
+    const { worn } = useWardrobe()
     // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
     // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed.
     return (
@@ -52,7 +56,7 @@ export function Buddy() {
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                     )}
                 >
-                    <Figure cue={tip} />
+                    <Figure cue={tip} hat={worn} />
                 </button>
             </aside>
         </div>
@@ -123,10 +127,11 @@ function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
 }
 
 /**
- * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, and googly eyes under brows that rise with each new
- * tip. The eyes blink now and then and look toward the pointer, but under reduced motion, which keeps them still.
+ * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, the hat it wears (bought in Settings), and googly eyes
+ * under brows that rise with each new tip. The eyes blink now and then and look toward the pointer, but under reduced
+ * motion, which keeps them still.
  */
-function Figure({ cue }: { cue: string }) {
+function Figure({ cue, hat }: { cue: string; hat: HatId | null }) {
     const figure = useRef<SVGSVGElement>(null)
     useEffect(() => {
         const svg = figure.current
@@ -174,6 +179,7 @@ function Figure({ cue }: { cue: string }) {
                 strokeLinejoin="round"
                 className="text-muted-foreground"
             />
+            {hat === null ? null : <HatDrawing id={hat} />}
             <g key={cue} className="animate-buddy-brows text-foreground">
                 <path
                     d="M10 25 Q15 21 20 24"

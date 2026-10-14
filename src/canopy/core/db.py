@@ -746,6 +746,16 @@ def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
     return sum(parts) if parts else None
 
 
+def spent_ever(conn: sqlite3.Connection) -> float | None:
+    """What every agent run the journal holds cost, whenever it started; None when none of them reported one (§13).
+
+    Returns:
+        The total cost in US dollars, or None when no run reported one.
+    """
+    # Every recorded time sorts after the empty string.
+    return spent_since(conn, "")
+
+
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     """Return the `limit` runs that ended most recently, newest first."""
     return conn.execute(

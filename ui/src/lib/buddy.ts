@@ -67,6 +67,7 @@ export const TIPS: Record<Page, readonly string[]> = {
     '/settings': [
         "It looks like you're in Settings. You can turn me off here. I'd rather you didn't.",
         'Unhelpful tip: the Spicy ticker is for professionals.',
+        'Unhelpful tip: every dollar canopy spends buys me hats. I would like the crown.',
     ],
     '/search': [
         "It looks like you're searching. I lost a leaf in 2024. Let me know if it turns up.",

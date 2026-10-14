@@ -121,13 +121,17 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last day and the last 30 days cost, by the backend's clock.
+    """What the last day and the last 30 days cost, by the backend's clock, and what everything ever cost.
 
     Returns:
-        The cost the journal recorded in each window, with the window's start.
+        The cost the journal recorded in each window, with the window's start, and its total.
     """
     now = backend.clock()
-    return Spend(day=_spent(ctx, now, SPEND_DAY_HOURS), month=_spent(ctx, now, SPEND_MONTH_HOURS))
+    return Spend(
+        day=_spent(ctx, now, SPEND_DAY_HOURS),
+        month=_spent(ctx, now, SPEND_MONTH_HOURS),
+        total_usd=db.spent_ever(ctx.conn),
+    )
 
 
 def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:

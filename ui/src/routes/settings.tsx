@@ -2,16 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useState } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
-import { keys, sessionQuery } from '@/api/queries'
+import { keys, sessionQuery, spendQuery } from '@/api/queries'
+import { Cost } from '@/components/cost'
+import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
+import { costText } from '@/lib/cost-total'
+import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
+import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setSendKey, useSendKey } from '@/lib/send-key'
@@ -200,7 +208,121 @@ function FunPanel() {
                     ))}
                 </fieldset>
             </div>
+            <HatShop />
         </Panel>
+    )
+}
+
+/**
+ * Sprig's hat shop, the last of the Fun panel's details, folded under its wallet until opened. The wallet is
+ * everything canopy has spent, as `GET /api/spend` totals it, less every hat bought: each dollar the agent runtime
+ * reports is a dollar for hats. A hat bought goes on at once; one owned goes on or comes off with a click. All sales
+ * are final.
+ */
+function HatShop() {
+    const total = useQuery(spendQuery).data?.total_usd
+    const loaded = total !== undefined
+    const wardrobe = useWardrobe()
+    const left = balanceCents(total, wardrobe.owned)
+    // Folded until asked for: eight hats are a lot of Settings for something most visits leave alone.
+    const [open, setOpen] = useState(false)
+    return (
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <div className="border-t" data-testid="hats">
+                <div className="flex items-center justify-between gap-4 p-3">
+                    <p className="text-sm text-muted-foreground">
+                        Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while
+                        it is on. All sales are final.
+                    </p>
+                    <div className="flex shrink-0 flex-col items-end" data-testid="hats-wallet">
+                        {loaded ? (
+                            <Cost usd={left / 100} className="text-sm text-foreground" />
+                        ) : (
+                            <Skeleton className="h-5 w-14" />
+                        )}
+                        <span className="text-2xs text-muted-foreground">
+                            left of {loaded ? <Cost usd={total} /> : '…'} spent
+                        </span>
+                    </div>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="xs" data-testid="hats-toggle">
+                            {open ? 'Hide hats' : 'Show hats'}
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent asChild>
+                    <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
+                        {HATS.map((hat) => (
+                            <HatItem
+                                key={hat.id}
+                                hat={hat}
+                                owned={wardrobe.owned.includes(hat.id)}
+                                worn={wardrobe.worn === hat.id}
+                                shortCents={loaded ? Math.max(0, hat.price * 100 - left) : undefined}
+                                onBuy={() => {
+                                    const next = buy(wardrobe, hat.id, total)
+                                    if (next) {
+                                        setWardrobe(next)
+                                    }
+                                }}
+                                onWear={(on) => setWardrobe({ ...wardrobe, worn: on ? hat.id : null })}
+                            />
+                        ))}
+                    </ul>
+                </CollapsibleContent>
+            </div>
+        </Collapsible>
+    )
+}
+
+/** One hat in the shop: what it looks like and costs, and Buy, or Wear and Take off once owned. */
+function HatItem({
+    hat,
+    owned,
+    worn,
+    shortCents,
+    onBuy,
+    onWear,
+}: {
+    hat: Hat
+    owned: boolean
+    worn: boolean
+    shortCents: number | undefined
+    onBuy: () => void
+    onWear: (on: boolean) => void
+}) {
+    return (
+        <li
+            className="flex flex-col items-center gap-1 rounded-md border p-2 text-center"
+            data-testid={`hat-${hat.id}`}
+        >
+            <HatPreview id={hat.id} className="h-10 w-12" />
+            <span className="text-xs text-foreground">{hat.name}</span>
+            <span className="grow text-2xs text-muted-foreground">{hat.blurb}</span>
+            {owned ? (
+                <Button
+                    variant={worn ? 'secondary' : 'outline'}
+                    size="xs"
+                    onClick={() => onWear(!worn)}
+                    data-testid={`hat-${hat.id}-wear`}
+                >
+                    {worn ? 'Take off' : 'Wear'}
+                </Button>
+            ) : (
+                <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={shortCents !== 0}
+                    title={
+                        shortCents !== undefined && shortCents > 0 ? `${costText(shortCents / 100)} short` : undefined
+                    }
+                    onClick={onBuy}
+                    data-testid={`hat-${hat.id}-buy`}
+                >
+                    Buy <span className="readout">${hat.price}</span>
+                </Button>
+            )}
+        </li>
     )
 }
 
