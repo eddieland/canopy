@@ -102,7 +102,7 @@ Rules:
   browser paints the window's own gutter with the canvas color alone, so when the window scrolled, the header
   stopped short of its edge. The side rail runs the full height of the page, and what it holds sticks: a column as
   tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
-  screenshot test does the same by growing the window to the page (`screenshotWhole` in `e2e/helpers.ts`).
+  screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`. Each block under the nav is a hairline and a `panel-label` over its content. The
