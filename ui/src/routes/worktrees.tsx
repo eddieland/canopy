@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
@@ -48,29 +49,35 @@ function WorktreesPage() {
                 whenever a run starts or ends.
             </PageHeader>
             <PoolCounters pools={data} />
-            <div className="flex items-center justify-between gap-4">
-                <Notice error={error} />
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto"
-                    onClick={() => void readAgain()}
-                    disabled={reading}
-                    title={`Read every ${WORKTREES_REFRESH_MS / 1000} seconds while this page is open`}
-                    data-testid="worktrees-refresh"
-                >
-                    <RotateCw />
-                    {reading ? 'Reading' : 'Read again'}
-                </Button>
-            </div>
-            {data === undefined ? (
-                <Panel>
-                    <PanelHeader label="Loading" />
+            {/* One panel of every pool, so the read that covers them all sits in its header, as Open all does. */}
+            <Panel data-testid="pools">
+                <PanelHeader label="Pools">
+                    <span className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => void readAgain()}
+                            disabled={reading}
+                            title={`Read every ${WORKTREES_REFRESH_MS / 1000} seconds while this page is open`}
+                            data-testid="worktrees-refresh"
+                        >
+                            <RotateCw />
+                            {reading ? 'Reading' : 'Read again'}
+                        </Button>
+                        <span className="readout text-xs text-muted-foreground">{data?.length}</span>
+                    </span>
+                </PanelHeader>
+                <Notice error={error} className="border-b px-3 py-2" />
+                {data === undefined ? (
                     <PanelSkeleton className="min-h-40" />
-                </Panel>
-            ) : (
-                data.map((pool) => <PoolPanel key={pool.repo} pool={pool} />)
-            )}
+                ) : (
+                    <div className="divide-y">
+                        {data.map((pool) => (
+                            <PoolSection key={pool.repo} pool={pool} />
+                        ))}
+                    </div>
+                )}
+            </Panel>
         </>
     )
 }
@@ -109,13 +116,14 @@ function looked(dirty: number, broken: number, unread: number): string {
     return `${dirty} dirty · ${broken} broken${pools}`
 }
 
-function PoolPanel({ pool }: { pool: Pool }) {
+/** One pool in the Pools panel: its header, any slots past its size, and a line per slot. */
+function PoolSection({ pool }: { pool: Pool }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
     const over = overSize(pool)
     const root = slotsRoot(pool.worktrees)
     return (
-        <Panel data-testid={`pool-${pool.repo}`}>
-            <PanelHeader label={pool.repo}>
+        <section aria-label={pool.repo} data-testid={`pool-${pool.repo}`}>
+            <PoolHeader repo={pool.repo}>
                 <span className="mr-auto ml-3 flex min-w-0 items-center gap-3">
                     <SlotStrip worktrees={pool.worktrees} />
                     {root !== null && (
@@ -139,7 +147,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
                         </span>
                     )}
                 </span>
-            </PanelHeader>
+            </PoolHeader>
             {over > 0 && (
                 <p className="border-b px-3 py-2 text-xs text-status-blocked" data-testid="pool-over">
                     {over === 1 ? '1 slot' : `${over} slots`} past the declared size.{' '}
@@ -160,7 +168,17 @@ function PoolPanel({ pool }: { pool: Pool }) {
             ) : (
                 <Notice error={pool.error} className="px-3 py-2.5" />
             )}
-        </Panel>
+        </section>
+    )
+}
+
+/** A pool's head line inside the Pools panel: its repository, then what follows, on the panel's own surface. */
+function PoolHeader({ repo, children }: { repo: string; children: ReactNode }) {
+    return (
+        <div className="flex h-9 items-center justify-between gap-3 border-b px-3">
+            <span className="panel-label font-medium text-foreground">{repo}</span>
+            {children}
+        </div>
     )
 }
 

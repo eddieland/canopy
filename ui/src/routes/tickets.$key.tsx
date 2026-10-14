@@ -27,7 +27,7 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 
-/** One ticket: the operator's actions on it, its work, its recent runs and decisions, and its conversation. */
+/** One ticket: its work and the operator's actions, its conversation and the reply, then its runs and decisions. */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
 })
@@ -96,71 +96,40 @@ function Ticket({ detail }: { detail: TicketDetail }) {
             >
                 {how}
             </PageHeader>
-            {/* On a wide screen the conversation sits beside what the ticket is and did, as in the inbox. */}
+            {/* The detail skeleton (DESIGN.md): what it is and its actions, its conversation, then its lists. */}
+            {/* Wide, the conversation moves beside the rest, as in the inbox; the source keeps the reading order. */}
             <div
                 className={cn(
-                    'flex flex-col gap-6',
-                    '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:items-start',
+                    'stagger flex flex-col gap-6',
+                    '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:grid-rows-[auto_auto_1fr]',
+                    '2xl:items-start',
                 )}
             >
-                <div className="stagger flex flex-col gap-6">
-                    <Panel>
-                        <PanelHeader label="Actions" />
+                <Panel className="2xl:col-start-1 2xl:row-start-1">
+                    <PanelHeader label="Work">
+                        <span className="text-xs text-muted-foreground">
+                            active <Age at={ticket.active_at} variant="ago" />
+                        </span>
+                    </PanelHeader>
+                    <Fields>
+                        <Field label="phase" mono>
+                            <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
+                            {ticket.done ? ', done' : ''}
+                        </Field>
+                        <Field label="branch" mono>
+                            {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
+                        </Field>
+                        {units.map((unit) => (
+                            <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
+                        ))}
+                        <CostTotalRow cost={cost} />
+                    </Fields>
+                    <div className="border-t" data-testid="ticket-actions">
                         <TicketActions ticket={ticket} />
-                        <GrantLimits limits={limits} ticketKey={ticket.key} className="border-t" />
-                    </Panel>
-                    <Panel>
-                        <PanelHeader label="Work">
-                            <span className="text-xs text-muted-foreground">
-                                active <Age at={ticket.active_at} variant="ago" />
-                            </span>
-                        </PanelHeader>
-                        <Fields>
-                            <Field label="phase" mono>
-                                <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
-                                {ticket.done ? ', done' : ''}
-                            </Field>
-                            <Field label="branch" mono>
-                                {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
-                            </Field>
-                            {units.map((unit) => (
-                                <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
-                            ))}
-                            <CostTotalRow cost={cost} />
-                        </Fields>
-                    </Panel>
-                    <Panel>
-                        <PanelHeader label="Recent runs">
-                            <span className="flex items-center gap-2">
-                                {runs.length > 1 && <OrderToggle list="ticket-runs" />}
-                                <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                            </span>
-                        </PanelHeader>
-                        {runs.length === 0 ? (
-                            <Empty>no runs yet: none has worked it</Empty>
-                        ) : (
-                            <PanelScroll label="Recent runs">
-                                <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
-                            </PanelScroll>
-                        )}
-                    </Panel>
-                    <Panel data-testid="ticket-decisions">
-                        <PanelHeader label="Decisions">
-                            <span className="flex items-center gap-2">
-                                {decisions.length > 1 && <OrderToggle list="ticket-decisions" />}
-                                <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
-                            </span>
-                        </PanelHeader>
-                        {decisions.length === 0 ? (
-                            <Empty>no decisions yet: no tick has decided anything about it</Empty>
-                        ) : (
-                            <PanelScroll label="Decisions">
-                                <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
-                            </PanelScroll>
-                        )}
-                    </Panel>
-                </div>
-                <Panel>
+                    </div>
+                    <GrantLimits limits={limits} ticketKey={ticket.key} className="border-t" />
+                </Panel>
+                <Panel className="2xl:col-start-2 2xl:row-span-3 2xl:row-start-1" data-testid="ticket-conversation">
                     <PanelHeader label="Conversation">
                         <span className="flex items-center gap-2">
                             {messages.length > 1 && <OrderToggle list="conversation" />}
@@ -183,6 +152,36 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
                         waiting={ticket.awaiting}
                     />
+                </Panel>
+                <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="ticket-runs">
+                    <PanelHeader label="Recent runs">
+                        <span className="flex items-center gap-2">
+                            {runs.length > 1 && <OrderToggle list="ticket-runs" />}
+                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                        </span>
+                    </PanelHeader>
+                    {runs.length === 0 ? (
+                        <Empty>no runs yet: none has worked it</Empty>
+                    ) : (
+                        <PanelScroll label="Recent runs">
+                            <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
+                        </PanelScroll>
+                    )}
+                </Panel>
+                <Panel className="2xl:col-start-1 2xl:row-start-3" data-testid="ticket-decisions">
+                    <PanelHeader label="Decisions">
+                        <span className="flex items-center gap-2">
+                            {decisions.length > 1 && <OrderToggle list="ticket-decisions" />}
+                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                        </span>
+                    </PanelHeader>
+                    {decisions.length === 0 ? (
+                        <Empty>no decisions yet: no tick has decided anything about it</Empty>
+                    ) : (
+                        <PanelScroll label="Decisions">
+                            <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
+                        </PanelScroll>
+                    )}
                 </Panel>
             </div>
         </>

@@ -112,14 +112,6 @@ export const ROW_COLUMNS = {
         ['text', FREE],
         ['age', '5rem'],
     ],
-    /** A run working now, under the attention list: its dot, its ticket, its kind, its cost so far, and how long. */
-    worker: [
-        ['state', '0.5rem'],
-        ['key', '5rem'],
-        ['facts', FREE],
-        ['cost', 'auto'],
-        ['age', '3.5rem'],
-    ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
         ['time', '3.5rem'],
