@@ -16,6 +16,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
+import { useWholePath } from '@/hooks/use-whole-path'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
@@ -80,6 +81,7 @@ function NoRun({ title, children }: { title: string; children: string }) {
 }
 
 function RunPanel({ run }: { run: Run }) {
+    const whole = useWholePath()
     return (
         <Panel>
             <PanelHeader label="Run">
@@ -127,13 +129,15 @@ function RunPanel({ run }: { run: Run }) {
                     <Field label="worktrees" mono>
                         <span className="flex flex-wrap gap-x-4">
                             {run.worktrees.map((path) => (
-                                <Copyable key={path} text={path} label="worktree path" />
+                                <Copyable key={path} text={whole(path)} label="worktree path">
+                                    {path}
+                                </Copyable>
                             ))}
                         </span>
                     </Field>
                 )}
                 <Field label="log" mono>
-                    <Copyable text={run.log_path} label="log path">
+                    <Copyable text={whole(run.log_path)} label="log path">
                         <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
                     </Copyable>
                 </Field>

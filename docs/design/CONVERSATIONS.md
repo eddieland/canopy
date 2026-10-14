@@ -401,7 +401,7 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), and each repository's branch link template |
+| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), each repository's branch link template, and the workspace root |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
@@ -434,6 +434,10 @@ The API, under `{base}/api`:
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
 | `GET /events` | the event stream, below |
+
+A path under the workspace, a worktree's or a log's, is sent from its root, so a page reads `.treehouse/web-3f9c2a1b/1/web`
+rather than the whole of it; one outside it is sent whole. A copy button beside such a path joins it to `/meta`'s
+workspace root, since the shell it is pasted into need not be in the workspace.
 
 A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message
 the latest `ok` tick read (§6 step 3), or none before the first. The attention list is that tick's, so until then a

@@ -73,6 +73,13 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def test_meta_carries_the_workspace_root_whole(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    root = c.get("/api/meta").json()["workspace_root"]
+    assert root == str(ctx.workspace.root)
+    assert Path(root).is_absolute()
+
+
 def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get("/api/meta").json()["branch_urls"] == {}

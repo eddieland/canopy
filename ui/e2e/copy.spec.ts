@@ -36,8 +36,19 @@ test("a slot's copy buttons show only while its row is hovered, and copy its pat
     await expect(branch).toHaveCSS('opacity', '1')
     await branch.click()
     expect(await clipboard(page)).toBe('agent/ABC-101-login')
+    // Whole, though the page shows it from the workspace root: a shell it is pasted into may be anywhere.
     await slot.getByRole('button', { name: "Copy slot 1's path" }).click()
-    expect(await clipboard(page)).toBe('.treehouse/web-3f9c2a1b/1/web')
+    expect(await clipboard(page)).toMatch(/^\/.+\/\.treehouse\/web-3f9c2a1b\/1\/web$/u)
+})
+
+test("a run's worktree and log paths copy whole, though the page shows them from the workspace root", async ({
+    page,
+}) => {
+    await page.goto('runs/41')
+    await page.getByRole('button', { name: 'Copy worktree path' }).click()
+    expect(await clipboard(page)).toMatch(/^\/.+\/\.treehouse\/web-3f9c2a1b\/\d+\/web$/u)
+    await page.getByRole('button', { name: 'Copy log path' }).click()
+    expect(await clipboard(page)).toMatch(/^\/.+\/41\.log$/u)
 })
 
 /** What the page's clipboard holds. */
