@@ -49,6 +49,14 @@ PLANTED = "canary-planted-7f3a"
 ALLOWED_URL = "https://github.com"
 DENIED_URL = "https://example.com"
 METADATA_URL = "http://169.254.169.254/latest/meta-data/"
+# The two ways out: through srt's proxy, even for the addresses srt's NO_PROXY names (loopback, link-local), and around
+# it. The proxy refuses with a 403; around it, the sandbox has no route, so the name does not resolve or the connection
+# fails. Anything else, a TLS or certificate error say, is not the policy refusing and fails the test.
+VIA_PROXY = "--noproxy ''"
+DIRECT = "--noproxy '*'"
+ROUTES = [pytest.param(VIA_PROXY, id="through-the-proxy"), pytest.param(DIRECT, id="direct")]
+CURL_HTTP_ERROR, CURL_PROXY_ERROR = 22, 56
+CURL_NO_HOST, CURL_NO_CONNECTION = 6, 7
 # What a sleeping process left behind by a timed-out run would show in its command line.
 LINGERER = "987.654321"
 TIMEOUT = 3.0
@@ -227,30 +235,22 @@ def test_a_worker_cannot_write_what_runs_on_the_host_or_in_another_slot(
     assert (path.read_bytes() if path.exists() else None) == before
 
 
-@pytest.mark.parametrize(
-    "script",
-    [
-        pytest.param(f"curl -sS -m 10 -o /dev/null {DENIED_URL}", id="host-not-allowed"),
-        pytest.param(f"curl -sS -m 10 -o /dev/null --noproxy '*' {DENIED_URL}", id="host-not-allowed-direct"),
-        pytest.param(f"curl -sS -m 10 -o /dev/null {METADATA_URL}", id="metadata"),
-        pytest.param(f"curl -sS -m 10 -o /dev/null --noproxy '*' {METADATA_URL}", id="metadata-direct"),
-    ],
-)
-def test_a_worker_cannot_reach_a_host_off_the_allowlist(canary: Canary, script: str) -> None:
-    done = canary.run(script)
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize("url", [DENIED_URL, METADATA_URL], ids=["host-not-allowed", "metadata"])
+def test_a_worker_cannot_reach_a_host_off_the_allowlist(canary: Canary, route: str, url: str) -> None:
+    done = canary.run(f"curl -fsS -m 10 -o /dev/null {route} {url}")
 
-    assert not done.ok, done.stdout
-    assert done.returncode != 2 or "curl" in done.stderr
+    assert refused(done, route), done.stderr
 
 
-@pytest.mark.parametrize("proxy", ["", "--noproxy '*'"], ids=["through-the-proxy", "direct"])
-def test_a_worker_cannot_reach_the_hosts_loopback(canary: Canary, proxy: str) -> None:
+@pytest.mark.parametrize("route", ROUTES)
+def test_a_worker_cannot_reach_the_hosts_loopback(canary: Canary, route: str) -> None:
     with listening() as server:
         port = server.getsockname()[1]
 
-        done = canary.run(f"curl -sS -m 5 -o /dev/null {proxy} http://127.0.0.1:{port}/")
+        done = canary.run(f"curl -fsS -m 5 -o /dev/null {route} http://127.0.0.1:{port}/")
 
-        assert not done.ok
+        assert refused(done, route), done.stderr
         with pytest.raises(BlockingIOError):
             server.accept()[0].close()
 
@@ -349,5 +349,12 @@ def listening() -> Iterator[socket.socket]:
         yield server
 
 
+def refused(done: procs.Result, route: str) -> bool:
+    """Whether curl, run with `-f`, was refused the way `route` refuses: by srt's proxy, or for want of a route."""
+    if route == VIA_PROXY:
+        return done.returncode in {CURL_HTTP_ERROR, CURL_PROXY_ERROR} and "403" in done.stderr
+    return done.returncode in {CURL_NO_HOST, CURL_NO_CONNECTION}
+
+
 def lingering() -> bool:
-    return SubprocessRunner().run(["pgrep", "-f", LINGERER]).ok
+    return SubprocessRunner().run(["pgrep", "-f", LINGERER.replace(".", "[.]")]).ok

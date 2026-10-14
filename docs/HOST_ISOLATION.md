@@ -327,7 +327,10 @@ the machine up the way docs/SANDBOX.md tells the operator to and runs `canopy sa
 templates unchanged, and a primary clone and two slots under the fake `$HOME`, as treehouse lays them out, so the
 template's denied `$HOME` and the binds that re-allow the slot are what is tested. Each case is its own run, and every
 run prints a marker first, so an attempt that failed because nothing ran fails the test. What the slots share is
-compared file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows. A run of the
+compared file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows. A connection is
+tried both through `srt`'s proxy and around it, and must be refused the way that route refuses, with the proxy's 403 or
+with no route at all, so a certificate error or a sandbox with no network passes nothing. `srt` sets `NO_PROXY` to
+loopback and link-local addresses, so curl tries those around the proxy unless told not to. A run of the
 canary against the fake `srt`, which sandboxes nothing, fails every case but the positive controls, and the two that
 try a host off the allowlist when the machine's own proxy refuses that host too. A sleeper the run
 leaves must not hold its output, or a sandbox that lets one outlive the run hangs the test instead of failing it. On
