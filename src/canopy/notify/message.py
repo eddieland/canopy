@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import db
 from canopy.core.items import Item, age
@@ -118,6 +118,46 @@ class Event:
 _OWN = ("id", "kind", "at", "line")
 
 
+class DoneRun(TypedDict):
+    """A run that ended `done`, as the digest lists it, with the PRs its result named."""
+
+    ticket: str
+    title: str | None
+    run: int
+    pr: str | None
+
+
+class BlockedRun(TypedDict):
+    """A run that ended `blocked`, as the digest lists it."""
+
+    ticket: str
+    title: str | None
+    run: int
+
+
+class DigestAttention(TypedDict):
+    """The open attention list in a digest: how many items, how many by reason, and the oldest one's age."""
+
+    open: int
+    by_reason: dict[str, int]
+    oldest: str | None
+
+
+class DigestJson(TypedDict):
+    """The digest as the `json` format carries it."""
+
+    since: str
+    until: str
+    ticks: dict[str, int]
+    runs_started: dict[str, int]
+    runs_ended: dict[str, int]
+    done: list[DoneRun]
+    blocked: list[BlockedRun]
+    attention: DigestAttention
+    running: int
+    lines: list[str]
+
+
 @dataclass(frozen=True)
 class Digest:
     """Progress since a sink's previous digest, from the journal only."""
@@ -127,8 +167,8 @@ class Digest:
     ticks: dict[str, int]
     runs_started: dict[str, int]
     runs_ended: dict[str, int]
-    done: list[dict[str, object]]
-    blocked: list[dict[str, object]]
+    done: list[DoneRun]
+    blocked: list[BlockedRun]
     attention: dict[str, int]
     oldest: str | None
     running: int
@@ -160,7 +200,7 @@ class Digest:
         out.append(f"  workers running: {self.running}")
         return out
 
-    def as_json(self) -> dict[str, object]:
+    def as_json(self) -> DigestJson:
         """The digest as the `json` format carries it.
 
         Returns:
@@ -200,12 +240,12 @@ def digest(conn: sqlite3.Connection, items: list[Item], *, since: str, now: date
     ended_rows = conn.execute("SELECT * FROM runs WHERE ended_at >= ? ORDER BY id", (since,)).fetchall()
     ended = Counter(str(r["status"]) for r in ended_rows)
     named = titles(conn)
-    done = [
+    done: list[DoneRun] = [
         {"ticket": r["ticket_key"], "title": named.get(r["ticket_key"]), "run": r["id"], "pr": _pr(r["result_json"])}
         for r in ended_rows
         if r["status"] == "done"
     ]
-    blocked = [
+    blocked: list[BlockedRun] = [
         {"ticket": r["ticket_key"], "title": named.get(r["ticket_key"]), "run": r["id"]}
         for r in ended_rows
         if r["status"] == "blocked"
@@ -241,6 +281,36 @@ def _pr(result_json: object) -> str | None:
             return " ".join(urls)
     pr: object = parsed.get("pr")
     return str(pr) if pr else None
+
+
+class AddedItem(TypedDict):
+    """An attention item new since the sink's last delivery."""
+
+    ticket: str | None
+    title: str | None
+    repo: str | None
+    reason: str
+    detail: str
+    since: str
+
+
+class ResolvedItem(TypedDict):
+    """An attention item gone since the sink's last delivery, and whether the operator dismissed it."""
+
+    ticket: str | None
+    title: str | None
+    repo: str | None
+    reason: str
+    dismissed: bool
+
+
+class AttentionJson(TypedDict):
+    """The attention diff as the `json` format carries it, with the open count and the full list's path."""
+
+    added: list[AddedItem]
+    resolved: list[ResolvedItem]
+    open: int
+    path: str
 
 
 @dataclass
@@ -318,7 +388,7 @@ class Message:
             The object serialized as one JSON document.
         """
         added, resolved, events, omitted = self._bounded()
-        attention: dict[str, object] | None = None
+        attention: AttentionJson | None = None
         if self.attention is not None:
             resolved_items = self.attention.resolved_items[: len(resolved)]
             dismissed = self.attention.resolved_dismissed

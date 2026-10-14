@@ -1,13 +1,15 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, and the pools' slots are stand-ins, since the first three belong to the loop and there is no treehouse to ask
-(backend.py).
+reload, the attempt and review limits and their grants, and the pools' slots are stand-ins, since the first four belong
+to the loop, `runs`, and `reviews`, and there is no treehouse to ask (backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
-ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). Runs 39 and 40, tick 2, and chore
-run 2 left their sessions' events in their logs, as `--format json` prints them, for their transcripts (DESIGN §22).
+ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The workspace's policy allows one
+fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at its review limit (§22's grants). Runs 39
+and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
+transcripts (DESIGN §22).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -23,7 +25,7 @@ from canopy.core import chore_view, config, conversation, db, treehouse, workspa
 from canopy.core.items import Item
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
-from canopy.serve.backend import Backend, Reloading
+from canopy.serve.backend import Backend, Granted, Limit, Reloading
 
 if TYPE_CHECKING:
     import sqlite3
@@ -55,6 +57,10 @@ summary = "The web app."
 provider = "jira"
 query = "project = ABC"
 ticket_url = "https://jira.example/browse/{key}"
+
+[policy]
+max_fix_ci_attempts = 1
+max_reviews_per_pr = 2
 """
 
 _USER_TOML = """\
@@ -226,6 +232,9 @@ def seed(directory: Path) -> Backend:
         attention=_attention,
         end_run=_end_run,
         reload=_reload,
+        limits=_limits,
+        review_limit=_review_limit,
+        grant=_grant,
         mock=True,
         slots=slots,
         clock=lambda: T0,
@@ -264,6 +273,76 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
 def _reload(_ctx: Context) -> Reloading:
     # No loop runs on the mock's config, so there is nothing to read again.
     return Reloading(changed=(), restart=(), after_tick=False)
+
+
+def _limits(ctx: Context, key: str) -> list[Limit]:
+    """Each kind's limit of each unit of `key`'s, counted as `runs.policy` counts them: every run in each repository.
+
+    Returns:
+        Every kind of every unit, by repository.
+    """
+    p = ctx.config.policy
+    base = {"implement": p.max_implement_attempts, "fix-ci": p.max_fix_ci_attempts, "resume": p.max_resume_attempts}
+    counts: dict[str, dict[str, int]] = {}
+    for repo, kind, runs in ctx.conn.execute(
+        "SELECT s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
+        "WHERE r.ticket_key = ? AND r.kind != 'split' AND s.repo IS NOT NULL GROUP BY s.repo, r.kind",
+        (key,),
+    ):
+        counts.setdefault(str(repo), dict.fromkeys(base, 0))[str(kind)] = int(runs)
+    granted = {
+        (str(r[0]), str(r[1])): int(r[2])
+        for r in ctx.conn.execute(
+            "SELECT repo, kind, sum(runs) FROM attempt_grants WHERE ticket_key = ? GROUP BY repo, kind", (key,)
+        )
+    }
+    return [
+        Limit(kind, repo, None, runs, granted.get((repo, kind), 0), base[kind] + granted.get((repo, kind), 0))
+        for repo, of in sorted(counts.items())
+        for kind, runs in of.items()
+    ]
+
+
+def _review_limit(ctx: Context, url: str) -> Limit | None:
+    runs = len(db.review_runs_of(ctx.conn, url))
+    if runs == 0:
+        return None
+    row = ctx.conn.execute("SELECT coalesce(sum(runs), 0) FROM review_grants WHERE pr_url = ?", (url,)).fetchone()
+    granted = int(row[0])
+    return Limit("review", None, url, runs, granted, ctx.config.policy.max_reviews_per_pr + granted)
+
+
+def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> Granted:
+    """One more run, as `canopy grant` records it, with its `unknown` and `unknown_repo` guards and none of the rest.
+
+    Returns:
+        The unit's repository (none for a PR), its runs, and its limit with the grant counted.
+
+    Raises:
+        Refused: `unknown` for a PR never reviewed, `unknown_repo` for a unit the ticket has had no runs in.
+    """
+    if kind == "review":
+        reviewed = _review_limit(ctx, ref.id)
+        if reviewed is None:
+            raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant")
+        with db.transaction(ctx.conn):
+            ctx.conn.execute(
+                "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (ref.id, db.format_time(T0))
+            )
+        return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
+    units = {(found.repo, found.kind): found for found in _limits(ctx, ref.id)}
+    repos = {r for r, _ in units}
+    if repo is None and len(repos) == 1:
+        [repo] = repos
+    current = units.get((repo, kind))
+    if repo is None or current is None:
+        raise conversation.Refused("unknown_repo", f"{ref} has had no runs in {repo or 'one repository only'}")
+    with db.transaction(ctx.conn):
+        ctx.conn.execute(
+            "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, 1, ?)",
+            (ref.id, repo, kind, db.format_time(T0)),
+        )
+    return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
 
 
 async def changes(backend: Backend, seconds: float | None) -> None:
@@ -430,7 +509,9 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             ),
         )
     run_slots = (
-        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile
+        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
+        (37, "web", 4, "lease-37", "canopy:ABC-100"),
+        (40, "web", 4, "lease-40", "canopy:ABC-100"),
         (LIVE_RUN, "web", 1, "lease-1", "canopy:ABC-101"),
         (43, "web", 2, "lease-2", "canopy:ABC-104"),
         (43, "mobile", 1, "lease-3", "canopy:ABC-104"),
@@ -634,6 +715,10 @@ def _event(kind: str, session: str, minutes: float, **fields: object) -> str:
     return json.dumps({"type": kind, "timestamp": ms, "sessionID": session, **fields})
 
 
+def _start(session: str, minutes: float) -> str:
+    return _event("step_start", session, minutes, part={"type": "step-start"})
+
+
 def _text(session: str, minutes: float, text: str) -> str:
     return _event("text", session, minutes, part={"type": "text", "text": text})
 
@@ -680,6 +765,60 @@ _SEARCH_BOX = """\
 6\t}
 """
 
+# Shortened from what canopy renders, keeping its shape.
+_PROMPT_39 = """\
+# canopy worker: implement
+
+You are working ticket ABC-099 in slot 3. Each repository listed below is checked out with a detached HEAD, at
+`agent/ABC-099-search` as it was pushed, or at that repository's base branch if nothing was pushed there yet. This is
+attempt 1 of 3.
+
+## Repositories
+
+- web: /home/op/acme/.treehouse/web-3f9c2a1b/3/web, base `main`
+
+## Task
+
+Read the ticket through the tracker MCP. The tracker is jira. Implement the ticket. Follow the repository's AGENTS.md
+and conventions. Run the tests that cover your change.
+
+## Messages from the operator
+
+None.
+
+## Result
+
+End with one line of JSON: {"status": "done" | "failed" | "blocked", "summary": "...", "prs": {"<repo>": "<url>"}}
+"""
+_PROMPT_TICK_2 = """\
+## State
+
+{
+  "tick_id": 2,
+  "dry_run": false,
+  "tickets": [
+    {"key": "ABC-101", "phase": "implementing", "run": 41, "attempt": 1},
+    {"key": "ABC-104", "phase": "implementing", "run": 43, "attempt": 1}
+  ],
+  "prs": [{"url": "https://github.com/acme/web/pull/88", "ticket": "ABC-099", "checks": "pending"}],
+  "attention": []
+}
+"""
+_PROMPT_CHORE_2 = """\
+# canopy chore: deps
+
+Audit each repository's dependencies against the published advisories. Report each advisory that touches a lockfile
+as a finding.
+
+## Repositories
+
+- web: /home/op/acme/web
+- mobile: /home/op/acme/mobile
+
+## Notes from the operator
+
+None.
+"""
 _TICK_STDERR = """\
 INFO  2026-10-08T11:00:00 +210ms service=default version=1.19.0 args=["run","--format","json"] opencode
 WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 1000ms listing prompts
@@ -692,7 +831,7 @@ def _transcripts(state_dir: Path) -> None:
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
     s39, s40, s2, c2 = "ses_mock39", "ses_mock40", "ses_tick2", "ses_chore2"
     run_39 = [
-        _event("step_start", s39, -90, part={"type": "step-start"}),
+        _start(s39, -90),
         _text(s39, -89.9, "I'll read the ticket, then the search box."),
         _tool(
             s39,
@@ -727,6 +866,7 @@ def _transcripts(state_dir: Path) -> None:
             },
         ),
         _step(s39, -89.3, 0.82),
+        _start(s39, -89.2),
         _text(s39, -80, "There is no search hook yet. I'll add one that debounces and aborts the stale request."),
         _tool(
             s39,
@@ -749,6 +889,7 @@ def _transcripts(state_dir: Path) -> None:
             seconds=14,
         ),
         _step(s39, -69.9, 0.97),
+        _start(s39, -69.8),
         _done(
             s39,
             -63,
@@ -783,12 +924,15 @@ def _transcripts(state_dir: Path) -> None:
         _step(s39, -61, 0.52, reason="stop"),
     ]
     run_40 = [
+        _start(s40, -74.1),
         _text(s40, -74, "Reading the failing job's log first."),
         _done(s40, -73, "Find the failing job", "gh run list --branch agent/ABC-100-flaky-test", "", seconds=2),
         _step(s40, -72.5, 0.18),
+        _start(s40, -72.4),
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
     chore_2 = [
+        _start(c2, -240),
         _text(c2, -239.9, "Checking each repository's lockfile against the advisories."),
         _done(
             c2,
@@ -801,6 +945,7 @@ def _transcripts(state_dir: Path) -> None:
         ),
         _done(c2, -236, "Audit mobile's dependencies", "npm audit --omit=dev", "found 0 vulnerabilities\n", seconds=5),
         _step(c2, -235.9, 0.14),
+        _start(c2, -235.8),
         _text(
             c2,
             -233.1,
@@ -809,6 +954,7 @@ def _transcripts(state_dir: Path) -> None:
         _step(c2, -233, 0.12, reason="stop"),
     ]
     tick_2 = [
+        _start(s2, -60.1),
         _text(s2, -60, "Reading the journal's state first."),
         _done(s2, -59.9, "Read the loop's state", "canopy state", "## Tickets\n- ABC-101 implementing (run 41)\n"),
         _tool(
@@ -864,3 +1010,7 @@ def _transcripts(state_dir: Path) -> None:
             # What OpenCode printed on stderr, which only the tick's output shows.
             text = f"{stdout}\n--- stderr ---\n{_TICK_STDERR}"
         logs.write_private(state_dir / directory / f"{name}.log", text)
+    # What canopy gave each runtime, kept beside its log: the first model call's input (DESIGN §22).
+    prompts = (("runs", "39", _PROMPT_39), ("ticks", "2", _PROMPT_TICK_2), ("chore-runs/deps", "2", _PROMPT_CHORE_2))
+    for directory, name, text in prompts:
+        logs.write_private(state_dir / directory / f"{name}.prompt", text)

@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
+from canopy.core import review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
@@ -23,6 +24,76 @@ CHORES = "chores"
 REVIEWS = "reviews"
 SUMMARY_LIMIT = 300
 DETAIL_LIMIT = 500
+
+
+class RunStarted(TypedDict):
+    """A `run.started` event's fields."""
+
+    ticket: str
+    run: int
+    run_kind: str
+    branch: str
+    attempt: int
+    limit: int
+
+
+class RunEnded(TypedDict):
+    """A `run.ended` event's fields. `pr` is the first of `prs`; `question` is set only for a `blocked` run."""
+
+    ticket: str
+    run: int
+    run_kind: str
+    status: str
+    branch: str | None
+    pr: str | None
+    prs: list[str]
+    summary: str | None
+    question: str | None
+    message: int | None
+
+
+class ChoreEnded(TypedDict):
+    """A `chore.ended` event's fields."""
+
+    chore: str
+    run: int
+    status: str
+    summary: str | None
+    findings: int
+
+
+class ReviewEnded(TypedDict):
+    """A `review.ended` event's fields: how many findings, never what they are (D114)."""
+
+    pr: str
+    ticket: str | None
+    run: int
+    status: str
+    verdict: str | None
+    impact: str | None
+    findings: int
+
+
+class LoopFailing(TypedDict):
+    """A `loop.failing` event's fields."""
+
+    count: int
+    status: str
+    tick: int
+    log: str
+
+
+class LoopRecovered(TypedDict):
+    """A `loop.recovered` event's fields."""
+
+    failed: int
+
+
+class SinkFailing(TypedDict):
+    """A `loop.sink_failing` event's fields."""
+
+    sink: str
+    error: str
 
 
 def cut(text: object, limit: int) -> str:
@@ -43,7 +114,14 @@ def run_started(
     def build(run_id: int) -> Event | None:
         if not config.notify.takes(RUNS):
             return None
-        fields = {"ticket": key, "run": run_id, "run_kind": kind, "branch": branch, "attempt": attempt, "limit": limit}
+        fields: RunStarted = {
+            "ticket": key,
+            "run": run_id,
+            "run_kind": kind,
+            "branch": branch,
+            "attempt": attempt,
+            "limit": limit,
+        }
         return Event(RUNS, "run.started", fields)
 
     return build
@@ -71,7 +149,7 @@ def run_ended(
             pr_urls = [str(pr)]
         question = result.get("question") if status == "blocked" else None
         summary = result.get("harness") or result.get("summary")
-        fields: dict[str, object] = {
+        fields: RunEnded = {
             "ticket": run["ticket_key"],
             "run": run["id"],
             "run_kind": run["kind"],
@@ -95,7 +173,7 @@ def chore_ended(config: Config, run: sqlite3.Row, status: str, result_json: str 
     result = _object(result_json)
     findings = result.get("findings")
     summary = result.get("harness") or result.get("summary")
-    fields: dict[str, object] = {
+    fields: ChoreEnded = {
         "chore": run["chore"],
         "run": run["id"],
         "status": status,
@@ -109,17 +187,16 @@ def review_ended(config: Config, run: sqlite3.Row, status: str, result_json: str
     """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
     if not config.notify.takes(REVIEWS):
         return None
-    result = _object(result_json)
-    findings = result.get("findings")
-    fields: dict[str, object] = {
+    result = review_result.stored(result_json)
+    fields: ReviewEnded = {
         "pr": run["pr_url"],
         "ticket": run["ticket_key"],
         "run": run["id"],
         "status": status,
-        "verdict": result.get("verdict"),
-        "impact": result.get("impact"),
+        "verdict": result.verdict if result is not None else None,
+        "impact": result.impact if result is not None else None,
         # How many, not what: the findings stay in the journal (D114).
-        "findings": len(findings) if isinstance(findings, list) else 0,
+        "findings": len(result.findings) if result is not None else 0,
     }
     return Event(REVIEWS, "review.ended", fields)
 
@@ -130,7 +207,8 @@ def loop_failing(count: int, status: str, tick_id: int, log: str) -> Event:
     Returns:
         The `loop.failing` event, naming how many ticks failed, the latest one's status and id, and the log.
     """
-    return Event(LOOP, "loop.failing", {"count": count, "status": status, "tick": tick_id, "log": log})
+    fields: LoopFailing = {"count": count, "status": status, "tick": tick_id, "log": log}
+    return Event(LOOP, "loop.failing", fields)
 
 
 def loop_recovered(failed: int) -> Event:
@@ -139,7 +217,8 @@ def loop_recovered(failed: int) -> Event:
     Returns:
         The `loop.recovered` event, naming how many ticks had failed.
     """
-    return Event(LOOP, "loop.recovered", {"failed": failed})
+    fields: LoopRecovered = {"failed": failed}
+    return Event(LOOP, "loop.recovered", fields)
 
 
 def sink_failing(sink: str, error: str) -> Event:
@@ -148,7 +227,8 @@ def sink_failing(sink: str, error: str) -> Event:
     Returns:
         The `loop.sink_failing` event, naming the sink and its latest error.
     """
-    return Event(LOOP, "loop.sink_failing", {"sink": sink, "error": cut(error, DETAIL_LIMIT)})
+    fields: SinkFailing = {"sink": sink, "error": cut(error, DETAIL_LIMIT)}
+    return Event(LOOP, "loop.sink_failing", fields)
 
 
 def _object(result_json: str | None) -> Mapping[str, object]:

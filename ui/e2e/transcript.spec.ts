@@ -12,7 +12,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await page.goto('runs')
     await settled(page)
     await page.getByTestId('run-39').getByRole('link', { name: 'run:39' }).click()
-    await expect(page).toHaveURL(/\/runs\/39$/)
+    await expect(page).toHaveURL(/\/runs\/39$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('run:39')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
         'data-status',
@@ -34,7 +34,10 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await expect(output).toBeHidden()
     await read.locator('summary').click()
     await expect(output).toBeVisible()
-    await expect(transcript.locator('input')).toHaveCount(0)
+    await expect(transcript.getByTestId('transcript-entries').locator('input')).toHaveCount(0)
+    // Its input is JSON, colored by what each piece is; its output, a file, stays plain.
+    await expect(read.locator('.text-syntax-key', { hasText: '"filePath"' })).toBeVisible()
+    await expect(output.locator('span')).toHaveCount(0)
     // A failed call shows its error where a call's output goes.
     const missing = tools.filter({ hasText: 'useSearch.ts' }).first()
     await missing.locator('summary').click()
@@ -46,7 +49,93 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await expect(transcript.locator('details[open]')).toHaveCount(0)
 
     await page.getByRole('link', { name: 'ABC-099' }).first().click()
-    await expect(page).toHaveURL(/\/tickets\/ABC-099$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
+})
+
+test('a search keeps the rows with a line that holds it, marked, and opens the calls it is in', async ({ page }) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const rows = transcript.getByTestId('transcript-entries').locator(':scope > li')
+    const all = await rows.count()
+    const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
+
+    await find.fill('DEBOUNCE')
+    // The agent's text twice, and two calls: the test run's output, and the pull request's line and input.
+    await expect(transcript.getByTestId('transcript-found')).toHaveText('5 lines, 4 rows')
+    await expect(rows).toHaveCount(4)
+    await expect(transcript.locator('mark').first()).toHaveText('debounce')
+    // A call whose input or output holds the query opens to it, its match marked inside the colored JSON.
+    await expect(transcript.locator('details[open]')).toHaveCount(2)
+    const pr = rows.filter({ hasText: 'github_create_pull_request' })
+    await expect(pr.locator('pre mark')).toHaveText('debounce')
+    await expect(pr.locator('pre mark .text-syntax-string')).toHaveText('debounce')
+    // Close all closes them too, and a new search opens what it finds again.
+    await transcript.getByRole('button', { name: 'Close all' }).click()
+    await expect(transcript.locator('details[open]')).toHaveCount(0)
+    await find.fill('debounces input')
+    await expect(transcript.locator('details[open]')).toHaveCount(1)
+
+    // Characters, never a pattern: a dot matches only a dot.
+    await find.fill('push.origin')
+    await expect(transcript).toContainText('no line holds “push.origin”')
+    await expect(rows).toHaveCount(0)
+
+    await find.press('Escape')
+    await expect(find).toHaveValue('')
+    await expect(rows).toHaveCount(all)
+    await expect(transcript.locator('mark')).toHaveCount(0)
+    await expect(transcript.locator('details[open]')).toHaveCount(0)
+
+    // By call keeps its own rows, whole: the search waits for the events in order.
+    await find.fill('debounce')
+    await transcript.getByRole('button', { name: 'By call' }).click()
+    await expect(find).toBeHidden()
+    await expect(transcript.getByTestId('transcript-call')).toHaveCount(3)
+    await expect(transcript.locator('mark')).toHaveCount(0)
+})
+
+test('by call, each model call opens to what it was sent and what it did, as text', async ({ page }) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const toggle = transcript.getByRole('button', { name: 'By call' })
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    const calls = transcript.getByTestId('transcript-call')
+    await expect(calls).toHaveCount(3)
+    // A call's line is what it did: its first text, then its tools by name, counted.
+    await expect(calls.nth(0)).toContainText("I'll read the ticket, then the search box. · jira_get_issue, read ×2")
+    await expect(calls.nth(2)).toContainText('stop')
+
+    // The first call was sent the prompt canopy kept, and the rest no file records; its body is built when opened.
+    const first = calls.nth(0)
+    await expect(first.getByTestId('transcript-call-body')).toHaveCount(0)
+    await first.locator('[data-slot=collapsible-trigger]').click()
+    const sent = first.getByRole('region', { name: 'call 1 input' })
+    await expect(sent).toContainText('# canopy worker: implement')
+    await expect(sent).toContainText('which no file records')
+    const wrote = first.getByRole('region', { name: 'call 1 output' })
+    await expect(wrote.getByTestId('transcript-tool')).toHaveCount(3)
+
+    // A later call was sent what the call before it asked its tools for, a failed read's error and a file's markup
+    // included, as characters.
+    const second = calls.nth(1)
+    await second.locator('[data-slot=collapsible-trigger]').click()
+    const returned = second.getByRole('region', { name: 'call 2 input' })
+    await expect(returned).toContainText('call 1’s input and output, then what its tools returned:')
+    await expect(returned).toContainText('return <input value={query}')
+    await expect(returned).toContainText('File not found:')
+    await expect(transcript.locator('input')).toHaveCount(0)
+    await expect(second.getByRole('region', { name: 'call 2 output' })).toContainText('There is no search hook yet.')
+
+    await transcript.getByRole('button', { name: 'Close all' }).click()
+    await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(0)
+    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(3)
+
+    await toggle.click()
+    await expect(transcript.getByTestId('transcript-entries')).toBeVisible()
 })
 
 test("a failed run's transcript ends in the runtime's error, and a running one's waits for it to end", async ({
@@ -113,8 +202,12 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await expect(text).toContainText('service=mcp key=jira error=timed out after 1000ms listing prompts')
     // The session's events too, as the runtime printed them: lines of JSON, as text.
     await expect(text).toContainText('"sessionID": "ses_tick2"')
+    // Colored by what each piece is, while a line that is not JSON stays plain.
+    await expect(text.locator('.text-syntax-key', { hasText: '"sessionID"' }).first()).toBeVisible()
+    await expect(text.locator('.text-syntax-string', { hasText: '"ses_tick2"' }).first()).toBeVisible()
+    await expect(text.locator('span', { hasText: 'service=mcp' })).toHaveCount(0)
     // The file's size, in the header.
-    await expect(output).toContainText(/\d+\.\d KiB/)
+    await expect(output).toContainText(/\d+\.\d KiB/u)
     // It opens at its end, where stderr is.
     await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
 
@@ -127,11 +220,46 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
 })
 
+test("a tick's output lays its JSON out when asked, and that tick's panel remembers it", async ({ page }) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    const output = page.getByTestId('tick-output')
+    await output.getByRole('button', { name: 'Show' }).click()
+    const text = output.getByTestId('tick-output-text')
+    const pretty = output.getByRole('button', { name: 'Pretty' })
+    const read = () => text.evaluate((el) => el.textContent)
+    await expect(pretty).toHaveAttribute('aria-pressed', 'false')
+    expect(await read()).toContain('{"type": "text", "timestamp"')
+
+    await pretty.click()
+    await expect(pretty).toHaveAttribute('aria-pressed', 'true')
+    expect(await read()).toContain('{\n  "type": "text",\n  "timestamp"')
+    // It opens at its end again, where stderr is: every line moved.
+    await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
+    // A line that is not JSON stays as it was.
+    expect(await read()).toContain('\n--- stderr ---\n')
+    // Still colored.
+    await expect(text.locator('.text-syntax-key', { hasText: '"sessionID"' }).first()).toBeVisible()
+
+    // Kept for this tick across a reload.
+    expect(await page.evaluate(() => globalThis.localStorage.getItem('canopy-pretty-output'))).toBe('[2]')
+    await page.reload()
+    await settled(page)
+    await output.getByRole('button', { name: 'Show' }).click()
+    await expect(pretty).toHaveAttribute('aria-pressed', 'true')
+    expect(await read()).toContain('{\n  "type": "text",')
+
+    await pretty.click()
+    await expect(pretty).toHaveAttribute('aria-pressed', 'false')
+    expect(await read()).toContain('{"type": "text", "timestamp"')
+    expect(await page.evaluate(() => globalThis.localStorage.getItem('canopy-pretty-output'))).toBe('[]')
+})
+
 test("a chore run's id opens its page: what it reported, in full, over its session's transcript", async ({ page }) => {
     await page.goto('chores/deps')
     await settled(page)
     await page.getByTestId('chore-run-2').getByRole('link', { name: '#2' }).click()
-    await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/)
+    await expect(page).toHaveURL(/\/chores\/deps\/runs\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps #2')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Chores' })).toHaveAttribute(
         'data-status',
@@ -148,7 +276,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await expect(web).toContainText('1 high severity vulnerability')
 
     await page.locator('dl').getByRole('link', { name: 'chore:deps' }).click()
-    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page).toHaveURL(/\/chores\/deps$/u)
 
     await page.goto('chores/build-health/runs/4')
     await settled(page)

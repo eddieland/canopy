@@ -6,7 +6,11 @@ export type ActionTone = 'refused' | 'attention' | 'other'
 
 /** An action's tone, from its prefix: `refused:` or `attention:`. */
 export function actionTone(action: string): ActionTone {
-    if (action.startsWith('refused:')) return 'refused'
-    if (action.startsWith('attention:')) return 'attention'
+    if (action.startsWith('refused:')) {
+        return 'refused'
+    }
+    if (action.startsWith('attention:')) {
+        return 'attention'
+    }
     return 'other'
 }

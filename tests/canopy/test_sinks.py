@@ -4,10 +4,11 @@ import io
 import json
 import os
 import threading
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, ClassVar, override
+from unittest import mock
 
 import canopy_notify_slack as slack
 import pytest
@@ -61,7 +62,7 @@ MESSAGE: dict[str, Any] = {
 
 
 @pytest.fixture
-def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def tools(tmp_path: Path) -> Iterator[Path]:
     """`notify-send` and `osascript` on PATH, each appending its argv as a JSON line to the returned file."""
     calls = tmp_path / "calls.jsonl"
     bin_dir = tmp_path / "bin"
@@ -72,8 +73,8 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
             f"#!/usr/bin/env python3\nimport json, sys\nopen({str(calls)!r}, 'a').write(json.dumps(sys.argv) + '\\n')\n"
         )
         tool.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
-    return calls
+    with mock.patch.dict(os.environ, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}):
+        yield calls
 
 
 def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
@@ -105,13 +106,11 @@ def test_the_desktop_sink_bounds_its_body() -> None:
     assert len(body.splitlines()) == desktop.MAX_LINES
 
 
-def test_the_desktop_sink_without_its_tool(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setenv("PATH", str(tmp_path))
-    assert desktop.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
-    assert "notify-send is not installed" in capsys.readouterr().err
-    assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
+def test_the_desktop_sink_without_its_tool(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
+        assert desktop.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
+        assert "notify-send is not installed" in capsys.readouterr().err
+        assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
 
 
 # Slack
@@ -215,16 +214,16 @@ def test_a_long_slack_message_is_45_lines_with_its_header() -> None:
 
 
 def test_the_slack_sink_reads_its_default_file_and_needs_json(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    assert slack.default_webhook_file() == tmp_path / "canopy" / "slack-webhook"
-    assert slack.run([], io.StringIO(json.dumps(MESSAGE))) == 2
-    assert f"cannot read the webhook file {tmp_path / 'canopy' / 'slack-webhook'}" in capsys.readouterr().err
-    (tmp_path / "canopy").mkdir()
-    webhook_file(tmp_path / "canopy", "https://hooks.slack.com/services/T/B/x")
-    assert slack.run([], io.StringIO("canopy attention: 1 new\n")) == 2
-    assert 'set format = "json" for this sink' in capsys.readouterr().err
+    with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(tmp_path)}):
+        assert slack.default_webhook_file() == tmp_path / "canopy" / "slack-webhook"
+        assert slack.run([], io.StringIO(json.dumps(MESSAGE))) == 2
+        assert f"cannot read the webhook file {tmp_path / 'canopy' / 'slack-webhook'}" in capsys.readouterr().err
+        (tmp_path / "canopy").mkdir()
+        webhook_file(tmp_path / "canopy", "https://hooks.slack.com/services/T/B/x")
+        assert slack.run([], io.StringIO("canopy attention: 1 new\n")) == 2
+        assert 'set format = "json" for this sink' in capsys.readouterr().err
 
 
 def test_a_digest_is_a_short_block() -> None:
@@ -458,14 +457,12 @@ def test_the_slack_sink_posts_with_a_name_and_an_icon(api: str, tmp_path: Path) 
     assert (posted["username"], posted["icon_emoji"]) == ("canopy (api)", ":wave::skin-tone-3:")
 
 
-def test_the_token_file_defaults_to_the_config_directory(
-    api: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
-    (tmp_path / "canopy").mkdir()
-    token_file(tmp_path / "canopy")
-    assert slack.run(["--channel", "#canopy"], io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
-    assert _Api.received[0][1]["channel"] == "#canopy"
+def test_the_token_file_defaults_to_the_config_directory(api: str, tmp_path: Path) -> None:
+    with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": str(tmp_path)}):
+        (tmp_path / "canopy").mkdir()
+        token_file(tmp_path / "canopy")
+        assert slack.run(["--channel", "#canopy"], io.StringIO(json.dumps(MESSAGE)), api_url=api) == 0
+        assert _Api.received[0][1]["channel"] == "#canopy"
 
 
 def test_a_long_successful_reply_is_exit_0(api: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

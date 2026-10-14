@@ -3,13 +3,14 @@ import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig } from 'vite'
+import type { Plugin } from 'vite'
 
 // The FastAPI server the dev server proxies to: `npm run dev:api` starts it with mock data.
 const api = process.env.CANOPY_API ?? 'http://127.0.0.1:8765'
 
 // Fonts to preload: the latin subset of each self-hosted family. Others load on demand by unicode-range.
-const PRELOAD_FONTS = /^ibm-plex-(sans-latin-wght|mono-latin-(400|500|600))-normal-.*\.woff2$/
+const PRELOAD_FONTS = /^ibm-plex-(sans-latin-wght|mono-latin-(400|500|600))-normal-.*\.woff2$/u
 
 /** Adds a <link rel="preload"> for each font PRELOAD_FONTS matches, so text never paints in a fallback face. */
 function preloadFonts(): Plugin {

@@ -47,12 +47,12 @@ export default defineConfig({
     projects: [
         {
             name: 'root',
-            testIgnore: /prefixed\.spec\.ts/,
+            testIgnore: /prefixed\.spec\.ts/u,
             use: { baseURL: `http://127.0.0.1:${ROOT_PORT}` },
         },
         {
             name: 'prefixed',
-            testMatch: /prefixed\.spec\.ts/,
+            testMatch: /prefixed\.spec\.ts/u,
             use: { baseURL: `http://127.0.0.1:${PREFIXED_PORT}/canopy/` },
         },
     ],

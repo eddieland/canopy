@@ -20,7 +20,7 @@ for (const theme of THEMES) {
         await padDecisions(page, 'ABC-102', 12)
         await page.goto('tickets/ABC-102')
         await settled(page)
-        await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/)
+        await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
         await expect(page.getByTestId('ticket-decisions')).toHaveScreenshot(`long-list-${theme}.png`)
     })
 }

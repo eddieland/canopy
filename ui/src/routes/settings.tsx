@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { LogOut, Monitor, Moon, RefreshCw, Sun, type LucideIcon } from 'lucide-react'
+import { LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, sessionQuery } from '@/api/queries'
@@ -10,18 +11,14 @@ import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { type BuddySetting, setBuddy, useBuddy } from '@/lib/buddy'
+import { setBuddy, useBuddy } from '@/lib/buddy'
+import type { BuddySetting } from '@/lib/buddy'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
-import { type SendKey, setSendKey, useSendKey } from '@/lib/send-key'
-import {
-    clampGap,
-    MAX_GAP,
-    setTickerSettings,
-    type TickerSpeed,
-    useTickerSettings,
-    withTopic,
-} from '@/lib/ticker-settings'
+import { setSendKey, useSendKey } from '@/lib/send-key'
+import type { SendKey } from '@/lib/send-key'
+import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
+import type { TickerSpeed } from '@/lib/ticker-settings'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
@@ -116,7 +113,9 @@ function TickerPanel() {
                     aria-label="Ticker speed"
                     onValueChange={(value) => {
                         const picked = SPEEDS.find((s) => s.value === value)
-                        if (picked) setTickerSettings({ speed: picked.value })
+                        if (picked) {
+                            setTickerSettings({ speed: picked.value })
+                        }
                     }}
                 >
                     {SPEEDS.map(({ value, label }) => (
@@ -145,7 +144,9 @@ function TickerPanel() {
                         onChange={(event) => {
                             const value = event.currentTarget.value
                             const seconds = value === '' ? undefined : clampGap(Number(value))
-                            if (seconds !== undefined) setTickerSettings({ gap: seconds })
+                            if (seconds !== undefined) {
+                                setTickerSettings({ gap: seconds })
+                            }
                         }}
                         onBlur={(event) => {
                             // Shows what was kept: an empty or out-of-range entry snaps back to the stored value.
@@ -197,7 +198,9 @@ function BuddyPanel() {
                     className="shrink-0"
                     onValueChange={(value) => {
                         const picked = BUDDY.find((b) => b.value === value)
-                        if (picked) setBuddy(picked.value)
+                        if (picked) {
+                            setBuddy(picked.value)
+                        }
                     }}
                 >
                     {BUDDY.map(({ value, label }) => (
@@ -229,7 +232,9 @@ function SendKeyPanel() {
                     className="shrink-0"
                     onValueChange={(value) => {
                         const picked = SEND_KEYS.find((k) => k.value === value)
-                        if (picked) setSendKey(picked.value)
+                        if (picked) {
+                            setSendKey(picked.value)
+                        }
                     }}
                 >
                     {SEND_KEYS.map(({ value, label }) => (
@@ -288,7 +293,9 @@ function SessionPanel() {
         },
     })
     // Mock data served without a secret has no session to end.
-    if (data?.token === 'open') return null
+    if (data?.token === 'open') {
+        return null
+    }
     return (
         <Panel>
             <PanelHeader label="Session" />

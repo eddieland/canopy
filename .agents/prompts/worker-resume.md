@@ -9,13 +9,12 @@ yet. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 {{REPOSITORIES}}
 
 {{STACKING}} If the context says the PR this ticket was stacked on has merged, change this ticket's PR to target its
-repository's base branch listed above, and if the branch then conflicts with it, merge that base into the branch as
-`origin/<base>` and resolve the conflicts. If the context says the PR conflicts with its base, merge that repository's
-base branch listed above into the branch as `origin/<base>`. Either way, canopy fetched it just before you started, so
-do not fetch, and never merge a local branch of that name: it is not the base. Resolve each
-conflict so both sides' changes survive; if one cannot be resolved without a decision about behavior that neither the
-ticket nor the code settles, do not guess: abort the merge and ask, as under "blocked" below. Never rebase: the push
-must not need force.
+repository's base branch listed above, and if the branch then conflicts with it, bring that base into the branch and
+resolve the conflicts. If the context says the PR conflicts with its base, bring that repository's base branch listed
+above into the branch. {{BRANCH_UPDATE}} Either way, canopy fetched the base as `origin/<base>` just before you
+started, so do not fetch, and never use a local branch of that name: it is not the base. Resolve each conflict so both
+sides' changes survive; if one cannot be resolved without a decision about behavior that neither the ticket nor the
+code settles, do not guess: abort and ask, as under "blocked" below.
 
 ## Authorization
 
@@ -86,8 +85,8 @@ commit message.
 
 Same as any canopy worker: stay in {{SLOT}}, push only to `{{BRANCH}}`, with
 `git push origin HEAD:refs/heads/{{BRANCH}}` and no local branch, one push per repository, no CI polling, never
-merge or approve, never transition the ticket directly or through closing keywords. Keep the agent runtime's attribution
-trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invalid>`. The tracker is
+merge or approve, never transition the ticket directly or through closing keywords. {{COMMIT_ATTRIBUTION}}
+The tracker is
 {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load it before touching the ticket.
 If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in the
 title. {{OPEN_PR}} Then add the label `{{PR_LABEL}}` to it if you have a GitHub tool that sets labels, passing nothing

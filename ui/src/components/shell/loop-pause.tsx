@@ -29,9 +29,11 @@ export function LoopPause() {
         onSuccess: (changed) => showLoop(client, changed.loop),
     })
     // The button's width, held before the state arrives, so the readouts beside it do not move.
-    if (loop.data === undefined) return <span aria-hidden className="w-20" />
+    if (loop.data === undefined) {
+        return <span aria-hidden className="w-20" />
+    }
     const paused = loop.data.paused
-    const failed = toggle.error instanceof Error ? toggle.error.message : toggle.error ? 'the request failed' : null
+    const failed = toggle.error?.message ?? null
     return (
         <div className="flex items-center gap-2" data-testid="loop-pause" data-paused={paused !== null}>
             {paused !== null && (

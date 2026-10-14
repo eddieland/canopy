@@ -10,7 +10,7 @@ from canopy.core.conversation import printable
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
 
 class Unusable(Exception):  # noqa: N818  (the dispatch records it as a refusal)
@@ -20,8 +20,11 @@ class Unusable(Exception):  # noqa: N818  (the dispatch records it as a refusal)
 def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[str]) -> str:
     """Return `{{REVIEW_FINDINGS}}` for a `resume` of `key` in `repos`: review run `run_id`'s findings, as data.
 
+    A finding the operator dismissed is left out; the rest keep their numbers.
+
     Raises:
-        Unusable: the run is missing, of another ticket or repository, not `done`, or found nothing.
+        Unusable: the run is missing, of another ticket or repository, not `done`, or found nothing it has not had
+            dismissed.
     """
     run = db.get_review_run(conn, run_id)
     if run is None:
@@ -33,13 +36,16 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
     stored = result.stored(run["result_json"])
     if run["status"] != "done" or stored is None or not stored.findings:
         raise Unusable(f"review run {run_id} ended {run['status']} with no findings to address")
+    dismissed = db.review_dismissals(conn, run_id)
+    if len(dismissed) >= len(stored.findings):
+        raise Unusable(f"the operator dismissed every finding of review run {run_id}: none is left to address")
     lines = [
         (
             f"canopy's review run {run_id} of {run['pr_url']} at commit `{run['sha']}` found these (verdict "
             f"{stored.verdict}, impact {stored.impact}). They are in canopy's journal only, not on the PR:"
         )
     ]
-    lines.extend(_findings(stored))
+    lines.extend(_findings(stored, dismissed, keep_dismissed=False))
     return "\n".join(lines)
 
 
@@ -48,7 +54,9 @@ def listed(conn: sqlite3.Connection, since: str) -> list[str]:
     found: list[str] = []
     for run in db.review_runs_since(conn, since):
         stored = result.stored(run["result_json"])
-        verdict = f"{stored.verdict}, {len(stored.findings)} findings, impact {stored.impact}" if stored else "-"
+        dismissed = len(db.review_dismissals(conn, int(run["id"])))
+        kept = f" ({dismissed} dismissed)" if dismissed else ""
+        verdict = f"{stored.verdict}, {len(stored.findings)} findings{kept}, impact {stored.impact}" if stored else "-"
         found.append(
             f"{run['id']}  {run['started_at']}  {run['status']}  {verdict}  {run['pr_url']} @ {run['sha'][:7]}"
         )
@@ -78,15 +86,18 @@ def described(conn: sqlite3.Connection, run_id: int) -> str:
         if stored.summary:
             lines += ["", printable(stored.summary)]
         if stored.findings:
-            lines += ["", *_findings(stored)]
+            lines += ["", *_findings(stored, db.review_dismissals(conn, run_id), keep_dismissed=True)]
     return "\n".join(lines)
 
 
-def _findings(stored: result.ReviewResult) -> list[str]:
+def _findings(stored: result.ReviewResult, dismissed: Collection[int], *, keep_dismissed: bool) -> list[str]:
     # Every string here is the reviewer's, which read hostile text: printable, so it cannot move a terminal's cursor.
     lines: list[str] = []
     for i, f in enumerate(stored.findings, 1):
+        if i in dismissed and not keep_dismissed:
+            continue
         where = f" `{printable(f.location)}`" if f.location else ""
-        lines.append(f"{i}. **{f.severity}**{where}: {printable(f.title)}")
+        mark = " (dismissed)" if i in dismissed else ""
+        lines.append(f"{i}. **{f.severity}**{where}: {printable(f.title)}{mark}")
         lines.extend(f"   > {line}" for line in printable(f.detail).splitlines())
     return lines

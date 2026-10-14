@@ -4,6 +4,7 @@ What makes a tick idle is checked on a journal written by hand, with no overseer
 the fake overseer on a fake clock, as `test_loop.py` does.
 """
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -12,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -85,6 +87,22 @@ class Case:
 
 def was_idle(ctx: Context, case: Case) -> bool:
     """Write `case`'s two ticks, and say whether the second was idle."""
+    outcome, seen = two_ticks(ctx, case)
+    return pacing.idle(ctx, outcome, seen)
+
+
+def churn_of(ctx: Context, case: Case) -> list[str]:
+    """Write `case`'s two ticks, and say what the second changed with nothing new to see."""
+    outcome, seen = two_ticks(ctx, case)
+    return pacing.churn(ctx, outcome, seen)
+
+
+def two_ticks(ctx: Context, case: Case) -> tuple[tick.Outcome, pacing.Before]:
+    """Write `case`'s two ticks.
+
+    Returns:
+        How the second ended, and what the loop read before it.
+    """
     setup, during, status, previous_read = case.setup, case.during, case.status, case.previous_read
     conn = ctx.conn
     db.migrate(conn, resources.migrations_dir())
@@ -102,7 +120,7 @@ def was_idle(ctx: Context, case: Case) -> bool:
     if during is not None:
         during(conn, tick_id)
     db.finish_tick(conn, tick_id, status, "")
-    return pacing.idle(ctx, tick.Outcome(tick_id, status, ""), seen)
+    return tick.Outcome(tick_id, status, ""), seen
 
 
 def decided(action: str) -> Step:
@@ -149,6 +167,31 @@ def operator_reply(conn: sqlite3.Connection, _tick_id: int) -> None:
     db.insert_message(conn, db.SUBJECT_TICKET, KEY, source="operator", kind="reply", channel="cli", body="Go ahead.")
 
 
+def ticket_started(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.set_start(conn, db.SUBJECT_TICKET, KEY, status="started", channel="web")
+
+
+def ticket_stopped(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.set_start(conn, db.SUBJECT_TICKET, KEY, status="stopped", channel="cli")
+
+
+def started_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:
+    ticket_started(conn, tick_id)
+    conn.execute("UPDATE starts SET started_at = ?", (ago(hours=1),))
+
+
+def attempts_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
+    db.touch_ticket(conn, KEY, "/r")
+    conn.execute(
+        "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, 'r', 'fix-ci', 1, ?)",
+        (KEY, db.now()),
+    )
+
+
+def reviews_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
+    conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (PR, db.now()))
+
+
 def sets_ticket(*, phase: str | None = None, done: bool = False) -> Step:
     return lambda conn, _tick_id: db.set_ticket(conn, KEY, "/r", phase=phase, done=done)
 
@@ -178,6 +221,10 @@ def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(during=chore_starts), id="run started"),
         pytest.param(Case(setup=review_started_long_ago, during=review_ends), id="run ended"),
         pytest.param(Case(during=operator_reply), id="operator message"),
+        pytest.param(Case(during=ticket_started), id="ticket started"),
+        pytest.param(Case(setup=started_long_ago, during=ticket_stopped), id="ticket stopped"),
+        pytest.param(Case(during=attempts_granted), id="attempts granted"),
+        pytest.param(Case(during=reviews_granted), id="reviews granted"),
         pytest.param(Case(status="overseer_failed"), id="not ok"),
         pytest.param(Case(previous_read=False), id="no previous read"),
     ],
@@ -193,6 +240,94 @@ def test_a_run_that_ended_before_the_previous_tick_read_does_not_count(canopy_en
         conn.execute("UPDATE review_runs SET started_at = ?, ended_at = ?", (ago(hours=1), ago(minutes=30)))
 
     assert was_idle(context(canopy_env), Case(setup=setup))
+
+
+# Churn: what a tick changed with nothing new to see (ROADMAP M28), measured on the same journals.
+
+
+def both(*steps: Step) -> Step:
+    def run(conn: sqlite3.Connection, tick_id: int) -> None:
+        for step in steps:
+            step(conn, tick_id)
+
+    return run
+
+
+RELABELLED = both(seen_ticket, sets_ticket(phase="ci_red"))
+
+
+@pytest.mark.parametrize(
+    ("case", "lines"),
+    [
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED), ["PROJ-1 phase ci_running -> ci_red"], id="phase"),
+        pytest.param(
+            Case(
+                setup=seen_ticket,
+                during=both(seen_ticket, lambda c, _t: db.set_unit(c, KEY, "/r", "r", phase="ci_red")),
+            ),
+            ["PROJ-1 (r) phase ci_running -> ci_red"],
+            id="a unit's phase",
+        ),
+        pytest.param(Case(during=listed), ["+PROJ-1 needs_reviewer"], id="item added"),
+        pytest.param(Case(setup=listed), ["-PROJ-1 needs_reviewer"], id="item dropped"),
+        pytest.param(Case(setup=seen_ticket, during=seen_ticket), [], id="nothing changed"),
+        pytest.param(Case(during=seen_ticket), [], id="a ticket first seen"),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, chore_starts)), [], id="a run started"),
+        pytest.param(
+            Case(setup=both(seen_ticket, review_started_long_ago), during=both(RELABELLED, review_ends)),
+            [],
+            id="a run ended",
+        ),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, operator_reply)), [], id="an operator message"),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, ticket_started)), [], id="a start"),
+        pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, attempts_granted)), [], id="a grant"),
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED, status="overseer_failed"), [], id="not ok"),
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED, previous_read=False), [], id="no previous read"),
+    ],
+)
+def test_churn_is_a_change_with_nothing_new_to_see(canopy_env: CanopyEnv, case: Case, lines: list[str]) -> None:
+    assert churn_of(context(canopy_env), case) == lines
+
+
+def test_a_gate_that_opened_since_the_previous_tick_is_something_new(canopy_env: CanopyEnv) -> None:
+    # A gate (a fix-ci cooldown's end, a chore's due time) half way between the two ticks' reads.
+    def gate(_ctx: Context, now: datetime) -> datetime:
+        return now + BACK / 2
+
+    with mock.patch.object(pacing, "gate", autospec=True, side_effect=gate):
+        assert churn_of(context(canopy_env), Case(setup=seen_ticket, during=RELABELLED)) == []
+
+
+def test_the_loop_waits_line_says_what_a_tick_churned(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    ctx = context(canopy_env)
+    time = FakeTime()
+    term, _ = console()
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")))
+
+        def relabel_at_the_first_wait() -> None:
+            if len(time.slept) == 1:
+                stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")))
+
+        time.on_sleep = relabel_at_the_first_wait
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=3,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+    # The first tick sees the ticket first; the second relabels it with nothing new to see; the third leaves it.
+    assert [line["churn"] for line in log_lines(canopy_env, "loop waits")] == [
+        [],
+        [f"{KEY} (repo) phase ci_running -> ci_red"],
+    ]
 
 
 # The wait after a tick.
@@ -267,65 +402,75 @@ def test_a_gate_still_ahead_ends_the_wait_and_one_already_open_does_not(
 
 
 def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     loop_config(canopy_env, interval=1, cap=4)
-    overseer_does(monkeypatch, canopy("decide", KEY, "wait", "--rationale", "checks pending"))
-    time = FakeTime()
+    with (
+        overseer_does(canopy("decide", KEY, "wait", "--rationale", "checks pending")),
+        contextlib.ExitStack() as later,
+    ):
+        time = FakeTime()
 
-    def at_each_wait() -> None:
-        # The fourth tick finds something new: a reviewer asked for changes.
-        if time.now == sum((60, 120, 240)):
-            overseer_does(monkeypatch, canopy("attention", KEY, "needs_reviewer", "--detail", PR))
+        def at_each_wait() -> None:
+            # The fourth tick finds something new: a reviewer asked for changes.
+            if time.now == sum((60, 120, 240)):
+                later.enter_context(overseer_does(canopy("attention", KEY, "needs_reviewer", "--detail", PR)))
 
-    time.on_sleep = at_each_wait
-    term, out = console()
+        time.on_sleep = at_each_wait
+        term, out = console()
 
-    statuses = repeat.run(
-        context(canopy_env),
-        dry_run=True,
-        interval_minutes=1,
-        max_ticks=6,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=1,
+            max_ticks=6,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
 
-    assert statuses == {"ok": 6}
-    # The first tick saw PROJ-1 for the first time, the next two found nothing, the fourth raised an item, and the
-    # fifth found nothing again: idle counts restart from it.
-    assert waits(canopy_env) == [(0, 60), (1, 120), (2, 240), (0, 60), (1, 120)]
-    assert sum(time.slept) == sum((60, 120, 240, 60, 120))
-    text = out.getvalue()
-    assert "wait 1 minute after each tick ends, up to 4 minutes when idle" in text
-    assert "idle 2, next tick in 4m 00s at" in text
-    assert "attention 0  ·  next tick in 1m 00s at" in text
-    [started] = log_lines(canopy_env, "loop started")
-    assert started["idle_max_minutes"] == 4
-    assert [line["idle"] for line in log_lines(canopy_env, "loop waits")] == [False, True, True, False, True]
-    # The journal records the same, the last tick's included, for spend on idle ticks.
-    assert recorded(canopy_env) == [(0, "start"), (1, "timer"), (1, "timer"), (0, "timer"), (1, "timer"), (1, "timer")]
+        assert statuses == {"ok": 6}
+        # The first tick saw PROJ-1 for the first time, the next two found nothing, the fourth raised an item, and the
+        # fifth found nothing again: idle counts restart from it.
+        assert waits(canopy_env) == [(0, 60), (1, 120), (2, 240), (0, 60), (1, 120)]
+        assert sum(time.slept) == sum((60, 120, 240, 60, 120))
+        text = out.getvalue()
+        assert "wait 1 minute after each tick ends, up to 4 minutes when idle" in text
+        assert "idle 2, next tick in 4m 00s at" in text
+        assert "attention 0  ·  next tick in 1m 00s at" in text
+        [started] = log_lines(canopy_env, "loop started")
+        assert started["idle_max_minutes"] == 4
+        assert [line["idle"] for line in log_lines(canopy_env, "loop waits")] == [False, True, True, False, True]
+        # The journal records the same, the last tick's included, for spend on idle ticks.
+        assert recorded(canopy_env) == [
+            (0, "start"),
+            (1, "timer"),
+            (1, "timer"),
+            (0, "timer"),
+            (1, "timer"),
+            (1, "timer"),
+        ]
 
 
 def test_the_cap_stays_the_cap_however_long_nothing_changes(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     loop_config(canopy_env, interval=1, cap=3)
-    overseer_does(monkeypatch)
-    time = FakeTime()
-    term, _ = console()
-    repeat.run(
-        context(canopy_env),
-        dry_run=True,
-        interval_minutes=1,
-        max_ticks=5,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
-    assert waits(canopy_env) == [(0, 60), (1, 120), (2, 180), (3, 180)]
+    with overseer_does():
+        time = FakeTime()
+        term, _ = console()
+        repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=1,
+            max_ticks=5,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+        assert waits(canopy_env) == [(0, 60), (1, 120), (2, 180), (3, 180)]
 
 
 @pytest.mark.parametrize(("interval", "cap", "every"), [(1, 1, None), (1, 4, 4), (1, 4, 5)])
@@ -333,44 +478,42 @@ def test_a_cap_not_above_base_keeps_todays_pacing(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     interval: int,
     cap: int,
     every: int | None,
 ) -> None:
     loop_config(canopy_env, interval=interval, cap=cap)
-    overseer_does(monkeypatch)
-    base = (every or interval) * 60
-    time = FakeTime()
-    term, out = console()
-    repeat.run(
-        context(canopy_env),
-        dry_run=True,
-        interval_minutes=every or interval,
-        max_ticks=4,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
-    assert waits(canopy_env) == [(0, base)] * 3
-    assert sum(time.slept) == 3 * base
-    assert "when idle" not in out.getvalue()
-    assert "idle " not in out.getvalue()
-    # Pacing does not count them, but the journal still says which ticks were idle.
-    assert recorded(canopy_env) == [(0, "start"), (1, "timer"), (1, "timer"), (1, "timer")]
+    with overseer_does():
+        base = (every or interval) * 60
+        time = FakeTime()
+        term, out = console()
+        repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=every or interval,
+            max_ticks=4,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+        assert waits(canopy_env) == [(0, base)] * 3
+        assert sum(time.slept) == 3 * base
+        assert "when idle" not in out.getvalue()
+        assert "idle " not in out.getvalue()
+        # Pacing does not count them, but the journal still says which ticks were idle.
+        assert recorded(canopy_env) == [(0, "start"), (1, "timer"), (1, "timer"), (1, "timer")]
 
 
 def test_the_cli_paces_from_every_with_the_configured_cap(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    overseer_does(monkeypatch)
-    assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
-    assert "wait 3 minutes after each tick ends, up to 120 minutes when idle" in capsys.readouterr().out
+    with overseer_does():
+        assert main(["loop", "--dry-run", "--ticks", "1", "--every", "3"]) == 0
+        assert "wait 3 minutes after each tick ends, up to 120 minutes when idle" in capsys.readouterr().out
 
 
 def finishes_review(db_path: Path) -> list[str]:
@@ -385,7 +528,7 @@ def finishes_review(db_path: Path) -> list[str]:
 
 @pytest.mark.parametrize("when", ["during the tick", "during the wait", "an operator message", "before the tick"])
 def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch, when: str
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, when: str
 ) -> None:
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
@@ -396,48 +539,107 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
     if when == "before the tick":
         assert db.finish_review_run(ctx.conn, run_id, "done", None)
     commands = [finishes_review(canopy_env.state_dir / db.DB_FILE_NAME)] if when == "during the tick" else []
-    overseer_does(monkeypatch, *commands)
+    with overseer_does(*commands):
+        time = FakeTime()
+
+        def at_each_wait() -> None:
+            if len(time.slept) != 1:
+                return
+            if when == "during the wait":
+                assert db.finish_review_run(ctx.conn, run_id, "done", None)
+            elif when == "an operator message":
+                assert main(["reply", KEY, "Go ahead."]) == 0
+
+        time.on_sleep = at_each_wait
+        term, out = console()
+
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+
+        # The hand-made tick, the loop's first, then the tick the wait ended in.
+        woken_by = {"an operator message": "message", "before the tick": "timer"}.get(when, "run")
+        assert [w for _, w in recorded(canopy_env)] == [None, "start", woken_by]
+        if when == "before the tick":
+            # The tick could see that run end: nothing for the wait to wake for.
+            assert sum(time.slept) == 900
+            assert not log_lines(canopy_env, "a run ending ended the wait")
+            return
+        # Woken at once, but no sooner than a minute after the tick began, not fifteen.
+        assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+        message = (
+            "an operator message ended the wait" if when == "an operator message" else "a run ending ended the wait"
+        )
+        assert len(log_lines(canopy_env, message)) == 1
+        assert "next tick in 15m 00s at" in out.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("act", "woken", "message"),
+    [
+        ("start", "starts", "a ticket started or stopped ended the wait"),
+        ("stop", "starts", "a ticket started or stopped ended the wait"),
+        ("grant attempts", "grant", "a grant ended the wait"),
+        ("grant reviews", "grant", "a grant ended the wait"),
+    ],
+)
+@pytest.mark.parametrize("pacing_on", [True, False], ids=["pacing on", "pacing off"])
+def test_the_operators_start_stop_and_grant_end_the_wait(
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    agent_log: Path,
+    act: str,
+    woken: str,
+    message: str,
+    pacing_on: bool,  # noqa: FBT001
+) -> None:
+    loop_config(canopy_env, interval=15, cap=120 if pacing_on else 15)
+    ctx = context(canopy_env)
+    if act == "stop":
+        assert main(["start", KEY]) == 0  # before the loop: its first tick sees it
     time = FakeTime()
 
-    def at_each_wait() -> None:
+    def at_first_wait() -> None:
         if len(time.slept) != 1:
             return
-        if when == "during the wait":
-            assert db.finish_review_run(ctx.conn, run_id, "done", None)
-        elif when == "an operator message":
-            assert main(["reply", KEY, "Go ahead."]) == 0
+        if act in {"start", "stop"}:
+            assert main([act, KEY]) == 0
+        elif act == "grant attempts":
+            attempts_granted(ctx.conn, 0)
+        else:
+            reviews_granted(ctx.conn, 0)
 
-    time.on_sleep = at_each_wait
+    time.on_sleep = at_first_wait
     term, out = console()
+    with overseer_does():
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=None,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
 
-    repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=15,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
-
-    # The hand-made tick, the loop's first, then the tick the wait ended in.
-    woken_by = {"an operator message": "message", "before the tick": "timer"}.get(when, "run")
-    assert [w for _, w in recorded(canopy_env)] == [None, "start", woken_by]
-    if when == "before the tick":
-        # The tick could see that run end: nothing for the wait to wake for.
-        assert sum(time.slept) == 900
-        assert not log_lines(canopy_env, "a run ending ended the wait")
-        return
-    # Woken at once, but no sooner than a minute after the tick began, not fifteen.
+    # Woken at once, but no sooner than a minute after the tick began, whatever the pacing; and the tick it woke is
+    # not idle.
     assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
-    message = "an operator message ended the wait" if when == "an operator message" else "a run ending ended the wait"
+    assert recorded(canopy_env) == [(0, "start"), (0, woken)]
     assert len(log_lines(canopy_env, message)) == 1
     assert "next tick in 15m 00s at" in out.getvalue()
 
 
 def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     loop_config(canopy_env, interval=15, cap=15)
     ctx = context(canopy_env)
@@ -445,28 +647,28 @@ def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
     first = db.start_tick(ctx.conn, dry_run=True)
     db.finish_tick(ctx.conn, first, "ok", "")
     run_id = review_run(ctx.conn, first)
-    overseer_does(monkeypatch)
+    with overseer_does():
 
-    def run_ends() -> None:
-        db.finish_review_run(ctx.conn, run_id, "done", None)
+        def run_ends() -> None:
+            db.finish_review_run(ctx.conn, run_id, "done", None)
 
-    time = FakeTime(on_sleep=run_ends)
-    term, _ = console()
-    repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=15,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
-    assert sum(time.slept) == 900
+        time = FakeTime(on_sleep=run_ends)
+        term, _ = console()
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+        assert sum(time.slept) == 900
 
 
 def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     (canopy_env.home / "chores").mkdir()
     (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
@@ -475,27 +677,27 @@ def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
     db.migrate(ctx.conn, resources.migrations_dir())
     # The chore runs every 120 minutes: one that started 115 minutes ago is due in 5, before the 15-minute interval.
     chore_started(ctx.conn, datetime.now(UTC) - timedelta(minutes=115))
-    overseer_does(monkeypatch)
-    time = FakeTime()
-    term, _ = console()
-    repeat.run(
-        ctx,
-        dry_run=True,
-        interval_minutes=15,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
-    assert sum(time.slept) == pytest.approx(300, abs=5)
-    # The hand-made tick that ran the chore, the loop's first, then the one the gate started.
-    assert [w for _, w in recorded(canopy_env)] == [None, "start", "gate"]
+    with overseer_does():
+        time = FakeTime()
+        term, _ = console()
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+        assert sum(time.slept) == pytest.approx(300, abs=5)
+        # The hand-made tick that ran the chore, the loop's first, then the one the gate started.
+        assert [w for _, w in recorded(canopy_env)] == [None, "start", "gate"]
 
 
 def test_a_tick_run_by_hand_records_nothing_of_the_loop(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    overseer_does(monkeypatch)
-    assert main(["tick", "--dry-run"]) == 0
-    assert recorded(canopy_env) == [(None, None)]
+    with overseer_does():
+        assert main(["tick", "--dry-run"]) == 0
+        assert recorded(canopy_env) == [(None, None)]

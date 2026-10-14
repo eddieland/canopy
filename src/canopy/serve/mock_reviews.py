@@ -11,6 +11,7 @@ import json
 from typing import TYPE_CHECKING
 
 from canopy.core import review_diff
+from canopy.core.review_result import Finding, ReviewResult
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -27,56 +28,52 @@ SHA_91 = "c47a91e0" + "5" * 32
 SHA_12 = "0d8e3b57" + "1" * 32
 _UNKNOWN = "the reviewer's last line was not a valid result"
 
-_STALE = {
-    "status": "done",
-    "verdict": "findings",
-    "impact": "normal",
-    "summary": "The debounce works, but a slow response can overwrite a newer one.",
-    "findings": [
-        {
-            "severity": "blocking",
-            "title": "A stale response replaces the results of a newer query",
-            "location": "src/search/useSearch.ts:11",
-            "detail": "Nothing cancels the earlier fetch, so typing `ab` then `abc` shows `ab`'s results whenever "
-            "they arrive last.",
-        }
+_STALE = ReviewResult(
+    status="done",
+    verdict="findings",
+    impact="normal",
+    summary="The debounce works, but a slow response can overwrite a newer one.",
+    findings=[
+        Finding(
+            severity="blocking",
+            title="A stale response replaces the results of a newer query",
+            location="src/search/useSearch.ts:11",
+            detail="Nothing cancels the earlier fetch, so typing `ab` then `abc` shows `ab`'s results whenever they "
+            "arrive last.",
+        )
     ],
-}
-_LATEST = {
-    "status": "done",
-    "verdict": "findings",
-    "impact": "normal",
-    "summary": "Stale requests are aborted now. Two smaller things remain; neither holds the merge on its own.",
-    "findings": [
-        {
-            "severity": "major",
-            "title": "A failed request leaves the spinner on",
-            "location": "src/search/useSearch.ts:15",
-            "detail": "`setLoading(false)` runs only after a successful `json()`. A network error or a 500 rejects "
+)
+_LATEST = ReviewResult(
+    status="done",
+    verdict="findings",
+    impact="normal",
+    summary="Stale requests are aborted now. Two smaller things remain; neither holds the merge on its own.",
+    findings=[
+        Finding(
+            severity="major",
+            title="A failed request leaves the spinner on",
+            location="src/search/useSearch.ts:15",
+            detail="`setLoading(false)` runs only after a successful `json()`. A network error or a 500 rejects "
             "first, so `loading` stays true until the next query.\nMove it into a `finally`, and skip it for an "
             "aborted request.",
-        },
-        {
-            "severity": "minor",
-            "title": "The debounce delay is a bare number",
-            "location": "src/search/SearchBox.tsx:6",
-            "detail": "Name it, as `SEARCH_DEBOUNCE_MS` beside the other timings in `src/config.ts`.",
-        },
-        {
-            "severity": "minor",
-            "title": "No test covers an aborted request",
-            "location": "src/search/useSearch.test.ts",
-            "detail": "The new hook's tests check the debounce only.",
-        },
+        ),
+        Finding(
+            severity="minor",
+            title="The debounce delay is a bare number",
+            location="src/search/SearchBox.tsx:6",
+            detail="Name it, as `SEARCH_DEBOUNCE_MS` beside the other timings in `src/config.ts`.",
+        ),
+        Finding(
+            severity="minor",
+            title="No test covers an aborted request",
+            location="src/search/useSearch.test.ts",
+            detail="The new hook's tests check the debounce only.",
+        ),
     ],
-}
-_CLEAN: dict[str, object] = {
-    "status": "done",
-    "verdict": "clean",
-    "impact": "low",
-    "summary": "A README fix: the port it names.",
-    "findings": [],
-}
+)
+_CLEAN = ReviewResult(
+    status="done", verdict="clean", impact="low", summary="A README fix: the port it names.", findings=[]
+)
 
 DIFF_88 = """\
 diff --git a/src/search/SearchBox.tsx b/src/search/SearchBox.tsx
@@ -141,10 +138,10 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
     reviews.mkdir(mode=0o700, exist_ok=True)
     rows = (
         # id, PR, commit, ticket, repo, started, ended, status, result, cost, diff
-        (1, PR_88, SHA_88_FIRST, "ABC-099", "web", -100, -97, "done", _STALE, 0.21, None),
-        (2, PR_12, SHA_12, None, "api", -80, -79, "done", _CLEAN, 0.06, DIFF_12),
-        (3, PR_91, SHA_91, "ABC-103", "web", -70, -69, "unknown", {"harness": _UNKNOWN}, 0.02, None),
-        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", _LATEST, 0.24, DIFF_88),
+        (1, PR_88, SHA_88_FIRST, "ABC-099", "web", -100, -97, "done", _STALE.model_dump_json(), 0.21, None),
+        (2, PR_12, SHA_12, None, "api", -80, -79, "done", _CLEAN.model_dump_json(), 0.06, DIFF_12),
+        (3, PR_91, SHA_91, "ABC-103", "web", -70, -69, "unknown", json.dumps({"harness": _UNKNOWN}), 0.02, None),
+        (4, PR_88, SHA_88, "ABC-099", "web", -58, -56, "done", _LATEST.model_dump_json(), 0.24, DIFF_88),
     )
     for run_id, pr, sha, ticket, repo, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"
@@ -161,7 +158,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
                 at(started),
                 at(ended),
                 status,
-                json.dumps(result),
+                result,
                 str(log_path),
                 f"ses_review{run_id}",
                 cost,

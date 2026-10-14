@@ -10,7 +10,9 @@ const UNITS: [suffix: string, seconds: number][] = [
 export function age(iso: string, now: number): string {
     const seconds = Math.max(0, Math.floor((now - Date.parse(iso)) / 1000))
     for (const [suffix, size] of UNITS) {
-        if (seconds >= size) return `${Math.floor(seconds / size)}${suffix}`
+        if (seconds >= size) {
+            return `${Math.floor(seconds / size)}${suffix}`
+        }
     }
     return `${seconds}s`
 }
@@ -32,7 +34,9 @@ function subscribe(listener: () => void): () => void {
         now = Date.now()
         timer = setInterval(() => {
             now = Date.now()
-            for (const notify of listeners) notify()
+            for (const notify of listeners) {
+                notify()
+            }
         }, TICK_MS)
     }
     return () => {

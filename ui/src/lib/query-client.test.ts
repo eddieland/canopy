@@ -10,11 +10,11 @@ describe('createQueryClient', () => {
         const client = createQueryClient()
         client.setQueryData(keys.session, { signed_in: true, token: 't' })
         await client
-            .fetchQuery({
+            .query({
                 queryKey: ['runs'],
                 queryFn: () => Promise.reject(new ApiError(401, 'sign in with the listener secret')),
             })
-            .catch(() => undefined)
+            .catch(() => {})
         expect(client.getQueryData(keys.session)).toEqual({ signed_in: false, token: null })
     })
 })

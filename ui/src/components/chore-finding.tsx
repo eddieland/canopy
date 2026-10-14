@@ -1,6 +1,6 @@
-import { ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
@@ -14,7 +14,9 @@ import { cn } from '@/lib/utils'
  * operator dismissed it, with a small button in its head line to dismiss it or list it again.
  */
 export function ChoreFindingRow({ finding, chore }: { finding: ChoreFinding | ChoreRunFinding; chore?: string }) {
-    if (chore !== undefined && 'since' in finding) return <OpenFindingRow chore={chore} finding={finding} />
+    if (chore !== undefined && 'since' in finding) {
+        return <OpenFindingRow chore={chore} finding={finding} />
+    }
     return <FindingRow finding={finding} />
 }
 
@@ -57,8 +59,8 @@ function FindingRow({
                         'hover:underline',
                     )}
                 >
-                    {finding.link.replace(/^https:\/\//, '')}
-                    <ExternalLink className="size-3" />
+                    {finding.link.replace(/^https:\/\//u, '')}
+                    <LinkOutIcon href={finding.link} />
                 </a>
             )}
             {notice}

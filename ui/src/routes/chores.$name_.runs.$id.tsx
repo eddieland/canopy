@@ -29,12 +29,13 @@ function ChoreRunPage() {
     const title = `chore:${name} #${id}`
     // A chore run's id is a positive number, as a run's is.
     const parsed = tickId(id)
-    if (parsed === null)
+    if (parsed === null) {
         return (
             <NoRun name={name} title={title}>
                 not a chore run: its id is a positive number
             </NoRun>
         )
+    }
     return <Loaded name={name} id={parsed} />
 }
 
@@ -63,8 +64,8 @@ function Loaded({ name, id }: { name: string; id: number }) {
     return (
         <>
             <PageHeader parents={<ChoreCrumb name={name} />} title={title}>
-                What the chore's agent did, from its session's events in the run's log: its text, each tool call with
-                its input and output, and what each model call cost.
+                What the chore&apos;s agent did, from its session&apos;s events in the run&apos;s log: its text, each
+                tool call with its input and output, and what each model call cost.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel detail={data} />

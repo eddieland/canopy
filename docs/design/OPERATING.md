@@ -17,15 +17,15 @@ The schema is `migrations/0001_init.sql`, the whole schema as of v0.1; a journal
 migrations is not upgraded (D068). Each later change is a new migration. Tables:
 
 - `ticks`: one row per tick; id, timestamps, dry_run, status, summary, and what it read up to (`message_id`, `read_at`,
-  §6 step 3). Status is `running`, `ok`, `skipped`, `overseer_failed`, `reconcile_failed`, or `abandoned`. What the
-  runtime reported about its overseer run (§13), in the same columns as `runs`: `session_id`, `cost_usd`, and tokens by
-  kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it dispatched records its
-  own. On a tick `canopy loop` ran, whether it was idle and what ended the wait before it (`idle`, `woken_by`, §6 Idle
-  pacing), so spend can be split by what it bought; NULL on a hand-run tick. `canopy decisions [TICK]` prints a tick
-  (the latest by default), its overseer's session and cost, and its decisions; `--ticket KEY` filters decisions by exact
-  ticket key and reports when none match. This is the way to read a dry run's plan. The web UI shows the same: its ticks
-  page lists the latest 50, a tick's page its decisions, and a ticket's page the latest decisions about it across ticks
-  (§22). A tick that cannot take the lock writes no row.
+  §6 step 3). Status is `running`, `ok`, `skipped`, `canopy_unavailable`, `overseer_failed`, `reconcile_failed`, or
+  `abandoned`. What the runtime reported about its overseer run (§13), in the same columns as `runs`: `session_id`,
+  `cost_usd`, and tokens by kind, all NULL when it reported nothing. A tick's cost is its overseer's alone; each run it
+  dispatched records its own. On a tick `canopy loop` ran, whether it was idle and what ended the wait before it
+  (`idle`, `woken_by`, §6 Idle pacing), so spend can be split by what it bought; NULL on a hand-run tick.
+  `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its decisions;
+  `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a dry run's
+  plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a ticket's page
+  the latest decisions about it across ticks (§22). A tick that cannot take the lock writes no row.
 - `tickets`: one row per ticket key seen; the workspace root (`repo`), the ticket's own last derived phase, its
   branch (named by its first implement), the comment cursor (`last_comment_id`), a private ticket's message cursor
   (`last_message_id`, §22), the mirror cursor (`last_mirrored_id`, §22), done flag, and, once the operator forgot its
@@ -47,6 +47,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   pids, times, status, the validated result (§21), and what the runtime reported (§13), as `runs` has it.
   `decisions.pr` names the PR of a decision about a review.
 - `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
+  Only added to.
+- `review_grants`: one row per `canopy grant URL review`; the PR's URL, review runs granted, and when (§21, §22).
   Only added to.
 - `split_children`: one row per ticket a split created; its parent, the repository it covers, and the split run.
   Written only by `_run` from a validated split result (§18).
@@ -104,6 +106,8 @@ to do instead.
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
+| `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whether and whom the operator's commits credit (§8) |
+| `trust.rebase` | user-only | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
 | `capacity.*` | user-only | the operator's machine and spend |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
@@ -173,6 +177,10 @@ authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, .
 trusted_reviewers = ["github-login", "canopy:review"]   # whose PR feedback a worker addresses unasked (§7)
 comment_prefix = "CANOPY:"   # every worker comment starts with it (§8)
 comment_suffix = ""          # and ends with this, if set
+commit_trailer = true                            # a worker adds this trailer when the runtime adds none (§8)
+commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
+commit_trailer_email = "noreply@canopy.invalid"  # at this address
+rebase = false               # true: workers rebase and push with a lease, never merge a base in (§8)
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -200,6 +208,23 @@ most 100 characters with no whitespace, colon, or backtick.
 
 `trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter or
 digit, no backtick, and no surrounding spaces, and at least one is set.
+
+`trust.commit_trailer_name` and `trust.commit_trailer_email` make the `Co-authored-by` trailer a worker adds to its
+commits when the agent runtime adds no attribution of its own (§8, TRUST_MODEL T5). The name is one line of at most 80
+characters, with a letter or digit, no backtick or angle bracket, and no surrounding spaces; the address is at most 254
+characters, with one `@` and no whitespace, backtick, or angle bracket. They are user-only because the commits are the
+operator's: a shared file must not credit agent work to a person. Set them to name agent work the way the team's
+tooling expects, such as a team's bot address, and never to a person: the trailer is how a reader tells the work is
+an agent's. `trust.commit_trailer = false` turns the trailer off, for a runtime whose own attribution suffices or a
+team whose tooling rejects it: a worker still keeps the runtime's trailer, but adds none of its own, so with a runtime
+that adds none the commits carry no trailer, and only the branch prefix and the PR mark the work. It is user-only for
+the same reason.
+
+`trust.rebase` is for repositories whose host or CI refuses merge commits. Set, a worker that brings a base branch into
+its branch rebases onto it instead of merging it, and pushes the result with `git push --force-with-lease`; the
+worker's definition allows that one force and no other, and `canopy _run`'s own push takes a lease on the commit the
+run started from (§8, TRUST_MODEL T1). It applies to every repository the operator works on. It is user-only because
+it lets a worker replace a branch's history: a shared file must not decide that.
 
 Rules:
 
@@ -247,13 +272,15 @@ custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DI
 agent, which allows everything (D040). `env` in the default templates is the ordinary program, not a shell.
 `notify.cmd` is split the same way, gets its input on stdin, and must not contain `{prompt}`.
 
-Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An override must keep what the guards rely
-on: an overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include
-`{{LABELS}}` and the authorization check that uses it (§8, D051); a worker override without it is refused as
-`bad_prompt`. The default is `prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME`
-says otherwise; an empty value means the default. `paths.*` values must be absolute or start with `~`, since canopy
-runs from the workspace root and a relative path would let a shared workspace supply them (TRUST_MODEL T7). There is
-no key for the state directory: it is always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
+Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An overseer override goes where the
+shipped prompt goes, into the overseer's definition in a snapshot of its own (§13), so a change to it reaches the next
+tick, and one canopy cannot read as UTF-8 refuses the snapshot. An override must keep what the guards rely on: an
+overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include `{{LABELS}}` and
+the authorization check that uses it (§8, D051); a worker override without it is refused as `bad_prompt`. The default is
+`prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise; an empty value
+means the default. `paths.*` values must be absolute or start with `~`, since canopy runs from the workspace root and a
+relative path would let a shared workspace supply them (TRUST_MODEL T7). There is no key for the state directory: it is
+always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
 
 `paths.worker_instructions` names a file of the operator's standing instructions, a few habits every worker should
 keep, such as how to commit review fixes. canopy renders it into every worker prompt but a split's, as
@@ -264,10 +291,11 @@ the dispatch as `bad_prompt` rather than running a worker without it. Like every
 serves every workspace the user file does.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, and every shipped skill is in the definitions directory (§13). `tracker.query` is how the
-overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue search), otherwise plain
-language. It finds tickets; it does not authorize them (§17). The repository's query usually omits the label; an
-operator can override it in the user file to include their labels and save the overseer reads.
+skill, and every shipped skill is in the definitions directory (§13). The one use canopy makes of it is to look up that
+skill by name and give it to the overseer in its definition, so it need not be loaded on every tick (§13).
+`tracker.query` is how the overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue
+search), otherwise plain language. It finds tickets; it does not authorize them (§17). The repository's query usually
+omits the label; an operator can override it in the user file to include their labels and save the overseer reads.
 
 ## 13. Agent runtime
 
@@ -354,16 +382,26 @@ title starts with a letter or digit (a key, `tick`, `chore:`, `review`), so not 
 Rationale in D040 and D044.
 
 canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<digest>/`, named for a digest of their
-contents (`definitions.py`). One definition is rendered from the user config first: `canopy-worker-private` gets the
-tracker's MCP server and the tools of it a private worker may call (§22), so a change to those keys makes a new snapshot
-rather than changing one. A snapshot is written to a temporary directory, renamed into place, and never changed, so
-overlapping runs never load a partial set. The overseer run and each `_run` use the installed canopy's snapshot,
-creating it if missing. A snapshot canopy made is readable only by the operator; one that is a symlink, someone else's,
-or open to others (for example from a checkout of a shared workspace, §18) is refused: the overseer's refusal fails the
-tick, a worker's is a `crashed` run. When no run is live, reconcile removes other snapshots and temporary directories
-over an hour old; a live run may be an earlier canopy's, still loading its snapshot. OpenCode scans both `agent/` and
-`agents/` (and `skill/` and `skills/`) in a config directory, and writes a `.gitignore` and `node_modules/` into each
-one it loads, the snapshot included.
+contents (`definitions.py`). Two definitions are rendered from config first, so a change to what they are rendered from
+makes a new snapshot rather than changing one:
+
+- `canopy-worker-private` gets the tracker's MCP server and the tools of it a private worker may call (§22).
+- `canopy-overseer` gets the overseer's prompt, the operator's override if there is one (§12), as its body from a marked
+  line on, followed by the shipped `tracker-<provider>` skill for `tracker.provider`, without its frontmatter, when
+  canopy ships one. OpenCode sends an agent's body as its system prompt, which the provider caches across ticks with
+  the tool schemas; a tick's message is its state block alone (§6). The skill stays in `skills/` too, for the workers.
+  An override canopy cannot read refuses the snapshot, which fails the tick and every run started from it, as a
+  snapshot that is not private does (below): a run without its definitions would run without the prompt. A definition
+  canopy did not render, such as the shipped file loaded by hand, tells the overseer to print `no prompt supplied` and
+  exit.
+
+A snapshot is written to a temporary directory, renamed into place, and never changed, so overlapping runs never load a
+partial set. The overseer run and each `_run` use the installed canopy's snapshot, creating it if missing. A snapshot
+canopy made is readable only by the operator; one that is a symlink, someone else's, or open to others (for example from
+a checkout of a shared workspace, §18) is refused: the overseer's refusal fails the tick, a worker's is a `crashed` run.
+When no run is live, reconcile removes other snapshots and temporary directories over an hour old; a live run may be an
+earlier canopy's, still loading its snapshot. OpenCode scans both `agent/` and `agents/` (and `skill/` and `skills/`) in
+a config directory, and writes a `.gitignore` and `node_modules/` into each one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), required in every template that runs a
 canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §19's `chore_cmd`, §21's
@@ -421,10 +459,10 @@ with control characters dropped and cut at 160 characters; and its session id, i
 reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-`attempt_limit`, a private ticket's `awaiting_reply` (§22), and in a workspace `repo_missing` and the overseer's
-`multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add `chore_failed` and their findings, listed by
-chore after the ticket items (§19). Reviews add `review_failed` and `review_limit`, about a PR
-(§21). An item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
+`attempt_limit`, a private ticket's `awaiting_reply` (§22), `canopy_unavailable` (§6 step 5), and in a workspace
+`repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
+`chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
+`review_limit`, about a PR (§21). An item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to
@@ -443,12 +481,18 @@ The harness also raises `repo_missing` every tick for each repository in the wor
 `repos/<name>`. It has no ticket key, carries the repository's name, and is shown under that name. Its cause is gone
 once `canopy workspace sync` (or anything else) puts the clone there.
 
+A tick raises `canopy_unavailable` when `canopy --version` fails from the overseer's environment, and runs no overseer
+(§6 step 5). It is about neither a ticket nor a repository, and is shown as `-`. Its detail says why, and its cause is
+gone at the first tick that ends otherwise.
+
 The overseer records an item with `canopy attention <KEY> <reason> [--repo NAME] --detail "<link or text>"`, every tick
 the cause holds. `--repo` names the unit it is about, such as the PR waiting on a reviewer. The item is stored as a
 decision with action `attention:<reason>`, not in a separate table (D020). The current list is the attention decisions
 of the latest `ok` tick: an item disappears the first tick that does not record it, and a failed or `skipped` tick
-leaves the previous list standing. Dry-run ticks count like live ones. An item's age runs from the first tick of its
-unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
+leaves the previous list standing. A `canopy_unavailable` tick adds its one item to that list while it is the latest
+tick to have ended, open since the first such tick after the last `ok` one. The overseer's state block lists its own
+open items (`attention`, §6 step 4), so it records each again until it sees the cause gone. Dry-run ticks count like
+live ones. An item's age runs from the first tick of its unbroken run. Reasons must match `[a-z][a-z0-9_]*`.
 
 `attempt_limit` is raised two ways: the overseer records it when the state block shows a ticket at its limit for the
 work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal. Either way it lasts as long as the
@@ -474,10 +518,12 @@ never notified twice, and an item that returns after going away is new again.
   records the status; the ticket goes to attention (§14).
 - Stale lease without a run: returned in reconcile.
 - treehouse unavailable or failing in reconcile: tick closes with `reconcile_failed`; the overseer does not run.
+- `canopy --version` fails from the overseer's environment: tick closes with `canopy_unavailable`, the overseer does
+  not run, and the item of that name is on the attention list until a tick ends otherwise (§6 step 5).
 - Overseer timeout or bad output: tick closes with `overseer_failed`; nothing is dispatched; next tick retries. Three
   consecutive ticks that end other than `ok` produce a `loop.failing` notification for sinks that take `loop`, once per
   streak, and `loop.recovered` at the next `ok` tick (§20). There is no attention item for this: the attention list is
-  the latest `ok` tick's, so a failing loop cannot add to it.
+  the latest `ok` tick's, so a failing loop cannot add to it; `canopy_unavailable`, above, is the one exception.
 - MCP unavailable: the overseer reports it with a tick-wide `skip`; the tick closes as `skipped` and `canopy tick`
   exits 1; no decisions are made on partial data, and the attention list stays as it was. The overseer prompt
   says so explicitly.

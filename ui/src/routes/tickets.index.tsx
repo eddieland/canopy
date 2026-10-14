@@ -58,18 +58,19 @@ function TicketsPage() {
 }
 
 function Row({ ticket }: { ticket: TicketSummary }) {
+    const phase = `${phaseLabel(ticket)}${ticket.done ? ', done' : ''}`
     return (
         <li className="flex items-center gap-3 px-3 py-2.5" data-testid={`ticket-${ticket.key}`}>
             <TicketLink ticketKey={ticket.key} className="w-24 shrink-0 truncate" />
             <TicketTitle title={ticket.title} className="flex-1" />
-            <span className="flex w-32">
+            {/* Fixed widths from here on, so every row's chip, phase, and run line up whatever the others say. */}
+            <span className="flex w-36 shrink-0">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
             </span>
-            <span className="font-mono text-xs text-muted-foreground">
-                {phaseLabel(ticket)}
-                {ticket.done ? ', done' : ''}
+            <span className="w-40 shrink-0 truncate font-mono text-xs text-muted-foreground" title={phase}>
+                {phase}
             </span>
-            <span className="flex items-center gap-4">
+            <span className="flex w-32 shrink-0 flex-col gap-0.5 whitespace-nowrap">
                 {ticket.running_run !== null && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
                         <RunDot state="running" />
@@ -82,8 +83,8 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                         waiting on you
                     </span>
                 )}
-                <Age at={ticket.active_at} className="w-10 text-right" />
             </span>
+            <Age at={ticket.active_at} className="w-10 shrink-0 text-right" />
         </li>
     )
 }

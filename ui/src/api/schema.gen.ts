@@ -297,6 +297,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/pull-request/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant a PR a review
+         * @description `canopy grant URL review`, for one more: the PR may have one more review run than now (DESIGN §21).
+         *
+         *     Every review run still counts (D030), and it reviews nothing: the next tick decides. A URL canopy has never reviewed
+         *     is refused `unknown`; one that is not a PR's, `bad_ref`.
+         */
+        post: operations["grantPullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pull-requests": {
         parameters: {
             query?: never;
@@ -351,6 +374,26 @@ export type paths = {
         get: operations["getReview"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss a review's finding
+         * @description `canopy dismiss review:ID N`: no worker or tick acts on the finding. With `undo`, `--undo` (DESIGN §21).
+         */
+        post: operations["dismissReviewFinding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -574,6 +617,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tickets/{key}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Grant a ticket's unit a run
+         * @description `canopy grant KEY KIND --repo NAME`, for one more run: the unit may have one more run of the kind than now.
+         *
+         *     Every run still counts (D030), and it dispatches nothing: the next tick decides. `repo` may be left out when the
+         *     ticket has had runs in one repository only; else it is refused `unknown_repo`, as a ticket with no runs is.
+         */
+        post: operations["grantTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets/{key}/replies": {
         parameters: {
             query?: never;
@@ -766,6 +832,11 @@ export type components = {
              * @description Stable across ticks and rewordings: the item's fingerprint.
              */
             id: string;
+            /**
+             * Pr
+             * @description The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found.
+             */
+            pr: string | null;
             /**
              * Reason
              * @description Why: `awaiting_reply`, `worker_failed`, ..., or a chore finding's id.
@@ -981,6 +1052,60 @@ export type components = {
             title: string;
         };
         /**
+         * ChoreSpend
+         * @description What one chore's runs cost in the last day and the last 30 days, read together.
+         */
+        ChoreSpend: {
+            /** @description The last 24 hours. */
+            day: components["schemas"]["ChoreSpendWindow"];
+            /** @description The last 30 days. */
+            month: components["schemas"]["ChoreSpendWindow"];
+        };
+        /**
+         * ChoreSpendWindow
+         * @description What one chore's runs that started in the last `hours` hours cost, as the agent runtime reported it (§13).
+         *
+         *     No start time, unlike `SpendWindow`: that moves with the clock, and would change the chores list on every read.
+         */
+        ChoreSpendWindow: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Hours
+             * @description How long the window is, in hours.
+             */
+            hours: number;
+            /**
+             * Max Usd
+             * @description What the dearest run cost, of those that reported a cost; None when none did.
+             */
+            max_usd: number | null;
+            /**
+             * Mean Usd
+             * @description What a run cost on average, over those that reported a cost; None when none did.
+             */
+            mean_usd: number | null;
+            /**
+             * P99 Usd
+             * @description The 99th percentile of what a run cost, by nearest rank over those that reported a cost: the dearest run when
+             *     fewer than 100 did. None when none did.
+             */
+            p99_usd: number | null;
+            /**
+             * Priced
+             * @description How many of those reported a cost.
+             */
+            priced: number;
+            /**
+             * Runs
+             * @description How many of its runs started in the window, a running one included.
+             */
+            runs: number;
+        };
+        /**
          * ChoreSummary
          * @description A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings.
          */
@@ -1026,6 +1151,8 @@ export type components = {
             name: string;
             /** @description Its run that is running now, if one is. */
             running: components["schemas"]["ChoreRun"] | null;
+            /** @description What its runs cost in the last day and the last 30 days. */
+            spend: components["schemas"]["ChoreSpend"];
             /**
              * Timezone
              * @description The IANA zone `days` and `hours` are in; None for the local time of the machine the loop runs on.
@@ -1100,6 +1227,32 @@ export type components = {
              * @description The changed keys that take effect only when the loop restarts: the web UI's listener.
              */
             restart: string[];
+        };
+        /**
+         * CostTotal
+         * @description What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran.
+         */
+        CostTotal: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Priced
+             * @description How many of those runs and review runs reported a cost.
+             */
+            priced: number;
+            /**
+             * Reviews
+             * @description How many review runs it counts, a running one included.
+             */
+            reviews: number;
+            /**
+             * Runs
+             * @description How many worker and split runs it counts, a running one included.
+             */
+            runs: number;
         };
         /**
          * Decision
@@ -1312,6 +1465,47 @@ export type components = {
              */
             prs: string[];
         };
+        /**
+         * Granted
+         * @description What a grant recorded: one more run allowed, every earlier one still counted (D030). The next tick decides.
+         */
+        Granted: {
+            /** @description The kind it allows one more of. */
+            kind: components["schemas"]["LimitKind"];
+            /**
+             * Limit
+             * @description Its limit now, the grant counted.
+             */
+            limit: number;
+            /**
+             * Repo
+             * @description The unit's repository, named or found; None for a PR's reviews.
+             */
+            repo: string | null;
+            /**
+             * Runs
+             * @description Its runs of the kind so far, unchanged by the grant.
+             */
+            runs: number;
+        };
+        /**
+         * @description A kind of run a ticket's unit is limited in, which `canopy grant` raises (DESIGN §8, §22).
+         * @enum {string}
+         */
+        GrantKind: "implement" | "fix-ci" | "resume";
+        /**
+         * GrantRequest
+         * @description A grant of one more run of a kind to one of a ticket's units, as `canopy grant KEY KIND --repo NAME` does.
+         */
+        GrantRequest: {
+            /** @description The kind of run to allow one more of. */
+            kind: components["schemas"]["GrantKind"];
+            /**
+             * Repo
+             * @description The unit's repository; may be left out when the ticket has had runs in one repository only.
+             */
+            repo?: string | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1331,6 +1525,47 @@ export type components = {
             /** @description The latest tick; None before the first. */
             tick: components["schemas"]["Tick"] | null;
         };
+        /**
+         * Limit
+         * @description A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22).
+         *
+         *     Every run counts, however it ended (D030), so `runs` only grows; at `limit` the loop does no more of the kind until
+         *     the operator grants more or raises the policy.
+         */
+        Limit: {
+            /**
+             * Granted
+             * @description The runs the operator granted it past the policy's limit.
+             */
+            granted: number;
+            /** @description What it counts. */
+            kind: components["schemas"]["LimitKind"];
+            /**
+             * Limit
+             * @description The most runs of the kind it may have: the policy's limit plus `granted`.
+             */
+            limit: number;
+            /**
+             * Pr Url
+             * @description The PR, for a review limit.
+             */
+            pr_url: string | null;
+            /**
+             * Repo
+             * @description The unit's repository; for a review limit, the repository of the unit whose PR it is, if any.
+             */
+            repo: string | null;
+            /**
+             * Runs
+             * @description Its runs of the kind so far.
+             */
+            runs: number;
+        };
+        /**
+         * @description What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs.
+         * @enum {string}
+         */
+        LimitKind: "implement" | "fix-ci" | "resume" | "review";
         /**
          * LoopState
          * @description Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes.
@@ -1570,6 +1805,8 @@ export type components = {
          * @description One PR: the runs that pushed to it, canopy's reviews of it, and the decisions that name it.
          */
         PullRequestDetail: {
+            /** @description What every run it lists cost, not only the 20 shown, and every review run of it. */
+            cost: components["schemas"]["CostTotal"];
             /**
              * Decisions
              * @description The latest 20 decisions naming it, across ticks, newest first.
@@ -1577,6 +1814,8 @@ export type components = {
             decisions: components["schemas"]["Decision"][];
             /** @description The PR, as the PRs list shows it. */
             pull_request: components["schemas"]["PullRequest"];
+            /** @description Its review runs against its limit (DESIGN §21); None when canopy has never reviewed it. */
+            review_limit: components["schemas"]["Limit"] | null;
             /**
              * Reviews
              * @description Every review run of it, newest first; each opens its own page, with its findings on its diff.
@@ -1702,6 +1941,44 @@ export type components = {
             truncated: boolean;
         };
         /**
+         * ReviewDismissed
+         * @description What a dismissal of a review's finding left: the finding, and whether it is now dismissed.
+         */
+        ReviewDismissed: {
+            /**
+             * Dismissed
+             * @description Whether it is now dismissed: false after an `undo`.
+             */
+            dismissed: boolean;
+            /**
+             * Finding
+             * @description The finding's number in the review, from 1.
+             */
+            finding: number;
+            /**
+             * Run
+             * @description The review run's id.
+             */
+            run: number;
+        };
+        /**
+         * ReviewDismissRequest
+         * @description A dismissal of one of a review run's findings, by its number, or with `undo` the taking back of one.
+         */
+        ReviewDismissRequest: {
+            /**
+             * Finding
+             * @description The finding's number in the review, from 1.
+             */
+            finding: number;
+            /**
+             * Undo
+             * @description Take the dismissal back, as `--undo` does.
+             * @default false
+             */
+            undo: boolean;
+        };
+        /**
          * ReviewFinding
          * @description One finding, with where it falls in the diff: `file` indexes the diff's files, `line` is on the new side.
          *
@@ -1713,6 +1990,12 @@ export type components = {
              * @description Its detail, as the reviewer wrote it: untrusted text.
              */
             detail: string;
+            /**
+             * Dismissed
+             * @description Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21).
+             * @default false
+             */
+            dismissed: boolean;
             /**
              * File
              * @description The index in the diff's files of the file it is in; None when the diff does not show it.
@@ -2197,7 +2480,7 @@ export type components = {
             started_at: string;
             /**
              * Status
-             * @description running | ok | skipped | overseer_failed | reconcile_failed | abandoned
+             * @description running | ok | skipped | canopy_unavailable | overseer_failed | reconcile_failed | abandoned
              */
             status: string;
             /**
@@ -2246,11 +2529,20 @@ export type components = {
          * @description One ticket: what `canopy show` prints, and the latest decisions about it.
          */
         TicketDetail: {
+            /** @description What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace. */
+            cost: components["schemas"]["CostTotal"];
             /**
              * Decisions
              * @description The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it.
              */
             decisions: components["schemas"]["Decision"][];
+            /**
+             * Limits
+             * @description Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
+             *     has reviewed.
+             * @default []
+             */
+            limits: components["schemas"]["Limit"][];
             /**
              * Messages
              * @description Its conversation: the latest 100 messages, oldest first.
@@ -2415,6 +2707,8 @@ export type components = {
              * @default []
              */
             entries: components["schemas"]["TranscriptEntry"][];
+            /** @description The session's prompt, kept beside the log, if canopy kept one and it could be read. */
+            prompt: components["schemas"]["TranscriptPrompt"] | null;
             /**
              * Session Id
              * @description The runtime's session, if it reported one.
@@ -2448,6 +2742,11 @@ export type components = {
              */
             at: string | null;
             /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
+            /**
              * @description What the entry is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
@@ -2464,6 +2763,27 @@ export type components = {
             name: string;
         };
         /**
+         * TranscriptPrompt
+         * @description The message canopy gave the runtime to start the session (DESIGN §22).
+         *
+         *     The first model call's input, but for the agent's definition and the runtime's own system prompt and tools, which
+         *     nothing records.
+         */
+        TranscriptPrompt: {
+            /**
+             * Text
+             * @description The prompt as canopy rendered it, control characters dropped: untrusted in part, since it quotes tickets,
+             *     comments, and PRs.
+             */
+            text: string;
+            /**
+             * Truncated
+             * @description It holds more than the bound read.
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
          * @description `read`: the log was read, whether or not it held any of the session's events yet (a running run's reach it when the run ends). `no_session`: the runtime reported no session (a template without `--format json`). `no_log`: the log is missing, a symlink, or not a regular file.
          * @enum {string}
          */
@@ -2478,6 +2798,11 @@ export type components = {
              * @description When the runtime reported it, if it said.
              */
             at: string | null;
+            /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
             /**
              * Cost Usd
              * @description What it cost, in US dollars.
@@ -2511,6 +2836,11 @@ export type components = {
              * @description When the runtime reported it, if it said.
              */
             at: string | null;
+            /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
             /**
              * Cut
              * @description Cut at the transcript's bound for one text.
@@ -2575,6 +2905,11 @@ export type components = {
              * @description When the runtime reported it, if it said.
              */
             at: string | null;
+            /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
             /**
              * Cut
              * @description Its input or output was cut at the transcript's bound for one.
@@ -3436,6 +3771,65 @@ export interface operations {
             };
         };
     };
+    grantPullRequest: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Granted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listPullRequests: {
         parameters: {
             query?: never;
@@ -3558,6 +3952,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismissReviewFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewDismissRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDismissed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4091,6 +4548,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Forgot"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grantTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Granted"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

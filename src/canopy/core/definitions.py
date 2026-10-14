@@ -4,9 +4,13 @@ canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<
 contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial one.
 Command templates name it with `{definitions_dir}`, and OpenCode reads it through `OPENCODE_CONFIG_DIR`.
 
-One definition is rendered from config: `canopy-worker-private` gets the tracker's MCP server and the tools of it a
-private worker may call (`render_private`, DESIGN §22). The digest covers the rendered text, so a config change makes a
-new snapshot rather than changing one a run may be loading.
+Three definitions are rendered from config. `canopy-worker-private` gets the tracker's MCP server and the tools of it a
+private worker may call (`render_private`, DESIGN §22). Both workers get the rule that lets them push a rebased branch
+with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8). `canopy-overseer` gets the overseer's prompt, the
+operator's override if any, and the tracker's skill if canopy ships one, as its body (`render_overseer`): the body is
+the agent's system prompt, which the provider caches across ticks, where the state block, the tick's message, changes
+every tick (DESIGN §6). The digest covers the rendered text, so a config or override change makes a new snapshot rather
+than changing one a run may be loading.
 
 OpenCode merges a repository's definition of an agent into canopy's, and a repository that repeats one of canopy's
 permission patterns can put its own rules after it (D044). So a run refuses to start in a directory whose OpenCode
@@ -25,6 +29,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from canopy.core import prompts
 from canopy.infra import logs, resources
 
 if TYPE_CHECKING:
@@ -34,10 +39,25 @@ RUNTIME_DIR = "runtime"
 _TMP_PREFIX = ".tmp-"
 # A temporary directory this old belongs to a process that died mid-copy; a copy takes well under a second.
 _STALE_TMP_SECONDS = 3600
+WORKER = "canopy-worker"
 PRIVATE_WORKER = "canopy-worker-private"
 _PRIVATE_FILE = f"agents/{PRIVATE_WORKER}.md"
+_WORKER_FILES = (f"agents/{WORKER}.md", _PRIVATE_FILE)
+# The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
+_REBASE_MARKER = "    # canopy: rebase rules\n"
+# The one forced push `trust.rebase` allows, after the deny of every other: the prompts' own command, a lease on the
+# branch's remote-tracking ref. A `--force` added to it is denied again; the rules after the marker still deny the rest.
+_REBASE_RULES = (
+    '    "git push --force-with-lease origin HEAD:refs/heads/*": allow\n',
+    '    "git push *--force": deny\n',
+    '    "git push *--force *": deny\n',
+)
 # The line of the shipped private worker definition the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
+OVERSEER = "canopy-overseer"
+_OVERSEER_FILE = f"agents/{OVERSEER}.md"
+# The line of the shipped overseer definition its prompt replaces, with everything after it.
+_PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 
 
 class DefinitionsError(Exception):
@@ -67,11 +87,45 @@ def render_private(text: str, tools: TrackerTools | None) -> str:
     return text.replace(_TOOLS_MARKER, _TOOLS_MARKER + "".join(rules), 1)
 
 
+def render_rebase(text: str, name: str, *, rebase: bool) -> str:
+    """Return worker definition `name` with the rules for a rebased branch's push at its marked line, if `rebase`.
+
+    Without `rebase`, the marked line stays as it is, and every forced push stays denied (TRUST_MODEL T1).
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the rules at.
+    """
+    if _REBASE_MARKER not in text:
+        raise DefinitionsError(f"{name} has no line {_REBASE_MARKER.strip()!r} to render the rebase rules at")
+    if not rebase:
+        return text
+    return text.replace(_REBASE_MARKER, _REBASE_MARKER + "".join(_REBASE_RULES), 1)
+
+
+def render_overseer(text: str, prompt: str, skill: str | None) -> str:
+    """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
+
+    The body is the agent's system prompt, so it is cached across ticks with the tools (DESIGN §6, §13). `skill` is the
+    tracker's skill, its own frontmatter left out: given here, the overseer need not load it with a tool call each tick.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the prompt at.
+    """
+    head, marker, _ = text.partition(_PROMPT_MARKER)
+    if not marker:
+        raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_PROMPT_MARKER.strip()!r} to render the prompt at")
+    parts = [prompt] if skill is None else [prompt, skill]
+    return head + "\n\n".join(part.strip("\n") for part in parts) + "\n"
+
+
 def sources(config: Config | None = None) -> dict[str, bytes]:
     """Return the snapshot's files by relative path.
 
-    They are the bundled agents and skills, with the private worker's definition rendered from `config` when it is
-    given.
+    They are the bundled agents and skills, with the workers' and the overseer's definitions rendered from `config`
+    when it is given.
+
+    Raises:
+        DefinitionsError: The overseer's prompt cannot be read.
     """
     found: dict[str, bytes] = {}
     for name, root in (("agents", resources.agents_dir()), ("skills", resources.skills_dir())):
@@ -80,7 +134,35 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
     if config is not None and _PRIVATE_FILE in found:
         text = found[_PRIVATE_FILE].decode()
         found[_PRIVATE_FILE] = render_private(text, config.tracker.tools()).encode()
+    for rel in _WORKER_FILES:
+        if config is not None and rel in found:
+            found[rel] = render_rebase(found[rel].decode(), rel, rebase=config.trust.rebase).encode()
+    if config is not None and _OVERSEER_FILE in found:
+        path = prompts.prompt_path(config, prompts.OVERSEER)
+        try:
+            prompt = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            raise DefinitionsError(f"cannot read the overseer prompt {path}: {e}") from e
+        skill = _tracker_skill(found, config.tracker.provider)
+        text = found[_OVERSEER_FILE].decode()
+        found[_OVERSEER_FILE] = render_overseer(text, prompt, skill).encode()
     return found
+
+
+def _tracker_skill(found: Mapping[str, bytes], provider: str) -> str | None:
+    """Return the shipped skill for `provider`, introduced by name, without the frontmatter that names it for loading.
+
+    Returns:
+        The skill's text, or None when canopy ships no skill for `provider`.
+    """
+    name = f"tracker-{provider}"
+    data = found.get(f"skills/{name}/SKILL.md")
+    if data is None:
+        return None
+    text = data.decode()
+    if text.startswith("---\n"):
+        _, _, text = text.removeprefix("---\n").partition("\n---\n")
+    return f"The skill `{name}` follows, given here so that you need not load it.\n\n{text.strip()}"
 
 
 def digest(config: Config | None = None) -> str:
@@ -110,7 +192,8 @@ def ensure(state_dir: Path, config: Config | None = None) -> Path:
     checkout of a shared workspace (DESIGN §18), and could loosen canopy's agents, so it is refused, never loaded.
 
     Raises:
-        DefinitionsError: the snapshot's directory exists and is not private to the operator.
+        DefinitionsError: the snapshot's directory exists and is not private to the operator, or the overseer's prompt
+            cannot be read.
         OSError: the snapshot could not be written, and no other process put one in its place.
     """
     files = sources(config)

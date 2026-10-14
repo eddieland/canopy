@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react'
 
 import { LinkedText } from '@/components/linked-text'
-import { type Block, clamp, type Line, parse } from '@/lib/rich-text'
+import { clamp, parse } from '@/lib/rich-text'
+import type { Block, Inline, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 
 /** How many lines a summary or a rationale shows in a list's row before its toggle. */
@@ -44,7 +45,7 @@ export function RichText({ text, lines, className }: { text: string; lines?: num
 
 function BlockView({ block }: { block: Block }) {
     switch (block.kind) {
-        case 'paragraph':
+        case 'paragraph': {
             return (
                 <p>
                     {block.lines.map((line, i) => (
@@ -55,12 +56,14 @@ function BlockView({ block }: { block: Block }) {
                     ))}
                 </p>
             )
-        case 'heading':
+        }
+        case 'heading': {
             return (
                 <p className="font-medium">
                     <LineView line={block.line} />
                 </p>
             )
+        }
         case 'list': {
             const items = block.items.map((item, i) => (
                 <li key={i} className={DEPTH[item.depth]}>
@@ -81,32 +84,34 @@ function BlockView({ block }: { block: Block }) {
                 <ul className={cn(list, 'list-disc')}>{items}</ul>
             )
         }
-        case 'code':
+        case 'code': {
             return (
                 <pre className="overflow-x-auto rounded-sm border bg-surface-raised px-2 py-1.5 font-mono text-xs">
                     {block.lines.join('\n')}
                 </pre>
             )
+        }
     }
 }
 
 function LineView({ line }: { line: Line }) {
-    return line.map((piece, i) => {
-        switch (piece.kind) {
-            case 'text':
-                return <LinkedText key={i} text={piece.text} />
-            case 'strong':
-                return (
-                    <strong key={i} className="font-semibold">
-                        <LinkedText text={piece.text} />
-                    </strong>
-                )
-            case 'code':
-                return (
-                    <code key={i} className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.85em]">
-                        {piece.text}
-                    </code>
-                )
+    return line.map((piece, i) => <InlineView key={i} piece={piece} />)
+}
+
+function InlineView({ piece }: { piece: Inline }) {
+    switch (piece.kind) {
+        case 'text': {
+            return <LinkedText text={piece.text} />
         }
-    })
+        case 'strong': {
+            return (
+                <strong className="font-semibold">
+                    <LinkedText text={piece.text} />
+                </strong>
+            )
+        }
+        case 'code': {
+            return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.85em]">{piece.text}</code>
+        }
+    }
 }

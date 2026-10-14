@@ -4,18 +4,19 @@ session read back from the events its log holds. Reads only; every text in them 
 import dataclasses
 import json
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core import transcript
-from canopy.serve import mock
+from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.test_serve import client
 
 
 @pytest.fixture
 def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+    return serve_mock.seed(tmp_path / "mock")
 
 
 def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> None:
@@ -71,6 +72,7 @@ def test_a_runtime_error_ends_a_failed_runs_transcript(backend: Backend) -> None
         "at": "2026-10-08T10:49:54Z",
         "name": "APIError",
         "message": "Rate limited: retry after 60s",
+        "call": 2,
     }
 
 
@@ -96,22 +98,49 @@ def test_a_run_with_no_session_or_no_log_says_so(backend: Backend) -> None:
         ctx.conn.execute("UPDATE runs SET session_id = NULL WHERE id = 39")
         log = ctx.state_dir / "runs" / "40.log"
     log.unlink()
-    assert c.get("/api/runs/39/transcript").json() == {
-        "status": "no_session",
-        "session_id": None,
-        "entries": [],
-        "truncated": False,
-        "unreadable": 0,
-    }
+    found = c.get("/api/runs/39/transcript").json()
+    # The prompt is canopy's own, kept whether or not the runtime reported a session.
+    assert found.pop("prompt")["text"].startswith("# canopy worker: implement\n")
+    assert found == {"status": "no_session", "session_id": None, "entries": [], "truncated": False, "unreadable": 0}
     assert c.get("/api/runs/40/transcript").json()["status"] == "no_log"
     # A link in a log's place is not followed: a worker cannot point it at a file of the operator's.
     log.symlink_to(log.parent / "41.log")
     assert c.get("/api/runs/40/transcript").json()["status"] == "no_log"
 
 
-def test_a_transcript_past_its_bounds_says_it_was_cut(backend: Backend, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(transcript, "MAX_ENTRIES", 3)
-    found = client(None, backend).get("/api/runs/39/transcript").json()
+def test_each_entry_names_its_model_call_and_the_prompt_is_the_first_calls_input(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/runs/39/transcript").json()
+    assert [(e["kind"], e["call"]) for e in found["entries"]] == [
+        ("text", 1),
+        ("tool", 1),
+        ("tool", 1),
+        ("tool", 1),
+        ("step", 1),
+        ("text", 2),
+        ("tool", 2),
+        ("tool", 2),
+        ("step", 2),
+        ("tool", 3),
+        ("tool", 3),
+        ("text", 3),
+        ("step", 3),
+    ]
+    with backend.open() as ctx:
+        kept = ctx.state_dir / "runs" / "39.prompt"
+    assert found["prompt"] == {"text": kept.read_text(), "truncated": False}
+    # A run canopy kept no prompt for has none; a link in a prompt's place is not followed.
+    assert c.get("/api/runs/41/transcript").json()["prompt"] is None
+    (kept.parent / "41.prompt").symlink_to(kept)
+    assert c.get("/api/runs/41/transcript").json()["prompt"] is None
+    # A tick's prompt is its state block, and a chore run's is beside its log too.
+    assert c.get("/api/ticks/2/transcript").json()["prompt"]["text"].startswith("## State\n")
+    assert c.get("/api/chores/deps/runs/2/transcript").json()["prompt"]["text"].startswith("# canopy chore: deps\n")
+
+
+def test_a_transcript_past_its_bounds_says_it_was_cut(backend: Backend) -> None:
+    with mock.patch.object(transcript, "MAX_ENTRIES", 3):
+        found = client(None, backend).get("/api/runs/39/transcript").json()
     assert (len(found["entries"]), found["truncated"]) == (3, True)
 
 

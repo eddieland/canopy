@@ -375,16 +375,21 @@ review. A review run killed
 mid-way is detected on the next tick, its slot returned, and `review_failed` raised. A PR at its limit gets no more
 reviews.
 
-Status: in progress. Code, fakes-based tests (`tests/canopy/test_reviews.py`), and docs are in. Checked live on
-2026-10-07 with OpenCode 1.18.32: the reviewer canary passes, and with `agent_prs` on, PR #69 got one identified
-`clean` comment at its commit and no GitHub review. Accept's other live checks are SCENARIOS S19 to S21. What keeps it
-open: on 2026-10-12 all seven review runs of a live session ended `unknown` within about 15 seconds, the reviewer's
-last line not a valid result, and the overseer's retries for them cost $2.21 (MEASUREMENTS 2026-10-12, F4). Not
-diagnosed yet; next is a failed review run's log. On 2026-10-13 the operator decided that reviews post nothing on the
-PR (D114): the comment, its marker, and `review_unposted` are gone, the reviewer needs no write tool (so the
-`add_issue_comment` grant the 2026-10-07 check needed is moot), and findings reach a worker through `--review-run` and
-the operator through `canopy review show`. Over the first day 8 of 11 review runs ended `unknown` within seconds
-(MEASUREMENTS 2026-10-13, F18).
+Status: done 2026-10-13.
+Learned:
+
+- Closed on the operator's real use. Checked live on 2026-10-07 with OpenCode 1.18.32: the reviewer canary passed, and
+  PR #69 was reviewed once at its commit. Accept's other live checks are SCENARIOS S19 to S21.
+- The review runs that ended `unknown` within seconds (MEASUREMENTS 2026-10-12 F4, 2026-10-13 F18) were an OpenCode
+  plugin printing log lines on stdout after the reviewer's result, under a plain-text template, so the last line was
+  not the result. Since #218 a JSON contract is the last line of the text that starts with `{`, for every agent's
+  result. The fix landed at 15:33Z, inside the 2026-10-13 window, so that window's count mostly predates it.
+- Reviews post nothing on the PR (D114): findings reach a worker through `--review-run` and the operator through
+  `canopy review show`. Use added `canopy dismiss review:ID N`, which keeps a finding from any worker or tick, and
+  `canopy grant URL review`, which raises one PR's review limit.
+
+Next: the next spend measurement counts review runs ending `unknown`, to confirm F18 is gone. M32 shows reviews in the
+web UI.
 
 ## M12. The loop
 
@@ -430,9 +435,10 @@ Accept: written with the design, before work starts.
 Status: in progress. Taken in part on request (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids:
 worker, split, chore, and review runs and each tick's overseer record their cost in dollars and tokens, so every agent
 run canopy starts is in the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
-and the web UI's attention page (the last 24 hours and 30 days) show it. A tick's cost is its overseer's alone, so a
-worker's is not counted against the tick that dispatched it. An `overseer_cmd`, `review_cmd`, or chore `cmd` in a user
-file from before needs `--format json` added. What keeps it open: the budget and the pacing rule are not designed.
+and the web UI's attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's
+cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`,
+`review_cmd`, or chore `cmd` in a user file from before needs `--format json` added. What keeps it open: the budget
+and the pacing rule are not designed.
 
 ## M14. PR-scoped work
 
@@ -623,6 +629,8 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI. Forget too, behind the ticket's key typed out (§22). Taken on request
   (2026-10-12).
+- Grant too, one run a click, for a unit or a PR at its limit, where the stuck ticket or PR is shown (§22). Taken on
+  request (2026-10-13).
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
   while it is open, with the running run or review holding each. Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
@@ -832,8 +840,12 @@ tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
 before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
 that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). Next: the wrapper, the policy template, `docs/SANDBOX.md`, the canary, and TRUST_MODEL T4
-and T6.
+back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `examples/sandbox/`, tested
+against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
+included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
+`allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
+denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
+§6). Next: `docs/SANDBOX.md`, the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 
@@ -852,6 +864,10 @@ what an OpenCode session did, its tool calls above all, in the browser rather th
 - TRUST_MODEL T8: the listener serves agent output from a file, which holds whatever a tool read.
 - Tests: the reader against OpenCode's event shapes, the routes over the mock journal, and Playwright from the runs page
   to a run's tool calls.
+- Model calls joined it on request (2026-10-13): each entry carries the model call it came from, a transcript carries
+  the prompt kept beside its log (a tick now keeps its state block as `ticks/<id>.prompt`), and By call groups the
+  page's rows into calls that open to what each was sent and what it did (DESIGN §22). The agent's definition and the
+  runtime's system prompt and tools are not shown: no file records them, `opencode export` included.
 
 Accept: the tests above pass. Live: after a day of `canopy loop`, the operator opens a worker run's page and a tick's,
 and finds the tool calls `opencode export <id>` shows for the same session, and a failed run's runtime error.
@@ -881,16 +897,15 @@ in code can catch, and the same reasons keep idle pacing from counting a quiet t
 - The done line: the overseer ends its final message with a line `CANOPY_TICK_DONE`, and may summarize before or after
   it; the harness accepts it as a line anywhere in that message, never in an earlier one. DESIGN §6, with the
   operator's approval note in the PR for the prompt.
-- A ticket started or stopped from the web UI or the CLI (`starts`), attempts granted (`canopy grant`), and a config
-  reload each end the loop's wait as an operator message does, with the same one-minute floor, count against
-  idleness the same way, and are recorded as what woke the tick (`ticks.woken_by`). DESIGN §6 (The loop, Idle pacing)
-  and §22 (Waking the loop).
+- A ticket started or stopped from the web UI or the CLI (`starts`) and attempts granted (`canopy grant`) each end the
+  loop's wait as an operator message does, with the same one-minute floor, count against idleness the same way, and
+  are recorded as what woke the tick (`ticks.woken_by`). DESIGN §6 (The loop, Idle pacing) and §22 (Waking the loop).
+  A config reload does not: the operator declined it (2026-10-13).
 - Churn, measured before it is fixed: the loop's `loop waits` log line says when a tick changed a phase or the
   attention list with no run, message, start, or gate since the tick before. Prompt changes follow only when the
   `decisions` table shows a pattern. The first day shows one (2026-10-13 F17): the overseer leaves out an attention
-  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Open: whether that is a
-  prompt fix, or the harness keeps an item until the overseer resolves it or a tick that could see the world drops
-  it.
+  item and restores it a tick later, and a tick without the tracker's MCP wipes the list. Settled by the operator
+  (2026-10-13): a prompt fix, with the overseer's open items in its state block (DESIGN §6 step 4).
 - Tests with the fakes: a missing or failing `canopy` closes the tick without starting the fake overseer; a start ends
   the wait; a fake overseer that prints a summary after `CANOPY_TICK_DONE` closes the tick `ok`.
 
@@ -982,10 +997,18 @@ cannot be done well.
 Accept: the tests above pass. Live: on a journal from a week of `canopy loop`, the operator finds a ticket by a word
 of its title and a run by a phrase from its summary, and a search nothing matches answers in under a second.
 
-Status: in progress. Code, tests, and docs are in (2026-10-13). Measured before choosing a plain scan: SQLite's `LIKE`
-reads about 1.6 ms per MB of text when nothing matches (56 MB of messages in 90 ms), and stops at the limit when
-hits are many, so an FTS5 index, with its migration and triggers, waits until a real journal is slow. Waiting on the
-operator: the live search Accept describes.
+Status: done 2026-10-13.
+Learned:
+
+- Closed on the operator's real use, searching a real journal in the web UI, without the timed check Accept
+  describes, which is SCENARIOS S32.
+- A plain scan was chosen on a measurement, not a guess: SQLite's `LIKE` reads about 1.6 ms per MB of text when nothing
+  matches (56 MB of messages in 90 ms) and stops at a source's limit when hits are many, so an FTS5 index, with its
+  migration and triggers, was not needed to start.
+
+Next: FTS5 waits until a real journal's empty search takes more than a quarter of a second (DESIGN §22, Search); S32
+times one. Ticket titles become searchable only when the journal records them, which needs the overseer to report
+them.
 
 ## M32. Shadow PR reviews in the web UI
 
@@ -1005,8 +1028,9 @@ Status: in progress. Migration 0016 records a review run's base branch, and `_re
 them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note. The
 Reviews pages show them, findings on the diff. The pull requests pages make the PR the subject: each PR the journal
 knows, the loop's own included before any review, with its page of the runs that pushed to it, its reviews, and the
-decisions naming it. Next: what the operator does from
-a finding, through the journal's channels; then the live check, a real review's page against its PR's diff on GitHub.
+decisions naming it. The operator dismisses a finding from its card or with `canopy dismiss review:ID N` (2026-10-13),
+which holds it back from a resume's worker and from the overseer, for that run only. Next: sending some findings to a
+worker from the page; then the live check, a real review's page against its PR's diff on GitHub.
 
 ## M33. Spend by what it bought
 
@@ -1057,7 +1081,8 @@ Accept: the tests above pass. Live: a re-measurement (MEASUREMENTS) shows the fi
 state block's size, not the prompt's plus the state block's, on ticks that start within the cache's lifetime of the
 one before, and a median such tick at least 15% cheaper at the same price, with no change in what the ticks decided.
 
-Status: not started.
+Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
+the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
 
 ## M35. A private-only queue
 

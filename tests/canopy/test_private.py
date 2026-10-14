@@ -1,9 +1,15 @@
 """Private tickets (DESIGN §22, ROADMAP M18): `canopy start`, `stop`, `reply`, and `show`, the private worker, and the
 journal's conversation, against the fake treehouse, a fake overseer, and a fake worker."""
 
+import contextlib
+import io
 import json
+import os
 import sqlite3
+import sys
+from collections.abc import Iterator
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -41,26 +47,31 @@ def agent_runs(agent_log: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
-def private_worker_does(monkeypatch: pytest.MonkeyPatch, *commands: list[str], result: dict[str, object]) -> None:
-    monkeypatch.setenv("FAKE_WORKER_PRIVATE_COMMANDS", json.dumps(list(commands)))
-    monkeypatch.setenv("FAKE_WORKER_PRIVATE_RESULT", json.dumps(result))
+@contextlib.contextmanager
+def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iterator[None]:
+    """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
+    with mock.patch.dict(
+        os.environ,
+        {"FAKE_WORKER_PRIVATE_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_PRIVATE_RESULT": json.dumps(result)},
+    ):
+        yield
 
 
 def blocked() -> dict[str, object]:
     return {"status": "blocked", "branch": BRANCH, "prs": {"repo": None}, "summary": "half done", "question": QUESTION}
 
 
-def operator(*args: str, monkeypatch: pytest.MonkeyPatch) -> int:
+def operator(*args: str) -> int:
     """Run one of the operator's commands, from the operator's shell: outside any tick or run."""
-    monkeypatch.delenv("CANOPY_TICK_ID", raising=False)
-    return main(list(args))
+    with mock.patch.dict(os.environ):
+        os.environ.pop("CANOPY_TICK_ID", None)
+        return main(list(args))
 
 
-def dispatch(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, *args: str, runner: InlineRunner) -> int:
-    tick_id = in_tick(conn, monkeypatch)
-    code = main(["dispatch", KEY, "--repo", "repo", *args], runner=runner)
-    db.finish_tick(conn, tick_id, "ok", "test")
-    monkeypatch.delenv("CANOPY_TICK_ID")
+def dispatch(conn: sqlite3.Connection, *args: str, runner: InlineRunner) -> int:
+    with in_tick(conn) as tick_id:
+        code = main(["dispatch", KEY, "--repo", "repo", *args], runner=runner)
+        db.finish_tick(conn, tick_id, "ok", "test")
     return code
 
 
@@ -76,21 +87,20 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # ROADMAP M18's acceptance, the harness's half.
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
     assert "is started, privately" in capsys.readouterr().out
 
     # Dispatched with no label: the start record authorizes it, and the harness picks the private worker.
-    private_worker_does(monkeypatch, *commit_and_push(BRANCH), result=blocked())
-    runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
-    run = last_run(conn)
-    assert run["private"] == 1
-    assert "private: started by the operator" in capsys.readouterr().out
-    assert main(["_run", str(run["id"])], runner=runner) == 0
+    with private_worker_does(*commit_and_push(BRANCH), result=blocked()):
+        runner = InlineRunner()
+        assert dispatch(conn, "--kind", "implement", runner=runner) == 0
+        run = last_run(conn)
+        assert run["private"] == 1
+        assert "private: started by the operator" in capsys.readouterr().out
+        assert main(["_run", str(run["id"])], runner=runner) == 0
     [worker] = agent_runs(agent_log)
     argv = worker["argv"]
     assert isinstance(argv, list)
@@ -103,75 +113,80 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
     assert (question["kind"], question["body"]) == ("question", QUESTION)
 
     # The question is on the attention list, raised by the harness, and in `canopy show`.
-    overseer_does(monkeypatch, canopy("decide", KEY, "wait", "--rationale", "waiting on the operator"))
-    assert main(["tick"]) == 0
-    ctx = context(canopy_env)
-    [item] = [i for i in attention.listed(ctx) if i.reason == "awaiting_reply"]
-    assert item.ticket_key == KEY
-    # That tick read the question: the web UI marks only what came after it as waiting for a tick.
-    assert db.acknowledged_message_id(conn) == question["id"]
-    assert QUESTION in item.detail
-    capsys.readouterr()
-    assert operator("show", KEY, monkeypatch=monkeypatch) == 0
-    shown = capsys.readouterr().out
-    assert QUESTION in shown
-    assert f"Message {question['id']} waits on your answer" in shown
-    assert operator("status", monkeypatch=monkeypatch) == 0
-    assert f"awaiting your reply to message {question['id']}" in capsys.readouterr().out
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on the operator")):
+        assert main(["tick"]) == 0
+        ctx = context(canopy_env)
+        [item] = [i for i in attention.listed(ctx) if i.reason == "awaiting_reply"]
+        assert item.ticket_key == KEY
+        # That tick read the question: the web UI marks only what came after it as waiting for a tick.
+        assert db.acknowledged_message_id(conn) == question["id"]
+        assert QUESTION in item.detail
+        capsys.readouterr()
+        assert operator("show", KEY) == 0
+        shown = capsys.readouterr().out
+        assert QUESTION in shown
+        assert f"Message {question['id']} waits on your answer" in shown
+        assert operator("status") == 0
+        assert f"awaiting your reply to message {question['id']}" in capsys.readouterr().out
 
-    # `canopy reply` during the loop's wait ends it, and the next tick resumes the ticket with the reply.
-    reply = "Blue, to match the header."
-    time = FakeTime()
+        # `canopy reply` during the loop's wait ends it, and the next tick resumes the ticket with the reply.
+        reply = "Blue, to match the header."
+        time = FakeTime()
+        with (
+            private_worker_does(result={**blocked(), "status": "done", "question": None}),
+            contextlib.ExitStack() as after_reply,
+        ):
 
-    def reply_once() -> None:
-        if not db.latest_message_id(conn, source="operator"):
-            assert operator("reply", KEY, reply, monkeypatch=monkeypatch) == 0
-            newest = db.latest_message_id(conn, source="operator")
-            overseer_does(
-                monkeypatch,
-                canopy(
-                    "dispatch",
-                    KEY,
-                    "--repo",
-                    "repo",
-                    "--kind",
-                    "resume",
-                    "--cursor",
-                    f"message={newest}",
-                    "--context",
-                    f"Operator reply: message {newest}",
-                ),
+            def reply_once() -> None:
+                # The overseer's next tick dispatches the resume, so its new commands outlast this call.
+                if not db.latest_message_id(conn, source="operator"):
+                    assert operator("reply", KEY, reply) == 0
+                    newest = db.latest_message_id(conn, source="operator")
+                    after_reply.enter_context(
+                        overseer_does(
+                            canopy(
+                                "dispatch",
+                                KEY,
+                                "--repo",
+                                "repo",
+                                "--kind",
+                                "resume",
+                                "--cursor",
+                                f"message={newest}",
+                                "--context",
+                                f"Operator reply: message {newest}",
+                            ),
+                        )
+                    )
+
+            time.on_sleep = reply_once
+            term, _ = console()
+            statuses = repeat.run(
+                ctx,
+                dry_run=False,
+                interval_minutes=15,
+                max_ticks=2,
+                console=term,
+                stop=repeat.Stop(),
+                sleep=time.sleep,
+                clock=time.clock,
             )
-
-    time.on_sleep = reply_once
-    private_worker_does(monkeypatch, result={**blocked(), "status": "done", "question": None})
-    term, _ = console()
-    statuses = repeat.run(
-        ctx,
-        dry_run=False,
-        interval_minutes=15,
-        max_ticks=2,
-        console=term,
-        stop=repeat.Stop(),
-        sleep=time.sleep,
-        clock=time.clock,
-    )
-    assert statuses == {"ok": 2}
-    # Woken at once, but no sooner than a minute after the first tick began, not after 15 minutes.
-    assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
-    resumed = wait_for_run(conn, int(last_run(conn)["id"]))
-    assert (resumed["kind"], resumed["private"], resumed["status"]) == ("resume", 1, "done")
-    prompt = (canopy_env.state_dir / "runs" / f"{resumed['id']}.prompt").read_text()
-    assert reply in prompt
-    assert "the operator's reply to message" in prompt
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
-    assert ticket["last_message_id"] == db.latest_message_id(conn, source="operator")
-    # The reply answered the question: the next tick raises no `awaiting_reply`, and acknowledges the reply.
-    assert conversation.awaiting(conn) == []
-    acknowledged = db.acknowledged_message_id(conn)
-    assert acknowledged is not None
-    assert acknowledged >= db.latest_message_id(conn, source="operator")
+            assert statuses == {"ok": 2}
+            # Woken at once, but no sooner than a minute after the first tick began, not after 15 minutes.
+            assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+            resumed = wait_for_run(conn, int(last_run(conn)["id"]))
+            assert (resumed["kind"], resumed["private"], resumed["status"]) == ("resume", 1, "done")
+            prompt = (canopy_env.state_dir / "runs" / f"{resumed['id']}.prompt").read_text()
+            assert reply in prompt
+            assert "the operator's reply to message" in prompt
+            ticket = db.get_ticket(conn, KEY)
+            assert ticket is not None
+            assert ticket["last_message_id"] == db.latest_message_id(conn, source="operator")
+            # The reply answered the question: the next tick raises no `awaiting_reply`, and acknowledges the reply.
+            assert conversation.awaiting(conn) == []
+            acknowledged = db.acknowledged_message_id(conn)
+            assert acknowledged is not None
+            assert acknowledged >= db.latest_message_id(conn, source="operator")
 
 
 def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() -> None:
@@ -195,15 +210,14 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
 def test_the_operators_commands_refuse_inside_canopys_runs(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     variable: str,
     verb: list[str],
 ) -> None:
-    monkeypatch.setenv(variable, "1")
-    assert main(verb) == 1
-    assert f"refused (inside_run): {variable} is set" in capsys.readouterr().err
-    assert db.starts(conn) == []
+    with mock.patch.dict(os.environ, {variable: "1"}):
+        assert main(verb) == 1
+        assert f"refused (inside_run): {variable} is set" in capsys.readouterr().err
+        assert db.starts(conn) == []
 
 
 def test_start_refuses_without_tracker_tools_for_a_private_worker(
@@ -243,13 +257,11 @@ def test_reply_refuses_an_unknown_ticket_stop_a_public_one_and_reply_is_bounded_
     )
 
 
-def test_a_reply_answers_the_latest_question(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_reply_answers_the_latest_question(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     assert main(["start", KEY]) == 0
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
-    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("B\n"))
-    assert main(["reply", KEY]) == 0
+    with mock.patch.object(sys, "stdin", io.StringIO("B\n")):
+        assert main(["reply", KEY]) == 0
     reply = db.get_message(conn, question + 1)
     assert reply is not None
     assert (reply["body"], reply["answers"]) == ("B", question)
@@ -262,21 +274,20 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
-    assert operator("stop", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
+    assert operator("stop", KEY) == 0
     # Not even with a queue label: a stopped ticket stays private.
     runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 1
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 1
     assert "dispatch refused (stopped)" in capsys.readouterr().err
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
     record = conversation.start_of(conn, KEY)
     assert record is not None
     assert record["status"] == "stopped"
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
+    assert operator("start", KEY) == 0
+    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
 
 
 def private_only(canopy_env: CanopyEnv) -> None:
@@ -292,17 +303,16 @@ def test_a_private_only_queue_dispatches_only_started_tickets(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     private_only(canopy_env)
     runner = InlineRunner()
     # A queue label is no authorization here: only a start record is.
-    assert dispatch(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 1
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 1
     assert "dispatch refused (private_only)" in capsys.readouterr().err
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
+    assert operator("start", KEY) == 0
+    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
     assert last_run(conn)["private"] == 1
 
 
@@ -311,15 +321,14 @@ def test_a_private_only_state_block_carries_only_started_tickets_and_nothing_to_
     conn: sqlite3.Connection,
     agent_log: Path,
     treehouse_state: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     private_only(canopy_env)
     assert main(["start", KEY]) == 0
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     # A public ticket the operator wrote to: without private_only, the block would carry it and its message.
     assert main(["reply", "PROJ-2", "go"]) == 0
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
     state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
     assert [t["key"] for t in state["tickets"]] == [KEY]
@@ -329,11 +338,11 @@ def test_a_private_only_state_block_carries_only_started_tickets_and_nothing_to_
 
 
 def test_a_private_ticket_is_never_split(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--kind", "split", "--request", "c-1", runner=runner) == 1
+    assert dispatch(conn, "--kind", "split", "--request", "c-1", runner=runner) == 1
     assert "dispatch refused (private)" in capsys.readouterr().err
 
 
@@ -342,10 +351,9 @@ def test_a_stop_that_commits_before_the_runs_insert_wins(
     git_pool: GitPool,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
     real = conversation.prompt_conversation
 
     def stop_meanwhile(c: sqlite3.Connection, key: str) -> str:
@@ -353,11 +361,11 @@ def test_a_stop_that_commits_before_the_runs_insert_wins(
         conversation.stop(journal(canopy_env), conversation.Ref("ticket", key), channel="cli")
         return real(c, key)
 
-    monkeypatch.setattr(conversation, "prompt_conversation", stop_meanwhile)
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=InlineRunner()) == 1
-    assert "dispatch refused (stopped)" in capsys.readouterr().err
-    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
-    assert {s["status"] for s in pool(treehouse_state)} == {"available"}
+    with mock.patch.object(conversation, "prompt_conversation", autospec=True, side_effect=stop_meanwhile):
+        assert dispatch(conn, "--kind", "implement", runner=InlineRunner()) == 1
+        assert "dispatch refused (stopped)" in capsys.readouterr().err
+        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+        assert {s["status"] for s in pool(treehouse_state)} == {"available"}
 
 
 def test_run_reads_the_start_record_again_before_the_worker_starts(
@@ -366,12 +374,11 @@ def test_run_reads_the_start_record_again_before_the_worker_starts(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
-    assert operator("stop", KEY, monkeypatch=monkeypatch) == 0
+    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
+    assert operator("stop", KEY) == 0
     run = last_run(conn)
     assert main(["_run", str(run["id"])], runner=runner) == 0
     run = last_run(conn)
@@ -389,11 +396,10 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    assert operator("start", KEY) == 0
     run = last_run(conn)
     assert run["private"] == 0
     assert main(["_run", str(run["id"])], runner=runner) == 0
@@ -406,11 +412,10 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     git_pool: GitPool,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=InlineRunner()) == 0
+    assert operator("start", KEY) == 0
+    assert dispatch(conn, "--kind", "implement", runner=InlineRunner()) == 0
     run = last_run(conn)
     # Stand-ins for `_run` and its worker, each leading its own process group as the real ones do.
     # Each has a log, and so a lifelock, of its own.
@@ -420,10 +425,10 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     conn.execute("UPDATE runs SET pid = ?, worker_pid = ? WHERE id = ?", (run_pid, worker_pid, run["id"]))
     assert {s["status"] for s in pool(treehouse_state)} == {"available", "leased"}
 
-    assert operator("stop", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("stop", KEY) == 0
     assert "will finish; --now ends it" in capsys.readouterr().out
     assert last_run(conn)["status"] == "running"
-    assert operator("stop", KEY, "--now", monkeypatch=monkeypatch) == 0
+    assert operator("stop", KEY, "--now") == 0
     assert "was ended and its slots returned" in capsys.readouterr().out
 
     run = last_run(conn)
@@ -442,13 +447,12 @@ def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for slot in git_pool.slots:
         (slot / "opencode.json").write_text('{"permission": {"atlassian_addOrEditJiraIssueComment": "allow"}}')
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--kind", "implement", runner=runner) == 0
+    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
     assert main(["_run", str(last_run(conn)["id"])], runner=runner) == 0
     run = last_run(conn)
     assert run["status"] == "crashed"
@@ -539,33 +543,32 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     conn: sqlite3.Connection,
     agent_log: Path,
     treehouse_state: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert main(["start", KEY]) == 0
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     assert main(["reply", KEY, "B"]) == 0
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
-    overseer = json.loads(agent_log.read_text().splitlines()[-1])
-    state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
-    tickets = {t["key"]: t for t in state["tickets"]}
-    assert "private" not in tickets["PROJ-2"]
-    private = tickets[KEY]["private"]
-    assert private["message_cursor"] is None
-    assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
-        (question + 1, "B", question)
-    ]
-    assert private["awaiting_reply"] is None
-    # A handled message moves the cursor past it.
-    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}"]) == 0
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
-    assert conversation.state_section(conn, ticket) == {
-        **private,
-        "message_cursor": question + 1,
-        "new_operator_messages": [],
-    }
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+        overseer = json.loads(agent_log.read_text().splitlines()[-1])
+        state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
+        tickets = {t["key"]: t for t in state["tickets"]}
+        assert "private" not in tickets["PROJ-2"]
+        private = tickets[KEY]["private"]
+        assert private["message_cursor"] is None
+        assert [(m["id"], m["body"], m["answers"]) for m in private["new_operator_messages"]] == [
+            (question + 1, "B", question)
+        ]
+        assert private["awaiting_reply"] is None
+        # A handled message moves the cursor past it.
+        assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}"]) == 0
+        ticket = db.get_ticket(conn, KEY)
+        assert ticket is not None
+        assert conversation.state_section(conn, ticket) == {
+            **private,
+            "message_cursor": question + 1,
+            "new_operator_messages": [],
+        }
 
 
 def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
@@ -573,23 +576,22 @@ def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
     conn: sqlite3.Connection,
     agent_log: Path,
     treehouse_state: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Listed with the other tickets, it would be owed a decision every tick it stays stopped.
     assert main(["start", KEY]) == 0
     assert main(["stop", KEY]) == 0
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick", "--dry-run"]) == 0
-    stopped = state_block(agent_log)
-    assert stopped["stopped"] == [KEY]
-    assert [t["key"] for t in stopped["tickets"]] == ["PROJ-2"]
-    # Started again, it is a private ticket like any other.
-    assert main(["start", KEY]) == 0
-    assert main(["tick", "--dry-run"]) == 0
-    started = state_block(agent_log)
-    assert started["stopped"] == []
-    assert {t["key"]: "private" in t for t in started["tickets"]} == {KEY: True, "PROJ-2": False}
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+        stopped = state_block(agent_log)
+        assert stopped["stopped"] == [KEY]
+        assert [t["key"] for t in stopped["tickets"]] == ["PROJ-2"]
+        # Started again, it is a private ticket like any other.
+        assert main(["start", KEY]) == 0
+        assert main(["tick", "--dry-run"]) == 0
+        started = state_block(agent_log)
+        assert started["stopped"] == []
+        assert {t["key"]: "private" in t for t in started["tickets"]} == {KEY: True, "PROJ-2": False}
 
 
 def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -600,12 +602,11 @@ def test_a_message_cursor_is_a_message_id(canopy_env: CanopyEnv, capsys: pytest.
 def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # The overseer records a decision for every ticket it looks at, but not always the ticket's own phase.
     def phase_line() -> str:
-        assert operator("status", monkeypatch=monkeypatch) == 0
+        assert operator("status") == 0
         [line] = [line for line in capsys.readouterr().out.splitlines() if line.startswith(f"  {KEY}  started")]
         return line.split("  phase ", 1)[1]
 
@@ -614,18 +615,18 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
         return found.phase, found.last_decision
 
     def in_a_tick(*args: str) -> None:
-        tick_id = in_tick(conn, monkeypatch)
-        assert main(list(args)) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        with in_tick(conn) as tick_id:
+            assert main(list(args)) == 0
+            db.finish_tick(conn, tick_id, "ok", "test")
 
-    assert operator("start", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("start", KEY) == 0
     assert phase_line() == "not seen by a tick yet"
     assert summary() == (None, None)
 
     in_a_tick("decide", KEY, "wait", "--rationale", "blocked_by: PROJ-2")
     assert phase_line() == "not recorded, last decision wait"
     assert summary() == (None, "wait")
-    assert operator("show", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("show", KEY) == 0
     assert "phase not recorded, last decision wait;" in capsys.readouterr().out
 
     in_a_tick("ticket", "set", KEY, "--phase", "blocked")
@@ -633,7 +634,7 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
     assert summary() == ("blocked", "wait")
 
     # Forgetting clears the phase and starts the loop's view over: the decisions before it no longer count.
-    assert operator("forget", KEY, monkeypatch=monkeypatch) == 0
+    assert operator("forget", KEY) == 0
     assert phase_line() == "not seen by a tick yet"
     assert summary() == (None, None)
 
@@ -644,25 +645,24 @@ def test_show_a_run_and_a_chore(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    worker_does(monkeypatch, *commit_and_push(BRANCH))
-    runner = InlineRunner()
-    assert dispatch(conn, monkeypatch, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
-    assert main(["_run", "1"], runner=runner) == 0
-    capsys.readouterr()
-    assert main(["show", "run:1"]) == 0
-    shown = capsys.readouterr().out
-    assert f"run:1: implement of {KEY}, done" in shown
-    assert "https://example.test/pr/1" in shown
-    assert "report" in shown
-    assert main(["show", "run:99"]) == 1
-    assert main(["show", "chore:nightly"]) == 1
-    assert "no chore 'nightly'" in capsys.readouterr().err
-    # A public ticket's show says so, and has the run's report.
-    assert main(["show", KEY]) == 0
-    assert "public: its queue label authorizes it" in capsys.readouterr().out
+    with worker_does(*commit_and_push(BRANCH)):
+        runner = InlineRunner()
+        assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+        assert main(["_run", "1"], runner=runner) == 0
+        capsys.readouterr()
+        assert main(["show", "run:1"]) == 0
+        shown = capsys.readouterr().out
+        assert f"run:1: implement of {KEY}, done" in shown
+        assert "https://example.test/pr/1" in shown
+        assert "report" in shown
+        assert main(["show", "run:99"]) == 1
+        assert main(["show", "chore:nightly"]) == 1
+        assert "no chore 'nightly'" in capsys.readouterr().err
+        # A public ticket's show says so, and has the run's report.
+        assert main(["show", KEY]) == 0
+        assert "public: its queue label authorizes it" in capsys.readouterr().out
 
 
 def test_show_drops_control_characters(

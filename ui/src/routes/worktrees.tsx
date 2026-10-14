@@ -1,12 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
-import { WORKTREE_STATES, type Pool, type Worktree, type WorktreeState } from '@/api/types'
+import { WORKTREE_STATES } from '@/api/types'
+import type { Pool, Worktree, WorktreeState } from '@/api/types'
 import { Age } from '@/components/age'
-import { Counter, type Tone } from '@/components/counter'
+import { CopyButton } from '@/components/copy-button'
+import { Counter } from '@/components/counter'
+import type { Tone } from '@/components/counter'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip } from '@/components/status'
@@ -37,9 +41,9 @@ function WorktreesPage() {
     return (
         <>
             <PageHeader title="Worktrees">
-                Every slot in canopy's treehouse pools: what holds it, what it has checked out, and what runs in it.
-                Paths inside the workspace are shown from its root. Read from treehouse when the page opens and whenever
-                a run starts or ends.
+                Every slot in canopy&apos;s treehouse pools: what holds it, what it has checked out, and what runs in
+                it. Paths inside the workspace are shown from its root. Read from treehouse when the page opens and
+                whenever a run starts or ends.
             </PageHeader>
             <PoolCounters pools={data} />
             <div className="flex items-center justify-between gap-4">
@@ -144,18 +148,20 @@ function PoolPanel({ pool }: { pool: Pool }) {
                     stays until it has none.
                 </p>
             )}
-            {pool.error !== null ? (
+            {pool.error === null ? (
+                pool.worktrees.length === 0 ? (
+                    <Placeholder className="min-h-24">no worktrees yet</Placeholder>
+                ) : (
+                    <ul className="divide-y" data-testid="worktrees">
+                        {pool.worktrees.map((w) => (
+                            <WorktreeRow key={w.path} worktree={w} repo={pool.repo} shared={root !== null} />
+                        ))}
+                    </ul>
+                )
+            ) : (
                 <Placeholder className="min-h-24">
                     <span className="text-status-failed">{pool.error}</span>
                 </Placeholder>
-            ) : pool.worktrees.length === 0 ? (
-                <Placeholder className="min-h-24">no worktrees yet</Placeholder>
-            ) : (
-                <ul className="divide-y" data-testid="worktrees">
-                    {pool.worktrees.map((w) => (
-                        <WorktreeRow key={w.path} worktree={w} repo={pool.repo} shared={root !== null} />
-                    ))}
-                </ul>
             )}
         </Panel>
     )
@@ -163,7 +169,9 @@ function PoolPanel({ pool }: { pool: Pool }) {
 
 /** One square per slot, in slot order, in its state's color: the pool's occupancy at a glance. */
 function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
-    if (worktrees.length === 0) return null
+    if (worktrees.length === 0) {
+        return null
+    }
     return (
         <span aria-hidden className="flex shrink-0 items-center gap-1" data-testid="slot-strip">
             {worktrees.map((w) => (
@@ -194,7 +202,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     const idle = w.state === 'idle'
     return (
         <li
-            className={cn('flex flex-col gap-1 px-3 py-2', idle && 'opacity-60')}
+            className={cn('group/copy flex flex-col gap-1 px-3 py-2', idle && 'opacity-60')}
             data-testid={`worktree-${w.name}`}
             data-state={w.state}
         >
@@ -206,8 +214,11 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                     <WorktreeDot state={w.state} />
                     {w.state === 'broken' ? w.status : w.state}
                 </span>
-                <span className="readout w-8 shrink-0 text-xs text-muted-foreground" title={w.path}>
-                    #{w.name}
+                <span className="flex shrink-0 items-center">
+                    <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
+                        #{w.name}
+                    </span>
+                    <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
                 </span>
                 {!idle && (
                     <>
@@ -229,9 +240,10 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                                 )}
                             >
                                 <span className="truncate">{w.branch}</span>
-                                <ExternalLink aria-hidden className="size-3 shrink-0" />
+                                <LinkOutIcon href={branchHref} className="shrink-0" />
                             </a>
                         )}
+                        {w.branch !== null && <CopyButton text={w.branch} label="branch" reveal />}
                     </>
                 )}
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
@@ -285,8 +297,8 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
                     rel="noreferrer noopener"
                     className="inline-flex min-w-0 items-center gap-1 font-mono text-xs text-accent hover:underline"
                 >
-                    <span className="truncate">{w.review.pr_url.replace(/^https:\/\//, '')}</span>
-                    <ExternalLink className="size-3 shrink-0" />
+                    <span className="truncate">{w.review.pr_url.replace(/^https:\/\//u, '')}</span>
+                    <LinkOutIcon href={w.review.pr_url} className="shrink-0" />
                 </a>
             </span>
         )

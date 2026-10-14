@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { hit } from '@/api/mocks'
 
-import { bySource, isSearchShortcut, marked, searchQueryOf } from './search'
+import { bySource, isSearchShortcut, marked, markedTokens, searchQueryOf } from './search'
 
 describe('searchQueryOf', () => {
     it('collapses whitespace and keeps what the server accepts', () => {
@@ -44,6 +44,34 @@ describe('marked', () => {
     it('marks nothing without words', () => {
         expect(marked('text', [])).toEqual([{ text: 'text', mark: false }])
         expect(marked('', [])).toEqual([])
+    })
+})
+
+describe('markedTokens', () => {
+    it("cuts tokens where a match starts and ends, each piece keeping its token's fields", () => {
+        const tokens = [
+            { kind: 'key', text: '"title"' },
+            { kind: 'punct', text: ':' },
+            { kind: 'text', text: ' ' },
+            { kind: 'string', text: '"Debounce"' },
+        ]
+        expect(markedTokens(tokens, ['title": "DEB'])).toEqual([
+            { kind: 'key', text: '"', mark: false },
+            { kind: 'key', text: 'title"', mark: true },
+            { kind: 'punct', text: ':', mark: true },
+            { kind: 'text', text: ' ', mark: true },
+            { kind: 'string', text: '"Deb', mark: true },
+            { kind: 'string', text: 'ounce"', mark: false },
+        ])
+    })
+
+    it('marks nothing without words, and keeps every character', () => {
+        const tokens = [{ text: 'a' }, { text: '' }, { text: 'bc' }]
+        expect(markedTokens(tokens, [])).toEqual([
+            { text: 'a', mark: false },
+            { text: 'bc', mark: false },
+        ])
+        expect(markedTokens(tokens, ['b']).map((t) => t.text)).toEqual(['a', 'b', 'c'])
     })
 })
 

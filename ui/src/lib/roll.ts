@@ -9,6 +9,8 @@ export type RollCell =
  * right, so the units settle first.
  */
 export function rollCells(value: string): RollCell[] {
+    // A value is digits and punctuation, whose code points are its characters.
+    // oxlint-disable-next-line typescript/no-misused-spread
     const chars = [...value]
     let place = 0
     const cells: RollCell[] = []

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { stubSystemTheme } from '@/test-utils'
 
 // The store reads storage and the system theme when it loads, so each test imports a fresh copy.
-async function load() {
+function load() {
     vi.resetModules()
     return import('./store')
 }
@@ -23,7 +23,7 @@ describe('theme store', () => {
     it('stores, applies, and announces a preference', async () => {
         stubSystemTheme(false)
         const store = await load()
-        const listener = vi.fn()
+        const listener = vi.fn<() => void>()
         const unsubscribe = store.subscribe(listener)
 
         store.setPreference('dark')
@@ -42,11 +42,11 @@ describe('theme store', () => {
     it('picks up a change made in another tab', async () => {
         stubSystemTheme(false)
         const store = await load()
-        const listener = vi.fn()
+        const listener = vi.fn<() => void>()
         store.subscribe(listener)
 
         localStorage.setItem(store.STORAGE_KEY, 'dark')
-        window.dispatchEvent(new StorageEvent('storage', { key: store.STORAGE_KEY, newValue: 'dark' }))
+        globalThis.dispatchEvent(new StorageEvent('storage', { key: store.STORAGE_KEY, newValue: 'dark' }))
 
         expect(store.getSnapshot().resolved).toBe('dark')
         expect(document.documentElement.classList.contains('dark')).toBe(true)
@@ -59,7 +59,7 @@ describe('theme store', () => {
         document.documentElement.classList.add('dark')
 
         system.set(false)
-        const listener = vi.fn()
+        const listener = vi.fn<() => void>()
         store.subscribe(listener)
 
         expect(store.getSnapshot().resolved).toBe('light')

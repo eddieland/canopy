@@ -28,7 +28,7 @@ test('a wrong secret is refused; the right one signs in and stays signed in', as
     expect(session?.httpOnly).toBe(true)
     expect(session?.sameSite).toBe('Strict')
     expect(JSON.stringify(cookies)).not.toContain(E2E_SECRET)
-    expect(await page.evaluate(() => JSON.stringify(window.localStorage))).not.toContain(E2E_SECRET)
+    expect(await page.evaluate(() => JSON.stringify(globalThis.localStorage))).not.toContain(E2E_SECRET)
 
     await page.reload()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102 Export reports as CSV')

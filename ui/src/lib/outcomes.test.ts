@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { dismissedText, forgotText, notedText, reloadedText, repliedText, startedText, stoppedText } from './outcomes'
+import {
+    dismissedText,
+    forgotText,
+    grantedText,
+    notedText,
+    reloadedText,
+    repliedText,
+    reviewDismissedText,
+    startedText,
+    stoppedText,
+} from './outcomes'
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {
@@ -50,6 +60,16 @@ describe('outcomes', () => {
         expect(said).toContain('delete its branch on origin yourself')
     })
 
+    it('say what a grant did, as canopy grant does: the runs so far still count', () => {
+        expect(grantedText('A-1', { kind: 'fix-ci', repo: 'web', runs: 2, limit: 3 })).toBe(
+            'A-1 in web has had 2 fix-ci runs, and may now have 3. The next tick decides whether to dispatch it.',
+        )
+        expect(grantedText('https://example.test/o/r/pull/1', { kind: 'review', repo: null, runs: 3, limit: 4 })).toBe(
+            'https://example.test/o/r/pull/1 has had 3 review runs, and may now have 4. ' +
+                'The next tick decides whether to review it.',
+        )
+    })
+
     it('say what a note to a chore did, and that its next run reads it', () => {
         expect(notedText('deps', { message_id: 9, answers: null, new: true })).toBe(
             'Recorded message 9 on chore:deps. Its next run reads it.',
@@ -65,6 +85,15 @@ describe('outcomes', () => {
         )
         expect(dismissedText({ chore: 'deps', finding: 'lodash-advisory', dismissed: false })).toBe(
             'chore:deps lodash-advisory is listed again while the chore reports it.',
+        )
+    })
+
+    it("say what a dismissal of a review's finding did", () => {
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: true })).toBe(
+            'review:4 finding 2 is dismissed: no worker or tick acts on it.',
+        )
+        expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false })).toBe(
+            'review:4 finding 2 is no longer dismissed: a resume hands it to the worker again.',
         )
     })
 

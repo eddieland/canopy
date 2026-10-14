@@ -3,13 +3,32 @@ name = "canopy-notify-slack"
 version = "0.0.1"
 description = "canopy's Slack notification sink: posts each message it reads on stdin to a Slack incoming webhook."
 license = "MIT"
-classifiers = ["Private :: Do Not Upload"]
+authors = [{ name = "eddieland" }]
+keywords = ["canopy", "notifications", "slack", "webhook"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    # Makes PyPI refuse an upload (D046).
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+]
 requires-python = ">=3.12"
 # Stdlib only, and nothing from canopy: it runs as its own process, as a sink command (DESIGN §20, D041).
 dependencies = []
 
 [project.scripts]
 canopy-notify-slack = "canopy_notify_slack:main"
+
+[project.urls]
+Homepage = "https://github.com/eddieland/canopy"
+Repository = "https://github.com/eddieland/canopy/tree/main/packages/canopy-notify-slack"
+Issues = "https://github.com/eddieland/canopy/issues"
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""Fake `srt` (Anthropic's sandbox-runtime) for tests of `examples/sandbox/canopy-sandbox`. Sandboxes nothing.
+
+Speaks the one form the wrapper uses, `srt --settings PATH -- COMMAND [ARG]...`: it reads the policy at PATH, records
+what it was given, sets TMPDIR the way srt does, and replaces itself with COMMAND, which runs unsandboxed. A missing or
+invalid policy file is refused with exit 1, as srt refuses one.
+
+    FAKE_SRT_LOG    if set, one JSON line {"argv": [...], "cwd": "...", "settings": {...}, "env": {...}} is appended
+                    to this file per run. `settings` is the policy as parsed; `env` holds the variables in RECORDED
+                    that the command would see, before srt adds its own.
+
+Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+
+RECORDED = (
+    "BASH_ENV",
+    "ENV",
+    "CANOPY_GIT_OBJECTS",
+    "CLAUDE_CODE_TMPDIR",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "TMPDIR",
+)
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 4 or argv[0] != "--settings" or argv[2] != "--":
+        print(f"fake srt: expected --settings PATH -- COMMAND..., got {argv}", file=sys.stderr)
+        return 1
+    try:
+        settings = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        print(f"Error: {argv[1]} could not be read: {e}", file=sys.stderr)
+        return 1
+    command = argv[3:]
+    if log := os.environ.get("FAKE_SRT_LOG"):
+        env = {k: os.environ[k] for k in RECORDED if k in os.environ}
+        record = {"argv": argv, "cwd": str(Path.cwd()), "settings": settings, "env": env}
+        with Path(log).open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+    os.environ["TMPDIR"] = os.environ.get("CLAUDE_CODE_TMPDIR") or "/tmp/claude"  # noqa: S108  (what srt does)
+    return os.execvp(command[0], command)  # noqa: S606  (argv from the wrapper under test)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

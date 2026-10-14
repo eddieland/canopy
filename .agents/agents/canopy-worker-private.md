@@ -27,8 +27,10 @@ permission:
   bash:
     "*": allow
     # Pushes are plain ones: no force, no deletes, no mirrors or bulk ref updates. Patterns anchor on a space before
-    # a short flag so that branch names such as agent/PROJ-1-fix-typo still match nothing.
+    # a short flag so that branch names such as agent/PROJ-1-fix-typo still match nothing. With `trust.rebase` set,
+    # canopy renders the one forced push the prompts name, `--force-with-lease` to a branch, at the marked line.
     "git push *--force*": deny
+    # canopy: rebase rules
     "git push -f*": deny
     "git push * -f*": deny
     "git push *--delete*": deny

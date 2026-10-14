@@ -1,4 +1,5 @@
-import { expect, type Page } from '@playwright/test'
+import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { E2E_SECRET } from './secret.ts'
 
@@ -33,7 +34,7 @@ export const NOW = new Date('2026-10-08T12:30:00Z')
 export async function storeTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
     await page.addInitScript(
         ([key, value]) => {
-            window.localStorage.setItem(key, value)
+            globalThis.localStorage.setItem(key, value)
         },
         [STORAGE_KEY, theme] as const,
     )
@@ -64,7 +65,9 @@ export async function screenshotWhole(page: Page, name: string): Promise<void> {
     const scroller = page.locator('[data-scroll-restoration-id=page]')
     const height = await scroller.evaluate((el) => el.getBoundingClientRect().top + el.scrollHeight)
     const viewport = page.viewportSize()
-    if (viewport === null) throw new Error('the page has no viewport to grow')
+    if (viewport === null) {
+        throw new Error('the page has no viewport to grow')
+    }
     await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
     await expect(page).toHaveScreenshot(name)
 }

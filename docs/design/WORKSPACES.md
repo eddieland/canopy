@@ -24,7 +24,8 @@ no tracker code in the harness. Tracker differences are handled in three places,
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action
    (closing keywords, smart commits). Skills ship for `jira` and `github`. A skill is optional; add one when the
-   `decisions` table shows the loop misreading a tracker, not in advance.
+   `decisions` table shows the loop misreading a tracker, not in advance. The overseer gets the shipped skill for
+   `tracker.provider` in its prompt (§13), where it is cached across ticks; workers load it as a skill.
 
 ### Contract
 

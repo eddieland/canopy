@@ -35,14 +35,14 @@ def instruct(canopy_env: CanopyEnv, text: str | bytes) -> Path:
     return path
 
 
-def dispatch(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> tuple[int, list[sqlite3.Row]]:
+def dispatch(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Row]]:
     """Dispatch an `implement` of PROJ-1 in a tick, and return the exit code and the tick's decisions."""
-    tick_id = in_tick(conn, monkeypatch)
-    code = main(
-        ["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-        runner=InlineRunner(),
-    )
-    return code, db.decisions_for_tick(conn, tick_id)
+    with in_tick(conn) as tick_id:
+        code = main(
+            ["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
+            runner=InlineRunner(),
+        )
+        return code, db.decisions_for_tick(conn, tick_id)
 
 
 def section_of(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
@@ -52,18 +52,18 @@ def section_of(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
 
 
 def test_the_operators_standing_instructions_reach_the_worker(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
     instruct(canopy_env, f"\n{FIXUP}\n\n")
-    code, decisions = dispatch(conn, monkeypatch)
+    code, decisions = dispatch(conn)
     assert code == 0, [dict(d) for d in decisions]
     assert section_of(canopy_env, conn) == FIXUP
 
 
 def test_without_standing_instructions_the_section_says_none(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
-    code, decisions = dispatch(conn, monkeypatch)
+    code, decisions = dispatch(conn)
     assert code == 0, [dict(d) for d in decisions]
     assert section_of(canopy_env, conn) == "None."
 
@@ -81,7 +81,6 @@ def test_instructions_that_cannot_be_used_refuse_the_dispatch(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     text: str | bytes | None,
     error: str,
 ) -> None:
@@ -89,7 +88,7 @@ def test_instructions_that_cannot_be_used_refuse_the_dispatch(
     path = instruct(canopy_env, text if text is not None else "")
     if text is None:
         path.unlink()
-    code, decisions = dispatch(conn, monkeypatch)
+    code, decisions = dispatch(conn)
     assert code == 1
     [decision] = decisions
     assert decision["action"] == "refused:bad_prompt"
@@ -102,7 +101,6 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     instructed: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
     # An override written before the placeholder existed keeps serving an operator who sets no instructions.
@@ -111,7 +109,7 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir(parents=True)
     (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
-    code, decisions = dispatch(conn, monkeypatch)
+    code, decisions = dispatch(conn)
     if not instructed:
         assert code == 0, [dict(d) for d in decisions]
         return

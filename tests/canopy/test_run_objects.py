@@ -2,11 +2,13 @@
 
 A sandboxed worker cannot write the git directory its slot shares, so its new objects go to the run's own directory,
 which a sandbox wrapper names to git. These tests play that wrapper in the fake worker's commands: they set git's
-variables from `CANOPY_GIT_OBJECTS`, as `examples/sandbox/canopy-sandbox` will.
+variables from `CANOPY_GIT_OBJECTS`, as `examples/sandbox/canopy-sandbox` does (`test_sandbox_wrapper.py`).
 """
 
+import os
 import sqlite3
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -35,12 +37,12 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
     return journal(canopy_env)
 
 
-def dispatch(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, runner: InlineRunner) -> int:
-    tick_id = in_tick(conn, monkeypatch)
-    args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-    assert main([*args, "--slug", "work"], runner=runner) == 0
-    db.finish_tick(conn, tick_id, "ok", "test")
-    return int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
+    with in_tick(conn) as tick_id:
+        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+        assert main([*args, "--slug", "work"], runner=runner) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
+        return int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
 
 
 def objects_of(canopy_env: CanopyEnv, run_id: int) -> Path:
@@ -66,27 +68,26 @@ def test_a_sandboxed_workers_commits_are_pushed_from_the_run_directory_and_the_s
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     primary, _ = worktree_pool
-    worker_does(monkeypatch, ["sh", "-c", WORKER])
-    runner = InlineRunner()
-    run_id = dispatch(conn, monkeypatch, runner)
-    assert main(["_run", str(run_id)], runner=runner) == 0
+    with worker_does(["sh", "-c", WORKER]):
+        runner = InlineRunner()
+        run_id = dispatch(conn, runner)
+        assert main(["_run", str(run_id)], runner=runner) == 0
 
-    run = db.get_run(conn, run_id)
-    assert run is not None
-    assert run["status"] == "done"
-    pushed = git_pool.remote_head(BRANCH)
-    assert pushed is not None  # `_run`'s own push read the commit from the run's directory
-    # The commit was only ever in the run's directory: the shared one never had it.
-    assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok
-    slot = Path(slot_of(conn, run_id)["slot_path"])
-    assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")  # back on origin/main
-    assert git("for-each-ref", "refs/worktree", cwd=slot) == ""
-    assert not objects_of(canopy_env, run_id).exists()
-    assert_healthy(slot, primary)
-    assert all(s["status"] == "available" for s in pool(treehouse_state))
+        run = db.get_run(conn, run_id)
+        assert run is not None
+        assert run["status"] == "done"
+        pushed = git_pool.remote_head(BRANCH)
+        assert pushed is not None  # `_run`'s own push read the commit from the run's directory
+        # The commit was only ever in the run's directory: the shared one never had it.
+        assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok
+        slot = Path(slot_of(conn, run_id)["slot_path"])
+        assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")  # back on origin/main
+        assert git("for-each-ref", "refs/worktree", cwd=slot) == ""
+        assert not objects_of(canopy_env, run_id).exists()
+        assert_healthy(slot, primary)
+        assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_an_unsandboxed_run_leaves_the_directory_empty_and_its_slot_alone(
@@ -95,17 +96,16 @@ def test_an_unsandboxed_run_leaves_the_directory_empty_and_its_slot_alone(
     worktree_pool: tuple[Path, list[Path]],
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker_does(monkeypatch, hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"))
-    runner = InlineRunner()
-    run_id = dispatch(conn, monkeypatch, runner)
-    assert main(["_run", str(run_id)], runner=runner) == 0
+    with worker_does(hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")):
+        runner = InlineRunner()
+        run_id = dispatch(conn, runner)
+        assert main(["_run", str(run_id)], runner=runner) == 0
 
-    slot = Path(slot_of(conn, run_id)["slot_path"])
-    # Not tidied: HEAD stays on the worker's commit, which `_run` pushed, as before the object directory.
-    assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head(BRANCH)
-    assert not objects_of(canopy_env, run_id).exists()
+        slot = Path(slot_of(conn, run_id)["slot_path"])
+        # Not tidied: HEAD stays on the worker's commit, which `_run` pushed, as before the object directory.
+        assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head(BRANCH)
+        assert not objects_of(canopy_env, run_id).exists()
 
 
 def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, run_id: int, slot: Path) -> None:
@@ -133,27 +133,26 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     primary, _ = worktree_pool
-    run_id = dispatch(conn, monkeypatch, InlineRunner())
+    run_id = dispatch(conn, InlineRunner())
     slot = Path(slot_of(conn, run_id)["slot_path"])
     link = (slot / ".git").read_bytes()
     sandboxed_worker_then_kill(canopy_env, conn, run_id, slot)
     if rewrites_link:
         (slot / ".git").write_text("gitdir: /somewhere/else\n")
 
-    monkeypatch.setenv("FAKE_OVERSEER_RESULT", "CANOPY_TICK_DONE")
-    assert main(["tick"]) == 0
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick"]) == 0
 
-    run = db.get_run(conn, run_id)
-    assert run is not None
-    assert run["status"] == "crashed"
-    assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
-    assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
-    assert not objects_of(canopy_env, run_id).exists()
-    assert_healthy(slot, primary)
-    assert all(s["status"] == "available" for s in pool(treehouse_state))
+        run = db.get_run(conn, run_id)
+        assert run is not None
+        assert run["status"] == "crashed"
+        assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
+        assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
+        assert not objects_of(canopy_env, run_id).exists()
+        assert_healthy(slot, primary)
+        assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_without_tidying_the_run_directory_cannot_go(
@@ -161,11 +160,10 @@ def test_without_tidying_the_run_directory_cannot_go(
     worktree_pool: tuple[Path, list[Path]],
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The control for the tests above: deleting the run's objects as they are breaks `gc` in the primary clone."""
     primary, _ = worktree_pool
-    run_id = dispatch(conn, monkeypatch, InlineRunner())
+    run_id = dispatch(conn, InlineRunner())
     slot = Path(slot_of(conn, run_id)["slot_path"])
     sandboxed_worker_then_kill(canopy_env, conn, run_id, slot)
     for path in sorted(objects_of(canopy_env, run_id).rglob("*"), reverse=True):

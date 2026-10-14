@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
-import { Children, type ComponentProps, type ReactNode } from 'react'
+import { Children } from 'react'
+import type { ComponentProps, ReactNode } from 'react'
 
 import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
+import { blocking } from '@/lib/attention'
 import { pageTitle } from '@/lib/page-title'
 import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
-import { cn } from '@/lib/utils'
+import { cn, isBlank } from '@/lib/utils'
 
 /**
  * A page's title block: the trail to it, the title, any chips that qualify it, one line of description, and the page
@@ -15,7 +17,7 @@ import { cn } from '@/lib/utils'
  * section). On the section's own list that is all it is; on any page under it, the section links to its list, then
  * come `parents`, plain router `Link`s the trail styles, to the pages between it and this one, and every step ends in
  * a chevron. The title is the trail's last step, so the trail never repeats it. The header also names the browser
- * tab (`pageTitle`): `tab`, or the title when it is plain text.
+ * tab (`pageTitle`): `tab`, or the title when it is plain text, after the count of attention items that block work.
  */
 export function PageHeader({
     title,
@@ -51,7 +53,7 @@ export function PageHeader({
     const atSection = section !== undefined && steps.length === 0 && matchRoute({ to: section }) !== false
     const linked = section !== undefined && !atSection
     const end = linked && <ChevronRight aria-hidden className="size-3 shrink-0" />
-    const attention = useQuery(attentionQuery).data?.length
+    const attention = useQuery(attentionQuery).data?.filter(blocking).length
     return (
         <header className="flex flex-col gap-1">
             {/* React puts it in the document's head, ahead of index.html's, so it names the tab. */}
@@ -81,7 +83,6 @@ export function PageHeader({
                     </li>
                     {steps.map((step, i) => (
                         // The parents never reorder: their place is their identity.
-                        // oxlint-disable-next-line react/no-array-index-key
                         <li
                             key={i}
                             className={cn(
@@ -100,7 +101,7 @@ export function PageHeader({
                 <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{title}</h1>
                 {chips}
             </div>
-            {children && (
+            {!isBlank(children) && (
                 // Balanced, so a two-line description splits evenly rather than leaving a word or two on its last line,
                 // and a command in it never breaks across lines.
                 <p className="max-w-3xl text-sm text-balance text-muted-foreground [&_code]:whitespace-nowrap">

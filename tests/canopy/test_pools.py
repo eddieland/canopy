@@ -1,23 +1,25 @@
 """Declared repositories and slots (DESIGN §18, ROADMAP M17): `capacity` sizes the pools, sync converges."""
 
+import contextlib
 import json
 import os
-import sqlite3
 import threading
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, workspace
+from canopy.core import config, workspace
 from canopy.infra import lock
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
-from tests.canopy.helpers import InlineRunner
+from tests.canopy.helpers import InlineRunner, in_tick
 from tests.conftest import CanopyEnv, git, user_toml
 
 LABEL = "agent-ready-tester"
+GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
 
 
 def declare(canopy_env: CanopyEnv, capacity: str) -> None:
@@ -64,12 +66,6 @@ def calls(treehouse_state: Path) -> list[list[str]]:
     return found
 
 
-def in_tick(conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> int:
-    tick_id = db.start_tick(conn, dry_run=False)
-    monkeypatch.setenv("CANOPY_TICK_ID", str(tick_id))
-    return tick_id
-
-
 def dispatch(*repos: str) -> list[str]:
     return ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", *(a for r in repos for a in ("--repo", r))]
 
@@ -104,78 +100,73 @@ def test_a_full_pool_refuses_a_dispatch_without_asking_treehouse_for_another_slo
     ws: Ws,
     canopy_env: CanopyEnv,
     treehouse_state: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 1")
     set_slots(treehouse_state, ws, "api", "leased")
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-    runner = InlineRunner()
+    with in_tick(conn):
+        runner = InlineRunner()
 
-    assert main(dispatch("api"), runner=runner) == 1
-    assert (
-        "dispatch refused (no_slot): api: 1 of its slots are busy, and capacity declares 1" in capsys.readouterr().err
-    )
-    assert [c[0] for c in calls(treehouse_state)] == ["status"]
-    assert len(slots_of(treehouse_state, ws, "api")) == 1
-    assert runner.spawned == []
+        assert main(dispatch("api"), runner=runner) == 1
+        assert (
+            "dispatch refused (no_slot): api: 1 of its slots are busy, and capacity declares 1"
+            in capsys.readouterr().err
+        )
+        assert [c[0] for c in calls(treehouse_state)] == ["status"]
+        assert len(slots_of(treehouse_state, ws, "api")) == 1
+        assert runner.spawned == []
 
 
 def test_a_slot_treehouse_makes_past_the_declared_size_is_destroyed(
     ws: Ws,
     canopy_env: CanopyEnv,
     treehouse_state: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "slots_per_repo = 1")
     stale = str(ws.root / ".treehouse" / "api-fake" / "1" / "api")
     set_slots(treehouse_state, ws, "api", "available", skip_reuse=[stale])
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-
-    assert main(dispatch("api"), runner=InlineRunner()) == 1
-    err = capsys.readouterr().err
-    assert "no slot of the 1 could be reused, and capacity declares 1" in err
-    assert "the new slot " in err
-    assert " was removed" in err
-    assert [c[0] for c in calls(treehouse_state)] == ["status", "get", "return", "destroy"]
-    assert [s["path"] for s in slots_of(treehouse_state, ws, "api")] == [stale]
+    with in_tick(conn):
+        assert main(dispatch("api"), runner=InlineRunner()) == 1
+        err = capsys.readouterr().err
+        assert "no slot of the 1 could be reused, and capacity declares 1" in err
+        assert "the new slot " in err
+        assert " was removed" in err
+        assert [c[0] for c in calls(treehouse_state)] == ["status", "get", "return", "destroy"]
+        assert [s["path"] for s in slots_of(treehouse_state, ws, "api")] == [stale]
 
 
 def test_a_pool_declared_smaller_than_it_is_counts_its_busy_slots(
     ws: Ws,
     canopy_env: CanopyEnv,
     treehouse_state: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 0\nweb = 1")
     set_slots(treehouse_state, ws, "api", "available")
     set_slots(treehouse_state, ws, "web", "leased", "available")
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-
-    assert main(dispatch("api"), runner=InlineRunner()) == 1
-    assert "api: 0 of its slots are busy, and capacity declares 0" in capsys.readouterr().err
-    assert main(dispatch("web"), runner=InlineRunner()) == 1
-    assert "web: 1 of its slots are busy, and capacity declares 1" in capsys.readouterr().err
-    assert [c[0] for c in calls(treehouse_state)] == ["status", "status"]
+    with in_tick(conn):
+        assert main(dispatch("api"), runner=InlineRunner()) == 1
+        assert "api: 0 of its slots are busy, and capacity declares 0" in capsys.readouterr().err
+        assert main(dispatch("web"), runner=InlineRunner()) == 1
+        assert "web: 1 of its slots are busy, and capacity declares 1" in capsys.readouterr().err
+        assert [c[0] for c in calls(treehouse_state)] == ["status", "status"]
 
 
 def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
-    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, monkeypatch: pytest.MonkeyPatch
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
 ) -> None:
     declare(canopy_env, "[capacity.repo_slots]\napi = 2\nweb = 1")
     set_slots(treehouse_state, ws, "api", "leased")
     seed = set_slots(treehouse_state, ws, "web", "available")
     conn = ws.journal()
-    in_tick(conn, monkeypatch)
-
-    assert main(dispatch("api", "web"), runner=InlineRunner()) == 0
-    assert [s["status"] for s in slots_of(treehouse_state, ws, "api")] == ["leased", "leased"]
-    assert [s["path"] for s in slots_of(treehouse_state, ws, "web")] == seed
+    with in_tick(conn):
+        assert main(dispatch("api", "web"), runner=InlineRunner()) == 0
+        assert [s["status"] for s in slots_of(treehouse_state, ws, "api")] == ["leased", "leased"]
+        assert [s["path"] for s in slots_of(treehouse_state, ws, "web")] == seed
 
 
 # Sync converges the pools
@@ -461,64 +452,57 @@ def test_init_with_clone_urls_sets_up_a_workspace_ready_to_run(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
-        monkeypatch.setenv(var, "canopy-test")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    origins = [bare_origin(tmp_path / "origins" / f"{n}.git", tmp_path) for n in ("api", "web")]
-    declare(canopy_env, "slots_per_repo = 2")
-    root = tmp_path / "acme"
-    root.mkdir()
-    monkeypatch.chdir(root)
-
-    assert main(["init", "--workspace", "--provider", "github", *map(str, origins)]) == 0
-    out = capsys.readouterr().out
-    assert "api: added\nweb: added\n" in out
-    assert "api: cloned\napi: slots: 2 of 2, made 2\n" in out
-    assert "web: cloned\nweb: slots: 2 of 2, made 2\n" in out
-    assert "  - api\n  - web\n" in out  # branch protection names both
-    ws = workspace.load(root)
-    assert [(r.name, r.url, r.cloned) for r in ws.repos] == [
-        ("api", str(origins[0]), True),
-        ("web", str(origins[1]), True),
-    ]
-    assert config.load(root, canopy_env.user_file).tracker.provider == "github"
-    assert len(fake_state(treehouse_state)["pools"]) == 2
+    authors = dict.fromkeys(GIT_AUTHORS, "canopy-test")
+    with mock.patch.dict(os.environ, {**authors, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}):
+        origins = [bare_origin(tmp_path / "origins" / f"{n}.git", tmp_path) for n in ("api", "web")]
+        declare(canopy_env, "slots_per_repo = 2")
+        root = tmp_path / "acme"
+        root.mkdir()
+        with contextlib.chdir(root):
+            assert main(["init", "--workspace", "--provider", "github", *map(str, origins)]) == 0
+            out = capsys.readouterr().out
+            assert "api: added\nweb: added\n" in out
+            assert "api: cloned\napi: slots: 2 of 2, made 2\n" in out
+            assert "web: cloned\nweb: slots: 2 of 2, made 2\n" in out
+            assert "  - api\n  - web\n" in out  # branch protection names both
+            ws = workspace.load(root)
+            assert [(r.name, r.url, r.cloned) for r in ws.repos] == [
+                ("api", str(origins[0]), True),
+                ("web", str(origins[1]), True),
+            ]
+            assert config.load(root, canopy_env.user_file).tracker.provider == "github"
+            assert len(fake_state(treehouse_state)["pools"]) == 2
 
 
 def test_sync_warns_about_an_origin_rewritten_to_push_over_ssh(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """What git pushes to after the operator's rewrites, not the map's URL, which is a local path here."""
-    for var in ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL"):
-        monkeypatch.setenv(var, "canopy-test")
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    origins = tmp_path / "origins"
-    origin = bare_origin(origins / "api.git", tmp_path)
-    global_config = tmp_path / "gitconfig"
-    git("config", "--file", str(global_config), "url.git@example.test:acme/.pushInsteadOf", f"{origins}/", cwd=tmp_path)
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
-    root = tmp_path / "acme"
-    root.mkdir()
-    monkeypatch.chdir(root)
-
-    assert main(["init", "--provider", "github", str(origin)]) == 0
-    assert "api: warning: origin pushes over SSH (git@example.test:acme/api.git)" in capsys.readouterr().out
+    authors = dict.fromkeys(GIT_AUTHORS, "canopy-test")
+    with mock.patch.dict(os.environ, {**authors, "GIT_CONFIG_NOSYSTEM": "1"}):
+        origins = tmp_path / "origins"
+        origin = bare_origin(origins / "api.git", tmp_path)
+        global_config = tmp_path / "gitconfig"
+        pushes_over_ssh = ("url.git@example.test:acme/.pushInsteadOf", f"{origins}/")
+        git("config", "--file", str(global_config), *pushes_over_ssh, cwd=tmp_path)
+        root = tmp_path / "acme"
+        root.mkdir()
+        with mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(global_config)}), contextlib.chdir(root):
+            assert main(["init", "--provider", "github", str(origin)]) == 0
+            assert "api: warning: origin pushes over SSH (git@example.test:acme/api.git)" in capsys.readouterr().out
 
 
 def test_clone_urls_in_a_code_checkout_are_refused(
-    canopy_env: CanopyEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     checkout = tmp_path / "code"
     (checkout / ".git").mkdir(parents=True)
-    monkeypatch.chdir(checkout)
-    assert main(["init", "--provider", "jira", "https://x.test/api.git"]) == 2
-    assert "Pass --workspace" in capsys.readouterr().err
-    assert not (checkout / config.WORKSPACE_FILE_NAME).exists()
+    with contextlib.chdir(checkout):
+        assert main(["init", "--provider", "jira", "https://x.test/api.git"]) == 2
+        assert "Pass --workspace" in capsys.readouterr().err
+        assert not (checkout / config.WORKSPACE_FILE_NAME).exists()

@@ -2,7 +2,8 @@ import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { setBuddy, tipFor } from '@/lib/buddy'
+import { sectionOf, setBuddy, tipFor } from '@/lib/buddy'
+import type { Section } from '@/lib/buddy'
 import { cn } from '@/lib/utils'
 
 /** How long a tip stays up before Sprig takes the hint. */
@@ -16,29 +17,34 @@ const TIP_SECONDS = 20
  */
 export function Buddy() {
     const pathname = useRouterState({ select: (state) => state.location.pathname })
+    const section = sectionOf(pathname)
     // Read once per page load, as the ticker's reel is: the tip must not change under the reader.
     const [today] = useState(() => Date.now())
-    const [asked, setAsked] = useState(0)
-    // A new page or a click on Sprig opens a new tip: the key remounts the bubble, open, and raises Sprig's brows.
-    const cue = `${pathname}:${asked}`
+    // How many more tips the reader asked for, counted per section: a new section starts at its own first tip.
+    const [asked, setAsked] = useState<{ section: Section | undefined; n: number }>({ section, n: 0 })
+    const n = asked.section === section ? asked.n : 0
+    const another = () => setAsked({ section, n: n + 1 })
+    const tip = tipFor(pathname, n, today)
+    // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
+    // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed.
     return (
         <aside
             aria-label="Sprig"
             data-testid="buddy"
             className="pointer-events-none fixed bottom-12 left-3 z-20 flex w-48 flex-col items-start gap-2"
         >
-            <Bubble key={cue} tip={tipFor(pathname, asked, today)} onAnother={() => setAsked((n) => n + 1)} />
+            <Bubble key={tip} tip={tip} onAnother={another} />
             <button
                 type="button"
                 aria-label="Ask Sprig for a tip"
                 data-testid="buddy-sprig"
-                onClick={() => setAsked((n) => n + 1)}
+                onClick={another}
                 className={cn(
                     'pointer-events-auto rounded-md p-1 transition-transform',
                     'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                 )}
             >
-                <Figure cue={cue} />
+                <Figure cue={tip} />
             </button>
         </aside>
     )
@@ -48,10 +54,12 @@ export function Buddy() {
 function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
     const [open, setOpen] = useState(true)
     useEffect(() => {
-        const timer = window.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
-        return () => window.clearTimeout(timer)
+        const timer = globalThis.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
+        return () => globalThis.clearTimeout(timer)
     }, [])
-    if (!open) return null
+    if (!open) {
+        return null
+    }
     return (
         <div
             data-testid="buddy-tip"
@@ -78,7 +86,7 @@ function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
                     className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                     data-testid="buddy-dismiss"
                 >
-                    Don't show me tips again
+                    Don&apos;t show me tips again
                 </button>
             </div>
             <button
@@ -107,13 +115,15 @@ function Figure({ cue }: { cue: string }) {
     const figure = useRef<SVGSVGElement>(null)
     useEffect(() => {
         const svg = figure.current
-        if (svg === null || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+        if (svg === null || globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+            return
+        }
         const look = (event: PointerEvent) => {
             for (const eye of svg.querySelectorAll<SVGGElement>('[data-eye]')) {
                 const box = eye.getBoundingClientRect()
                 const dx = event.clientX - (box.left + box.width / 2)
                 const dy = event.clientY - (box.top + box.height / 2)
-                const distance = Math.hypot(dx, dy) || 1
+                const distance = Math.max(Math.hypot(dx, dy), 1)
                 // At most 2.5 units off center, in the drawing's own units, and less for a pointer close by.
                 const reach = 2.5 * Math.min(1, distance / 120)
                 const x = ((dx / distance) * reach).toFixed(2)
@@ -121,8 +131,8 @@ function Figure({ cue }: { cue: string }) {
                 eye.querySelector('[data-pupil]')?.setAttribute('transform', `translate(${x} ${y})`)
             }
         }
-        window.addEventListener('pointermove', look, { passive: true })
-        return () => window.removeEventListener('pointermove', look)
+        globalThis.addEventListener('pointermove', look, { passive: true })
+        return () => globalThis.removeEventListener('pointermove', look)
     }, [])
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>

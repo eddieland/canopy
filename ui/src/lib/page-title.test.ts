@@ -7,7 +7,7 @@ describe('pageTitle', () => {
         expect(pageTitle('PROJ-12 Fix the login', 3)).toBe('(3) PROJ-12 Fix the login · canopy')
     })
 
-    it('leaves the count out while the attention list is empty or not read yet', () => {
+    it('leaves the count out while nothing blocks or the attention list is not read yet', () => {
         expect(pageTitle('Runs', 0)).toBe('Runs · canopy')
         expect(pageTitle('Runs', undefined)).toBe('Runs · canopy')
     })

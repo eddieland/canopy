@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 
 /** Stubs matchMedia so `(prefers-color-scheme: dark)` matches when `dark`, and lets a test flip it later. */
-export function stubSystemTheme(dark: boolean): { set(dark: boolean): void } {
+export function stubSystemTheme(dark: boolean): { set: (dark: boolean) => void } {
     let matches = dark
     const listeners = new Set<() => void>()
     vi.stubGlobal(
@@ -18,7 +18,9 @@ export function stubSystemTheme(dark: boolean): { set(dark: boolean): void } {
     return {
         set(next) {
             matches = next
-            for (const listener of listeners) listener()
+            for (const listener of listeners) {
+                listener()
+            }
         },
     }
 }

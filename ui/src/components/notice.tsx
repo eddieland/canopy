@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
-import { cn } from '@/lib/utils'
+import { cn, isBlank } from '@/lib/utils'
 
 /** What an action said: a refusal in the failure color, naming its guard as the CLI does, or a plain outcome. */
 export function Notice({ error, children, className }: { error?: unknown; children?: ReactNode; className?: string }) {
-    if (error) {
+    if (error !== undefined && error !== null) {
         const guard = error instanceof ApiError ? error.guard : null
         const text = error instanceof Error ? error.message : 'the request failed'
         return (
@@ -15,6 +15,8 @@ export function Notice({ error, children, className }: { error?: unknown; childr
             </p>
         )
     }
-    if (!children) return null
+    if (isBlank(children)) {
+        return null
+    }
     return <output className={cn('block text-xs text-muted-foreground', className)}>{children}</output>
 }

@@ -1,8 +1,8 @@
 """`canopy review run`: guards, a slot, the reviewer's prompt, and the detached `canopy _review` (DESIGN §21).
 
-A review is keyed by its PR and commit. The guards hold one `done` review per commit, a per-PR limit, a daily limit, and
-`max_reviews` within `max_workers`, whatever the overseer asks for. A refusal is raised as `Refusal`; the CLI records
-it as `refused:<guard>`.
+A review is keyed by its PR and commit. The guards hold one `done` review per commit, a per-PR limit (the policy's plus
+the operator's grants, `grants.py`), a daily limit, and `max_reviews` within `max_workers`, whatever the overseer asks
+for. A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, db, outbox, prompts, treehouse
 from canopy.core import review_result as result
 from canopy.infra import lock, logs, procs
+from canopy.reviews import grants
 
 if TYPE_CHECKING:
     import sqlite3
@@ -171,7 +172,7 @@ def _spawn(
         "TRACKER_PROVIDER": cfg.tracker.provider,
         "LOW_IMPACT": cfg.review.low_impact.strip() or "None: never report `low`.",
         "ATTEMPT": str(attempt),
-        "MAX_ATTEMPTS": str(cfg.policy.max_reviews_per_pr),
+        "MAX_ATTEMPTS": str(grants.limit(ctx.conn, cfg, request.pr)),
         "CONTEXT": context or "None.",
         "TIMEOUT_MINUTES": str(cfg.runtime.review_timeout_minutes),
         "CONTRACT": result.CONTRACT,
@@ -261,7 +262,7 @@ def _check_limits(
         raise Refusal(
             "reviewed", f"review run {done['id']} already reviewed {request.sha[:12]}{found}; one review per commit"
         )
-    limit = cfg.policy.max_reviews_per_pr
+    limit = grants.limit(ctx.conn, cfg, request.pr)
     if len(runs) >= limit:
         raise Refusal("review_limit", f"this PR has had {len(runs)} review runs and the limit is {limit}")
     since = db.format_time(datetime.now(UTC) - _DAY)

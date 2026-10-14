@@ -132,15 +132,23 @@ if [ "$binary" = 1 ]; then
     # this checkout ships.
     # The private worker's definition is rendered with the tracker's server and tools (DESIGN §22): with those lines,
     # the only ones a two-space quoted key on the github server starts, taken out, it is the shipped file.
+    # The overseer's is rendered with its prompt from its marked line on (DESIGN §13): above that line it is the shipped
+    # file, and the prompt follows.
     private=agents/canopy-worker-private.md
+    overseer=agents/canopy-overseer.md
     for dir in agents skills; do
-        diff -r -x "${private#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" >/dev/null ||
-            fail "the snapshot's $dir are not .agents/"
+        diff -r -x "${private#agents/}" -x "${overseer#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" \
+            >/dev/null || fail "the snapshot's $dir are not .agents/"
     done
     grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" ||
         fail "the snapshot's $private names no tracker tools"
     grep -v '^  "github_' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
         fail "the snapshot's $private is not .agents/ with the tracker's tools"
+    head=$(sed -n '/^<!-- canopy: overseer prompt -->$/q;p' "$repo/.agents/$overseer" | wc -l)
+    prompt="$repo/.agents/prompts/overseer.md"
+    { head -n "$head" "$repo/.agents/$overseer" && cat "$prompt"; } >"$work/overseer.md"
+    head -n "$((head + $(wc -l <"$prompt")))" "$state"/runtime/*/"$overseer" | diff - "$work/overseer.md" >/dev/null ||
+        fail "the snapshot's $overseer is not .agents/ with the overseer's prompt"
     echo "install-check: ok"
     exit 0
 fi

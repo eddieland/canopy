@@ -3,8 +3,8 @@
 `pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
 or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`,
 and `dismiss` write through `canopy.core.conversation`, which every channel shares, `grant` through
-`canopy.runs.policy`, and `pause` and `resume` through `canopy.core.pause`; all eight refuse inside canopy's own ticks
-and runs.
+`canopy.runs.policy`, or `canopy.reviews.grants` for a PR's reviews, and `pause` and `resume` through
+`canopy.core.pause`; all eight refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from canopy.cli.params import REPO
 from canopy.core import chore_view, conversation, db, pause
 from canopy.infra import logs
 from canopy.loop import attention
+from canopy.reviews import grants
 from canopy.runs import halt, policy
 
 if TYPE_CHECKING:
@@ -216,18 +217,23 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 
 @click.command("grant")
 @click.argument("ref", metavar="REF")
-@click.argument("kind", type=click.Choice(policy.KINDS))
+@click.argument("kind", type=click.Choice((*policy.KINDS, grants.KIND)))
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
 @click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
 @click.pass_context
 def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, runs: int) -> int:
-    """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository.
+    """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository, or a PR more reviews.
 
-    For a ticket at its attempt limit that you want the loop to keep working. Every run still counts toward the limit;
-    this raises that unit's limit, and only from your shell. The next tick decides whether to dispatch it.
+    For a ticket at its attempt limit that you want the loop to keep working, or, with REF a PR's URL and KIND
+    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. Every run still counts toward the
+    limit; this raises that unit's or PR's limit, and only from your shell. The next tick decides whether to use it.
     """
     subject = _ref(ref, "grant")
+    if (subject.kind == conversation.PR) != (kind == grants.KIND):
+        raise CliError(f"grant refused (bad_kind): {_grant_mismatch(subject, kind)}")
     ctx = open_context(click_ctx)
+    if kind == grants.KIND:
+        return _grant_reviews(ctx, subject, repo=repo, runs=runs)
     try:
         granted = policy.grant(ctx.conn, ctx.config, subject.id, kind, repo=repo, runs=runs)
     except conversation.Refused as r:
@@ -242,17 +248,41 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     return 0
 
 
+def _grant_mismatch(subject: Ref, kind: str) -> str:
+    if kind == grants.KIND:
+        return f"{subject} is a ticket; `review` takes the PR's URL: `canopy grant <URL> review`"
+    return f"{subject} is a PR, which takes only `review`; {kind} takes a ticket key"
+
+
+def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -> int:
+    if repo is not None:
+        raise CliError("grant refused (bad_repo): a PR's review limit is the PR's own; leave out --repo")
+    try:
+        granted = grants.grant(ctx.conn, ctx.config, subject, runs=runs)
+    except conversation.Refused as r:
+        raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("reviews granted", extra={"pr": subject.id, "runs": runs})
+    click.echo(
+        f"{subject} has had {granted.runs} review runs, and may now have {granted.limit}. "
+        "The next tick decides whether to review it."
+    )
+    return 0
+
+
 @click.command("dismiss")
 @click.argument("ref", metavar="REF")
 @click.argument("finding")
-@click.option("--undo", is_flag=True, help="Take the dismissal back: the finding is listed again.")
+@click.option("--undo", is_flag=True, help="Take the dismissal back.")
 @click.pass_context
 def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool) -> int:
-    """Keep chore REF's open FINDING (its id) off the attention list until the chore stops reporting it.
+    """Dismiss a chore's open FINDING (`chore:NAME`, by its id) or a review's (`review:ID`, by its number).
 
-    The chore still reports it, and `canopy show chore:NAME` still lists it, marked dismissed. Once a run leaves it out
-    the dismissal is spent: if it comes back, it is listed again. To have the chore stop reporting it, write the chore
-    a note with `canopy reply chore:NAME`.
+    A chore's finding is off the attention list until the chore stops reporting it: `canopy show chore:NAME` still
+    lists it, marked dismissed, and if it comes back after a run leaves it out, it is listed again. To have the chore
+    stop reporting it, write the chore a note with `canopy reply chore:NAME`.
+
+    A review's finding stays in `canopy review show ID`, marked, and is left out of what a resume hands a worker and of
+    what the overseer reads. It is one run's finding: a new commit's review starts fresh.
     """
     _operator("dismiss")
     subject = _ref(ref, "dismiss")
@@ -266,8 +296,14 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
     log = logs.for_tick(None)
     log.info(
         "finding dismissal taken back" if undo else "finding dismissed",
-        extra={"chore": subject.id, "finding": finding, "channel": CLI},
+        extra={"subject": str(subject), "finding": finding, "channel": CLI},
     )
+    if subject.kind == conversation.REVIEW:
+        if undo:
+            click.echo(f"{subject} finding {finding} is no longer dismissed: a resume hands it to the worker again.")
+        else:
+            click.echo(f"{subject} finding {finding} is dismissed: no worker or tick acts on it.")
+        return 0
     attention.write(ctx, log)
     if undo:
         click.echo(f"{subject} {finding} is listed again while the chore reports it.")

@@ -25,8 +25,10 @@ const DARK_QUERY = '(prefers-color-scheme: dark)'
 
 function readPreference(): ThemePreference {
     try {
-        const stored = window.localStorage.getItem(STORAGE_KEY)
-        if (stored === 'light' || stored === 'dark') return stored
+        const stored = globalThis.localStorage.getItem(STORAGE_KEY)
+        if (stored === 'light' || stored === 'dark') {
+            return stored
+        }
     } catch {
         // Storage can be unavailable (privacy modes); fall back to the system theme.
     }
@@ -34,7 +36,7 @@ function readPreference(): ThemePreference {
 }
 
 function systemTheme(): ResolvedTheme {
-    return window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light'
+    return globalThis.matchMedia(DARK_QUERY).matches ? 'dark' : 'light'
 }
 
 function resolve(preference: ThemePreference): ResolvedTheme {
@@ -59,14 +61,20 @@ const listeners = new Set<() => void>()
 
 function refresh(): void {
     const next = take()
-    if (next.preference === snapshot.preference && next.resolved === snapshot.resolved) return
+    if (next.preference === snapshot.preference && next.resolved === snapshot.resolved) {
+        return
+    }
     snapshot = next
     apply(snapshot)
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) refresh()
+    if (event.key === STORAGE_KEY || event.key === null) {
+        refresh()
+    }
 }
 
 /**
@@ -76,15 +84,15 @@ function onStorage(event: StorageEvent): void {
 export function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
-        window.matchMedia(DARK_QUERY).addEventListener('change', refresh)
+        globalThis.addEventListener('storage', onStorage)
+        globalThis.matchMedia(DARK_QUERY).addEventListener('change', refresh)
         refresh()
     }
     return () => {
         listeners.delete(listener)
         if (listeners.size === 0) {
-            window.removeEventListener('storage', onStorage)
-            window.matchMedia(DARK_QUERY).removeEventListener('change', refresh)
+            globalThis.removeEventListener('storage', onStorage)
+            globalThis.matchMedia(DARK_QUERY).removeEventListener('change', refresh)
         }
     }
 }
@@ -97,12 +105,17 @@ export function getSnapshot(): ThemeSnapshot {
 /** Stores `preference` and applies it now, synchronously, so a view transition can snapshot the result. */
 export function setPreference(preference: ThemePreference): void {
     try {
-        if (preference === 'system') window.localStorage.removeItem(STORAGE_KEY)
-        else window.localStorage.setItem(STORAGE_KEY, preference)
+        if (preference === 'system') {
+            globalThis.localStorage.removeItem(STORAGE_KEY)
+        } else {
+            globalThis.localStorage.setItem(STORAGE_KEY, preference)
+        }
     } catch {
         // Not persisted, but still applied for this page.
     }
     snapshot = { preference, resolved: resolve(preference) }
     apply(snapshot)
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }

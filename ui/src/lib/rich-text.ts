@@ -4,7 +4,12 @@
 // linked to itself by `LinkedText` (D113).
 
 /** A piece of a line: plain text, `code`, or **strong**. */
-export type Inline = { kind: 'text' | 'code' | 'strong'; text: string }
+export interface Inline {
+    /** How the piece is set. */
+    kind: 'text' | 'code' | 'strong'
+    /** The piece's text, without its markers. */
+    text: string
+}
 
 /** One line of text, as its inline pieces. */
 export type Line = Inline[]
@@ -27,16 +32,16 @@ export type Block =
     | { kind: 'list'; ordered: boolean; start: number; items: Item[] }
     | { kind: 'code'; lines: string[] }
 
-const FENCE = /^\s*(`{3,}|~{3,})/
-const HEADING = /^#{1,6}\s+(.*)$/
-const BULLET = /^(\s*)[-*+]\s+(.*)$/
-const NUMBERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/
+const FENCE = /^\s*(`{3,}|~{3,})/u
+const HEADING = /^#{1,6}\s+(.*)$/u
+const BULLET = /^(\s*)[-*+]\s+(.*)$/u
+const NUMBERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/u
 const MAX_DEPTH = 3
 
 /** `text` as blocks: a blank line ends a paragraph or a list, and a line break inside one is kept. */
 export function parse(text: string): Block[] {
     const blocks: Block[] = []
-    const lines = text.replace(/\r\n?/g, '\n').split('\n')
+    const lines = text.replaceAll(/\r\n?/gu, '\n').split('\n')
     let i = 0
     while (i < lines.length) {
         const line = lines[i] ?? ''
@@ -76,7 +81,7 @@ export function parse(text: string): Block[] {
                 const item = listMarker(next)
                 if (item && item.ordered === list.ordered) {
                     list.items.push({ depth: depthOf(item.indent), lines: [inline(item.text)] })
-                } else if (!item && next.trim() !== '' && /^\s/.test(next) && !FENCE.test(next)) {
+                } else if (!item && next.trim() !== '' && /^\s/u.test(next) && !FENCE.test(next)) {
                     // An indented line under an item continues it.
                     list.items.at(-1)?.lines.push(inline(next.trim()))
                 } else {
@@ -90,7 +95,9 @@ export function parse(text: string): Block[] {
         const paragraph: Line[] = []
         while (i < lines.length) {
             const next = lines[i] ?? ''
-            if (next.trim() === '' || FENCE.test(next) || HEADING.test(next) || listMarker(next)) break
+            if (next.trim() === '' || FENCE.test(next) || HEADING.test(next) || listMarker(next)) {
+                break
+            }
             paragraph.push(inline(next.trim()))
             i += 1
         }
@@ -101,7 +108,9 @@ export function parse(text: string): Block[] {
 
 function listMarker(line: string): { ordered: boolean; number: number; indent: number; text: string } | null {
     const bullet = BULLET.exec(line)
-    if (bullet) return { ordered: false, number: 1, indent: (bullet[1] ?? '').length, text: bullet[2] ?? '' }
+    if (bullet) {
+        return { ordered: false, number: 1, indent: (bullet[1] ?? '').length, text: bullet[2] ?? '' }
+    }
     const numbered = NUMBERED.exec(line)
     if (numbered) {
         const indent = (numbered[1] ?? '').length
@@ -117,15 +126,22 @@ function depthOf(indent: number): number {
 /** A line's `code` spans and **strong** runs; anything unclosed stays as it was written. */
 export function inline(text: string): Line {
     const pieces: Line = []
-    const pattern = /`([^`]+)`|\*\*(.+?)\*\*/g
+    const pattern = /`([^`]+)`|\*\*(.+?)\*\*/gu
     let last = 0
     for (const match of text.matchAll(pattern)) {
-        if (match.index > last) pieces.push({ kind: 'text', text: text.slice(last, match.index) })
-        if (match[1] !== undefined) pieces.push({ kind: 'code', text: match[1] })
-        else pieces.push({ kind: 'strong', text: match[2] ?? '' })
+        if (match.index > last) {
+            pieces.push({ kind: 'text', text: text.slice(last, match.index) })
+        }
+        if (match[1] === undefined) {
+            pieces.push({ kind: 'strong', text: match[2] ?? '' })
+        } else {
+            pieces.push({ kind: 'code', text: match[1] })
+        }
         last = match.index + match[0].length
     }
-    if (last < text.length) pieces.push({ kind: 'text', text: text.slice(last) })
+    if (last < text.length) {
+        pieces.push({ kind: 'text', text: text.slice(last) })
+    }
     return pieces
 }
 
@@ -136,14 +152,18 @@ export function lineCount(blocks: Block[]): number {
 
 function linesOf(block: Block): number {
     switch (block.kind) {
-        case 'paragraph':
+        case 'paragraph': {
             return block.lines.length
-        case 'heading':
+        }
+        case 'heading': {
             return 1
-        case 'list':
+        }
+        case 'list': {
             return block.items.reduce((sum, item) => sum + item.lines.length, 0)
-        case 'code':
+        }
+        case 'code': {
             return Math.max(1, block.lines.length)
+        }
     }
 }
 
@@ -153,11 +173,15 @@ function linesOf(block: Block): number {
  */
 export function clamp(blocks: Block[], max: number): { blocks: Block[]; hidden: number } {
     const total = lineCount(blocks)
-    if (total <= max + 1) return { blocks, hidden: 0 }
+    if (total <= max + 1) {
+        return { blocks, hidden: 0 }
+    }
     const shown: Block[] = []
     let room = max
     for (const block of blocks) {
-        if (room <= 0) break
+        if (room <= 0) {
+            break
+        }
         const cut = cutBlock(block, room)
         shown.push(cut)
         room -= linesOf(cut)
@@ -167,17 +191,22 @@ export function clamp(blocks: Block[], max: number): { blocks: Block[]; hidden: 
 
 function cutBlock(block: Block, room: number): Block {
     switch (block.kind) {
-        case 'paragraph':
+        case 'paragraph': {
             return { ...block, lines: block.lines.slice(0, room) }
-        case 'heading':
+        }
+        case 'heading': {
             return block
-        case 'code':
+        }
+        case 'code': {
             return { ...block, lines: block.lines.slice(0, room) }
+        }
         case 'list': {
             const items: Item[] = []
             let left = room
             for (const item of block.items) {
-                if (left <= 0) break
+                if (left <= 0) {
+                    break
+                }
                 items.push({ ...item, lines: item.lines.slice(0, left) })
                 left -= item.lines.length
             }

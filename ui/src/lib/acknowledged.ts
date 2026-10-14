@@ -14,7 +14,9 @@ export function awaitsTick(message: Pick<Message, 'id' | 'source'>, acknowledged
  * question now. The list is the latest `ok` tick's (DESIGN §14), so the item stays until the next one.
  */
 export function answered(item: AttentionItem, tickets: TicketSummary[] | undefined): boolean {
-    if (item.reason !== 'awaiting_reply' || item.ticket_key === null) return false
+    if (item.reason !== 'awaiting_reply' || item.ticket_key === null) {
+        return false
+    }
     const ticket = tickets?.find((t) => t.key === item.ticket_key)
     return ticket?.start === 'started' && ticket.awaiting === null
 }

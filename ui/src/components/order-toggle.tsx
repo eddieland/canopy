@@ -1,7 +1,8 @@
 import { ArrowDownUp } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { type ListName, setListOrder, useListOrder } from '@/lib/list-order'
+import { setListOrder, useListOrder } from '@/lib/list-order'
+import type { ListName } from '@/lib/list-order'
 
 /**
  * A list's order in its panel's header: which end comes first, in words, flipping to the other on a click. Each list

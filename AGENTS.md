@@ -119,8 +119,19 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 ## Testing
 
-- Unit tests fake external processes through `canopy.infra.procs`, never by monkeypatching `subprocess` in scattered
-  places.
+- Unit tests fake external processes through `canopy.infra.procs`, never by patching `subprocess` in scattered places.
+- Patch with `unittest.mock`, as context managers, never pytest's `monkeypatch`. Import the namespace,
+  `from unittest import mock`, and spell it out: `mock.patch.dict(os.environ, {...})` for environment variables (pop
+  a variable inside the block to unset it), `mock.patch.object(module, "NAME", value)` for an attribute, and
+  `contextlib.chdir` for the working directory. ruff fails the lint on `pytest.MonkeyPatch` and on
+  `from unittest.mock import ...`.
+- A mock is specced: `mock.patch.object(module, "fn", autospec=True)`, with `side_effect` or `return_value` for what
+  it does, or `mock.create_autospec(...)`, so a call the real thing would refuse fails the test. Never a bare
+  `Mock()` or `MagicMock()`. Patching a plain value (a limit, a constant) needs no spec.
+- A patch lasts as long as its `with` block. A fixture that patches yields inside the block. A helper that sets up
+  state for the code after it is a context manager (`with in_tick(conn) as tick_id:`, `with worker_does(...):`), and
+  a helper that needs a patch only while it runs opens and closes its own. `hermetic_agent_env` restores the whole
+  environment after every test, as a backstop, not a license to set `os.environ` directly.
 - `tests/fakes/treehouse` is an executable fake that speaks the same CLI (`status --json`, `get --lease --json`,
   `return`) and keeps its state in a temp file. It is put on `PATH` by fixtures.
 - The fake agent command is `tests/fakes/agent`, a script that prints a configurable final JSON line. Tests configure
