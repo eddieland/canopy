@@ -5,6 +5,7 @@ import { Children } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
 import { attentionQuery } from '@/api/queries'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useSection } from '@/hooks/use-section'
 import { blocking } from '@/lib/attention'
 import { pageTitle } from '@/lib/page-title'
@@ -154,16 +155,49 @@ export function PanelScroll({ label, className, ...props }: ComponentProps<'sect
     )
 }
 
-/** Where a feature will go: reserves its space so the page does not move when the feature lands. */
-export function Placeholder({ className, children }: { className?: string; children: ReactNode }) {
+/**
+ * What a list or a page says when it has nothing to show, in muted text: `no X yet`, then one clause on why or what to
+ * do. A `row` stands where a panel's list would be, as its one row; a `panel` fills a page's main panel. Never an
+ * error: that is a `Notice`.
+ */
+export function Empty({
+    size = 'row',
+    className,
+    children,
+}: {
+    /** A list's one row (`row`), or a page's main panel (`panel`). */
+    size?: 'row' | 'panel'
+    /** Any classes added to it. */
+    className?: string
+    /** What it says. */
+    children: ReactNode
+}) {
     return (
-        <div
+        <p
             className={cn(
-                'grid min-h-72 place-items-center p-6 text-center font-mono text-xs text-muted-foreground',
+                'text-sm text-muted-foreground',
+                size === 'row' ? 'px-3 py-2.5' : 'grid min-h-40 place-items-center p-6 text-center',
                 className,
             )}
         >
             {children}
+        </p>
+    )
+}
+
+// Each bar a little shorter than the one before it, as lines of text are.
+const BAR_WIDTHS = ['w-2/3', 'w-1/2', 'w-3/5', 'w-2/5'] as const
+
+/**
+ * What a panel shows while its data has not arrived at all: `rows` shimmering bars. Give it the minimum height its
+ * content will take, so nothing moves when that lands.
+ */
+export function PanelSkeleton({ rows = 2, className }: { rows?: number; className?: string }) {
+    return (
+        <div className={cn('flex flex-col gap-2 p-3', className)} data-testid="panel-skeleton">
+            {Array.from({ length: rows }, (_, i) => (
+                <Skeleton key={i} className={cn('h-4', BAR_WIDTHS[i % BAR_WIDTHS.length])} />
+            ))}
         </div>
     )
 }

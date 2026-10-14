@@ -4,11 +4,13 @@ import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
+import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
 import { actionTone } from '@/lib/decisions'
 import type { ActionTone } from '@/lib/decisions'
+import { rowLineFrom } from '@/lib/rows'
 import { cn } from '@/lib/utils'
 
 // Written out so Tailwind finds them.
@@ -19,24 +21,20 @@ const TONE: Record<ActionTone, string> = {
 }
 
 /**
- * Decisions, one row each: what it was about (or, on a ticket's page, which tick), the action, and the rationale. A
- * rationale is the overseer's text: untrusted, laid out as `RichText`, which renders it as text.
+ * Decisions, one row each: what it was about (or, on its subject's page, which tick), the action, and under it the
+ * rationale. A rationale is the overseer's text: untrusted, laid out as `RichText`, which renders it as text.
  */
 export function Decisions({ decisions, byTick = false }: { decisions: Decision[]; byTick?: boolean }) {
     return (
         <ul className="divide-y" data-testid="decisions">
             {decisions.map((decision) => (
-                <li
+                <ListRow
                     key={decision.id}
-                    className="flex flex-col gap-1 px-3 py-2.5"
+                    kind={byTick ? 'own-decision' : 'decision'}
                     data-testid={`decision-${decision.id}`}
                 >
-                    <div className="flex items-center gap-3">
-                        {byTick ? (
-                            <TickLink id={decision.tick_id} className="w-16 shrink-0" />
-                        ) : (
-                            <Subject decision={decision} />
-                        )}
+                    {byTick ? <TickLink id={decision.tick_id} /> : <Subject decision={decision} />}
+                    <span className="flex min-w-0 items-center gap-3">
                         <Chip className={TONE[actionTone(decision.action)]} word={decision.action} />
                         {decision.pr && (
                             <a
@@ -52,10 +50,10 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                                 <LinkOutIcon href={decision.pr} className="shrink-0" />
                             </a>
                         )}
-                        {byTick && <Age at={decision.at} className="ml-auto" />}
-                    </div>
-                    <RichText text={decision.rationale} lines={SUMMARY_LINES} />
-                </li>
+                    </span>
+                    {byTick && <Age at={decision.at} className="text-right" />}
+                    <RichText text={decision.rationale} lines={SUMMARY_LINES} className={rowLineFrom('action')} />
+                </ListRow>
             ))}
         </ul>
     )
@@ -63,7 +61,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
 
 /** A ticket, a chore, or a PR no ticket owns as a link to its page; a repository or the whole tick as the CLI says. */
 function Subject({ decision }: { decision: Decision }) {
-    const cell = 'w-36 shrink-0 truncate'
+    const cell = 'truncate'
     if (decision.chore !== null) {
         return <ChoreLink name={decision.chore} className={cell} />
     }

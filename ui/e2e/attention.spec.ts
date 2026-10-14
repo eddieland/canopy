@@ -61,7 +61,7 @@ test('an item about no ticket says so, with nothing to answer', async ({ page })
 
     const detail = page.getByTestId('attention-detail')
     await expect(detail).toContainText('api is in the workspace map but has no clone')
-    await expect(detail).toContainText('Nothing to answer here')
+    await expect(detail).toContainText('nothing to answer here')
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 

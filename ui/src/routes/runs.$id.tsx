@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
@@ -8,13 +7,13 @@ import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Field, Fields } from '@/components/fields'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { TranscriptPanel } from '@/components/transcript'
-import { Skeleton } from '@/components/ui/skeleton'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { localTime } from '@/lib/time'
@@ -47,8 +46,8 @@ function Loaded({ id }: { id: number }) {
         return (
             <>
                 <PageHeader title={`run:${id}`} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -72,7 +71,7 @@ function NoRun({ title, children }: { title: string; children: string }) {
         <>
             <PageHeader title={title} />
             <Panel>
-                <Placeholder className="min-h-40">{children}</Placeholder>
+                <Empty size="panel">{children}</Empty>
             </Panel>
         </>
     )
@@ -87,7 +86,7 @@ function RunPanel({ run }: { run: Run }) {
                     {run.status}
                 </span>
             </PanelHeader>
-            <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
+            <Fields>
                 <Field label="ticket">
                     <span className="flex items-center gap-2">
                         <TicketLink ticketKey={run.ticket_key} />
@@ -148,16 +147,7 @@ function RunPanel({ run }: { run: Run }) {
                         <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
                     </Copyable>
                 </Field>
-            </dl>
+            </Fields>
         </Panel>
-    )
-}
-
-function Field({ label, mono = false, children }: { label: string; mono?: boolean; children: ReactNode }) {
-    return (
-        <>
-            <dt className="panel-label self-center">{label}</dt>
-            <dd className={cn('min-w-0 break-words', mono ? 'font-mono text-xs break-all' : 'text-sm')}>{children}</dd>
-        </>
     )
 }

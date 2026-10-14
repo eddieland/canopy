@@ -202,7 +202,7 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
   move.
 - Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
-- A skeleton (`Skeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
+- A skeleton (`PanelSkeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
   screen.
 
 ## Themes
@@ -215,17 +215,51 @@ way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), the key that 
 (`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
 tabs. The ticker keeps the topics left out, not those shown, so a topic added later shows until it is turned off.
 
+## Primitives
+
+Every list and detail page is built from the same few pieces, so a new page lines up with the others without anyone
+measuring. A page that needs something they do not offer extends them here first; it never builds a row, a field
+list, an empty state, or a skeleton by hand.
+
+- **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
+  `src/lib/rows.ts`). Each column is a named grid line and a width; every one is fixed but one free column, which
+  takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The head line's
+  cells fill the columns in order, so a cell that may be empty still renders (an empty `span`). What goes under the
+  head line, a summary, its links, an earlier run, is a **`RowLine`** that spans from a named column to the row's end
+  (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A summary starts
+  under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's status, a
+  decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same kind with a
+  `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
+- **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
+  the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
+  The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
+  a list of reviews), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
+- **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
+  page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
+  kind of their own (`own-review`, `own-run`).
+- **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
+  sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
+  around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
+  it is due`); `now` for what comes and goes rather than `yet` (`no open findings now`). A search that finds nothing
+  says so; a page whose subject is missing says why. An error is never an `Empty`, and never a red sentence in a
+  panel: it is a `Notice`, which names a refusal's guard.
+- **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
+  shimmering bars, each shorter than the last. It takes the minimum height its content will (`min-h-72` for a page's
+  main panel), so nothing moves when the data lands.
+
 ## Patterns
 
-- **Lists are rows in a panel**, divided by hairlines: a fixed-width key column (a ticket key, a state), then the
-  text, then readouts (cost, age) right-aligned in fixed widths. Ages are `Age`: the CLI's largest whole unit, with
-  the local time on hover.
-- **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): a
-  conversation, a chore's notes, a transcript, the runs page and a ticket's or chore's recent runs, a ticket's or
-  tick's decisions, the ticks, and the tickets. The toggle is a ghost button before the count, an up-down arrow and
-  the order it is in, in words (`newest first`); a click shows the other. Each list starts in the order the server
-  sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on a
-  ticket's page is flipped in the inbox too. It shows only when the list has two items or more.
+- **Lists are rows in a panel** (`ListRow`), divided by hairlines: a key column (a ticket key, a state), then the
+  text in the free column, then readouts (cost, age) right-aligned. Ages are `Age`: the CLI's largest whole unit,
+  with the local time on hover; a run's, tick's, or chore run's is `Ended` (`for 3m`, `ended 3m ago`).
+- **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
+  in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
+  PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
+  toggle is a ghost button before the count, an up-down arrow and the order it is in, in words (`newest first`); a
+  click shows the other. Each list starts in the order the server sends it and keeps the operator's choice for that
+  list alone, wherever it appears: a conversation flipped on a ticket's page is flipped in the inbox too. It shows only
+  when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
+  read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
@@ -233,20 +267,19 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   not: the page scrolls instead.
 - **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's latest
   run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs before it,
-  newest first, each one line in the row's own columns: its state, the first line of what it said in muted text where
-  the title is, its id and chips, cost, and when; the rest is on its run's page. The head line leads with the ticket:
-  the state, the key, and the title, which takes the free width, then the run's id and chips in a fixed-width column, so
-  every row's title and run id line up whatever chips a run has. What goes under it (the summary, the PRs, the toggle)
-  starts under the title. A ticket that asked, got its answer, and asked again is one blocked row, not two. The state
+  newest first, each one line in the row's own columns (a `ListRow` of the same kind): its state, the first line of
+  what it said in muted text where the title is, its id and chips, cost, and when; the rest is on its run's page. The
+  head line leads with the ticket: the state, the key, and the title in the free column, then the run's id and chips.
+  What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one blocked row,
+  not two. The state
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
   there is the same ticket's.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
-- **The tickets list** keeps every column but the title at a fixed width: the key, the title in the free width, then
-  the `public` or `private, started` chip, the phase (cut to fit, the whole on hover), the running run or `waiting on
-  you`, and the age. So each row's chip, phase, and run line up whatever the others say.
+- **The tickets list**: the key, the title in the free column, the `public` or `private, started` chip, the phase (cut
+  to fit, the whole on hover), the running run or `waiting on you`, and the age.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while
@@ -263,10 +296,10 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
-  number). Columns keep their width on every row, the age's included. An idle slot shows its state and number
-  alone, dimmed; only a note or an unreadable branch takes a second line, wrapped to the panel. The branch and the
-  processes treehouse found share what the row leaves, each cut to fit with the whole on hover: an agent can start
-  a dozen, and the line still ends at the age.
+  number). An idle slot shows its state and number alone, dimmed; only a note or an unreadable branch takes a second
+  line, from the holder's column. The branch and the processes treehouse found share the free column, each cut to fit
+  with the whole on hover: an agent can start a dozen, and the line still ends at the age. A pool treehouse could not
+  read says why as a `Notice`.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
@@ -295,10 +328,10 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next run` in
   `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
-  (on a ticket's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale under
-  them as rich text. A `refused:` action's chip is in `status-failed` and an `attention:` one's in `status-blocked`
-  (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a link, its status in the header's tick
-  colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
+  (on its subject's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale
+  under them as rich text, from the action's column. A `refused:` action's chip is in `status-failed` and an
+  `attention:` one's in `status-blocked` (`src/lib/decisions.ts`); the rest are plain. A tick in a list is its id as a
+  link, its status in the header's tick colors (`src/lib/ticks.ts`), how many decisions, its cost, and when it ended.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each
   with its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line
   breaks, its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line
@@ -353,7 +386,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   run's, its id as `#2` (a chore run has no `run:ID` reference) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
-  `dismissed` chip and `list again`: still reported, only off the attention list. A row's own action is a ghost `xs`
+  `dismissed` chip and `list again`: still reported, only off the attention list; its detail and link start under
+  its title. A row's own action is a ghost `xs`
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
@@ -416,17 +450,16 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
   text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
-  its title muted, `keep` in place of `dismiss`, and the same chip in the findings list. The list of reviews is rows:
-  the review's link, its state's dot and verdict in that state's color, its ticket (or `review.query`), the PR as a
-  link out, the commit's first 7 characters, its impact, cost, and age.
+  its title muted, `keep` in place of `dismiss`, and the same chip in the findings list. The list of reviews is a
+  `ReviewsTable`: the review's link, its state's dot and verdict in that state's color, its ticket (or
+  `review.query`), the PR as a link out, the commit's first 7 characters, its impact, cost, and age.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
   its page, named `org/repo#123` when it is GitHub's, as GitHub writes a reference (`pullRequestLabel`, the URL on
-  hover), its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
+  hover), its ticket and title (or `no ticket`, muted) and its unit's phase as a chip in the free column, then the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
   state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
   a link out under it as a ticket's page has, then panels for its fields and total cost, the runs that pushed to it
-  (`RunsTable`), its
-  reviews as rows each opening the review, and its decisions. A review's page links to its PR's (`its page in
+  (`RunsTable`), its reviews (`ReviewsTable`), and its decisions. A review's page links to its PR's (`its page in
   canopy`).
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`

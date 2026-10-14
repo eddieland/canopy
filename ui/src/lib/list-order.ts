@@ -32,6 +32,16 @@ export const LISTS = {
     'tick-decisions': 'oldest',
     /** The tickets page, by latest activity. */
     tickets: 'newest',
+    /** The pull requests page, by latest activity. */
+    'pull-requests': 'newest',
+    /** The reviews page. */
+    reviews: 'newest',
+    /** A PR's runs, the ones that pushed to it. */
+    'pr-runs': 'newest',
+    /** A PR's reviews. */
+    'pr-reviews': 'newest',
+    /** A PR's decisions. */
+    'pr-decisions': 'newest',
 } as const satisfies Record<string, Order>
 
 /** A list that can be flipped. */

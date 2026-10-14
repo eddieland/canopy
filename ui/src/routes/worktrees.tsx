@@ -12,11 +12,11 @@ import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import type { Tone } from '@/components/counter'
 import { Notice } from '@/components/notice'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
@@ -64,10 +64,7 @@ function WorktreesPage() {
             {data === undefined ? (
                 <Panel>
                     <PanelHeader label="Loading" />
-                    <div className="flex min-h-40 flex-col gap-2 p-3">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+                    <PanelSkeleton className="min-h-40" />
                 </Panel>
             ) : (
                 data.map((pool) => <PoolPanel key={pool.repo} pool={pool} />)
@@ -150,7 +147,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
             )}
             {pool.error === null ? (
                 pool.worktrees.length === 0 ? (
-                    <Placeholder className="min-h-24">no worktrees yet</Placeholder>
+                    <Empty>no worktrees yet: treehouse makes one when a run or review leases a slot</Empty>
                 ) : (
                     <ul className="divide-y" data-testid="worktrees">
                         {pool.worktrees.map((w) => (
@@ -159,9 +156,7 @@ function PoolPanel({ pool }: { pool: Pool }) {
                     </ul>
                 )
             ) : (
-                <Placeholder className="min-h-24">
-                    <span className="text-status-failed">{pool.error}</span>
-                </Placeholder>
+                <Notice error={pool.error} className="px-3 py-2.5" />
             )}
         </Panel>
     )
@@ -201,28 +196,30 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
-        <li
-            className={cn('group/copy flex flex-col gap-1 px-3 py-2', idle && 'opacity-60')}
+        <ListRow
+            kind="worktree"
+            className={cn('group/copy py-2', idle && 'opacity-60')}
             data-testid={`worktree-${w.name}`}
             data-state={w.state}
         >
-            <div className="flex h-5 items-center gap-3">
-                <span
-                    className={cn('flex w-20 shrink-0 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
-                    title={`treehouse: ${w.status}`}
-                >
-                    <WorktreeDot state={w.state} />
-                    {w.state === 'broken' ? w.status : w.state}
+            <span
+                className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
+                title={`treehouse: ${w.status}`}
+            >
+                <WorktreeDot state={w.state} />
+                {w.state === 'broken' ? w.status : w.state}
+            </span>
+            <span className="flex items-center">
+                <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
+                    #{w.name}
                 </span>
-                <span className="flex shrink-0 items-center">
-                    <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
-                        #{w.name}
-                    </span>
-                    <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
-                </span>
+                <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
+            </span>
+            {idle ? <span /> : <Holder worktree={w} />}
+            {/* The branch, path, and processes share what the row leaves: each is cut to fit, the age never. */}
+            <span className="flex min-w-0 items-center gap-3">
                 {!idle && (
                     <>
-                        <Holder worktree={w} />
                         {branchHref === undefined ? (
                             <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
                                 {w.branch ??
@@ -247,32 +244,26 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                     </>
                 )}
                 {!shared && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{w.path}</span>}
-                {/* Not one group: each keeps its own minimum width, so the processes are cut to fit, the age never. */}
                 {w.processes.length > 0 && <Processes processes={w.processes} />}
-                <span
-                    className={cn(
-                        'flex w-20 shrink-0 justify-end gap-1 text-xs text-muted-foreground',
-                        w.processes.length > 0 ? 'ml-1' : 'ml-auto',
-                    )}
-                >
-                    {since && (
-                        <>
-                            for <Age at={since} />
-                        </>
-                    )}
-                </span>
-            </div>
+            </span>
+            <span className="flex justify-end gap-1 text-xs text-muted-foreground">
+                {since && (
+                    <>
+                        for <Age at={since} />
+                    </>
+                )}
+            </span>
             {(w.note || w.branch_error) && (
-                <div className="flex flex-wrap gap-x-4 pl-[7.5rem] font-mono text-xs">
+                <RowLine from="holder" className="flex flex-wrap gap-x-4 font-mono text-xs">
                     {w.branch_error && (
                         <span className="min-w-0 break-words text-status-failed">
                             branch unreadable: {w.branch_error}
                         </span>
                     )}
                     {w.note && <span className="min-w-0 break-words text-status-blocked">{w.note}</span>}
-                </div>
+                </RowLine>
             )}
-        </li>
+        </ListRow>
     )
 }
 
@@ -280,7 +271,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
 function Holder({ worktree: w }: { worktree: Worktree }) {
     if (w.run) {
         return (
-            <span className="flex w-52 shrink-0 items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
                 <TicketLink ticketKey={w.run.ticket_key} className="truncate" />
                 <Chip word={w.run.kind} />
                 <span className="readout text-xs text-muted-foreground">run:{w.run.id}</span>
@@ -289,7 +280,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
     }
     if (w.review) {
         return (
-            <span className="flex w-52 shrink-0 items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
                 <Chip>review</Chip>
                 <a
                     href={w.review.pr_url}
@@ -304,7 +295,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
         )
     }
     return (
-        <span className="w-52 shrink-0 truncate font-mono text-xs text-muted-foreground" title={w.holder ?? undefined}>
+        <span className="truncate font-mono text-xs text-muted-foreground" title={w.holder ?? undefined}>
             {w.holder}
         </span>
     )

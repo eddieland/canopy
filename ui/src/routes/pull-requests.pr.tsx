@@ -6,23 +6,22 @@ import type { ReactNode } from 'react'
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { pullRequestQuery } from '@/api/queries'
-import type { PullRequestDetail, ReviewSummary } from '@/api/types'
+import type { PullRequestDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
-import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
-import { ReviewLink } from '@/components/review-link'
+import { OrderToggle } from '@/components/order-toggle'
+import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
-import { Chip, RunDot } from '@/components/status'
+import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { shortSha, verdictText } from '@/lib/reviews'
-import { RUN_TEXT } from '@/lib/run-state'
-import { cn } from '@/lib/utils'
+import { ordered, useListOrder } from '@/lib/list-order'
 
 interface PullRequestSearch {
     url?: string | undefined
@@ -57,8 +56,8 @@ function Loaded({ url }: { url: string }) {
         return (
             <>
                 <PageHeader title={title} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -71,7 +70,7 @@ function Missing({ title, children }: { title: string; children: ReactNode }) {
         <>
             <PageHeader title={title} />
             <Panel>
-                <Placeholder className="min-h-40">{children}</Placeholder>
+                <Empty size="panel">{children}</Empty>
             </Panel>
         </>
     )
@@ -79,6 +78,9 @@ function Missing({ title, children }: { title: string; children: ReactNode }) {
 
 function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: string }) {
     const { pull_request: pr, review_limit: reviewLimit, runs, reviews, decisions, cost } = detail
+    const runsOrder = useListOrder('pr-runs')
+    const reviewsOrder = useListOrder('pr-reviews')
+    const decisionsOrder = useListOrder('pr-decisions')
     return (
         <>
             <PageHeader
@@ -96,9 +98,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                             active <Age at={pr.active_at} /> ago
                         </span>
                     </PanelHeader>
-                    <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
-                        <dt className="panel-label self-center">ticket</dt>
-                        <dd className="flex min-w-0 items-center gap-2">
+                    <Fields>
+                        <Field label="ticket" className="flex items-baseline gap-2">
                             {pr.ticket_key === null ? (
                                 <span className="text-muted-foreground">none: canopy has only reviewed it</span>
                             ) : (
@@ -107,54 +108,51 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                                     <TicketTitle title={pr.ticket_title} />
                                 </>
                             )}
-                        </dd>
+                        </Field>
                         {pr.repo && (
-                            <>
-                                <dt className="panel-label self-center">repository</dt>
-                                <dd className="font-mono text-xs">{pr.repo}</dd>
-                            </>
+                            <Field label="repository" mono>
+                                {pr.repo}
+                            </Field>
                         )}
                         {pr.branch && (
-                            <>
-                                <dt className="panel-label self-center">branch</dt>
-                                <dd className="min-w-0 font-mono text-xs">
-                                    <Copyable text={pr.branch} label="branch" />
-                                </dd>
-                            </>
+                            <Field label="branch" mono>
+                                <Copyable text={pr.branch} label="branch" />
+                            </Field>
                         )}
                         {pr.phase && (
-                            <>
-                                <dt className="panel-label self-center">phase</dt>
-                                <dd className="font-mono text-xs">{pr.phase}</dd>
-                            </>
+                            <Field label="phase" mono>
+                                {pr.phase}
+                            </Field>
                         )}
                         <CostTotalRow cost={cost} />
-                    </dl>
+                    </Fields>
                 </Panel>
                 <Panel data-testid="pull-request-runs">
                     <PanelHeader label="Runs">
-                        <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                        <span className="flex items-center gap-2">
+                            {runs.length > 1 && <OrderToggle list="pr-runs" />}
+                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                        </span>
                     </PanelHeader>
                     {runs.length === 0 ? (
-                        <Placeholder className="min-h-20">no run has pushed to it</Placeholder>
+                        <Empty>no runs yet: none of its ticket&apos;s runs has pushed to it</Empty>
                     ) : (
                         <PanelScroll label="Runs">
-                            <RunsTable runs={runs} ticket={false} />
+                            <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} />
                         </PanelScroll>
                     )}
                 </Panel>
                 <Panel data-testid="pull-request-reviews">
                     <PanelHeader label="Reviews">
-                        <span className="readout text-xs text-muted-foreground">{reviews.length}</span>
+                        <span className="flex items-center gap-2">
+                            {reviews.length > 1 && <OrderToggle list="pr-reviews" />}
+                            <span className="readout text-xs text-muted-foreground">{reviews.length}</span>
+                        </span>
                     </PanelHeader>
                     {reviews.length === 0 ? (
-                        <Placeholder className="min-h-20">canopy has not reviewed it</Placeholder>
+                        <Empty>no reviews yet: canopy has not reviewed it</Empty>
                     ) : (
-                        <ul className="divide-y">
-                            {reviews.map((review) => (
-                                <ReviewRow key={review.id} review={review} />
-                            ))}
-                        </ul>
+                        <ReviewsTable reviews={ordered('pr-reviews', reviewsOrder, reviews)} pr={false} />
                     )}
                     {reviewLimit !== null && (
                         <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
@@ -162,13 +160,16 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 </Panel>
                 <Panel data-testid="pull-request-decisions">
                     <PanelHeader label="Decisions">
-                        <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                        <span className="flex items-center gap-2">
+                            {decisions.length > 1 && <OrderToggle list="pr-decisions" />}
+                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
+                        </span>
                     </PanelHeader>
                     {decisions.length === 0 ? (
-                        <Placeholder className="min-h-20">no tick has named it</Placeholder>
+                        <Empty>no decisions yet: no tick has named it</Empty>
                     ) : (
                         <PanelScroll label="Decisions">
-                            <Decisions decisions={decisions} byTick />
+                            <Decisions decisions={ordered('pr-decisions', decisionsOrder, decisions)} byTick />
                         </PanelScroll>
                     )}
                 </Panel>
@@ -193,31 +194,5 @@ function PullRequestOut({ url }: { url: string }) {
                 </a>
             </Button>
         </nav>
-    )
-}
-
-/** A review run of the PR, opening its page with its findings on its diff: verdict, commit, impact, cost, when. */
-function ReviewRow({ review }: { review: ReviewSummary }) {
-    return (
-        <li className="flex items-center gap-3 px-3 py-2.5 text-sm" data-testid={`pull-request-review-${review.id}`}>
-            <ReviewLink id={review.id} className="w-20 shrink-0" />
-            <span className={cn('flex w-28 shrink-0 items-center gap-1.5 font-mono text-xs', RUN_TEXT[review.state])}>
-                <RunDot state={review.state} />
-                {verdictText(review)}
-            </span>
-            <span className="readout shrink-0 text-xs text-muted-foreground" title={review.sha}>
-                at {shortSha(review.sha)}
-            </span>
-            <span className="ml-auto flex shrink-0 items-center gap-4">
-                {review.impact !== null && <Chip word={`${review.impact} impact`} />}
-                <span className="readout w-14 text-right text-xs text-muted-foreground">
-                    {review.cost_usd === null ? '' : `$${review.cost_usd.toFixed(2)}`}
-                </span>
-                <span className="flex w-20 justify-end gap-1 text-xs text-muted-foreground">
-                    <Age at={review.ended_at ?? review.started_at} />
-                    ago
-                </span>
-            </span>
-        </li>
     )
 }

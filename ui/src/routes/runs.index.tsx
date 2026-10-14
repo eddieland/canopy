@@ -6,10 +6,9 @@ import { runsQuery } from '@/api/queries'
 import { RUN_STATES } from '@/api/types'
 import type { RunState } from '@/api/types'
 import { OrderToggle } from '@/components/order-toggle'
-import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { TicketRunsTable } from '@/components/runs-table'
 import { RunDot } from '@/components/status'
-import { Skeleton } from '@/components/ui/skeleton'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { byTicket } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -59,12 +58,13 @@ function RunsPage() {
                     </span>
                 </PanelHeader>
                 {shown === undefined ? (
-                    <div className="flex min-h-72 flex-col gap-2 p-3">
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </div>
+                    <PanelSkeleton className="min-h-72" />
                 ) : shown.length === 0 ? (
-                    <Placeholder>{state ? `no ${state} runs` : 'no runs yet'}</Placeholder>
+                    <Empty size="panel">
+                        {state
+                            ? `no ${state} runs now: no ticket's latest run is ${state}`
+                            : 'no runs yet: the overseer starts one when a ticket is ready to work'}
+                    </Empty>
                 ) : (
                     <TicketRunsTable groups={ordered('runs', order, shown)} />
                 )}

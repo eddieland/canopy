@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, Link } from '@tanstack/react-router'
 
 import { AppShell } from '@/components/shell/app-shell'
-import { PageHeader, Panel, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel } from '@/components/panel'
 
 /** What every route's loaders and hooks get from the router. */
 export interface RouterContext {
@@ -21,11 +21,12 @@ function NotFound() {
         <>
             <PageHeader root="404" title="Nothing here" />
             <Panel>
-                <Placeholder>
+                <Empty size="panel">
+                    no page at this address:{' '}
                     <Link to="/attention" className="text-accent underline-offset-4 hover:underline">
-                        Go to the attention list
+                        go to the attention list
                     </Link>
-                </Placeholder>
+                </Empty>
             </Panel>
         </>
     )

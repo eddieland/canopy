@@ -14,14 +14,15 @@ import { Copyable } from '@/components/copy-button'
 import { JsonTokens } from '@/components/json-text'
 import { MarkedText } from '@/components/marked-text'
 import { OrderToggle } from '@/components/order-toggle'
-import { Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { RowGrid, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
+import { rowLineFrom } from '@/lib/rows'
 import { markedTokens } from '@/lib/search'
 import { localTime } from '@/lib/time'
 import {
@@ -129,12 +130,9 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                 </span>
             </PanelHeader>
             {transcript === undefined ? (
-                <div className="flex flex-col gap-2 p-3">
-                    <Skeleton className="h-4 w-2/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                </div>
+                <PanelSkeleton />
             ) : entries.length === 0 ? (
-                <Placeholder className="min-h-32">{empty(transcript, running)}</Placeholder>
+                <Empty>{empty(transcript, running)}</Empty>
             ) : (
                 <>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-1.5">
@@ -190,7 +188,7 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                             ])}
                         </ol>
                     ) : shown.length === 0 ? (
-                        <Placeholder className="min-h-20">no line holds “{query}”</Placeholder>
+                        <Empty>no line holds “{query}”</Empty>
                     ) : (
                         <ol className="divide-y" data-testid="transcript-entries">
                             {shown.map(({ entry, i, hits }) => {
@@ -435,14 +433,16 @@ function Tool({
                         )}
                     />
                 </summary>
-                <div className="flex flex-col gap-2 pr-3 pb-3 pl-[5.25rem]">
-                    <Block label="input" words={words}>
-                        {entry.input}
-                    </Block>
-                    <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed} words={words}>
-                        {shownOutput(entry)}
-                    </Block>
-                </div>
+                <RowGrid kind="transcript" className="pb-3">
+                    <RowLine from="text" className="flex flex-col gap-2">
+                        <Block label="input" words={words}>
+                            {entry.input}
+                        </Block>
+                        <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed} words={words}>
+                            {shownOutput(entry)}
+                        </Block>
+                    </RowLine>
+                </RowGrid>
             </details>
         </li>
     )
@@ -493,16 +493,18 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
                         )}
                     />
                 </summary>
-                <dl className="flex flex-wrap gap-x-6 gap-y-1 pr-3 pb-2 pl-[5.25rem] font-mono text-xs">
-                    {TOKEN_KINDS.map(([key, label]) => (
-                        <div key={key} className="flex items-baseline gap-2">
-                            <dt className="panel-label">{label}</dt>
-                            <dd className="readout" title={`${split[key]} tokens`}>
-                                {tokenCount(split[key])}
-                            </dd>
-                        </div>
-                    ))}
-                </dl>
+                <RowGrid kind="transcript" className="pb-2">
+                    <dl className={cn(rowLineFrom('text'), 'flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs')}>
+                        {TOKEN_KINDS.map(([key, label]) => (
+                            <div key={key} className="flex items-baseline gap-2">
+                                <dt className="panel-label">{label}</dt>
+                                <dd className="readout" title={`${split[key]} tokens`}>
+                                    {tokenCount(split[key])}
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                </RowGrid>
             </details>
         </li>
     )
@@ -588,57 +590,62 @@ function CallBody({
     split: TranscriptTokens | null
 }) {
     return (
-        <div className="flex flex-col gap-3 pr-3 pb-3 pl-3 sm:pl-[5.25rem]" data-testid="transcript-call-body">
-            <section className="flex flex-col gap-2" aria-label={`call ${call.n} input`}>
-                <Heading
-                    label="input"
-                    tokens={split === null ? null : sentTokens(split)}
-                    detail={split === null ? null : `${tokenCount(split.cache_read)} read from the cache`}
-                />
-                {call.n === 1 ? (
-                    prompt === null ? (
-                        <p className="text-xs text-muted-foreground">canopy kept no prompt for this session</p>
+        // On a narrow screen the body takes the row's whole width; on a wider one it starts under the text.
+        <RowGrid kind="transcript" className="pb-3" data-testid="transcript-call-body">
+            <RowLine from="text" className="flex flex-col gap-3 max-sm:col-[time/end]">
+                <section className="flex flex-col gap-2" aria-label={`call ${call.n} input`}>
+                    <Heading
+                        label="input"
+                        tokens={split === null ? null : sentTokens(split)}
+                        detail={split === null ? null : `${tokenCount(split.cache_read)} read from the cache`}
+                    />
+                    {call.n === 1 ? (
+                        prompt === null ? (
+                            <p className="text-xs text-muted-foreground">canopy kept no prompt for this session</p>
+                        ) : (
+                            <Block label={prompt.truncated ? 'prompt, cut' : 'prompt'}>{prompt.text}</Block>
+                        )
                     ) : (
-                        <Block label={prompt.truncated ? 'prompt, cut' : 'prompt'}>{prompt.text}</Block>
-                    )
-                ) : (
-                    <>
+                        <>
+                            <p className="text-xs text-muted-foreground">
+                                {call.returned.length === 0
+                                    ? `call ${call.n - 1}’s input and output, and nothing returned since`
+                                    : `call ${call.n - 1}’s input and output, then what its tools returned:`}
+                            </p>
+                            {call.returned.map((tool, i) => (
+                                // oxlint-disable-next-line react/no-array-index-key -- a call's tools never reorder
+                                <Returned key={i} tool={tool} />
+                            ))}
+                        </>
+                    )}
+                    {call.n === 1 && (
                         <p className="text-xs text-muted-foreground">
-                            {call.returned.length === 0
-                                ? `call ${call.n - 1}’s input and output, and nothing returned since`
-                                : `call ${call.n - 1}’s input and output, then what its tools returned:`}
+                            sent after the agent’s definition and the runtime’s own system prompt and tools, which no
+                            file records
                         </p>
-                        {call.returned.map((tool, i) => (
-                            // oxlint-disable-next-line react/no-array-index-key -- a call's tools never reorder
-                            <Returned key={i} tool={tool} />
-                        ))}
-                    </>
-                )}
-                {call.n === 1 && (
-                    <p className="text-xs text-muted-foreground">
-                        sent after the agent’s definition and the runtime’s own system prompt and tools, which no file
-                        records
-                    </p>
-                )}
-            </section>
-            <section className="flex flex-col gap-2" aria-label={`call ${call.n} output`}>
-                <Heading
-                    label="output"
-                    tokens={split === null ? null : wroteTokens(split)}
-                    detail={split === null || split.reasoning === 0 ? null : `${tokenCount(split.reasoning)} reasoning`}
-                />
-                {call.output.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">nothing printed</p>
-                ) : (
-                    <ol className="divide-y rounded-sm border">
-                        {call.output.map((entry, i) => (
-                            // oxlint-disable-next-line react/no-array-index-key -- a call's entries never reorder
-                            <Entry key={i} entry={entry} start={start} open={false} />
-                        ))}
-                    </ol>
-                )}
-            </section>
-        </div>
+                    )}
+                </section>
+                <section className="flex flex-col gap-2" aria-label={`call ${call.n} output`}>
+                    <Heading
+                        label="output"
+                        tokens={split === null ? null : wroteTokens(split)}
+                        detail={
+                            split === null || split.reasoning === 0 ? null : `${tokenCount(split.reasoning)} reasoning`
+                        }
+                    />
+                    {call.output.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">nothing printed</p>
+                    ) : (
+                        <ol className="divide-y rounded-sm border">
+                            {call.output.map((entry, i) => (
+                                // oxlint-disable-next-line react/no-array-index-key -- a call's entries never reorder
+                                <Entry key={i} entry={entry} start={start} open={false} />
+                            ))}
+                        </ol>
+                    )}
+                </section>
+            </RowLine>
+        </RowGrid>
     )
 }
 

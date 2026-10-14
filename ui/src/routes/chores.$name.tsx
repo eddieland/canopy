@@ -4,16 +4,18 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreRun, ChoreSpend, ChoreSpendWindow } from '@/api/types'
-import { Age } from '@/components/age'
+import { Ended } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreNotes } from '@/components/chore-notes'
+import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
-import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
+import { ListRow, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
-import { Skeleton } from '@/components/ui/skeleton'
 import { choreLine, costText, runsText, windowText } from '@/lib/chores'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -31,7 +33,7 @@ function ChorePage() {
             <>
                 <PageHeader title={`chore:${name}`} />
                 <Panel>
-                    <Placeholder className="min-h-40">{error.message}</Placeholder>
+                    <Empty size="panel">{error.message}</Empty>
                 </Panel>
             </>
         )
@@ -40,8 +42,8 @@ function ChorePage() {
         return (
             <>
                 <PageHeader title={`chore:${name}`} />
-                <Panel className="min-h-72 p-3">
-                    <Skeleton className="h-4 w-1/2" />
+                <Panel>
+                    <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -71,23 +73,24 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                         <PanelHeader label="Schedule">
                             <span className="readout text-xs text-muted-foreground">{choreLine(chore, now)}</span>
                         </PanelHeader>
-                        <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 p-3 text-sm">
-                            <dt className="panel-label self-center">at most</dt>
-                            <dd className="font-mono text-xs">every {chore.every_minutes} minutes</dd>
-                            <dt className="panel-label self-center">starts</dt>
-                            <dd className="font-mono text-xs">{windowText(chore)}</dd>
-                            <dt className="panel-label">when</dt>
-                            <dd className="text-sm break-words whitespace-pre-wrap">
+                        <Fields>
+                            <Field label="at most" mono>
+                                every {chore.every_minutes} minutes
+                            </Field>
+                            <Field label="starts" mono>
+                                {windowText(chore)}
+                            </Field>
+                            <Field label="when" className="whitespace-pre-wrap">
                                 {chore.when ?? <span className="font-mono text-xs">whenever it is due</span>}
-                            </dd>
-                        </dl>
+                            </Field>
+                        </Fields>
                     </Panel>
                     <Panel data-testid="chore-findings">
                         <PanelHeader label="Open findings">
                             <span className="readout text-xs text-muted-foreground">{chore.findings.length}</span>
                         </PanelHeader>
                         {chore.findings.length === 0 ? (
-                            <Placeholder className="min-h-20">none: its latest ok run found nothing</Placeholder>
+                            <Empty>no open findings now: its latest ok run found nothing</Empty>
                         ) : (
                             <PanelScroll label="Open findings">
                                 <ul className="divide-y">
@@ -106,7 +109,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             </span>
                         </PanelHeader>
                         {runs.length === 0 ? (
-                            <Placeholder className="min-h-20">never run</Placeholder>
+                            <Empty>no runs yet: the overseer starts one when it is due</Empty>
                         ) : (
                             <PanelScroll label="Recent runs">
                                 <ul className="divide-y" data-testid="chore-runs">
@@ -137,12 +140,12 @@ function Chore({ detail }: { detail: ChoreDetail }) {
 /** A chore run: its state, id (opening its page), findings, cost, and when; what it said; its session. */
 function RunRow({ name, run }: { name: string; run: ChoreRun }) {
     return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`chore-run-${run.id}`}>
-            <div className="flex items-center gap-3">
-                <span className={cn('flex w-20 items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
-                    <RunDot state={run.state} />
-                    {run.status}
-                </span>
+        <ListRow kind="own-run" data-testid={`chore-run-${run.id}`}>
+            <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
+                <RunDot state={run.state} />
+                {run.status}
+            </span>
+            <span className="flex items-center gap-3">
                 <Link
                     to="/chores/$name/runs/$id"
                     params={{ name, id: String(run.id) }}
@@ -151,30 +154,22 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                     #{run.id}
                 </Link>
                 {run.status === 'ok' && <Chip>{run.findings === 1 ? '1 finding' : `${run.findings} findings`}</Chip>}
-                <span className="ml-auto flex items-center gap-4">
-                    <span className="readout w-16 text-right text-xs text-muted-foreground">
-                        {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
-                    </span>
-                    <span className="flex w-24 justify-end gap-1 text-xs text-muted-foreground">
-                        {run.ended_at === null ? 'for' : 'ended'}
-                        <Age at={run.ended_at ?? run.started_at} />
-                        {run.ended_at === null ? '' : 'ago'}
-                    </span>
-                </span>
-            </div>
-            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className="pl-[9.5rem]" />}
-            <div
-                className={cn(
-                    'flex flex-wrap items-center gap-x-4 gap-y-1 pl-[9.5rem]',
-                    'font-mono text-xs text-muted-foreground',
-                )}
+            </span>
+            <span className="readout text-right text-xs text-muted-foreground">
+                {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
+            </span>
+            <Ended started={run.started_at} ended={run.ended_at} />
+            {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom('facts')} />}
+            <RowLine
+                from="facts"
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground"
             >
                 {run.session_id && (
                     <span title="open its transcript with the runtime's tools">session {run.session_id}</span>
                 )}
                 <span title="the run's output">log {run.log_path}</span>
-            </div>
-        </li>
+            </RowLine>
+        </ListRow>
     )
 }
 
