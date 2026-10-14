@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.metadata import version
@@ -13,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
 from canopy.serve import api, mock
-from canopy.serve.api import deps
+from canopy.serve.api import deps, refs
 from canopy.serve.guard import Guard
 from canopy.serve.spa import SinglePageApp
 from canopy.serve.sse import QuietLeaving
@@ -54,6 +55,7 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
         lifespan=lifespan,
     )
     app.include_router(api.router, prefix=f"{base}/api")
+    app.add_exception_handler(sqlite3.OperationalError, refs.journal_busy)
     deps.bind(app, backend, sessions)
     if base:
 

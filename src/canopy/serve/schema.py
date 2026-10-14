@@ -92,7 +92,7 @@ class SignIn(_Model):
 
 
 class ErrorResponse(_Model):
-    """The body of an error that is not a guard's refusal or a validation error: a 401, a 403, or a 404."""
+    """The body of an error that is not a guard's refusal or a validation error: a 401, a 403, a 404, or a 503."""
 
     detail: str
     """What went wrong, in words."""

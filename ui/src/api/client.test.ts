@@ -34,4 +34,19 @@ describe('unwrap', () => {
         expect((caught as ApiError).message).toBe('ABC-1 was not started in canopy')
         expect((caught as ApiError).status).toBe(409)
     })
+
+    it('throws an ApiError whose message is the words of any other failure, such as a busy journal', () => {
+        const response = new Response(null, { status: 503 })
+        const busy = { detail: 'the journal is busy: another writer held it for over 10s; try again' }
+        let caught: unknown
+        try {
+            unwrap({ error: busy, response })
+        } catch (error) {
+            caught = error
+        }
+        expect(caught).toBeInstanceOf(ApiError)
+        expect((caught as ApiError).guard).toBeNull()
+        expect((caught as ApiError).message).toBe(busy.detail)
+        expect((caught as ApiError).status).toBe(503)
+    })
 })

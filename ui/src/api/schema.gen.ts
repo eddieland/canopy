@@ -1424,7 +1424,7 @@ export type components = {
         };
         /**
          * ErrorResponse
-         * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, or a 404.
+         * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, a 404, or a 503.
          */
         ErrorResponse: {
             /**
@@ -3113,6 +3113,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listChores: {
@@ -3144,6 +3153,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3219,6 +3237,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     dismissFinding: {
@@ -3282,6 +3309,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     replyChore: {
@@ -3343,6 +3379,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -3415,6 +3460,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getChoreRunTranscript: {
@@ -3483,6 +3537,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -3561,6 +3624,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     pauseLoop: {
@@ -3592,6 +3664,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3646,6 +3727,15 @@ export interface operations {
                     "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     resumeLoop: {
@@ -3684,6 +3774,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getMeta: {
@@ -3715,6 +3814,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3781,6 +3889,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     grantPullRequest: {
@@ -3840,6 +3957,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listPullRequests: {
@@ -3878,6 +4004,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listReviews: {
@@ -3909,6 +4044,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3975,6 +4119,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     dismissReviewFinding: {
@@ -4038,6 +4191,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listRuns: {
@@ -4069,6 +4231,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4135,6 +4306,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getRunTranscript: {
@@ -4194,6 +4374,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     search: {
@@ -4242,6 +4431,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -4391,6 +4589,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getLastTick: {
@@ -4429,6 +4636,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listTickets: {
@@ -4460,6 +4676,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4535,6 +4760,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     forgetTicket: {
@@ -4596,6 +4830,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -4661,6 +4904,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     replyTicket: {
@@ -4724,6 +4976,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     startTicket: {
@@ -4781,6 +5042,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -4846,6 +5116,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listTicks: {
@@ -4877,6 +5156,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4943,6 +5231,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getTickOutput: {
@@ -5000,6 +5297,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -5061,6 +5367,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     listWorktrees: {
@@ -5092,6 +5407,15 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
