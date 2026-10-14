@@ -67,7 +67,10 @@ Controls:
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
   required protection rules. For the exception, the label and authorship are read by the overseer and read again by
   the worker before it changes anything, as for ticket labels (D051); the harness refuses the repository's base branch.
-  Pushes are never forced and never go to a fork.
+  Pushes never go to a fork, and are never forced unless the operator sets `trust.rebase`, for repositories that
+  refuse merge commits (D056). Then a worker that rebased its branch pushes it with `--force-with-lease` to that
+  branch, the one forced push its definition allows, and `canopy _run`'s own push leases the commit the run started
+  from. Branch protection keeps every force off the base branch.
 - Workers never approve, merge, close PRs, or move tickets to Done, directly or through text the tracker acts on (GitHub
   closing keywords, Jira smart commits). Enforced by prompt and by the worker agent's tool permissions (no merge tools;
   MCP write scope limited to comments, labels, PR create/update). The worker's definition denies merge, review
@@ -97,11 +100,11 @@ Controls:
   comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
   harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
   journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
-  `canopy grant` is the operator's alone as well: it raises one unit's attempt limit for one kind, or one PR's review
-  limit, and resets no count (DESIGN §22). `start`, `stop`, `reply`, `forget`, and `grant` refuse when
-  `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent canopy runs has, so no agent can lift a limit that
-  bounds it. So do `pause` and `resume`, the
-  loop's pause (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
+  `canopy grant` is the operator's alone as well, from the shell or the web UI behind the listener secret (T8): it
+  raises one unit's attempt limit for one kind, or one PR's review limit, and resets no count (DESIGN §22). `start`,
+  `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
+  canopy runs has, so no agent can lift a limit that bounds it. So do `pause` and `resume`, the loop's pause
+  (DESIGN §6): an agent that paused the loop could hold off every tick after its own, and one that resumed
   it could undo the operator's pause. So does `dismiss`, which keeps a chore's finding off the attention list until it
   clears (DESIGN §19), or holds a review's finding back from workers and the overseer (§21): an agent that could
   dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
@@ -141,7 +144,10 @@ but not who added it, and the label-time check is the overseer's judgment: a ste
 dispatch a self-labeled child, as it could dispatch an unlabeled ticket. That child's work is still a PR a human
 reviews. Under the PR exception, a steered overseer and worker that both skip their checks can
 push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
-backstop, as it is for a coworker pushing there by hand. A worker's bash still reaches the network, for package
+backstop, as it is for a coworker pushing there by hand. With `trust.rebase` set, a steered worker can replace its own
+branch's history, or one of those branches', with whatever it pushes: the lease stops it overwriting a push it has not
+fetched, not a rewrite it chose. The old commits stay in the PR's timeline and the host's reflog, and the PR's review
+still sees only what the branch now holds. A worker's bash still reaches the network, for package
 installs and builds, so a worker steered into fetching a page with `curl` reads it anyway: denying the web tools
 removes what a model reaches for unprompted, not the capability. Until workers are sandboxed (HOST_ISOLATION), a
 worker's bash runs as the operator and can run `canopy reply`, `canopy start`, or `canopy forget` with the variables
@@ -229,7 +235,11 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden.
+  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden: a
+  worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
+  user-only), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
+  that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
+  neither turn it off nor rename it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -290,7 +300,7 @@ A private ticket's privacy rests on the tool lists: a tool listed as read that w
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
 denied by name (D076's root cause: workers run as the operator until HOST_ISOLATION). A private ticket hides the
-conversation, not authorship or the work: commits keep their attribution trailer (T5), and its branch and PR title name
+conversation, not authorship or the work: commits keep the attribution T5 gives them, and its branch and PR title name
 the ticket key, which a tracker's VCS integration may link to the ticket.
 An operator message on a public ticket (D089, D093) is kept off the ticket only by the worker's prompt: a public worker
 can comment on the ticket and its PRs, so one that disregards the prompt, or is steered by what it read, can repeat the
@@ -393,7 +403,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - It also serves a run's or tick's transcript (DESIGN §22): its session's events, read back from the run's log or
   the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
-  following links; nothing else under the state directory is read but a tick's output below.
+  following links; nothing else under the state directory is read but a tick's output below and the session's prompt.
+- With a transcript it serves the session's prompt, the `<id>.prompt` canopy wrote beside the log before the agent
+  started: what the agent command was given as `{prompt}`, a worker's or a chore's rendered prompt or a tick's state
+  block. It quotes ticket text, comments, PRs, and the operator's messages, untrusted as the journal is, and names
+  worktree paths. It is read the same way, at most 1 MiB, its control characters dropped, rendered as text.
 - It serves the end of a tick's output as written (DESIGN §22): at most its last 1 MiB, read the same way, its
   control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
   which may name the operator's paths and config, and every field of the overseer's events. A run's log is never
@@ -404,12 +418,13 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
-  reply to, and forget tickets, end a stopped ticket's run, note something to a chore as `canopy reply chore:NAME`
-  does, dismiss a chore's or a review's finding or take that back as `canopy dismiss` does, pause and resume the loop as
-  `canopy pause` and `canopy resume` do, and ask the loop to read its config files
-  again as SIGHUP does, nothing else. It cannot write config: a reload reads only the operator's own files, and a
-  `serve.*` change waits for a restart, so the listener's bind and port never change under it. A forget must carry the
-  ticket's key typed out, checked in code. It cannot run a chore.
+  reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
+  note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
+  back as `canopy dismiss` does, pause and resume the loop as `canopy pause` and `canopy resume` do, and ask the loop
+  to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
+  operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
+  it. A forget must carry the ticket's key typed out, checked in code. A grant allows one more run a request, with
+  `canopy grant`'s guards. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
@@ -425,7 +440,8 @@ the network (D076), transcripts included: a secret a worker's tool printed into 
 - Push to or edit a PR the loop is only reviewing.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator
-  authored and labeled with a queue label (T1); and never with force.
+  authored and labeled with a queue label (T1); and never with force, except a worker's rebased branch pushed with a
+  lease when the operator sets `trust.rebase` (T1).
 - Act on instructions found in ticket or PR text from non-authorized accounts.
 - Store or log credentials.
 - Run more than `capacity.max_workers` workers, or two workers on one ticket.

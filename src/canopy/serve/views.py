@@ -24,8 +24,10 @@ from canopy.serve.schema import (
     ChoreSpendWindow,
     ChoreSummary,
     Comment,
+    CostTotal,
     Decision,
     LastTick,
+    Limit,
     LoopState,
     Message,
     MessageKind,
@@ -47,6 +49,7 @@ from canopy.serve.schema import (
     Transcript,
     TranscriptEntry,
     TranscriptError,
+    TranscriptPrompt,
     TranscriptStep,
     TranscriptText,
     TranscriptTokens,
@@ -58,6 +61,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.context import Context
+    from canopy.serve import backend as served
     from canopy.serve.backend import Backend
 
 # How many runs that ended the runs list carries, after the running ones.
@@ -97,7 +101,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     for item in backend.attention(ctx):
         key = item.ticket_key
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
-        ticket = key if key is not None and chore is None and not key.startswith(_PR) else None
+        pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
+        ticket = key if key is not None and chore is None and pr is None else None
         found.append(
             AttentionItem(
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
@@ -109,6 +114,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 detail=conversation.printable(item.detail),
                 since=db.parse_time(item.since),
                 finding=item.finding,
+                pr=pr,
             )
         )
     return found
@@ -274,19 +280,22 @@ def session_transcript(path: Path, session: object) -> Transcript:
 
     Returns:
         The entries read, with status `no_session` when the journal recorded no session, or `no_log` when the file is
-        missing or not a regular file.
+        missing or not a regular file; and the prompt kept beside the file, whatever the status.
     """
+    kept = transcript.prompt(transcript.prompt_path(path))
+    prompt = TranscriptPrompt(text=kept.text, truncated=kept.truncated) if kept is not None else None
     if not isinstance(session, str) or not session:
-        return Transcript(status="no_session")
+        return Transcript(status="no_session", prompt=prompt)
     found = transcript.read(path, session)
     if found is None:
-        return Transcript(status="no_log", session_id=session)
+        return Transcript(status="no_log", session_id=session, prompt=prompt)
     return Transcript(
         status="read",
         session_id=session,
         entries=[transcript_entry(e) for e in found.entries],
         truncated=found.truncated,
         unreadable=found.unreadable,
+        prompt=prompt,
     )
 
 
@@ -298,7 +307,9 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
     """
     match entry:
         case transcript.Text():
-            return TranscriptText(at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut)
+            return TranscriptText(
+                at=entry.at, text=entry.text, reasoning=entry.reasoning, cut=entry.cut, call=entry.call
+            )
         case transcript.ToolCall():
             return TranscriptTool(
                 at=entry.at,
@@ -309,6 +320,7 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 output=entry.output,
                 duration_ms=entry.duration_ms,
                 cut=entry.cut,
+                call=entry.call,
             )
         case transcript.Step():
             t = entry.tokens
@@ -318,9 +330,10 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
                 cost_usd=entry.cost_usd,
                 tokens=t.total if t is not None else None,
                 split=TranscriptTokens(**vars(t)) if t is not None else None,
+                call=entry.call,
             )
         case transcript.Error():
-            return TranscriptError(at=entry.at, name=entry.name, message=entry.message)
+            return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)
 
 
 def decision(row: sqlite3.Row) -> Decision:
@@ -487,29 +500,67 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     )
 
 
-def ticket(ctx: Context, key: str) -> TicketDetail | None:
+def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
     """One ticket, as `canopy show` prints it, or None if the journal has no record of it.
 
     Returns:
-        The ticket, its units, and its latest runs, messages, and decisions.
+        The ticket, its units, its limits, and its latest runs, messages, and decisions.
     """
     rows = db.recent_tickets(ctx.conn, 1, key=key)
     if not rows:
         return None
     [row] = rows
+    units = [
+        Unit(
+            repo=str(u["repo"]) if u["repo"] else None,
+            pr_url=str(u["pr_url"]) if u["pr_url"] else None,
+            phase=str(u["phase"]) if u["phase"] else None,
+        )
+        for u in db.units(ctx.conn, key)
+    ]
+    reviews = [
+        (u.repo, found)
+        for u in units
+        if u.pr_url is not None and (found := backend.review_limit(ctx, u.pr_url)) is not None
+    ]
     return TicketDetail(
         ticket=summary(ctx.conn, row),
-        units=[
-            Unit(
-                repo=str(u["repo"]) if u["repo"] else None,
-                pr_url=str(u["pr_url"]) if u["pr_url"] else None,
-                phase=str(u["phase"]) if u["phase"] else None,
-            )
-            for u in db.units(ctx.conn, key)
-        ],
+        units=units,
+        limits=[limit(found) for found in backend.limits(ctx, key)]
+        + [limit(found, repo=repo) for repo, found in reviews],
         runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
+        cost=_ticket_cost(ctx.conn, key),
+    )
+
+
+def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
+    row = db.ticket_cost(conn, key)
+    cost = row["cost_usd"]
+    return CostTotal(
+        runs=int(row["runs"]),
+        reviews=int(row["reviews"]),
+        priced=int(row["priced"]),
+        cost_usd=float(cost) if cost is not None else None,
+    )
+
+
+def limit(found: served.Limit, *, repo: str | None = None) -> Limit:
+    """A limit the backend found, as the API sends it; `repo` names the unit whose PR a review limit is on.
+
+    Returns:
+        The limit, its repository `repo` when the backend's names none.
+    """
+    return Limit.model_validate(
+        {
+            "kind": found.kind,
+            "repo": found.repo or repo,
+            "pr_url": found.pr_url,
+            "runs": found.runs,
+            "granted": found.granted,
+            "limit": found.limit,
+        }
     )
 
 

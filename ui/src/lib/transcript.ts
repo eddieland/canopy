@@ -1,4 +1,4 @@
-import type { TranscriptEntry, TranscriptTool } from '@/api/types'
+import type { TranscriptEntry, TranscriptStep, TranscriptTokens, TranscriptTool } from '@/api/types'
 import { indent, tokenize } from '@/lib/json-lines'
 import { literal } from '@/lib/search'
 
@@ -75,6 +75,90 @@ export function tally(entries: TranscriptEntry[]): Tally {
         }
     }
     return found
+}
+
+/** One model call, as the transcript shows it by call: what it was sent that no call before it was, and what it did. */
+export interface ModelCall {
+    /** Its number, from 1, in the order the runtime started its calls. */
+    n: number
+    /** What its tools returned to the call before it, which it was sent: a later call's input past its first. */
+    returned: TranscriptTool[]
+    /** What it did, in the order printed: its text and reasoning, its tool calls, and the runtime's errors. */
+    output: TranscriptEntry[]
+    /** How it ended, with its tokens and cost; null when the session ended first, or a bound cut it. */
+    end: TranscriptStep | null
+}
+
+/** A transcript by model call: the calls in order, and the entries printed before the runtime started any. */
+export interface ByCall {
+    /** Entries the runtime printed before its first call, such as an error starting it. */
+    before: TranscriptEntry[]
+    /** The calls, in order. */
+    calls: ModelCall[]
+}
+
+/**
+ * A transcript's entries by the model call each came from. A call was sent everything before it; what is new in its
+ * input is what the call before it asked its tools for, so each call after the first carries that call's tool calls,
+ * which hold what they returned.
+ */
+export function byCall(entries: TranscriptEntry[]): ByCall {
+    const before: TranscriptEntry[] = []
+    const calls: ModelCall[] = []
+    for (const entry of entries) {
+        if (entry.call === null) {
+            before.push(entry)
+            continue
+        }
+        let call = calls.at(-1)
+        if (call?.n !== entry.call) {
+            const returned = (call?.output ?? []).filter((e): e is TranscriptTool => e.kind === 'tool')
+            call = { n: entry.call, returned, output: [], end: null }
+            calls.push(call)
+        }
+        if (entry.kind === 'step') {
+            call.end = entry
+        } else {
+            call.output.push(entry)
+        }
+    }
+    return { before, calls }
+}
+
+/** How many tokens a model call was sent, from the cache or not. */
+export function sentTokens(tokens: TranscriptTokens): number {
+    return tokens.input + tokens.cache_read + tokens.cache_write
+}
+
+/** How many tokens a model call wrote, its reasoning included. */
+export function wroteTokens(tokens: TranscriptTokens): number {
+    return tokens.output + tokens.reasoning
+}
+
+/**
+ * What a model call did, on one line: its first text's start, then its tool calls by name, a name it called more
+ * than once counted (`read ×2`), then its errors.
+ */
+export function callLine(call: ModelCall): string {
+    const text = call.output.find((e) => e.kind === 'text' && !e.reasoning)
+    const tools = new Map<string, number>()
+    let errors = 0
+    for (const entry of call.output) {
+        if (entry.kind === 'tool') {
+            tools.set(entry.tool, (tools.get(entry.tool) ?? 0) + 1)
+        } else if (entry.kind === 'error') {
+            errors += 1
+        }
+    }
+    const parts = [
+        text?.kind === 'text' ? oneLine(text.text) : '',
+        [...tools].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name)).join(', '),
+        errors > 0 ? `${errors} runtime ${errors === 1 ? 'error' : 'errors'}` : '',
+    ]
+    return parts
+        .filter((p) => p !== '')
+        .join(' · ')
+        .slice(0, MAX_LINE)
 }
 
 /** The first time a transcript names, which every entry's `elapsed` counts from. */

@@ -96,6 +96,10 @@ def test_dry_run_tick_records_the_overseer_plan(
         output = canopy_env.state_dir / "ticks" / "1.log"
         assert output.read_text().startswith("fake agent: starting")
         assert output.stat().st_mode & 0o077 == 0
+        # The state block is kept beside it, as the input of the transcript's first model call (DESIGN §22).
+        kept = canopy_env.state_dir / "ticks" / "1.prompt"
+        assert kept.read_text() == prompt
+        assert kept.stat().st_mode & 0o077 == 0
         assert canopy_env.state_dir.stat().st_mode & 0o077 == 0
 
 

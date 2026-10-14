@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
@@ -96,7 +97,7 @@ function RunPanel({ run }: { run: Run }) {
                     </span>
                 </Field>
                 <Field label="branch" mono>
-                    {run.branch ?? 'none'}
+                    {run.branch === null ? 'none' : <Copyable text={run.branch} label="branch" />}
                 </Field>
                 <Field label="started" mono>
                     <span className="flex items-center gap-2">
@@ -123,7 +124,7 @@ function RunPanel({ run }: { run: Run }) {
                                     )}
                                 >
                                     {pr.replace(/^https:\/\//u, '')}
-                                    <ExternalLink className="size-3" />
+                                    <LinkOutIcon href={pr} />
                                 </a>
                             ))}
                         </span>
@@ -135,11 +136,17 @@ function RunPanel({ run }: { run: Run }) {
                 </Field>
                 {run.worktrees.length > 0 && (
                     <Field label="worktrees" mono>
-                        {run.worktrees.join('  ')}
+                        <span className="flex flex-wrap gap-x-4">
+                            {run.worktrees.map((path) => (
+                                <Copyable key={path} text={path} label="worktree path" />
+                            ))}
+                        </span>
                     </Field>
                 )}
                 <Field label="log" mono>
-                    <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
+                    <Copyable text={run.log_path} label="log path">
+                        <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
+                    </Copyable>
                 </Field>
             </dl>
         </Panel>

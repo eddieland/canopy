@@ -629,6 +629,8 @@ first.
 - Pages for the attention list, running and recent runs, and tickets with their conversations; reply, start, and
   stop, through the same functions as the CLI. Forget too, behind the ticket's key typed out (§22). Taken on request
   (2026-10-12).
+- Grant too, one run a click, for a unit or a PR at its limit, where the stuck ticket or PR is shown (§22). Taken on
+  request (2026-10-13).
 - A worktrees page: each pool's slots from `treehouse status --json`, read when the page asks and every 30 seconds
   while it is open, with the running run or review holding each. Taken on request (2026-10-08).
 - The release binary (D067) bundles the built UI and builds on every platform it ships for.
@@ -862,6 +864,10 @@ what an OpenCode session did, its tool calls above all, in the browser rather th
 - TRUST_MODEL T8: the listener serves agent output from a file, which holds whatever a tool read.
 - Tests: the reader against OpenCode's event shapes, the routes over the mock journal, and Playwright from the runs page
   to a run's tool calls.
+- Model calls joined it on request (2026-10-13): each entry carries the model call it came from, a transcript carries
+  the prompt kept beside its log (a tick now keeps its state block as `ticks/<id>.prompt`), and By call groups the
+  page's rows into calls that open to what each was sent and what it did (DESIGN §22). The agent's definition and the
+  runtime's system prompt and tools are not shown: no file records them, `opencode export` included.
 
 Accept: the tests above pass. Live: after a day of `canopy loop`, the operator opens a worker run's page and a tick's,
 and finds the tool calls `opencode export <id>` shows for the same session, and a failed run's runtime error.

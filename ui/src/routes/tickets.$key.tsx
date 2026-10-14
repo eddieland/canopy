@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
+import { CostTotalRow } from '@/components/cost-total'
+import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
@@ -59,7 +62,7 @@ function TicketPage() {
 }
 
 function Ticket({ detail }: { detail: TicketDetail }) {
-    const { ticket, units, runs, messages, decisions } = detail
+    const { ticket, units, limits, runs, messages, decisions, cost } = detail
     const now = useNow()
     const tracker = useTicketUrl(ticket.key)
     const branchUrl = useBranchUrls()
@@ -105,6 +108,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <Panel>
                         <PanelHeader label="Actions" />
                         <TicketActions ticket={ticket} />
+                        <GrantLimits limits={limits} ticketKey={ticket.key} className="border-t" />
                     </Panel>
                     <Panel>
                         <PanelHeader label="Work">
@@ -119,10 +123,13 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                                 {ticket.done ? ', done' : ''}
                             </dd>
                             <dt className="panel-label self-center">branch</dt>
-                            <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
+                            <dd className="min-w-0 font-mono text-xs">
+                                {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
+                            </dd>
                             {units.map((unit) => (
                                 <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
                             ))}
+                            <CostTotalRow cost={cost} />
                         </dl>
                     </Panel>
                     <Panel>
@@ -198,7 +205,7 @@ function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; pha
                         className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
                     >
                         {pr.replace(/^https:\/\//u, '')}
-                        <ExternalLink className="size-3" />
+                        <LinkOutIcon href={pr} />
                     </a>
                 ) : (
                     'none recorded'

@@ -1,13 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink, GitPullRequest } from 'lucide-react'
+import { GitPullRequest } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { pullRequestQuery } from '@/api/queries'
 import type { PullRequestDetail, ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
+import { CostTotalRow } from '@/components/cost-total'
+import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { GrantLimits } from '@/components/grant-limits'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReviewLink } from '@/components/review-link'
 import { RunsTable } from '@/components/runs-table'
@@ -74,7 +78,7 @@ function Missing({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: string }) {
-    const { pull_request: pr, runs, reviews, decisions } = detail
+    const { pull_request: pr, review_limit: reviewLimit, runs, reviews, decisions, cost } = detail
     return (
         <>
             <PageHeader
@@ -113,7 +117,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         {pr.branch && (
                             <>
                                 <dt className="panel-label self-center">branch</dt>
-                                <dd className="font-mono text-xs break-all">{pr.branch}</dd>
+                                <dd className="min-w-0 font-mono text-xs">
+                                    <Copyable text={pr.branch} label="branch" />
+                                </dd>
                             </>
                         )}
                         {pr.phase && (
@@ -122,6 +128,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                                 <dd className="font-mono text-xs">{pr.phase}</dd>
                             </>
                         )}
+                        <CostTotalRow cost={cost} />
                     </dl>
                 </Panel>
                 <Panel data-testid="pull-request-runs">
@@ -148,6 +155,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                                 <ReviewRow key={review.id} review={review} />
                             ))}
                         </ul>
+                    )}
+                    {reviewLimit !== null && (
+                        <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
                     )}
                 </Panel>
                 <Panel data-testid="pull-request-decisions">
@@ -178,9 +188,8 @@ function PullRequestOut({ url }: { url: string }) {
                 className="max-w-full gap-1.5 font-mono text-xs font-normal text-accent"
             >
                 <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
-                    <GitPullRequest aria-hidden />
+                    <LinkOutIcon href={url} icon={GitPullRequest} className="size-4" />
                     <span className="truncate">{url.replace(/^https:\/\//u, '')}</span>
-                    <ExternalLink aria-hidden className="size-3" />
                 </a>
             </Button>
         </nav>

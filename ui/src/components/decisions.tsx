@@ -1,5 +1,4 @@
-import { ExternalLink } from 'lucide-react'
-
+import { LinkOutIcon } from '@/components/link-out-icon'
 import type { Decision } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
@@ -50,7 +49,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                                 )}
                             >
                                 {decision.pr.replace(/^https:\/\//u, '')}
-                                <ExternalLink className="size-3 shrink-0" />
+                                <LinkOutIcon href={decision.pr} className="shrink-0" />
                             </a>
                         )}
                         {byTick && <Age at={decision.at} className="ml-auto" />}

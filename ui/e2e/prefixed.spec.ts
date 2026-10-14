@@ -238,3 +238,33 @@ test("a review's finding is dismissed on its card, and kept again", async ({ pag
     await expect(card).not.toHaveAttribute('data-dismissed', 'true')
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
 })
+
+test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
+    await page.goto('tickets/ABC-100')
+    const limits = page.getByTestId('grant-limits')
+    await expect(limits).toContainText('fix-ci in web')
+    await expect(limits).toContainText('1 of 1 runs')
+    const grant = limits.getByTestId('grant-fix-ci in web')
+    await expect(grant).toHaveAttribute('title', 'canopy grant ABC-100 fix-ci --repo web')
+    await grant.click()
+    await expect(limits.getByRole('status')).toHaveText(
+        'ABC-100 in web has had 1 fix-ci runs, and may now have 2. The next tick decides whether to dispatch it.',
+    )
+    // No longer at its limit, so its row is gone; what the grant did stays said.
+    await expect(grant).toHaveCount(0)
+})
+
+test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
+    await page.goto('attention')
+    await page.getByTestId('attention-list').getByText('pull/88 waits on a reviewer').click()
+    const limits = page.getByTestId('attention-detail').getByTestId('grant-limits')
+    await expect(limits).toContainText('reviews of web#88')
+    await limits.getByTestId('grant-reviews of web#88').click()
+    await expect(limits.getByRole('status')).toHaveText(
+        'https://github.com/acme/web/pull/88 has had 2 review runs, and may now have 3. ' +
+            'The next tick decides whether to review it.',
+    )
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    await expect(page.getByTestId('pull-request-reviews')).toBeVisible()
+    await expect(page.getByTestId('grant-limits')).toHaveCount(0)
+})
