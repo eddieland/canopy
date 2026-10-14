@@ -3,14 +3,17 @@
 It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
-on macOS, and unprivileged user namespaces. It changes no config: the sandbox is opt-in until the operator prefixes
-the command templates, and `canopy init` prints the line for `worker_cmd`.
+on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
+reads: a bubblewrap older than srt fully supports, and a machine srt has no seccomp filter for. It changes no config:
+the sandbox is opt-in until the operator prefixes the command templates, and `canopy init` prints the line for
+`worker_cmd`.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -27,6 +30,18 @@ LINUX_TOOLS = (
     (("socat", "-V"), "socat"),
     (("rg", "--version"), "ripgrep"),
 )
+# The oldest bubblewrap srt fully supports (its OLDEST_FULLY_SUPPORTED_BWRAP_VERSION). An older one still sandboxes.
+OLDEST_BWRAP = (0, 5, 0)
+OLD_BWRAP = """\
+bubblewrap {version} is older than 0.5.0, the oldest srt fully supports. On it, srt cannot hide a socket, fifo, or
+device that a template denies reading, and leaves on the host the mount points of a sandbox that was killed. Install
+bubblewrap 0.5.0 or later, from your distribution's backports or a newer release of it."""
+# The machines srt ships its seccomp helper for, by the name uname gives them. Without the helper, srt runs with no
+# filter, and logs that only with --debug: nothing stops a sandboxed command making a Unix socket.
+SECCOMP_MACHINES = ("x86_64", "aarch64")
+NO_SECCOMP = """\
+srt has no seccomp filter for {machine}, only for {machines}. Without it, a sandboxed command can connect to any
+Unix socket it can see, such as your SSH agent's or Docker's. Do not rely on the sandbox on this machine."""
 # Ubuntu 24.04 and later set this to 1, which leaves bubblewrap's user namespace without the capabilities it needs.
 APPARMOR_USERNS = Path("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
 USERNS_FIX = """\
@@ -168,7 +183,22 @@ def _check_platform(runner: procs.Runner, platform: str, report: Report) -> None
             f"    sudo apt-get install {packages}"
         )
     if "bubblewrap" not in missing:
+        _check_bwrap_version(runner, report)
         _check_userns(runner, report)
+    machine = os.uname().machine
+    if machine not in SECCOMP_MACHINES:
+        report.todo.append(NO_SECCOMP.format(machine=machine, machines=" and ".join(SECCOMP_MACHINES)))
+
+
+def _check_bwrap_version(runner: procs.Runner, report: Report) -> None:
+    """Check that bubblewrap is one srt fully supports. A version it does not say is not guessed at, as srt does not."""
+    done = runner.run(["bwrap", "--version"], timeout=30)
+    found = re.search(r"(\d+)\.(\d+)(?:\.(\d+))?", done.stdout) if done.ok else None
+    if found is None:
+        return
+    major, minor, patch = found.groups()
+    if (int(major), int(minor), int(patch or 0)) < OLDEST_BWRAP:
+        report.todo.append(OLD_BWRAP.format(version=found.group()))
 
 
 def _check_userns(runner: procs.Runner, report: Report) -> None:
