@@ -12,7 +12,7 @@ repositories, your tracker, or your internal tools.
 
 > Not on PyPI: `canopy` there is an unrelated project. Install canopy from this repository.
 
-![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-light-root-linux.png)
+![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
 
 **Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
 notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend (M28 to M30) are
@@ -125,6 +125,12 @@ chores, with a search box (`/`) over the whole journal.
 Your part is to label tickets with your queue label, answer the agents' questions on the ticket, and review their PRs.
 Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR
 on their own; anyone else's comments wait on the attention list as `untrusted_review` until you reply.
+
+| A ticket's conversation, waiting on your answer | A run's transcript: each tool call, and what it cost |
+| --- | --- |
+| ![A private ticket's page: its work, runs, decisions, and the worker's question waiting on your answer](ui/e2e/screenshots.spec.ts-snapshots/tickets-ABC-102-dark-root-linux.png) | ![A run's page: its summary and PR, then the transcript of the worker's tool and model calls](ui/e2e/screenshots.spec.ts-snapshots/runs-39-dark-root-linux.png) |
+| **canopy's review of a PR, its findings on the diff** | **What the overseer decided in a tick, and why** |
+| ![A review's page: its verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/ticks-2-dark-root-linux.png) |
 
 | To | Run |
 | --- | --- |

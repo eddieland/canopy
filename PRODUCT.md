@@ -78,7 +78,7 @@ faster.
 - A mock journal of a three-repository workspace (`src/canopy/serve/mock.py`, run with
   `python -m canopy.serve --mock`), with times fixed around 2026-10-08.
 - Playwright screenshot baselines for every route in both themes (`ui/e2e/screenshots.spec.ts-snapshots/`). The README
-  shows `attention-light`.
+  shows the dark Attention, ticket, run, review, and tick pages.
 - Style directions weighed earlier: `docs/ui-explorations/2026-10-08-style/`.
 - Absences not to fabricate: no users beyond the operator yet, no testimonials, no metrics, no hosted offering, no
   pricing. canopy is pre-alpha, MIT-licensed, and unsupported.

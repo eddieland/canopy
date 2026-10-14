@@ -105,9 +105,9 @@ to the rest; a write goes through `canopy.core.conversation`, never SQL of its o
   tests that write run against the prefixed one. Every route gets a screenshot per theme in
   `e2e/screenshots.spec.ts`. A visual change updates the baselines deliberately and the PR says why; look at each
   new image before it merges. Every screenshot applies `e2e/screenshot.css`, which hides what changes with the build
-  rather than the page (the rail's version, which names the commit). `README.md` shows `attention-light`: rename
-  it there too. The baselines are CI's Chromium and fonts, so
-  regenerate them there: push the branch, then run the Screenshots workflow on it
+  rather than the page (the rail's version, which names the commit). `README.md` shows `attention-dark`,
+  `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too. The baselines
+  are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots workflow on it
   (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It pushes a commit
   with the images that changed and starts CI on it; pull before going on. It rewrites only the images that fail the
   comparison, so a change subtle enough to pass within the threshold (a token's small shift) leaves the old images in
