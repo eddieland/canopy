@@ -143,6 +143,11 @@ moments from death, without reading `/proc`. A run started by a canopy from befo
 pid is asked instead, as before: a zombie counts as dead, and a pid reused by an unrelated process reads as alive. A
 run with neither a lock nor a recorded pid is gone.
 
+The file is removed once the run's row is closed, by whichever process closed it: the run's own, or reconcile, or
+`canopy stop --now`. A spawn that starts nothing removes it too. Only a `running` row is ever asked whether its process
+lives, so a closed one needs no file, and without this every run would leave an empty `<id>.lock` beside its log for
+good. It is never removed earlier: a `running` row with no file would be asked after by its pid instead.
+
 ### The loop
 
 `canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run

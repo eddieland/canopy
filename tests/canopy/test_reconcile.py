@@ -132,6 +132,9 @@ def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
             os.close(held)
         statuses = {r: (run["status"] if (run := db.get_run(conn, r)) else None) for r in (holding, let_go)}
         assert statuses == {holding: "running", let_go: "crashed"}
+        # The crashed run's lock file goes with its row; the running one's stays, as it says the run lives.
+        assert not procs.lifelock(runs / f"{let_go}.log").exists()
+        assert procs.lifelock(runs / f"{holding}.log").exists()
 
 
 def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
