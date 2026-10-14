@@ -80,10 +80,11 @@ Re-read the tracker and GitHub before every decision that matters.
    loop has seen, including ones that never had a label and ones whose label was removed. A closed ticket is never a
    candidate, whatever its labels, branch, PR, or last run say: unless a worker is running for it (then record `wait`;
    the worker reads the ticket first and stops), record `canopy ticket set <KEY> --done` and `canopy decide <KEY> done
-   --rationale "closed"`, so the state block stops carrying it and later ticks do not read it again. If it is reopened,
-   the configured query finds it again. Read the labels of every open ticket in the union, and for one without a
-   configured label record only `canopy decide <KEY> skip --rationale "not_labeled"`, whatever its branch, PR, or last
-   run says. A ticket in `split_children` needs more than a label to be
+   --rationale "closed"`, so the state block stops carrying it and later ticks do not read it again. A closed ticket
+   only the query found, not in the state block, is done already or was never worked: record nothing for it. If it is
+   reopened, the configured query finds it again. Read the labels of every open ticket in the union, and for one
+   without a configured label record only `canopy decide <KEY> skip --rationale "not_labeled"`, whatever its branch,
+   PR, or last run says. A ticket in `split_children` needs more than a label to be
    a candidate (see "Splitting"). A ticket with a `private` key in the state block is the exception: the operator
    started it, and its labels do not matter (see "Private tickets"). A ticket in `stopped` is never a candidate: leave
    it out of the union and record nothing for it, whatever its labels. Use the tracker's short id as the ticket key
