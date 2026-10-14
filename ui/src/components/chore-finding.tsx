@@ -1,6 +1,6 @@
-import { ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
@@ -60,7 +60,7 @@ function FindingRow({
                     )}
                 >
                     {finding.link.replace(/^https:\/\//u, '')}
-                    <ExternalLink className="size-3" />
+                    <LinkOutIcon href={finding.link} />
                 </a>
             )}
             {notice}

@@ -51,3 +51,8 @@ function trim(url: string): string {
 function count(text: string, char: string): number {
     return text.split(char).length - 1
 }
+
+/** Whether a link out goes to github.com, so it can wear GitHub's mark instead of the generic one. */
+export function onGitHub(href: string): boolean {
+    return URL.canParse(href) && new URL(href).hostname === 'github.com'
+}
