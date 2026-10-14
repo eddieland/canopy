@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { Transcript, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
+import { Copyable } from '@/components/copy-button'
 import { JsonTokens } from '@/components/json-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
@@ -40,12 +41,15 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                 <span className="flex items-center gap-3">
                     {entries.length > 1 && <OrderToggle list="transcript" />}
                     {transcript?.session_id && (
-                        <span
-                            className="readout hidden text-xs text-muted-foreground sm:inline"
-                            title="open it with the runtime's tools too: opencode export <id>"
+                        <Copyable
+                            text={transcript.session_id}
+                            label="session id"
+                            className="readout hidden text-xs text-muted-foreground sm:inline-flex"
                         >
-                            session {transcript.session_id}
-                        </span>
+                            <span title="open it with the runtime's tools too: opencode export <id>">
+                                session {transcript.session_id}
+                            </span>
+                        </Copyable>
                     )}
                     {tools && (
                         <span className="flex items-center">

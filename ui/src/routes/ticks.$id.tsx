@@ -5,6 +5,7 @@ import { ApiError } from '@/api/client'
 import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
 import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
@@ -94,7 +95,13 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         </dd>
                         <dt className="panel-label self-center">overseer</dt>
                         <dd className="font-mono text-xs">
-                            {tick.session_id ? `session ${tick.session_id}` : 'no session reported'}
+                            {tick.session_id ? (
+                                <Copyable text={tick.session_id} label="session id">
+                                    session {tick.session_id}
+                                </Copyable>
+                            ) : (
+                                'no session reported'
+                            )}
                             {tick.cost_usd === null ? '' : `  $${tick.cost_usd.toFixed(2)}`}
                         </dd>
                         <dt className="panel-label self-center">output</dt>
