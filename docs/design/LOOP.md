@@ -296,7 +296,7 @@ canopy's own work.
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
 tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
 trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
-the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h 00m at 03:41` (no count after a
+the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h at 03:41` (no count after a
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
 records whether it was idle, the count, the wait chosen, in seconds, and `churn`, below.
 
