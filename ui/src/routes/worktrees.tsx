@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink, RotateCw } from 'lucide-react'
+import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES } from '@/api/types'
 import type { Pool, Worktree, WorktreeState } from '@/api/types'
@@ -239,7 +240,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                                 )}
                             >
                                 <span className="truncate">{w.branch}</span>
-                                <ExternalLink aria-hidden className="size-3 shrink-0" />
+                                <LinkOutIcon href={branchHref} className="shrink-0" />
                             </a>
                         )}
                         {w.branch !== null && <CopyButton text={w.branch} label="branch" reveal />}
@@ -297,7 +298,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
                     className="inline-flex min-w-0 items-center gap-1 font-mono text-xs text-accent hover:underline"
                 >
                     <span className="truncate">{w.review.pr_url.replace(/^https:\/\//u, '')}</span>
-                    <ExternalLink className="size-3 shrink-0" />
+                    <LinkOutIcon href={w.review.pr_url} className="shrink-0" />
                 </a>
             </span>
         )

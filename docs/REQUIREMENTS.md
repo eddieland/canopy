@@ -158,7 +158,7 @@ Shape (§22, D072): the operator starts the ticket in canopy (`canopy start`) in
 workers can only read the tracker; questions reach the attention list (`awaiting_reply`) and `canopy show`, and the
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
-The PR still carries commit attribution (TRUST_MODEL T5): privacy covers the conversation, not authorship.
+The PR still carries the commit attribution TRUST_MODEL T5 gives it: privacy covers the conversation, not authorship.
 
 ### R12. One record of every ticket's conversation
 
@@ -239,3 +239,6 @@ DESIGN §10).
   attention list" (DESIGN §4 principle 6, N1).** Settled by the operator on 2026-10-08 (D072, D073): the operator's
   own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.
   Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 says so since M20.
+- **C6. Repositories that refuse merge commits vs pushes that are never forced (R4, R9).** Settled by the operator on
+  2026-10-13 (issue #293, D056): with `trust.rebase`, user-only and off by default, workers rebase onto their base and
+  push with `--force-with-lease`, the only force their definitions allow. Without it, they merge, as before.

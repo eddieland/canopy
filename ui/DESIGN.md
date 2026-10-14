@@ -184,8 +184,9 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
 - The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
   left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
-  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. At rest the window is
-  empty, between headlines.
+  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. A headline starts
+  from the window's width as its pass begins and keeps it, so the readouts beside it changing width as a tick starts
+  or ends never move it back or on. At rest the window is empty, between headlines.
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
   the one drawing made for its own sake, in the accent.
@@ -315,8 +316,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
   `JsonTokens`): keys, strings, numbers, and literals in the `syntax-*` tokens, punctuation muted; any other line
-  stays plain. A transcript's block is colored the same way when the whole of it is JSON. A ghost Pretty toggle in the
-  header (`aria-pressed`, its pressed look the open Hide button's) lays each JSON line out over several, two spaces a
+  stays plain. A transcript's block is colored the same way when the whole of it is JSON. A Pretty `Toggle` in the
+  header (a ghost button raised while on, as the open Hide button is) lays each JSON line out over several, two spaces a
   level, by the space between its tokens alone, so every value stays as written; it reopens the block at its end.
   Each tick's panel keeps its own choice, off until turned on, across reloads (`src/lib/pretty-output.ts`), as a list
   keeps its order.
@@ -338,14 +339,15 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
-  shows its address without `https://`, and ends in the `ExternalLink` icon. A ticket's links out sit in its page's
-  header, under the title and its line, so they are the first thing found (`TicketLinks`): an outline button per
-  link, in the accent's monospace, its icon first (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch`
-  for a branch), what it opens on hover.
+  shows its address without `https://`, and ends in one icon (`LinkOutIcon`): GitHub's mark for github.com, bundled
+  since Lucide has no brand icons, and `ExternalLink` anywhere else. A link never wears two icons. A ticket's links
+  out sit in its page's header, under the title and its line, so they are the first thing found (`TicketLinks`): an
+  outline button per link, in the accent's monospace, its one icon first: GitHub's mark for github.com, else what it
+  opens (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch` for a branch), and what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
   page shows the tracker's alone. The Work panel keeps each repository's PR beside its phase. A worktree's branch
-  links the same way, its name in the accent with the `ExternalLink` icon, when its repository has a branch link.
+  links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a branch link.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
   or PR's page, a run's worktrees and log path, a session id on a tick's page and in a transcript's header, and a
   review's commit, whole though the page shows its first 7 characters. The button is a ghost `icon-xs` with the
@@ -359,6 +361,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   composition only commits it (`src/lib/send-key.ts`). The send button names its key in a keycap (`Kbd`) after its
   label, in the accent foreground's tint: ⏎, or ⌘⏎ on an Apple keyboard and Ctrl⏎ elsewhere; Button only shows none.
   The keycap is `aria-hidden`; the button carries the same keys as `aria-keyshortcuts`.
+- **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the
+  lint refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens
+  under its button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper), an option that
+  is on or off a `Checkbox`, and a choice of a few options a `ToggleGroup`. Radix keeps their ARIA in step with
+  their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a component never writes it by hand. Two
+  stay native on purpose: a transcript's tool call is a `<details>` (above), and rich text's `show N more lines`
+  shows more of text already on screen rather than opening a part, so it is a plain button with `aria-expanded`.
+  A new wrapper is shadcn's, added or ported as `button.tsx` was.
 - **Options that are each on or off** (the ticker's topics) are a row of checkboxes (`Checkbox`,
   `src/components/ui/checkbox.tsx`), each inside its label, so a click on the word toggles it too: a box on the raised
   surface, filled with the accent and its foreground's tick when on. The row is a `fieldset` named by the line beside
@@ -384,7 +394,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   the review's link, its state's dot and verdict in that state's color, its ticket (or `review.query`), the PR as a
   link out, the commit's first 7 characters, its impact, cost, and age.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR as a link to
-  its page, its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
+  its page, named `org/repo#123` when it is GitHub's, as GitHub writes a reference (`pullRequestLabel`, the URL on
+  hover), its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
   state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
   a link out under it as a ticket's page has, then panels for its fields, the runs that pushed to it (`RunsTable`), its
