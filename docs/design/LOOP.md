@@ -434,9 +434,10 @@ ambiguous as before.
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
 
-A closed ticket is not a candidate, and it has no phase: the overseer marks it done (`canopy ticket set --done`,
-decision `done`, rationale `closed`), whatever its labels, branch, or PR, unless a worker is running for it, which it
-waits out, since the worker reads the ticket first and stops. Without that, a ticket closed before it reached `merged`
+A closed ticket is not a candidate, and it has no phase: the overseer marks it done (decision `done`, rationale
+`closed`, then `canopy ticket set --done`, so a tick cut off between the two records the decision again rather than
+losing it), whatever its labels, branch, or PR, unless a worker is running for it, which it waits out: a tick after the
+run ends marks it done. Without that, a ticket closed before it reached `merged`
 (closed by hand, or by the tracker when its PR merged) stayed in the state block, which carries every ticket not marked
 done, and every tick read it again and recorded a `skip` for it. A closed ticket that only the query returns, not in
 the state block, gets no decision at all, so a query that matches closed tickets adds nothing to every tick. A PR
