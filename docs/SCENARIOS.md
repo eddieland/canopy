@@ -120,7 +120,7 @@ relying on a permission they check.
 - **S27. An overnight loop** (M21). Leave `canopy loop` running overnight. Expect, in its output and log (`loop waits`
   lines), waits reaching `loop.idle_max_minutes` after a quiet evening, back at `loop.interval_minutes` within one tick
   of the first morning activity, and each run's end followed by a tick within a couple of minutes. Re-measure
-  afterwards with MEASUREMENTS' prompt; M29 waits on the result.
+  afterwards with MEASUREMENTS' prompt; M39 waits on the result.
 - **S31. Reloading config** (M12). With `canopy loop` running in a terminal, change `capacity.max_workers` and
   `kill -HUP` the loop during a tick, then press Reload on the web UI's settings page during the wait. Expect each tick
   to finish first, `config reloaded  capacity.max_workers changed` under it, and the next tick's footer to count to the
