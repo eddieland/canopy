@@ -1,0 +1,8 @@
+{
+  "name": "canopy-sandbox-runtime",
+  "private": true,
+  "description": "The sandbox runtime canopy sandbox setup installs, pinned with its lockfile.",
+  "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.79"
+  }
+}

@@ -1,4 +1,6 @@
 import contextlib
+import json
+import shlex
 import sys
 import tomllib
 from collections.abc import Iterator
@@ -10,7 +12,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.core.config import load
-from canopy.setup.init import is_ssh_url
+from canopy.setup.init import is_ssh_url, sandbox_suggestion
 from tests.conftest import CanopyEnv
 
 
@@ -156,6 +158,63 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
     out = capsys.readouterr().out
     assert f"Warning: OpenCode config here defines one of canopy's agents ({old})" in out
     assert old.exists()
+
+
+def test_init_suggests_a_sandboxed_worker_cmd_and_writes_none(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    before = canopy_env.user_file.read_text()
+    worker_cmd = load(canopy_env.root, canopy_env.user_file).runtime.worker_cmd
+    assert main(["init"]) == 0
+    out = capsys.readouterr().out
+
+    assert "Optional: run workers in a sandbox" in out
+    suggested = _suggested_worker_cmd(out)
+    assert shlex.split(suggested) == [*SANDBOX_PREFIX, *shlex.split(worker_cmd)]
+    assert canopy_env.user_file.read_text() == before
+
+    # The suggestion is a template the config accepts.
+    lines = [
+        f"worker_cmd = {json.dumps(suggested)}" if x.startswith("worker_cmd =") else x for x in before.splitlines()
+    ]
+    canopy_env.write_user("\n".join(lines) + "\n")
+    assert load(canopy_env.root, canopy_env.user_file).runtime.worker_cmd == suggested
+
+
+def test_init_suggests_nothing_once_workers_are_sandboxed(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    sandboxed = "\nworker_cmd = '/opt/bin/canopy-sandbox worker --read {definitions_dir} -- env"
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("\nworker_cmd = 'env", sandboxed))
+    assert main(["init"]) == 0
+    out = capsys.readouterr().out
+    assert "Branch protection" in out
+    assert "Optional: run workers in a sandbox" not in out
+
+
+@pytest.mark.parametrize(
+    "worker_cmd",
+    [
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --title={title} {prompt}",
+        # What a TOML literal string cannot hold, so the suggestion falls back to a basic one.
+        "agent {definitions_dir} {prompt} --sep \"'''\"",
+        'agent {definitions_dir} {prompt} --sep "\x07"',
+        "agent {definitions_dir} '{prompt}'",
+    ],
+)
+def test_sandbox_suggestion_reads_back_as_the_prefixed_template(worker_cmd: str, tmp_path: Path) -> None:
+    out = sandbox_suggestion(worker_cmd, tmp_path / "config.toml")
+    assert str(tmp_path / "config.toml") in out
+    assert shlex.split(_suggested_worker_cmd(out)) == [*SANDBOX_PREFIX, *shlex.split(worker_cmd)]
+
+
+SANDBOX_PREFIX = ["canopy-sandbox", "worker", "--read", "{definitions_dir}", "--"]
+
+
+def _suggested_worker_cmd(out: str) -> str:
+    """Read the `worker_cmd` that init suggests, from the `[runtime]` table it prints."""
+    value: str = tomllib.loads(out[out.index("  [runtime]\n") :])["runtime"]["worker_cmd"]
+    return value
 
 
 def test_init_needs_provider_when_not_interactive(empty: Path, capsys: pytest.CaptureFixture[str]) -> None:
