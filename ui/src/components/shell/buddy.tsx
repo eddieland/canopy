@@ -12,6 +12,11 @@ import { cn } from '@/lib/utils'
 
 /** How long a tip stays up before Sprig takes the hint. */
 const TIP_SECONDS = 20
+/** How far Sprig may stand over the foot of the rail's blocks, the spend, in a rail too short to hold it whole. */
+const OVERLAP_PX = 40
+
+/** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over the spend a little. */
+type Room = 'roomy' | 'tight'
 
 /**
  * Sprig, the helper at the foot of the side rail: a bent wire with a sprig on top and googly eyes that follow the
@@ -19,10 +24,11 @@ const TIP_SECONDS = 20
  * it offers another. The tip closes with its button, or by itself after a while. Settings turns Sprig off, and so
  * does the tip's "Don't show me tips again".
  *
- * It has a slot of its own in the rail's column, between what the rail holds and its footer, so it covers nothing:
- * the slot is the room left under the rail's blocks, and Sprig stands at its foot. A rail with too little room for
- * Sprig and its bubble leaves it out, rather than squeeze the blocks above. The bubble keeps its room once closed, so
- * closing it never brings in a Sprig that had no room.
+ * It has a slot of its own in the rail's column, between what the rail holds and its footer: the slot is the room
+ * left under the rail's blocks, and Sprig stands at its foot. A slot with room for Sprig and its bubble covers
+ * nothing. A shorter one, as a laptop's window leaves, still shows Sprig if it can stand over the foot of the spend
+ * by `OVERLAP_PX` or less, as the operator asked; there the bubble would cover the blocks above, so a tip shows only
+ * when asked for, with a click. A slot shorter still leaves Sprig out, rather than squeeze the blocks above.
  */
 export function Buddy() {
     const pathname = useRouterState({ select: (state) => state.location.pathname })
@@ -34,18 +40,23 @@ export function Buddy() {
     const n = asked.page === page ? asked.n : 0
     const another = () => setAsked({ page, n: n + 1 })
     const tip = tipFor(pathname, n, today)
-    const [slot, fits] = useFits(sprigFits)
+    const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
     // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
-    // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed.
+    // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed. Sprig, and a
+    // bubble shown in a tight slot, rise out of the slot over the blocks above: positioned, so they paint over them.
     return (
-        <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden print:hidden">
+        <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end print:hidden">
             <aside
                 aria-label="Sprig"
                 data-testid="buddy"
-                className={cn('flex shrink-0 flex-col items-start gap-2 px-3 pt-3 pb-1', !fits && 'invisible')}
+                data-room={room === false ? undefined : room}
+                className={cn(
+                    'relative flex shrink-0 flex-col items-start gap-2 px-3 pt-3 pb-1',
+                    room === false && 'invisible',
+                )}
             >
-                <Bubble key={tip} tip={tip} onAnother={another} />
+                <Bubble key={tip} tip={tip} shown={room === 'roomy' || n > 0} onAnother={another} />
                 <button
                     type="button"
                     aria-label="Ask Sprig for a tip"
@@ -63,28 +74,43 @@ export function Buddy() {
     )
 }
 
-/** Whether Sprig, the slot's one child, has the room it needs. */
-function sprigFits(slot: HTMLElement): boolean {
+/**
+ * How Sprig, the slot's one child, fits: whole, its bubble included, or the figure alone once it may stand over the
+ * blocks above by `OVERLAP_PX`. False for neither.
+ */
+function roomFor(slot: HTMLElement): Room | false {
     const sprig = slot.firstElementChild
-    return sprig instanceof HTMLElement && sprig.offsetHeight <= slot.clientHeight
+    const figure = sprig?.lastElementChild
+    if (!(sprig instanceof HTMLElement) || !(figure instanceof HTMLElement)) {
+        return false
+    }
+    if (sprig.offsetHeight <= slot.clientHeight) {
+        return 'roomy'
+    }
+    // From the figure's top to Sprig's foot: the aside is positioned, so it is the figure's offsetParent.
+    return sprig.offsetHeight - figure.offsetTop <= slot.clientHeight + OVERLAP_PX ? 'tight' : false
 }
 
 /**
- * The speech bubble above Sprig: the tip, another, and the way out. Its tail points down at Sprig. Closed, it is
- * hidden but keeps its room, so Sprig does not move.
+ * The speech bubble above Sprig: the tip, another, and the way out. Its tail points down at Sprig. Closed, or not
+ * `shown`, it is hidden but keeps its room, so Sprig does not move.
  */
-function Bubble({ tip, onAnother }: { tip: string; onAnother: () => void }) {
+function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnother: () => void }) {
     const [open, setOpen] = useState(true)
+    // Its time runs only while it shows: a tip waiting unseen in a tight slot is not used up before a roomier one.
     useEffect(() => {
+        if (!shown) {
+            return
+        }
         const timer = globalThis.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
         return () => globalThis.clearTimeout(timer)
-    }, [])
+    }, [shown])
     return (
         <div
             data-testid="buddy-tip"
             className={cn(
                 'animate-buddy-tip relative w-full rounded-md border bg-surface-raised p-3 text-sm',
-                !open && 'invisible',
+                !(open && shown) && 'invisible',
             )}
         >
             <p className="panel-label mb-1">Sprig</p>
