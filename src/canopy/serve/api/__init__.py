@@ -41,9 +41,10 @@ _RESOURCES = (overview, tickets, runs, ticks, chores, loop, worktrees, events, s
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.
 TAGS: list[dict[str, Any]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]
 
-_signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses={**refs.SIGNED_IN, **refs.BUSY})
+_signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses=refs.SIGNED_IN)
 for _resource in _RESOURCES:
-    _signed_in.include_router(_resource.router)
+    # The stream only reads, which never waits on the write lock, and could not answer a 503 once its 200 had begun.
+    _signed_in.include_router(_resource.router, responses=None if _resource is events else refs.BUSY)
 
 router = APIRouter(responses=refs.GUARDED)
 router.include_router(session.router)

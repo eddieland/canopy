@@ -1424,7 +1424,7 @@ export type components = {
         };
         /**
          * ErrorResponse
-         * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, or a 404.
+         * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, a 404, or a 503.
          */
         ErrorResponse: {
             /**
@@ -3579,15 +3579,6 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };

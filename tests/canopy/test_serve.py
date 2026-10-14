@@ -280,13 +280,23 @@ def test_a_write_that_waits_out_a_held_journal_is_a_503_saying_so(
     body = {"body": "red", "submission": "submission-1"}
     holder = journals.open(db_path(backend.workspace), migrate=False)
     holder.execute("BEGIN IMMEDIATE")
-    with mock.patch.object(db, "BUSY_SECONDS", 0.05):
-        response = c.post(url, json=body, headers={"origin": ORIGIN})
-        assert response.status_code == 503, response.text
-        assert response.json() == {"detail": "the journal is busy: another writer held it for over 0.05s; try again"}
-        assert c.get("/api/tickets").status_code == 200
-        holder.execute("ROLLBACK")
-        assert c.post(url, json=body, headers={"origin": ORIGIN}).status_code == 200
+    handler = _Records()
+    log = logging.getLogger("canopy")
+    log.addHandler(handler)
+    try:
+        with mock.patch.object(db, "BUSY_SECONDS", 0.05):
+            response = c.post(url, json=body, headers={"origin": ORIGIN})
+            assert response.status_code == 503, response.text
+            assert response.json() == {
+                "detail": "the journal is busy: another writer held it for over 0.05s; try again"
+            }
+            assert c.get("/api/tickets").status_code == 200
+            holder.execute("ROLLBACK")
+            assert c.post(url, json=body, headers={"origin": ORIGIN}).status_code == 200
+    finally:
+        log.removeHandler(handler)
+    warned = [r.getMessage() for r in handler.records if r.levelno >= logging.WARNING]
+    assert warned == [f"journal busy: POST {url} waited 0.05s for the write lock"]
 
 
 def test_any_other_operational_error_stays_a_500(ui: Path, backend: Backend) -> None:
@@ -826,7 +836,7 @@ def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.
             assert "403" in responses, where
             if path != "/api/session":
                 assert "401" in responses, where
-                assert "503" in responses, where
+            assert ("503" in responses) == (path not in {"/api/session", "/api/events"}), where
             if "{key}" in path or "{name}" in path:
                 assert "409" in responses, where
             if path.endswith(("_id}", "{key}", "{name}")) and method == "get":

@@ -12,6 +12,7 @@ from fastapi import HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 
 from canopy.core import conversation, db
+from canopy.infra import logs
 from canopy.serve.schema import ErrorResponse, RefusalResponse
 
 if TYPE_CHECKING:
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 type Responses = dict[int | str, dict[str, Any]]
 
 WEB = "web"
+_log = logs.for_tick(None)
 # The largest id SQLite stores; a larger one in a path is a 422, not an overflow.
 _MAX_ID = 2**63 - 1
 
@@ -42,7 +44,8 @@ GUARDED: Responses = {
 SIGNED_IN: Responses = {
     401: {"model": ErrorResponse, "description": "No valid session: sign in with the listener secret."}
 }
-# Every route's that reads or writes the journal: another connection held its write lock past db.BUSY_SECONDS.
+# Every route's but the stream's that reads or writes the journal: another connection held its write lock past
+# db.BUSY_SECONDS.
 BUSY: Responses = {
     503: {
         "model": ErrorResponse,
@@ -73,7 +76,7 @@ class RefusedError(HTTPException):
         super().__init__(status_code=409, detail={"guard": r.guard, "reason": r.reason})
 
 
-def journal_busy(_request: Request, exc: Exception) -> JSONResponse:
+def journal_busy(request: Request, exc: Exception) -> JSONResponse:
     """Answer a write that waited out the journal's busy timeout as the 503 `BUSY` describes, not a bare 500.
 
     Returns:
@@ -86,6 +89,7 @@ def journal_busy(_request: Request, exc: Exception) -> JSONResponse:
     # name, and a busy timeout is SQLITE_BUSY or an extended code of it.
     if not getattr(exc, "sqlite_errorname", "").startswith("SQLITE_BUSY"):
         raise exc
+    _log.warning("journal busy: %s %s waited %gs for the write lock", request.method, request.url.path, db.BUSY_SECONDS)
     detail = f"the journal is busy: another writer held it for over {db.BUSY_SECONDS:g}s; try again"
     return JSONResponse({"detail": detail}, status_code=503)
 
