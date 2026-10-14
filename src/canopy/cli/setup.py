@@ -110,7 +110,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         )
     try:
         ws = workspace.load(root)
-        prefix = config.load(root, user_file).trust.branch_prefix
+        cfg = config.load(root, user_file)
     except config.ConfigError as e:
         click.echo(f"\nThe config does not load yet; fix it before the first tick:\n{e}")
         if repos:
@@ -126,8 +126,11 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
             f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit tracker.query too."
         )
     click.echo()
-    click.echo(init.BRANCH_PROTECTION.format(prefix=prefix), nl=False)
+    click.echo(init.BRANCH_PROTECTION.format(prefix=cfg.trust.branch_prefix), nl=False)
     click.echo(setup_workspace.protection_targets(ws), nl=False)
+    if sandbox := init.sandbox_suggestion(cfg.runtime.worker_cmd, user_file):
+        click.echo()
+        click.echo(sandbox, nl=False)
     # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
     report.shadowing += [path for repo in ws.repos if repo.cloned for path in definitions.shadowing(repo.path)]
     _print_shadowing(report)

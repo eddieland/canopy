@@ -843,7 +843,10 @@ against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the 
 included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
 `allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
 denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
-§6). Next: `docs/SANDBOX.md`, the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
+§6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested `worker_cmd`. Running the
+guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper outside canopy must use
+a worktree of its own, since nothing tidies a slot it commits in, and that a process started with `setsid` inside the
+sandbox ends with it. Next: the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 

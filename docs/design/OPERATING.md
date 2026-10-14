@@ -249,7 +249,9 @@ Rules:
   default serves: a default written into a file is pinned there, and a later canopy's never reaches it. It never
   overwrites either file and installs nothing else (§13). If the config does not load (for example, templates lacking
   `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
-  of the workspace root and of each cloned repository, which stop runs (§13).
+  of the workspace root and of each cloned repository, which stop runs (§13). Unless `worker_cmd` already starts with
+  `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for the user file, pointing to
+  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `srt` installed first (HOST_ISOLATION §5).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.

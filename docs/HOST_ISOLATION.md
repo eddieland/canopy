@@ -3,7 +3,8 @@
 Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
 Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
 explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
-so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates are in `examples/sandbox/`.
+so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates are in `examples/sandbox/`,
+and the operator's guide to them is `docs/SANDBOX.md`.
 The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against
 the version the operator pins.
 
@@ -290,8 +291,8 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    directory, passed as `CANOPY_GIT_OBJECTS`, read by step 5, and tidied away on every exit path and by reconcile, as
    §4.2 describes. Only the wrapper (§4.1) sets git's variables from it.
 
-No new config keys. `canopy init` can print a suggested `worker_cmd` and the one install command, but does not write
-them. The sandbox stays opt-in until the canary has passed on real machines.
+No new config keys. `canopy init` prints a suggested `worker_cmd` and points to `docs/SANDBOX.md` for the install,
+but writes neither. The sandbox stays opt-in until the canary has passed on real machines.
 
 ## 6. The canary
 

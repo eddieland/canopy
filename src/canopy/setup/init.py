@@ -7,13 +7,15 @@ definitions and skills from a directory canopy owns (`definitions.py`). canopy w
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
+import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from canopy.core import hostgit
+from canopy.core import config, hostgit
 from canopy.infra import procs
 
 # A provider name becomes a directory name; keep it to one plain path component.
@@ -36,6 +38,17 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Require pull request reviews before merging, and do not let authors approve their own PRs.
   - Require status checks to pass before merging.
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
+"""
+
+# The wrapper docs/SANDBOX.md installs, and the prefix it gives a worker's template (HOST_ISOLATION §4.1).
+SANDBOX_WRAPPER = "canopy-sandbox"
+SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
+SANDBOX_SUGGESTION = """\
+Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Install
+srt and canopy-sandbox as https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md says, then set this in
+{user_file}, with the same prefix on private_worker_cmd and split_cmd:
+  [runtime]
+  {line}
 """
 
 # Transports git runs over ssh. Anything else with `://` (https, git, file) is not SSH.
@@ -66,6 +79,25 @@ def ssh_push_urls(runner: procs.Runner, clone: Path) -> list[str]:
     if not result.ok:
         return []
     return [url for url in result.stdout.split() if is_ssh_url(url)]
+
+
+def sandbox_suggestion(worker_cmd: str, user_file: Path) -> str:
+    """Return how to sandbox workers: `worker_cmd` behind `canopy-sandbox`'s prefix, as a line of `user_file`.
+
+    Printed, never written: the sandbox is opt-in, and needs `srt` and the wrapper installed first (HOST_ISOLATION §5).
+
+    Returns:
+        The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`.
+    """
+    if Path(config.command_words(worker_cmd)[0]).name == SANDBOX_WRAPPER:
+        return ""
+    value = f"{SANDBOX_PREFIX}\n      {worker_cmd}"
+    line = f"worker_cmd = '''{value}'''"
+    # A template TOML read from a basic string can hold what a literal one cannot: three quotes, a control character.
+    with contextlib.suppress(tomllib.TOMLDecodeError):
+        if tomllib.loads(line)["worker_cmd"] == value:
+            return SANDBOX_SUGGESTION.format(user_file=user_file, line=line)
+    return SANDBOX_SUGGESTION.format(user_file=user_file, line=f"worker_cmd = {json.dumps(value, ensure_ascii=False)}")
 
 
 @dataclass

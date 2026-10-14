@@ -183,7 +183,7 @@ canopy (harness, Python)
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
-    init.py        canopy init: the user config, branch protection text, the SSH push URL check
+    init.py        canopy init: the user config, branch protection text, the SSH push URL check, the sandbox hint
     workspace.py   canopy init: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
