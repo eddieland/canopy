@@ -95,21 +95,19 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })
 
-test('the runs working now are listed under the attention list', async ({ page }) => {
-    await page.goto('attention')
-    await settled(page)
-    const workers = page.getByTestId('workers')
-    await expect(workers.getByRole('listitem')).toHaveCount(2)
-    await expect(workers.getByTestId('worker-41')).toContainText('ABC-101')
-    await expect(workers.getByTestId('worker-41')).toContainText('implement')
-    await expect(workers.getByTestId('worker-43')).toContainText('ABC-104')
-})
-
-test("a started ticket's item offers the ticket's own actions beside its thread", async ({ page }) => {
+test("a started ticket's item leads with the ticket's own actions, then its conversation and the reply", async ({
+    page,
+}) => {
     await page.goto('attention')
     await settled(page)
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' }).click()
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
     await expect(detail.getByText('Private: workers read the ticket and write nothing to it.')).toBeVisible()
+    // The same order as the ticket's own page: its actions foot what it is, above the thread you answer in.
+    const actions = await detail.getByTestId('attention-actions').boundingBox()
+    const reply = await detail.getByRole('textbox', { name: /^Reply/u }).boundingBox()
+    expect(actions !== null && reply !== null && actions.y < reply.y).toBe(true)
+    // The runs working now are the rail's, on every page; the attention page keeps no list of its own.
+    await expect(page.getByTestId('workers')).toHaveCount(0)
 })

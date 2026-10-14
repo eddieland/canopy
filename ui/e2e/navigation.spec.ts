@@ -227,6 +227,38 @@ test("a ticket's page links to its PR and its branch under its title, beside the
     await expect(links.getByRole('link', { name: branch })).toHaveAttribute('href', `https://${branch}`)
 })
 
+test("a ticket's page puts its reply before its runs and decisions on a half-width screen", async ({ page }) => {
+    await page.setViewportSize({ width: 820, height: 900 })
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const box = async (testId: string) => {
+        const found = await page.getByTestId(testId).boundingBox()
+        if (found === null) {
+            throw new Error(`${testId} is not on the page`)
+        }
+        return found
+    }
+    const actions = await box('ticket-actions')
+    const conversation = await box('ticket-conversation')
+    const reply = await page
+        .getByTestId('ticket-conversation')
+        .getByRole('textbox', { name: /^Reply/u })
+        .boundingBox()
+    const runs = await box('ticket-runs')
+    const decisions = await box('ticket-decisions')
+    // What it is and its actions, then the conversation and the reply, then the lists that support them.
+    expect(actions.y).toBeLessThan(conversation.y)
+    expect(reply).not.toBeNull()
+    expect((reply?.y ?? Infinity) + (reply?.height ?? 0)).toBeLessThan(runs.y)
+    expect(runs.y).toBeLessThan(decisions.y)
+
+    // Wide, the conversation sits beside the rest, its top level with the Work panel's, above the actions in its foot.
+    await page.setViewportSize({ width: 1600, height: 900 })
+    const wide = await box('ticket-conversation')
+    expect(wide.x).toBeGreaterThan((await box('ticket-runs')).x)
+    expect(wide.y).toBeLessThan((await box('ticket-actions')).y)
+})
+
 test('the chores page lists each chore as canopy status does, and a chore page what canopy show prints', async ({
     page,
 }) => {
