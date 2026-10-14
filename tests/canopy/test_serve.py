@@ -110,6 +110,22 @@ def test_a_route_gets_index_html_uncached_with_a_base_href_and_a_csp(ui: Path, b
         assert response.headers["x-frame-options"] == "DENY"
 
 
+def test_index_html_carries_the_build_meta_reports_and_a_rebuild_changes_it(ui: Path, backend: Backend) -> None:
+    c = client(ui, backend)
+    build = c.get("/api/meta").json()["build"]
+    assert isinstance(build, str)
+    assert f'<meta name="canopy-build" content="{build}" />' in c.get("/runs").text
+
+    (ui / "index.html").write_text(INDEX.replace("abc123", "def456"))
+    rebuilt = c.get("/api/meta").json()["build"]
+    assert rebuilt != build
+    assert f'content="{rebuilt}"' in c.get("/").text
+
+
+def test_meta_reports_no_build_when_the_ui_is_not_built(backend: Backend) -> None:
+    assert client(None, backend).get("/api/meta").json()["build"] is None
+
+
 def test_the_csp_hashes_each_inline_script_and_no_external_one() -> None:
     csp = content_security_policy('<script>a()</script><script src="x.js"></script><script>b()</script>')
     assert csp.count("'sha256-") == 2

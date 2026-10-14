@@ -1,5 +1,8 @@
 """Serves the built single-page app: hashed assets, other files at the build's root, and index.html for routes.
 
+index.html carries its build's id, which `GET /api/meta` reports too, so a page loaded before an upgrade can tell it
+is out of date and offer a reload.
+
 The fallback to index.html is for the app's own routes only. It never answers under the API prefix, never for a
 path with a file extension (a missing asset is a 404, not a page that fails to parse as a script), and never for
 anything but GET and HEAD.
@@ -23,6 +26,8 @@ _ASSETS = "assets"
 _IMMUTABLE = "public, max-age=31536000, immutable"
 # index.html names the current assets, so the browser must revalidate it on every load or an upgrade shows a stale UI.
 _NO_CACHE = "no-cache"
+# The name of the meta tag in index.html that holds its build's id (SinglePageApp.build); the UI reads it there.
+BUILD_META = "canopy-build"
 _INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DOTALL)
 
 _NOT_BUILT = """<!doctype html>
@@ -80,13 +85,32 @@ class SinglePageApp:
             return _file(ui_dir, parts)
         return self._index(ui_dir)
 
+    def build(self) -> str | None:
+        """Return the id of the build served now, or None when the UI is not built.
+
+        Returns:
+            A digest of index.html as it is on disk, which names every hashed asset, so it changes with any of them.
+        """
+        index = self.ui_dir / "index.html" if self.ui_dir is not None else None
+        if index is None or not index.is_file():
+            return None
+        return _build_id(index.read_bytes())
+
     def _index(self, ui_dir: Path) -> Response:
-        html = (ui_dir / "index.html").read_text(encoding="utf-8")
+        raw = (ui_dir / "index.html").read_bytes()
+        html = raw.decode("utf-8")
         # One build serves under any prefix: the app's URLs are relative and resolve against this, and the router
-        # reads its basepath from document.baseURI. base_path is validated to need no escaping (options.py).
-        html = html.replace("<head>", f'<head>\n    <base href="{self.base_path}/" />', 1)
+        # reads its basepath from document.baseURI. base_path is validated to need no escaping (options.py). The
+        # build's id is hex, so it needs none either.
+        base = f'<base href="{self.base_path}/" />'
+        build = f'<meta name="{BUILD_META}" content="{_build_id(raw)}" />'
+        html = html.replace("<head>", f"<head>\n    {base}\n    {build}", 1)
         headers = {"Cache-Control": _NO_CACHE, "Content-Security-Policy": content_security_policy(html)}
         return HTMLResponse(html, headers=headers)
+
+
+def _build_id(index: bytes) -> str:
+    return hashlib.sha256(index).hexdigest()[:16]
 
 
 def _file(ui_dir: Path, parts: tuple[str, ...]) -> Response:
