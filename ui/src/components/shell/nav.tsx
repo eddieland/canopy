@@ -120,25 +120,27 @@ export function Nav() {
 /**
  * The attention list's count beside its nav item: what is broken in the failure color, what waits on the operator's
  * answer in theirs, and the rest muted, each shown only when there is one. Not the section's rose, which is too near
- * the failure color to tell apart at this size.
+ * the failure color to tell apart at this size. Color alone does not say which number is which, so the numbers are
+ * also said in words, on hover and to a screen reader (`1 broken, 1 waiting on you, 3 other`).
  */
 function AttentionCount({ counts }: { counts: Record<Severity, number> }) {
     const parts = [
-        { kind: 'failed', count: counts.failed, tone: 'text-status-failed' },
-        { kind: 'waiting', count: counts.waiting, tone: 'text-status-blocked' },
-        { kind: 'other', count: counts.other + counts.finding, tone: 'text-muted-foreground' },
+        { kind: 'failed', label: 'broken', count: counts.failed, tone: 'text-status-failed' },
+        { kind: 'waiting', label: 'waiting on you', count: counts.waiting, tone: 'text-status-blocked' },
+        { kind: 'other', label: 'other', count: counts.other + counts.finding, tone: 'text-muted-foreground' },
     ].filter(({ count }) => count > 0)
     if (parts.length === 0) {
         return null
     }
+    const said = parts.map(({ count, label }) => `${count} ${label}`).join(', ')
     return (
-        <span className="ml-auto flex gap-1.5 readout text-xs" data-testid="nav-attention-count">
+        <span className="ml-auto flex gap-1.5 readout text-xs" title={said} data-testid="nav-attention-count">
             {parts.map(({ kind, count, tone }) => (
-                <span key={kind} className={tone} title={`${count} ${kind}`} data-testid={`nav-attention-${kind}`}>
+                <span key={kind} aria-hidden className={tone} data-testid={`nav-attention-${kind}`}>
                     {count}
-                    <span className="sr-only"> {kind}</span>
                 </span>
             ))}
+            <span className="sr-only">{said}</span>
         </span>
     )
 }
