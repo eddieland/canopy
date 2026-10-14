@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
+import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
@@ -119,7 +120,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                                 {ticket.done ? ', done' : ''}
                             </dd>
                             <dt className="panel-label self-center">branch</dt>
-                            <dd className="font-mono text-xs">{ticket.branch ?? 'none yet'}</dd>
+                            <dd className="min-w-0 font-mono text-xs">
+                                {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
+                            </dd>
                             {units.map((unit) => (
                                 <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
                             ))}

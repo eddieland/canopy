@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
@@ -128,7 +129,9 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                     )}
                 </Field>
                 <Field label="commit" mono>
-                    <span title={review.sha}>{shortSha(review.sha)}</span>
+                    <Copyable text={review.sha} label="commit">
+                        <span title={review.sha}>{shortSha(review.sha)}</span>
+                    </Copyable>
                     {detail.base_branch !== null && (
                         <span className="text-muted-foreground"> against {detail.base_branch}</span>
                     )}
