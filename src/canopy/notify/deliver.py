@@ -1,9 +1,10 @@
 """Delivering to notification sinks at the end of each tick (DESIGN §6 step 7, §20).
 
 For each sink, in name order: gather its attention diff if it takes `attention`, its events after its cursor in the
-groups it takes, and a digest if one is due; render one message in its format; run its command with the message on
-stdin. Exit 0 within the timeout is a delivery, recorded in the journal; anything else changes nothing but the sink's
-failure count, so the next tick tries again. Sinks run one after another under the tick lock.
+groups it takes, and a digest if one is due; hold it if the sink batches and nothing in it is urgent; else render one
+message in its format and run its command with the message on stdin. Exit 0 within the timeout is a delivery,
+recorded in the journal; anything else changes nothing but the sink's failure count, so the next tick tries again.
+Sinks run one after another under the tick lock.
 """
 
 from __future__ import annotations
@@ -30,11 +31,13 @@ TIMEOUT_SECONDS = 60
 # `loop.failing` once.
 FAILING_AFTER = 3
 _POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS)
+# Events a batching sink sends at once, with whatever it held: the loop or a sink failing.
+_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing"})
 
 
 @dataclass(frozen=True)
 class Delivery:
-    """How one sink's delivery went: `delivered`, `nothing` to send, or `failed` with why."""
+    """How one sink's delivery went: `delivered`, `nothing` to send, `held` for its batch, or `failed` with why."""
 
     sink: str
     outcome: str
@@ -211,6 +214,10 @@ def _deliver(
         "events": len(events),
         "digest": digest is not None,
     }
+    if _batching(row, sink, now) and not _urgent(change, events):
+        # Nothing moves: the next tick gathers all of this again, with whatever happened since.
+        log.info("notification held", extra=fields)
+        return Delivery(name, "held")
     failure = send(ctx, sink, msg.render(sink.format))
     if failure is None:
         journal.mark_delivered(ctx.conn, name, change, cursor=cursor, digest=digest is not None)
@@ -223,6 +230,30 @@ def _deliver(
             db.record_event(ctx.conn, outbox.sink_failing(name, failure))
     log.warning("notify command failed", extra={**fields, "error": failure, "failures": failures})
     return Delivery(name, "failed", failure)
+
+
+def _batching(row: sqlite3.Row, sink: Sink, now: datetime) -> bool:
+    """Whether the sink is inside its batch window.
+
+    Returns:
+        True when it batches and its last delivery was less than `batch_minutes` ago; never before its first.
+    """
+    if sink.batch_minutes is None or row["last_delivery_at"] is None:
+        return False
+    return now - db.parse_time(str(row["last_delivery_at"])) < timedelta(minutes=sink.batch_minutes)
+
+
+def _urgent(change: journal.Diff | None, events: list[message.Event]) -> bool:
+    """Whether a message needs the operator now, so a batching sink sends it at once.
+
+    Returns:
+        True for a new attention item, a blocked run's question, or the loop or a sink failing.
+    """
+    if change is not None and change.added:
+        return True
+    return any(
+        e.kind in _URGENT_KINDS or (e.kind == "run.ended" and e.fields.get("status") == "blocked") for e in events
+    )
 
 
 def _digest_due(row: sqlite3.Row, sink: Sink, now: datetime) -> bool:
