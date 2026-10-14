@@ -21,7 +21,7 @@ from canopy.infra.procs import SubprocessRunner
 from canopy.setup import sandbox
 from tests.conftest import CanopyEnv
 
-# Records its arguments and working directory, then exits with $FAKE_EXIT_<NAME>, or 0.
+# Records its arguments and working directory, prints $FAKE_STDOUT_<NAME>, then exits with $FAKE_EXIT_<NAME>, or 0.
 STUB = """\
 #!{python}
 import json, os, sys
@@ -29,6 +29,7 @@ from pathlib import Path
 name = Path(sys.argv[0]).name
 with open({log!r}, "a") as f:
     f.write(json.dumps({{"argv": [name, *sys.argv[1:]], "cwd": os.getcwd()}}) + "\\n")
+sys.stdout.write(os.environ.get("FAKE_STDOUT_" + name.upper(), ""))
 sys.stderr.write(os.environ.get("FAKE_STDERR", ""))
 sys.exit(int(os.environ.get("FAKE_EXIT_" + name.upper(), "0")))
 """
@@ -58,11 +59,12 @@ class Call(TypedDict):
 
 @dataclass(frozen=True)
 class Machine:
-    """The stubs' directory, which is all of PATH, the log of what they were run with, and the user's id."""
+    """The stubs' directory, which is all of PATH, the log of what they were run with, the user's id, and uname."""
 
     bin: Path
     log: Path
     geteuid: mock.MagicMock
+    uname: mock.MagicMock
 
     def install(self, *names: str) -> None:
         for name in names:
@@ -79,14 +81,19 @@ class Machine:
 
 @pytest.fixture
 def machine(canopy_env: CanopyEnv, tmp_path: Path) -> Iterator[Machine]:
-    """A machine with nothing installed, run by a user who is not root, with HOME in `canopy_env`."""
+    """An x86_64 machine with nothing installed, run by a user who is not root, with HOME in `canopy_env`."""
     assert canopy_env.home.is_dir()
     (tmp_path / "bin").mkdir()
     with (
         mock.patch.dict(os.environ, {"PATH": str(tmp_path / "bin")}),
         mock.patch.object(os, "geteuid", autospec=True, return_value=1000) as geteuid,
+        mock.patch.object(os, "uname", autospec=True, return_value=uname("x86_64")) as host,
     ):
-        yield Machine(tmp_path / "bin", tmp_path / "calls.jsonl", geteuid)
+        yield Machine(tmp_path / "bin", tmp_path / "calls.jsonl", geteuid, host)
+
+
+def uname(machine: str) -> os.uname_result:
+    return os.uname_result(("Linux", "host", "6.8.0", "#1 SMP", machine))
 
 
 def runtime(canopy_env: CanopyEnv) -> Path:
@@ -204,8 +211,38 @@ def test_bubblewrap_that_cannot_make_a_sandbox_says_why(
     assert ("sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0" in todo) is (restricted == "1")
 
 
+@pytest.mark.parametrize(
+    ("says", "too_old"), [("bubblewrap 0.4.0\n", "0.4.0"), ("0.5\n", None), ("bubblewrap 0.9.0\n", None)]
+)
+def test_a_bubblewrap_older_than_srt_fully_supports_is_to_be_upgraded(
+    machine: Machine, says: str, too_old: str | None
+) -> None:
+    machine.install(*LINUX_COMMANDS)
+    with mock.patch.dict(os.environ, {"FAKE_STDOUT_BWRAP": says}):
+        report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    if too_old is None:
+        assert report.todo == []
+        return
+    [todo] = report.todo
+    assert todo.startswith(f"bubblewrap {too_old} is older than 0.5.0, the oldest srt fully supports.")
+    assert "Install\nbubblewrap 0.5.0 or later" in todo
+
+
+def test_a_machine_srt_has_no_seccomp_filter_for_is_said(machine: Machine) -> None:
+    machine.install(*LINUX_COMMANDS)
+    machine.uname.return_value = uname("riscv64")
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = report.todo
+    assert todo.startswith("srt has no seccomp filter for riscv64, only for x86_64 and aarch64.")
+    assert "SSH agent" in todo
+
+
 def test_macos_needs_ripgrep_and_no_bubblewrap(machine: Machine) -> None:
     machine.install("npm", "canopy-sandbox")
+    machine.uname.return_value = uname("arm64")  # macOS's name for it, which needs no seccomp filter
 
     report = sandbox.run_setup(SubprocessRunner(), "darwin")
 
