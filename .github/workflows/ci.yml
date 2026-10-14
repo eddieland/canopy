@@ -98,13 +98,17 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: make check
 
-  # The sandbox canary (HOST_ISOLATION §6): the shipped wrapper and policy templates under the real srt and
-  # bubblewrap, set up the way docs/SANDBOX.md tells the operator to.
+  # The sandbox canary (HOST_ISOLATION §6): the shipped wrapper and policy templates under the real srt, with
+  # bubblewrap on Linux and sandbox-exec on macOS, set up the way docs/SANDBOX.md tells the operator to.
   sandbox-canary:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     needs: changes
     if: ${{ !cancelled() }}
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository
         if: needs.changes.outputs.code != 'false'
@@ -126,14 +130,19 @@ jobs:
           node-version: "22"
 
       - name: Install bubblewrap, socat, and ripgrep
-        if: needs.changes.outputs.code != 'false'
+        if: needs.changes.outputs.code != 'false' && runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep
 
       # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, which leaves bubblewrap without the
       # capabilities it needs. docs/SANDBOX.md gives the operator the same command.
       - name: Allow unprivileged user namespaces
-        if: needs.changes.outputs.code != 'false'
+        if: needs.changes.outputs.code != 'false' && runner.os == 'Linux'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # sandbox-exec comes with macOS; srt needs ripgrep beside it.
+      - name: Install ripgrep
+        if: needs.changes.outputs.code != 'false' && runner.os == 'macOS'
+        run: brew install ripgrep
 
       - name: Install dependencies
         if: needs.changes.outputs.code != 'false'

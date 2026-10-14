@@ -47,8 +47,11 @@ ROLES = ("worker", "setup", "chore")
 PINNED_SRT = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
 # Found before a fixture puts tests/fakes, and its fake srt, first on PATH.
 SRT = str(PINNED_SRT) if PINNED_SRT.is_file() else shutil.which("srt")
-# A parent short enough on Linux and macOS alike for the sockets srt makes under the wrapper's run directory.
-SHORT_TMP = "/tmp"  # noqa: S108  (the run directories under it are private to the user; the wrapper checks)
+# A parent short enough on Linux and macOS alike for the sockets srt makes under the wrapper's run directory; on macOS
+# /tmp is a link to /private/tmp. And the temp directory the operator's own canopy runs with, found before a fixture
+# moves TMPDIR, which on macOS is a deep one per user.
+SHORT_TMP = os.path.realpath("/tmp")  # noqa: S108  (the run directories under it are private to the user)
+SYSTEM_TMP = tempfile.gettempdir()
 PLANTED = "canary-planted-7f3a"
 # On the shipped template's allowlist, and not; and the cloud metadata address, which no policy should reach.
 ALLOWED_URL = "https://github.com"
@@ -90,8 +93,13 @@ class Canary:
     def own(self) -> Path:
         return self.common / "worktrees" / self.slot.name
 
-    def run(self, script: str, *args: str, role: str = "worker", timeout: float | None = None) -> procs.Result:
-        """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started."""
+    def run(
+        self, script: str, *args: str, role: str = "worker", tmpdir: str | None = None, timeout: float | None = None
+    ) -> procs.Result:
+        """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
+
+        `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the fixture's short one.
+        """
         argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
         cwd = self.slot
         env: dict[str, str] = {"CANOPY_GIT_OBJECTS": str(self.objects)}
@@ -99,6 +107,8 @@ class Canary:
             cwd = self.state_dir / "chores" / "canary"
             env = {}
             cwd.mkdir(parents=True, exist_ok=True)
+        if tmpdir is not None:
+            env["TMPDIR"] = tmpdir
         done = SubprocessRunner().run(argv, cwd=cwd, env=env, timeout=timeout)
         assert done.stdout.startswith(f"{RAN}\n"), done.stderr
         return done
@@ -279,6 +289,15 @@ def test_a_worker_commits_in_its_slot(canary: Canary) -> None:
     in_objects = {"GIT_OBJECT_DIRECTORY": str(canary.objects)}
     assert SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=canary.slot, env=in_objects).ok
     assert list(canary.runs_root.iterdir()) == []
+
+
+def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
+    """A positive control: the wrapper's run directory, under the TMPDIR canopy runs with, leaves srt room for its
+    sockets. The rest of the canary runs under a short one of its own, so that this is the only test that depends on it
+    (HOST_ISOLATION §7, the temp directory on macOS)."""
+    done = canary.run("true", tmpdir=SYSTEM_TMP)
+
+    assert done.ok, done.stderr
 
 
 def test_a_worker_reaches_an_allowed_host(canary: Canary) -> None:
