@@ -393,6 +393,21 @@
     }
 }
 
+/* The propeller cap's propeller turns, flat as if seen from the side. */
+@keyframes buddy-propeller {
+    50% {
+        transform: scaleX(-1);
+    }
+}
+
+@utility animate-buddy-propeller {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-propeller 400ms linear infinite;
+    }
+}
+
 @utility animate-buddy-blink {
     transform-box: fill-box;
     transform-origin: center;

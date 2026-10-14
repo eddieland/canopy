@@ -111,9 +111,10 @@ Rules:
   `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
   runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
-  is shown nowhere else. The footer (the version) sits at the foot of the sticky column, so at the window's foot
-  however long the page; in a window too short for the rest, the part above it scrolls on its own. The room left
-  between the blocks and the footer is Sprig's (Fun, below).
+  is shown nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer (the
+  version) sits at the foot of the sticky column, so at the window's foot however long the page; in a window too
+  short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer is
+  Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to
   a screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop
@@ -234,6 +235,16 @@ Sprig:
   at the slot's foot. A slot too short for Sprig and its bubble leaves Sprig out. The bubble keeps its room once
   closed, so closing it never brings in a Sprig that had no room. With the mock's three working runs, that is a
   window about 1100px tall.
+- **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
+  `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
+  everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
+  spent. The shop is folded under its wallet row, which stays in view, until its Show hats button opens it (a
+  `Collapsible`, closed on every visit). The hats bought and the one worn are kept in this browser. A hat bought goes on
+  at once; one owned goes on and comes off with a click; there are no refunds. Each hat is drawn in Sprig's own units,
+  its brim on the top of the wire and under the brows, in the `buddy-hat-*` tokens, and drawn after the leaf, which
+  shows behind the crown like a feather. Hats are priced for an operator who spends about $2,000 a month, $50 to
+  $25,000: the first inside a day, the last after about a year. A new hat is an id in `HatId`, a row in `HATS` (cheapest
+  first), and its drawing.
 
 The empty inbox, and an item clearing:
 

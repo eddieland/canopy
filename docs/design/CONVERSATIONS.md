@@ -412,7 +412,7 @@ The API, under `{base}/api`:
 | `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
-| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
+| `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
