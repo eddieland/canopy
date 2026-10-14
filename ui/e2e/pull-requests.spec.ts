@@ -38,6 +38,8 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     // A review opens its findings on its diff, and leads back to its PR's page.
     await page.getByTestId('pull-request-review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
+    // The URL changes before the new page replaces the old, which links to its PR too: wait for the review's title.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4')
     await page.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88')
 })
