@@ -23,6 +23,8 @@ if TYPE_CHECKING:
     from canopy.core.agent_output import Usage
 
 DB_FILE_NAME = "canopy.db"
+# How long a connection waits for another to release the write lock before its write fails as `database is locked`.
+BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
@@ -127,7 +129,7 @@ def connect(path: Path) -> sqlite3.Connection:
         An autocommit connection whose rows are `sqlite3.Row`. The caller closes it.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, autocommit=True, timeout=10)
+    conn = sqlite3.connect(path, autocommit=True, timeout=BUSY_SECONDS)
     conn.row_factory = sqlite3.Row
     # WAL must be set outside a transaction; migration 0001 repeats it inside one, where it is then a no-op.
     conn.execute("PRAGMA journal_mode = WAL")

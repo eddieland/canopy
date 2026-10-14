@@ -348,17 +348,20 @@ canopy, not built after an incident.
 - `run_slots` records each slot's `.git` link (a new migration), so reconcile's `end_run` does the same cleanup for a
   run whose `_run` is gone, after the same link check `_run` makes; this closes the gap a `_run` killed with SIGKILL
   leaves (HOST_ISOLATION §5 item 2).
-- `examples/sandbox/`: `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and
-  their git directories, write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
+- `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and their git directories,
+  write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
   `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`) that picks the policy; and the
   policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts left to fill in. No
-  Unix sockets, so sandboxed runs push over HTTPS. Examples, not harness code: the harness sees only the
-  command template, as today.
-- `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: the pinned `srt` install, the prefixes for `worker_cmd`,
-  `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS remotes, and Ubuntu 24.04's
-  restriction on unprivileged user namespaces. `canopy init` prints the suggested `worker_cmd` and writes nothing.
+  Unix sockets, so sandboxed runs push over HTTPS. Not harness code: the harness sees only the command template, as
+  today. First an example under `examples/sandbox/`; on the operator's request (2026-10-14) it ships with canopy, as
+  the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the templates, installs the
+  `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
+- `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: `canopy sandbox setup` and what it cannot install, the
+  prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
+  remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
+  `worker_cmd` and writes nothing.
 - The canary (HOST_ISOLATION §6), `tests/canopy/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`: a
-  plain script run through the real `worker_cmd` prefix and the example wrapper, every denial and every positive
+  plain script run through the real `worker_cmd` prefix and the shipped wrapper, every denial and every positive
   control §6 lists, the prompt property test included. A Linux CI job runs it with bubblewrap and `srt`.
 - Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
   tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
@@ -376,12 +379,18 @@ tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
 before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
 that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `examples/sandbox/`, tested
+back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `packages/canopy-sandbox`, tested
 against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
 included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
 `allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
 denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
-§6). Next: `docs/SANDBOX.md`, the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
+§6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested `worker_cmd`. Running the
+guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper outside canopy must use
+a worktree of its own, since nothing tidies a slot it commits in, and that a process started with `setsid` inside the
+sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in `~/.local/share/canopy/`; trying it
+found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a template denies it is not found
+unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does wherever `srt` is installed.
+Next: the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 
@@ -780,6 +789,127 @@ overseer spends: M34's cache hit needs ticks minutes apart, which M39 makes rare
 - Open: whether runs go in parallel; chores' `when`, which needs no ticket; whether one run may still see the queue.
 
 Accept: written with the design, before work starts.
+
+Status: not started.
+
+## M41. Limits and trust settings from the web UI
+
+REQUIREMENTS R16, DESIGN §12 and §22. Needs M20. Asked for by the operator (2026-10-14): change a pool's slots or a
+trust setting from the web UI without opening the user config file. Today the web channel asks for a reload and writes
+no config (TRUST_MODEL T8).
+
+- Which keys: an allowlist in code, by name, never a section's wildcard. Limits, raised or lowered: the counts in
+  `capacity` (`slots_per_repo` and `repo_slots` among them), the attempt limits and the cooldown in `policy`, and
+  `loop.interval_minutes` and `loop.idle_max_minutes`. Only toward stricter: `policy.stacking` to `"never"`, removing
+  an entry from `trust.authorized_repliers` or `trust.trusted_reviewers`, `trust.rebase` to false, and
+  `trust.commit_trailer` to true. Nothing else: `runtime.*`, `notify.*`, `chores`, `paths.*`, `review.*`, `serve.*`,
+  `tracker.*`, the comment marks, and the trailer's name and email each run a command, choose a prompt or whose words
+  are read, or move the listener. A key added to a section later is not editable until it is named.
+- Why the stricter-only keys: a config write outlives the secret. A new secret ends every session, but a replier added
+  through a stolen one would go on steering workers.
+- Ceilings: no count can be raised from the page past a ceiling in code, such as `capacity.max_workers` at 8; the file
+  can set any value. A raise within the ceilings outlives a new secret too; that residual is spend, and the page and
+  the log show it.
+- Where it writes: the user file only, never the workspace file (shared, perhaps committed, T7). Edited in place,
+  keeping the operator's comments and layout, so a TOML writer joins the runtime dependencies with its DECISIONS
+  entry; `tomllib` only reads. Rejected: a file of canopy's own layered after the user file (a hand edit to the user
+  file would be silently overridden), and writing the file anew with the stdlib (its comments lost).
+- How: the request carries a hash of the user file as the page read it. The server holds a lock from reading the file
+  to replacing it, so two requests cannot both pass the check on the same hash; a file whose hash differs is refused
+  as `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last moment. The
+  change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a refusal writes
+  nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and refused when it is a
+  symlink or not the operator's (D053's check). Then the loop is asked to reload through the existing path
+  (`loop.reread`).
+- The answer says what was saved apart from what the reload did: the keys changed, whether they wait for a running
+  tick to end, and that a run already running keeps the prompt and permissions it started with, so a stricter trust
+  setting reaches only runs started after it. A save whose reload was not asked for, the server stopping between the
+  two, takes effect at the next reload; the settings page's Reload asks again. Under `canopy loop --every`, a changed
+  `loop.interval_minutes` is saved, and the answer says `--every` still sets the pace until the loop restarts.
+- No CLI verb: the operator's editor is the CLI's way. A `canopy config set` would be in reach of the overseer's
+  `canopy *` bash rule; the write refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set regardless.
+- Each change is logged with channel `web`, the key, and its old and new values.
+- Slots: a changed `capacity.slots_per_repo` or `capacity.repo_slots` bounds leases from the next tick. Making or
+  removing slots is still `canopy workspace sync`, which the page names; the web UI runs no sync.
+- API: `GET /config`, each editable key's value, the file it came from, its ceiling, and the user file's hash;
+  `PATCH /config`, the changed keys and that hash. The settings page edits them, beside Reload.
+- TRUST_MODEL T8: "It cannot write config" becomes the allowlist, ceilings, and stricter-only keys above, and its
+  residual gains a stolen session raising limits up to their ceilings, which outlives a new secret until the operator
+  sees it. With the operator's approval note in the PR. DESIGN §12 marks the keys the page edits and their ceilings,
+  and §22 the routes and the settings page. DECISIONS: an entry for what the web channel may write to config (a rule
+  the trust boundary relies on), and one for the TOML writer.
+- Tests with the fakes: an allowed key written and reloaded, the file's comments kept; a key outside the allowlist, a
+  stricter-only key loosened, a count over its ceiling, a stale hash, two requests on one hash, an invalid value, and
+  a symlinked user file each refused with the file unchanged; the workspace file never written; Playwright for the
+  form.
+- Open: the ceilings' values; whether the page also shows the keys it cannot edit, read-only, with the file each came
+  from.
+
+Accept: the tests above pass. Live: while `canopy loop` runs, the operator changes `capacity.slots_per_repo` and
+removes a trusted reviewer from the settings page; the next tick leases under the new size and reads the shorter list;
+and the user file keeps its comments, with only those two values changed.
+
+Status: not started.
+
+## M42. Other people's PRs, reviewed on request
+
+REQUIREMENTS R17, DESIGN §21 and §22. Needs M11 and M20. Asked for by the operator (2026-10-14): hand canopy a
+coworker's PR to review, once or for as long as it is open, without writing a search into `review.query`. Today a PR
+is reviewed only as the loop's own (`review.agent_prs`) or as a match of that standing query, which lives in the user
+file and reads one repository's PRs.
+
+- A review request is a journal fact, like a start record (§22): the PR's URL, its repository, `once` or `watch`, when
+  and through which channel it was made, and when and why it ended. At most one open request per PR; a new one
+  replaces its mode. A `once` request ends when a review of the PR ends `done`. A `watch` ends when the PR merges or
+  closes, or the operator stops it.
+- `canopy start URL --review --repo NAME [--watch]` makes one, D075's verb on a PR reference; `canopy stop URL` ends it,
+  a running review finishing; `canopy show URL` shows it with its reviews, and `canopy status` lists the open ones.
+  `--repo` names the repository whose clone fetches the commit and whose pool leases the slot, as for
+  `canopy review run`. `start` on a PR without `--review` stays M14's, so a missing flag never turns a review into work
+  on someone else's branch.
+- Like `start`, `reply`, and `grant`, it refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. A
+  request authorizes reviews as `review.query` does, so an agent steered by a PR's text could otherwise point the
+  reviewer, and the operator's spend, at any PR. It also refuses, recording nothing: `reviews_off` when
+  `capacity.max_reviews` is 0, `bad_pr` for a URL `canopy review run` would refuse, `unknown_repo`, and `loop_pr` for a
+  PR a ticket's run pushed to, which `review.agent_prs` covers. An open request turns reviews on without `agent_prs`
+  or `query` (§21, Off unless configured).
+- The overseer: the state block's `reviews` gains each open request: URL, repository, mode, review runs so far, and
+  its latest review run. Each tick it reads each requested PR through MCP, as it reads `review.query`'s matches. For an
+  open PR whose head commit has no `done` review, it runs `canopy review run --pr URL --sha SHA --repo NAME` or
+  records `canopy review wait` (checks still running, a draft). For a merged or closed PR, it records
+  `canopy review end --pr URL --reason merged|closed`, which needs `CANOPY_TICK_ID` and ends only a `watch`. A steered
+  overseer could end a watch early; that costs reviews, never adds one, and the PR's page shows who ended it and why.
+- The harness ends a `once` request when its review ends `done`. A review that ends otherwise leaves it open, so a
+  later tick retries within the per-PR limit, as `review_failed` says today. Every guard of `canopy review run` holds
+  unchanged: one `done` review per commit, `policy.max_reviews_per_pr` (a watched PR pushed to often reaches it, and
+  `review_limit` names `canopy grant URL review`), the daily limit, and capacity.
+- What follows a review is what follows a `review.query` review: findings in the journal, posted nowhere (D114), no
+  worker, no ticket, and `review.ended` (§20) to the operator's sinks. A PR from a fork is reviewed like any other;
+  `_review` fetches its commit from the repository's `origin` and pushes nothing.
+- Web UI: the pull requests page takes a PR's URL and a repository, with `Review once` and `Watch`; a PR's page shows
+  its request, with `Stop`. `POST /pull-request/start?url=` and `POST /pull-request/stop?url=`, through the same code
+  as the CLI, so with the same refusals.
+- Journal: a migration adds `review_requests`: id, URL, repository, mode, created at and channel, ended at, and end
+  reason (`reviewed`, `merged`, `closed`, `stopped`, or `replaced`), with at most one open row per URL. Its hash joins
+  `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
+- TRUST_MODEL: T1 says a review request authorizes a review as `review.query` does, made only through the operator's
+  channels and refused inside a run; T8 adds making and ending one to the web channel's writes; §7's note that
+  `review.query` may review other people's PRs covers requests too. With the operator's approval note in the PR, for
+  those and the overseer prompt.
+- DESIGN §21 (requests beside `agent_prs` and `query`, the overseer's part, Off unless configured, the journal) and
+  §22 (the references table's PR row, the verbs, the routes and pages) say what changes.
+- Tests with the fakes: a `once` request is reviewed at its head and ends `reviewed`; a `watch` is reviewed again at a
+  new head and ends on `review end`; a failed review leaves a `once` request open; `start --review` refuses inside a
+  run, with reviews off, for a loop PR, and for an unknown repository; `review end` refuses without `CANOPY_TICK_ID`
+  and on a `once` request; a dry-run tick's state block carries the requests; with no request, no query, and
+  `agent_prs` off, it has no `reviews` key; the web routes start and stop one; Playwright for the form.
+- Open: whether `REPO#N` works, which needs a PR's URL from the repository's map (M14's references); a bound on open
+  watches, since the overseer reads each one every tick, and whether a watch lapses after some days with no new
+  commit; whether a watched PR's review waits for its checks to pass.
+
+Accept: the tests above pass. Live: the operator asks for one coworker's open PR to be reviewed once from the CLI, and
+another watched from the web UI. The first is reviewed at its head and its request ends. The second is reviewed,
+reviewed again after its author pushes, and its watch ends when it merges. Nothing is posted on either PR.
 
 Status: not started.
 

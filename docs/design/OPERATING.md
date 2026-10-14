@@ -259,7 +259,19 @@ Rules:
   default serves: a default written into a file is pinned there, and a later canopy's never reaches it. It never
   overwrites either file and installs nothing else (§13). If the config does not load (for example, templates lacking
   `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
-  of the workspace root and of each cloned repository, which stop runs (§13).
+  of the workspace root and of each cloned repository, which stop runs (§13). Unless `worker_cmd` already starts with
+  `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for the user file, pointing to
+  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (HOST_ISOLATION
+  §5).
+- `canopy sandbox setup` needs no workspace. It copies `canopy-sandbox`'s policy templates to
+  `<user config dir>/sandbox/` (0700), never over one that is there; installs `srt` with
+  `npm ci --ignore-scripts --engine-strict` from the lockfile the wrapper ships, into
+  `$XDG_DATA_HOME/canopy/sandbox-runtime/`, unless an earlier install of that lockfile finished and its `srt` answers
+  the pinned version (a copy of the lockfile, written only once an install has, records which did); and checks what it
+  never runs because it needs root: on Linux bubblewrap, socat, and ripgrep, and that bubblewrap can make a user
+  namespace (naming the AppArmor sysctl when that is why not), on macOS ripgrep, and that canopy is not root. It prints
+  each thing left to do and exits 1 while there is one; it writes no config, and prints the `worker_cmd` line
+  `canopy init` does (D117).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.

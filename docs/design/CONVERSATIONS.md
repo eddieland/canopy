@@ -449,11 +449,19 @@ A guard's refusal is a 409 whose `detail` names the guard and gives its reason, 
 a submission id the form drew when it was rendered, sent again unchanged when the operator retries, and stored as
 `web:<id>`, so a retried submission records nothing new.
 
+A request that waits out the journal's busy timeout (`db.BUSY_SECONDS`, 10s), because another writer, such as the
+loop, held it that long, is a 503 whose `detail` says the journal is busy and to try again, and the UI shows it where it
+shows a refusal; the server logs a warning naming the route. The stream never answers it: it only reads, which never
+waits on the write lock, and its 200 has begun before any read. A write that takes the lock once, as a reply does, wrote
+nothing, and a reply's submission id makes a retry safe anyway. Any other SQLite error stays a 500. The wait is not
+shortened: each waiting write holds one of the threads the server runs requests on, reads' too, for the whole timeout.
+
 The OpenAPI schema (`python -m canopy.serve openapi`) says all of this as well, so the UI's generated types carry it
 as JSDoc. Each route has its resource's tag, a summary, a description, and every error it answers with the model of
 its body: a 403 on every route (the guard, or a write's token and `Origin` checks), a 401 on all but `/session`, a 404
-for no such thing, a 409 for a guard's refusal, and FastAPI's validation error for every 422, a search of too many
-words included. Every model, field, path parameter, and named type is described; `test_serve.py` checks each.
+for no such thing, a 409 for a guard's refusal, a 503 on all but `/session` and the stream for a busy journal, and
+FastAPI's validation error for every 422, a search of too many words included. Every model, field, path parameter, and
+named type is described; `test_serve.py` checks each.
 
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open

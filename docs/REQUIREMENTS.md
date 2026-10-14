@@ -1,7 +1,7 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 on
-2026-10-14), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
+on 2026-10-14), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it
 must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry
 settles it, and the design doc stays normative until then (AGENTS.md).
 
@@ -201,6 +201,24 @@ tests, or reads CI hear it until it is over, without editing a file and remember
 should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on failures the notice explains.
 `paths.worker_instructions` (§12) carries text to workers today, but it never lapses, the overseer, reviews, and chores
 never read it, and nothing shows it is in force.
+
+### R16. Change limits and tighten trust settings from the web UI
+
+Gap (M41). Written down 2026-10-14. The operator changes some settings often enough that opening the user config file
+is friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
+able to change those from the web UI's settings page and have the loop take them up, as a reload does today. Trust
+settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
+turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
+chooses a prompt, or moves the listener, stays an edit to the file. Today the web channel writes no config at all
+(TRUST_MODEL T8).
+
+### R17. Review a coworker's PR on request, once or for as long as it is open
+
+Gap (M42). Written down 2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at
+its current commit, or watched, reviewed again at each new commit until it merges or closes. Today canopy reviews a PR
+only as the loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so
+one PR means editing config and editing it back. The review is what any canopy review is: findings in the journal for
+the operator, posted nowhere (D114), with no worker and no ticket.
 
 ## Nice to have
 

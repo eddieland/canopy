@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import HTTPException, Path
+from fastapi import HTTPException, Path, Request
+from fastapi.responses import JSONResponse
 
-from canopy.core import conversation
+from canopy.core import conversation, db
+from canopy.infra import logs
 from canopy.serve.schema import ErrorResponse, RefusalResponse
 
 if TYPE_CHECKING:
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 type Responses = dict[int | str, dict[str, Any]]
 
 WEB = "web"
+_log = logs.for_tick(None)
 # The largest id SQLite stores; a larger one in a path is a 422, not an overflow.
 _MAX_ID = 2**63 - 1
 
@@ -41,6 +44,15 @@ GUARDED: Responses = {
 SIGNED_IN: Responses = {
     401: {"model": ErrorResponse, "description": "No valid session: sign in with the listener secret."}
 }
+# Every route's but the stream's that reads or writes the journal: another connection held its write lock past
+# db.BUSY_SECONDS.
+BUSY: Responses = {
+    503: {
+        "model": ErrorResponse,
+        "description": "The journal is busy: another writer, such as the loop, held it past the busy timeout. Try "
+        "again.",
+    }
+}
 # A route's whose guards can refuse: a write, or a path naming a ticket or a chore by a reference that is not one.
 REFUSED: Responses = {
     409: {"model": RefusalResponse, "description": "A guard refused it: `detail` names the guard and its reason."}
@@ -62,6 +74,24 @@ class RefusedError(HTTPException):
     def __init__(self, r: conversation.Refused) -> None:
         """Carry refusal `r`."""
         super().__init__(status_code=409, detail={"guard": r.guard, "reason": r.reason})
+
+
+def journal_busy(request: Request, exc: Exception) -> JSONResponse:
+    """Answer a write that waited out the journal's busy timeout as the 503 `BUSY` describes, not a bare 500.
+
+    Returns:
+        The 503, its detail saying why.
+
+    Raises:
+        Exception: `exc` is anything but SQLite's busy timeout, which stays the 500 it was.
+    """
+    # The app hands this sqlite3.OperationalError alone. SQLite names the error it raises, one raised in Python has no
+    # name, and a busy timeout is SQLITE_BUSY or an extended code of it.
+    if not getattr(exc, "sqlite_errorname", "").startswith("SQLITE_BUSY"):
+        raise exc
+    _log.warning("journal busy: %s %s waited %gs for the write lock", request.method, request.url.path, db.BUSY_SECONDS)
+    detail = f"the journal is busy: another writer held it for over {db.BUSY_SECONDS:g}s; try again"
+    return JSONResponse({"detail": detail}, status_code=503)
 
 
 def ticket_ref(key: str, verb: str) -> Ref:

@@ -204,8 +204,8 @@ journal text: the ticker, Sprig, and the empty inbox. They share these rules:
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`) or the accent, never a
   status color, so nothing in it reads as a run's state.
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same.
-- **Settings has one Fun panel**: an on/off for each, as checkboxes, then each one's details. Everything in it is
-  kept in this browser (Themes, below).
+- **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
+  an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
 
 The ticker:
 
@@ -237,9 +237,12 @@ Sprig:
   the bubble's Another tip, offers the next; the bubble closes with its button or after 20 seconds, and "Don't show
   me tips again" turns Sprig off.
 - Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands
-  at the slot's foot. A slot too short for Sprig and its bubble leaves Sprig out. The bubble keeps its room once
-  closed, so closing it never brings in a Sprig that had no room. With the mock's three working runs, that is a
-  window about 1100px tall.
+  at the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about
+  1100px tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig
+  standing over the spend a little than not at all: so a shorter slot, down to one that leaves Sprig over the foot of
+  the spend by 40px, still shows it, the one exception to Fun's first rule. There the bubble would cover the runs
+  working now, so a tip shows only when asked for, by a click on Sprig, and closes as any other. A slot shorter
+  still leaves Sprig out. The bubble keeps its room once closed, so closing it never moves Sprig.
 - **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
   `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
   everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is

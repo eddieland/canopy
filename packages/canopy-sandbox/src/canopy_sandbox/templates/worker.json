@@ -1,8 +1,9 @@
 {
   "#": [
-    "canopy-sandbox's template for worker_cmd, private_worker_cmd, and split_cmd (HOST_ISOLATION §4.2, §4.3). Copy",
-    "it to ~/.config/canopy/sandbox/worker.json, then fill in your hosts and trim the toolchains to yours. Keys",
-    "starting with # are comments; @NAME@ strings are the paths canopy-sandbox fills in for each run."
+    "canopy-sandbox's template for worker_cmd, private_worker_cmd, and split_cmd (HOST_ISOLATION §4.2, §4.3).",
+    "canopy sandbox setup copies it to ~/.config/canopy/sandbox/worker.json; fill in your hosts and trim the",
+    "toolchains to yours there. Keys starting with # are comments; @NAME@ strings are the paths canopy-sandbox fills",
+    "in for each run."
   ],
   "network": {
     "#": [

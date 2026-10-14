@@ -1,18 +1,24 @@
-"""`canopy init`, `canopy skill` for the operator's own agent sessions, and `canopy secret` for the web UI."""
+"""`canopy init`, `canopy skill`, `canopy secret`, and `canopy sandbox setup`: setting canopy up on this machine.
+
+`canopy skill` is for the operator's own agent sessions, `canopy secret` for the web UI, and `canopy sandbox setup`
+for sandboxed runs.
+"""
 
 from __future__ import annotations
 
+import contextlib
 import sys
 from pathlib import Path
 
 import click
 
 from canopy.cli import workspace as cli_workspace
-from canopy.cli.common import CliError
+from canopy.cli.common import CliError, runner_of
 from canopy.core import config, conversation, definitions, workspace
 from canopy.infra import resources
 from canopy.serve import secret
 from canopy.setup import init
+from canopy.setup import sandbox as setup_sandbox
 from canopy.setup import workspace as setup_workspace
 
 
@@ -110,7 +116,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         )
     try:
         ws = workspace.load(root)
-        prefix = config.load(root, user_file).trust.branch_prefix
+        cfg = config.load(root, user_file)
     except config.ConfigError as e:
         click.echo(f"\nThe config does not load yet; fix it before the first tick:\n{e}")
         if repos:
@@ -126,8 +132,11 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
             f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit tracker.query too."
         )
     click.echo()
-    click.echo(init.BRANCH_PROTECTION.format(prefix=prefix), nl=False)
+    click.echo(init.BRANCH_PROTECTION.format(prefix=cfg.trust.branch_prefix), nl=False)
     click.echo(setup_workspace.protection_targets(ws), nl=False)
+    if sandbox := init.sandbox_suggestion(cfg.runtime.worker_cmd, user_file):
+        click.echo()
+        click.echo(sandbox, nl=False)
     # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
     report.shadowing += [path for repo in ws.repos if repo.cloned for path in definitions.shadowing(repo.path)]
     _print_shadowing(report)
@@ -151,6 +160,51 @@ def _print_shadowing(report: init.Report) -> None:
         click.echo(
             "  Earlier versions of `canopy init` put them there. Agent runs refuse to start until they are gone."
         )
+
+
+@click.group("sandbox")
+def sandbox_group() -> None:
+    """Run agents in an OS sandbox (docs/SANDBOX.md)."""
+
+
+@sandbox_group.command("setup")
+@click.pass_context
+def cmd_sandbox_setup(click_ctx: click.Context) -> int:
+    """Install what sandboxed runs need, and say what is left to do.
+
+    Copies canopy-sandbox's policy templates to ~/.config/canopy/sandbox/, keeping any already there. Installs the srt
+    canopy pins, with npm, in ~/.local/share/canopy/sandbox-runtime/. Checks what needs root, and prints how to do it:
+    bubblewrap, socat, and ripgrep on Linux, ripgrep on macOS, and user namespaces. Changes no config: prefix your
+    command templates with canopy-sandbox to use the sandbox. Run it again after upgrading canopy. Exits 1 while
+    something is left to do.
+    """
+    report = setup_sandbox.run_setup(runner_of(click_ctx))
+    for path in report.written:
+        click.echo(f"wrote   {path}")
+    for path in report.kept:
+        click.echo(f"kept    {path}")
+    if report.runtime:
+        click.echo(report.runtime)
+    for item in report.todo:
+        click.echo(f"\nTo do: {item}")
+    user_file = config.user_config_path()
+    click.echo(
+        "\nFill in your hosts in each template: your model provider, your tracker's and other MCP services,\n"
+        "and the registries your builds fetch from (docs/SANDBOX.md, step 3)."
+    )
+    if suggestion := init.sandbox_suggestion(_worker_cmd(user_file), user_file, text=init.SANDBOX_NEXT):
+        click.echo()
+        click.echo(suggestion, nl=False)
+    return 1 if report.todo else 0
+
+
+def _worker_cmd(user_file: Path) -> str:
+    """The `worker_cmd` this workspace's config sets, or the built-in one outside a workspace or if it does not load."""
+    root = workspace.find_root(Path.cwd())
+    if root is not None:
+        with contextlib.suppress(config.ConfigError):
+            return config.load(root, user_file).runtime.worker_cmd
+    return config.Runtime().worker_cmd
 
 
 @click.command("skill")
