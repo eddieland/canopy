@@ -111,9 +111,10 @@ Rules:
   `status-blocked`), and the ticket's title under it, opening the run's page; at most four, then `+N more` to the
   runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
-  is shown nowhere else. The footer (the version) sits at the foot of the sticky column, so at the window's foot
-  however long the page; in a window too short for the rest, the part above it scrolls on its own. The room left
-  between the blocks and the footer is Sprig's (Fun, below).
+  is shown nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer (the
+  version) sits at the foot of the sticky column, so at the window's foot however long the page; in a window too
+  short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer is
+  Sprig's (Fun, below).
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -225,6 +226,13 @@ Sprig:
   at the slot's foot. A slot too short for Sprig and its bubble leaves Sprig out. The bubble keeps its room once
   closed, so closing it never brings in a Sprig that had no room. With the mock's three working runs, that is a
   window about 1100px tall.
+- **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
+  `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
+  everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
+  spent. The hats bought and the one worn are kept in this browser. A hat bought goes on at once; one owned goes on
+  and comes off with a click; there are no refunds. Each hat is drawn in Sprig's own units, its brim on the top of the
+  wire and under the brows, in the `buddy-hat-*` tokens, and drawn after the leaf, which shows behind the crown like
+  a feather. A new hat is an id in `HatId`, a row in `HATS` (cheapest first), and its drawing.
 
 The empty inbox, and an item clearing:
 

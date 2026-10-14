@@ -142,7 +142,46 @@ test.describe('turned on', () => {
         await expect(buddy).toBeHidden()
     })
 
+    test("Sprig's hats are bought with what canopy has spent, and worn one at a time", async ({ page }) => {
+        // The mock journal has spent $9.23 in all: a party hat and a beanie, but no propeller cap.
+        await page.goto('settings')
+        await settled(page)
+        const wallet = page.getByTestId('hats-wallet')
+        await expect(wallet).toContainText('$9.23')
+        await expect(page.getByTestId('hat-propeller-buy')).toBeDisabled()
+        await expect(page.locator('[data-testid=buddy] [data-hat]')).toHaveCount(0)
+
+        await page.getByTestId('hat-beanie-buy').click()
+        await expect(wallet).toContainText('$4.23')
+        await expect(page.locator('[data-testid=buddy] [data-hat=beanie]')).toHaveCount(1)
+        await page.getByTestId('hat-party-buy').click()
+        await expect(wallet).toContainText('$3.23')
+        await expect(page.locator('[data-testid=buddy] [data-hat=party]')).toHaveCount(1)
+        await expect(page.getByTestId('hat-toque-buy')).toBeDisabled()
+
+        // Owned, a hat goes on and comes off without spending again, and the wardrobe outlasts a reload.
+        await page.getByTestId('hat-beanie-wear').click()
+        await expect(page.locator('[data-testid=buddy] [data-hat=beanie]')).toHaveCount(1)
+        await page.reload()
+        await settled(page)
+        await expect(wallet).toContainText('$3.23')
+        await page.getByTestId('hat-beanie-wear').click()
+        await expect(page.locator('[data-testid=buddy] [data-hat]')).toHaveCount(0)
+        await expect(page.getByTestId('hat-party-wear')).toHaveText('Wear')
+    })
+
     for (const theme of THEMES) {
+        test(`Sprig in a top hat in ${theme}`, async ({ page }) => {
+            await page.addInitScript(() => {
+                globalThis.localStorage.setItem('canopy-hats', JSON.stringify({ owned: ['top'], worn: 'top' }))
+            })
+            await page.clock.setFixedTime(NOW)
+            await storeTheme(page, theme)
+            await page.goto('attention')
+            await settled(page)
+            await expect(page.getByTestId('buddy')).toHaveScreenshot(`buddy-hat-${theme}.png`)
+        })
+
         test(`Sprig in ${theme}`, async ({ page }) => {
             await page.clock.setFixedTime(NOW)
             await storeTheme(page, theme)

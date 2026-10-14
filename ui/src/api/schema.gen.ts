@@ -2328,13 +2328,18 @@ export type components = {
         };
         /**
          * Spend
-         * @description What the last day and the last 30 days cost, read together, so a month never shows less than its day.
+         * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
         Spend: {
             /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
             /** @description The last 30 days. */
             month: components["schemas"]["SpendWindow"];
+            /**
+             * Total Usd
+             * @description What every run in the journal cost, whenever it started, in US dollars; None when none reported a cost.
+             */
+            total_usd: number | null;
         };
         /**
          * SpendUpdated

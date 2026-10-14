@@ -396,6 +396,8 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
         assert now.cost_usd is not None
         assert was.cost_usd is not None
         assert now.cost_usd == pytest.approx(was.cost_usd + after.cost_usd - before.cost_usd)
+    assert spend.spend.total_usd is not None
+    assert spent.spend.total_usd == pytest.approx(spend.spend.total_usd + after.cost_usd - before.cost_usd)
 
 
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
