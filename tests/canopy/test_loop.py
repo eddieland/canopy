@@ -173,7 +173,7 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
         tick1, tick2 = text.split("tick 1  ok")[1].split("tick 2  ok")
         assert "PROJ-2  dispatch:implement  dry run: not dispatched; would work on agent/PROJ-2-login" in tick1
         assert "+   PROJ-3  needs_reviewer      https://example.test/pr/3" in tick1
-        assert "attention 1  ·  next tick in 5m 00s at" in tick1
+        assert "attention 1  ·  next tick in 5m at" in tick1
         assert "checks pending" not in text  # waits are counted in the summary, not listed
         assert "-   PROJ-3  needs_reviewer  resolved" in tick2
         assert "attention 0" in tick2
@@ -208,7 +208,7 @@ def test_each_tick_block_shows_what_its_overseer_cost(
         )
 
         tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
-        assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick in 1m 00s at" in tick1
+        assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick in 1m at" in tick1
         assert "cost" not in tick2
 
 
@@ -596,7 +596,7 @@ def test_a_deferred_start_waits_before_the_first_tick(
         assert statuses == {"ok": 1}
         assert sum(time.slept) == 600  # the deferral, and no wait after the only tick
         assert not any(ticked)  # the overseer ran after the wait, not before it
-        assert "first tick  in 10m 00s at" in text
+        assert "first tick  in 10m at" in text
         assert text.index("first tick") < text.index("tick 1  ok")
         log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
         assert any(line["msg"] == "loop defers its first tick" and line["wait_seconds"] == 600 for line in log_lines)
@@ -859,7 +859,7 @@ def test_an_agent_can_neither_pause_nor_resume_the_loop(
 
 @pytest.mark.parametrize(
     ("seconds", "text"),
-    [(0, "0s"), (44.6, "45s"), (60, "1m 00s"), (185, "3m 05s"), (7800, "2h 10m"), (-3, "0s")],
+    [(0, "0s"), (44.6, "45s"), (60, "1m"), (185, "3m 05s"), (3600, "1h"), (7800, "2h 10m"), (-3, "0s")],
 )
 def test_duration(seconds: float, text: str) -> None:
     assert repeat.duration(seconds) == text

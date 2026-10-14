@@ -437,8 +437,8 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
         assert sum(time.slept) == sum((60, 120, 240, 60, 120))
         text = out.getvalue()
         assert "wait 1 minute after each tick ends, up to 4 minutes when idle" in text
-        assert "idle 2, next tick in 4m 00s at" in text
-        assert "attention 0  ·  next tick in 1m 00s at" in text
+        assert "idle 2, next tick in 4m at" in text
+        assert "attention 0  ·  next tick in 1m at" in text
         [started] = log_lines(canopy_env, "loop started")
         assert started["idle_max_minutes"] == 4
         assert [line["idle"] for line in log_lines(canopy_env, "loop waits")] == [False, True, True, False, True]
@@ -578,7 +578,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
             "an operator message ended the wait" if when == "an operator message" else "a run ending ended the wait"
         )
         assert len(log_lines(canopy_env, message)) == 1
-        assert "next tick in 15m 00s at" in out.getvalue()
+        assert "next tick in 15m at" in out.getvalue()
 
 
 @pytest.mark.parametrize(
@@ -635,7 +635,7 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
     assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
     assert recorded(canopy_env) == [(0, "start"), (0, woken)]
     assert len(log_lines(canopy_env, message)) == 1
-    assert "next tick in 15m 00s at" in out.getvalue()
+    assert "next tick in 15m at" in out.getvalue()
 
 
 def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
