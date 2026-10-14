@@ -4,6 +4,7 @@ the mock journal. The API over a real journal, and the loop serving it, are in t
 import asyncio
 import gc
 import json
+import logging
 import re
 import sqlite3
 import stat
@@ -13,6 +14,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
+from typing import override
 from unittest import mock
 
 import httpx2
@@ -499,6 +501,38 @@ def test_a_stream_dropped_during_its_first_events_closes_its_connection(served: 
             time.sleep(0.05)
     assert len(opened) == 10
     assert len(closed) == 10
+
+
+def test_a_stream_that_cannot_close_its_connection_logs_why(backend: Backend) -> None:
+    """Nothing waits on the close, queued on the stream's thread: an error in it is logged, not lost."""
+    handler = _Records()
+    records = handler.records
+    log = logging.getLogger("canopy")
+    log.addHandler(handler)
+    error = sqlite3.ProgrammingError("closed on the wrong thread")
+    try:
+        with mock.patch.object(live._Reader, "close", autospec=True, side_effect=error), live.stream(backend):  # noqa: SLF001
+            pass
+        deadline = time.monotonic() + 5
+        while not records and time.monotonic() < deadline:
+            time.sleep(0.01)
+    finally:
+        log.removeHandler(handler)
+    [record] = records
+    assert record.levelno == logging.ERROR
+    assert record.error == "ProgrammingError: closed on the wrong thread"  # pyrefly: ignore[missing-attribute]
+
+
+class _Records(logging.Handler):
+    """Keeps the records it is handed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
 
 
 def test_a_streams_read_never_holds_up_a_request(served: int) -> None:

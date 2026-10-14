@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from typing import TYPE_CHECKING
 
+from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.schema import (
     AttentionUpdated,
@@ -95,8 +96,20 @@ class Stream:
         """Close the connection on the stream's own thread, and let the thread end."""
         # Queued behind a read still running when the client left, so the connection closes on its own thread, and
         # without waiting for that read here, on the event loop.
-        self._thread.submit(self._reader.close)
+        closing = self._thread.submit(self._reader.close)
+        closing.add_done_callback(_log_failure)
         self._thread.shutdown(wait=False)
+
+
+def _log_failure(closing: Future[None]) -> None:
+    """Log why the connection did not close: nothing waits on `closing`, so its error would go unseen."""
+    error = closing.exception()
+    if error is not None:
+        logs.for_tick(None).error(
+            "event stream's journal connection did not close",
+            extra={"error": f"{type(error).__name__}: {error}"},
+            exc_info=error,
+        )
 
 
 class _Reader:
