@@ -31,7 +31,7 @@ export function Chip({ className, word, children }: { className?: string; word?:
         <span
             title={word !== undefined && word !== text ? word : undefined}
             className={cn(
-                'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-[0.6875rem]',
+                'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
                 'text-muted-foreground',
                 className,
             )}

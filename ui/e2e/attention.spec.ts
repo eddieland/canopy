@@ -79,9 +79,19 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counter-attention')).toContainText('1 failed · 1 waiting · 3 more')
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/u }).click()
-    await expect(page.getByTestId('nav-attention-failed')).toHaveText('1 failed')
-    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('1 waiting')
-    await expect(page.getByTestId('nav-attention-other')).toHaveText('3 other')
+    await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
+    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('1')
+    await expect(page.getByTestId('nav-attention-other')).toHaveText('3')
+    // Told apart by color, so said in words too: on hover, and in the link's name.
+    await expect(page.getByTestId('nav-attention-count')).toHaveAttribute(
+        'title',
+        '1 broken, 1 waiting on you, 3 other',
+    )
+    await expect(
+        page
+            .getByRole('navigation', { name: 'Main' })
+            .getByRole('link', { name: /1 broken, 1 waiting on you, 3 other/u }),
+    ).toHaveCount(1)
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })
 

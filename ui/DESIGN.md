@@ -51,6 +51,13 @@ Rules:
   `text-white`), or arbitrary color values. `npm run lint` fails on them (`scripts/check-source.mjs`).
 - **No `dark:` in components.** Both themes are first-class and come from the same tokens. If a component looks wrong
   in one theme, the token is wrong: fix the value in `tokens.css`, for that theme. The lint fails on `dark:`.
+- **Text reads at 4.5:1** (WCAG AA for small text), in both themes: every token used as text (`foreground`,
+  `muted-foreground`, `accent`, each status, section, diff, and syntax color) on `background`, `surface`, and
+  `surface-raised`, and each status on its own tint up to 20% (a chip, a destructive button, a question's bubble), in a
+  selected row too. `src/styles/tokens.test.ts` measures every pair from `tokens.css` and fails below it, so a token
+  change that drops one fails `npm test`. Text is never faded with `opacity` to look quieter: that is what
+  `muted-foreground` is for, and an opacity under it drops below AA. Only a disabled control, and a state that passes
+  (search's last hits while the next load), dim. The ticker's `flair-*` colors are decoration, not held to it.
 - **Status colors** work three ways, in both themes, on `surface` and `surface-raised`: as a dot (`RunDot` in
   `src/components/status.tsx`), as text, and as a tint (`bg-status-blocked/8` behind a question). Map a state to its
   classes through a `Record<State, string>` written out in full, never by building a class name from a string:
@@ -79,8 +86,10 @@ Rules:
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
-- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows. Nothing larger, but a
-  counter's value (`text-3xl`).
+- Sizes: `text-xl` page titles, `text-sm` body, `text-xs` secondary and data-dense rows, and `text-2xs` (11px, defined
+  in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and spend windows, and a
+  `panel-label`. Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no
+  arbitrary sizes (`text-[0.625rem]`).
 
 ## Shape and space
 
@@ -118,7 +127,8 @@ Rules:
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
   rest muted, each only when there is one. Never in the section's rose, too near the failure color to tell apart at that
-  size.
+  size. Since color alone tells the numbers apart, they are said in words on hover and to a screen reader
+  (`1 broken, 1 waiting on you, 3 other`).
 - **The pause** is the one action in the header, since it is about the loop, not a page's subject: a ghost Pause
   button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
@@ -362,7 +372,7 @@ list, an empty state, or a skeleton by hand.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
-  number). An idle slot shows its state and number alone, dimmed; only a note or an unreadable branch takes a second
+  number). An idle slot shows its state and number alone, muted; only a note or an unreadable branch takes a second
   line, from the holder's column. The branch and the processes treehouse found share the free column, each cut to fit
   with the whole on hover: an agent can start a dozen, and the line still ends at the age. A pool treehouse could not
   read says why as a `Notice`.

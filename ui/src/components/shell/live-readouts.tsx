@@ -29,7 +29,7 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
             {last.data?.tick && <LastTick tick={last.data.tick} />}
             <span
                 className={cn(
-                    'readout inline-flex items-center gap-1.5 text-[0.6875rem] uppercase',
+                    'readout inline-flex items-center gap-1.5 text-2xs uppercase',
                     stream === 'open' ? 'text-accent' : 'text-muted-foreground',
                 )}
                 data-testid="stream-status"
