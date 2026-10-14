@@ -1,5 +1,5 @@
-import { ChevronRight, Rows3 } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronRight, Rows3, Search, X } from 'lucide-react'
+import { useDeferredValue, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type {
@@ -12,6 +12,7 @@ import type {
 } from '@/api/types'
 import { Copyable } from '@/components/copy-button'
 import { JsonTokens } from '@/components/json-text'
+import { MarkedText } from '@/components/marked-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
@@ -21,15 +22,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Toggle } from '@/components/ui/toggle'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
+import { markedTokens } from '@/lib/search'
 import { localTime } from '@/lib/time'
 import {
     byCall,
     callLine,
     duration,
     elapsed,
+    findQueryOf,
+    hitsIn,
     outcome,
-    pretty,
     sentTokens,
+    shownOutput,
     startOf,
     summary,
     tally,
@@ -39,29 +43,46 @@ import {
 import type { ModelCall as Call } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
+// What a row marks with no search: one stable value, as a default prop must be.
+const NO_WORDS: readonly string[] = []
+
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
  * printed them. By call, the same entries are grouped by the model call they came from, each opening to what it was
- * sent and what it did. All of it is agent output, rendered as text. `running` says the session's events have not
- * reached the log yet: they do when its run or tick ends.
+ * sent and what it did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a
+ * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session's
+ * events have not reached the log yet: they do when its run or tick ends.
  */
 export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
-    // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own.
-    const [opened, setOpened] = useState({ open: false, round: 0 })
     const [grouped, setGrouped] = useState(false)
+    const [typed, setTyped] = useState('')
+    // A long transcript is searched behind the field, so typing never waits on it.
+    const deferred = useDeferredValue(typed)
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
     const calls = byCall(entries)
     const callView = grouped && calls.calls.length > 0
+    // The search is the events' in order: By call keeps its own, whole.
+    const query = callView ? null : findQueryOf(deferred)
+    const words = query === null ? [] : [query]
+    // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own. It wins over the
+    // search it was made under; a new search opens the calls it finds again.
+    const [opened, setOpened] = useState<{ open: boolean; round: number; query: string | null }>({
+        open: false,
+        round: 0,
+        query: null,
+    })
     const tools = entries.some((e) => e.kind === 'tool')
     const order = useListOrder('transcript')
     // Each entry with its place in the log, which is its identity: a log only ever grows at the end.
     const numbered = ordered(
         'transcript',
         order,
-        entries.map((entry, i) => ({ entry, i })),
+        entries.map((entry, i) => ({ entry, i, hits: query === null ? null : hitsIn(entry, query) })),
     )
+    const shown = numbered.filter((n) => n.hits === null || n.hits.row + n.hits.body > 0)
+    const lines = shown.reduce((sum, n) => sum + (n.hits === null ? 0 : n.hits.row + n.hits.body), 0)
     return (
         <Panel className="min-h-40" data-testid="transcript">
             <PanelHeader label="Transcript">
@@ -96,7 +117,9 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                                     key={verb}
                                     variant="ghost"
                                     size="xs"
-                                    onClick={() => setOpened((o) => ({ open: verb === 'open', round: o.round + 1 }))}
+                                    onClick={() =>
+                                        setOpened((o) => ({ open: verb === 'open', round: o.round + 1, query }))
+                                    }
                                 >
                                     {verb === 'open' ? 'Open all' : 'Close all'}
                                 </Button>
@@ -114,31 +137,41 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                 <Placeholder className="min-h-32">{empty(transcript, running)}</Placeholder>
             ) : (
                 <>
-                    <p className="flex flex-wrap gap-x-4 border-b px-3 py-1.5 font-mono text-xs text-muted-foreground">
-                        <span>
-                            {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
-                            {counts.failed > 0 && (
-                                <>
-                                    , <span className="text-status-failed">{counts.failed} failed</span>
-                                </>
-                            )}
-                            {counts.refused > 0 && (
-                                <>
-                                    , <span className="text-status-failed">{counts.refused} refused</span>
-                                </>
-                            )}
-                        </span>
-                        <span>
-                            {counts.calls} model {counts.calls === 1 ? 'call' : 'calls'}
-                        </span>
-                        {counts.errors > 0 && (
-                            <span className="text-status-failed">
-                                {counts.errors} runtime {counts.errors === 1 ? 'error' : 'errors'}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-1.5">
+                        <p className="flex flex-wrap gap-x-4 font-mono text-xs text-muted-foreground">
+                            <span>
+                                {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
+                                {counts.failed > 0 && (
+                                    <>
+                                        , <span className="text-status-failed">{counts.failed} failed</span>
+                                    </>
+                                )}
+                                {counts.refused > 0 && (
+                                    <>
+                                        , <span className="text-status-failed">{counts.refused} refused</span>
+                                    </>
+                                )}
                             </span>
+                            <span>
+                                {counts.calls} model {counts.calls === 1 ? 'call' : 'calls'}
+                            </span>
+                            {counts.errors > 0 && (
+                                <span className="text-status-failed">
+                                    {counts.errors} runtime {counts.errors === 1 ? 'error' : 'errors'}
+                                </span>
+                            )}
+                            {transcript.truncated && <span>cut: the log holds more than a page shows</span>}
+                            {transcript.unreadable > 0 && <span>{transcript.unreadable} events could not be read</span>}
+                        </p>
+                        {!callView && (
+                            <Find
+                                value={typed}
+                                onChange={setTyped}
+                                lines={query === null ? null : lines}
+                                rows={shown.length}
+                            />
                         )}
-                        {transcript.truncated && <span>cut: the log holds more than a page shows</span>}
-                        {transcript.unreadable > 0 && <span>{transcript.unreadable} events could not be read</span>}
-                    </p>
+                    </div>
                     {callView ? (
                         <ol className="divide-y" data-testid="transcript-calls">
                             {ordered('transcript', order, [
@@ -156,16 +189,25 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                                 )),
                             ])}
                         </ol>
+                    ) : shown.length === 0 ? (
+                        <Placeholder className="min-h-20">no line holds “{query}”</Placeholder>
                     ) : (
                         <ol className="divide-y" data-testid="transcript-entries">
-                            {numbered.map(({ entry, i }) => (
-                                <Entry
-                                    key={`${i}-${opened.round}`}
-                                    entry={entry}
-                                    start={startOf(entries)}
-                                    open={opened.open}
-                                />
-                            ))}
+                            {shown.map(({ entry, i, hits }) => {
+                                // A search opens a call whose input or output holds it, until Open all or Close all is
+                                // used under it; a row whose place changes remounts to it.
+                                const inBody = hits !== null && hits.body > 0
+                                const open = opened.open || (inBody && opened.query !== query)
+                                return (
+                                    <Entry
+                                        key={`${i}-${opened.round}-${open}`}
+                                        entry={entry}
+                                        start={startOf(entries)}
+                                        open={open}
+                                        words={words}
+                                    />
+                                )
+                            })}
                         </ol>
                     )}
                 </>
@@ -193,7 +235,77 @@ function empty(transcript: Transcript, running: boolean): string {
     }
 }
 
-function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string | null; open: boolean }) {
+/**
+ * The transcript's search field: a magnifier, the field, how many lines and rows hold the query once there is one,
+ * and a clear button. Escape empties it.
+ */
+function Find({
+    value,
+    onChange,
+    lines,
+    rows,
+}: {
+    value: string
+    onChange: (value: string) => void
+    lines: number | null
+    rows: number
+}) {
+    return (
+        <search
+            className={cn(
+                'ml-auto flex h-7 w-full items-center gap-2 rounded-md border bg-surface-raised px-2 sm:w-72',
+                'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
+            )}
+        >
+            <Search aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+            <input
+                type="search"
+                aria-label="Find lines in the transcript"
+                placeholder="Find lines"
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                        onChange('')
+                    }
+                }}
+                className={cn(
+                    'min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none',
+                    'placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden',
+                )}
+            />
+            {lines !== null && (
+                <span className="readout shrink-0 text-xs text-muted-foreground" data-testid="transcript-found">
+                    {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? 'row' : 'rows'}
+                </span>
+            )}
+            {value !== '' && (
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="Clear the transcript's search"
+                    onClick={() => onChange('')}
+                    className="hover:bg-muted"
+                >
+                    <X aria-hidden />
+                </Button>
+            )}
+        </search>
+    )
+}
+
+function Entry({
+    entry,
+    start,
+    open,
+    words = NO_WORDS,
+}: {
+    entry: TranscriptEntry
+    start: string | null
+    open: boolean
+    words?: readonly string[]
+}) {
     switch (entry.kind) {
         case 'text': {
             return (
@@ -205,14 +317,14 @@ function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string |
                         )}
                     >
                         {entry.reasoning && <span className="panel-label mr-2 not-italic">thinking</span>}
-                        {entry.text}
+                        <MarkedText text={entry.text} words={words} />
                     </p>
                     {entry.cut && <Chip>cut</Chip>}
                 </Row>
             )
         }
         case 'tool': {
-            return <Tool entry={entry} start={start} open={open} />
+            return <Tool entry={entry} start={start} open={open} words={words} />
         }
         case 'step': {
             return <ModelCall entry={entry} start={start} />
@@ -220,8 +332,12 @@ function Entry({ entry, start, open }: { entry: TranscriptEntry; start: string |
         case 'error': {
             return (
                 <Row at={entry.at} start={start} className="bg-status-failed/8">
-                    <span className="font-mono text-xs text-status-failed">{entry.name}</span>
-                    <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">{entry.message}</p>
+                    <span className="font-mono text-xs text-status-failed">
+                        <MarkedText text={entry.name} words={words} />
+                    </span>
+                    <p className="min-w-0 flex-1 text-sm break-words whitespace-pre-wrap">
+                        <MarkedText text={entry.message} words={words} />
+                    </p>
                 </Row>
             )
         }
@@ -263,7 +379,17 @@ function When({ at, start }: { at: string | null; start: string | null }) {
  * A tool call: one line, its name, what it did, and how it ended (refused, or what it printed when that is short),
  * that opens to its input and its output or error.
  */
-function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | null; open: boolean }) {
+function Tool({
+    entry,
+    start,
+    open,
+    words,
+}: {
+    entry: TranscriptTool
+    start: string | null
+    open: boolean
+    words: readonly string[]
+}) {
     const { verdict, guard, line } = outcome(entry)
     const failed = verdict !== 'done'
     const did = summary(entry)
@@ -279,19 +405,19 @@ function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | n
                     <When at={entry.at} start={start} />
                     <RunDot state={failed ? 'failed' : 'done'} />
                     <span className="w-32 shrink-0 truncate font-mono text-xs sm:w-56" title={entry.tool}>
-                        {entry.tool}
+                        <MarkedText text={entry.tool} words={words} />
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col">
                         {/* A shell call's title is what the agent said it was for: the command is what it did. */}
                         <span className="truncate font-mono text-xs" title={entry.title ?? did}>
-                            {did}
+                            <MarkedText text={did} words={words} />
                         </span>
                         {line !== null && (
                             <span
                                 className={cn('truncate text-xs text-muted-foreground', failed && 'text-status-failed')}
                                 title={line}
                             >
-                                {line}
+                                <MarkedText text={line} words={words} />
                             </span>
                         )}
                     </span>
@@ -310,9 +436,11 @@ function Tool({ entry, start, open }: { entry: TranscriptTool; start: string | n
                     />
                 </summary>
                 <div className="flex flex-col gap-2 pr-3 pb-3 pl-[5.25rem]">
-                    <Block label="input">{entry.input}</Block>
-                    <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed}>
-                        {entry.output ? pretty(entry.output) : 'no output'}
+                    <Block label="input" words={words}>
+                        {entry.input}
+                    </Block>
+                    <Block label={entry.status === 'error' ? 'error' : 'output'} failed={failed} words={words}>
+                        {shownOutput(entry)}
                     </Block>
                 </div>
             </details>
@@ -540,21 +668,41 @@ function Returned({ tool }: { tool: TranscriptTool }) {
                     {summary(tool)}
                 </span>
             </span>
-            <Pre failed={failed}>{tool.output ? pretty(tool.output) : 'no output'}</Pre>
+            <Pre failed={failed}>{shownOutput(tool)}</Pre>
         </div>
     )
 }
 
-function Block({ label, failed = false, children }: { label: string; failed?: boolean; children: string }) {
+function Block({
+    label,
+    failed = false,
+    words = NO_WORDS,
+    children,
+}: {
+    label: string
+    failed?: boolean
+    words?: readonly string[]
+    children: string
+}) {
     return (
         <div className="flex flex-col gap-1">
             <span className={cn('panel-label', failed && 'text-status-failed')}>{label}</span>
-            <Pre failed={failed}>{children}</Pre>
+            <Pre failed={failed} words={words}>
+                {children}
+            </Pre>
         </div>
     )
 }
 
-function Pre({ failed = false, children }: { failed?: boolean; children: string }) {
+function Pre({
+    failed = false,
+    words = NO_WORDS,
+    children,
+}: {
+    failed?: boolean
+    words?: readonly string[]
+    children: string
+}) {
     return (
         <pre
             className={cn(
@@ -563,7 +711,7 @@ function Pre({ failed = false, children }: { failed?: boolean; children: string 
                 failed && 'border-status-failed/40',
             )}
         >
-            <JsonTokens tokens={tokenize(children)} />
+            <JsonTokens tokens={markedTokens(tokenize(children), words)} />
         </pre>
     )
 }
