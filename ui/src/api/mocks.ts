@@ -56,6 +56,7 @@ export const mockAttention: AttentionItem[] = [
         detail: 'message 5: Should the export button be red or blue?',
         since: '2026-10-08T11:56:00Z',
         finding: false,
+        pr: null,
     },
 ]
 

@@ -11,6 +11,7 @@ import { Age } from '@/components/age'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { GrantLimits } from '@/components/grant-limits'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReviewLink } from '@/components/review-link'
 import { RunsTable } from '@/components/runs-table'
@@ -77,7 +78,7 @@ function Missing({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: string }) {
-    const { pull_request: pr, runs, reviews, decisions, cost } = detail
+    const { pull_request: pr, review_limit: reviewLimit, runs, reviews, decisions, cost } = detail
     return (
         <>
             <PageHeader
@@ -154,6 +155,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                                 <ReviewRow key={review.id} review={review} />
                             ))}
                         </ul>
+                    )}
+                    {reviewLimit !== null && (
+                        <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
                     )}
                 </Panel>
                 <Panel data-testid="pull-request-decisions">
