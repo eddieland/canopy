@@ -3,14 +3,17 @@ the mock journal. The API over a real journal, and the loop serving it, are in t
 
 import asyncio
 import json
+import logging
 import re
 import sqlite3
 import stat
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import closing, contextmanager
 from importlib.metadata import version
 from pathlib import Path
+from typing import override
 from unittest import mock
 
 import httpx2
@@ -432,12 +435,13 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
 
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
-        stream = live.events(backend, poll_seconds=0.01)
-        first = [await anext(stream) for _ in range(7)]
-        # A reload commits nothing to the journal: the stream sees it in the config it serves.
-        chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
-        backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
-        after = await asyncio.wait_for(anext(stream), timeout=5)
+        with closing(live.Stream(backend)) as opened:
+            stream = opened.events(poll_seconds=0.01)
+            first = [await anext(stream) for _ in range(7)]
+            # A reload commits nothing to the journal: the stream sees it in the config it serves.
+            chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
+            backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
+            after = await asyncio.wait_for(anext(stream), timeout=5)
         return first, after
 
     first, after = asyncio.run(first_and_after_a_reload())
@@ -469,6 +473,98 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     lists = [e.root for e in found if isinstance(e.root, TicketsUpdated)]
     assert len(lists) == 2
     assert lists[1].tickets[0].key == "ABC-103"
+
+
+def test_a_stream_dropped_during_its_first_events_closes_its_connection(served: int) -> None:
+    """Issue 337: a client gone while the first events were still being sent left its journal connection open."""
+    real = Backend.open
+    opened: list[Context] = []
+    closed: list[Context] = []
+
+    @contextmanager
+    def counted(self: Backend) -> Iterator[Context]:
+        # The mock's writer and the other requests open connections of their own: only the streams' are counted.
+        stream = threading.current_thread().name.startswith("canopy-stream")
+        with real(self) as ctx:
+            if stream:
+                opened.append(ctx)
+            yield ctx
+        # Not reached when closing the connection raised, as it did off the thread that opened it.
+        if stream:
+            closed.append(ctx)
+
+    read = live._Reader.read  # noqa: SLF001  (the stream's reads, on its own thread)
+
+    def a_long_burst(self: live._Reader) -> list[StreamEvent]:
+        # Each burst ends with more events than the server sends before it sees the client gone, so the task reading
+        # them is always waiting to send one then, never inside the generator, where a cancel would have finished it.
+        events = read(self)
+        return events + [StreamEvent(LoopUpdated(paused=None))] * 2000 if events else events
+
+    with (
+        mock.patch.object(Backend, "open", autospec=True, side_effect=counted),
+        mock.patch.object(live._Reader, "read", autospec=True, side_effect=a_long_burst),  # noqa: SLF001
+    ):
+        for _ in range(10):
+            read_events(served, 1)
+        deadline = time.monotonic() + 10
+        while len(closed) < len(opened) and time.monotonic() < deadline:
+            time.sleep(0.05)
+    assert len(opened) == 10
+    assert len(closed) == 10
+
+
+def test_a_stream_that_cannot_close_its_connection_logs_why(backend: Backend) -> None:
+    """Nothing waits on the close, queued on the stream's thread: an error in it is logged, not lost."""
+    handler = _Records()
+    records = handler.records
+    log = logging.getLogger("canopy")
+    log.addHandler(handler)
+    close = live._Reader.close  # noqa: SLF001  (closes the stream's connection, on its own thread)
+
+    def closes_then_fails(self: live._Reader) -> None:
+        close(self)
+        raise sqlite3.ProgrammingError("closed on the wrong thread")
+
+    try:
+        with mock.patch.object(live._Reader, "close", autospec=True, side_effect=closes_then_fails):  # noqa: SLF001
+            asyncio.run(read_once_and_close(backend))
+        deadline = time.monotonic() + 5
+        while not records and time.monotonic() < deadline:
+            time.sleep(0.01)
+    finally:
+        log.removeHandler(handler)
+    [record] = records
+    assert record.levelno == logging.ERROR
+    assert record.error == "ProgrammingError: closed on the wrong thread"  # pyrefly: ignore[missing-attribute]
+
+
+def test_a_stream_closed_before_its_first_read_has_nothing_to_close(backend: Backend) -> None:
+    """A request torn down before its stream read anything queues no close, and a second close does nothing."""
+    with mock.patch.object(live._Reader, "close", autospec=True) as close:  # noqa: SLF001
+        stream = live.Stream(backend)
+        stream.close()
+        stream.close()
+    close.assert_not_called()
+
+
+async def read_once_and_close(backend: Backend) -> None:
+    with closing(live.Stream(backend)) as stream:
+        events = stream.events()
+        await anext(events)
+        await events.aclose()  # pyrefly: ignore[missing-attribute]
+
+
+class _Records(logging.Handler):
+    """Keeps the records it is handed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.records: list[logging.LogRecord] = []
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
 
 
 def test_a_streams_read_never_holds_up_a_request(served: int) -> None:

@@ -12,17 +12,20 @@ landing partway through cannot pair one list's old rows with another's new ones.
 The connection is opened, read, and closed on a thread of the stream's own, never on the server's event loop: on a
 journal with months of history one read of the lists takes tens of milliseconds, every open stream reads them on each
 commit, and a tick commits each decision it records, so reading them on the event loop held up every other request
-while the overseer worked. One thread per stream keeps its connection on one thread, as sqlite3 requires.
+while the overseer worked. One thread per stream keeps its connection on one thread, as sqlite3 requires. The route
+closes it from a dependency's teardown (`Stream`), never from the events' generator, which a client leaving can leave
+unfinished.
 """
 
 from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from typing import TYPE_CHECKING
 
+from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.schema import (
     AttentionUpdated,
@@ -49,21 +52,58 @@ if TYPE_CHECKING:
 POLL_SECONDS = 0.25
 
 
-async def events(backend: Backend, *, poll_seconds: float = POLL_SECONDS) -> AsyncIterator[StreamEvent]:
-    """Yield every list, the spend, the latest tick, and the pause at once, then whatever changes, until the end."""
-    thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="canopy-stream")
-    reader = _Reader(backend)
-    loop = asyncio.get_running_loop()
-    try:
+class Stream:
+    """One stream's thread, and its reader, which is used only on that thread.
+
+    The route closes it from a dependency with `yield` (`api/events.py`), never from `events`: FastAPI cancels the task
+    reading a stream's events when its client leaves, and when that lands while the task waits to send an event, the
+    generators are left suspended at a `yield`, and no `finally` in them runs. The garbage collector then closed them on
+    the event loop's thread, where sqlite3 refuses to close the connection, so it stayed open until the server exited.
+    """
+
+    def __init__(self, backend: Backend) -> None:
+        """Make the stream's thread, which its first read starts, and which opens the connection."""
+        self._thread = ThreadPoolExecutor(max_workers=1, thread_name_prefix="canopy-stream")
+        self._reader = _Reader(backend)
+        # Both set and read only on the event loop, so `close` never races a read for them.
+        self._read = False
+        self._closed = False
+
+    async def events(self, *, poll_seconds: float = POLL_SECONDS) -> AsyncIterator[StreamEvent]:
+        """Yield every list, the spend, the latest tick, and the pause at once, then whatever changes, until the end.
+
+        Yields:
+            Each event as the stream's thread reads it.
+        """
+        loop = asyncio.get_running_loop()
         while True:
-            for event in await loop.run_in_executor(thread, reader.read):
+            self._read = True
+            for event in await loop.run_in_executor(self._thread, self._reader.read):
                 yield event
             await asyncio.sleep(poll_seconds)
-    finally:
-        # Queued behind a read still running when the client left, so the connection closes on its own thread, and
-        # without waiting for that read here, on the event loop.
-        thread.submit(reader.close)
-        thread.shutdown(wait=False)
+
+    def close(self) -> None:
+        """Close the connection on the stream's own thread, and let the thread end. Closing it again does nothing."""
+        if self._closed:
+            return
+        self._closed = True
+        if self._read:
+            # Queued behind a read still running when the client left, so the connection closes on its own thread,
+            # and without waiting for that read here, on the event loop.
+            closing = self._thread.submit(self._reader.close)
+            closing.add_done_callback(_log_failure)
+        self._thread.shutdown(wait=False)
+
+
+def _log_failure(closing: Future[None]) -> None:
+    """Log why the connection did not close: nothing waits on `closing`, so its error would go unseen."""
+    error = closing.exception()
+    if error is not None:
+        logs.for_tick(None).error(
+            "event stream's journal connection did not close",
+            extra={"error": f"{type(error).__name__}: {error}"},
+            exc_info=error,
+        )
 
 
 class _Reader:
