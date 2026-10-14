@@ -796,6 +796,52 @@ Accept: written with the design, before work starts.
 
 Status: not started.
 
+## M36. Limits and trust settings from the web UI
+
+REQUIREMENTS R16, DESIGN §12 and §22. Needs M20. Asked for by the operator (2026-10-14): change a pool's slots or a
+trust setting from the web UI without opening the user config file. Today the web channel asks for a reload and writes
+no config (TRUST_MODEL T8).
+
+- Which keys: an allowlist in code. Limits, raised or lowered: `capacity.*`, `policy.*`, `loop.interval_minutes`, and
+  `loop.idle_max_minutes`. Trust, only toward stricter: removing an entry from `trust.authorized_repliers` or
+  `trust.trusted_reviewers`, `trust.rebase` to false, `trust.commit_trailer` to true. Nothing else: `runtime.*`,
+  `notify.*`, `chores`, `paths.*`, `review.*`, `serve.*`, `tracker.*`, the comment marks, and the trailer's name and
+  email each run a command, choose a prompt or whose words are read, or move the listener.
+- Why trust is tighten-only: a config write outlives the secret. A new secret ends every session, but a replier added
+  through a stolen one would go on steering workers. A raised limit outlives it too; that residual is spend, bounded
+  per run by T3's guards, and the page and the log show it.
+- Where it writes: the user file only, never the workspace file (shared, perhaps committed, T7). Edited in place,
+  keeping the operator's comments and layout, so a TOML writer joins the runtime dependencies with its DECISIONS
+  entry; `tomllib` only reads. Rejected: a file of canopy's own layered after the user file (a hand edit to the user
+  file would be silently overridden), and writing the file anew with the stdlib (its comments lost).
+- How: the request carries a hash of the user file as the page read it, and a changed file is refused as `stale`. The
+  change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a refusal writes
+  nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and refused when it is a
+  symlink or not the operator's (D053's check). Then the loop is asked to reload through the existing path
+  (`loop.reread`), and the answer is the reload's: the keys changed, and whether they wait for a running tick to end.
+- No CLI verb: the operator's editor is the CLI's way. A `canopy config set` would be in reach of the overseer's
+  `canopy *` bash rule; the write refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set regardless.
+- Each change is logged with channel `web`, the key, and its old and new values.
+- Slots: a changed `capacity.slots_per_repo` or `capacity.repo_slots` bounds leases from the next tick. Making or
+  removing slots is still `canopy workspace sync`, which the page names; the web UI runs no sync.
+- API: `GET /config`, each editable key's value, the file it came from, and the user file's hash; `PATCH /config`, the
+  changed keys and that hash. The settings page edits them, beside Reload.
+- TRUST_MODEL T8: "It cannot write config" becomes the allowlist above, and its residual gains a stolen session raising
+  limits, which outlives a new secret until the operator sees it. With the operator's approval note in the PR. DESIGN
+  §12 marks the keys the page edits, and §22 the routes and the settings page. DECISIONS: an entry for what the web
+  channel may write to config (a rule the trust boundary relies on), and one for the TOML writer.
+- Tests with the fakes: an allowed key written and reloaded, the file's comments kept; a key outside the allowlist, a
+  trust change that loosens, a stale hash, an invalid value, and a symlinked user file each refused with the file
+  unchanged; the workspace file never written; Playwright for the form.
+- Open: whether the page also shows the keys it cannot edit, read-only, with the file each came from; whether a raised
+  limit needs a ceiling the file sets.
+
+Accept: the tests above pass. Live: while `canopy loop` runs, the operator changes `capacity.slots_per_repo` and
+removes a trusted reviewer from the settings page; the next tick leases under the new size and reads the shorter list;
+and the user file keeps its comments, with only those two values changed.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Webhooks: when tick latency is measured as a real cost.
