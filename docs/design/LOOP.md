@@ -429,6 +429,14 @@ ambiguous as before.
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
 
+A closed ticket is not a candidate, and it has no phase: the overseer marks it done (`canopy ticket set --done`,
+decision `done`, rationale `closed`), whatever its labels, branch, or PR, unless a worker is running for it, which it
+waits out, since the worker reads the ticket first and stops. Without that, a ticket closed before it reached `merged`
+(closed by hand, or by the tracker when its PR merged) stayed in the state block, which carries every ticket not marked
+done, and every tick read it again and recorded a `skip` for it. A PR still open on it is the operator's, like the
+tracker transition. A reopened ticket is found again by the configured query; a private one (§22) comes back when the
+operator starts it again, which clears done.
+
 ## 8. Dispatch and the worker contract
 
 `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG] [--base BRANCH]
