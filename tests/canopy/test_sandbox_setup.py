@@ -110,6 +110,7 @@ def test_setup_installs_what_it_can_and_keeps_it_on_the_next_run(machine: Machin
     assert npm == {"argv": list(sandbox.NPM_CI), "cwd": str(runtime(canopy_env))}
     lock = canopy_sandbox.RUNTIME_SPEC / "package-lock.json"
     assert (runtime(canopy_env) / "package-lock.json").read_bytes() == lock.read_bytes()
+    assert (runtime(canopy_env) / sandbox.INSTALLED_LOCK).read_bytes() == lock.read_bytes()
     assert machine.calls("bwrap")[-1]["argv"] == ["bwrap", "--ro-bind", "/", "/", "true"]
 
     again = sandbox.run_setup(SubprocessRunner(), "linux")
@@ -134,12 +135,31 @@ def test_a_template_already_there_is_kept_as_it_is(machine: Machine, canopy_env:
 def test_a_lockfile_that_changed_is_installed_again(machine: Machine, canopy_env: CanopyEnv) -> None:
     machine.install(*LINUX_COMMANDS)
     sandbox.run_setup(SubprocessRunner(), "linux")
-    (runtime(canopy_env) / "package-lock.json").write_text("{}")
+    (runtime(canopy_env) / sandbox.INSTALLED_LOCK).write_text("{}")
 
     report = sandbox.run_setup(SubprocessRunner(), "linux")
 
     assert report.runtime.startswith("installed srt")
     assert len([c for c in machine.calls("npm") if c["argv"][1:2] == ["ci"]]) == 2
+
+
+def test_an_install_that_failed_is_tried_again_though_its_lockfile_is_in_place(
+    machine: Machine, canopy_env: CanopyEnv
+) -> None:
+    """A new canopy's lockfile, copied in before npm ci failed, beside the srt an older canopy installed."""
+    machine.install(*LINUX_COMMANDS)
+    sandbox.run_setup(SubprocessRunner(), "linux")
+    (runtime(canopy_env) / sandbox.INSTALLED_LOCK).write_text("{}")  # what an older canopy installed
+    with mock.patch.dict(os.environ, {"FAKE_EXIT_NPM": "1"}):
+        failed = sandbox.run_setup(SubprocessRunner(), "linux")
+    assert (runtime(canopy_env) / "package-lock.json").is_file()
+    assert (runtime(canopy_env) / "node_modules" / ".bin" / "srt").is_file()
+
+    again = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    assert failed.todo[0].startswith("npm could not install srt")
+    assert again.runtime.startswith("installed srt")
+    assert len([c for c in machine.calls("npm") if c["argv"][1:2] == ["ci"]]) == 3
 
 
 def test_what_is_missing_is_said_and_nothing_else_is_tried(machine: Machine, canopy_env: CanopyEnv) -> None:

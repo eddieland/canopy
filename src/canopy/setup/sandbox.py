@@ -39,8 +39,11 @@ the path to your canopy, and make it executable:
     #!/bin/sh
     exec env SCIE_BOOT=canopy-sandbox /path/to/canopy "$@\""""
 # npm ci installs exactly the lockfile, and checks each package's integrity hash. srt has no install scripts, and none
-# of its dependencies may run one.
-NPM_CI = ("npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund")
+# of its dependencies may run one. A Node older than a package's `engines` fails the install instead of only warning.
+NPM_CI = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--no-fund")
+# The lockfile of the last install that finished and answered the pinned version, written only then: npm ci needs the
+# lockfile itself in place before it runs, so that copy says nothing about whether the install behind it succeeded.
+INSTALLED_LOCK = "canopy-installed.lock"
 NPM_TIMEOUT = 600
 
 
@@ -106,7 +109,7 @@ def _install_runtime(runner: procs.Runner, report: Report) -> None:
     target = canopy_sandbox.runtime_dir()
     version = pinned_version()
     lock = canopy_sandbox.RUNTIME_SPEC / "package-lock.json"
-    installed = target / "package-lock.json"
+    installed = target / INSTALLED_LOCK
     if installed.is_file() and installed.read_bytes() == lock.read_bytes() and _srt_version(runner, target) == version:
         report.runtime = f"kept    srt {version} in {target}"
         return
@@ -118,6 +121,7 @@ def _install_runtime(runner: procs.Runner, report: Report) -> None:
         return
     try:
         target.mkdir(mode=0o700, parents=True, exist_ok=True)
+        installed.unlink(missing_ok=True)
         for name in ("package.json", "package-lock.json"):
             shutil.copyfile(canopy_sandbox.RUNTIME_SPEC / name, target / name)
     except OSError as e:
@@ -130,6 +134,11 @@ def _install_runtime(runner: procs.Runner, report: Report) -> None:
     found = _srt_version(runner, target)
     if found != version:
         report.todo.append(f"srt in {target} answers {found or 'nothing'} to --version, not {version}.")
+        return
+    try:
+        shutil.copyfile(lock, installed)
+    except OSError as e:
+        report.todo.append(f"srt {version} is installed in {target}, but {installed} could not be written: {e}")
         return
     report.runtime = f"installed srt {version} in {target}"
 
