@@ -259,9 +259,12 @@ Rules:
   `$XDG_DATA_HOME/canopy/sandbox-runtime/`, unless an earlier install of that lockfile finished and its `srt` answers
   the pinned version (a copy of the lockfile, written only once an install has, records which did); and checks what it
   never runs because it needs root: on Linux bubblewrap, socat, and ripgrep, and that bubblewrap can make a user
-  namespace (naming the AppArmor sysctl when that is why not), on macOS ripgrep, and that canopy is not root. It prints
-  each thing left to do and exits 1 while there is one; it writes no config, and prints the `worker_cmd` line
-  `canopy init` does (D117).
+  namespace (naming the AppArmor sysctl when that is why not), on macOS ripgrep, and that canopy is not root. On Linux
+  it also checks what `srt` only warns about, with `--debug`, and runs without: bubblewrap 0.5.0 or later, and a
+  machine `srt` ships its seccomp filter for (x86_64, aarch64), without which a sandboxed command can connect to any
+  Unix socket it sees. Either missing would leave a sandbox weaker than HOST_ISOLATION says, so each is a thing to do.
+  It prints each thing left to do and exits 1 while there is one; it writes no config, and prints the `worker_cmd`
+  line `canopy init` does (D117).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
 - Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.
