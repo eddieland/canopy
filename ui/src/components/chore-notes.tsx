@@ -23,7 +23,7 @@ export function ChoreNotes({ detail }: { detail: ChoreDetail }) {
     }
     return (
         <>
-            <PanelHeader label="Your notes">
+            <PanelHeader label="Notes">
                 <span className="flex items-center gap-2">
                     {notes.length > 1 && <OrderToggle list="notes" />}
                     <span className="readout text-xs text-muted-foreground">{notes.length}</span>

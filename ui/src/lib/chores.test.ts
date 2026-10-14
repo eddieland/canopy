@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { mockChores } from '@/api/mocks'
 
-import { awaitsRun, choreLine, costText, dueText, runsText, windowText } from './chores'
+import { awaitsRun, choreLine, dueText, runsText, windowText } from './chores'
 
 const [deps] = mockChores
 if (!deps?.latest) {
@@ -40,8 +40,6 @@ describe('chores', () => {
         expect(runsText(deps.spend.day)).toBe('2')
         expect(runsText(deps.spend.month)).toBe('4, 1 unpriced')
         expect(runsText({ runs: 0, priced: 0 })).toBe('0')
-        expect(costText(0.4)).toBe('$0.40')
-        expect(costText(null)).toBe('–')
     })
 
     it('mark a note no run has read: one after the latest run started', () => {

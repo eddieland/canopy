@@ -14,8 +14,7 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { verdictText } from '@/lib/reviews'
-import { RUN_TEXT } from '@/lib/run-state'
+import { verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 /** Every PR the journal knows, most recent activity first, whoever's it is. */
@@ -85,10 +84,11 @@ function Row({ pr }: { pr: PullRequest }) {
                     </>
                 )}
             </span>
+            {/* The dot is how the review's run ended; the verdict's color, its worst finding. */}
             <span
                 className={cn(
                     'flex items-center gap-1.5 font-mono text-xs whitespace-nowrap',
-                    review ? RUN_TEXT[review.state] : 'text-muted-foreground',
+                    review ? verdictTone(review) : 'text-muted-foreground',
                 )}
                 data-testid="pull-request-review"
             >
@@ -102,10 +102,7 @@ function Row({ pr }: { pr: PullRequest }) {
                     'not reviewed'
                 )}
             </span>
-            <span className="flex justify-end gap-1 text-xs text-muted-foreground">
-                <Age at={pr.active_at} />
-                ago
-            </span>
+            <Age at={pr.active_at} variant="ago" className="text-right" />
         </ListRow>
     )
 }

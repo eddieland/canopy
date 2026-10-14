@@ -39,7 +39,8 @@ function FindingRow({
     const open = 'since' in finding ? finding : null
     return (
         <ListRow kind="finding" data-testid={`finding-${finding.id}`}>
-            <Chip>{finding.id}</Chip>
+            {/* The agent's own id for it: journal text, so muted data, never a chip. */}
+            <span className="font-mono text-xs text-muted-foreground">{finding.id}</span>
             <span className="truncate text-sm">{finding.title}</span>
             <span className="flex items-center justify-end gap-3">
                 {open?.dismissed && <Chip>dismissed</Chip>}

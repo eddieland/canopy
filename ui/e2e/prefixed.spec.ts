@@ -41,7 +41,7 @@ test('stream events update the cache without refetching', async ({ page }) => {
 
 test('a reply answers the waiting question, and a retry records nothing new', async ({ page }) => {
     await page.goto('tickets/ABC-102')
-    await expect(page.getByText('waits on your answer')).toBeVisible()
+    await expect(page.getByTestId('conversation').getByText('waiting on you')).toBeVisible()
     const form = page.getByRole('form', { name: 'Reply' })
     await form.getByRole('textbox').fill('Blue, to match the toolbar.')
     await form.getByRole('button', { name: 'Reply' }).click()
@@ -50,7 +50,7 @@ test('a reply answers the waiting question, and a retry records nothing new', as
     const mine = conversation.locator('[data-source=operator]').last()
     await expect(mine).toContainText('Blue, to match the toolbar.')
     await expect(mine).toContainText('via web')
-    await expect(page.getByText('waits on your answer')).toHaveCount(0)
+    await expect(page.getByTestId('conversation').getByText('waiting on you')).toHaveCount(0)
 
     // No tick has read it yet: the reply says so, and the inbox keeps the question, marked answered, until one does.
     await expect(mine).toContainText('waiting for the next tick')

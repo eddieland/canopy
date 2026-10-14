@@ -38,7 +38,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                         {/* A PR that is the row's subject is named there already. */}
                         {decision.pr && (byTick || !prIsSubject(decision)) && <PullRequestLink url={decision.pr} />}
                     </span>
-                    {byTick && <Age at={decision.at} className="text-right" />}
+                    {byTick && <Age at={decision.at} variant="ago" className="text-right" />}
                     <RichText text={decision.rationale} lines={SUMMARY_LINES} className={rowLineFrom('action')} />
                 </ListRow>
             ))}

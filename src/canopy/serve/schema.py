@@ -1011,6 +1011,8 @@ class ReviewSummary(_Model):
     """The change's impact, once it reported one."""
     findings: int = 0
     """How many findings it reported."""
+    worst: FindingSeverity | None = None
+    """The severity of the worst finding it reported, which colors its verdict; None when it reported none."""
     started_at: datetime
     """When it started."""
     ended_at: datetime | None = None

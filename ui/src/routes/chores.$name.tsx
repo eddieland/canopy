@@ -4,16 +4,18 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreRun, ChoreSpend, ChoreSpendWindow } from '@/api/types'
-import { Ended } from '@/components/age'
+import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreNotes } from '@/components/chore-notes'
+import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
-import { Chip, RunDot } from '@/components/status'
-import { choreLine, costText, runsText, windowText } from '@/lib/chores'
+import { RunDot, Word } from '@/components/status'
+import { choreLine, runsText, windowText } from '@/lib/chores'
+import { costText } from '@/lib/cost-total'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { rowLineFrom } from '@/lib/rows'
@@ -144,7 +146,7 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
         <ListRow kind="own-run" data-testid={`chore-run-${run.id}`}>
             <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                 <RunDot state={run.state} />
-                {run.status}
+                <Word word={run.status} />
             </span>
             <span className="flex items-center gap-3">
                 <Link
@@ -154,12 +156,14 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                 >
                     {choreRunRef(name, run.id)}
                 </Link>
-                {run.status === 'ok' && <Chip>{run.findings === 1 ? '1 finding' : `${run.findings} findings`}</Chip>}
+                {run.status === 'ok' && (
+                    <span className="readout text-xs text-muted-foreground">
+                        {run.findings === 1 ? '1 finding' : `${run.findings} findings`}
+                    </span>
+                )}
             </span>
-            <span className="readout text-right text-xs text-muted-foreground">
-                {run.cost_usd === null ? '' : `$${run.cost_usd.toFixed(2)}`}
-            </span>
-            <Ended started={run.started_at} ended={run.ended_at} />
+            <Cost usd={run.cost_usd} className="text-right text-xs text-muted-foreground" />
+            <Age variant="span" started={run.started_at} ended={run.ended_at} className="text-right" />
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom('facts')} />}
             <RowLine
                 from="facts"

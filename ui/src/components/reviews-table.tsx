@@ -1,12 +1,12 @@
 import type { ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
+import { Cost } from '@/components/cost'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { shortSha, verdictText } from '@/lib/reviews'
-import { RUN_TEXT } from '@/lib/run-state'
+import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 /**
@@ -38,7 +38,8 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             data-testid={pr ? `review-${review.id}` : `pull-request-review-${review.id}`}
         >
             <ReviewLink id={review.id} />
-            <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[review.state])}>
+            {/* The dot is how its run ended; the verdict's color, its worst finding. */}
+            <span className={cn('flex items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
                 {verdictText(review)}
             </span>
@@ -46,7 +47,7 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
                 <>
                     <span className="truncate">
                         {review.ticket_key === null ? (
-                            <Chip>review.query</Chip>
+                            <span className="font-mono text-xs text-muted-foreground">review.query</span>
                         ) : (
                             <TicketLink ticketKey={review.ticket_key} />
                         )}
@@ -62,13 +63,8 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             <span className="flex justify-end">
                 {review.impact !== null && <Chip word={`${review.impact} impact`} />}
             </span>
-            <span className="readout text-right text-xs text-muted-foreground">
-                {review.cost_usd === null ? '' : `$${review.cost_usd.toFixed(2)}`}
-            </span>
-            <span className="flex justify-end gap-1 text-xs text-muted-foreground">
-                <Age at={review.ended_at ?? review.started_at} />
-                ago
-            </span>
+            <Cost usd={review.cost_usd} className="text-right text-xs text-muted-foreground" />
+            <Age variant="span" started={review.started_at} ended={review.ended_at} className="text-right" />
         </ListRow>
     )
 }

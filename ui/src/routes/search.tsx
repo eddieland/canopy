@@ -103,15 +103,13 @@ function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
                 <Where hit={hit} />
             </span>
             <span className="flex min-w-0">
-                {hit.label !== null && <Chip className="w-full justify-center truncate" word={hit.label} />}
+                {hit.label !== null && <Chip className="min-w-0 shrink" word={hit.label} />}
             </span>
             {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
             <p className="text-sm break-words">
                 <MarkedText text={hit.snippet} words={words} />
             </p>
-            <span className="flex justify-end gap-1 text-xs text-muted-foreground">
-                <Age at={hit.at} /> ago
-            </span>
+            <Age at={hit.at} variant="ago" className="text-right" />
         </ListRow>
     )
 }

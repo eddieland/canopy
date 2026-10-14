@@ -11,6 +11,22 @@ export const SEVERITY_TEXT: Record<FindingSeverity, string> = {
     minor: '',
 }
 
+// Written out so Tailwind finds them: a verdict wears its worst finding's color, as that finding's chip does.
+const VERDICT_TEXT: Record<FindingSeverity, string> = {
+    blocking: 'text-status-failed',
+    major: 'text-status-blocked',
+    minor: '',
+}
+
+/**
+ * A verdict's text color, by the worst finding the review reported, not by how its run ended (its dot says that): a
+ * blocking finding's in the failure color, a major one's in the color of what waits on the operator, and anything else
+ * plain, a clean review included.
+ */
+export function verdictTone(review: Pick<ReviewSummary, 'worst'>): string {
+    return review.worst === null ? '' : VERDICT_TEXT[review.worst]
+}
+
 /** What a review found, in a few words: `clean`, `3 findings`, or the status of a run that reported no verdict. */
 export function verdictText(review: ReviewSummary): string {
     if (review.verdict === 'clean') {
