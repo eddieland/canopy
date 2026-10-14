@@ -1052,6 +1052,42 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     return found
 
 
+def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) -> str:
+    """Record that `sha` was the PR's head at `at`, unless it was seen before (DESIGN §21, Settling).
+
+    Returns:
+        When the head was first seen: `at`, or the earlier sighting's time.
+    """
+    conn.execute(
+        "INSERT INTO review_heads (pr_url, sha, seen_at) VALUES (?, ?, ?) ON CONFLICT (pr_url, sha) DO NOTHING",
+        (pr_url, sha, at),
+    )
+    return review_head_seen_at(conn, pr_url, sha) or at
+
+
+def review_head_seen_at(conn: sqlite3.Connection, pr_url: str, sha: str) -> str | None:
+    """Return when the PR's head `sha` was first seen, or None if it never was."""
+    row = conn.execute("SELECT seen_at FROM review_heads WHERE pr_url = ? AND sha = ?", (pr_url, sha)).fetchone()
+    return None if row is None else str(row[0])
+
+
+def unreviewed_review_heads(conn: sqlite3.Connection, since: str, limit: int) -> list[sqlite3.Row]:
+    """Return each PR's newest head seen at or after `since` with no `done` review of it, newest first, at most `limit`.
+
+    Each row has `pr_url`, `sha`, and `seen_at`. A PR whose newest head was reviewed is left out, whatever its older
+    heads were: a push that came before the review superseded them.
+    """
+    return conn.execute(
+        "SELECT h.pr_url, h.sha, h.seen_at FROM review_heads h "
+        "WHERE h.seen_at >= ? "
+        "AND h.rowid = (SELECT max(n.rowid) FROM review_heads n WHERE n.pr_url = h.pr_url) "
+        "AND NOT EXISTS "
+        "(SELECT 1 FROM review_runs r WHERE r.pr_url = h.pr_url AND r.sha = h.sha AND r.status = 'done') "
+        "ORDER BY h.rowid DESC LIMIT ?",
+        (since, limit),
+    ).fetchall()
+
+
 def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
     """Return the `limit` PRs with the most recent activity, newest first; with `url`, only that one (DESIGN §22).
 

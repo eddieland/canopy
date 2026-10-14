@@ -132,3 +132,4 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
+# settle_minutes = 30   # review a head commit once it has been the head this long; each push starts over. Default 0

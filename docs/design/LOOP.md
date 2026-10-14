@@ -281,8 +281,9 @@ longer interval, it is no error and idle pacing is off. The count lives in the l
 starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other. When M13's cost pacing
 is built, the wait is the longer of the two rules' waits, and what follows bounds that combined wait.
 
-Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
-the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
+Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, each what
+the state block shows: a `fix-ci` cooldown's end (§8), a configured chore's `due_at` (§19), and a PR head's
+`settles_at` (§21, Settling). A gate opening is acted
 on when it opens, even sooner than `base`. One already open, such as a chore the overseer passed over because its `when`
 says not now, sets no deadline, so it cannot make the loop spin.
 

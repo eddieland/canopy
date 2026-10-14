@@ -154,6 +154,7 @@ canopy (harness, Python)
   reviews/         adversarial reviews of PRs (§21)
     start.py       canopy review run: guards, the slot, the reviewer's prompt, spawn detached _review
     grants.py      a PR's review limit, and canopy grant URL review raising it
+    settle.py      when a PR's head commit has been seen long enough to review
     execute.py     canopy _review: checkout at the commit, its diff kept for the web UI, the reviewer outside it,
                    result checks, slot return
     view.py        the state block's reviews

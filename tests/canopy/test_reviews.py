@@ -7,6 +7,7 @@ import sqlite3
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -359,6 +360,90 @@ def test_a_dry_run_counts_its_reviews(reviews: CanopyEnv) -> None:
         assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
 
 
+def settling(env: CanopyEnv, minutes: int = 30) -> None:
+    env.write_user(env.user_file.read_text().replace("[review]\n", f"[review]\nsettle_minutes = {minutes}\n", 1))
+
+
+def seen(conn: sqlite3.Connection, sha: str, minutes_ago: int, pr: str = PR) -> None:
+    """Put a head's first sighting `minutes_ago` back, as if the overseer had named it then."""
+    moment = db.format_time(datetime.now(UTC) - timedelta(minutes=minutes_ago))
+    conn.execute("UPDATE review_heads SET seen_at = ? WHERE pr_url = ? AND sha = ?", (moment, pr, sha))
+
+
+def test_a_head_is_reviewed_once_it_has_settled_and_a_new_push_starts_over(
+    reviews: CanopyEnv, treehouse_state: Path
+) -> None:
+    settling(reviews)
+    conn = journal(reviews)
+    first, second = "a" * 40, "b" * 40
+    with in_tick(conn) as tick_id:
+        runner = InlineRunner()
+        assert main(review(sha=first), runner=runner) == 1  # settling: first seen now
+        seen(conn, first, 20)
+        assert main(review(sha=first), runner=runner) == 1  # settling: 10 minutes to go
+        assert main(review(sha=second), runner=runner) == 1  # a new push starts over
+        seen(conn, second, 31)
+        assert main(review(sha=second), runner=runner) == 0
+        found = decisions(conn, tick_id)
+    assert [d[2] for d in found] == ["refused:settling"] * 3 + ["dispatch:review"]
+    assert found[0][3].startswith(f"{first[:12]} was first seen now and settles at ")
+    assert found[0][3].endswith("(review.settle_minutes = 30); a newer push starts over")
+    assert found[1][3].startswith(f"{first[:12]} was first seen at ")
+    assert runner.spawned != []
+    assert [r["sha"] for r in db.review_runs_of(conn, PR)] == [second]
+
+
+def test_a_dry_run_reads_a_heads_settle_time_and_never_starts_it(reviews: CanopyEnv) -> None:
+    settling(reviews)
+    conn = journal(reviews)
+    sha = "a" * 40
+    with in_tick(conn, dry_run=True) as tick_id:
+        assert main(review(sha=sha), runner=InlineRunner()) == 1
+        assert [d[2] for d in decisions(conn, tick_id)] == ["refused:settling"]
+    assert conn.execute("SELECT count(*) FROM review_heads").fetchone()[0] == 0
+    # Seen by a live tick long enough ago, it would be reviewed.
+    with in_tick(conn):
+        assert main(review(sha=sha), runner=InlineRunner()) == 1
+    seen(conn, sha, 31)
+    with in_tick(conn, dry_run=True) as tick_id:
+        assert main(review(sha=sha), runner=InlineRunner()) == 0
+        assert [d[2] for d in decisions(conn, tick_id)] == ["dispatch:review"]
+
+
+def test_with_settling_off_no_head_is_recorded(reviews: CanopyEnv, treehouse_state: Path) -> None:
+    conn = journal(reviews)
+    with in_tick(conn) as tick_id:
+        assert main(review(sha="a" * 40), runner=InlineRunner()) == 0
+        assert [d[2] for d in decisions(conn, tick_id)] == ["dispatch:review"]
+    assert conn.execute("SELECT count(*) FROM review_heads").fetchone()[0] == 0
+
+
+def test_the_state_block_shows_each_prs_newest_unreviewed_head(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path
+) -> None:
+    settling(reviews)
+    conn = journal(reviews)
+    sha, other_pr = head(git_pool), f"{PR}0"
+    with in_tick(conn):
+        for pr, commit in ((PR, "a" * 40), (PR, sha), (other_pr, "c" * 40)):
+            assert main(review(sha=commit, pr=pr), runner=InlineRunner()) == 1  # settling
+    seen(conn, sha, 31)
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+    section = state_block(agent_log)["reviews"]
+    assert section["limits"]["settle_minutes"] == 30
+    # Newest first; PR's older head was superseded by the push after it.
+    assert [(h["pr"], h["sha"]) for h in section["heads"]] == [(other_pr, "c" * 40), (PR, sha)]
+    settled = section["heads"][1]
+    assert db.parse_time(settled["settles_at"]) - db.parse_time(settled["seen_at"]) == timedelta(minutes=30)
+    # Once its head is reviewed, a PR is in `prs`, not `heads`.
+    with reviewer_reports(CLEAN):
+        run_inline(conn, sha=sha)
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+    assert [h["pr"] for h in state_block(agent_log)["reviews"]["heads"]] == [other_pr]
+
+
 @pytest.mark.parametrize(
     ("report", "status", "note"),
     [
@@ -518,9 +603,12 @@ def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, git_pool: GitPoo
         "max_reviews": 1,
         "max_reviews_per_day": 20,
         "max_reviews_per_pr": 3,
+        "settle_minutes": 0,
         "started_last_24h": 1,
     }
     assert section["running"] == []
+    # With settling off, no head is recorded.
+    assert section["heads"] == []
     [reviewed] = section["prs"]
     assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
     latest = reviewed["latest"]

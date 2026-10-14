@@ -1,10 +1,10 @@
 """How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6).
 
 A tick is idle when the journal shows it found nothing new and changed nothing (`idle`). After the n-th idle tick in a
-row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`
-still ahead ends it sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`)
-wakes it, as the operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no
-gate shortens it, and only the operator's acts wake it: a message, a start or stop, or a grant.
+row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end, a chore's `due_at`, or a
+PR head's settle time still ahead ends it sooner (`gate`). While the loop waits, a run that ends after the tick read the
+journal (`read_at`) wakes it, as the operator's own acts do. With the cap not above `base`, idle pacing is off: the wait
+is `base`, no gate shortens it, and only the operator's acts wake it: a message, a start or stop, or a grant.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from canopy.core import chore_view, db
 from canopy.core.items import subject
 from canopy.loop import attention
+from canopy.reviews import settle
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -27,10 +28,10 @@ if TYPE_CHECKING:
     from canopy.loop import tick
 
 # Refusals that lift by themselves, so a tick that records only these may be idle: on a run or chore run ending
-# (`running`, `capacity`, `chore_capacity`), at a gate (`cooldown`, `not_due`, `outside_hours`), or never
+# (`running`, `capacity`, `chore_capacity`), at a gate (`cooldown`, `not_due`, `outside_hours`, `settling`), or never
 # (`attempt_limit`, which an attention item reports).
 QUIET_REFUSALS = frozenset(
-    {"running", "capacity", "chore_capacity", "cooldown", "not_due", "outside_hours", "attempt_limit"}
+    {"running", "capacity", "chore_capacity", "cooldown", "not_due", "outside_hours", "settling", "attempt_limit"}
 )
 # Decisions that change nothing: a wait, and a ticket's skip (a tick-wide skip closes the tick `skipped`).
 _QUIET_ACTIONS = frozenset({"wait", "skip"})
@@ -166,16 +167,18 @@ def _quiet(action: str) -> bool:
 
 
 def gate(ctx: Context, now: datetime) -> datetime | None:
-    """The earliest harness gate still ahead of `now`: a `fix-ci` cooldown's end or a configured chore's `due_at`.
+    """The earliest harness gate still ahead of `now`: a fix-ci cooldown's end, a chore's due time, or a head settling.
 
-    One already open sets none, so a chore the overseer passed over cannot make the loop spin.
+    A gate is a `fix-ci` cooldown's end, a configured chore's `due_at`, or a PR head's settle time (DESIGN §21,
+    Settling). One already open sets none, so a chore the overseer passed over cannot make the loop spin.
 
     Returns:
         The time the earliest gate opens, or None if none is still ahead.
     """
     cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, now).values()
     dues = [d for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if (d := s.due_at(now)) is not None]
-    return min((t for t in (*cooldowns, *dues) if t > now), default=None)
+    settles = settle.next_settle(ctx.conn, ctx.config, now)
+    return min((t for t in (*cooldowns, *dues, *([settles] if settles else [])) if t > now), default=None)
 
 
 def wait(ctx: Context, pace: Pace, idle_count: int, now: datetime) -> float:

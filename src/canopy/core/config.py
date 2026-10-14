@@ -565,6 +565,8 @@ class Review(Section):
     query: Annotated[StrictStr, Scope.USER] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
     low_impact: Annotated[StrictStr, Scope.USER] = ""
+    # How long a PR's head commit must have been seen before it is reviewed; a new push starts over. 0 reviews at once.
+    settle_minutes: Annotated[Count, Scope.USER] = 0
 
 
 class Loop(Section):
