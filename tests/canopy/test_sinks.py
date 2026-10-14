@@ -391,9 +391,6 @@ def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "usage: canopy-notify-desktop" in out
     assert "usage: canopy-notify-slack" in out
-    # How to run each from a release's single executable (D067).
-    assert "exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy" in out
-    assert "exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy" in out
 
 
 # Slack with a bot token

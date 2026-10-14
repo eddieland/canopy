@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check binary treehouse
+.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check treehouse
 
 ##@ General
 
@@ -55,14 +55,9 @@ ui-e2e: ui/node_modules ## Build ui/ and run Playwright against it served by Fas
 	npm --prefix ui run test:e2e
 
 # Not part of check: it downloads canopy's dependencies into an empty cache. CI runs it as its own job.
-# INSTALL_SOURCE is what to install: this checkout by default, or dist/canopy after `make binary`.
+# INSTALL_SOURCE is what to install: this checkout by default, or anything `uv tool install` accepts.
 install-check: ## Install canopy into an empty HOME and run it against the fakes (INSTALL_SOURCE: default this checkout)
 	tests/install-check.sh $(INSTALL_SOURCE)
-
-##@ Release
-
-binary: ## Build dist/canopy, one executable with Python and the locked dependencies, for this platform (D067)
-	scripts/build-binary.sh
 
 ##@ Setup
 

@@ -3,8 +3,8 @@
 The wheel carries ui/dist as `canopy/_data/ui`, where canopy.infra.resources finds it. When npm is on PATH and node
 meets ui/package.json's `engines.node` floor, the hook builds it first (`npm ci` if ui/node_modules is missing, then
 `npm run build`). Without a usable npm it bundles an existing ui/dist, and fails the build if there is none: a wheel
-without the UI is never built. So an install from git needs Node; the release binary does not. Editable installs skip
-all of this: they read ui/dist from the checkout.
+without the UI is never built. So an install from git needs Node. Editable installs skip all of this: they read ui/dist
+from the checkout.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ class UIBuildHook(BuildHookInterface):
         if not index.is_file():
             msg = (
                 f"canopy: cannot build the web UI: {why}. Install node {engines} (with nvm: `nvm install 22`) and"
-                " retry, or install a release binary, which needs no node."
+                " retry."
             )
             raise RuntimeError(msg)
         build_data["force_include"][str(ui / "dist")] = "canopy/_data/ui"

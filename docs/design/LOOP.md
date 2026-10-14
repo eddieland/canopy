@@ -89,8 +89,8 @@ in order:
 
    Settled (M28): a check, not putting this canopy's own launcher first on the overseer's PATH. Prepending catches
    only a missing `canopy`, not a launcher that is there but whose environment is gone, and it would need the
-   launcher's path for every install: the release's scie (whose `SCIE_BOOT` must stay unset for `canopy`), a
-   `uv tool install` script, `uv run`, and `python -m canopy`, none of which `sys.argv[0]` names reliably. It would
+   launcher's path for every install: a `uv tool install` script, `uv run`, and `python -m canopy`, none of which
+   `sys.argv[0]` names reliably. It would
    also override the operator's PATH. The check runs whatever the overseer would, so every install works as it does
    for the overseer, and costs a process start (about 0.4 seconds) per tick.
 
