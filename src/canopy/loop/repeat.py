@@ -633,7 +633,6 @@ def _header(
         grid.add_row("paused", Text(since, style="yellow"))
     console.print(grid)
     console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
-    console.print(Text(f"kill -HUP {os.getpid()} reads the config again; a running tick finishes first.", style="dim"))
     if keys:
         console.print(
             Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim")
