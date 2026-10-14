@@ -15,6 +15,7 @@ import { Chip } from '@/components/status'
 import { TickOutputPanel } from '@/components/tick-output'
 import { TranscriptPanel } from '@/components/transcript'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { tickRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import { TICK_TONE, tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
@@ -28,7 +29,7 @@ function TickPage() {
     const { id } = Route.useParams()
     const parsed = tickId(id)
     if (parsed === null) {
-        return <NoTick title={`tick ${id}`}>not a tick: a tick&apos;s id is a positive number</NoTick>
+        return <NoTick title={tickRef(id)}>not a tick: a tick&apos;s id is a positive number</NoTick>
     }
     return <Loaded id={parsed} />
 }
@@ -37,12 +38,12 @@ function Loaded({ id }: { id: number }) {
     const { data, error } = useQuery(tickDetailQuery(id))
     const { data: transcript } = useQuery(tickTranscriptQuery(id))
     if (error instanceof ApiError && error.status === 404) {
-        return <NoTick title={`tick ${id}`}>{error.message}</NoTick>
+        return <NoTick title={tickRef(id)}>{error.message}</NoTick>
     }
     if (data === undefined) {
         return (
             <>
-                <PageHeader title={`tick ${id}`} />
+                <PageHeader title={tickRef(id)} />
                 <Panel>
                     <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
@@ -68,7 +69,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
     const decisionsOrder = useListOrder('tick-decisions')
     return (
         <>
-            <PageHeader title={`tick ${tick.id}`} chips={tick.dry_run && <Chip>dry run</Chip>}>
+            <PageHeader title={tickRef(tick.id)} chips={tick.dry_run && <Chip>dry run</Chip>}>
                 What the overseer decided in this tick, and why, as{' '}
                 <code className="font-mono text-xs">canopy decisions {tick.id}</code> prints it. Attention items and
                 refusals are the harness&apos;s. Under them, the overseer&apos;s session: what it read and ran to

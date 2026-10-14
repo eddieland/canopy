@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-react'
 
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { Button } from '@/components/ui/button'
+import { addressOf } from '@/lib/links'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 
 // A default that is a fresh array on each render would be a new prop each time.
 const NONE: readonly never[] = []
@@ -29,23 +31,37 @@ export function TicketLinks({
     }
     return (
         <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
-            {tracker && <LinkOut href={tracker} icon={Ticket} hint="The ticket in the tracker" />}
+            {tracker && (
+                <LinkOutButton
+                    href={tracker}
+                    label={addressOf(tracker)}
+                    icon={Ticket}
+                    hint="The ticket in the tracker"
+                />
+            )}
             {prs.map((pr) => (
-                <LinkOut
+                <LinkOutButton
                     key={pr.href}
                     href={pr.href}
+                    label={pullRequestLabel(pr.href)}
                     icon={GitPullRequest}
                     hint={pr.repo ? `The PR in ${pr.repo}` : 'The PR'}
                 />
             ))}
             {branches.map((b) => (
-                <LinkOut key={b.href} href={b.href} icon={GitBranch} hint={`The branch in ${b.repo}`} />
+                <LinkOutButton
+                    key={b.href}
+                    href={b.href}
+                    label={addressOf(b.href)}
+                    icon={GitBranch}
+                    hint={`The branch in ${b.repo}`}
+                />
             ))}
         </nav>
     )
 }
 
-function LinkOut({ href, icon, hint }: { href: string; icon: LucideIcon; hint: string }) {
+function LinkOutButton({ href, label, icon, hint }: { href: string; label: string; icon: LucideIcon; hint: string }) {
     return (
         <Button
             asChild
@@ -55,7 +71,7 @@ function LinkOut({ href, icon, hint }: { href: string; icon: LucideIcon; hint: s
         >
             <a href={href} target="_blank" rel="noreferrer noopener" title={hint}>
                 <LinkOutIcon href={href} icon={icon} className="size-4" />
-                <span className="truncate">{href.replace(/^https:\/\//u, '')}</span>
+                <span className="truncate">{label}</span>
             </a>
         </Button>
     )

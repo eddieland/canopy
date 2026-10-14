@@ -13,11 +13,13 @@ import { Counter } from '@/components/counter'
 import type { Tone } from '@/components/counter'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
+import { runRef } from '@/lib/refs'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
@@ -274,7 +276,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
             <span className="flex min-w-0 items-center gap-2">
                 <TicketLink ticketKey={w.run.ticket_key} className="truncate" />
                 <Chip word={w.run.kind} />
-                <span className="readout text-xs text-muted-foreground">run:{w.run.id}</span>
+                <span className="readout text-xs text-muted-foreground">{runRef(w.run.id)}</span>
             </span>
         )
     }
@@ -282,15 +284,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
         return (
             <span className="flex min-w-0 items-center gap-2">
                 <Chip>review</Chip>
-                <a
-                    href={w.review.pr_url}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex min-w-0 items-center gap-1 font-mono text-xs text-accent hover:underline"
-                >
-                    <span className="truncate">{w.review.pr_url.replace(/^https:\/\//u, '')}</span>
-                    <LinkOutIcon href={w.review.pr_url} className="shrink-0" />
-                </a>
+                <PullRequestLink url={w.review.pr_url} />
             </span>
         )
     }

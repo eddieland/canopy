@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
@@ -9,11 +8,13 @@ import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { TranscriptPanel } from '@/components/transcript'
+import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { localTime } from '@/lib/time'
@@ -30,7 +31,7 @@ function RunPage() {
     // A run's id is a positive number, as a tick's is.
     const parsed = tickId(id)
     if (parsed === null) {
-        return <NoRun title={`run:${id}`}>not a run: a run&apos;s id is a positive number</NoRun>
+        return <NoRun title={runRef(id)}>not a run: a run&apos;s id is a positive number</NoRun>
     }
     return <Loaded id={parsed} />
 }
@@ -40,12 +41,12 @@ function Loaded({ id }: { id: number }) {
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(runTranscriptQuery(id))
     if (error instanceof ApiError && error.status === 404) {
-        return <NoRun title={`run:${id}`}>{error.message}</NoRun>
+        return <NoRun title={runRef(id)}>{error.message}</NoRun>
     }
     if (data === undefined) {
         return (
             <>
-                <PageHeader title={`run:${id}`} />
+                <PageHeader title={runRef(id)} />
                 <Panel>
                     <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
@@ -54,7 +55,7 @@ function Loaded({ id }: { id: number }) {
     }
     return (
         <>
-            <PageHeader title={`run:${data.id}`} chips={data.private && <Chip>private</Chip>}>
+            <PageHeader title={runRef(data.id)} chips={data.private && <Chip>private</Chip>}>
                 What the worker did, from its session&apos;s events in the run&apos;s log: its text, each tool call with
                 its input and output, and what each model call cost.
             </PageHeader>
@@ -112,19 +113,7 @@ function RunPanel({ run }: { run: Run }) {
                     <Field label="pull requests" mono>
                         <span className="flex flex-wrap gap-x-4">
                             {run.prs.map((pr) => (
-                                <a
-                                    key={pr}
-                                    href={pr}
-                                    target="_blank"
-                                    rel="noreferrer noopener"
-                                    className={cn(
-                                        'inline-flex items-center gap-1 text-accent',
-                                        'underline-offset-4 hover:underline',
-                                    )}
-                                >
-                                    {pr.replace(/^https:\/\//u, '')}
-                                    <LinkOutIcon href={pr} />
-                                </a>
+                                <PullRequestLink key={pr} url={pr} className="text-sm" />
                             ))}
                         </span>
                     </Field>

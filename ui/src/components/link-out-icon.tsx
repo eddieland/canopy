@@ -40,3 +40,22 @@ export function LinkOutIcon({
         </svg>
     )
 }
+
+/**
+ * The icon that follows a name linking in, opening the same thing outside canopy in a new tab: a PR on GitHub, a
+ * ticket in the tracker. It wears `LinkOutIcon`, and `label` names it for a screen reader and on hover.
+ */
+export function LinkOut({ href, label }: { href: string; label: string }) {
+    return (
+        <a
+            href={href}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={label}
+            aria-label={label}
+            className="inline-flex shrink-0 items-center rounded-sm p-0.5 text-accent hover:bg-surface-raised"
+        >
+            <LinkOutIcon href={href} />
+        </a>
+    )
+}

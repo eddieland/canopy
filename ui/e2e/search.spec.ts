@@ -19,7 +19,7 @@ test('typing in the box opens the search, its hits grouped by source and linked 
     await expect(messages.locator('mark')).toHaveText(['stale', 'requests'])
     await expect(messages.getByRole('link', { name: 'run:39' })).toBeVisible()
 
-    await messages.getByRole('link', { name: 'ABC-099' }).click()
+    await messages.getByRole('link', { name: 'ABC-099', exact: true }).click()
     await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
     // Typing replaced the search's own history entries, so Back returns to the search, and the box keeps its query.
     await page.goBack()
