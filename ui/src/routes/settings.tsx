@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useState } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
@@ -12,6 +13,7 @@ import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
@@ -212,52 +214,64 @@ function FunPanel() {
 }
 
 /**
- * Sprig's hat shop, the last of the Fun panel's details. The wallet is everything canopy has spent, as
- * `GET /api/spend` totals it, less every hat bought: each dollar the agent runtime reports is a dollar for hats. A hat
- * bought goes on at once; one owned goes on or comes off with a click. All sales are final.
+ * Sprig's hat shop, the last of the Fun panel's details, folded under its wallet until opened. The wallet is
+ * everything canopy has spent, as `GET /api/spend` totals it, less every hat bought: each dollar the agent runtime
+ * reports is a dollar for hats. A hat bought goes on at once; one owned goes on or comes off with a click. All sales
+ * are final.
  */
 function HatShop() {
     const total = useQuery(spendQuery).data?.total_usd
     const loaded = total !== undefined
     const wardrobe = useWardrobe()
     const left = balanceCents(total, wardrobe.owned)
+    // Folded until asked for: eight hats are a lot of Settings for something most visits leave alone.
+    const [open, setOpen] = useState(false)
     return (
-        <>
-            <div className="flex items-center justify-between gap-4 border-t border-b p-3">
-                <p className="text-sm text-muted-foreground">
-                    Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while it
-                    is on. All sales are final.
-                </p>
-                <div className="flex shrink-0 flex-col items-end" data-testid="hats-wallet">
-                    {loaded ? (
-                        <Cost usd={left / 100} className="text-sm text-foreground" />
-                    ) : (
-                        <Skeleton className="h-5 w-14" />
-                    )}
-                    <span className="text-2xs text-muted-foreground">
-                        left of {loaded ? <Cost usd={total} /> : '…'} spent
-                    </span>
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <div className="border-t" data-testid="hats">
+                <div className="flex items-center justify-between gap-4 p-3">
+                    <p className="text-sm text-muted-foreground">
+                        Every dollar canopy spends is a dollar for Sprig&apos;s hats. Sprig wears the one you pick while
+                        it is on. All sales are final.
+                    </p>
+                    <div className="flex shrink-0 flex-col items-end" data-testid="hats-wallet">
+                        {loaded ? (
+                            <Cost usd={left / 100} className="text-sm text-foreground" />
+                        ) : (
+                            <Skeleton className="h-5 w-14" />
+                        )}
+                        <span className="text-2xs text-muted-foreground">
+                            left of {loaded ? <Cost usd={total} /> : '…'} spent
+                        </span>
+                    </div>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="xs" data-testid="hats-toggle">
+                            {open ? 'Hide hats' : 'Show hats'}
+                        </Button>
+                    </CollapsibleTrigger>
                 </div>
+                <CollapsibleContent asChild>
+                    <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
+                        {HATS.map((hat) => (
+                            <HatItem
+                                key={hat.id}
+                                hat={hat}
+                                owned={wardrobe.owned.includes(hat.id)}
+                                worn={wardrobe.worn === hat.id}
+                                shortCents={loaded ? Math.max(0, hat.price * 100 - left) : undefined}
+                                onBuy={() => {
+                                    const next = buy(wardrobe, hat.id, total)
+                                    if (next) {
+                                        setWardrobe(next)
+                                    }
+                                }}
+                                onWear={(on) => setWardrobe({ ...wardrobe, worn: on ? hat.id : null })}
+                            />
+                        ))}
+                    </ul>
+                </CollapsibleContent>
             </div>
-            <ul className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
-                {HATS.map((hat) => (
-                    <HatItem
-                        key={hat.id}
-                        hat={hat}
-                        owned={wardrobe.owned.includes(hat.id)}
-                        worn={wardrobe.worn === hat.id}
-                        shortCents={loaded ? Math.max(0, hat.price * 100 - left) : undefined}
-                        onBuy={() => {
-                            const next = buy(wardrobe, hat.id, total)
-                            if (next) {
-                                setWardrobe(next)
-                            }
-                        }}
-                        onWear={(on) => setWardrobe({ ...wardrobe, worn: on ? hat.id : null })}
-                    />
-                ))}
-            </ul>
-        </>
+        </Collapsible>
     )
 }
 

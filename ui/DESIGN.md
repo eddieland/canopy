@@ -229,12 +229,13 @@ Sprig:
 - **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
   `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
   everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
-  spent. The hats bought and the one worn are kept in this browser. A hat bought goes on at once; one owned goes on
-  and comes off with a click; there are no refunds. Each hat is drawn in Sprig's own units, its brim on the top of the
-  wire and under the brows, in the `buddy-hat-*` tokens, and drawn after the leaf, which shows behind the crown like
-  a feather. Hats are priced for an operator who spends about $2,000 a month, $50 to $25,000: the first inside a
-  day, the last after about a year. A new hat is an id in `HatId`, a row in `HATS` (cheapest first), and its
-  drawing.
+  spent. The shop is folded under its wallet row, which stays in view, until its Show hats button opens it (a
+  `Collapsible`, closed on every visit). The hats bought and the one worn are kept in this browser. A hat bought goes on
+  at once; one owned goes on and comes off with a click; there are no refunds. Each hat is drawn in Sprig's own units,
+  its brim on the top of the wire and under the brows, in the `buddy-hat-*` tokens, and drawn after the leaf, which
+  shows behind the crown like a feather. Hats are priced for an operator who spends about $2,000 a month, $50 to
+  $25,000: the first inside a day, the last after about a year. A new hat is an id in `HatId`, a row in `HATS` (cheapest
+  first), and its drawing.
 
 The empty inbox, and an item clearing:
 

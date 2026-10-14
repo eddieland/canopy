@@ -149,6 +149,9 @@ test.describe('turned on', () => {
         await settled(page)
         const wallet = page.getByTestId('hats-wallet')
         await expect(wallet).toContainText('left of $400.00 spent')
+        // The shop is folded under its wallet until opened.
+        await expect(page.getByTestId('hat-party')).toHaveCount(0)
+        await page.getByTestId('hats-toggle').click()
         await expect(page.getByTestId('hat-propeller-buy')).toBeDisabled()
         await expect(page.locator('[data-testid=buddy] [data-hat]')).toHaveCount(0)
 
@@ -166,6 +169,7 @@ test.describe('turned on', () => {
         await page.reload()
         await settled(page)
         await expect(wallet).toContainText('$100.00')
+        await page.getByTestId('hats-toggle').click()
         await page.getByTestId('hat-beanie-wear').click()
         await expect(page.locator('[data-testid=buddy] [data-hat]')).toHaveCount(0)
         await expect(page.getByTestId('hat-party-wear')).toHaveText('Wear')
@@ -175,6 +179,7 @@ test.describe('turned on', () => {
         await page.goto('settings')
         await settled(page)
         await expect(page.getByTestId('hats-wallet')).toContainText('$9.23')
+        await page.getByTestId('hats-toggle').click()
         await expect(page.getByTestId('hat-party-buy')).toBeDisabled()
         await expect(page.getByTestId('hat-party-buy')).toHaveAttribute('title', '$40.77 short')
     })
