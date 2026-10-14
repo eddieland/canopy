@@ -5,13 +5,13 @@ import type { ReviewFinding, ReviewSummary } from '@/api/types'
 import { placeFindings, shortSha, verdictText } from './reviews'
 
 function finding(title: string, file: number | null, line: number | null): ReviewFinding {
-    return { severity: 'minor', title, location: '', detail: '', file, line }
+    return { severity: 'minor', title, location: '', detail: '', file, line, dismissed: false }
 }
 
 const REVIEW: ReviewSummary = {
     id: 4,
     pr_url: 'https://github.com/acme/web/pull/88',
-    sha: '9b2f4c61' + '3'.repeat(32),
+    sha: `9b2f4c61${'3'.repeat(32)}`,
     ticket_key: 'ABC-099',
     repo: 'web',
     status: 'done',

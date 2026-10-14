@@ -5,11 +5,15 @@ import os
 import shutil
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
-from canopy.core import definitions
+from canopy.core import config, definitions
 from canopy.infra import resources
+from tests.conftest import CanopyEnv
+
+PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
 
 
 def test_the_snapshot_holds_the_bundled_agents_and_skills(tmp_path: Path) -> None:
@@ -50,7 +54,7 @@ def test_an_existing_snapshot_is_reused_as_is(tmp_path: Path) -> None:
     assert [p.name for p in (tmp_path / "runtime").iterdir()] == [snapshot.name]
 
 
-def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path) -> None:
     final = tmp_path / "runtime" / definitions.digest()
     real_rename = os.rename
 
@@ -59,8 +63,8 @@ def test_losing_the_race_to_create_a_snapshot_uses_the_winners(tmp_path: Path, m
         (final / "winner").touch()
         real_rename(src, dst)  # refused: dst is a directory that is not empty
 
-    monkeypatch.setattr(os, "rename", another_process_wins)
-    assert definitions.ensure(tmp_path) == final
+    with mock.patch.object(os, "rename", autospec=True, side_effect=another_process_wins):
+        assert definitions.ensure(tmp_path) == final
     assert (final / "winner").exists()
     assert [p.name for p in (tmp_path / "runtime").iterdir()] == [final.name]
 
@@ -136,7 +140,11 @@ def test_the_shadowing_message_names_the_files(tmp_path: Path) -> None:
 def _rules(agent: str, section: str = "") -> list[tuple[str, str]]:
     """The agent's quoted permission rules, in order: its top-level ones, OpenCode's patterns for MCP tool names, or
     those under `section`, such as `bash`, whose patterns are command lines."""
-    frontmatter = (resources.agents_dir() / f"{agent}.md").read_text().split("---")[1]
+    return _rules_in((resources.agents_dir() / f"{agent}.md").read_text(), section)
+
+
+def _rules_in(definition: str, section: str = "") -> list[tuple[str, str]]:
+    frontmatter = definition.split("---")[1]
     indent = "    " if section else "  "
     inside = not section
     rules: list[tuple[str, str]] = []
@@ -162,6 +170,41 @@ def test_workers_may_push_as_their_prompts_say_and_never_force(agent: str) -> No
         "git push origin :refs/heads/agent/PROJ-1-x",
     ):
         assert not _allowed(rules, refused), refused
+
+
+LEASED_PUSH = "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x"
+
+
+@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env: CanopyEnv, agent: str) -> None:
+    """`trust.rebase` adds the one forced push the prompts name; every other force, and the rest, stay denied."""
+    path = f"agents/{agent}.md"
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    assert not _allowed(_rules_in(rendered, "bash"), LEASED_PUSH)
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    rules = _rules_in(rendered, "bash")
+    assert _allowed(rules, LEASED_PUSH)
+    assert _allowed(rules, "git push origin HEAD:refs/heads/agent/PROJ-1-x")
+    for refused in (
+        "git push --force origin HEAD:refs/heads/agent/PROJ-1-x",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --force",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --force --no-verify",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x -f",
+        "git push --force-with-lease=refs/heads/main origin HEAD:refs/heads/main",
+        "git push --force-with-lease origin +HEAD:refs/heads/agent/PROJ-1-x",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --delete",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x --mirror",
+        "git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-x :refs/heads/main",
+        "git push -f origin HEAD:refs/heads/agent/PROJ-1-x",
+    ):
+        assert not _allowed(rules, refused), refused
+
+
+def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="no line"):
+        definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
 
 
 def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
@@ -251,3 +294,58 @@ def test_the_reviewer_posts_nothing(tool: str) -> None:
 )
 def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
+
+
+def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canopy_env: CanopyEnv) -> None:
+    # The prompt is the agent's system prompt, cached across ticks; the tick's message is the state block (DESIGN §6).
+    snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+    text = (snapshot / "agents" / "canopy-overseer.md").read_text()
+    head = (resources.agents_dir() / "canopy-overseer.md").read_text().split(PROMPT_MARKER)[0]
+    assert text.startswith(head)
+    body = text.removeprefix(head)
+    prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")
+    assert body.startswith(
+        f"{prompt}\n\nThe skill `tracker-jira` follows, given here so that you need not load it.\n\n"
+    )
+    skill = (resources.skills_dir() / "tracker-jira" / "SKILL.md").read_text()
+    assert body.endswith(skill.split("\n---\n", 1)[1].strip() + "\n")
+    assert "name: tracker-jira" not in body
+    assert "no prompt supplied" not in body
+    # The skill stays a skill too, for the workers.
+    assert (snapshot / "skills" / "tracker-jira" / "SKILL.md").read_text() == skill
+
+
+def test_an_overseer_override_makes_a_snapshot_of_its_own(canopy_env: CanopyEnv) -> None:
+    cfg = config.load(canopy_env.root)
+    shipped = definitions.ensure(canopy_env.state_dir, cfg)
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "overseer.md").write_text("# my overseer\n\nDecide my way.\n")
+    snapshot = definitions.ensure(canopy_env.state_dir, cfg)
+    assert snapshot != shipped
+    text = (snapshot / "agents" / "canopy-overseer.md").read_text()
+    assert "\n---\n\n# my overseer\n\nDecide my way.\n\nThe skill `tracker-jira` follows" in text
+    assert "# canopy overseer" not in text
+    # The snapshot a run may be loading is never changed.
+    assert "# canopy overseer" in (shipped / "agents" / "canopy-overseer.md").read_text()
+
+
+def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "overseer.md").write_bytes(b"\xff\xfe not UTF-8")
+    with pytest.raises(definitions.DefinitionsError, match="cannot read the overseer prompt"):
+        definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+
+
+def test_the_overseer_prompt_stands_alone_without_a_skill_for_its_tracker() -> None:
+    head = f"---\ndescription: x\n---\n\n{PROMPT_MARKER}"
+    assert definitions.render_overseer(f"{head}stub\n", "# canopy overseer\n\nDecide.\n", None) == (
+        "---\ndescription: x\n---\n\n# canopy overseer\n\nDecide.\n"
+    )
+
+
+def test_an_overseer_definition_without_its_marked_line_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="no line"):
+        definitions.render_overseer(bundled.replace(PROMPT_MARKER, ""), "# canopy overseer\n", None)

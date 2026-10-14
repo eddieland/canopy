@@ -1,10 +1,12 @@
 import { Fragment } from 'react'
 
 import type { DiffFile, DiffLine, ReviewDiff } from '@/api/types'
+import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
-import { findingAnchor, type Numbered, type Placed, SEVERITY_TEXT } from '@/lib/reviews'
+import { findingAnchor, SEVERITY_TEXT } from '@/lib/reviews'
+import type { Numbered, Placed } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
 // Full class names, written out, so Tailwind finds them: a line's tint and its +/- mark.
@@ -16,12 +18,13 @@ const MARK: Record<DiffLine['kind'], string> = { add: '+', del: '-', ctx: ' ' }
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
  * header when the diff does not show its line. The diff is the PR's own text: every line is React text.
  */
-export function ReviewDiffPanels({ diff, placed }: { diff: ReviewDiff; placed: Placed }) {
+export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: ReviewDiff; placed: Placed }) {
     return (
         <>
             {diff.files.map((file, i) => (
                 <FilePanel
                     key={`${i}:${file.path}`}
+                    run={run}
                     file={file}
                     onLine={placed.lines.get(i)}
                     onFile={placed.files.get(i) ?? []}
@@ -37,10 +40,12 @@ export function ReviewDiffPanels({ diff, placed }: { diff: ReviewDiff; placed: P
 }
 
 function FilePanel({
+    run,
     file,
     onLine,
     onFile,
 }: {
+    run: number
     file: DiffFile
     onLine: Map<number, Numbered[]> | undefined
     onFile: Numbered[]
@@ -57,7 +62,7 @@ function FilePanel({
             {onFile.length > 0 && (
                 <div className="flex flex-col gap-2 border-b p-3">
                     {onFile.map((f) => (
-                        <FindingCard key={f.n} numbered={f} />
+                        <FindingCard key={f.n} run={run} numbered={f} />
                     ))}
                 </div>
             )}
@@ -80,7 +85,7 @@ function FilePanel({
                                                     <td colSpan={4} className="border-y bg-surface px-3 py-2">
                                                         <div className="flex flex-col gap-2 font-sans">
                                                             {onLine.get(line.new)?.map((f) => (
-                                                                <FindingCard key={f.n} numbered={f} />
+                                                                <FindingCard key={f.n} run={run} numbered={f} />
                                                             ))}
                                                         </div>
                                                     </td>
@@ -111,24 +116,32 @@ function Line({ line }: { line: DiffLine }) {
     )
 }
 
-/** One finding: its number and severity, its title and where, and its detail as rich text, as an agent wrote it. */
-export function FindingCard({ numbered, className }: { numbered: Numbered; className?: string }) {
+/**
+ * One finding: its number and severity, its title and where, and its detail as rich text, as an agent wrote it. A small
+ * button at the end of its head line dismisses it, so no worker or tick acts on it; a dismissed one says so.
+ */
+export function FindingCard({ run, numbered, className }: { run: number; numbered: Numbered; className?: string }) {
     const { n, finding } = numbered
+    const { button, notice } = useDismissReviewFinding(run, n, finding.dismissed)
     return (
         <article
             id={findingAnchor(n)}
             className={cn('scroll-mt-16 rounded-md border bg-surface-raised p-3 text-sm', className)}
             data-testid="finding"
+            data-dismissed={finding.dismissed || undefined}
         >
             <header className="flex flex-wrap items-center gap-2">
                 <span className="readout text-xs text-muted-foreground">{n}</span>
                 <Chip className={SEVERITY_TEXT[finding.severity]}>{finding.severity}</Chip>
-                <span className="font-medium">{finding.title}</span>
+                <span className={cn('font-medium', finding.dismissed && 'text-muted-foreground')}>{finding.title}</span>
                 {finding.location && (
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>
                 )}
+                {finding.dismissed && <Chip>dismissed</Chip>}
+                <span className="ml-auto">{button}</span>
             </header>
             {finding.detail && <RichText text={finding.detail} className="mt-1.5 text-muted-foreground" />}
+            {notice}
         </article>
     )
 }

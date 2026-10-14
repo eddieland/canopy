@@ -23,35 +23,41 @@ export function SearchBox() {
     const [seen, setSeen] = useState(q)
     if (q !== seen) {
         setSeen(q)
-        if (q !== undefined) setValue(q)
+        if (q !== undefined) {
+            setValue(q)
+        }
     }
     const input = useRef<HTMLInputElement>(null)
     const timer = useRef<number | undefined>(undefined)
 
     useEffect(() => {
         function onKey(event: KeyboardEvent) {
-            if (!isSearchShortcut(event, event.target)) return
+            if (!isSearchShortcut(event, event.target)) {
+                return
+            }
             event.preventDefault()
             input.current?.focus()
             input.current?.select()
         }
-        window.addEventListener('keydown', onKey)
+        globalThis.addEventListener('keydown', onKey)
         return () => {
-            window.removeEventListener('keydown', onKey)
-            window.clearTimeout(timer.current)
+            globalThis.removeEventListener('keydown', onKey)
+            globalThis.clearTimeout(timer.current)
         }
     }, [])
 
     function open(text: string) {
-        window.clearTimeout(timer.current)
+        globalThis.clearTimeout(timer.current)
         const query = searchQueryOf(text)
-        if (query === undefined) return
+        if (query === undefined) {
+            return
+        }
         const onPage = matchRoute({ to: '/search' }) !== false
         void navigate({ to: '/search', search: { q: query }, replace: onPage })
     }
 
     function clear() {
-        window.clearTimeout(timer.current)
+        globalThis.clearTimeout(timer.current)
         setValue('')
         input.current?.focus()
     }
@@ -80,11 +86,13 @@ export function SearchBox() {
                     onChange={(event) => {
                         const text = event.target.value
                         setValue(text)
-                        window.clearTimeout(timer.current)
-                        timer.current = window.setTimeout(() => open(text), SEARCH_DEBOUNCE_MS)
+                        globalThis.clearTimeout(timer.current)
+                        timer.current = globalThis.setTimeout(() => open(text), SEARCH_DEBOUNCE_MS)
                     }}
                     onKeyDown={(event) => {
-                        if (event.key === 'Escape') event.currentTarget.blur()
+                        if (event.key === 'Escape') {
+                            event.currentTarget.blur()
+                        }
                     }}
                     className={cn(
                         'min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none',

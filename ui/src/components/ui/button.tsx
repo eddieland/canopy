@@ -1,6 +1,7 @@
 // shadcn/ui Button, Radix base, Vega style (components.json), ported by hand because the registry was unreachable
 // when this was set up. Its style classes are inlined and its per-theme overrides replaced with tokens (ui/DESIGN.md).
-import { cva, type VariantProps } from 'class-variance-authority'
+import { cva } from 'class-variance-authority'
+import type { VariantProps } from 'class-variance-authority'
 import { Slot } from 'radix-ui'
 import type { ComponentProps } from 'react'
 

@@ -13,8 +13,12 @@ export const SEVERITY_TEXT: Record<FindingSeverity, string> = {
 
 /** What a review found, in a few words: `clean`, `3 findings`, or the status of a run that reported no verdict. */
 export function verdictText(review: ReviewSummary): string {
-    if (review.verdict === 'clean') return 'clean'
-    if (review.verdict === 'findings') return review.findings === 1 ? '1 finding' : `${review.findings} findings`
+    if (review.verdict === 'clean') {
+        return 'clean'
+    }
+    if (review.verdict === 'findings') {
+        return review.findings === 1 ? '1 finding' : `${review.findings} findings`
+    }
     return review.state === 'running' ? 'reviewing' : 'no verdict'
 }
 

@@ -38,8 +38,11 @@ export function byTicket(runs: Run[]): TicketRuns[] {
     const groups = new Map<string, TicketRuns>()
     for (const run of runs) {
         const group = groups.get(run.ticket_key)
-        if (group === undefined) groups.set(run.ticket_key, { latest: run, earlier: [] })
-        else group.earlier.push(run)
+        if (group === undefined) {
+            groups.set(run.ticket_key, { latest: run, earlier: [] })
+        } else {
+            group.earlier.push(run)
+        }
     }
     return [...groups.values()]
 }
@@ -64,7 +67,10 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
 export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: number } {
     const working = latestRuns(runs)
         .filter((r) => r.state === 'blocked' || r.state === 'running')
-        .toSorted((a, b) => rank(a) - rank(b) || a.started_at.localeCompare(b.started_at))
+        .toSorted((a, b) => {
+            const order = rank(a) - rank(b)
+            return order === 0 ? a.started_at.localeCompare(b.started_at) : order
+        })
     return { shown: working.slice(0, limit), more: Math.max(working.length - limit, 0) }
 }
 

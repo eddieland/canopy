@@ -1,4 +1,6 @@
-import type { TranscriptEntry, TranscriptTool } from '@/api/types'
+import type { TranscriptEntry, TranscriptStep, TranscriptTokens, TranscriptTool } from '@/api/types'
+import { indent, tokenize } from '@/lib/json-lines'
+import { literal } from '@/lib/search'
 
 // A value longer than this is left out of a call's summary; a summary or outcome line is cut at `MAX_LINE`.
 const MAX_VALUE = 80
@@ -6,7 +8,9 @@ const MAX_LINE = 200
 
 /** How long after `start` an ISO time was, as a readout: `+0:42`, `+12:05`, `+1:02:09`. Empty without both times. */
 export function elapsed(at: string | null, start: string | null): string {
-    if (at === null || start === null) return ''
+    if (at === null || start === null) {
+        return ''
+    }
     const seconds = Math.max(0, Math.floor((Date.parse(at) - Date.parse(start)) / 1000))
     const h = Math.floor(seconds / 3600)
     const m = Math.floor((seconds % 3600) / 60)
@@ -16,16 +20,24 @@ export function elapsed(at: string | null, start: string | null): string {
 
 /** A duration in milliseconds as a readout: `840ms`, `14s`, `3m 05s`. */
 export function duration(ms: number): string {
-    if (ms < 1000) return `${ms}ms`
+    if (ms < 1000) {
+        return `${ms}ms`
+    }
     const seconds = Math.round(ms / 1000)
-    if (seconds < 60) return `${seconds}s`
+    if (seconds < 60) {
+        return `${seconds}s`
+    }
     return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, '0')}s`
 }
 
 /** A token count as the CLI says it (`agent_output.Usage.describe`): `950`, `12.3k`, `1.2M`. */
 export function tokenCount(n: number): string {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+    if (n >= 1_000_000) {
+        return `${(n / 1_000_000).toFixed(1)}M`
+    }
+    if (n >= 1_000) {
+        return `${(n / 1_000).toFixed(1)}k`
+    }
     return String(n)
 }
 
@@ -50,8 +62,12 @@ export function tally(entries: TranscriptEntry[]): Tally {
         if (entry.kind === 'tool') {
             found.tools += 1
             const { verdict } = outcome(entry)
-            if (verdict === 'failed') found.failed += 1
-            if (verdict === 'refused') found.refused += 1
+            if (verdict === 'failed') {
+                found.failed += 1
+            }
+            if (verdict === 'refused') {
+                found.refused += 1
+            }
         } else if (entry.kind === 'step') {
             found.calls += 1
         } else if (entry.kind === 'error') {
@@ -59,6 +75,90 @@ export function tally(entries: TranscriptEntry[]): Tally {
         }
     }
     return found
+}
+
+/** One model call, as the transcript shows it by call: what it was sent that no call before it was, and what it did. */
+export interface ModelCall {
+    /** Its number, from 1, in the order the runtime started its calls. */
+    n: number
+    /** What its tools returned to the call before it, which it was sent: a later call's input past its first. */
+    returned: TranscriptTool[]
+    /** What it did, in the order printed: its text and reasoning, its tool calls, and the runtime's errors. */
+    output: TranscriptEntry[]
+    /** How it ended, with its tokens and cost; null when the session ended first, or a bound cut it. */
+    end: TranscriptStep | null
+}
+
+/** A transcript by model call: the calls in order, and the entries printed before the runtime started any. */
+export interface ByCall {
+    /** Entries the runtime printed before its first call, such as an error starting it. */
+    before: TranscriptEntry[]
+    /** The calls, in order. */
+    calls: ModelCall[]
+}
+
+/**
+ * A transcript's entries by the model call each came from. A call was sent everything before it; what is new in its
+ * input is what the call before it asked its tools for, so each call after the first carries that call's tool calls,
+ * which hold what they returned.
+ */
+export function byCall(entries: TranscriptEntry[]): ByCall {
+    const before: TranscriptEntry[] = []
+    const calls: ModelCall[] = []
+    for (const entry of entries) {
+        if (entry.call === null) {
+            before.push(entry)
+            continue
+        }
+        let call = calls.at(-1)
+        if (call?.n !== entry.call) {
+            const returned = (call?.output ?? []).filter((e): e is TranscriptTool => e.kind === 'tool')
+            call = { n: entry.call, returned, output: [], end: null }
+            calls.push(call)
+        }
+        if (entry.kind === 'step') {
+            call.end = entry
+        } else {
+            call.output.push(entry)
+        }
+    }
+    return { before, calls }
+}
+
+/** How many tokens a model call was sent, from the cache or not. */
+export function sentTokens(tokens: TranscriptTokens): number {
+    return tokens.input + tokens.cache_read + tokens.cache_write
+}
+
+/** How many tokens a model call wrote, its reasoning included. */
+export function wroteTokens(tokens: TranscriptTokens): number {
+    return tokens.output + tokens.reasoning
+}
+
+/**
+ * What a model call did, on one line: its first text's start, then its tool calls by name, a name it called more
+ * than once counted (`read ×2`), then its errors.
+ */
+export function callLine(call: ModelCall): string {
+    const text = call.output.find((e) => e.kind === 'text' && !e.reasoning)
+    const tools = new Map<string, number>()
+    let errors = 0
+    for (const entry of call.output) {
+        if (entry.kind === 'tool') {
+            tools.set(entry.tool, (tools.get(entry.tool) ?? 0) + 1)
+        } else if (entry.kind === 'error') {
+            errors += 1
+        }
+    }
+    const parts = [
+        text?.kind === 'text' ? oneLine(text.text) : '',
+        [...tools].map(([name, n]) => (n > 1 ? `${name} ×${n}` : name)).join(', '),
+        errors > 0 ? `${errors} runtime ${errors === 1 ? 'error' : 'errors'}` : '',
+    ]
+    return parts
+        .filter((p) => p !== '')
+        .join(' · ')
+        .slice(0, MAX_LINE)
 }
 
 /** The first time a transcript names, which every entry's `elapsed` counts from. */
@@ -74,15 +174,27 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 export function summary(entry: TranscriptTool): string {
     const input = parsed(entry.input)
     const command = input?.['command']
-    if (typeof command === 'string') return oneLine(command)
-    if (entry.title !== null) return entry.title
-    if (input === null) return ''
+    if (typeof command === 'string') {
+        return oneLine(command)
+    }
+    if (entry.title !== null) {
+        return entry.title
+    }
+    if (input === null) {
+        return ''
+    }
     const pairs = Object.entries(input).flatMap(([key, value]) => {
-        if (typeof value === 'number' || typeof value === 'boolean') return [`${key}=${value}`]
-        if (typeof value !== 'string') return []
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return [`${key}=${value}`]
+        }
+        if (typeof value !== 'string') {
+            return []
+        }
         const shown = oneLine(value)
-        if (shown === '' || shown.length > MAX_VALUE) return []
-        return [`${key}=${/\s/.test(shown) ? JSON.stringify(shown) : shown}`]
+        if (shown === '' || shown.length > MAX_VALUE) {
+            return []
+        }
+        return [`${key}=${/\s/u.test(shown) ? JSON.stringify(shown) : shown}`]
     })
     return pairs.join(' ').slice(0, MAX_LINE)
 }
@@ -107,30 +219,84 @@ export interface Outcome {
  * long one, has no line: the row opens to it.
  */
 export function outcome(entry: TranscriptTool): Outcome {
-    if (entry.status === 'error') return { verdict: 'failed', guard: null, line: firstLine(entry.output) }
+    if (entry.status === 'error') {
+        return { verdict: 'failed', guard: null, line: firstLine(entry.output) }
+    }
     const input = parsed(entry.input)
     const command = input?.['command']
-    if (typeof command === 'string' && /^\s*canopy\s/.test(command)) {
-        const error = /^Error: (.+)$/m.exec(entry.output)?.[1]
+    if (typeof command === 'string' && /^\s*canopy\s/u.test(command)) {
+        const error = /^Error: (.+)$/mu.exec(entry.output)?.[1]
         if (error !== undefined) {
-            const guard = /\brefused \(([^)]+)\)/.exec(error)?.[1] ?? null
+            const guard = /\brefused \(([^)]+)\)/u.exec(error)?.[1] ?? null
             return { verdict: guard === null ? 'failed' : 'refused', guard, line: oneLine(error).slice(0, MAX_LINE) }
         }
     }
     const lines = entry.output.split('\n').filter((l) => l.trim() !== '')
     const only = lines.length === 1 ? oneLine(lines[0] ?? '') : ''
-    const fits = only !== '' && only.length <= MAX_LINE && !/^[[{]/.test(only)
+    const fits = only !== '' && only.length <= MAX_LINE && !/^[[{]/u.test(only)
     return { verdict: 'done', guard: null, line: fits ? only : null }
 }
 
-/** A tool's output as it is shown opened: JSON indented, anything else as it was printed. */
+/**
+ * A tool's output as it is shown opened: a JSON object or array indented, anything else as it was printed. Laid out
+ * from its tokens, never parsed and printed again, so every value stays as written: a number past a double's
+ * precision, an id in an API's response, is not rounded.
+ */
 export function pretty(output: string): string {
-    const value = parsedJson(output)
-    return typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : output
+    return indent(tokenize(output))
+        .map((token) => token.text)
+        .join('')
+}
+
+/** A tool call's output as its opened row shows it: `pretty`, or `no output`. */
+export function shownOutput(entry: TranscriptTool): string {
+    return entry.output ? pretty(entry.output) : 'no output'
+}
+
+/** A transcript's search as typed, its ends trimmed, or null when that leaves nothing to find. */
+export function findQueryOf(raw: string): string | null {
+    const query = raw.trim()
+    return query === '' ? null : query
+}
+
+/** How many lines of an entry hold a search's query. */
+export interface Hits {
+    /** Lines of its row: the agent's text, a tool call's name and line, an error. */
+    row: number
+    /** Lines of what it opens to: a tool call's input and output, as shown. */
+    body: number
+}
+
+/**
+ * How many of an entry's lines hold `query`, letters in either case, its characters taken literally. Lines are read
+ * as the page shows them, so a match never spans a line break, and each line counts once however often it matches. A
+ * model call is numbers alone, and never matches.
+ */
+export function hitsIn(entry: TranscriptEntry, query: string): Hits {
+    switch (entry.kind) {
+        case 'text': {
+            return { row: linesHolding([entry.text], query), body: 0 }
+        }
+        case 'tool': {
+            const row = [entry.tool, summary(entry), outcome(entry).line ?? '']
+            return { row: linesHolding(row, query), body: linesHolding([entry.input, shownOutput(entry)], query) }
+        }
+        case 'step': {
+            return { row: 0, body: 0 }
+        }
+        case 'error': {
+            return { row: linesHolding([entry.name, entry.message], query), body: 0 }
+        }
+    }
+}
+
+function linesHolding(texts: string[], query: string): number {
+    const pattern = new RegExp(literal(query), 'iu')
+    return texts.flatMap((text) => text.split('\n')).filter((line) => pattern.test(line)).length
 }
 
 function oneLine(text: string): string {
-    return text.replace(/\s+/g, ' ').trim()
+    return text.replaceAll(/\s+/gu, ' ').trim()
 }
 
 function firstLine(text: string): string | null {

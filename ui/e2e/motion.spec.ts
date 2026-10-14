@@ -1,4 +1,5 @@
-import { expect, type Locator, test } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
@@ -21,12 +22,12 @@ test('the nav highlight slides to the item a navigation lands on', async ({ page
     const highlight = page.getByTestId('nav-highlight')
     await covers(highlight, nav.getByRole('link', { name: 'Attention' }))
 
-    await expect(highlight).toHaveClass(/\bbg-section-attention\/16\b/)
+    await expect(highlight).toHaveClass(/\bbg-section-attention\/16\b/u)
 
     await nav.getByRole('link', { name: 'Worktrees' }).click()
     await covers(highlight, nav.getByRole('link', { name: 'Worktrees' }))
     // It takes on the color of the section it lands on.
-    await expect(highlight).toHaveClass(/\bbg-section-worktrees\/16\b/)
+    await expect(highlight).toHaveClass(/\bbg-section-worktrees\/16\b/u)
 
     await page.getByRole('link', { name: 'Tickets' }).click()
     await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
@@ -62,7 +63,9 @@ test('the header ticker crawls one headline at a time, at the speed and gap set 
     await headline.evaluate((element) => {
         const [crawl] = element.getAnimations()
         const duration = Number(crawl?.effect?.getComputedTiming().duration)
-        if (crawl) crawl.currentTime = duration - 20
+        if (crawl) {
+            crawl.currentTime = duration - 20
+        }
     })
     await expect(headline).not.toHaveText(first ?? '')
     await expect(headline).toHaveCount(1)
@@ -83,6 +86,28 @@ test('the header ticker crawls one headline at a time, at the speed and gap set 
     await expect(page.getByTestId('ticker-gap')).toBeDisabled()
 })
 
+test('the ticker holds its headline in place when the readouts beside it change width', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const frame = page.getByTestId('ticker')
+    const headline = page.getByTestId('ticker-headline')
+    // Held mid-pass, then the latest tick's readout widens, as it does when a tick starts: the window narrows.
+    await headline.evaluate(async (element) => {
+        const [crawl] = element.getAnimations()
+        crawl?.pause()
+        await crawl?.ready
+    })
+    const where = (): Promise<number | undefined> =>
+        headline.evaluate((element) => element.firstElementChild?.getBoundingClientRect().left)
+    const before = await where()
+    const wide = (await frame.boundingBox())?.width ?? 0
+    await page.getByTestId('last-tick').evaluate((element) => {
+        element.append(' running · for 12s')
+    })
+    await expect.poll(async () => (await frame.boundingBox())?.width).toBeLessThan(wide)
+    expect(await where()).toBeCloseTo(before ?? Number.NaN, 0)
+})
+
 test('the ticker leaves out the topics turned off in Settings', async ({ page }) => {
     await page.goto('settings')
     await settled(page)
@@ -98,7 +123,7 @@ test('the ticker leaves out the topics turned off in Settings', async ({ page })
     await programming.click()
     await page.getByText('Vibe coding', { exact: true }).click()
     await expect(vibes).not.toBeChecked()
-    await expect(headline).toHaveText(/^Tip: /)
+    await expect(headline).toHaveText(/^Tip: /u)
 
     // With none picked, the window is gone, and it stays gone on a reload.
     await tips.click()
@@ -109,5 +134,5 @@ test('the ticker leaves out the topics turned off in Settings', async ({ page })
     await expect(tips).not.toBeChecked()
 
     await vibes.click()
-    await expect(headline).not.toHaveText(/^Tip: /)
+    await expect(headline).not.toHaveText(/^Tip: /u)
 })

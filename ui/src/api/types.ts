@@ -17,6 +17,8 @@ export type RunState = Schemas['RunState']
 export type TicketSummary = Schemas['TicketSummary']
 /** One ticket: what `canopy show` prints, and the latest decisions about it. */
 export type TicketDetail = Schemas['TicketDetail']
+/** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
+export type CostTotal = Schemas['CostTotal']
 /** One message in a ticket's conversation. */
 export type Message = Schemas['Message']
 /** A ticket's work in one repository: its PR and phase (DESIGN §18). */
@@ -31,8 +33,14 @@ export type Stopped = Schemas['Stopped']
 export type Replied = Schemas['Replied']
 /** What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete. */
 export type Forgot = Schemas['Forgot']
+/** A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22). */
+export type Limit = Schemas['Limit']
+/** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */
+export type Granted = Schemas['Granted']
 /** What a dismissal left: the chore's finding, and whether it is now dismissed. */
 export type Dismissed = Schemas['Dismissed']
+/** What a dismissal of a review's finding left: the run, the finding's number, and whether it is now dismissed. */
+export type ReviewDismissed = Schemas['ReviewDismissed']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
 /** One repository's treehouse pool, read when asked for. */
@@ -65,6 +73,10 @@ export type WorktreeState = Schemas['WorktreeState']
 export type ChoreSummary = Schemas['ChoreSummary']
 /** One chore: what `canopy show chore:NAME` prints. */
 export type ChoreDetail = Schemas['ChoreDetail']
+/** What one chore's runs cost in the last day and the last 30 days (DESIGN §13). */
+export type ChoreSpend = Schemas['ChoreSpend']
+/** What one chore's runs that started in a window cost: how many, how many reported a cost, and the total. */
+export type ChoreSpendWindow = Schemas['ChoreSpendWindow']
 /** One run of a chore (DESIGN §19). */
 export type ChoreRun = Schemas['ChoreRun']
 /** An open finding: one the chore's latest `ok` run reported (DESIGN §19). */
@@ -81,6 +93,10 @@ export type TranscriptEntry = Transcript['entries'][number]
 export type TranscriptTool = Schemas['TranscriptTool']
 /** One model call's end: why, what it cost, and its tokens together and by kind. */
 export type TranscriptStep = Schemas['TranscriptStep']
+/** One model call's tokens by kind: what it was sent, from the cache or not, and what it wrote. */
+export type TranscriptTokens = Schemas['TranscriptTokens']
+/** The message canopy gave the runtime to start a session: its first model call's input, as far as any file says. */
+export type TranscriptPrompt = Schemas['TranscriptPrompt']
 /** The end of a tick's overseer output as written, stdout then stderr: what the transcript leaves out too. */
 export type TickOutput = Schemas['TickOutput']
 /** A search: the words it looked for, its hits by source and newest first, and the sources that had more. */

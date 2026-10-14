@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Command, CornerDownLeft, Send } from 'lucide-react'
-import { useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useState } from 'react'
+import type { KeyboardEvent, SubmitEvent } from 'react'
 
 import { newSubmission, refreshChore, refreshTicket, replyChore, replyTicket } from '@/api/mutations'
 import type { Replied } from '@/api/types'
@@ -21,8 +22,12 @@ function Shortcut({ keys }: { keys: string }) {
     return (
         <Kbd aria-hidden className="ml-0.5 bg-accent-foreground/15 text-accent-foreground">
             {keys.split('+').map((key) => {
-                if (key === 'Meta') return <Command key={key} />
-                if (key === 'Enter') return <CornerDownLeft key={key} />
+                if (key === 'Meta') {
+                    return <Command key={key} />
+                }
+                if (key === 'Enter') {
+                    return <CornerDownLeft key={key} />
+                }
                 return <span key={key}>Ctrl</span>
             })}
         </Kbd>
@@ -58,27 +63,34 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
         },
     })
 
-    function submit(event: FormEvent<HTMLFormElement>) {
+    function submit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
-        if (body.trim() && !mutation.isPending) mutation.mutate(body)
+        if (body.trim() && !mutation.isPending) {
+            mutation.mutate(body)
+        }
     }
 
     // The key Settings names sends through the form, as the button does; any other Enter makes a new line.
     function sendOnKey(event: KeyboardEvent<HTMLTextAreaElement>) {
         const { key, shiftKey, ctrlKey, metaKey } = event
-        if (!sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) return
+        if (!sends(sendKey, { key, shiftKey, ctrlKey, metaKey, isComposing: event.nativeEvent.isComposing })) {
+            return
+        }
         event.preventDefault()
         event.currentTarget.form?.requestSubmit()
     }
 
     const chore = target.kind === 'chore'
     let label = chore ? 'Your note' : 'Your reply'
-    if (waiting !== null) label = `Your answer to message ${waiting}`
+    if (waiting !== null) {
+        label = `Your answer to message ${waiting}`
+    }
     let placeholder = 'The next worker reads it as an instruction.'
-    if (chore)
+    if (chore) {
         placeholder = 'Its next runs read it as an instruction, a later note winning, such as a finding to leave out.'
-    else if (target.isPublic)
+    } else if (target.isPublic) {
         placeholder = 'Stays in canopy, never on the ticket. Say what to do about an untrusted review.'
+    }
 
     return (
         <form onSubmit={submit} aria-label={chore ? 'Note' : 'Reply'} className="flex flex-col gap-2 border-t p-3">

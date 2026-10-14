@@ -23,7 +23,9 @@ test.describe('turned on', () => {
     // As if turned on in Settings on an earlier visit; a choice made since, in the page, stands.
     test.beforeEach(async ({ page }) => {
         await page.addInitScript(() => {
-            if (window.localStorage.getItem('canopy-buddy') === null) window.localStorage.setItem('canopy-buddy', 'on')
+            if (globalThis.localStorage.getItem('canopy-buddy') === null) {
+                globalThis.localStorage.setItem('canopy-buddy', 'on')
+            }
         })
     })
 
@@ -50,6 +52,29 @@ test.describe('turned on', () => {
         await expect(tip).toBeVisible()
     })
 
+    test('Sprig leaves its tip alone on another page offering the same one', async ({ page }) => {
+        await page.goto('tickets')
+        await settled(page)
+        const tip = page.getByTestId('buddy-tip')
+        const shown = await tip.textContent()
+
+        // A ticket's page offers the same tip: the bubble stays as it was, not closed and opened again.
+        await tip.evaluate((el) => {
+            el.dataset.kept = ''
+        })
+        await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
+        await expect(page).toHaveURL(/tickets\/ABC-102$/u)
+        await expect(tip).toHaveText(shown ?? '')
+        await expect(tip).toHaveAttribute('data-kept', '')
+
+        // Closed, it stays closed back on the list.
+        await page.getByTestId('buddy-close').click()
+        await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tickets' }).click()
+        await expect(page).toHaveURL(/tickets$/u)
+        await expect(page.getByTestId('tickets')).toBeVisible()
+        await expect(tip).toHaveCount(0)
+    })
+
     test("Don't show me tips again turns Sprig off until Settings turns it back on", async ({ page }) => {
         await page.goto('settings')
         await settled(page)
@@ -73,7 +98,7 @@ test.describe('turned on', () => {
         await settled(page)
         const pupil = page.locator('[data-pupil]').first()
         await page.mouse.move(0, 0)
-        await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/)
+        await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
     })
 
     test('Sprig stands above the rail footer, never on the version', async ({ page }) => {
@@ -83,7 +108,9 @@ test.describe('turned on', () => {
         await page.locator('[data-scroll-restoration-id=page]').evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
         const sprig = await page.getByTestId('buddy').boundingBox()
         const footer = await page.getByTestId('rail-footer').boundingBox()
-        if (sprig === null || footer === null) throw new Error('Sprig or the rail footer is not shown')
+        if (sprig === null || footer === null) {
+            throw new Error('Sprig or the rail footer is not shown')
+        }
         expect(sprig.y + sprig.height).toBeLessThanOrEqual(footer.y)
     })
 

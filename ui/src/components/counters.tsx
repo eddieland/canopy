@@ -4,7 +4,8 @@ import { attentionQuery, runsQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
-import { countBySeverity, type Severity } from '@/lib/attention'
+import { countBySeverity } from '@/lib/attention'
+import type { Severity } from '@/lib/attention'
 import { latestRuns } from '@/lib/run-state'
 
 /**
@@ -52,9 +53,9 @@ export function Counters() {
 function breakdown(counts: Record<Severity, number>): string {
     const rest = counts.other + counts.finding
     const parts = [
-        counts.failed && `${counts.failed} failed`,
-        counts.waiting && `${counts.waiting} waiting`,
-        rest && `${rest} more`,
+        counts.failed > 0 && `${counts.failed} failed`,
+        counts.waiting > 0 && `${counts.waiting} waiting`,
+        rest > 0 && `${rest} more`,
     ].filter(Boolean)
     return parts.length === 0 ? 'nothing' : parts.join(' · ')
 }

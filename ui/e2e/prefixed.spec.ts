@@ -5,9 +5,9 @@ import { expect, test } from '@playwright/test'
 
 test('the app works under a path prefix', async ({ page }) => {
     await page.goto('')
-    await expect(page).toHaveURL(/\/canopy\/attention$/)
+    await expect(page).toHaveURL(/\/canopy\/attention$/u)
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/canopy\/runs$/)
+    await expect(page).toHaveURL(/\/canopy\/runs$/u)
     await page.reload()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
 })
@@ -15,7 +15,9 @@ test('the app works under a path prefix', async ({ page }) => {
 test('stream events update the cache without refetching', async ({ page }) => {
     const fetches: string[] = []
     page.on('request', (request) => {
-        if (request.resourceType() === 'fetch') fetches.push(new URL(request.url()).pathname)
+        if (request.resourceType() === 'fetch') {
+            fetches.push(new URL(request.url()).pathname)
+        }
     })
     await page.goto('runs')
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
@@ -64,7 +66,7 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
 }) => {
     await page.goto('tickets/ABC-101')
     const form = page.getByRole('form', { name: 'Reply' })
-    await expect(form.getByRole('textbox')).toHaveAttribute('placeholder', /never on the ticket/)
+    await expect(form.getByRole('textbox')).toHaveAttribute('placeholder', /never on the ticket/u)
     await form.getByRole('textbox').fill('Use your judgement on the review bot.')
     await form.getByRole('button', { name: 'Reply' }).click()
     await expect(form.getByRole('status')).toContainText('Recorded message')
@@ -107,7 +109,9 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     const form = detail.getByRole('form', { name: 'Note' })
     await form.getByRole('textbox').fill('Leave out lodash-advisory until 2026-10-15: the upgrade is merging.')
     await form.getByRole('button', { name: 'Add note' }).click()
-    await expect(form.getByRole('status')).toContainText(/Recorded message \d+ on chore:deps\. Its next run reads it\./)
+    await expect(form.getByRole('status')).toContainText(
+        /Recorded message \d+ on chore:deps\. Its next run reads it\./u,
+    )
     const mine = detail.getByTestId('conversation').locator('[data-source=operator]').last()
     await expect(mine).toContainText('until 2026-10-15')
     await expect(mine).toContainText('via web')
@@ -195,7 +199,7 @@ test('starting a ticket from the list opens it, private', async ({ page }) => {
     await page.goto('tickets')
     await page.getByLabel('Ticket key').fill('ABC-200')
     await page.getByRole('button', { name: 'Start privately' }).click()
-    await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-200$/)
+    await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-200$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-200')
     await expect(page.locator('header').getByText('private', { exact: true })).toBeVisible()
 })
@@ -214,7 +218,7 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await control.getByRole('button', { name: 'Pause' }).click()
     await expect(control).toHaveAttribute('data-paused', 'true')
     await expect(control).toContainText('paused · 0s')
-    await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/)
+    await expect(control.getByText('paused')).toHaveAttribute('title', /from the web UI$/u)
 
     // The pause is the journal's: another page reads it back, as the loop does.
     await page.reload()
@@ -222,4 +226,45 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await control.getByRole('button', { name: 'Resume' }).click()
     await expect(control).toHaveAttribute('data-paused', 'false')
     await expect(control).not.toContainText('paused')
+})
+
+test("a review's finding is dismissed on its card, and kept again", async ({ page }) => {
+    await page.goto('reviews/4')
+    const card = page.locator('#finding-2')
+    await card.getByTestId('dismiss-finding-2').click()
+    await expect(card.getByRole('status')).toHaveText('review:4 finding 2 is dismissed: no worker or tick acts on it.')
+    await expect(card).toHaveAttribute('data-dismissed', 'true')
+    await card.getByTestId('undismiss-finding-2').click()
+    await expect(card).not.toHaveAttribute('data-dismissed', 'true')
+    await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
+})
+
+test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
+    await page.goto('tickets/ABC-100')
+    const limits = page.getByTestId('grant-limits')
+    await expect(limits).toContainText('fix-ci in web')
+    await expect(limits).toContainText('1 of 1 runs')
+    const grant = limits.getByTestId('grant-fix-ci in web')
+    await expect(grant).toHaveAttribute('title', 'canopy grant ABC-100 fix-ci --repo web')
+    await grant.click()
+    await expect(limits.getByRole('status')).toHaveText(
+        'ABC-100 in web has had 1 fix-ci runs, and may now have 2. The next tick decides whether to dispatch it.',
+    )
+    // No longer at its limit, so its row is gone; what the grant did stays said.
+    await expect(grant).toHaveCount(0)
+})
+
+test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
+    await page.goto('attention')
+    await page.getByTestId('attention-list').getByText('pull/88 waits on a reviewer').click()
+    const limits = page.getByTestId('attention-detail').getByTestId('grant-limits')
+    await expect(limits).toContainText('reviews of web#88')
+    await limits.getByTestId('grant-reviews of web#88').click()
+    await expect(limits.getByRole('status')).toHaveText(
+        'https://github.com/acme/web/pull/88 has had 2 review runs, and may now have 3. ' +
+            'The next tick decides whether to review it.',
+    )
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    await expect(page.getByTestId('pull-request-reviews')).toBeVisible()
+    await expect(page.getByTestId('grant-limits')).toHaveCount(0)
 })

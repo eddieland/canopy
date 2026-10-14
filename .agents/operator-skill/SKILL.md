@@ -46,8 +46,10 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy reply KEY [TEXT]` | Answers a ticket, with TEXT or stdin; never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy dismiss chore:NAME ID` | Keeps a finding off the attention list until the chore stops reporting it; `--undo`. |
+| `canopy dismiss review:ID N` | Holds a review's finding N back from workers and the overseer; `--undo`. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |
+| `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
@@ -85,8 +87,8 @@ user file.
 Work through these in order and stop at the first that explains it.
 
 1. Did a recent tick run at all? `canopy status` shows the last tick. `skipped` usually means the overseer could not
-   reach an MCP server (`mcp_unavailable: <which>`); `overseer_failed` and `reconcile_failed` have a summary, and
-   `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing.
+   reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `overseer_failed`, and `reconcile_failed`
+   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing.
 2. What did the overseer decide about KEY?
 
    ```sh
@@ -139,8 +141,9 @@ no dismissing. Reasons:
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or `canopy grant KEY KIND` for another run. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
-| `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists reviews. |
+| `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists them; at the limit, `canopy grant URL review`. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
+| `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |
 | `split_self_labeled` | A split child was labeled before its split ended: remove the label, add it again. |

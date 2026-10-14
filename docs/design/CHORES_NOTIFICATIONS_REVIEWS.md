@@ -240,7 +240,8 @@ exits 0 only on `ok`.
   path, and what the runtime reported (§13): `session_id`,
   `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported nothing. Separate from `runs`, whose
   ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
-  cost, and the web UI's spend counts chore runs.
+  cost, the web UI's spend counts chore runs, and its chores pages show each chore's spend over the last day and 30
+  days (§22).
 - `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
 - `finding_dismissals`: chore, finding id, when dismissed, and channel; at most one row per chore and finding.
 
@@ -609,8 +610,8 @@ commit the overseer read. `--ticket` links an agent PR to its ticket. Under the 
 - `unknown_repo`: no `--repo`, or one not in the map or with no clone. The slot comes from that repository's pool.
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is.
 - `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and impact.
-- `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, however they ended. Also records the
-  `review_limit` attention item.
+- `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, plus any the operator granted it with
+  `canopy grant URL review` (§22), however they ended. Also records the `review_limit` attention item.
 - `daily_limit`: `capacity.max_reviews_per_day` review runs started in the last 24 hours.
 - `review_capacity`: `capacity.max_reviews` review runs are running.
 - `capacity`: `max_workers` runs and review runs, together, are running.
@@ -674,9 +675,10 @@ reviewer. A repository that wants that needs a verdict it can trust, which waits
 ### The overseer's part
 
 The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
-and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, and
-latest run: id, commit, status, verdict, impact, finding titles, start and end, and `reviewed_at`, its end in the
-`review` cursor's form (§7).
+and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, the
+review runs the operator granted it past the policy's limit if any (`granted`, §22), and latest run: id, commit, status,
+verdict, impact, the titles of the findings the operator has not dismissed and how many were (`dismissed_findings`,
+Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -685,7 +687,7 @@ they are `untrusted_review` and wait for the operator's go-ahead like any untrus
 | Phase | Derived from | Next action |
 |---|---|---|
 | `review_pending` | checks pass, no approval, no `done` review of the head commit, under the per-PR limit | `canopy review run --ticket KEY` |
-| `review_findings` | the head commit's `done` review has findings, newer than the `review` cursor | classify as review comments (§7): dispatch `resume --review-run <id>`, or `needs_author` |
+| `review_findings` | the head commit's `done` review has findings the operator has not dismissed, newer than the `review` cursor | classify as review comments (§7): dispatch `resume --review-run <id>`, or `needs_author` |
 
 A clean review, or a PR at its review limit, moves on to `green_unreviewed`, whose `needs_reviewer` item names the
 latest review run. A `resume` pushes a new commit, which is reviewed again, up to the per-PR limit. The overseer knows a
@@ -713,7 +715,8 @@ Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dis
 - `review_failed`: a PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed`. Recorded every tick
   that the PR is still a candidate and nothing newer has run; `canopy review run` may retry within the per-PR limit.
 - `review_limit`: recorded by the refusal, and by the overseer every tick that a candidate PR's head is unreviewed and
-  it is at its limit.
+  it is at its limit. However it is recorded, `canopy attention` ends its detail with the command that lifts that
+  PR's limit, `canopy grant URL review` (§22), so raising `max_reviews_per_pr` for every PR is not the only way.
 - Findings are not attention items. For an agent PR they lead to a `resume`, or the existing `needs_author` or
   `needs_reviewer` items.
 
@@ -726,8 +729,25 @@ and how many findings, never their text.
 
 `canopy review show` lists the review runs of the last 14 days, newest first: id, start, status, verdict, how many
 findings, impact, PR, and commit. `canopy review show ID` prints one in full: the summary and each finding with its
-detail. Text the reviewer wrote is made printable, as any message shown on a terminal is (§22). It reads the journal
-only, and runs outside a tick.
+detail, a dismissed one marked so. Text the reviewer wrote is made printable, as any message shown on a terminal is
+(§22). It reads the journal only, and runs outside a tick.
+
+### Dismissing a finding
+
+`canopy dismiss review:<ID> <N>`, or `dismiss` on a finding's card in the web UI (§22), dismisses finding `N` (its
+number in the review, from 1) of review run `ID` (asked for by the operator, 2026-10-13, with ROADMAP M32: a reviewer
+is wrong often enough that the operator wants to rule a finding out before a worker spends a run on it).
+
+- A dismissed finding stays on the review's page and in `canopy review show`, marked. It is left out of what a
+  `resume --review-run` hands the worker, which keeps the rest's numbers, and of the state block's finding titles,
+  which count it in `dismissed_findings`. A `resume` for a review whose findings are all dismissed refuses as
+  `bad_review`, and the PR, having none left to classify, moves on as a clean review would.
+- It is one run's finding. A finding has no id that lasts from one commit's review to the next, so a new commit's
+  review starts fresh (Open, below). `--undo`, or `keep` on its card, takes it back.
+- Refused `unknown` for a review run that does not exist, did not end `done` with findings, or has no finding `N` (with
+  `--undo`, one not dismissed), `bad_finding` for a number that is not 1 to 20, and `inside_run` as `reply` is: the
+  overseer and agents cannot hold a finding back from a worker. A row in `review_dismissals` per run and number, with
+  its time and channel. A `review:ID` reference takes only `dismiss`; `canopy review show ID` shows one.
 
 ### The diff
 
@@ -735,7 +755,7 @@ For the web UI's review page (ROADMAP M32), which shows each finding on the diff
 the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GET /reviews/{id}` serves one with its
 findings anchored on its diff and the diff itself (§22); both read only. The Reviews pages show them: the list, and
 a review's page with each finding's card under the line it names, under its file's header when the diff does not
-show the line, or in a panel of its own; nothing on them writes yet (Open, below).
+show the line, or in a panel of its own. The one thing they write is a finding's dismissal (above).
 
 A review is also listed on its PR's page, in the web UI's pull requests pages (§22), which open it here; a review's
 page links back to its PR's.
@@ -780,6 +800,7 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   nothing. A timed-out reviewer records what its finished calls cost. Separate from `runs`, which is keyed by ticket
   and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
+- `review_dismissals`: review run, finding number, when dismissed, and channel; at most one row per run and number.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=` with the run's `reviewed_at`.
 
@@ -796,8 +817,8 @@ marker, with the operator's approval.
 
 ### Open
 
-- Showing a review as a PR review of canopy's own, findings on the diff's lines, in the web UI (ROADMAP M32), and
-  what the operator does from there: dismiss a finding, or send it to a worker.
+- What else the operator does from a review's page (ROADMAP M32): send some findings to a worker. And how a
+  finding is followed from one commit's review to the next, so a dismissal could outlast its run.
 - A repository-offered review rubric, such as its own `low_impact`, that an operator opts into by name.
 - Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
   (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR

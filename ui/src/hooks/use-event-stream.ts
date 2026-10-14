@@ -40,12 +40,16 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
     const [reported, setReported] = useState<{ url: string; status: StreamStatus } | null>(null)
     const onMessage = useEffectEvent((data: string) => {
         const event = options.parse(data)
-        if (event !== null) options.onEvent(event)
+        if (event !== null) {
+            options.onEvent(event)
+        }
     })
     const onReconnect = useEffectEvent(() => options.onReconnect?.())
 
     useEffect(() => {
-        if (!enabled) return
+        if (!enabled) {
+            return
+        }
         let source: EventSource | null = null
         let dropped = false
         let retry: ReturnType<typeof setTimeout> | null = null
@@ -53,7 +57,9 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
         let hiddenAt: number | null = null
 
         const stopRetry = () => {
-            if (retry !== null) clearTimeout(retry)
+            if (retry !== null) {
+                clearTimeout(retry)
+            }
             retry = null
         }
         const connect = () => {
@@ -65,7 +71,9 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
                 stopRetry()
                 delay = RETRY_FIRST_MS
                 setReported({ url, status: 'open' })
-                if (dropped) onReconnect()
+                if (dropped) {
+                    onReconnect()
+                }
                 dropped = false
             })
             current.addEventListener('message', (message: MessageEvent<string>) => onMessage(message.data))
@@ -73,7 +81,9 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
                 dropped = true
                 setReported({ url, status: 'reconnecting' })
                 // One timer per drop: the browser's own retries fire `error` again while it waits.
-                if (retry !== null) return
+                if (retry !== null) {
+                    return
+                }
                 retry = setTimeout(connect, delay)
                 delay = Math.min(delay * 2, RETRY_MAX_MS)
             })
@@ -91,29 +101,37 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
             }
             const away = hiddenAt === null ? 0 : Date.now() - hiddenAt
             hiddenAt = null
-            if (away >= HIDDEN_MS || source?.readyState !== EventSource.OPEN) startOver()
+            if (away >= HIDDEN_MS || source?.readyState !== EventSource.OPEN) {
+                startOver()
+            }
         }
         const onOnline = () => {
-            if (source?.readyState !== EventSource.OPEN) startOver()
+            if (source?.readyState !== EventSource.OPEN) {
+                startOver()
+            }
         }
         // A page restored from the back-forward cache had its stream closed when it was put there.
         const onPageShow = (event: PageTransitionEvent) => {
-            if (event.persisted) startOver()
+            if (event.persisted) {
+                startOver()
+            }
         }
 
         connect()
         document.addEventListener('visibilitychange', onVisibility)
-        window.addEventListener('online', onOnline)
+        globalThis.addEventListener('online', onOnline)
         window.addEventListener('pageshow', onPageShow)
         return () => {
             stopRetry()
             source?.close()
             document.removeEventListener('visibilitychange', onVisibility)
-            window.removeEventListener('online', onOnline)
+            globalThis.removeEventListener('online', onOnline)
             window.removeEventListener('pageshow', onPageShow)
         }
     }, [url, enabled])
 
-    if (!enabled) return 'closed'
+    if (!enabled) {
+        return 'closed'
+    }
     return reported?.url === url ? reported.status : 'connecting'
 }

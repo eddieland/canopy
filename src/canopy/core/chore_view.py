@@ -11,7 +11,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_result as result
 from canopy.core import chore_window as window
@@ -216,12 +216,44 @@ def _detail(run: sqlite3.Row) -> str:
     return f"{text}; log {run['log_path']}"[:2000]
 
 
-def state_section(states_: list[ChoreState], now: datetime) -> list[dict[str, object]]:
+class LatestRun(TypedDict):
+    """A chore's latest run, as the state block's `chores` carries it."""
+
+    run_id: int
+    status: str
+    started_at: str
+    ended_at: str | None
+    # The harness's note on the run, or else the chore's own summary.
+    summary: str | None
+
+
+class FindingRef(TypedDict):
+    """An open finding, named by its id and title, with its link if it has one."""
+
+    id: str
+    title: str
+    link: str | None
+
+
+class ChoreSummary(TypedDict):
+    """One configured chore in the state block's `chores` (DESIGN §19)."""
+
+    name: str
+    every_minutes: int
+    when: str | None
+    due_at: str | None
+    due: bool
+    running: bool
+    latest_run: LatestRun | None
+    findings: list[FindingRef]
+
+
+def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary]:
     """Return the state block's `chores`: each configured chore, for the overseer to run or wait on (DESIGN §19)."""
-    section: list[dict[str, object]] = []
+    section: list[ChoreSummary] = []
     for state in states_:
         latest = state.latest
-        latest_summary = None
+        latest_summary: LatestRun | None = None
         if latest is not None:
             stored = result.stored(latest["result_json"])
             harness = _harness(latest["result_json"])

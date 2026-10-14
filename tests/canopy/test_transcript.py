@@ -4,8 +4,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
+from unittest import mock
 
 from canopy.core import transcript
 from canopy.core.transcript import Error, Step, Text, Tokens, ToolCall
@@ -63,8 +62,8 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
     found = transcript.read(path, SESSION)
     assert found is not None
     assert found.entries == [
-        Text(AT, "The tests first.", reasoning=True),
-        Text(AT, "Running the tests."),
+        Text(AT, "The tests first.", reasoning=True, call=1),
+        Text(AT, "Running the tests.", call=1),
         ToolCall(
             AT,
             "bash",
@@ -73,12 +72,30 @@ def test_a_session_reads_as_its_text_tool_calls_steps_and_errors_in_order(tmp_pa
             '{\n  "command": "uv run pytest -q",\n  "description": "Run the tests"\n}',
             "3 passed\n",
             2500,
+            call=1,
         ),
-        ToolCall(AT, "read", "error", None, '{\n  "filePath": "/x"\n}', "no such file", None),
-        Step(AT, "tool-calls", 0.25, Tokens(100, 20, 3, 400, 50)),
-        Error(AT, "APIError", ""),
+        ToolCall(AT, "read", "error", None, '{\n  "filePath": "/x"\n}', "no such file", None, call=1),
+        Step(AT, "tool-calls", 0.25, Tokens(100, 20, 3, 400, 50), call=1),
+        Error(AT, "APIError", "", call=1),
     ]
     assert (found.truncated, found.unreadable) == (False, 0)
+
+
+def test_each_entry_is_numbered_by_the_model_call_the_runtime_started_it_in(tmp_path: Path) -> None:
+    # Another session's calls do not count, and an entry before the first call has no number.
+    path = log(
+        tmp_path,
+        json.dumps({"type": "error", "timestamp": T, "sessionID": SESSION, "error": {"name": "early"}}),
+        event("step_start", {"type": "step-start"}),
+        event("text", {"type": "text", "text": "one"}),
+        event("step_start", {"type": "step-start"}, session="ses_other"),
+        event("step_finish", {"type": "step-finish", "reason": "tool-calls"}),
+        event("step_start", {"type": "step-start"}),
+        event("text", {"type": "text", "text": "two"}),
+    )
+    found = transcript.read(path, SESSION)
+    assert found is not None
+    assert [e.call for e in found.entries] == [None, 1, 1, 2]
 
 
 def test_only_the_recorded_sessions_events_are_read(tmp_path: Path) -> None:
@@ -132,28 +149,26 @@ def test_a_bad_timestamp_is_no_time(tmp_path: Path) -> None:
     assert found.entries == [Text(None, "when?")]
 
 
-def test_entries_past_the_bounds_are_left_out_and_say_so(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(transcript, "MAX_ENTRIES", 2)
-    path = log(tmp_path, *(event("text", {"type": "text", "text": str(i)}) for i in range(5)))
-    found = transcript.read(path, SESSION)
-    assert found is not None
-    assert ([e.text for e in found.entries if isinstance(e, Text)], found.truncated) == (["0", "1"], True)
+def test_entries_past_the_bounds_are_left_out_and_say_so(tmp_path: Path) -> None:
+    with mock.patch.object(transcript, "MAX_ENTRIES", 2):
+        path = log(tmp_path, *(event("text", {"type": "text", "text": str(i)}) for i in range(5)))
+        found = transcript.read(path, SESSION)
+        assert found is not None
+        assert ([e.text for e in found.entries if isinstance(e, Text)], found.truncated) == (["0", "1"], True)
 
-    monkeypatch.setattr(transcript, "MAX_ENTRIES", 100)
-    monkeypatch.setattr(transcript, "MAX_CHARS", 5)
-    found = transcript.read(log(tmp_path, *(event("text", {"type": "text", "text": "abc"}) for _ in range(3))), SESSION)
-    assert found is not None
-    assert (len(found.entries), found.truncated) == (1, True)
+    with mock.patch.object(transcript, "MAX_ENTRIES", 100), mock.patch.object(transcript, "MAX_CHARS", 5):
+        lines = (event("text", {"type": "text", "text": "abc"}) for _ in range(3))
+        found = transcript.read(log(tmp_path, *lines), SESSION)
+        assert found is not None
+        assert (len(found.entries), found.truncated) == (1, True)
 
 
-def test_a_log_past_the_byte_bound_is_read_to_its_last_whole_line(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_log_past_the_byte_bound_is_read_to_its_last_whole_line(tmp_path: Path) -> None:
     lines = [event("text", {"type": "text", "text": str(i)}) for i in range(3)]
     path = tmp_path / "1.log"
     path.write_text("\n".join(lines) + "\n")
-    monkeypatch.setattr(transcript, "MAX_BYTES", len(lines[0]) + len(lines[1]) + 10)
-    found = transcript.read(path, SESSION)
+    with mock.patch.object(transcript, "MAX_BYTES", len(lines[0]) + len(lines[1]) + 10):
+        found = transcript.read(path, SESSION)
     assert found is not None
     assert ([e.text for e in found.entries if isinstance(e, Text)], found.truncated) == (["0", "1"], True)
 
@@ -171,9 +186,7 @@ def test_a_missing_log_a_symlink_a_directory_and_a_fifo_are_not_read(tmp_path: P
     assert transcript.read(fifo, SESSION) is None
 
 
-def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_characters(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_characters(tmp_path: Path) -> None:
     path = tmp_path / "1.log"
     path.write_bytes("first line\nsecond, ünïcode\n--- stderr ---\nbell\x07 and \x1b escape\n".encode())
     found = transcript.tail(path)
@@ -181,8 +194,8 @@ def test_a_files_tail_is_its_end_as_written_from_a_whole_line_without_control_ch
         "first line\nsecond, ünïcode\n--- stderr ---\nbell  and   escape\n", path.stat().st_size, truncated=False
     )
     # Past the bound, the cut lands inside a character, and the text starts at the next whole line.
-    monkeypatch.setattr(transcript, "MAX_TAIL", path.stat().st_size - len("first line\nsecond, ü"))
-    cut = transcript.tail(path)
+    with mock.patch.object(transcript, "MAX_TAIL", path.stat().st_size - len("first line\nsecond, ü")):
+        cut = transcript.tail(path)
     assert cut is not None
     assert (cut.text, cut.size, cut.truncated) == ("--- stderr ---\nbell  and   escape\n", path.stat().st_size, True)
 
@@ -195,3 +208,26 @@ def test_a_missing_file_a_symlink_a_directory_and_a_fifo_have_no_tail(tmp_path: 
     os.mkfifo(fifo)
     for path in (tmp_path / "missing.log", link, tmp_path, fifo):
         assert transcript.tail(path) is None
+
+
+def test_a_prompt_is_kept_beside_its_log_and_read_whole_without_control_characters(tmp_path: Path) -> None:
+    path = transcript.prompt_path(tmp_path / "7.log")
+    assert path == tmp_path / "7.prompt"
+    path.write_text("# canopy worker\x1b[2J\n\nWork ABC-1.\n")
+    assert transcript.prompt(path) == transcript.Prompt("# canopy worker [2J\n\nWork ABC-1.\n", truncated=False)
+
+
+def test_a_prompt_past_its_bound_is_cut_and_says_so(tmp_path: Path) -> None:
+    path = tmp_path / "7.prompt"
+    path.write_text("x" * 12)
+    with mock.patch.object(transcript, "MAX_PROMPT", 10):
+        assert transcript.prompt(path) == transcript.Prompt("x" * 10, truncated=True)
+
+
+def test_a_missing_prompt_a_symlink_and_a_directory_are_not_read(tmp_path: Path) -> None:
+    real = tmp_path / "real.prompt"
+    real.write_text("hi")
+    (tmp_path / "link.prompt").symlink_to(real)
+    (tmp_path / "dir.prompt").mkdir()
+    for name in ("missing.prompt", "link.prompt", "dir.prompt"):
+        assert transcript.prompt(tmp_path / name) is None

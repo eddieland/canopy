@@ -10,10 +10,47 @@ for (const theme of THEMES) {
             await signIn(page)
             await page.goto(route)
             await settled(page)
-            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/)
-            await screenshotWhole(page, `${route.replace(/[/?=]/g, '-')}-${theme}.png`)
+            await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
+            await screenshotWhole(page, `${route.replaceAll(/[/?=]/gu, '-')}-${theme}.png`)
         })
     }
+
+    // What a page shows only when opened: JSON colored in a tool call's input and output, and in a tick's output.
+    test(`an opened tool call in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto('runs/39')
+        await settled(page)
+        const call = page.getByTestId('transcript-tool').filter({ hasText: 'jira_get_issue' }).first()
+        await call.locator('summary').click()
+        await expect(call).toHaveScreenshot(`runs-39-tool-call-${theme}.png`)
+    })
+
+    test(`a tick's output shown in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto('ticks/2')
+        await settled(page)
+        const output = page.getByTestId('tick-output')
+        await output.getByRole('button', { name: 'Show' }).click()
+        await expect(output.getByTestId('tick-output-text')).toBeVisible()
+        await expect(output).toHaveScreenshot(`ticks-2-output-${theme}.png`)
+    })
+
+    test(`a tick's output pretty in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto('ticks/2')
+        await settled(page)
+        const output = page.getByTestId('tick-output')
+        await output.getByRole('button', { name: 'Show' }).click()
+        await output.getByRole('button', { name: 'Pretty' }).click()
+        await expect(output.getByRole('button', { name: 'Pretty' })).toHaveAttribute('aria-pressed', 'true')
+        await expect(output).toHaveScreenshot(`ticks-2-output-pretty-${theme}.png`)
+    })
 
     test(`sign-in in ${theme}`, async ({ page }) => {
         await storeTheme(page, theme)

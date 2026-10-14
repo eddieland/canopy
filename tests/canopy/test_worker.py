@@ -9,7 +9,10 @@ import re
 import signal
 import sqlite3
 import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -36,39 +39,38 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
 
 def dispatch_and_run(
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     runner: InlineRunner | None = None,
     slug: str = "work",
     title: str | None = None,
 ) -> sqlite3.Row:
     runner = runner or InlineRunner()
-    tick_id = in_tick(conn, monkeypatch)
-    if title is not None:
-        assert main(["ticket", "set", "PROJ-1", "--title", title]) == 0
-    assert (
-        main(
-            [
-                "dispatch",
-                "PROJ-1",
-                "--repo",
-                "repo",
-                "--label",
-                "agent-ready-tester",
-                "--kind",
-                "implement",
-                "--slug",
-                slug,
-            ],
-            runner=runner,
+    with in_tick(conn) as tick_id:
+        if title is not None:
+            assert main(["ticket", "set", "PROJ-1", "--title", title]) == 0
+        assert (
+            main(
+                [
+                    "dispatch",
+                    "PROJ-1",
+                    "--repo",
+                    "repo",
+                    "--label",
+                    "agent-ready-tester",
+                    "--kind",
+                    "implement",
+                    "--slug",
+                    slug,
+                ],
+                runner=runner,
+            )
+            == 0
         )
-        == 0
-    )
-    db.finish_tick(conn, tick_id, "ok", "test")
-    run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-    assert main(["_run", str(run_id)], runner=runner) == 0
-    row = db.get_run(conn, run_id)
-    assert row is not None
-    return row
+        db.finish_tick(conn, tick_id, "ok", "test")
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        assert main(["_run", str(run_id)], runner=runner) == 0
+        row = db.get_run(conn, run_id)
+        assert row is not None
+        return row
 
 
 def agent_runs(agent_log: Path) -> list[dict[str, object]]:
@@ -81,11 +83,10 @@ def test_worker_that_pushes_is_done(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(*commit_and_push("agent/PROJ-1-work")):
+        run = dispatch_and_run(conn)
 
     assert run["status"] == "done"
     assert run["ended_at"] is not None
@@ -134,7 +135,6 @@ def test_the_session_title_names_the_ticket_and_its_title(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     title: str | None,
     session_title: str,
 ) -> None:
@@ -143,8 +143,8 @@ def test_the_session_title_names_the_ticket_and_its_title(
     canopy_env.write_user(
         re.sub(r"^worker_cmd = .*$", f"worker_cmd = '{template}'", canopy_env.user_file.read_text(), flags=re.MULTILINE)
     )
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    dispatch_and_run(conn, monkeypatch, title=title)
+    with worker_does(*commit_and_push("agent/PROJ-1-work")):
+        dispatch_and_run(conn, title=title)
     [w] = agent_runs(agent_log)
     argv = w["argv"]
     assert isinstance(argv, list)
@@ -152,17 +152,16 @@ def test_the_session_title_names_the_ticket_and_its_title(
 
 
 def test_a_run_makes_no_local_branch(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
     """A pool's slots share its branch refs, so a worker starts detached, and a bare push has nowhere to go."""
-    worker_does(
-        monkeypatch,
+    with worker_does(
         ["git", "symbolic-ref", "--quiet", "HEAD"],
         ["git", "for-each-ref", "--format=%(refname)", "refs/heads/agent/"],
         ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"],
         ["git", "push", "--quiet", "origin"],
-    )
-    run = dispatch_and_run(conn, monkeypatch)
+    ):
+        run = dispatch_and_run(conn)
     [w] = agent_runs(agent_log)
     commands = w["commands"]
     assert isinstance(commands, list)
@@ -173,10 +172,10 @@ def test_a_run_makes_no_local_branch(
 
 
 def test_unpushed_commits_are_pushed_once(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
-    worker_does(monkeypatch, ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: forgot to push"])
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: forgot to push"]):
+        run = dispatch_and_run(conn)
     assert run["status"] == "done"
     assert git_pool.remote_head("agent/PROJ-1-work") == git(
         "rev-parse", "HEAD", cwd=Path(slot_of(conn, run["id"])["slot_path"])
@@ -184,31 +183,149 @@ def test_unpushed_commits_are_pushed_once(
 
 
 def test_commits_the_worker_moved_head_off_are_unpushed(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
     """Detached, HEAD alone holds the worker's commits: checking out something else leaves them behind."""
-    worker_does(
-        monkeypatch,
+    with worker_does(
         ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: left behind"],
         ["git", "checkout", "--quiet", "--detach", "origin/main"],
-    )
-    run = dispatch_and_run(conn, monkeypatch)
+    ):
+        run = dispatch_and_run(conn)
     assert run["status"] == "unpushed"
     assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run["result_json"])["harness"]
     assert git_pool.remote_head("agent/PROJ-1-work") is None
 
 
 def test_a_worker_that_pushed_and_then_moved_head_is_done(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
-    worker_does(
-        monkeypatch,
+    with worker_does(
         *commit_and_push("agent/PROJ-1-work"),
         ["git", "checkout", "--quiet", "--detach", "origin/main"],
-    )
-    run = dispatch_and_run(conn, monkeypatch)
+    ):
+        run = dispatch_and_run(conn)
     assert run["status"] == "done"
     assert git_pool.remote_head("agent/PROJ-1-work") != git_pool.remote_head("main")
+
+
+def branch_behind_main(git_pool: GitPool, branch: str = "agent/PROJ-1-work") -> None:
+    """Put `branch` on origin with two commits of its own, and then a commit on `main` it lacks."""
+    seed = git_pool.slots[1]
+    git("checkout", "--quiet", "-b", branch, "origin/main", cwd=seed)
+    for name in ("a", "b"):
+        (seed / f"{name}.txt").write_text(f"{name}\n")
+        git("add", f"{name}.txt", cwd=seed)
+        git("commit", "--quiet", "-m", f"PROJ-1: {name}", cwd=seed)
+    git("push", "--quiet", "origin", branch, cwd=seed)
+    git("checkout", "--quiet", "--detach", "origin/main", cwd=seed)
+    (seed / "m.txt").write_text("m\n")
+    git("add", "m.txt", cwd=seed)
+    git("commit", "--quiet", "-m", "main moves on", cwd=seed)
+    git("push", "--quiet", "origin", "HEAD:refs/heads/main", cwd=seed)
+    git("checkout", "--quiet", "--detach", cwd=seed)
+
+
+def commit_file(name: str) -> list[str]:
+    return ["sh", "-c", f"echo {name} > {name}.txt && git add {name}.txt && git commit --quiet -m 'PROJ-1: {name}'"]
+
+
+def with_rebase(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+
+
+def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """Issue #293: the worker rebased, could not force-push, and pushed a fix on top of origin's branch instead."""
+    branch_behind_main(git_pool)
+    with worker_does(
+        ["git", "rebase", "--quiet", "origin/main"],
+        ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
+        commit_file("fix"),
+        ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+    ):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "done", run["result_json"]
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+
+
+def test_a_rebase_dropped_with_work_of_its_own_is_unpushed(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """Only a commit whose change origin already has is dropped from the check: new work left behind still counts."""
+    branch_behind_main(git_pool)
+    with worker_does(
+        ["git", "rebase", "--quiet", "origin/main"],
+        commit_file("lost"),
+        ["git", "checkout", "--quiet", "--detach", "origin/agent/PROJ-1-work"],
+        commit_file("fix"),
+        ["git", "push", "--quiet", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+    ):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "unpushed"
+    assert "the worker moved HEAD off 1 commit(s) not on origin" in json.loads(run["result_json"])["harness"]
+
+
+def test_without_rebase_a_rebased_branch_is_never_forced(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    branch_behind_main(git_pool)
+    before = git_pool.remote_head("agent/PROJ-1-work")
+    with worker_does(["git", "rebase", "--quiet", "origin/main"]):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "unpushed"
+    assert "not on origin; the push failed: " in json.loads(run["result_json"])["harness"]
+    assert git_pool.remote_head("agent/PROJ-1-work") == before
+
+
+def test_with_rebase_a_worker_that_rebased_and_pushed_with_a_lease_is_done(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """Its own commit, made before the rebase, and origin's old commits are replaced by copies: nothing is lost."""
+    with_rebase(canopy_env)
+    branch_behind_main(git_pool)
+    with worker_does(
+        commit_file("fix"),
+        ["git", "rebase", "--quiet", "origin/main"],
+        ["git", "push", "--quiet", "--force-with-lease", "origin", "HEAD:refs/heads/agent/PROJ-1-work"],
+    ):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "done", run["result_json"]
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+    assert git("merge-base", "--is-ancestor", "origin/main", "HEAD", cwd=slot) == ""
+
+
+def test_with_rebase_canopy_pushes_a_rebased_branch_with_a_lease(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    with_rebase(canopy_env)
+    branch_behind_main(git_pool)
+    with worker_does(["git", "rebase", "--quiet", "origin/main"]):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "done", run["result_json"]
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
+
+
+def test_with_rebase_canopy_never_overwrites_a_push_made_since_the_run_started(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    with_rebase(canopy_env)
+    branch_behind_main(git_pool)
+    other = git_pool.slots[1]
+    script = (
+        f"git -C {other} fetch --quiet origin && git -C {other} checkout --quiet --detach origin/agent/PROJ-1-work && "
+        f"git -C {other} commit --quiet --allow-empty -m 'a coworker' && "
+        f"git -C {other} push --quiet origin HEAD:refs/heads/agent/PROJ-1-work"
+    )
+    pushed_meanwhile = ["sh", "-c", script]
+    with worker_does(pushed_meanwhile, ["git", "rebase", "--quiet", "origin/main"]):
+        run = dispatch_and_run(conn)
+    assert run["status"] == "unpushed"
+    assert "not on origin; the push failed: " in json.loads(run["result_json"])["harness"]
+    assert git("log", "-1", "--format=%s", git_pool.remote_head("agent/PROJ-1-work") or "", cwd=other) == "a coworker"
 
 
 @pytest.mark.parametrize("only_here", [False, True])
@@ -217,7 +334,6 @@ def test_a_local_branch_an_earlier_canopy_left_is_dropped_unless_it_holds_commit
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     only_here: bool,  # noqa: FBT001  (a parameter of the test)
 ) -> None:
     """Before D109 a run made its branch locally with `checkout -B`, and the pool's repository still has it."""
@@ -226,8 +342,8 @@ def test_a_local_branch_an_earlier_canopy_left_is_dropped_unless_it_holds_commit
         if only_here:
             stray = git("commit-tree", "-m", "only here", "-p", "origin/main", "origin/main^{tree}", cwd=slot)
             git("branch", "--force", "agent/PROJ-1-work", stray, cwd=slot)
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(*commit_and_push("agent/PROJ-1-work")):
+        run = dispatch_and_run(conn)
     assert run["status"] == "done"
     slot = Path(slot_of(conn, run["id"])["slot_path"])
     left = git("for-each-ref", "--format=%(refname)", "refs/heads/agent/PROJ-1-work", cwd=slot)
@@ -240,11 +356,10 @@ def test_failed_push_is_unpushed(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     git_pool.reject_pushes()
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(*commit_and_push("agent/PROJ-1-work")):
+        run = dispatch_and_run(conn)
     assert run["status"] == "unpushed"
     result = json.loads(run["result_json"])
     assert result["status"] == "done"  # what the worker claimed is kept
@@ -254,11 +369,11 @@ def test_failed_push_is_unpushed(
 
 
 def test_no_commits_is_not_unpushed(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
     blocked = json.dumps({"status": "blocked", "summary": "unclear", "question": "which API?"})
-    worker_does(monkeypatch, result=blocked)
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(result=blocked):
+        run = dispatch_and_run(conn)
     assert run["status"] == "blocked"
     assert json.loads(run["result_json"])["question"] == "which API?"
     assert git_pool.remote_head("agent/PROJ-1-work") is None
@@ -273,22 +388,20 @@ def test_bad_result_line_is_unknown(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     last_line: str,
     exit_code: str,
 ) -> None:
-    worker_does(monkeypatch, result=last_line)
-    monkeypatch.setenv("FAKE_WORKER_EXIT", exit_code)
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(result=last_line), mock.patch.dict(os.environ, {"FAKE_WORKER_EXIT": exit_code}):
+        run = dispatch_and_run(conn)
     assert run["status"] == "unknown"
     assert json.loads(run["result_json"]) == {"harness": "the worker's last line was not a valid result"}
 
 
 def test_result_text_is_bounded(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
-    worker_does(monkeypatch, result=json.dumps({"status": "failed", "summary": "x" * 10000, "extra": "ignored"}))
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(result=json.dumps({"status": "failed", "summary": "x" * 10000, "extra": "ignored"})):
+        run = dispatch_and_run(conn)
     result = json.loads(run["result_json"])
     assert run["status"] == "failed"
     assert len(result["summary"]) == 2000
@@ -300,16 +413,15 @@ def test_timeout(
     git_pool: GitPool,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    run = dispatch_and_run(conn, monkeypatch, InlineRunner(timeout_agent=True))
+    run = dispatch_and_run(conn, InlineRunner(timeout_agent=True))
     assert run["status"] == "timeout"
     assert json.loads(run["result_json"]) == {"harness": "the worker timed out after 45 minutes"}
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_existing_branch_on_origin_is_continued(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
     seed = git_pool.slots[1]
     git("checkout", "--quiet", "-b", "agent/PROJ-1-work", "origin/main", cwd=seed)
@@ -317,8 +429,8 @@ def test_existing_branch_on_origin_is_continued(
     git("push", "--quiet", "origin", "agent/PROJ-1-work", cwd=seed)
     git("checkout", "--quiet", "--detach", cwd=seed)
 
-    worker_does(monkeypatch, ["git", "log", "-1", "--format=%s"])
-    dispatch_and_run(conn, monkeypatch)
+    with worker_does(["git", "log", "-1", "--format=%s"]):
+        dispatch_and_run(conn)
     [w] = agent_runs(agent_log)
     commands = w["commands"]
     assert isinstance(commands, list)
@@ -331,7 +443,6 @@ def test_worker_refuses_to_start_on_a_branch_that_defines_its_agent(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     # Anyone who can push to the repository could commit this (TRUST_MODEL T7).
@@ -344,7 +455,7 @@ def test_worker_refuses_to_start_on_a_branch_that_defines_its_agent(
     git("commit", "--quiet", "-m", "loosen the worker", cwd=clone)
     git("push", "--quiet", "origin", "main", cwd=clone)
 
-    run = dispatch_and_run(conn, monkeypatch)
+    run = dispatch_and_run(conn)
     assert run["status"] == "crashed"
     assert "defines one of canopy's agents" in json.loads(run["result_json"])["harness"]
     assert not agent_log.exists()
@@ -357,11 +468,10 @@ def test_git_failure_is_crashed_and_returns_the_slot(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for slot in git_pool.slots:
         git("remote", "set-url", "origin", str(git_pool.origin.parent / "gone.git"), cwd=slot)
-    run = dispatch_and_run(conn, monkeypatch)
+    run = dispatch_and_run(conn)
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"])["harness"].startswith("repo: git fetch exited 128")
     assert not agent_log.exists()  # the worker never ran
@@ -373,31 +483,30 @@ def test_a_run_is_claimed_once(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    run = dispatch_and_run(conn, monkeypatch)
+    run = dispatch_and_run(conn)
     assert main(["_run", str(run["id"])]) == 1
     assert "is not waiting to start" in capsys.readouterr().err
     assert main(["_run", "99"]) == 1
     assert "no run 99" in capsys.readouterr().err
 
     # A running run that another process claimed is refused too: the overseer cannot start a second worker in a slot.
-    tick_id = in_tick(conn, monkeypatch)
-    assert (
-        main(
-            ["dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-            runner=InlineRunner(),
+    with in_tick(conn) as tick_id:
+        assert (
+            main(
+                ["dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
+                runner=InlineRunner(),
+            )
+            == 0
         )
-        == 0
-    )
-    db.finish_tick(conn, tick_id, "ok", "test")
-    conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
-    assert main(["_run", "2"]) == 1
-    still = db.get_run(conn, 2)
-    assert still is not None
-    assert still["status"] == "running"
-    assert len(agent_runs(agent_log)) == 1
+        db.finish_tick(conn, tick_id, "ok", "test")
+        conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
+        assert main(["_run", "2"]) == 1
+        still = db.get_run(conn, 2)
+        assert still is not None
+        assert still["status"] == "running"
+        assert len(agent_runs(agent_log)) == 1
 
 
 def test_sigterm_returns_the_slot(
@@ -406,17 +515,15 @@ def test_sigterm_returns_the_slot(
     agent_log: Path,
     treehouse_state: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    worker_does(monkeypatch)
-    monkeypatch.setenv("FAKE_WORKER_SLEEP", "30")
-    # Signal this process once the worker has started; `_run` turns SIGTERM into cleanup.
-    timer = threading.Timer(1.5, os.kill, (os.getpid(), signal.SIGTERM))
-    timer.start()
-    try:
-        run = dispatch_and_run(conn, monkeypatch)
-    finally:
-        timer.cancel()
+    with worker_does(), mock.patch.dict(os.environ, {"FAKE_WORKER_SLEEP": "30"}):
+        # Signal this process once the worker has started; `_run` turns SIGTERM into cleanup.
+        timer = threading.Timer(1.5, os.kill, (os.getpid(), signal.SIGTERM))
+        timer.start()
+        try:
+            run = dispatch_and_run(conn)
+        finally:
+            timer.cancel()
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"]) == {"harness": "stopped by signal SIGTERM"}
     assert all(s["status"] == "available" for s in pool(treehouse_state))
@@ -436,11 +543,13 @@ def test_parse_result_takes_the_last_json_object_line() -> None:
     assert worker.parse_result("chatter only\n") is None
 
 
-def report_events(canopy_env: CanopyEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+@contextmanager
+def report_events(canopy_env: CanopyEnv) -> Iterator[None]:
     """Have the worker's template ask for OpenCode's JSON events, as the default does, with session `ses_w1`."""
     text = canopy_env.user_file.read_text().replace("--agent canopy-worker", "--agent canopy-worker --format json")
     canopy_env.write_user(text)
-    monkeypatch.setenv("FAKE_WORKER_SESSION", "ses_w1")
+    with mock.patch.dict(os.environ, {"FAKE_WORKER_SESSION": "ses_w1"}):
+        yield
 
 
 def test_a_worker_records_the_session_and_cost_it_reported(
@@ -448,12 +557,10 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    report_events(canopy_env, monkeypatch)
-    worker_does(monkeypatch, *commit_and_push("agent/PROJ-1-work"))
-    run = dispatch_and_run(conn, monkeypatch)
+    with report_events(canopy_env), worker_does(*commit_and_push("agent/PROJ-1-work")):
+        run = dispatch_and_run(conn)
 
     # The result line is read from the events' text, as it is from stdout without them.
     assert run["status"] == "done"
@@ -473,16 +580,16 @@ def test_a_worker_records_the_session_and_cost_it_reported(
 
 
 def test_a_timed_out_worker_records_what_it_reported_before_the_kill(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
-    report_events(canopy_env, monkeypatch)
     tokens = {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 3, "write": 4}}
     events = [
         {"type": "step_finish", "sessionID": "ses_slow", "part": {"cost": 0.5, "tokens": tokens}},
         {"type": "text", "sessionID": "ses_slow", "part": {"type": "text", "text": "still going"}},
     ]
     stdout = "".join(json.dumps(e) + "\n" for e in events)
-    run = dispatch_and_run(conn, monkeypatch, InlineRunner(timeout_agent=True, timeout_stdout=stdout))
+    with report_events(canopy_env):
+        run = dispatch_and_run(conn, InlineRunner(timeout_agent=True, timeout_stdout=stdout))
     assert run["status"] == "timeout"
     assert (run["session_id"], run["cost_usd"], run["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
 
@@ -492,12 +599,11 @@ def test_a_worker_without_events_reports_no_session(
     git_pool: GitPool,
     agent_log: Path,
     conn: sqlite3.Connection,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     summary = "\x1b[2Jcleared the screen\nand  went on   " + "x" * 300
-    worker_does(monkeypatch, result=json.dumps({"status": "failed", "summary": summary, "pr": "https://x.test/\x1b"}))
-    run = dispatch_and_run(conn, monkeypatch)
+    with worker_does(result=json.dumps({"status": "failed", "summary": summary, "pr": "https://x.test/\x1b"})):
+        run = dispatch_and_run(conn)
     assert (run["status"], run["session_id"], run["cost_usd"]) == ("failed", None, None)
 
     capsys.readouterr()

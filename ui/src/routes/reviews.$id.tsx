@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
@@ -29,7 +30,9 @@ function ReviewPage() {
     const { id } = Route.useParams()
     // A review run's id is a positive number, as a run's is.
     const parsed = tickId(id)
-    if (parsed === null) return <NoReview title={`review ${id}`}>not a review: its id is a positive number</NoReview>
+    if (parsed === null) {
+        return <NoReview title={`review ${id}`}>not a review: its id is a positive number</NoReview>
+    }
     return <Loaded id={parsed} />
 }
 
@@ -52,8 +55,8 @@ function Loaded({ id }: { id: number }) {
     return (
         <>
             <PageHeader title={`review ${data.review.id}`}>
-                canopy's adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on the
-                diff, at the lines they name.
+                canopy&apos;s adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on
+                the diff, at the lines they name.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <ReviewPanel detail={data} />
@@ -63,7 +66,7 @@ function Loaded({ id }: { id: number }) {
                         <PanelHeader label="Not in the diff" />
                         <div className="flex flex-col gap-2 p-3">
                             {placed.elsewhere.map((f) => (
-                                <FindingCard key={f.n} numbered={f} />
+                                <FindingCard key={f.n} run={data.review.id} numbered={f} />
                             ))}
                         </div>
                     </Panel>
@@ -77,13 +80,13 @@ function Loaded({ id }: { id: number }) {
                         {placed.elsewhere.length > 0 && (
                             <div className="flex flex-col gap-2 border-t p-3">
                                 {placed.elsewhere.map((f) => (
-                                    <FindingCard key={f.n} numbered={f} />
+                                    <FindingCard key={f.n} run={data.review.id} numbered={f} />
                                 ))}
                             </div>
                         )}
                     </Panel>
                 ) : (
-                    <ReviewDiffPanels diff={data.diff} placed={placed} />
+                    <ReviewDiffPanels run={data.review.id} diff={data.diff} placed={placed} />
                 )}
             </div>
         </>
@@ -126,7 +129,9 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                     )}
                 </Field>
                 <Field label="commit" mono>
-                    <span title={review.sha}>{shortSha(review.sha)}</span>
+                    <Copyable text={review.sha} label="commit">
+                        <span title={review.sha}>{shortSha(review.sha)}</span>
+                    </Copyable>
                     {detail.base_branch !== null && (
                         <span className="text-muted-foreground"> against {detail.base_branch}</span>
                     )}
@@ -203,8 +208,9 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                         >
                             {f.title}
                         </Link>
+                        {f.dismissed && <Chip>dismissed</Chip>}
                         <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground">
-                            {f.line !== null ? 'on the diff' : f.file !== null ? 'on its file' : 'not in the diff'}
+                            {f.line === null ? (f.file === null ? 'not in the diff' : 'on its file') : 'on the diff'}
                         </span>
                     </li>
                 ))}

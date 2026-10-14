@@ -71,19 +71,25 @@ export function sectionOf(pathname: string): Section | undefined {
 }
 
 /**
- * The `n`th tip for a page: its section's and the ones for anywhere, starting at a different one each day, as the
- * ticker's reel does. The same page, day, and count always give the same tip, so a screenshot is stable.
+ * The `n`th tip for a page: its section's first, then the ones for anywhere, each list starting at a different one
+ * each day, as the ticker's reel does. A page's first tip is its own, so two pages Sprig knows never open on the same
+ * one. The same page, day, and count always give the same tip, so a screenshot is stable.
  */
 export function tipFor(pathname: string, n: number, now: number): string {
     const section = sectionOf(pathname)
-    const tips = [...(section === undefined ? [] : TIPS[section]), ...TIPS.anywhere]
     const day = Math.floor(now / 86_400_000)
-    return tips[(day + n) % tips.length] ?? ''
+    const tips = [...rotated(section === undefined ? [] : TIPS[section], day), ...rotated(TIPS.anywhere, day)]
+    return tips[n % tips.length] ?? ''
+}
+
+function rotated(tips: readonly string[], by: number): string[] {
+    const start = tips.length === 0 ? 0 : by % tips.length
+    return [...tips.slice(start), ...tips.slice(0, start)]
 }
 
 function read(): BuddySetting {
     try {
-        return parseBuddy(window.localStorage.getItem(STORAGE_KEY))
+        return parseBuddy(globalThis.localStorage.getItem(STORAGE_KEY))
     } catch {
         // Storage can be unavailable (privacy modes).
         return DEFAULT
@@ -94,24 +100,32 @@ let snapshot = read()
 const listeners = new Set<() => void>()
 
 function announce(next: BuddySetting): void {
-    if (next === snapshot) return
+    if (next === snapshot) {
+        return
+    }
     snapshot = next
-    for (const listener of listeners) listener()
+    for (const listener of listeners) {
+        listener()
+    }
 }
 
 function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) announce(read())
+    if (event.key === STORAGE_KEY || event.key === null) {
+        announce(read())
+    }
 }
 
 function subscribe(listener: () => void): () => void {
     listeners.add(listener)
     if (listeners.size === 1) {
-        window.addEventListener('storage', onStorage)
+        globalThis.addEventListener('storage', onStorage)
         announce(read())
     }
     return () => {
         listeners.delete(listener)
-        if (listeners.size === 0) window.removeEventListener('storage', onStorage)
+        if (listeners.size === 0) {
+            globalThis.removeEventListener('storage', onStorage)
+        }
     }
 }
 
@@ -127,7 +141,7 @@ export function useBuddy(): BuddySetting {
 /** Stores the setting and applies it now. */
 export function setBuddy(next: BuddySetting): void {
     try {
-        window.localStorage.setItem(STORAGE_KEY, next)
+        globalThis.localStorage.setItem(STORAGE_KEY, next)
     } catch {
         // Not persisted, but still applied for this page.
     }

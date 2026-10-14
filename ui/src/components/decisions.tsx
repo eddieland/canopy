@@ -1,5 +1,4 @@
-import { ExternalLink } from 'lucide-react'
-
+import { LinkOutIcon } from '@/components/link-out-icon'
 import type { Decision } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
@@ -8,7 +7,8 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
-import { actionTone, type ActionTone } from '@/lib/decisions'
+import { actionTone } from '@/lib/decisions'
+import type { ActionTone } from '@/lib/decisions'
 import { cn } from '@/lib/utils'
 
 // Written out so Tailwind finds them.
@@ -48,8 +48,8 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                                     'font-mono text-xs text-accent underline-offset-4 hover:underline',
                                 )}
                             >
-                                {decision.pr.replace(/^https:\/\//, '')}
-                                <ExternalLink className="size-3 shrink-0" />
+                                {decision.pr.replace(/^https:\/\//u, '')}
+                                <LinkOutIcon href={decision.pr} className="shrink-0" />
                             </a>
                         )}
                         {byTick && <Age at={decision.at} className="ml-auto" />}
@@ -64,12 +64,14 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
 /** A ticket, a chore, or a PR no ticket owns as a link to its page; a repository or the whole tick as the CLI says. */
 function Subject({ decision }: { decision: Decision }) {
     const cell = 'w-36 shrink-0 truncate'
-    if (decision.chore !== null) return <ChoreLink name={decision.chore} className={cell} />
+    if (decision.chore !== null) {
+        return <ChoreLink name={decision.chore} className={cell} />
+    }
     if (decision.ticket_key !== null) {
         return (
             <span className={cn(cell, 'font-mono text-xs text-muted-foreground')}>
                 <TicketLink ticketKey={decision.ticket_key} />
-                {decision.repo !== null ? ` (${decision.repo})` : ''}
+                {decision.repo === null ? '' : ` (${decision.repo})`}
             </span>
         )
     }

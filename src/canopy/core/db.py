@@ -42,6 +42,7 @@ UNIT_PHASES = frozenset(
         "review_pending",
         "review_findings",
         "changes_requested",
+        "untrusted_review",
         "green_unreviewed",
         "approved",
         "merged",
@@ -320,6 +321,42 @@ def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
         conn.execute(f"SELECT 1 FROM {table} WHERE ended_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
         for table in _RUN_TABLES
     )
+
+
+def starts_moved_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether the operator started or stopped a subject after `since`, a time the journal wrote (§6, §22).
+
+    Returns:
+        True if a start record's latest start or stop is newer.
+    """
+    row = conn.execute("SELECT 1 FROM starts WHERE started_at > ? OR stopped_at > ? LIMIT 1", (since, since))
+    return row.fetchone() is not None
+
+
+def granted_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether the operator granted a ticket's attempts or a PR's reviews after `since`, a time the journal wrote (§6).
+
+    Returns:
+        True if at least one grant is newer.
+    """
+    return any(
+        conn.execute(f"SELECT 1 FROM {table} WHERE granted_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
+        for table in ("attempt_grants", "review_grants")
+    )
+
+
+def phases(conn: sqlite3.Connection) -> dict[tuple[str, str | None], str | None]:
+    """Every ticket's and unit's recorded phase, to tell which a tick changed (§6, churn).
+
+    Returns:
+        The phase by ticket key and repository: None for the ticket's own, the unit's repository for a unit's.
+    """
+    found: dict[tuple[str, str | None], str | None] = {}
+    for key, phase in conn.execute("SELECT key, phase FROM tickets"):
+        found[str(key), None] = None if phase is None else str(phase)
+    for key, repo, phase in conn.execute("SELECT ticket_key, repo, phase FROM ticket_units"):
+        found[str(key), str(repo)] = None if phase is None else str(phase)
+    return found
 
 
 def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
@@ -832,6 +869,19 @@ def chore_runs(
     ).fetchall()
 
 
+def chore_costs_since(conn: sqlite3.Connection, chore: str, since: str) -> tuple[int, list[float]]:
+    """How many of `chore`'s runs started at or after `since`, and what each of those that reported a cost cost (§13).
+
+    Returns:
+        The runs, a running one included, and the costs reported, in US dollars, cheapest first.
+    """
+    rows = conn.execute(
+        "SELECT cost_usd FROM chore_runs WHERE chore = ? AND started_at >= ?",
+        (chore, since),
+    ).fetchall()
+    return len(rows), sorted(float(r[0]) for r in rows if r[0] is not None)
+
+
 def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
     """Return when the operator dismissed each of `chore`'s findings it dismissed, by finding id (DESIGN §19)."""
     rows = conn.execute("SELECT finding_id, dismissed_at FROM finding_dismissals WHERE chore = ?", (chore,))
@@ -890,6 +940,32 @@ def insert_review_run(
 def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Forget a review run that never started: no slot, or no prompt. It counts toward no limit."""
     conn.execute("DELETE FROM review_runs WHERE id = ? AND pid IS NULL", (run_id,))
+
+
+def review_dismissals(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
+    """Return the numbers, from 1, of review run `run_id`'s findings the operator dismissed (DESIGN §21)."""
+    rows = conn.execute("SELECT finding FROM review_dismissals WHERE review_run_id = ?", (run_id,))
+    return frozenset(int(r[0]) for r in rows)
+
+
+def set_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int, *, channel: str) -> None:
+    """Record that the operator dismissed review run `run_id`'s finding number `finding` now."""
+    conn.execute(
+        "INSERT INTO review_dismissals (review_run_id, finding, dismissed_at, channel) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT (review_run_id, finding) DO UPDATE SET "
+        "dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+        (run_id, finding, now(), channel),
+    )
+
+
+def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int) -> bool:
+    """Take back the operator's dismissal of review run `run_id`'s finding number `finding`.
+
+    Returns:
+        Whether there was one to take back.
+    """
+    cur = conn.execute("DELETE FROM review_dismissals WHERE review_run_id = ? AND finding = ?", (run_id, finding))
+    return cur.rowcount > 0
 
 
 def set_review_slot(
@@ -1234,12 +1310,31 @@ def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return row
 
 
-def runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
-    """Return a ticket's latest `limit` runs, newest first."""
+def runs_of(conn: sqlite3.Connection, key: str, limit: int | None) -> list[sqlite3.Row]:
+    """Return a ticket's latest `limit` runs, newest first; with None, every one."""
+    # SQLite reads a negative LIMIT as none.
     return conn.execute(
         f"{_RUNS} WHERE r.ticket_key = ? ORDER BY r.id DESC LIMIT ?",
-        (key, limit),
+        (key, -1 if limit is None else limit),
     ).fetchall()
+
+
+def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
+    """Return what a ticket's runs and the review runs naming it cost, however long ago they ran (§13).
+
+    The row has `runs` and `reviews`, how many of each; `priced`, how many of them reported a cost; and `cost_usd`,
+    what those cost, NULL when none did. Not the overseer's: a tick's cost is the whole workspace's.
+    """
+    row: sqlite3.Row = conn.execute(
+        "SELECT r.n AS runs, v.n AS reviews, r.priced + v.priced AS priced, "
+        "  CASE WHEN r.priced + v.priced > 0 THEN coalesce(r.cost, 0) + coalesce(v.cost, 0) END AS cost_usd "
+        "FROM (SELECT count(*) AS n, count(cost_usd) AS priced, sum(cost_usd) AS cost FROM runs"
+        "  WHERE ticket_key = ?) r, "
+        "(SELECT count(*) AS n, count(cost_usd) AS priced, sum(cost_usd) AS cost FROM review_runs"
+        "  WHERE ticket_key = ?) v",
+        (key, key),
+    ).fetchone()
+    return row
 
 
 def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:

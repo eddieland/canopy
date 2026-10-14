@@ -124,6 +124,41 @@ def _comment_mark(value: str) -> str:
     return value
 
 
+MAX_TRAILER_NAME = 80
+MAX_TRAILER_EMAIL = 254
+# The `Co-authored-by` trailer a worker adds to its commits when the runtime adds none of its own (TRUST_MODEL T5).
+DEFAULT_TRAILER_NAME = "canopy worker"
+DEFAULT_TRAILER_EMAIL = "noreply@canopy.invalid"
+# An address git and VCS hosts read as one: no whitespace, angle brackets, or backtick, and one "@" inside it.
+TRAILER_EMAIL_RE = re.compile(r"[^\s<>@`]+@[^\s<>@`]+")
+
+
+def _trailer_name(value: str) -> str:
+    # The name in `Co-authored-by: <name> <<email>>`. Prompts quote the trailer in backticks, and an angle bracket or a
+    # second line would end it early or start another.
+    if (
+        len(value) > MAX_TRAILER_NAME
+        or value != value.strip()
+        or not value.isprintable()
+        or any(c in value for c in "`<>")
+        or not any(c.isalnum() for c in value)
+    ):
+        raise ValueError(
+            f"must be one line of at most {MAX_TRAILER_NAME} characters with a letter or digit, no backtick or angle "
+            "bracket, and no surrounding spaces"
+        )
+    return value
+
+
+def _trailer_email(value: str) -> str:
+    if len(value) > MAX_TRAILER_EMAIL or not TRAILER_EMAIL_RE.fullmatch(value):
+        raise ValueError(
+            f"must be an address of at most {MAX_TRAILER_EMAIL} characters with one '@', and no whitespace, backtick, "
+            "or angle bracket"
+        )
+    return value
+
+
 MAX_REVIEWER = 100
 # The `trust.trusted_reviewers` entry for canopy's own reviewer (DESIGN §21). A login cannot hold a colon, so no account
 # can be read as it; canopy's reviewer posts as the operator, so the operator's login cannot stand for it.
@@ -413,6 +448,16 @@ class Trust(Section):
     # the comments that carry them; user-only, so a shared file cannot pick marks that silence people's comments.
     comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
     comment_suffix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = ""
+    # Whether a worker adds canopy's trailer to its commits when the agent runtime adds no attribution trailer, and whom
+    # it names as co-author (TRUST_MODEL T5). User-only: the commits are the operator's, and a shared file must neither
+    # credit agent work to a person nor strip the mark that tells it is an agent's.
+    commit_trailer: Annotated[StrictBool, Scope.USER] = True
+    commit_trailer_name: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
+    commit_trailer_email: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
+    # Whether workers bring a base branch in by rebasing, and push the result with a lease, instead of merging it
+    # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. User-only: a shared file must not let
+    # workers replace a branch's history.
+    rebase: Annotated[StrictBool, Scope.USER] = False
 
     @model_validator(mode="after")
     def _one_comment_mark(self) -> Trust:

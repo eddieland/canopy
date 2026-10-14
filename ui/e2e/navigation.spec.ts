@@ -8,15 +8,16 @@ test.beforeEach(async ({ page }) => {
 
 test('the root redirects to the attention list', async ({ page }) => {
     await page.goto('')
-    await expect(page).toHaveURL(/\/attention$/)
+    await expect(page).toHaveURL(/\/attention$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Attention')
 })
 
-test('the tab names the page, after what needs the operator', async ({ page }) => {
+test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    const count = await page.getByTestId(/^attention-item-/).count()
-    expect(count).toBeGreaterThan(0)
+    // The mock's five items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(5)
+    const count = 3
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -29,17 +30,20 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await page.goto('attention')
     await settled(page)
     await page.evaluate(() => {
-        document.querySelector('[data-testid=app-header]')?.setAttribute('data-marker', 'kept')
+        const header = document.querySelector<HTMLElement>('[data-testid=app-header]')
+        if (header) {
+            header.dataset.marker = 'kept'
+        }
     })
     const nav = page.getByRole('navigation', { name: 'Main' })
 
     await nav.getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/)
+    await expect(page).toHaveURL(/\/runs$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
     await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
 
     await nav.getByRole('link', { name: 'Worktrees' }).click()
-    await expect(page).toHaveURL(/\/worktrees$/)
+    await expect(page).toHaveURL(/\/worktrees$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
 
     await nav.getByRole('link', { name: 'Tickets' }).click()
@@ -47,14 +51,14 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     // A ticket the overseer named shows its title beside its key (DESIGN §7).
     await expect(page.getByTestId('ticket-ABC-102')).toContainText('Export reports as CSV')
     await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102' }).click()
-    await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-102$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-102 Export reports as CSV')
     await expect(nav.getByRole('link', { name: 'Tickets' })).toHaveAttribute('data-status', 'active')
 
     await nav.getByRole('link', { name: 'Chores' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Chores')
     await page.getByTestId('chores').getByRole('link', { name: 'chore:deps' }).click()
-    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page).toHaveURL(/\/chores\/deps$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps')
     await expect(nav.getByRole('link', { name: 'Chores' })).toHaveAttribute('data-status', 'active')
 
@@ -75,16 +79,16 @@ test('every page header opens with a trail back up to its section', async ({ pag
     await page.goto('runs/39')
     await expect(trail).toHaveText('Runs')
     await trail.getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/)
+    await expect(page).toHaveURL(/\/runs$/u)
 
     // A chore run's trail passes through its chore, by its name as written.
     await page.goto('chores/deps/runs/2')
     await expect(trail.getByRole('link')).toHaveText(['Chores', 'chore:deps'])
     await trail.getByRole('link', { name: 'chore:deps' }).click()
-    await expect(page).toHaveURL(/\/chores\/deps$/)
+    await expect(page).toHaveURL(/\/chores\/deps$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps')
     await trail.getByRole('link', { name: 'Chores' }).click()
-    await expect(page).toHaveURL(/\/chores$/)
+    await expect(page).toHaveURL(/\/chores$/u)
 
     // A page in no section names itself.
     await page.goto('search?q=csv')
@@ -95,8 +99,10 @@ test('each nav item says on hover what its page holds', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('title', /ended last/)
-    for (const link of await nav.getByRole('link').all()) await expect(link).toHaveAttribute('title', /\w/)
+    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('title', /ended last/u)
+    for (const link of await nav.getByRole('link').all()) {
+        await expect(link).toHaveAttribute('title', /\w/u)
+    }
 })
 
 test('the side rail runs the full height of the page and its nav stays in view when scrolled', async ({ page }) => {
@@ -128,10 +134,10 @@ test('the header spans the window and only what is under it scrolls', async ({ p
     await expect(header).toBeInViewport({ ratio: 1 })
     // A new page starts at its top, and going back returns to where the last one was.
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/)
+    await expect(page).toHaveURL(/\/runs$/u)
     await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(0)
     await page.goBack()
-    await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-102$/u)
     await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
 })
 
@@ -165,8 +171,13 @@ test('the runs page lists a ticket once, by its latest run, and opens its earlie
     const ticket = page.getByTestId('run-40')
     await expect(page.getByTestId('run-37')).toHaveCount(0)
     await ticket.getByRole('button', { name: '1 earlier run' }).click()
-    await expect(ticket.getByTestId('earlier-runs-ABC-100').getByTestId('run-37')).toContainText('done')
-    await ticket.getByRole('button', { name: 'hide earlier runs' }).click()
+    const earlier = ticket.getByTestId('earlier-runs-ABC-100')
+    await expect(earlier.getByTestId('run-37')).toContainText('done')
+    // Radix's Collapsible ties the toggle to what it opened, for assistive technology.
+    const hide = ticket.getByRole('button', { name: 'hide earlier runs' })
+    await expect(hide).toHaveAttribute('aria-expanded', 'true')
+    await expect(hide).toHaveAttribute('aria-controls', (await earlier.getAttribute('id')) ?? 'no id')
+    await hide.click()
     await expect(page.getByTestId('run-37')).toHaveCount(0)
 
     // The filter goes by where each ticket stands: its latest run failed, so the run that finished before it is no
@@ -232,9 +243,18 @@ test('the chores page lists each chore as canopy status does, and a chore page w
     await expect(deps).toContainText('last ok 4h ago, due in 1h')
     await expect(deps.getByTestId('chore-findings')).toHaveText('1 open finding')
     await expect(deps).toContainText('mon,tue,wed,thu,fri 08:00-18:00 UTC')
+    await expect(deps.getByTestId('chore-spend')).toHaveText('$0.47 24h · $0.47 30d')
+    await expect(page.getByTestId('chore-build-health').getByTestId('chore-spend')).toHaveText('$0.38 24h · $0.38 30d')
 
     await page.goto('chores/deps')
     await settled(page)
+    await expect(page.getByTestId('chore-spend-24h').getByRole('cell')).toHaveText([
+        '2',
+        '$0.47',
+        '$0.23',
+        '$0.26',
+        '$0.26',
+    ])
     const finding = page.getByTestId('finding-lodash-advisory')
     await expect(finding).toContainText('lodash 4.17.20 has a prototype pollution advisory')
     await expect(finding.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')
@@ -284,7 +304,7 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     await expect(web.getByTestId('worktree-2')).toContainText('run:43')
 
     await working.getByRole('link', { name: 'ABC-101', exact: true }).click()
-    await expect(page).toHaveURL(/\/tickets\/ABC-101$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-101$/u)
     await page.goBack()
 
     const reads = page.waitForResponse((r) => r.url().endsWith('/api/worktrees'))
@@ -302,7 +322,9 @@ test('a slot with long text keeps it inside its row', async ({ page }) => {
             worktrees: { name: string; branch: string | null; note: string | null; processes: object[] }[]
         }[]
         const slot = pools.find((p) => p.repo === 'web')?.worktrees.find((w) => w.name === '1')
-        if (slot === undefined) throw new Error('the mock has no slot web#1')
+        if (slot === undefined) {
+            throw new Error('the mock has no slot web#1')
+        }
         slot.processes = Array.from({ length: 12 }, (_, i) => ({ pid: 340928 + i, name: `great_gasdbq_${i}` }))
         slot.branch = `agent/ABC-101-${'a-very-long-branch-name-'.repeat(6)}end`
         slot.note = `left ${'/a/path/with/no/spaces'.repeat(12)}`
@@ -313,7 +335,7 @@ test('a slot with long text keeps it inside its row', async ({ page }) => {
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     await expect(slot).toContainText('great_gasdbq_0 340928')
     const processes = slot.getByTestId('worktree-processes')
-    await expect(processes).toHaveAttribute('title', /great_gasdbq_11 340939/)
+    await expect(processes).toHaveAttribute('title', /great_gasdbq_11 340939/u)
     const overflow = await slot.evaluate((li) => {
         const edge = li.getBoundingClientRect().right
         return [...li.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > edge + 0.5).length
@@ -325,7 +347,9 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
     await page.clock.install()
     let reads = 0
     page.on('request', (r) => {
-        if (r.url().endsWith('/api/worktrees')) reads += 1
+        if (r.url().endsWith('/api/worktrees')) {
+            reads += 1
+        }
     })
     await page.goto('worktrees')
     await settled(page)
@@ -347,7 +371,7 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
 test('the header names the latest tick and how long ago it ended', async ({ page }) => {
     await page.goto('runs')
     await settled(page)
-    await expect(page.getByTestId('last-tick')).toHaveText(/^tick 2 · \d+[a-z]+ ago$/)
+    await expect(page.getByTestId('last-tick')).toHaveText(/^tick 2 · \d+[a-z]+ ago$/u)
     await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
 })
 
@@ -357,7 +381,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     await page.goto('runs')
     await settled(page)
     await page.getByTestId('last-tick').getByRole('link', { name: 'tick 2' }).click()
-    await expect(page).toHaveURL(/\/ticks\/2$/)
+    await expect(page).toHaveURL(/\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick 2')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
         'data-status',
@@ -374,7 +398,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     await expect(decisions.nth(4)).toContainText('github.com/acme/api/pull/12')
 
     await decisions.nth(0).getByRole('link', { name: 'ABC-102' }).click()
-    await expect(page).toHaveURL(/\/tickets\/ABC-102$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-102$/u)
 })
 
 test('the ticks page lists the latest ticks, and a ticket page why the loop did or did not work it', async ({
@@ -393,7 +417,7 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await expect(decisions.nth(0)).toContainText('tick 2')
     await expect(decisions.nth(1)).toContainText('dispatch: implement')
     await decisions.nth(1).getByRole('link', { name: 'tick 1' }).click()
-    await expect(page).toHaveURL(/\/ticks\/1$/)
+    await expect(page).toHaveURL(/\/ticks\/1$/u)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
 })
 

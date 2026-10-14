@@ -4,10 +4,30 @@ name = "canopy"
 dynamic = ["version"]
 description = "Unattended, local agent loop driven by your issue tracker."
 readme = "README.md"
-# The classifier makes PyPI refuse an upload, where `canopy` is another project's name (D046).
 license = "MIT"
 license-files = ["LICENSE"]
-classifiers = ["Private :: Do Not Upload"]
+authors = [{ name = "eddieland" }]
+keywords = ["agents", "automation", "ci", "code-review", "issue-tracker", "jira", "llm", "worktree"]
+# The license is the `license` expression above, so no `License ::` classifier (PEP 639). Python versions are the ones
+# CI runs on.
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    # Makes PyPI refuse an upload, where `canopy` is another project's name (D046).
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Bug Tracking",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Utilities",
+]
 requires-python = ">=3.12"
 dependencies = [
     "canopy-notify-slack",
@@ -24,6 +44,13 @@ canopy = "canopy.cli.main:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
+
+[project.urls]
+Homepage = "https://github.com/eddieland/canopy"
+Documentation = "https://github.com/eddieland/canopy/tree/main/docs"
+Repository = "https://github.com/eddieland/canopy"
+Issues = "https://github.com/eddieland/canopy/issues"
+Releases = "https://github.com/eddieland/canopy/releases"
 
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
@@ -88,8 +115,12 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-# The fakes are extensionless executables; lint and format them as Python too.
-extend-include = ["tests/fakes/agent", "tests/fakes/treehouse"]
+# The fakes and the sandbox wrapper are extensionless executables; lint and format them as Python too.
+extend-include = ["tests/fakes/agent", "tests/fakes/srt", "tests/fakes/treehouse", "examples/sandbox/canopy-sandbox"]
+
+[tool.ruff.per-file-target-version]
+# The sandbox wrapper runs under the operator's own python3, which on macOS is 3.9 (HOST_ISOLATION §4.1).
+"examples/sandbox/canopy-sandbox" = "py39"
 
 [tool.ruff.lint]
 # Every stable rule (D018). Opt out below with a reason, never by narrowing `select`. Preview rules stay off, except
@@ -128,6 +159,12 @@ ban-relative-imports = "all"
 "urllib.request".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "http.client".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "socket".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+# Tests patch with unittest.mock, as context managers (AGENTS.md, Testing).
+"pytest.MonkeyPatch".msg = "Patch with `mock.patch`, `mock.patch.object`, or `mock.patch.dict` in a `with` block."
+
+# `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
+[tool.ruff.lint.flake8-import-conventions]
+banned-from = ["unittest.mock"]
 
 [tool.ruff.lint.per-file-ignores]
 # The subprocess boundary (D015). Arguments are an argv list, never a shell string.
@@ -145,6 +182,9 @@ ban-relative-imports = "all"
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
+# The sandbox wrapper is an example program of its own, not canopy (HOST_ISOLATION §4.1): it runs git and srt, and
+# reports on stderr.
+"examples/sandbox/canopy-sandbox" = ["T201", "TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.
 "hatch_build.py" = ["S603", "TID251"]
 # The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
@@ -169,7 +209,15 @@ filterwarnings = [
 # Strict preset (D017). The fakes are extensionless, so list them explicitly.
 [tool.pyrefly]
 preset = "strict"
-project-includes = ["src", "packages", "tests", "tests/fakes/agent", "tests/fakes/treehouse"]
+project-includes = [
+    "src",
+    "packages",
+    "tests",
+    "tests/fakes/agent",
+    "tests/fakes/srt",
+    "tests/fakes/treehouse",
+    "examples/sandbox/canopy-sandbox",
+]
 # Tests are packages under the repository root (D019) and import shared helpers from `tests.conftest`.
 search-path = ["src", "packages/canopy-notify-slack/src", "."]
 

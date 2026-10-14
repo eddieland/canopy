@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TranscriptEntry, TranscriptTool } from '@/api/types'
+import type { TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
 
-import { duration, elapsed, outcome, pretty, startOf, summary, tally, tokenCount } from './transcript'
+import {
+    byCall,
+    callLine,
+    duration,
+    elapsed,
+    findQueryOf,
+    hitsIn,
+    outcome,
+    pretty,
+    sentTokens,
+    shownOutput,
+    startOf,
+    summary,
+    tally,
+    tokenCount,
+    wroteTokens,
+} from './transcript'
 
 describe('elapsed', () => {
     it('counts from the start, with hours only when there are some', () => {
@@ -36,6 +52,7 @@ const tool = (status: 'completed' | 'error', fields: Partial<TranscriptTool> = {
     output: '',
     duration_ms: null,
     cut: false,
+    call: 1,
     ...fields,
 })
 
@@ -44,12 +61,12 @@ const shell = (command: string, output: string): TranscriptTool =>
 
 describe('tally and startOf', () => {
     const entries: TranscriptEntry[] = [
-        { kind: 'text', at: null, text: 'hi', reasoning: false, cut: false },
+        { kind: 'text', at: null, text: 'hi', reasoning: false, cut: false, call: 1 },
         tool('completed'),
         tool('error'),
         shell('canopy dispatch ABC-1', 'Error: dispatch refused (capacity): 2 of 2 running'),
-        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null },
-        { kind: 'error', at: null, name: 'APIError', message: '' },
+        { kind: 'step', at: '2026-10-08T10:32:00Z', reason: 'stop', cost_usd: 0.1, tokens: 10, split: null, call: 1 },
+        { kind: 'error', at: null, name: 'APIError', message: '', call: 1 },
     ]
 
     it('counts tool calls, failed and refused ones, model calls, and errors', () => {
@@ -140,5 +157,128 @@ describe('pretty', () => {
         expect(pretty('{"a": [1')).toBe('{"a": [1')
         expect(pretty('42')).toBe('42')
         expect(pretty('PASS  2 tests')).toBe('PASS  2 tests')
+    })
+
+    it('keeps every value as written: a number past a double, an escape, an output already indented', () => {
+        expect(pretty('{"id":12345678901234567890,"n":1.10}')).toBe('{\n  "id": 12345678901234567890,\n  "n": 1.10\n}')
+        expect(pretty('["caf\\u00e9"]')).toBe('[\n  "caf\\u00e9"\n]')
+        expect(pretty('{\n    "a": {}\n}')).toBe('{\n  "a": {}\n}')
+    })
+})
+
+describe('findQueryOf', () => {
+    it('trims the ends, keeping what is between them as typed', () => {
+        expect(findQueryOf('  gh pr  view ')).toBe('gh pr  view')
+        expect(findQueryOf(' \t ')).toBeNull()
+        expect(findQueryOf('')).toBeNull()
+    })
+})
+
+describe('hitsIn', () => {
+    it('counts the lines of a row that hold the query, in either case, each line once', () => {
+        const said = text('Reading the box.\nthe BOX and the box\nnothing here', null)
+        expect(hitsIn(said, 'box')).toEqual({ row: 2, body: 0 })
+        expect(hitsIn(said, 'box.\nthe')).toEqual({ row: 0, body: 0 })
+    })
+
+    it("reads a tool call's row as shown, and its input and output as it opens to them", () => {
+        const call = shell('gh pr view 88', '{"number": 88,\n"title": "Debounce search"}')
+        // The row's command, and the output's pretty lines.
+        expect(hitsIn(call, 'gh pr')).toEqual({ row: 1, body: 1 })
+        expect(hitsIn(call, 'debounce')).toEqual({ row: 0, body: 1 })
+        expect(hitsIn(call, '"number": 88')).toEqual({ row: 0, body: 1 })
+        expect(hitsIn(tool('completed', { tool: 'github_get_pr' }), 'GET_PR')).toEqual({ row: 1, body: 0 })
+        expect(hitsIn(tool('completed'), 'no output')).toEqual({ row: 0, body: 1 })
+    })
+
+    it('takes regex characters literally, and finds nothing in a model call', () => {
+        const error: TranscriptEntry = {
+            kind: 'error',
+            at: null,
+            name: 'APIError',
+            message: 'retry (after 60s)',
+            call: null,
+        }
+        expect(hitsIn(error, '(after')).toEqual({ row: 1, body: 0 })
+        expect(hitsIn(error, 'a.i')).toEqual({ row: 0, body: 0 })
+        expect(hitsIn(step(1, 'stop'), 'stop')).toEqual({ row: 0, body: 0 })
+    })
+})
+
+describe('shownOutput', () => {
+    it('is the output laid out, or says there is none', () => {
+        expect(shownOutput(tool('completed', { output: '{"a":1}' }))).toBe(pretty('{"a":1}'))
+        expect(shownOutput(tool('completed'))).toBe('no output')
+    })
+})
+
+const text = (value: string, call: number | null, reasoning = false): TranscriptEntry => ({
+    kind: 'text',
+    at: null,
+    text: value,
+    reasoning,
+    cut: false,
+    call,
+})
+
+const step = (call: number, reason = 'tool-calls'): TranscriptStep => ({
+    kind: 'step',
+    at: null,
+    reason,
+    cost_usd: 0.1,
+    tokens: 10,
+    split: null,
+    call,
+})
+
+describe('byCall', () => {
+    it('gives each call after the first what its tools returned to the call before, and keeps its end apart', () => {
+        const read = tool('completed', { tool: 'read', output: 'file', call: 1 })
+        const failed = tool('error', { tool: 'read', output: 'not found', call: 1 })
+        const early: TranscriptEntry = { kind: 'error', at: null, name: 'early', message: '', call: null }
+        const { before, calls } = byCall([
+            early,
+            text('reading', 1),
+            read,
+            failed,
+            step(1),
+            text('done', 2),
+            step(2, 'stop'),
+        ])
+        expect(before).toEqual([early])
+        expect(calls).toEqual([
+            { n: 1, returned: [], output: [text('reading', 1), read, failed], end: step(1) },
+            { n: 2, returned: [read, failed], output: [text('done', 2)], end: step(2, 'stop') },
+        ])
+    })
+
+    it('leaves a call the session ended in without an end', () => {
+        const { calls } = byCall([text('one', 1), step(1), text('two', 2)])
+        expect(calls.map((c) => [c.n, c.end])).toEqual([
+            [1, step(1)],
+            [2, null],
+        ])
+        expect(byCall([text('no calls marked', null)]).calls).toEqual([])
+    })
+})
+
+describe('callLine', () => {
+    it("is a call's first text, then its tools by name, counted, then its errors", () => {
+        const [call] = byCall([
+            text('thinking it over', 1, true),
+            text('I will read\nboth files.', 1),
+            tool('completed', { tool: 'read' }),
+            tool('completed', { tool: 'read' }),
+            tool('completed', { tool: 'bash' }),
+            { kind: 'error', at: null, name: 'APIError', message: '', call: 1 },
+        ]).calls
+        expect(call && callLine(call)).toBe('I will read both files. · read ×2, bash · 1 runtime error')
+    })
+})
+
+describe('sentTokens and wroteTokens', () => {
+    it('count what a call was sent, cached or not, and what it wrote, reasoning included', () => {
+        const split = { input: 10, cache_read: 300, cache_write: 20, output: 5, reasoning: 2 }
+        expect([sentTokens(split), wroteTokens(split)]).toEqual([330, 7])
     })
 })

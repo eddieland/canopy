@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
@@ -29,7 +30,9 @@ function RunPage() {
     const { id } = Route.useParams()
     // A run's id is a positive number, as a tick's is.
     const parsed = tickId(id)
-    if (parsed === null) return <NoRun title={`run:${id}`}>not a run: a run's id is a positive number</NoRun>
+    if (parsed === null) {
+        return <NoRun title={`run:${id}`}>not a run: a run&apos;s id is a positive number</NoRun>
+    }
     return <Loaded id={parsed} />
 }
 
@@ -37,7 +40,9 @@ function Loaded({ id }: { id: number }) {
     const { data, error } = useQuery(runQuery(id))
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(runTranscriptQuery(id))
-    if (error instanceof ApiError && error.status === 404) return <NoRun title={`run:${id}`}>{error.message}</NoRun>
+    if (error instanceof ApiError && error.status === 404) {
+        return <NoRun title={`run:${id}`}>{error.message}</NoRun>
+    }
     if (data === undefined) {
         return (
             <>
@@ -51,8 +56,8 @@ function Loaded({ id }: { id: number }) {
     return (
         <>
             <PageHeader title={`run:${data.id}`} chips={data.private && <Chip>private</Chip>}>
-                What the worker did, from its session's events in the run's log: its text, each tool call with its input
-                and output, and what each model call cost.
+                What the worker did, from its session&apos;s events in the run&apos;s log: its text, each tool call with
+                its input and output, and what each model call cost.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
@@ -92,7 +97,7 @@ function RunPanel({ run }: { run: Run }) {
                     </span>
                 </Field>
                 <Field label="branch" mono>
-                    {run.branch ?? 'none'}
+                    {run.branch === null ? 'none' : <Copyable text={run.branch} label="branch" />}
                 </Field>
                 <Field label="started" mono>
                     <span className="flex items-center gap-2">
@@ -118,8 +123,8 @@ function RunPanel({ run }: { run: Run }) {
                                         'underline-offset-4 hover:underline',
                                     )}
                                 >
-                                    {pr.replace(/^https:\/\//, '')}
-                                    <ExternalLink className="size-3" />
+                                    {pr.replace(/^https:\/\//u, '')}
+                                    <LinkOutIcon href={pr} />
                                 </a>
                             ))}
                         </span>
@@ -131,11 +136,17 @@ function RunPanel({ run }: { run: Run }) {
                 </Field>
                 {run.worktrees.length > 0 && (
                     <Field label="worktrees" mono>
-                        {run.worktrees.join('  ')}
+                        <span className="flex flex-wrap gap-x-4">
+                            {run.worktrees.map((path) => (
+                                <Copyable key={path} text={path} label="worktree path" />
+                            ))}
+                        </span>
                     </Field>
                 )}
                 <Field label="log" mono>
-                    <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
+                    <Copyable text={run.log_path} label="log path">
+                        <span title="the worker's stdout and stderr: yours alone">{run.log_path}</span>
+                    </Copyable>
                 </Field>
             </dl>
         </Panel>

@@ -3,7 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, choreQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
+import { attentionQuery, choreQuery, pullRequestQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
@@ -12,9 +12,11 @@ import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
+import { GrantLimits } from '@/components/grant-limits'
 import { LinkedText } from '@/components/linked-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, Placeholder } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { Chip, RunDot } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
@@ -22,7 +24,8 @@ import { TicketLink } from '@/components/ticket-link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
-import { bySeverity, severity, type Severity } from '@/lib/attention'
+import { bySeverity, severity } from '@/lib/attention'
+import type { Severity } from '@/lib/attention'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel } from '@/lib/phase'
@@ -147,8 +150,9 @@ function Answered() {
 }
 
 /**
- * The selected item: its ticket's conversation and the reply form; a chore's notes and the form for another, and for a
- * finding the button to dismiss it; or for an item about neither, what it says.
+ * The selected item: its ticket's conversation, the reply form, and the ticket's actions, with a grant for each limit
+ * it is stuck at; a chore's notes and the form for another, and for a finding the button to dismiss it; a PR's review
+ * limit and its grant, for an item about a PR no ticket owns; or for an item about none of them, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
@@ -160,11 +164,8 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
             )}
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
             {item.chore !== null && <ChoreThread name={item.chore} />}
-            {item.ticket_key === null && item.chore === null && (
-                <Placeholder className="min-h-24">
-                    Nothing to answer here: it leaves when its cause is gone.
-                </Placeholder>
-            )}
+            {item.pr !== null && <PullRequestLimits url={item.pr} />}
+            {item.ticket_key === null && item.chore === null && item.pr === null && <NothingToAnswer />}
         </Panel>
     )
 }
@@ -210,15 +211,49 @@ function FindingHead({ item, chore, done }: { item: AttentionItem; chore: string
 }
 
 function Subject({ item }: { item: AttentionItem }) {
-    if (item.ticket_key !== null) return <TicketLink ticketKey={item.ticket_key} />
-    if (item.chore !== null) return <ChoreLink name={item.chore} />
+    if (item.ticket_key !== null) {
+        return <TicketLink ticketKey={item.ticket_key} />
+    }
+    if (item.chore !== null) {
+        return <ChoreLink name={item.chore} />
+    }
+    if (item.pr !== null) {
+        return <PullRequestLink url={item.pr} />
+    }
     return <span className="font-mono text-xs">{item.subject}</span>
+}
+
+function NothingToAnswer() {
+    return <Placeholder className="min-h-24">Nothing to answer here: it leaves when its cause is gone.</Placeholder>
+}
+
+/** A PR's item: a grant of one more review when the PR is at its review limit (DESIGN §21), else nothing to answer. */
+function PullRequestLimits({ url }: { url: string }) {
+    const { data, error } = useQuery(pullRequestQuery(url))
+    if (error instanceof ApiError) {
+        return <Placeholder className="min-h-24">{error.message}</Placeholder>
+    }
+    if (data === undefined) {
+        return (
+            <div className="flex min-h-24 flex-col gap-2 p-3">
+                <Skeleton className="h-4 w-1/2" />
+            </div>
+        )
+    }
+    const limits = data.review_limit === null ? [] : [data.review_limit]
+    return limits.some((limit) => limit.runs >= limit.limit) ? (
+        <GrantLimits limits={limits} ticketKey={null} />
+    ) : (
+        <NothingToAnswer />
+    )
 }
 
 /** A chore's item: the chore's notes, which its next runs read, and the form for another (DESIGN §19). */
 function ChoreThread({ name }: { name: string }) {
     const { data, error } = useQuery(choreQuery(name))
-    if (error instanceof ApiError) return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    if (error instanceof ApiError) {
+        return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    }
     if (data === undefined) {
         return (
             <div className="flex min-h-60 flex-col gap-2 p-3">
@@ -233,7 +268,9 @@ function ChoreThread({ name }: { name: string }) {
 function Thread({ ticketKey }: { ticketKey: string }) {
     const { data, error } = useQuery(ticketQuery(ticketKey))
     const order = useListOrder('conversation')
-    if (error instanceof ApiError) return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    if (error instanceof ApiError) {
+        return <Placeholder className="min-h-40">{error.message}</Placeholder>
+    }
     if (data === undefined) {
         return (
             <div className="flex min-h-60 flex-col gap-2 p-3">
@@ -269,6 +306,12 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             <div className="border-t">
                 <TicketActions key={ticket.key} ticket={ticket} />
             </div>
+            <GrantLimits
+                key={`limits-${ticket.key}`}
+                limits={data.limits}
+                ticketKey={ticket.key}
+                className="border-t"
+            />
         </>
     )
 }

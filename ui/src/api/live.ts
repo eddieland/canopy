@@ -13,9 +13,10 @@ import type { ChoreRunDetail, LastTick, Run, StreamEvent } from './types'
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
-        case 'attention.updated':
+        case 'attention.updated': {
             client.setQueryData(keys.attention, event.items)
             break
+        }
         case 'runs.updated': {
             const before = client.getQueryData<Run[]>(keys.runs)
             client.setQueryData(keys.runs, event.runs)
@@ -26,7 +27,9 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             // run's events reach its log when it ends and its cost moves more often than that.
             for (const run of event.runs) {
                 const shown = client.getQueryData<Run>(keys.run(run.id))
-                if (shown === undefined) continue
+                if (shown === undefined) {
+                    continue
+                }
                 client.setQueryData(keys.run(run.id), run)
                 if (shown.status !== run.status) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
@@ -34,31 +37,39 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             }
             break
         }
-        case 'tickets.updated':
+        case 'tickets.updated': {
             client.setQueryData(keys.tickets, event.tickets)
             break
-        case 'chores.updated':
+        }
+        case 'chores.updated': {
             client.setQueryData(keys.chores, event.chores)
             void client.invalidateQueries({ queryKey: ['chore'], refetchType: 'active' })
             // A chore run's page and transcript change only as it ends, when its status moves.
             for (const chore of event.chores) {
                 for (const run of [chore.running, chore.latest]) {
-                    if (!run) continue
+                    if (!run) {
+                        continue
+                    }
                     const shown = client.getQueryData<ChoreRunDetail>(keys.choreRun(chore.name, run.id))
-                    if (shown === undefined || shown.run.status === run.status) continue
+                    if (shown === undefined || shown.run.status === run.status) {
+                        continue
+                    }
                     void client.invalidateQueries({ queryKey: keys.choreRun(chore.name, run.id) })
                     void client.invalidateQueries({ queryKey: keys.choreRunTranscript(chore.name, run.id) })
                 }
             }
             break
-        case 'ticket.changed':
+        }
+        case 'ticket.changed': {
             void client.invalidateQueries({ queryKey: keys.ticket(event.key), refetchType: 'active' })
             // A run of the ticket started or ended: the runs a PR's page shows, and the PRs list's run working now.
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
             break
-        case 'spend.updated':
+        }
+        case 'spend.updated': {
             client.setQueryData(keys.spend, event.spend)
             break
+        }
         case 'tick.updated': {
             const before = client.getQueryData<LastTick>(keys.tick)?.tick
             client.setQueryData(keys.tick, { tick: event.tick, acknowledged: event.acknowledged })
@@ -75,9 +86,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
             break
         }
-        case 'loop.updated':
+        case 'loop.updated': {
             client.setQueryData(keys.loop, { paused: event.paused })
             break
+        }
     }
 }
 
@@ -105,17 +117,24 @@ export function parseStreamEvent(data: string): StreamEvent | null {
     } catch {
         return null
     }
-    if (typeof value !== 'object' || value === null || !('type' in value)) return null
-    const type = (value as { type: unknown }).type
-    if (typeof type !== 'string') return null
+    if (typeof value !== 'object' || value === null || !('type' in value)) {
+        return null
+    }
+    const type = value.type
+    if (typeof type !== 'string') {
+        return null
+    }
     const list = LISTS[type]
     if (list !== undefined) {
         return Array.isArray((value as Record<string, unknown>)[list]) ? (value as StreamEvent) : null
     }
-    if (type === 'ticket.changed' && typeof (value as { key?: unknown }).key === 'string') return value as StreamEvent
+    if (type === 'ticket.changed' && typeof (value as { key?: unknown }).key === 'string') {
+        return value as StreamEvent
+    }
     if (type === 'tick.updated') {
         const { tick, acknowledged } = value as { tick?: unknown; acknowledged?: unknown }
-        const known = tick === null || (typeof tick === 'object' && tick !== undefined)
+        // `typeof null` is 'object' too: a tick, or null for none.
+        const known = typeof tick === 'object'
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
     }
     if (type === 'loop.updated') {

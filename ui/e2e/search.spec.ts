@@ -12,7 +12,7 @@ test('typing in the box opens the search, its hits grouped by source and linked 
     const box = page.getByRole('searchbox', { name: 'Search the journal' })
     await box.fill('stale requests')
 
-    await expect(page).toHaveURL(/\/search\?q=stale(\+|%20)requests$/)
+    await expect(page).toHaveURL(/\/search\?q=stale(\+|%20)requests$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('“stale requests”')
     const messages = page.getByTestId('search-message')
     await expect(messages.getByTestId('search-hit')).toHaveCount(1)
@@ -20,13 +20,13 @@ test('typing in the box opens the search, its hits grouped by source and linked 
     await expect(messages.getByRole('link', { name: 'run:39' })).toBeVisible()
 
     await messages.getByRole('link', { name: 'ABC-099' }).click()
-    await expect(page).toHaveURL(/\/tickets\/ABC-099$/)
+    await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
     // Typing replaced the search's own history entries, so Back returns to the search, and the box keeps its query.
     await page.goBack()
-    await expect(page).toHaveURL(/\/search\?q=/)
+    await expect(page).toHaveURL(/\/search\?q=/u)
     await expect(box).toHaveValue('stale requests')
     await page.goBack()
-    await expect(page).toHaveURL(/\/attention$/)
+    await expect(page).toHaveURL(/\/attention$/u)
 })
 
 test('every source that holds a word has its panel, in the server order', async ({ page }) => {
@@ -68,11 +68,11 @@ test('the clear button empties the box and keeps the focus there, leaving the pa
     await expect(box).toHaveValue('')
     await expect(box).toBeFocused()
     await expect(clear).toBeHidden()
-    await expect(page).toHaveURL(/\/search\?q=web$/)
+    await expect(page).toHaveURL(/\/search\?q=web$/u)
 
     await box.fill('stale requests')
     await expect(clear).toBeVisible()
-    await expect(page).toHaveURL(/\/search\?q=stale(\+|%20)requests$/)
+    await expect(page).toHaveURL(/\/search\?q=stale(\+|%20)requests$/u)
 })
 
 test('a query the server would refuse asks for one, and one nothing holds says so', async ({ page }) => {

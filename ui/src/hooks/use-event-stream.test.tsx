@@ -65,7 +65,7 @@ function show(state: DocumentVisibilityState): void {
     document.dispatchEvent(new Event('visibilitychange'))
 }
 
-function stream(onReconnect = vi.fn()) {
+function stream(onReconnect = vi.fn<() => void>()) {
     const hook = renderHook(() => useEventStream('/api/events', { parse: (d) => d, onEvent: () => {}, onReconnect }))
     act(() => latest().open())
     return { ...hook, onReconnect }
@@ -73,14 +73,16 @@ function stream(onReconnect = vi.fn()) {
 
 function latest(): FakeEventSource {
     const source = FakeEventSource.instances.at(-1)
-    if (!source) throw new Error('no EventSource was created')
+    if (!source) {
+        throw new Error('no EventSource was created')
+    }
     return source
 }
 
 describe('useEventStream', () => {
     it('reports its status, parses messages, and asks for a catch-up after a drop', () => {
-        const onEvent = vi.fn()
-        const onReconnect = vi.fn()
+        const onEvent = vi.fn<(event: string) => void>()
+        const onReconnect = vi.fn<() => void>()
         const { result, unmount } = renderHook(() =>
             useEventStream('/api/events', {
                 parse: (d) => (d === 'skip' ? null : d.toUpperCase()),
@@ -122,18 +124,26 @@ describe('useEventStream', () => {
         const first = latest()
         act(() => first.drop())
         act(() => first.drop())
-        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS - 1))
+        act(() => {
+            vi.advanceTimersByTime(RETRY_FIRST_MS - 1)
+        })
         expect(FakeEventSource.instances).toHaveLength(1)
 
-        act(() => vi.advanceTimersByTime(1))
+        act(() => {
+            vi.advanceTimersByTime(1)
+        })
         expect(first.closed).toBe(true)
         expect(FakeEventSource.instances).toHaveLength(2)
         expect(result.current).toBe('reconnecting')
 
         act(() => latest().drop())
-        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS))
+        act(() => {
+            vi.advanceTimersByTime(RETRY_FIRST_MS)
+        })
         expect(FakeEventSource.instances).toHaveLength(2)
-        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS))
+        act(() => {
+            vi.advanceTimersByTime(RETRY_FIRST_MS)
+        })
         expect(FakeEventSource.instances).toHaveLength(3)
 
         act(() => latest().open())
@@ -145,7 +155,9 @@ describe('useEventStream', () => {
         const { result, onReconnect } = stream()
         act(() => latest().drop())
         act(() => latest().open())
-        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS * 4))
+        act(() => {
+            vi.advanceTimersByTime(RETRY_FIRST_MS * 4)
+        })
         expect(FakeEventSource.instances).toHaveLength(1)
         expect(result.current).toBe('open')
         expect(onReconnect).toHaveBeenCalledOnce()
@@ -155,7 +167,9 @@ describe('useEventStream', () => {
         const { result } = stream()
         act(() => latest().refuse())
         expect(result.current).toBe('reconnecting')
-        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS))
+        act(() => {
+            vi.advanceTimersByTime(RETRY_FIRST_MS)
+        })
         expect(FakeEventSource.instances).toHaveLength(2)
         act(() => latest().open())
         expect(result.current).toBe('open')
@@ -164,12 +178,16 @@ describe('useEventStream', () => {
     it('starts over when the page is shown after long enough hidden to have lost the stream unawares', () => {
         const { result, onReconnect } = stream()
         act(() => show('hidden'))
-        act(() => vi.advanceTimersByTime(HIDDEN_MS - 1))
+        act(() => {
+            vi.advanceTimersByTime(HIDDEN_MS - 1)
+        })
         act(() => show('visible'))
         expect(FakeEventSource.instances).toHaveLength(1)
 
         act(() => show('hidden'))
-        act(() => vi.advanceTimersByTime(HIDDEN_MS))
+        act(() => {
+            vi.advanceTimersByTime(HIDDEN_MS)
+        })
         act(() => show('visible'))
         expect(FakeEventSource.instances).toHaveLength(2)
         expect(FakeEventSource.instances[0]?.closed).toBe(true)
@@ -186,10 +204,14 @@ describe('useEventStream', () => {
         expect(FakeEventSource.instances).toHaveLength(2)
 
         act(() => latest().drop())
-        act(() => window.dispatchEvent(new Event('online')))
+        act(() => {
+            globalThis.dispatchEvent(new Event('online'))
+        })
         expect(FakeEventSource.instances).toHaveLength(3)
         act(() => latest().open())
-        act(() => window.dispatchEvent(new Event('online')))
+        act(() => {
+            globalThis.dispatchEvent(new Event('online'))
+        })
         expect(FakeEventSource.instances).toHaveLength(3)
     })
 
@@ -197,8 +219,12 @@ describe('useEventStream', () => {
         const { unmount } = stream()
         act(() => latest().drop())
         unmount()
-        act(() => vi.advanceTimersByTime(RETRY_FIRST_MS * 10))
-        act(() => window.dispatchEvent(new Event('online')))
+        act(() => {
+            vi.advanceTimersByTime(RETRY_FIRST_MS * 10)
+        })
+        act(() => {
+            globalThis.dispatchEvent(new Event('online'))
+        })
         expect(FakeEventSource.instances).toHaveLength(1)
         expect(latest().closed).toBe(true)
     })

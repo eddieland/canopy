@@ -29,6 +29,14 @@ type MessageSource = Annotated[
 type MessageKind = Annotated[
     Literal["report", "question", "reply", "comment"], Field(description="What a message is (DESIGN §22).")
 ]
+type GrantKind = Annotated[
+    Literal["implement", "fix-ci", "resume"],
+    Field(description="A kind of run a ticket's unit is limited in, which `canopy grant` raises (DESIGN §8, §22)."),
+]
+type LimitKind = Annotated[
+    Literal["implement", "fix-ci", "resume", "review"],
+    Field(description="What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs."),
+]
 type StartStatus = Annotated[
     Literal["started", "stopped"],
     Field(description="Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22)."),
@@ -125,6 +133,8 @@ class AttentionItem(_Model):
     """When the unbroken run of ticks that recorded it began."""
     finding: bool = False
     """A chore's finding rather than a ticket's item."""
+    pr: str | None = None
+    """The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found."""
 
 
 class Run(_Model):
@@ -269,6 +279,40 @@ class Decision(_Model):
     when it was recorded."""
 
 
+class Limit(_Model):
+    """A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22).
+
+    Every run counts, however it ended (D030), so `runs` only grows; at `limit` the loop does no more of the kind until
+    the operator grants more or raises the policy.
+    """
+
+    kind: LimitKind
+    """What it counts."""
+    repo: str | None = None
+    """The unit's repository; for a review limit, the repository of the unit whose PR it is, if any."""
+    pr_url: str | None = None
+    """The PR, for a review limit."""
+    runs: int
+    """Its runs of the kind so far."""
+    granted: int
+    """The runs the operator granted it past the policy's limit."""
+    limit: int
+    """The most runs of the kind it may have: the policy's limit plus `granted`."""
+
+
+class CostTotal(_Model):
+    """What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran."""
+
+    runs: int
+    """How many worker and split runs it counts, a running one included."""
+    reviews: int
+    """How many review runs it counts, a running one included."""
+    priced: int
+    """How many of those runs and review runs reported a cost."""
+    cost_usd: float | None = None
+    """What they cost, in US dollars; None when none reported a cost."""
+
+
 class TicketDetail(_Model):
     """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
@@ -276,12 +320,17 @@ class TicketDetail(_Model):
     """The ticket, as the tickets list shows it."""
     units: list[Unit]
     """Its work in each repository."""
+    limits: list[Limit] = []
+    """Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
+    has reviewed."""
     runs: list[Run]
     """Its latest runs, newest first."""
     messages: list[Message]
     """Its conversation: the latest 100 messages, oldest first."""
     decisions: list[Decision]
     """The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it."""
+    cost: CostTotal
+    """What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace."""
 
 
 class ChoreRun(_Model):
@@ -328,6 +377,38 @@ class ChoreFinding(_Model):
     """Whether the operator dismissed it since then: it is off the attention list until it clears."""
 
 
+class ChoreSpendWindow(_Model):
+    """What one chore's runs that started in the last `hours` hours cost, as the agent runtime reported it (§13).
+
+    No start time, unlike `SpendWindow`: that moves with the clock, and would change the chores list on every read.
+    """
+
+    hours: int
+    """How long the window is, in hours."""
+    runs: int
+    """How many of its runs started in the window, a running one included."""
+    priced: int
+    """How many of those reported a cost."""
+    cost_usd: float | None = None
+    """What they cost, in US dollars; None when none reported a cost."""
+    mean_usd: float | None = None
+    """What a run cost on average, over those that reported a cost; None when none did."""
+    p99_usd: float | None = None
+    """The 99th percentile of what a run cost, by nearest rank over those that reported a cost: the dearest run when
+    fewer than 100 did. None when none did."""
+    max_usd: float | None = None
+    """What the dearest run cost, of those that reported a cost; None when none did."""
+
+
+class ChoreSpend(_Model):
+    """What one chore's runs cost in the last day and the last 30 days, read together."""
+
+    day: ChoreSpendWindow
+    """The last 24 hours."""
+    month: ChoreSpendWindow
+    """The last 30 days."""
+
+
 class ChoreSummary(_Model):
     """A configured chore as `canopy status` lists it: its window, its runs, when it is next due, its open findings."""
 
@@ -353,6 +434,8 @@ class ChoreSummary(_Model):
     """Its open findings."""
     latest_note_id: int | None = None
     """The newest of the operator's notes to it, so a new note changes the list the stream sends."""
+    spend: ChoreSpend
+    """What its runs cost in the last day and the last 30 days."""
 
 
 class ChoreDetail(_Model):
@@ -439,6 +522,28 @@ class Forgot(_Model):
     """The URLs of its units' PRs."""
 
 
+class GrantRequest(_Model):
+    """A grant of one more run of a kind to one of a ticket's units, as `canopy grant KEY KIND --repo NAME` does."""
+
+    kind: GrantKind
+    """The kind of run to allow one more of."""
+    repo: Annotated[str | None, Field(max_length=200)] = None
+    """The unit's repository; may be left out when the ticket has had runs in one repository only."""
+
+
+class Granted(_Model):
+    """What a grant recorded: one more run allowed, every earlier one still counted (D030). The next tick decides."""
+
+    kind: LimitKind
+    """The kind it allows one more of."""
+    repo: str | None = None
+    """The unit's repository, named or found; None for a PR's reviews."""
+    runs: int
+    """Its runs of the kind so far, unchanged by the grant."""
+    limit: int
+    """Its limit now, the grant counted."""
+
+
 class ReplyRequest(_Model):
     """A reply from the conversation's form, with the submission id the form drew when it was rendered."""
 
@@ -475,6 +580,26 @@ class Dismissed(_Model):
     """The chore's name."""
     finding: str
     """The finding's id."""
+    dismissed: bool
+    """Whether it is now dismissed: false after an `undo`."""
+
+
+class ReviewDismissRequest(_Model):
+    """A dismissal of one of a review run's findings, by its number, or with `undo` the taking back of one."""
+
+    finding: Annotated[int, Field(ge=1, le=20)]
+    """The finding's number in the review, from 1."""
+    undo: bool = False
+    """Take the dismissal back, as `--undo` does."""
+
+
+class ReviewDismissed(_Model):
+    """What a dismissal of a review's finding left: the finding, and whether it is now dismissed."""
+
+    run: int
+    """The review run's id."""
+    finding: int
+    """The finding's number in the review, from 1."""
     dismissed: bool
     """Whether it is now dismissed: false after an `undo`."""
 
@@ -549,7 +674,7 @@ class Tick(_Model):
     id: int
     """The tick's id."""
     status: str
-    """running | ok | skipped | overseer_failed | reconcile_failed | abandoned"""
+    """running | ok | skipped | canopy_unavailable | overseer_failed | reconcile_failed | abandoned"""
     dry_run: bool
     """Whether it was a dry run: it recorded decisions and acted on none."""
     started_at: datetime
@@ -591,6 +716,8 @@ class TranscriptText(_Model):
     """Whether it is the model's reasoning rather than its answer."""
     cut: bool = False
     """Cut at the transcript's bound for one text."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptTool(_Model):
@@ -614,6 +741,8 @@ class TranscriptTool(_Model):
     """How long it took, in milliseconds, if the runtime said."""
     cut: bool = False
     """Its input or output was cut at the transcript's bound for one."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptTokens(_Model):
@@ -646,6 +775,8 @@ class TranscriptStep(_Model):
     """Every kind of token together."""
     split: TranscriptTokens | None = None
     """The tokens, each kind apart."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptError(_Model):
@@ -659,6 +790,8 @@ class TranscriptError(_Model):
     """The error's name, as the runtime gave it."""
     message: str
     """The error's message: untrusted."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 type TranscriptEntry = Annotated[
@@ -673,6 +806,20 @@ type TranscriptStatus = Annotated[
         "`--format json`). `no_log`: the log is missing, a symlink, or not a regular file."
     ),
 ]
+
+
+class TranscriptPrompt(_Model):
+    """The message canopy gave the runtime to start the session (DESIGN §22).
+
+    The first model call's input, but for the agent's definition and the runtime's own system prompt and tools, which
+    nothing records.
+    """
+
+    text: str
+    """The prompt as canopy rendered it, control characters dropped: untrusted in part, since it quotes tickets,
+    comments, and PRs."""
+    truncated: bool = False
+    """It holds more than the bound read."""
 
 
 class Transcript(_Model):
@@ -692,6 +839,8 @@ class Transcript(_Model):
     """A bound left something out."""
     unreadable: int = 0
     """How many events did not validate."""
+    prompt: TranscriptPrompt | None = None
+    """The session's prompt, kept beside the log, if canopy kept one and it could be read."""
 
 
 class TickOutput(_Model):
@@ -888,6 +1037,8 @@ class ReviewFinding(_Model):
     """The index in the diff's files of the file it is in; None when the diff does not show it."""
     line: int | None = None
     """The line it is on, on the new side; None when the diff does not show it."""
+    dismissed: bool = False
+    """Whether the operator dismissed it: no worker or tick acts on it (DESIGN §21)."""
 
 
 class DiffLine(_Model):
@@ -983,12 +1134,16 @@ class PullRequestDetail(_Model):
 
     pull_request: PullRequest
     """The PR, as the PRs list shows it."""
+    review_limit: Limit | None = None
+    """Its review runs against its limit (DESIGN §21); None when canopy has never reviewed it."""
     runs: list[Run]
     """Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20."""
     reviews: list[ReviewSummary]
     """Every review run of it, newest first; each opens its own page, with its findings on its diff."""
     decisions: list[Decision]
     """The latest 20 decisions naming it, across ticks, newest first."""
+    cost: CostTotal
+    """What every run it lists cost, not only the 20 shown, and every review run of it."""
 
 
 class AttentionUpdated(_Model):

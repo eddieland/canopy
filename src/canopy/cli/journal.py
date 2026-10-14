@@ -22,6 +22,7 @@ from canopy.cli.params import (
 from canopy.core import conversation, db
 from canopy.infra import logs
 from canopy.loop import attention
+from canopy.reviews import grants
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -35,6 +36,7 @@ PHASES = (
     "ci_running",
     "ci_red",
     "changes_requested",
+    "untrusted_review",
     "green_unreviewed",
     "approved",
     "merged",
@@ -116,6 +118,9 @@ def cmd_attention(
     unit = _unit(ctx, repo)
     if key is not None:
         db.touch_ticket(ctx.conn, key, ctx.repo)
+    if reason == "review_limit" and pr is not None:
+        # However the overseer words it, the item names what lifts the limit (DESIGN §21).
+        detail = f"{detail}; {grants.hint(pr)}"
     db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
     click.echo(f"recorded attention {reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}")
     return 0

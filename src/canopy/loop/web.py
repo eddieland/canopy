@@ -1,8 +1,9 @@
 """The web UI for `canopy loop` (DESIGN §22, D073): the listener secret checked, the server's backend wired, started.
 
-The server is a feature (`canopy.serve`) and cannot import the loop or `runs`, so this hands it the attention list as
-`canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`, and a way to ask the
-loop to read its config again, as SIGHUP does.
+The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, or `reviews`, so this hands it the
+attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`, a
+way to ask the loop to read its config again, as SIGHUP does, and the attempt and review limits with the grants that
+`canopy grant` records (`runs.policy`, `reviews.grants`).
 """
 
 from __future__ import annotations
@@ -10,13 +11,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from canopy.core import db
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread
-from canopy.runs import halt
+from canopy.reviews import grants
+from canopy.runs import halt, policy
 from canopy.serve import secret
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
-from canopy.serve.backend import Backend, Reloading
+from canopy.serve.backend import Backend, Granted, Limit, Reloading
 from canopy.serve.options import ServeOptions
 from canopy.serve.server import WebServer
 
@@ -24,6 +27,7 @@ if TYPE_CHECKING:
     import sqlite3
 
     from canopy.core.context import Context
+    from canopy.core.conversation import Ref
 
 
 @dataclass(frozen=True)
@@ -66,7 +70,7 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
 
 
 def backend(ctx: Context, reload: reread.Reload) -> Backend:
-    """The server's view of the loop's journal: its config and workspace, the attention list, `halt.end`, and reload.
+    """The server's view of the loop's journal: the config, the attention list, `halt.end`, reload, and grants.
 
     Returns:
         The backend the server calls into, bound to `ctx` and `reload`.
@@ -86,5 +90,53 @@ def backend(ctx: Context, reload: reread.Reload) -> Backend:
         attention=attention.listed,
         end_run=end_run,
         reload=reload_config,
+        limits=limits,
+        review_limit=review_limit,
+        grant=grant,
         write_attention=lambda current: attention.write(current, logs.for_tick(None)),
     )
+
+
+def limits(ctx: Context, key: str) -> list[Limit]:
+    """Each kind's limit of each unit of `key`'s that has had runs, as the state block counts them (DESIGN §8, §22).
+
+    A forgotten ticket's runs still name their repositories, so its units are here though the journal has none.
+
+    Returns:
+        Every kind of every unit, by repository, then kind as `policy.KINDS` orders them.
+    """
+    granted = policy.grants(ctx.conn)
+    found: list[Limit] = []
+    for (ticket, repo), counts in sorted(policy.attempts(ctx.conn).items(), key=lambda u: str(u[0][1])):
+        # A slot with no repository name names no unit `canopy grant` can raise.
+        if ticket != key or repo is None:
+            continue
+        extra = granted.get(policy.unit(key, repo), {})
+        most = policy.unit_limits(ctx.config, extra)
+        found.extend(Limit(k, repo, None, counts[k], extra.get(k, 0), most[k]) for k in policy.KINDS)
+    return found
+
+
+def review_limit(ctx: Context, url: str) -> Limit | None:
+    """The PR's review limit (DESIGN §21), or None for one canopy has never reviewed, which has none to grant past.
+
+    Returns:
+        Its review runs, the runs granted it, and its limit, with no repository: the PR's own page names that.
+    """
+    runs = len(db.review_runs_of(ctx.conn, url))
+    if runs == 0:
+        return None
+    return Limit(grants.KIND, None, url, runs, grants.granted(ctx.conn, url), grants.limit(ctx.conn, ctx.config, url))
+
+
+def grant(ctx: Context, ref: Ref, kind: str, repo: str | None) -> Granted:
+    """`canopy grant` for one more run, with its guards: a PR's reviews with `review`, else a ticket's unit's attempts.
+
+    Returns:
+        The unit's repository (none for a PR), its runs, and its limit with the grant counted.
+    """
+    if kind == grants.KIND:
+        reviewed = grants.grant(ctx.conn, ctx.config, ref, runs=1)
+        return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit)
+    granted = policy.grant(ctx.conn, ctx.config, ref.id, kind, repo=repo, runs=1)
+    return Granted(repo=granted.repo, runs=granted.runs, limit=granted.limit)

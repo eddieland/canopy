@@ -5,12 +5,13 @@ by hand still fits in between. The loop also holds its own lock, `<state_dir>/lo
 loops on one state dir would run the overseer twice as often.
 
 How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
-never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). An operator
-message recorded since the last tick began, such as a `canopy reply`, ends the wait early, at most once a minute (DESIGN
-§22), and so, with idle pacing on, does a run ending after the tick read the journal. On a terminal, pressing
-`TICK_NOW_KEY` ends it at once. A deferred start waits the same way before the first tick, from when the loop started.
-Each tick's row records whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend
-can be split by what it bought (ROADMAP M33).
+never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). The
+operator's acts since the last tick read the journal end the wait early, at most once a minute (DESIGN §22): a message
+to a ticket, such as a `canopy reply`; a ticket started or stopped; attempts or reviews granted. With idle pacing on, a
+run ending after the tick read the journal does too. A config reload does not: it applies at the wait's next step and
+leaves its deadline as it was. On a terminal, pressing `TICK_NOW_KEY` ends it at once. A deferred start waits the same
+way before the first tick, from when the loop started. Each tick's row records whether it was idle and what ended the
+wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it bought (ROADMAP M33).
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -76,19 +77,23 @@ _STATUS_STYLES = {
     "ok": "bold green",
     "skipped": "bold yellow",
     "lock_busy": "bold yellow",
+    "canopy_unavailable": "bold red",
     "overseer_failed": "bold red",
     "reconcile_failed": "bold red",
     "error": "bold red",
 }
 
 
-# What ended a wait before its deadline: an operator message, a run ending, or the operator pressing `TICK_NOW_KEY`.
-type Woken = Literal["message", "run", "key"]
+# What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant), a run
+# ending, or the operator pressing `TICK_NOW_KEY`.
+type Woken = Literal["message", "starts", "grant", "run", "key"]
 # What started a tick, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its length, one a gate
 # shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
 _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
+    "starts": "a ticket started or stopped; next tick in ",
+    "grant": "a grant; next tick in ",
     "run": "a run ended; next tick in ",
 }
 
@@ -334,25 +339,14 @@ def _ticks(
     woken_by: WokenBy = "start"
     if defer_seconds:
         woken_by = (
-            _defer(
-                console,
-                ctx,
-                stop,
-                defer_seconds,
-                keys=keys,
-                sleep=sleep,
-                clock=clock,
-                log=log,
-                each_step=settings.apply,
-            )
-            or "start"
+            _defer(console, settings, stop, defer_seconds, keys=keys, sleep=sleep, clock=clock, log=log) or "start"
         )
     elif pause.paused(ctx.conn) is not None:
         # Paused before the loop started: hold the first tick as a wait already due holds.
         woken = _wait(
             console, ctx, stop, clock(), sleep=sleep, clock=clock, keys=keys, log=log, each_step=settings.apply
         )
-        _log_woken(log, woken, seen=0, read_at=None)
+        _log_woken(log, woken, seen=0, since=None, read_at=None)
         woken_by = woken or "start"
     idle_count = 0
     while not stop.requested:
@@ -362,6 +356,7 @@ def _ticks(
         # Operator messages to a ticket newer than this wake the wait after this tick: every channel records one the
         # same way. A note to a chore waits for the chore's next run.
         seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
+        begun = db.now()
         started = clock()
         settings.reload.ticking = True
         try:
@@ -376,6 +371,8 @@ def _ticks(
         statuses[outcome.status] += 1
         # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it.
         idle = pacing.idle(ctx, outcome, before)
+        # Measured for the prompt, not acted on (ROADMAP M28): what the tick changed with nothing new to see.
+        churn = pacing.churn(ctx, outcome, before)
         idle_count = idle_count + 1 if pace.on and idle else 0
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
@@ -383,18 +380,22 @@ def _ticks(
         wait = None if last or stop.requested else pacing.wait(ctx, pace, idle_count, datetime.now(UTC))
         if wait is not None:
             logs.for_tick(outcome.tick_id).info(
-                "loop waits", extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait)}
+                "loop waits",
+                extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait), "churn": churn},
             )
         # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
         _report(console, ctx, outcome, before.attention, elapsed=ended - started, wait=wait, idle_count=idle_count)
         if wait is None:
             break
-        # With idle pacing on, a run that ends after the tick read the journal wakes the wait too.
-        read_at = pacing.read_at(ctx, outcome) if pace.on else None
+        # The operator's starts, stops, and grants after the tick read the journal wake the wait, or after it began if
+        # it read nothing. With idle pacing on, a run that ends after the tick read the journal wakes it too.
+        read = pacing.read_at(ctx, outcome)
+        since = read or begun
+        read_at = read if pace.on else None
 
-        def wake(seen: int = seen, read_at: str | None = read_at) -> Woken | None:
-            if db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen:
-                return "message"
+        def wake(seen: int = seen, since: str = since, read_at: str | None = read_at) -> Woken | None:
+            if (acted := _operator_acted(settings, seen, since)) is not None:
+                return acted
             return "run" if read_at is not None and db.runs_ended_after(conn, read_at) else None
 
         woken = _wait(
@@ -410,13 +411,30 @@ def _ticks(
             log=log,
             each_step=settings.apply,
         )
-        _log_woken(log, woken, seen=seen, read_at=read_at)
+        _log_woken(log, woken, seen=seen, since=since, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
+
+
+def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
+    """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
+
+    A message to a ticket newer than `seen`; a ticket started or stopped, or attempts or reviews granted, after
+    `since`. A note to a chore waits for the chore's next run, and a config reload waits for the next tick.
+
+    Returns:
+        The first of those that happened, or None.
+    """
+    conn = settings.ctx.conn
+    if db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen:
+        return "message"
+    if db.starts_moved_after(conn, since):
+        return "starts"
+    return "grant" if db.granted_after(conn, since) else None
 
 
 def _defer(
     console: Console,
-    ctx: Context,
+    settings: _Settings,
     stop: Stop,
     seconds: float,
     *,
@@ -424,23 +442,17 @@ def _defer(
     sleep: Callable[[float], None],
     clock: Callable[[], float],
     log: logs.TickAdapter,
-    each_step: Callable[[], None],
 ) -> Woken | None:
-    """Wait `seconds` before the first tick. An operator message or `TICK_NOW_KEY` ends it early, as between ticks.
+    """Wait `seconds` before the first tick. The operator's acts or `TICK_NOW_KEY` end it early, as between ticks.
 
     Returns:
         What ended it early, if anything did.
     """
+    ctx = settings.ctx
     seen = db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET)
+    since = db.now()
     started = clock()
     log.info("loop defers its first tick", extra={"wait_seconds": round(seconds)})
-
-    def wake() -> Woken | None:
-        return (
-            "message"
-            if db.latest_message_id(ctx.conn, source="operator", subject_kind=db.SUBJECT_TICKET) > seen
-            else None
-        )
 
     woken = _wait(
         console,
@@ -449,20 +461,26 @@ def _defer(
         started + seconds,
         sleep=sleep,
         clock=clock,
-        wake=wake,
+        wake=lambda: _operator_acted(settings, seen, since),
         earliest=started + WAKE_MIN_SECONDS,
         keys=keys,
         log=log,
         note="first tick in ",
-        each_step=each_step,
+        each_step=settings.apply,
     )
-    _log_woken(log, woken, seen=seen, read_at=None)
+    _log_woken(log, woken, seen=seen, since=since, read_at=None)
     return woken
 
 
-def _log_woken(log: logs.TickAdapter, woken: Woken | None, *, seen: int, read_at: str | None) -> None:
+def _log_woken(
+    log: logs.TickAdapter, woken: Woken | None, *, seen: int, since: str | None, read_at: str | None
+) -> None:
     if woken == "message":
         log.info("an operator message ended the wait", extra={"after_message": seen})
+    elif woken == "starts":
+        log.info("a ticket started or stopped ended the wait", extra={"after": since})
+    elif woken == "grant":
+        log.info("a grant ended the wait", extra={"after": since})
     elif woken == "run":
         log.info("a run ending ended the wait", extra={"after": read_at})
     elif woken == "key":
