@@ -199,6 +199,7 @@ class SubprocessRunner:
         try:
             fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
         except BaseException:
+            drop_lifelock(log_path)
             os.close(held)
             raise
         try:
@@ -215,8 +216,10 @@ class SubprocessRunner:
                 pass_fds=(held,),
             )
         except FileNotFoundError as e:
+            drop_lifelock(log_path)
             raise CommandNotFoundError(f"command not found: {argv[0]}") from e
         except OSError as e:
+            drop_lifelock(log_path)
             raise ProcError(f"cannot start {argv[0]}: {e.strerror}") from e
         finally:
             # The child's copy of `held` keeps the lock; a child that never started leaves it free.
@@ -260,6 +263,17 @@ def _exists(command: str, *, cwd: Path | None, env: Mapping[str, str] | None) ->
 def lifelock(log_path: Path) -> Path:
     """Return the lock a child `spawn` started with `log_path` holds for its whole life: the log's path, `.lock`."""
     return log_path.with_suffix(".lock")
+
+
+def drop_lifelock(log_path: Path) -> None:
+    """Remove the lifelock of the run logging to `log_path`, so the file does not outlive the run.
+
+    Only once the run's row is closed, or its process never started: nothing asks whether it is `running` then. A row
+    still `running` with no lock file is asked after by its pid, which may since name another process. Removing the
+    file does not release the lock; its holder's exit does. A file that cannot be removed is left, as it does no harm.
+    """
+    with contextlib.suppress(OSError):
+        lifelock(log_path).unlink()
 
 
 def running(log_path: Path, pid: int | None) -> bool:

@@ -207,6 +207,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             stored = outcome.result_json()
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
+            procs.drop_lifelock(Path(run["log_path"]))
             log.info("run finished", extra={**fields, "status": outcome.status})
     return outcome
 

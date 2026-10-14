@@ -34,6 +34,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         note = json.dumps({"harness": "the review process is gone"})
         ended = outbox.review_ended(ctx.config, row, "crashed", note)
         if db.finish_review_run(ctx.conn, int(row["id"]), "crashed", note, event=ended):
+            procs.drop_lifelock(Path(row["log_path"]))
             closed.append(int(row["id"]))
             log.warning("review process is gone; review run marked crashed", extra=fields)
     return closed
