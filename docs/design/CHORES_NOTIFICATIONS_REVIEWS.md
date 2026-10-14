@@ -432,26 +432,12 @@ events = ["attention", "loop", "runs"]   # runs: a blocked worker's question arr
 - Linux: `notify-send --app-name=canopy -- TITLE BODY`. macOS: `osascript` with a fixed script reading title and body
   from its arguments. Neither is built into a shell command or script, so agent or org-member text runs nothing.
 - Exit 0 when the tool succeeded, 1 when it failed, 2 when it is not installed or stdin is empty.
-- From a release's single executable it runs with `SCIE_BOOT=canopy-notify-desktop` (§5). So that `cmd` can name
-  it, README's install puts a script of that name on `PATH`; `--help` prints it:
-
-  ```sh
-  #!/bin/sh
-  exec env SCIE_BOOT=canopy-notify-desktop /path/to/canopy "$@"
-  ```
 
 ### The Slack sink
 
 `canopy-notify-slack` is its own distribution, a uv workspace member (D041): `packages/canopy-notify-slack/`, module
 `canopy_notify_slack`, stdlib only (`urllib.request`, `json`), importing nothing from `canopy`. `canopy` depends on it
-and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`. A
-release's single executable carries it too, run with `SCIE_BOOT=canopy-notify-slack` (§5); README's install puts
-a script of that name on `PATH` so that `cmd` can name it, and `--help` prints it:
-
-```sh
-#!/bin/sh
-exec env SCIE_BOOT=canopy-notify-slack /path/to/canopy "$@"
-```
+and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`.
 
 - It reads `json` on stdin, posts one message to a Slack incoming webhook, and exits 0 on 2xx, else 1 with Slack's
   reply on stderr. A rate-limited post is retried next tick like any failure.

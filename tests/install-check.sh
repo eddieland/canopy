@@ -5,8 +5,7 @@
 #
 # Usage: tests/install-check.sh [SOURCE]
 #   SOURCE is anything `uv tool install` accepts: this checkout by default, or git+https://github.com/eddieland/canopy
-#   to check what README tells people to run. Or it is the single executable `make binary` builds (D067), installed
-#   the way README says to install a release: copied onto PATH as `canopy`, with the sinks as scripts that run it.
+#   to check what README tells people to run.
 set -eu
 
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -26,26 +25,8 @@ fail() {
     exit 1
 }
 
-if [ -f "$source" ] && [ -x "$source" ]; then
-    echo "install-check: single executable $source"
-    binary=1
-    mkdir -p "$UV_TOOL_BIN_DIR"
-    cp "$source" "$UV_TOOL_BIN_DIR/canopy"
-    # README's loop, in a subshell so the cd does not stick. The link is what an older README installed: the loop must
-    # replace it, not write through it to canopy.
-    (
-        cd "$UV_TOOL_BIN_DIR" && chmod +x canopy
-        ln -s canopy canopy-notify-slack
-        for sink in canopy-notify-desktop canopy-notify-slack; do
-            rm -f "$sink" && printf '#!/bin/sh\nexec env SCIE_BOOT=%s "%s/canopy" "$@"\n' "$sink" "$PWD" >"$sink"
-            chmod +x "$sink"
-        done
-    )
-else
-    echo "install-check: uv tool install $source"
-    binary=0
-    uv tool install --quiet "$source"
-fi
+echo "install-check: uv tool install $source"
+uv tool install --quiet "$source"
 
 # The installed canopy first, then the fake treehouse and agent. The fakes are stdlib-only scripts.
 export PATH="$UV_TOOL_BIN_DIR:$repo/tests/fakes:$PATH"
@@ -114,44 +95,19 @@ echo "$sinks" | grep -Eq '^desktop: (delivered|failed: exited [12]: canopy-notif
 sed -i.bak '/^\[notify\.sinks\./,$d' "$config"
 
 # The web UI (DESIGN §22): the listener secret, then the loop serving the UI this install bundles. The wheel bundles it
-# when npm was on PATH at build time; a release always has it.
+# when npm was on PATH at build time.
 secret=$(canopy secret 2>/dev/null)
 [ "${#secret}" -ge 32 ] || fail "canopy secret printed no secret"
 printf '\n[serve]\nport = 18765\n' >>"$config"
 loop=$(canopy loop --dry-run --ticks 1)
 echo "$loop" | grep -q 'web UI .*http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
-if [ "$binary" = 1 ] || command -v npm >/dev/null; then
+if command -v npm >/dev/null; then
     if echo "$loop" | grep -q 'not built'; then fail "the web UI is not built into this install"; fi
 fi
 
 # The migrations, prompts, agent definitions, and skills came from the wheel, not from this checkout.
 state="$workspace/.canopy"
 ls "$state"/runtime/*/agents/canopy-worker.md >/dev/null || fail "no agent definitions snapshot in $state/runtime"
-if [ "$binary" = 1 ]; then
-    # The executable cannot run a script of ours, and has no path to this checkout. What it snapshotted must be what
-    # this checkout ships.
-    # The private worker's definition is rendered with the tracker's server and tools (DESIGN §22): with those lines,
-    # the only ones a two-space quoted key on the github server starts, taken out, it is the shipped file.
-    # The overseer's is rendered with its prompt from its marked line on (DESIGN §13): above that line it is the shipped
-    # file, and the prompt follows.
-    private=agents/canopy-worker-private.md
-    overseer=agents/canopy-overseer.md
-    for dir in agents skills; do
-        diff -r -x "${private#agents/}" -x "${overseer#agents/}" "$repo/.agents/$dir" "$state"/runtime/*/"$dir" \
-            >/dev/null || fail "the snapshot's $dir are not .agents/"
-    done
-    grep -q '^  "github_\*": deny$' "$state"/runtime/*/"$private" ||
-        fail "the snapshot's $private names no tracker tools"
-    grep -v '^  "github_' "$state"/runtime/*/"$private" | diff - "$repo/.agents/$private" >/dev/null ||
-        fail "the snapshot's $private is not .agents/ with the tracker's tools"
-    head=$(sed -n '/^<!-- canopy: overseer prompt -->$/q;p' "$repo/.agents/$overseer" | wc -l)
-    prompt="$repo/.agents/prompts/overseer.md"
-    { head -n "$head" "$repo/.agents/$overseer" && cat "$prompt"; } >"$work/overseer.md"
-    head -n "$((head + $(wc -l <"$prompt")))" "$state"/runtime/*/"$overseer" | diff - "$work/overseer.md" >/dev/null ||
-        fail "the snapshot's $overseer is not .agents/ with the overseer's prompt"
-    echo "install-check: ok"
-    exit 0
-fi
 "$UV_TOOL_DIR/canopy/bin/python" -c '
 import sys
 from pathlib import Path
