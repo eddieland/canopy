@@ -64,6 +64,9 @@ class Meta(_Model):
 
     version: str
     """canopy's version, as the installed package reports it."""
+    build: str | None
+    """The id of the UI build the server serves now, which index.html carries too; None when the UI is not built. A page
+    whose own id differs was loaded from an older build, and reloading it fetches this one."""
     mock: bool
     """Whether the journal is seeded from fixtures (`python -m canopy.serve --mock`), not the operator's."""
     ticket_url: str | None = None

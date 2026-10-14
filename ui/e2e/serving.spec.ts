@@ -50,3 +50,43 @@ test('the page makes no request to another origin', async ({ page, baseURL }) =>
     })
     expect([...origins]).toEqual([new URL(baseURL ?? '').origin])
 })
+
+test('a page from an older build offers a reload, and the reload loads the build served', async ({ page }) => {
+    await signIn(page)
+    await page.goto('runs')
+    const served = await page.locator('meta[name=canopy-build]').getAttribute('content')
+    expect(served).toMatch(/^[0-9a-f]{16}$/u)
+    await expect(page.getByTestId('loop-pause')).toBeVisible()
+    await expect(page.getByTestId('newer-build')).toHaveCount(0)
+
+    // The server says it serves another build than the one this page loaded, as after an upgrade.
+    await page.route('**/api/meta', async (route) => {
+        const meta = (await (await route.fetch()).json()) as Record<string, unknown>
+        await route.fulfill({ json: { ...meta, build: 'f'.repeat(16) } })
+    })
+    await page.reload()
+    const reload = page.getByTestId('newer-build')
+    await expect(reload).toBeVisible()
+
+    await page.unroute('**/api/meta')
+    await reload.click()
+    await expect(page.getByTestId('loop-pause')).toBeVisible()
+    await expect(page.getByTestId('newer-build')).toHaveCount(0)
+})
+
+test('the stream coming back reads the build again, so a page open across an upgrade offers the reload', async ({
+    page,
+}) => {
+    await signIn(page)
+    await page.goto('runs')
+    await expect(page.getByTestId('loop-pause')).toBeVisible()
+    await page.route('**/api/meta', async (route) => {
+        const meta = (await (await route.fetch()).json()) as Record<string, unknown>
+        await route.fulfill({ json: { ...meta, build: 'f'.repeat(16) } })
+    })
+    await expect(page.getByTestId('newer-build')).toHaveCount(0)
+
+    // The loop restarting drops the stream; a page restored from the back-forward cache starts it over the same way.
+    await page.evaluate(() => globalThis.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true })))
+    await expect(page.getByTestId('newer-build')).toBeVisible()
+})

@@ -261,7 +261,7 @@ export type paths = {
         };
         /**
          * Get the server's meta
-         * @description The server's version, whether its data is mock, `tracker.ticket_url`, link templates, and the workspace root.
+         * @description The server's version and UI build, whether its data is mock, its link templates, and the workspace root.
          */
         get: operations["getMeta"];
         put?: never;
@@ -1654,6 +1654,12 @@ export type components = {
             branch_urls: {
                 [key: string]: string;
             };
+            /**
+             * Build
+             * @description The id of the UI build the server serves now, which index.html carries too; None when the UI is not built. A page
+             *     whose own id differs was loaded from an older build, and reloading it fetches this one.
+             */
+            build: string | null;
             /**
              * Mock
              * @description Whether the journal is seeded from fixtures (`python -m canopy.serve --mock`), not the operator's.

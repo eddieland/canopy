@@ -21,6 +21,7 @@ import { LiveReadouts } from './live-readouts'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
 import { Nav } from './nav'
+import { NewerBuild } from './newer-build'
 import { RailFooter, RailSpend, RailWorking } from './rail'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
@@ -107,6 +108,7 @@ export function AppShell() {
                     <Ticker />
                     {/* Three groups, the action, the readouts, and the theme, a rule between each. */}
                     <div className="flex items-center gap-2">
+                        <NewerBuild />
                         <LoopPause />
                         <Rule />
                         <LiveReadouts stream={stream} />

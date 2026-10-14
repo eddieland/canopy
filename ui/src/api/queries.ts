@@ -47,7 +47,10 @@ export const sessionQuery = queryOptions({
     staleTime: Number.POSITIVE_INFINITY,
 })
 
-/** The server itself: its version, whether its data is mock, and the tracker's ticket URL. Never stale. */
+/**
+ * The server itself: its version and UI build, whether its data is mock, and its link templates. Never stale on its
+ * own: the stream's reconnect marks it stale, since the server may have restarted on a newer version (useLiveUpdates).
+ */
 export const metaQuery = queryOptions({
     queryKey: keys.meta,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/meta', { signal })),
