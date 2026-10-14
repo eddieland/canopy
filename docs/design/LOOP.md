@@ -143,6 +143,11 @@ moments from death, without reading `/proc`. A run started by a canopy from befo
 pid is asked instead, as before: a zombie counts as dead, and a pid reused by an unrelated process reads as alive. A
 run with neither a lock nor a recorded pid is gone.
 
+The file is removed once the run's row is closed, by whichever process closed it: the run's own, or reconcile, or
+`canopy stop --now`. A spawn that starts nothing removes it too. Only a `running` row is ever asked whether its process
+lives, so a closed one needs no file, and without this every run would leave an empty `<id>.lock` beside its log for
+good. It is never removed earlier: a `running` row with no file would be asked after by its pid instead.
+
 ### The loop
 
 `canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run
@@ -637,10 +642,10 @@ read for a run in one repository.
 
 Worker obligations, stated in every worker prompt:
 
-- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, once per
-  repository, as `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker
-  that brings its base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it
-  rebases onto `origin/<base>` instead, never merging, and pushes the rebased branch with
+- Work only inside the worktree, or a joint run's desk. Push only to `agent/<KEY>-*`, never with force, as
+  `git push origin HEAD:refs/heads/<branch>` from the detached HEAD; create no local branch. A worker that brings its
+  base in merges `origin/<base>`, which step 2 fetched, and does not fetch. With `trust.rebase`, it rebases onto
+  `origin/<base>` instead, never merging, and pushes the rebased branch with
   `git push --force-with-lease origin HEAD:refs/heads/<branch>`: the one force the worker's definition then allows
   (TRUST_MODEL T1). `{{BRANCH_UPDATE}}` says which, in every prompt of a kind that commits; with `trust.rebase` set,
   an override without it fails to render rather than have the worker make merge commits the operator's repositories
@@ -659,7 +664,8 @@ Worker obligations, stated in every worker prompt:
   and `question` are its report and question (§22).
 - Never approve, merge, close PRs, or transition the ticket to Done, including indirectly: no closing keywords
   (`Fixes #12`) or tracker commands (Jira smart commits) in commit messages, PR titles, or PR bodies.
-- Push once. Do not poll CI. Do not retry.
+- Push again for anything fixed after a push, in a new commit, never an amend (D116). Do not poll CI. Do not retry a
+  rejected push.
 
 Everything posts as the operator (D010), who is usually an authorized replier, so without a mark a worker's PR reply
 would read back as new review feedback and spend a `resume` attempt, and its ticket comment could pass for an

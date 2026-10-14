@@ -190,7 +190,7 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
 /**
  * One slot on one line: its state, number, what holds it, its branch, what runs in it, and for how long. Our state
  * word, with treehouse's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
- * line, since it is something to act on. An idle slot is the state and number alone, dimmed.
+ * line, since it is something to act on. An idle slot is the state and number alone, muted.
  */
 function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
     const branchUrl = useBranchUrls()
@@ -198,12 +198,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
-        <ListRow
-            kind="worktree"
-            className={cn('group/copy py-2', idle && 'opacity-60')}
-            data-testid={`worktree-${w.name}`}
-            data-state={w.state}
-        >
+        <ListRow kind="worktree" className="group/copy py-2" data-testid={`worktree-${w.name}`} data-state={w.state}>
             <span
                 className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
                 title={`treehouse: ${w.status}`}

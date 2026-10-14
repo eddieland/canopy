@@ -9,20 +9,21 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 from unittest import mock
 
 import pytest
 
-from canopy.chores import start
+from canopy.chores import execute, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core import db, workspace
 from canopy.core.config import load
-from canopy.infra import procs
+from canopy.core.context import Context
+from canopy.infra import lock, procs
 from canopy.loop import attention
-from tests.canopy.helpers import InlineRunner, in_tick, journal
+from tests.canopy.helpers import InlineRunner, in_tick, journal, lifelock_left
 from tests.conftest import CanopyEnv
 
 FINDING = {
@@ -147,6 +148,9 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert row["log_path"] == str(runs / "1.log")
         assert (runs / "1.prompt").stat().st_mode & 0o777 == 0o600
         assert not (cwd / "1.log").exists()
+        # Its lifelock goes with it: a run leaves its log and prompt behind, and nothing else.
+        assert not lifelock_left(row)
+        assert sorted(p.name for p in runs.iterdir()) == ["1.log", "1.prompt"]
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
@@ -402,6 +406,7 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     crashed = db.get_chore_run(conn, 1)
     assert crashed is not None
     assert crashed["status"] == "crashed"
+    assert not procs.lifelock(Path(crashed["log_path"])).exists()
     while procs.alive(agent_pid) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert not procs.alive(agent_pid)
@@ -446,7 +451,19 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     assert open_ids(canopy_env, conn) == [FINDING["id"]]
     # Due, but with no tick and no chore capacity left to take: a try is the operator's, outside every guard but
     # `running`.
-    with chore_reports({"status": "ok", "summary": "all green", "findings": []}):
+    held: list[bool] = []
+
+    def holding(ctx: Context, run_id: int, *, out: TextIO) -> execute.Outcome:
+        run = db.get_chore_run(ctx.conn, run_id)
+        assert run is not None
+        held.append(lock.held(procs.lifelock(Path(run["log_path"]))))
+        return run_chore(ctx, run_id, out=out)
+
+    run_chore = execute.execute
+    with (
+        chore_reports({"status": "ok", "summary": "all green", "findings": []}),
+        mock.patch.object(execute, "execute", autospec=True, side_effect=holding),
+    ):
         assert main(["chore", "try", "build-health", "--context", "Look at build 91"]) == 0
     out = capsys.readouterr()
     assert "trying chore build-health in " in out.err
@@ -472,9 +489,9 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     run = run_section(tried["argv"][3])
     assert (run["run_id"], run["context"]) == (2, "Look at build 91")
     assert run_section(start.prompt_file(Path(row["log_path"])).read_text()) == run
-    # The try held its run's lifelock, as a detached `_chore` does, and let it go once the row was closed.
-    assert procs.lifelock(Path(row["log_path"])).exists()
-    assert not procs.running(Path(row["log_path"]), row["pid"])
+    # The try held its run's lifelock, as a detached `_chore` does, and removed it once the row was closed.
+    assert held == [True]
+    assert not procs.lifelock(Path(row["log_path"])).exists()
     # It sees what a run starting now would: the latest run and its open findings.
     assert run["previous_run"]["run_id"] == 1
     assert [f["id"] for f in run["open_findings"]] == [FINDING["id"]]

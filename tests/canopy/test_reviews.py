@@ -19,7 +19,7 @@ from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.infra import procs
 from canopy.loop import attention
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, pool, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, lifelock_left, pool, worker_does
 from tests.canopy.test_private import operator
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -147,6 +147,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         checked, _ = reviewer["commands"]
         assert checked["stdout"].strip() == sha
         assert not run_dir.exists()  # removed, and its link with it, once the run ended
+        assert not lifelock_left(row)
         assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
         [(ticket, pr, action, rationale)] = decisions(conn, tick_id)
         assert (ticket, pr, action) == ("PROJ-1", PR, "dispatch:review")
@@ -482,6 +483,7 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
             crashed = db.get_review_run(conn, 1)
             assert crashed is not None
             assert crashed["status"] == "crashed"
+            assert not procs.lifelock(Path(crashed["log_path"])).exists()
             while procs.alive(agent_pid) and time.monotonic() < deadline:
                 time.sleep(0.05)
             assert not procs.alive(agent_pid)

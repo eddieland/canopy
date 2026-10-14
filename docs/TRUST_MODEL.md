@@ -182,7 +182,8 @@ Controls in code, not prompts:
 - Per-run timeout; per-kind attempt limits, raised only by the operator, in config or per unit with `canopy grant`;
   cooldowns.
 - One running worker per ticket.
-- Workers push once and exit. They do not poll CI or retry.
+- Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
+  CI or retry a rejected push; the run timeout bounds the rest.
 - A tick that cannot acquire the lock exits immediately.
 - Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
   per PR with `canopy grant`), `capacity.max_reviews_per_day`, and

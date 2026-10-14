@@ -5,8 +5,9 @@
  * text-status-running), never a raw color and never a dark: variant: if a theme needs a different value, it is this
  * file that changes. `npm run lint` fails on a raw color or dark: anywhere else under src/.
  *
- * Status colors are tuned so each reads on surface and surface-raised in its theme, as a dot, as text, and at 15%
- * as a background tint (bg-status-running/15). Section colors are tuned the same way, as an icon, as text, and at 16%.
+ * Every color used as text reads at 4.5:1 (WCAG AA) on background, surface, and surface-raised in its theme, and a
+ * status color on its own tint up to 20% (bg-status-failed/12) too; tokens.test.ts measures each pair. Section colors
+ * are tuned the same way, as an icon, as text, and at 16%.
  *
  * Both themes' neutrals carry the accent's indigo hue, so the canvas has some color of its own.
  */
@@ -19,38 +20,38 @@
     --surface-raised: oklch(0.962 0.012 275);
     --border: oklch(0.895 0.022 275);
     --foreground: oklch(0.23 0.028 275);
-    --muted-foreground: oklch(0.485 0.042 275);
+    --muted-foreground: oklch(0.48 0.042 275);
     --accent: oklch(0.5 0.2 275);
     --accent-foreground: oklch(1 0 0);
     --ring: oklch(0.5 0.2 275 / 0.55);
-    --scrollbar: oklch(0.485 0.042 275 / 0.4);
+    --scrollbar: oklch(0.48 0.042 275 / 0.4);
 
     /* Runs */
-    --status-running: oklch(0.53 0.13 159);
-    --status-blocked: oklch(0.56 0.14 62);
-    --status-stopped: oklch(0.485 0.042 275);
-    --status-done: oklch(0.52 0.1 215);
-    --status-failed: oklch(0.55 0.19 28);
+    --status-running: oklch(0.46 0.105 159);
+    --status-blocked: oklch(0.485 0.11 62);
+    --status-stopped: oklch(0.48 0.042 275);
+    --status-done: oklch(0.47 0.08 215);
+    --status-failed: oklch(0.49 0.19 28);
 
     /* The nav's sections: identity, never state. */
-    --section-attention: oklch(0.57 0.2 2);
+    --section-attention: oklch(0.55 0.2 2);
     --section-runs: oklch(0.54 0.21 302);
-    --section-worktrees: oklch(0.54 0.11 182);
-    --section-tickets: oklch(0.55 0.15 242);
-    --section-pull-requests: oklch(0.6 0.13 95);
+    --section-worktrees: oklch(0.515 0.09 182);
+    --section-tickets: oklch(0.52 0.12 242);
+    --section-pull-requests: oklch(0.525 0.105 95);
     --section-reviews: oklch(0.55 0.2 330);
-    --section-chores: oklch(0.6 0.16 50);
-    --section-ticks: oklch(0.57 0.15 135);
+    --section-chores: oklch(0.535 0.14 50);
+    --section-ticks: oklch(0.51 0.145 135);
     --section-settings: oklch(0.52 0.13 275);
 
     /* A diff's added and removed lines: a line's change, never a run's state. Used as tints and as the +/- marks. */
-    --diff-add: oklch(0.55 0.14 150);
-    --diff-del: oklch(0.55 0.17 20);
+    --diff-add: oklch(0.5 0.135 150);
+    --diff-del: oklch(0.535 0.17 20);
 
     /* JSON in an agent's output: its keys, strings, numbers, and true/false/null. Syntax only, never state. */
     --syntax-key: oklch(0.5 0.13 235);
     --syntax-string: oklch(0.5 0.12 135);
-    --syntax-number: oklch(0.55 0.13 70);
+    --syntax-number: oklch(0.53 0.11 70);
     --syntax-literal: oklch(0.52 0.17 315);
 
     /* The header ticker's RuneScape chat colors: flair only, never state. Darker here, to read on white. */
@@ -78,17 +79,17 @@
     --surface-raised: oklch(0.252 0.038 270);
     --border: oklch(0.305 0.045 270);
     --foreground: oklch(0.95 0.014 265);
-    --muted-foreground: oklch(0.68 0.048 266);
+    --muted-foreground: oklch(0.71 0.048 266);
     --accent: oklch(0.76 0.15 278);
     --accent-foreground: oklch(0.165 0.024 270);
     --ring: oklch(0.76 0.15 278 / 0.5);
-    --scrollbar: oklch(0.68 0.048 266 / 0.4);
+    --scrollbar: oklch(0.71 0.048 266 / 0.4);
 
     --status-running: oklch(0.8 0.18 160);
     --status-blocked: oklch(0.83 0.16 73);
-    --status-stopped: oklch(0.68 0.048 266);
+    --status-stopped: oklch(0.71 0.048 266);
     --status-done: oklch(0.8 0.13 210);
-    --status-failed: oklch(0.72 0.19 23);
+    --status-failed: oklch(0.725 0.17 23);
 
     --section-attention: oklch(0.75 0.17 2);
     --section-runs: oklch(0.75 0.16 302);
@@ -187,6 +188,10 @@
     --radius-sm: calc(var(--radius) - 2px);
     --radius-md: var(--radius);
     --radius-lg: calc(var(--radius) + 2px);
+
+    /* One step under text-xs, 11px at the browser's size: chips, the rail's small print, a panel-label's size. */
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: 1rem;
 
     --font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;

@@ -120,7 +120,9 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
             logs.write_private(start.prompt_file(log_path), prompt)
         except OSError as e:
             os.close(held)
-            raise TrialError(_crash(ctx, run, e)) from e
+            error = _crash(ctx, run, e)
+            procs.drop_lifelock(log_path)
+            raise TrialError(error) from e
     return Recorded(run_id, held)
 
 
