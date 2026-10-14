@@ -27,8 +27,8 @@ _INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.DO
 
 _NOT_BUILT = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>canopy</title></head>
-<body><p>canopy's web UI is not built into this installation. Build it with <code>make ui-build</code>, or install
-canopy from a release.</p></body></html>
+<body><p>canopy's web UI is not built into this installation. Build it with <code>make ui-build</code>, or
+reinstall canopy with Node 22.12+ and npm on PATH.</p></body></html>
 """
 
 

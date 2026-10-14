@@ -10,7 +10,7 @@ running attention list tells you what actually needs a human.
 Everything runs on your machine, under your credentials. No hosted service holds standing write access to your
 repositories, your tracker, or your internal tools.
 
-> Not on PyPI: `canopy` there is an unrelated project. Install canopy from this repository or its releases.
+> Not on PyPI: `canopy` there is an unrelated project. Install canopy from this repository.
 
 ![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-light-root-linux.png)
 
@@ -73,30 +73,8 @@ posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
    In a canopy checkout, `make treehouse` does the same. Do not use a release or `treehouse update`: no release has the
    lease output canopy reads yet, and the release binary needs glibc 2.34+.
 
-2. **Install canopy**, from a release or from git.
-
-   **From a release** (D067). The machine that runs canopy needs no credential, Python, or uv.
-   1. Download `canopy-<platform>` from the [latest release](https://github.com/eddieland/canopy/releases/latest), or
-      run `gh release download --repo eddieland/canopy --pattern 'canopy-linux-x86_64*'`.
-   2. Check it against its `.sha256`.
-   3. Copy it to the machine as `~/.local/bin/canopy`. Run `mkdir -p ~/.local/bin` first if that directory is missing,
-      and put it on `PATH` if it is not.
-   4. Make it executable, and add the notification sinks beside it as scripts that run it with `SCIE_BOOT` set to their
-      name (a link to it would run canopy itself instead):
-
-      ```sh
-      cd ~/.local/bin && chmod +x canopy
-      for sink in canopy-notify-desktop canopy-notify-slack; do
-          rm -f "$sink" && printf '#!/bin/sh\nexec env SCIE_BOOT=%s "%s/canopy" "$@"\n' "$sink" "$PWD" >"$sink"
-          chmod +x "$sink"
-      done
-      ```
-
-   On macOS, a file downloaded in a browser also needs `xattr -d com.apple.quarantine canopy`. To upgrade, replace the
-   file.
-
-   **From git**, which needs Node 22.12+ and npm on `PATH` (with nvm: `nvm install 22`), because the install builds the
-   web UI:
+2. **Install canopy** from git, with [uv](https://docs.astral.sh/uv/). It needs Node 22.12+ and npm on `PATH` (with
+   nvm: `nvm install 22`), because the install builds the web UI:
 
    ```sh
    uv tool install git+https://github.com/eddieland/canopy
