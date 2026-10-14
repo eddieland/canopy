@@ -226,10 +226,17 @@ Sprig:
   closed, so closing it never brings in a Sprig that had no room. With the mock's three working runs, that is a
   window about 1100px tall.
 
-The empty inbox:
+The empty inbox, and an item clearing:
 
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`), in the
   accent: the one drawing in a page made for its own sake.
+- An item leaving the attention list leaves with a small reward rather than vanishing: its row stays where it was,
+  fades, then folds shut, while one of the empty inbox's leaves tumbles off it, in 600ms (`Leaving` in
+  `src/routes/attention.tsx`, the rows from `withLeaving` in `src/lib/leaving.ts`). Any item that clears gets it,
+  whether the operator cleared it (a reply read, a finding dismissed, a limit granted) or its cause went on its own:
+  either way, work cleared. The leaving row is only for the eye: no link, inert, and hidden from a screen reader,
+  which hears the list's count change. It never fakes state: the item is already gone from the list and the counters.
+  The last item to leave shows the empty inbox at once instead.
 
 ## Motion
 
@@ -258,15 +265,17 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyfram
 - Skeletons shimmer: a light passes over them.
 - With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`, Fun
   below).
+- An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
+  animation that fills forwards: the row is let go once it has played.
 - Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, and its eyes blink now and
   then and look toward the pointer.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, pulses, ripples, and the drifting leaf are hidden, the ticker shows its first headline in place, and
-  Sprig's eyes hold still. New
-  motion goes inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
+  in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
+  first headline in place, and Sprig's eyes hold still. New motion goes inside a `prefers-reduced-motion:
+  no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 

@@ -117,10 +117,15 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     await expect(mine).toContainText('via web')
     await expect(mine).toContainText('waiting for the next run')
 
-    // Dismissed, it leaves the list while the chore still reports it.
+    // Dismissed, it leaves the list while the chore still reports it: its row folds away with a leaf drifting off,
+    // for the eye alone, and then is gone.
     await detail.getByTestId('dismiss-lodash-advisory').click()
     const list = page.getByTestId('attention-list')
+    const leaving = list.locator('li[data-leaving]').filter({ hasText: 'lodash-advisory' })
+    await expect(leaving).toHaveCount(1)
+    await expect(leaving).toHaveAttribute('aria-hidden', 'true')
     await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
+    await expect(leaving).toHaveCount(0)
 
     await page.goto('chores/deps')
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
