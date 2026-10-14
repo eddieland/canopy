@@ -307,7 +307,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
   same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
   is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
-  tool calls, failed and refused ones, and model calls. A
+  tool calls, failed and refused ones, and model calls. A By call `Toggle` in the header, as Pretty is, groups the
+  rows by the model call they came from (`byCall` in `src/lib/transcript.ts`): each call a `Collapsible` row, its
+  number, what it did (its first text, then its tools by name, `read ×2`), an `unfinished` chip
+  when the session ended first, its reason as above, its tokens `in · out`, and its cost. It opens to an input and an
+  output section, each a `panel-label` with its tokens: the first call's input is the prompt canopy kept, in a block,
+  with a muted line saying what no file records; a later call's is each tool its predecessor called, a `RunDot`, the
+  tool, and its summary over its output's block. The output is the call's rows as above, in a bordered list. A call's
+  body is built only when opened, and Open all opens the calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
