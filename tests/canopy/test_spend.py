@@ -95,7 +95,7 @@ def test_a_week_is_split_by_day_by_kind_and_by_what_its_ticks_bought(tmp_path: P
     journal_of_a_week(conn, NOW)
     found = spend.breakdown(conn, NOW, 7)
 
-    assert (found.since, found.days) == ("2026-10-02T00:00:00.000Z", 7)
+    assert (found.since, found.until, found.days) == ("2026-10-02T00:00:00.000Z", "2026-10-09T00:00:00.000Z", 7)
     assert [d.day for d in found.per_day] == [f"2026-10-0{n}" for n in range(2, 9)]
     by_day = {d.day: d.costs for d in found.per_day}
     assert by_day["2026-10-02"] == spend.Costs()  # nothing that day: every cost None
@@ -152,13 +152,15 @@ def test_an_empty_journal_lists_each_day_with_nothing_spent(canopy_env: CanopyEn
 def test_idle_ticks_are_the_newest_live_idle_ones_in_the_window(canopy_env: CanopyEnv) -> None:
     conn = canopy_env.journal()
     journal_of_a_week(conn, NOW)
-    rows = spend.idle_ticks(conn, db.format_time(spend.window_start(NOW, 7)))
+    week = spend.breakdown(conn, NOW, 7)
+    rows = spend.idle_ticks(conn, week.since, week.until)
     assert [(r["started_at"], r["cost_usd"]) for r in rows] == [
         (at(NOW, 1, 2), None),
         (at(NOW, 1), 0.25),
         (at(NOW, 2, 1), 0.25),
     ]
-    assert spend.idle_ticks(conn, db.format_time(spend.window_start(NOW, 1))) == []  # today's one idle tick is dry
+    today = spend.breakdown(conn, NOW, 1)
+    assert spend.idle_ticks(conn, today.since, today.until) == []  # today's one idle tick is dry
 
 
 def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -220,3 +222,27 @@ def test_canopy_spend_says_when_every_run_reported_a_cost(
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("Spend over 1 day, since ")
     assert out[-1] == "Every run that ended reported a cost."
+
+
+def test_a_row_after_the_window_is_in_no_figure(tmp_path: Path, journals: Journals) -> None:
+    """A clock behind the journal's puts a row after today: it is in no day, no total, and no count."""
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, db.format_time(NOW + timedelta(days=1)), 9.0, idle=True, woken_by="timer")
+    tick(conn, at(NOW, 0), 1.0, idle=False, woken_by="start")
+    found = spend.breakdown(conn, NOW, 1)
+    assert (found.totals.overseer, found.totals.idle) == (1.0, None)
+    assert [(g.group, g.ticks) for g in found.ticks if g.ticks] == [("busy", 1)]
+    assert [w.by for w in found.woken] == ["start"]
+    assert found.unpriced[0].runs == 1
+    assert spend.idle_ticks(conn, found.since, found.until) == []
+
+
+def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Journals) -> None:
+    """A running tick has reported its cost and is in no group yet, so it is in neither part of the share."""
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, at(NOW, 0, 2), 0.25, idle=True, woken_by="timer")
+    tick(conn, at(NOW, 0, 1), 0.75, idle=False, woken_by="message")
+    tick(conn, at(NOW, 0), 2.0, status="running")
+    found = spend.breakdown(conn, NOW, 1)
+    assert found.totals.overseer == 3.0  # the running tick's cost counts, as the rail's counters count it
+    assert found.idle_share == 0.25

@@ -26,10 +26,12 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   default and at most 366, today's so far included, what the live ticks' overseers, idle ticks' among them, dry runs'
   overseers, worker and split runs, chore runs, and review runs cost, each run on the day it started; the ticks that
   ended in the window in five groups, each tick in one (a dry run, whatever the loop said of it; a live tick that did
-  not close `ok`; an `ok` one the loop called idle; one it called not idle; one no loop ran), with the count and cost
-  of each and idle ticks' share of the live overseer's spend; the live ticks the loop ran by `woken_by`; and how many
-  ended runs of each kind reported no cost. `--json` prints the same as one object, for a re-measurement
-  (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it (§22).
+  not close `ok`; an `ok` one the loop called idle; one it called not idle; one no loop ran, which a tick from before
+  the loop recorded it also reads as), with the count and cost of each and idle ticks' share of what the live ticks
+  that ended cost; the live ticks the loop ran by `woken_by`; and how many ended runs of each kind reported no cost.
+  Every figure is by start, within the window's days and none after, read in one transaction. `--json` prints the
+  same as one object, for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it
+  (§22).
   `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its decisions;
   `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a dry run's
   plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a ticket's page

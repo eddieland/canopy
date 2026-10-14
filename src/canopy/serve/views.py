@@ -162,7 +162,9 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
         idle_share=found.idle_share,
-        idle_ticks=[tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since)],
+        idle_ticks=[
+            tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since, found.until)
+        ],
     )
 
 

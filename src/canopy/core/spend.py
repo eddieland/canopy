@@ -7,6 +7,7 @@ ones', and idle ticks' (§6, Idle pacing) are a series of their own within the l
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Literal
@@ -15,13 +16,15 @@ from canopy.core import db
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Iterator
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
 type Kind = Literal["overseer", "workers", "chores", "reviews"]
 
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
-# live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran.
+# live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
+# tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
 KINDS: tuple[Kind, ...] = ("overseer", "workers", "chores", "reviews")
 # The longest window `canopy spend` and the web UI read, in days; a year keeps the per-day lines bounded.
@@ -94,9 +97,13 @@ class Unpriced:
 
 @dataclass(frozen=True)
 class Breakdown:
-    """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought."""
+    """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought.
+
+    The window is `[since, until)`, each a journal time: midnight UTC on its first day, and after its last.
+    """
 
     since: str
+    until: str
     days: int
     per_day: list[Day]
     totals: Costs
@@ -124,15 +131,19 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     """
     start = window_start(now, days)
     since = db.format_time(start)
-    rows = _tick_rows(conn, since)
-    by_day: dict[str, dict[str, float | None]] = {}
-    for kind, table in _TABLES.items():
-        for day, cost in conn.execute(
-            f"SELECT substr(started_at, 1, 10) AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
-            "WHERE started_at >= ? GROUP BY day",
-            (since,),
-        ):
-            by_day.setdefault(str(day), {})[kind] = cost
+    # Bounded at the window's end too, so a row the clock puts after today is in no figure rather than in some.
+    until = db.format_time(start + timedelta(days=days))
+    with _snapshot(conn):
+        rows = _tick_rows(conn, since, until)
+        by_day: dict[str, dict[str, float | None]] = {}
+        for kind, table in _TABLES.items():
+            for day, cost in conn.execute(
+                f"SELECT substr(started_at, 1, 10) AS day, SUM(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
+                "WHERE started_at >= ? AND started_at < ? GROUP BY day",
+                (since, until),
+            ):
+                by_day.setdefault(str(day), {})[kind] = cost
+        unpriced = _unpriced(conn, since, until, rows)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -141,28 +152,30 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     names = [(start + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
     per_day = [Day(day=d, costs=_costs(by_day.get(d, {}))) for d in names]
     totals = _costs({n: _sum([by_day.get(d, {}).get(n) for d in names]) for n in (*_SERIES, *_TABLES)})
+    ticks = _groups(rows)
     return Breakdown(
         since=since,
+        until=until,
         days=days,
         per_day=per_day,
         totals=totals,
-        ticks=_groups(rows),
+        ticks=ticks,
         woken=_woken(rows),
-        unpriced=_unpriced(conn, since, rows),
-        idle_share=(totals.idle or 0.0) / totals.overseer if totals.overseer else None,
+        unpriced=unpriced,
+        idle_share=_idle_share(ticks),
     )
 
 
-def idle_ticks(conn: sqlite3.Connection, since: str, limit: int = IDLE_TICKS) -> list[sqlite3.Row]:
-    """The newest live idle ticks that started at or after `since`, newest first, each with its `decisions` count.
+def idle_ticks(conn: sqlite3.Connection, since: str, until: str, limit: int = IDLE_TICKS) -> list[sqlite3.Row]:
+    """The newest live idle ticks that started in `[since, until)`, newest first, each with its `decisions` count.
 
     Returns:
         At most `limit` rows of `ticks`, as `db.recent_ticks` reads them.
     """
     return conn.execute(
         "SELECT t.*, (SELECT count(*) FROM decisions d WHERE d.tick_id = t.id) AS decisions FROM ticks t "
-        "WHERE t.started_at >= ? AND t.dry_run = 0 AND t.idle = 1 ORDER BY t.id DESC LIMIT ?",
-        (since, limit),
+        "WHERE t.started_at >= ? AND t.started_at < ? AND t.dry_run = 0 AND t.idle = 1 ORDER BY t.id DESC LIMIT ?",
+        (since, until, limit),
     ).fetchall()
 
 
@@ -184,12 +197,26 @@ class _TickRow:
         return self.woken_by is not None and self.group not in {None, "dry_run"}
 
 
-def _tick_rows(conn: sqlite3.Connection, since: str) -> list[_TickRow]:
+# Every read of a breakdown in one read transaction, so a run or tick ending between two of them is in all or none.
+# The journal's connections are autocommit; one already in a transaction reads in that one.
+@contextmanager
+def _snapshot(conn: sqlite3.Connection) -> Iterator[None]:
+    if conn.in_transaction:
+        yield
+        return
+    conn.execute("BEGIN")
+    try:
+        yield
+    finally:
+        conn.execute("COMMIT")
+
+
+def _tick_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_TickRow]:
     rows = conn.execute(
         "SELECT substr(started_at, 1, 10) AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "
         "count(*) - count(cost_usd) "
-        "FROM ticks WHERE started_at >= ? GROUP BY day, dry_run, status, idle, woken_by",
-        (since,),
+        "FROM ticks WHERE started_at >= ? AND started_at < ? GROUP BY day, dry_run, status, idle, woken_by",
+        (since, until),
     ).fetchall()
     return [
         _TickRow(
@@ -252,14 +279,22 @@ def _woken(rows: list[_TickRow]) -> list[Woken]:
     return sorted(found, key=lambda w: -w.ticks)
 
 
-def _unpriced(conn: sqlite3.Connection, since: str, rows: list[_TickRow]) -> list[Unpriced]:
+# Idle ticks' share of what the live ticks that ended cost: a tick still running has reported its cost and has no
+# group yet, so it is in neither part.
+def _idle_share(ticks: list[TickGroup]) -> float | None:
+    live = _sum([g.cost_usd for g in ticks if g.group != "dry_run"])
+    idle = next((g.cost_usd for g in ticks if g.group == "idle"), None)
+    return (idle or 0.0) / live if live else None
+
+
+def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: list[_TickRow]) -> list[Unpriced]:
     ended = [r for r in rows if r.group is not None]
     found = [Unpriced(kind="overseer", runs=sum(r.ticks for r in ended), unpriced=sum(r.unpriced for r in ended))]
     for kind, table in _TABLES.items():
         runs, unpriced = conn.execute(
             f"SELECT count(*), count(*) - count(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)
-            "WHERE started_at >= ? AND status != 'running'",
-            (since,),
+            "WHERE started_at >= ? AND started_at < ? AND status != 'running'",
+            (since, until),
         ).fetchone()
         found.append(Unpriced(kind=kind, runs=int(runs), unpriced=int(unpriced)))
     return found

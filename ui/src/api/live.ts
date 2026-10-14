@@ -48,6 +48,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         case 'chores.updated': {
             client.setQueryData(keys.chores, event.chores)
             void client.invalidateQueries({ queryKey: ['chore'], refetchType: 'active' })
+            // A chore run that ended changes the spend page's counts of runs, even one that reported no cost.
+            void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             // A chore run's page and transcript change only as it ends, when its status moves.
             for (const chore of event.chores) {
                 for (const run of [chore.running, chore.latest]) {
