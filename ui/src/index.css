@@ -300,9 +300,9 @@
 }
 
 /*
- * Sprig, the helper in the corner (src/components/shell/buddy.tsx). Its tip pops in a moment after a page arrives, as
- * if it had been waiting; its brows rise once with each tip; its eyes blink now and then. Each rests where a still
- * page shows it: the tip in place, the brows down, the eyes open.
+ * Sprig, the helper at the foot of the side rail (src/components/shell/buddy.tsx). Its tip pops in a moment after a
+ * page arrives, as if it had been waiting; its brows rise once with each tip; its eyes blink now and then. Each rests
+ * where a still page shows it: the tip in place, the brows down, the eyes open.
  */
 @keyframes buddy-brows {
     30%,

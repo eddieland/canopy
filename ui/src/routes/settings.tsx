@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
-import type { BuddySetting } from '@/lib/buddy'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setSendKey, useSendKey } from '@/lib/send-key'
@@ -23,7 +22,7 @@ import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the ticker, the send key, the session), and reloading the loop's config. */
+/** What this browser keeps (the theme, the fun, the send key, the session), and reloading the loop's config. */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -35,7 +34,6 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
-    { value: 'off', label: 'Off' },
     { value: 'slow', label: 'Slow' },
     { value: 'normal', label: 'Normal' },
     { value: 'spicy', label: 'Spicy' },
@@ -45,11 +43,6 @@ const TOPICS: { value: TickerTopic; label: string }[] = [
     { value: 'programming', label: 'Programming' },
     { value: 'vibes', label: 'Vibe coding' },
     { value: 'tips', label: 'Tips' },
-]
-
-const BUDDY: { value: BuddySetting; label: string }[] = [
-    { value: 'on', label: 'On' },
-    { value: 'off', label: 'Off' },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -63,8 +56,8 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the ticker, Sprig, and the send key are kept in this browser. Everything else canopy reads
-                from its config files.
+                The theme, the fun, and the send key are kept in this browser. Everything else canopy reads from its
+                config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -88,8 +81,7 @@ function SettingsPage() {
                     </ToggleGroup>
                 </div>
             </Panel>
-            <TickerPanel />
-            <BuddyPanel />
+            <FunPanel />
             <SendKeyPanel />
             <ConfigPanel />
             <SessionPanel />
@@ -97,20 +89,51 @@ function SettingsPage() {
     )
 }
 
-/** The header ticker's pace, the pause between its headlines, and the topics they are drawn from. */
-function TickerPanel() {
-    const { speed, gap, hidden } = useTickerSettings()
+/**
+ * The fun, in one place: an on/off for the ticker and for Sprig, then the ticker's pace, the pause between its
+ * headlines, and the topics they are drawn from.
+ */
+function FunPanel() {
+    const { on, speed, gap, hidden } = useTickerSettings()
+    const buddy = useBuddy()
     return (
         <Panel>
-            <PanelHeader label="Ticker" />
+            <PanelHeader label="Fun" />
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p id="fun-items" className="text-sm text-muted-foreground">
+                    The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, has a tip
+                    for every page; none of them help. Each sits out a window with no room for it.
+                </p>
+                <fieldset aria-labelledby="fun-items" className="flex shrink-0 items-center gap-4">
+                    <label htmlFor="fun-ticker" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-ticker"
+                            checked={on}
+                            data-testid="fun-ticker"
+                            onCheckedChange={(checked) => setTickerSettings({ on: checked === true })}
+                        />
+                        Ticker
+                    </label>
+                    <label htmlFor="fun-sprig" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-sprig"
+                            checked={buddy === 'on'}
+                            data-testid="fun-sprig"
+                            onCheckedChange={(checked) => setBuddy(checked === true ? 'on' : 'off')}
+                        />
+                        Sprig
+                    </label>
+                </fieldset>
+            </div>
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p className="text-sm text-muted-foreground">
-                    How fast the headlines in the header crawl, one at a time. Off hides them.
+                    How fast the ticker&apos;s headlines crawl, one at a time.
                 </p>
                 <ToggleGroup
                     type="single"
                     value={speed}
                     aria-label="Ticker speed"
+                    disabled={!on}
                     onValueChange={(value) => {
                         const picked = SPEEDS.find((s) => s.value === value)
                         if (picked) {
@@ -138,7 +161,7 @@ function TickerPanel() {
                         max={MAX_GAP}
                         step={1}
                         defaultValue={gap}
-                        disabled={speed === 'off'}
+                        disabled={!on}
                         className="readout h-8 w-20 text-right"
                         data-testid="ticker-gap"
                         onChange={(event) => {
@@ -159,14 +182,14 @@ function TickerPanel() {
             </div>
             <div className="flex items-center justify-between gap-4 p-3">
                 <p id="ticker-topics" className="text-sm text-muted-foreground">
-                    Which headlines it shows. Tips about canopy are mixed in with the jokes.
+                    Which headlines the ticker shows. Tips about canopy are mixed in with the jokes.
                 </p>
                 <fieldset aria-labelledby="ticker-topics" className="flex shrink-0 items-center gap-4">
                     {TOPICS.map(({ value, label }) => (
                         <label key={value} className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
                             <Checkbox
                                 checked={!hidden.includes(value)}
-                                disabled={speed === 'off'}
+                                disabled={!on}
                                 data-testid={`ticker-topic-${value}`}
                                 onCheckedChange={(checked) =>
                                     setTickerSettings({ hidden: withTopic(hidden, value, checked === true) })
@@ -176,39 +199,6 @@ function TickerPanel() {
                         </label>
                     ))}
                 </fieldset>
-            </div>
-        </Panel>
-    )
-}
-
-/** Whether Sprig sits in the corner offering tips. */
-function BuddyPanel() {
-    const buddy = useBuddy()
-    return (
-        <Panel>
-            <PanelHeader label="Sprig" />
-            <div className="flex items-center justify-between gap-4 p-3">
-                <p className="text-sm text-muted-foreground">
-                    The helper in the bottom-left corner, with a tip for every page. None of them help. Off hides it.
-                </p>
-                <ToggleGroup
-                    type="single"
-                    value={buddy}
-                    aria-label="Sprig"
-                    className="shrink-0"
-                    onValueChange={(value) => {
-                        const picked = BUDDY.find((b) => b.value === value)
-                        if (picked) {
-                            setBuddy(picked.value)
-                        }
-                    }}
-                >
-                    {BUDDY.map(({ value, label }) => (
-                        <ToggleGroupItem key={value} value={value} data-testid={`buddy-${value}`}>
-                            {label}
-                        </ToggleGroupItem>
-                    ))}
-                </ToggleGroup>
             </div>
         </Panel>
     )

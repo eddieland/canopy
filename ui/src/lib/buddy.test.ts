@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT, parseBuddy, sectionOf, TIPS, tipFor } from './buddy'
+import { SECTIONS } from '@/lib/sections'
+
+import { ANYWHERE, DEFAULT, pageOf, parseBuddy, TIPS, tipFor } from './buddy'
 
 const DAY = 86_400_000
 
@@ -14,38 +16,54 @@ describe('parseBuddy', () => {
     })
 })
 
-describe('sectionOf', () => {
+describe('pageOf', () => {
     it('names the page by the first part of its path it knows', () => {
-        expect(sectionOf('/attention')).toBe('attention')
-        expect(sectionOf('/tickets/ABC-102')).toBe('tickets')
-        expect(sectionOf('/canopy/ticks/2')).toBe('ticks')
-        expect(sectionOf('/')).toBeUndefined()
-        expect(sectionOf('/nowhere')).toBeUndefined()
+        expect(pageOf('/attention')).toBe('/attention')
+        expect(pageOf('/tickets/ABC-102')).toBe('/tickets')
+        expect(pageOf('/canopy/ticks/2')).toBe('/ticks')
+        expect(pageOf('/pull-requests/pr')).toBe('/pull-requests')
+        expect(pageOf('/search')).toBe('/search')
+        expect(pageOf('/')).toBeUndefined()
+        expect(pageOf('/nowhere')).toBeUndefined()
+    })
+})
+
+describe('TIPS', () => {
+    it('has tips for every section of the nav', () => {
+        for (const section of SECTIONS) {
+            expect(TIPS[section].length).toBeGreaterThan(0)
+        }
+    })
+
+    it('never opens a line with "Tip:", which is for the ticker\'s real tips', () => {
+        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE]) {
+            expect(tip).not.toMatch(/^Tip:/u)
+        }
     })
 })
 
 describe('tipFor', () => {
     it("draws from the page's tips and the ones for anywhere", () => {
         const tips = new Set(Array.from({ length: 20 }, (_, n) => tipFor('/chores/deps', n, 0)))
-        expect(tips).toEqual(new Set([...TIPS.chores, ...TIPS.anywhere]))
+        expect(tips).toEqual(new Set([...TIPS['/chores'], ...ANYWHERE]))
     })
 
     it('draws only from the ones for anywhere on a page it does not know', () => {
-        expect(TIPS.anywhere).toContain(tipFor('/nowhere', 0, 0))
+        expect(ANYWHERE).toContain(tipFor('/nowhere', 0, 0))
     })
 
     it("opens on the page's own tips, then the ones for anywhere", () => {
         for (let day = 0; day < 12; day += 1) {
-            const tips = Array.from({ length: TIPS.runs.length + TIPS.anywhere.length }, (_, n) =>
+            const tips = Array.from({ length: TIPS['/runs'].length + ANYWHERE.length }, (_, n) =>
                 tipFor('/runs', n, day * DAY),
             )
-            expect(new Set(tips.slice(0, TIPS.runs.length))).toEqual(new Set(TIPS.runs))
-            expect(new Set(tips.slice(TIPS.runs.length))).toEqual(new Set(TIPS.anywhere))
+            expect(new Set(tips.slice(0, TIPS['/runs'].length))).toEqual(new Set(TIPS['/runs']))
+            expect(new Set(tips.slice(TIPS['/runs'].length))).toEqual(new Set(ANYWHERE))
         }
     })
 
     it('never opens two pages it knows on the same tip', () => {
-        const pages = ['/attention', '/runs', '/worktrees', '/tickets', '/chores', '/ticks', '/settings', '/nowhere']
+        const pages = [...SECTIONS, '/search', '/nowhere']
         for (let day = 0; day < 12; day += 1) {
             const first = pages.map((page) => tipFor(page, 0, day * DAY))
             expect(new Set(first).size).toBe(pages.length)

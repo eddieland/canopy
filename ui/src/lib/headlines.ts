@@ -99,7 +99,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'Tip: canopy notify test sends a test message to every sink and changes nothing in the journal',
         'Tip: canopy workspace sync --dry-run says what sync would clone, make, and remove',
         'Tip: canopy workspace add URL adds a repository to the map, then syncs',
-        'Tip: Settings turns on Sprig, the helper in the bottom-left corner; none of its tips help',
+        'Tip: Settings turns on Sprig, the helper at the foot of the side rail; none of its tips help',
     ],
 }
 
