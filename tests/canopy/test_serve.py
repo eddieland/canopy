@@ -25,7 +25,7 @@ from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
 from canopy.core import db
-from canopy.core.context import Context
+from canopy.core.context import Context, db_path
 from canopy.serve import live, secret, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.__main__ import main
@@ -49,6 +49,7 @@ from canopy.serve.schema import (
 )
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
+from tests.conftest import Journals
 
 INDEX = """<!doctype html>
 <html lang="en">
@@ -269,6 +270,43 @@ def test_a_write_needs_the_sessions_token_and_an_origin(ui: Path, backend: Backe
     assert c.post(url, json=body, headers={"x-canopy-token": headers["x-canopy-token"]}).status_code == 403
     assert c.post(url, json=body, headers={**headers, "origin": "https://evil.example"}).status_code == 403
     assert c.post(url, json=body, headers=headers).status_code == 200
+
+
+def test_a_write_that_waits_out_a_held_journal_is_a_503_saying_so(
+    ui: Path, backend: Backend, journals: Journals
+) -> None:
+    c = client(ui, backend)
+    url = "/api/tickets/ABC-102/replies"
+    body = {"body": "red", "submission": "submission-1"}
+    holder = journals.open(db_path(backend.workspace), migrate=False)
+    holder.execute("BEGIN IMMEDIATE")
+    handler = _Records()
+    log = logging.getLogger("canopy")
+    log.addHandler(handler)
+    try:
+        with mock.patch.object(db, "BUSY_SECONDS", 0.05):
+            response = c.post(url, json=body, headers={"origin": ORIGIN})
+            assert response.status_code == 503, response.text
+            assert response.json() == {
+                "detail": "the journal is busy: another writer held it for over 0.05s; try again"
+            }
+            assert c.get("/api/tickets").status_code == 200
+            holder.execute("ROLLBACK")
+            assert c.post(url, json=body, headers={"origin": ORIGIN}).status_code == 200
+    finally:
+        log.removeHandler(handler)
+    warned = [r.getMessage() for r in handler.records if r.levelno >= logging.WARNING]
+    assert warned == [f"journal busy: POST {url} waited 0.05s for the write lock"]
+
+
+def test_any_other_operational_error_stays_a_500(ui: Path, backend: Backend) -> None:
+    c = client(ui, backend)
+    broken = sqlite3.OperationalError("no such table: tickets")
+    with (
+        mock.patch.object(Backend, "open", autospec=True, side_effect=broken),
+        pytest.raises(sqlite3.OperationalError, match="no such table"),
+    ):
+        c.get("/api/tickets")
 
 
 def test_signing_out_clears_the_cookie(ui: Path, backend: Backend) -> None:
@@ -798,6 +836,7 @@ def test_openapi_describes_every_route_parameter_error_and_field(capsys: pytest.
             assert "403" in responses, where
             if path != "/api/session":
                 assert "401" in responses, where
+            assert ("503" in responses) == (path not in {"/api/session", "/api/events"}), where
             if "{key}" in path or "{name}" in path:
                 assert "409" in responses, where
             if path.endswith(("_id}", "{key}", "{name}")) and method == "get":
