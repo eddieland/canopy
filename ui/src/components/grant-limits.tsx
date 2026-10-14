@@ -39,11 +39,16 @@ export function GrantLimits({
         return null
     }
     return (
-        <div className={cn('flex flex-col gap-2 p-3', className)} data-testid="grant-limits">
+        <div
+            // Tinted while something is stuck, in the failure color its `attempt_limit` chip wears, so it stands out.
+            className={cn('flex flex-col gap-2 p-3', atLimit.length > 0 && 'bg-status-failed/8', className)}
+            data-testid="grant-limits"
+        >
             {atLimit.length > 0 && (
                 <>
-                    <p className="text-xs text-muted-foreground">
-                        At its limit: the loop does no more of it until you allow another. Every run still counts.
+                    <p className="text-sm">
+                        <span className="font-medium text-status-failed">At its limit.</span> The loop does no more of
+                        it until you allow another; every run still counts.
                     </p>
                     <ul className="flex flex-col gap-1">
                         {atLimit.map((limit) => (
@@ -51,19 +56,19 @@ export function GrantLimits({
                                 key={`${limit.kind} ${limit.repo ?? ''} ${limit.pr_url ?? ''}`}
                                 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
                             >
-                                <span className="font-mono text-xs">{limitLabel(limit)}</span>
+                                <span className="font-mono text-xs font-medium">{limitLabel(limit)}</span>
                                 <span className="readout text-xs text-status-failed">{limitCount(limit)}</span>
                                 <Button
-                                    variant="ghost"
-                                    size="xs"
-                                    className="-my-1 ml-auto font-mono font-normal text-muted-foreground"
+                                    variant="outline"
+                                    size="sm"
+                                    className="ml-auto"
                                     title={command(ticketKey, limit)}
                                     onClick={() => grant.mutate(limit)}
                                     disabled={grant.isPending}
                                     data-testid={`grant-${limitLabel(limit)}`}
                                 >
                                     <Plus />
-                                    allow one more
+                                    Allow one more
                                 </Button>
                             </li>
                         ))}

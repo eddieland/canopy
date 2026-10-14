@@ -256,11 +256,6 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - treehouse's `max_trees` lives only in committed or global files, so canopy enforces sizes itself.
 
-## D067. Releases ship one executable per platform, built by CI
-
-- A pex in a scie with interpreter and locked dependencies: no Python, uv, credential, or network on the target.
-- Rejected: PyInstaller, Nuitka, shiv, zipapp (break `sys.executable -m canopy`); PyApp, uvbox (install from network).
-
 ## D068. Migrations were squashed into one for v0.1; older journals are not upgraded
 
 - A one-time exception. Never edit a shipped migration.
@@ -306,8 +301,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D079. The web UI is a single-page app in `ui/`
 
 - Vite, React, TypeScript, Tailwind, shadcn/ui, TanStack; types generated from FastAPI's OpenAPI. Built by the wheel's
-  hook, which fails without Node rather than build a wheel with no UI: an install from git needs Node, the release
-  binary does not. Rules in `ui/AGENTS.md`.
+  hook, which fails without Node rather than build a wheel with no UI: an install from git needs Node. Rules in
+  `ui/AGENTS.md`.
 - Rejected: Jinja2 with htmx (per-page script drifts); committing the build; building at install; server rendering;
   a wheel without the UI.
 - Revisit: if the UI shrinks to pages a template would serve.
