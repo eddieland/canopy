@@ -434,8 +434,9 @@ names the skill and the prompt then says to use it (§8). Prefer that to a promp
 ### The operator's skill
 
 `canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI, where
-the state directory's files are, how to read the journal read-only, and how to answer "why was KEY not picked up".
-canopy installs it nowhere: the operator saves it where their runtime reads skills, such as
+the state directory's files are, how to read the journal read-only, how to answer "why was KEY not picked up", and how
+to look into chore and review findings and draft tickets from them, filed only when the operator says and never
+labeled. canopy installs it nowhere: the operator saves it where their runtime reads skills, such as
 `~/.agents/skills/canopy/SKILL.md`, and again after upgrading. It is not in the definitions snapshot, where it would
 help no run, so a `$HOME` copy,
 which canopy's own runs also load, never meets a same-named skill. It opens by telling an agent started by canopy
