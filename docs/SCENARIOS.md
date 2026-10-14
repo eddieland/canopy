@@ -120,7 +120,7 @@ relying on a permission they check.
 - **S27. An overnight loop** (M21). Leave `canopy loop` running overnight. Expect, in its output and log (`loop waits`
   lines), waits reaching `loop.idle_max_minutes` after a quiet evening, back at `loop.interval_minutes` within one tick
   of the first morning activity, and each run's end followed by a tick within a couple of minutes. Re-measure
-  afterwards with MEASUREMENTS' prompt; M29 waits on the result.
+  afterwards with MEASUREMENTS' prompt; M39 waits on the result.
 - **S31. Reloading config** (M12). With `canopy loop` running in a terminal, change `capacity.max_workers` and
   `kill -HUP` the loop during a tick, then press Reload on the web UI's settings page during the wait. Expect each tick
   to finish first, `config reloaded  capacity.max_workers changed` under it, and the next tick's footer to count to the
@@ -132,6 +132,11 @@ relying on a permission they check.
   a few thousand tokens, and its read to hold the prompt, the provider skill, and the tools; the first tick, cold,
   writes them all. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
   change where OpenCode puts an agent's body. Record the numbers in `MEASUREMENTS.md`.
+- **S34. Overseer reliability re-measured** (M28). After a working session of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect no tick that ran the overseer without a working
+  `canopy` (each such tick closes `canopy_unavailable` with its attention item instead), no `overseer_failed` tick
+  that recorded decisions, and every start from the web UI picked up within about a minute (`ticks.woken_by` is
+  `starts`). Record the numbers in `MEASUREMENTS.md`.
 
 ## The web UI
 

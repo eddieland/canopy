@@ -208,8 +208,8 @@ the terminal hung up.
 Reloading config (taken on request, 2026-10-13): the loop reads its config at start, and again when the operator asks,
 so a change needs no restart. The listener secret is not config: a new one still takes a restart (§22).
 
-- SIGHUP (`kill -HUP`, with the pid the header prints) or Reload on the web UI's settings page asks for it
-  (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
+- SIGHUP (`kill -HUP`, with the pid in the `loop started` log line) or Reload on the web UI's settings page asks for
+  it (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
   loop's own copy: the next tick's limits, the pace, and what the web UI serves. `--every` still holds.
 - A tick running when it is asked for finishes first, on the config it started with; the wait applies it at its next
   step, so a reload during a wait does not wait for the deadline. The wait it comes in keeps its length, and the waits
@@ -296,7 +296,7 @@ canopy's own work.
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
 tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
 trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
-the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h 00m at 03:41` (no count after a
+the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h at 03:41` (no count after a
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
 records whether it was idle, the count, the wait chosen, in seconds, and `churn`, below.
 

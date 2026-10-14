@@ -20,6 +20,7 @@ import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
+import { useWholePath } from '@/hooks/use-whole-path'
 import { runRef } from '@/lib/refs'
 import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
@@ -219,6 +220,7 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
 function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
     const branchUrl = useBranchUrls()
     const branchHref = w.branch === null ? undefined : branchUrl(repo, w.branch)
+    const whole = useWholePath()
     const since = w.run?.started_at ?? w.review?.started_at ?? w.leased_at
     const idle = w.state === 'idle'
     return (
@@ -234,7 +236,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                 <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
                     #{w.name}
                 </span>
-                <CopyButton text={w.path} label={`slot ${w.name}'s path`} reveal />
+                {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
             {idle ? <span /> : <Holder worktree={w} />}
             {/* The branch, path, and processes share what the row leaves: each is cut to fit, the age never. */}

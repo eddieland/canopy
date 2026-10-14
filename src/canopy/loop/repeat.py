@@ -633,7 +633,6 @@ def _header(
         grid.add_row("paused", Text(since, style="yellow"))
     console.print(grid)
     console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
-    console.print(Text(f"kill -HUP {os.getpid()} reads the config again; a running tick finishes first.", style="dim"))
     if keys:
         console.print(
             Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim")
@@ -748,18 +747,19 @@ def _detail(text: str) -> Text:
 
 
 def duration(seconds: float) -> str:
-    """Render a length of time for a person: `45s`, `3m 05s`, `2h 10m`.
+    """Render a length of time for a person: `45s`, `3m 05s`, `1m`, `2h 10m`, `2h`.
 
     Returns:
-        Hours and minutes, minutes and seconds, or seconds alone, rounded to the second. A negative length is `0s`.
+        Hours and minutes, minutes and seconds, or seconds alone, rounded to the second, with a zero second unit left
+        off (`1m`, not `1m 00s`). A negative length is `0s`.
     """
     total = max(0, round(seconds))
     hours, rest = divmod(total, 3600)
     minutes, secs = divmod(rest, 60)
     if hours:
-        return f"{hours}h {minutes:02d}m"
+        return f"{hours}h {minutes:02d}m" if minutes else f"{hours}h"
     if minutes:
-        return f"{minutes}m {secs:02d}s"
+        return f"{minutes}m {secs:02d}s" if secs else f"{minutes}m"
     return f"{secs}s"
 
 

@@ -403,7 +403,7 @@ The API, under `{base}/api`:
 | Route | Does |
 |---|---|
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
-| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), and each repository's branch link template |
+| `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), each repository's branch link template, and the workspace root |
 | `GET /attention` | the attention list, as `canopy status` shows it |
 | `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
@@ -456,15 +456,17 @@ words included. Every model, field, path parameter, and named type is described;
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
 stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,
-held up every other request while the overseer worked. When another connection has committed since, or the loop has
-read its config again (§6), it reads the attention list, the runs, the tickets, the chores, the spend, the latest tick,
-and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
-`tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),
-`tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary changed. It reads them all in one
-read transaction, so they are one snapshot: a commit landing between two of its queries cannot send a ticket's new
-summary in a list still in the order from before it. A reload commits nothing, yet the chores and the attention list
-are read through the config, so the stream holds the loop's config as the server's requests do, taking the new one at
-its next read: a chore added and reloaded shows on an open page without a refresh.
+held up every other request while the overseer worked. The route closes the connection, on that thread, from a
+dependency's teardown, which FastAPI runs however the stream ended: a client leaving while the first events were sent
+left the stream's generator suspended, never finished, and the connection open until the server exited. When another
+connection has committed since, or the loop has read its config again (§6), it reads the attention list, the runs, the
+tickets, the chores, the spend, the latest tick, and the pause again, and sends each that changed, whole:
+`attention.updated`, `runs.updated`, `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the
+windows move with the clock), `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary
+changed. It reads them all in one read transaction, so they are one snapshot: a commit landing between two of its
+queries cannot send a ticket's new summary in a list still in the order from before it. A reload commits nothing, yet
+the chores and the attention list are read through the config, so the stream holds the loop's config as the server's
+requests do, taking the new one at its next read: a chore added and reloaded shows on an open page without a refresh.
 A new stream starts with every list, the spend, the latest
 tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
@@ -665,8 +667,9 @@ with uncommitted changes), `idle` (available), and `broken` (damaged, unverified
 pool with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process
 names are shown as text with control characters dropped, and at most 20 processes per slot. A path inside the workspace
 is shown from its root (`.treehouse/web-3f9c2a1b/1/web`), here, in the runs page's worktrees, and for a run's log and
-a tick's output. When a pool's slots
-share a directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
+a tick's output. A copy button beside one copies it whole, joined to `/meta`'s workspace root, since the shell it is
+pasted into need not be in the workspace; until that root is read there is no button. When a pool's slots share a
+directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
 read), and free; each pool's header has a square per slot in its state's color.
