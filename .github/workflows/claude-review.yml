@@ -40,6 +40,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
 
+      - name: Install bubblewrap
+        # The env scrub above runs each of Claude's commands under bwrap, which ubuntu-latest lacks.
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       - name: Review with Claude
         # Pinned to a commit, not the movable v1 tag, because this step holds the subscription token.
         uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1
