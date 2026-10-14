@@ -21,6 +21,7 @@ progress is tracked. Keep it current in the same PR that changes it:
   to the behavior; it goes in `DECISIONS.md` only when the choice meets that file's bar, something
   every future developer must know. The entry here just points to it. Edit a
   later milestone's bullets directly when `Next` calls for it.
+- A milestone a later one absorbs ends `Status: superseded by MN (YYYY-MM-DD).` and one line saying how.
 
 The operator may close a milestone on real use before every live check in its Accept has run. Its `Learned` says
 so, and each check still unrun goes to `SCENARIOS.md`, the live checks worth running again.
@@ -947,7 +948,8 @@ milestones' arithmetic.
 
 Accept: written with the design, before work starts.
 
-Status: not started.
+Status: superseded by M35 to M38 (2026-10-14): the probe's facts go into the journal as observations, and
+the overseer runs only when they leave it something to judge, which is the gate this milestone wanted.
 
 ## M30. Fewer re-reads per tick
 
@@ -972,7 +974,8 @@ upper bound until measured.
 Accept: written with the design, before work starts. Live, once built: a re-measurement shows tool-result tokens per
 tick at half the first session's (about 19k) or less, with no action missed.
 
-Status: not started.
+Status: superseded by M35 to M38 (2026-10-14): M36 takes the cut from the journal's observations instead of a
+probe's output, and M37 moves the derivation that needs no judgment into code.
 
 ## M31. Search in the web UI
 
@@ -1082,6 +1085,182 @@ one before, and a median such tick at least 15% cheaper at the same price, with 
 
 Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
 the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
+
+## M35. Connectors: the world observed into the journal, in shadow
+
+MEASUREMENTS 2026-10-12 F6, F9, F10; 2026-10-13 F13, F14, F16, F17; D003's revisit and D008's. Needs M28 and M34.
+Asked for by the operator (2026-10-14): each tick of the overseer should run from journal state, read into it by
+deterministic programs, instead of an agent re-reading the tracker and GitHub every tick. M35 to M38 take that one
+step at a time, and supersede M29 and M30: the probe's facts go into the journal rather than gating on them, and the
+overseer runs only when they leave it something to judge. Sketch only; the design comes first, as a new design file
+(§24).
+
+The shape the four share:
+
+- A **connector** is a deterministic program, configured like a sink (§20) and run by the harness through `procs`,
+  that reads one source and prints what it saw as JSON lines. canopy validates each line (pydantic, D026), bounds its
+  text, and writes it to the journal as an **observation**: a dated copy of a fact about the world. Authority stays
+  with the source (principle 1, §22): an observation says what the connector saw and when, never what is true now.
+- The harness still imports no tracker or VCS client and holds no token (D003). A connector is a separate program
+  with credentials of its own, as the Slack sink is (`packages/`, stdlib only, nothing from canopy). canopy ships
+  `canopy-connect-github` (GitHub Issues and PRs, with the token `gh` holds) and `canopy-connect-jira` (Jira Cloud's
+  REST API, an email and API token from an operator-only file); another tracker is the operator's program speaking
+  the same contract, the only thing the harness knows of any of them. AGENTS.md's "no tracker code" line is scoped
+  to the harness package in the same PR, and D003 reshaped.
+- The overseer's message becomes the journal: observations, the phase the harness derives from them in code, and
+  what is new since each cursor. Judgment stays the overseer's: which repository, a slug and title, a worker's
+  context, whether a review comment is a change or a question, what an operator's reply asks for, a chore's `when`.
+  Reading does not, and neither does anything §7's table derives from facts alone (D008's revisit: one rule at a
+  time, each checked against the `decisions` corpus before it moves).
+
+This milestone adds the connectors and the derivation without changing what the overseer sees or does:
+
+- The contract. On stdin, one JSON object naming what to observe: the tracker query, every ticket not marked done,
+  every PR URL on an unfinished unit (merged and closed included, 2026-10-13 F16), the repositories, and
+  `review.query` when set. On stdout, one JSON line per observation: `ticket` (key, title, body cut, open or
+  closed, labels, updated at, blocker keys, label events when the tracker has them), `comment` (ticket, id, author
+  account id, time, body cut), `pr` (url, repository, number, head sha, base ref, open, merged, or closed, draft,
+  mergeable, mergeable state, author login), `check` (pr, head sha, context name, status, conclusion, run id, url),
+  `review` (pr, id, review or review comment, author login, whether a bot, state, time, body cut, url), and last an
+  `end` line naming what it covered, so a connector cut off mid-way does not read as everything else having
+  vanished. Unknown kinds are skipped. Ids, states, times, and bounded text; never logs or diffs. The tracker query
+  is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, never the combined status
+  (2026-10-12 F9).
+- The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_checks`, `observed_reviews`), each
+  row keyed by the source's id and replaced on each observation with its `observed_at`; a subject the `end` line did
+  not cover keeps its old rows and their age. Comments go into `messages` as mirrored comments do now, with the
+  workers' marks read in code (D069). `connector_runs` records each run: when, status, counts, the tail of stderr.
+- Config, user-only (TRUST_MODEL T7): `[connect.<name>]` with `cmd` (argv, no shell, as a sink's), `source`
+  (`tracker` or `vcs`), and `timeout_minutes`. One per source at most.
+- Each tick runs the connectors after reconcile and before the state block (§6 step 3). A failure, a timeout, or
+  output that does not validate keeps the previous observations, is logged, and raises `connector_failed`, a
+  harness item like `repo_missing`; the tick goes on, and in this milestone loses nothing, since the overseer still
+  reads live.
+- `loop/phases.py` derives every candidate, phase, and attention reason of §7 and §14 from the observations and the
+  journal's cursors, in code, and records them per tick in a `derivations` table beside `decisions`, which it does
+  not touch. The loop's per-tick block and its `loop waits` line count the disagreements with what the overseer
+  recorded.
+- `canopy status` names each connector's last run and the age of its observations.
+- Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
+  rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
+  case per row of the phase table.
+
+Accept: written with the design, before work starts. Live, once built: a day of `canopy loop` with both connectors
+against the real queue, and a MEASUREMENTS section giving the agreement between the derivation and the overseer per
+phase row, each disagreement read and attributed (the rationale says which side was right), and what the connectors
+cost (calls and seconds per tick, no tokens).
+
+Status: not started.
+
+## M36. The overseer reads the journal
+
+Needs M35's measurement, with the disagreements that were the derivation's fixed. Sketch only; the design comes first.
+This is M30's cut, taken from the journal rather than a probe, and it is where the trust model gains its first code
+checks on what the overseer claims.
+
+- The state block carries the observations: per ticket, its title, state, labels, blockers, and the comments newer
+  than its comment cursor (id, author, time, body, and whether the author is an authorized replier, decided in code);
+  per unit, its PR (state, head, base, draft, mergeable), each named check at the head, and the reviews and review
+  comments newer than its review cursor (author, trusted or not, decided in code, body); and the derived phase of
+  each, as the harness's reading. Bounded text, labeled by source and author in code, after the fixed sections
+  (M34's order).
+- The prompt's procedure drops its reads: no tracker search, no ticket or PR reads, no mirror, no provider skill.
+  An MCP call is allowed only for a subject the block marks `stale`, one no connector has covered within
+  `connect.max_age_minutes`, with the operator's approval note; M38 removes that too.
+- Claims become references to observations, checked in code: `canopy dispatch --label` is refused `unauthorized`
+  unless the connector saw that label on the ticket (D051 gains a code check before the worker's own); a
+  `human_replied` resume must name a comment by an authorized replier or an operator message; a `resume` for review
+  feedback must name items by trusted reviewers, or an operator message about them (D089's revisit); `--cursor` must
+  name an observed item. `canopy dispatch` is refused `stale` when the ticket's or PR's observation is older than
+  `connect.max_age_minutes`: principle 1's "re-read before any action that matters" becomes "observed this tick, or
+  no dispatch".
+- Cursors become journal ids: observations order reviews, review comments, and canopy's review runs together, so the
+  `review` cursor's time form (§7) is no longer needed; CI newness is keyed on head sha and context, so a re-run at
+  the same head is new only when its conclusion changed (PRIOR_ART).
+- `canopy mirror` and the heredoc (D081) are retired: the tracker connector writes comments. Open: whether a tracker
+  with no connector keeps the live-read procedure, or a connector is required (recommended: required; the two shipped
+  cover the operator's trackers, and the contract is a page of Python for another).
+- TRUST_MODEL T1 (labels, repliers, and reviewers checked in code; the overseer's MCP narrowed to stale subjects),
+  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 and D081
+  edited in place.
+
+Accept: written with the design, before work starts. Live, once built: a re-measurement (MEASUREMENTS) with
+tool-result tokens per tick at a tenth of the first day's median (about 14k), no MCP call on a tick whose
+observations are fresh, and no action missed over a day, checked against the derivation as in M35.
+
+Status: not started.
+
+## M37. The harness decides what needs no judgment
+
+Needs M36. Sketch only; the design comes first. D008's revisit, taken for the rows of §7 that measurement (M35)
+showed the derivation getting right: a rule moves into code only with that evidence.
+
+- Before the overseer runs, the harness records the decisions that need no judgment, as it records `awaiting_reply`
+  today: `wait` for `running`, `ci_running`, `needs_human`, a cooldown, a failed latest run, and `blocked` with no
+  stackable blocker; `done` for a closed ticket and for `merged`; `dispatch resume` for `pushed_no_pr` and
+  `conflicted`, with their fixed contexts; `dispatch fix-ci` for `ci_red`, naming the failed checks (after `triage-ci`,
+  with M25); `review run` for `review_pending` and for `review.query`'s PRs. Each is a `decisions` row with
+  `by = harness`, so the corpus, `canopy decisions`, and the tick's page show every decision and who made it.
+- The attention list from observations: `green_unreviewed`, `approved`, `untrusted_review`, `attempt_limit`,
+  `split_unlabeled`, `split_self_labeled`, `review_failed`, and `review_limit` are the harness's, open while their
+  cause holds in the journal, like the run reasons (§14). No re-recording rule, so no flap (2026-10-13 F17), and no
+  list wiped by a tick on partial data (issue #219). The overseer keeps the two that are judgment, `needs_author` and
+  `multi_repo`: it records each once, naming the item it is about, and the harness holds it until the cursor passes
+  that item or the cause is gone.
+- The overseer's state block lists only the tickets left to it, each with why: `ready` (choose the repository, slug,
+  title, and context), `blocked` with a stackable blocker, `changes_requested` and `review_findings` (classify),
+  `human_replied` (what the reply asks), a due chore with a `when`, and a ticket whose observations fit no row. A
+  decision about any other ticket is refused `decided`. A dispatch for new items advances the cursors to the items
+  the block showed, so the overseer passes `--cursor` only to leave feedback alone.
+- The prompt shrinks to the judgment sections: candidates, the phase table, cursors, mirroring, and the attention
+  list section go, with the operator's approval note.
+- Tests with the fakes: the harness's decisions over journals written by hand, one per row; a decision on a ticket
+  not left to the overseer refused; a fake overseer that handles only the listed tickets closes the tick `ok`.
+
+Accept: written with the design, before work starts. Live, once built, over a day: the overseer's decisions are only
+on the tickets listed to it; the attention list changes only when an observation or the operator did; `loop waits`
+reports no churn; a median tick at half of M36's.
+
+Status: not started.
+
+## M38. A tick without the overseer
+
+Needs M37 and M21's overnight run (SCENARIOS S27). Sketch only; the design comes first. This is M29's gate without the
+trust change: the overseer runs when the journal leaves it something to judge, not when a fingerprint moved.
+
+- When the harness's decisions leave nothing for the overseer, no ticket and no due chore, the tick records them,
+  closes `ok`, and does not run the overseer: the common tick overnight, and after a run ends with nothing to
+  classify. `ticks` says whether the overseer ran, and M33's spend page splits ticks by it.
+- Connectors poll between ticks: the loop runs them every `connect.every_minutes` (default 2, 2026-10-12 F10) during
+  its wait, writes their observations, and ticks early when the derivation over them yields a decision the latest
+  tick did not record, a gate comes due, or the operator acts, as today. An external event is then seen within one
+  poll, not up to `loop.idle_max_minutes` later (M21's trade, lifted). Idle pacing paces only the overseer's runs. A
+  connector that fails during a poll raises `connector_failed` and the loop falls back to today's pacing.
+- The overseer's definition loses the tracker and GitHub MCP servers: it has `bash` for `canopy` and nothing else,
+  since a `stale` subject now gets `wait` instead of a live read. TRUST_MODEL T1: the overseer can be steered only by
+  text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all. Approval note.
+- M29 and M30 are closed as superseded; their open questions are answered here or in M35's design.
+
+Accept: written with the design, before work starts. Live, once built: S27 re-measured (MEASUREMENTS) with most ticks
+running no overseer, overseer spend per day at a quarter of the first day's for the same queue, median latency from
+an external event to the tick that acted on it under three minutes, and no action missed.
+
+Status: not started.
+
+## M39. The overseer per decision
+
+Needs M38. Sketch only, and taken only if M38's re-measurement shows the state block's size still dominating what the
+overseer spends: M34's cache hit needs ticks minutes apart, which M38 makes rarer, so each remaining run may be cold.
+
+- One overseer run per ticket left to judgment, whose message is that ticket's observations alone: a cold run writes
+  a few thousand tokens, not fifty, and text on one ticket cannot steer a decision about another.
+- The harness orders dispatches across tickets by phase priority (§6 step 4's order), which today the one overseer
+  does, and bounds the runs per tick by capacity.
+- Open: whether runs go in parallel; chores' `when`, which needs no ticket; whether one run may still see the queue.
+
+Accept: written with the design, before work starts.
+
+Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 
