@@ -3,14 +3,13 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, choreQuery, pullRequestQuery, runsQuery, ticketQuery, ticketsQuery } from '@/api/queries'
+import { attentionQuery, choreQuery, pullRequestQuery, ticketQuery, ticketsQuery } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
-import { Cost } from '@/components/cost'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { GrantLimits } from '@/components/grant-limits'
@@ -18,10 +17,9 @@ import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
-import { ListRow } from '@/components/rows'
 import { ReplyForm } from '@/components/reply-form'
 import { InlineCode } from '@/components/rich-text'
-import { Chip, RunDot, Word } from '@/components/status'
+import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { WorkingNow } from '@/components/working-now'
@@ -69,15 +67,13 @@ function AttentionPage() {
             </PageHeader>
             <Counters />
             {items !== undefined && items.length === 0 ? (
-                <>
-                    <Panel>
-                        <AllClear />
-                    </Panel>
-                    <Workers />
-                </>
+                <Panel>
+                    <AllClear />
+                </Panel>
             ) : (
                 <div className="flex flex-wrap items-start gap-6">
                     <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md">
+                        {/* The runs working now are the rail's, on every page, so this column is the list alone. */}
                         <Panel data-testid="attention-list">
                             <PanelHeader label="Attention">
                                 <span className="readout text-xs text-muted-foreground">{items?.length}</span>
@@ -97,7 +93,6 @@ function AttentionPage() {
                                 </ul>
                             )}
                         </Panel>
-                        <Workers />
                     </div>
                     <div className="flex min-w-0 flex-[999_1_28rem] flex-col gap-6">
                         {selected === undefined ? (
@@ -158,8 +153,8 @@ function Answered() {
 }
 
 /**
- * The selected item: its ticket's conversation, the reply form, and the ticket's actions, with a grant for each limit
- * it is stuck at; a chore's notes and the form for another, and for a finding the button to dismiss it; a PR's review
+ * The selected item: the ticket's actions and a grant for each limit it is stuck at, then its conversation and the
+ * reply form; a chore's notes and the form for another, and for a finding the button to dismiss it; a PR's review
  * limit and its grant, for an item about a PR no ticket owns; or for an item about none of them, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
@@ -281,7 +276,11 @@ function Thread({ ticketKey }: { ticketKey: string }) {
     const { ticket, messages } = data
     return (
         <>
-            {/* What holds the ticket up sits under the item, before its conversation, where it is read first. */}
+            {/* The ticket's actions foot the item, as they foot a ticket page's Work panel, and what holds it up sits
+                under them, before its conversation, where it is read first (DESIGN.md, the detail skeleton). */}
+            <div className="border-b" data-testid="attention-actions">
+                <TicketActions key={ticket.key} ticket={ticket} />
+            </div>
             <GrantLimits
                 key={`limits-${ticket.key}`}
                 limits={data.limits}
@@ -309,41 +308,6 @@ function Thread({ ticketKey }: { ticketKey: string }) {
                 target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
                 waiting={ticket.awaiting}
             />
-            <div className="border-t">
-                <TicketActions key={ticket.key} ticket={ticket} />
-            </div>
         </>
-    )
-}
-
-/** The runs working now, under the list: which ticket, what kind of run, for how long, and what it has cost so far. */
-function Workers() {
-    const { data } = useQuery(runsQuery)
-    const running = data?.filter((r) => r.state === 'running')
-    return (
-        <Panel data-testid="workers">
-            <PanelHeader label="Working">
-                <span className="readout text-xs text-muted-foreground">{running?.length}</span>
-            </PanelHeader>
-            {running === undefined ? (
-                <PanelSkeleton rows={1} />
-            ) : running.length === 0 ? (
-                <Empty>no runs working now: the overseer starts them at a tick</Empty>
-            ) : (
-                <ul className="stagger divide-y">
-                    {running.map((run) => (
-                        <ListRow key={run.id} kind="worker" className="py-2" data-testid={`worker-${run.id}`}>
-                            <RunDot state={run.state} />
-                            <TicketLink ticketKey={run.ticket_key} className="truncate" />
-                            <span className="flex">
-                                <Chip word={run.kind} />
-                            </span>
-                            <Cost usd={run.cost_usd} className="text-xs text-muted-foreground" />
-                            <Age variant="span" started={run.started_at} ended={null} className="text-right" />
-                        </ListRow>
-                    ))}
-                </ul>
-            )}
-        </Panel>
     )
 }

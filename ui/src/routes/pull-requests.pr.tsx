@@ -29,7 +29,7 @@ interface PullRequestSearch {
     url?: string | undefined
 }
 
-/** One PR: what it is, the runs that pushed to it, canopy's reviews of it, and the decisions naming it. */
+/** One PR: what it is, canopy's reviews of it, the runs that pushed to it, and the decisions naming it. */
 export const Route = createFileRoute('/pull-requests/pr')({
     // The PR is its URL, an opaque string the server checks: only an https:// one is passed on. Every key is returned,
     // undefined when invalid, so the router never keeps the raw value.
@@ -90,8 +90,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 chips={pr.phase ? <Chip word={pr.phase} /> : undefined}
                 links={<PullRequestOut url={pr.url} />}
             >
-                What canopy knows of this PR: its ticket when it has one, the runs that pushed to it, canopy&apos;s
-                reviews of it, and the decisions naming it.
+                What canopy knows of this PR: its ticket when it has one, canopy&apos;s reviews of it, the runs that
+                pushed to it, and the decisions naming it.
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>
@@ -128,20 +128,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         )}
                         <CostTotalRow cost={cost} />
                     </Fields>
-                </Panel>
-                <Panel data-testid="pull-request-runs">
-                    <PanelHeader label="Runs">
-                        <span className="flex items-center gap-2">
-                            {runs.length > 1 && <OrderToggle list="pr-runs" />}
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {runs.length === 0 ? (
-                        <Empty>no runs yet: none of its ticket&apos;s runs has pushed to it</Empty>
-                    ) : (
-                        <PanelScroll label="Runs">
-                            <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} />
-                        </PanelScroll>
+                    {/* The PR's one action: a grant of another review when it is at its review limit. */}
+                    {reviewLimit !== null && (
+                        <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
                     )}
                 </Panel>
                 <Panel data-testid="pull-request-reviews">
@@ -156,8 +145,20 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     ) : (
                         <ReviewsTable reviews={ordered('pr-reviews', reviewsOrder, reviews)} pr={false} />
                     )}
-                    {reviewLimit !== null && (
-                        <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
+                </Panel>
+                <Panel data-testid="pull-request-runs">
+                    <PanelHeader label="Runs">
+                        <span className="flex items-center gap-2">
+                            {runs.length > 1 && <OrderToggle list="pr-runs" />}
+                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                        </span>
+                    </PanelHeader>
+                    {runs.length === 0 ? (
+                        <Empty>no runs yet: none of its ticket&apos;s runs has pushed to it</Empty>
+                    ) : (
+                        <PanelScroll label="Runs">
+                            <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} />
+                        </PanelScroll>
                     )}
                 </Panel>
                 <Panel data-testid="pull-request-decisions">
