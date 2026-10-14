@@ -558,7 +558,9 @@ rather than from a one-off analysis of the log.
   page does not offer reads as the week. Reads only.
 - The rail's two spend figures open it, the 24 hours' on the week and the 30 days' on the month: a link from them
   rather than a nav item, since spend is a question the operator asks now and then, not a place they work.
-- `spend.updated` and `tick.updated` on the stream mark the breakdown stale, so a page left open follows the loop.
+- `spend.updated`, `tick.updated`, and a run starting or ending on `runs.updated` mark the breakdown stale, so a page
+  left open follows the loop. Each tick carries `idle` and `woken_by`, so the loop recording them after the tick
+  closes sends `tick.updated` again, and the page never keeps the tick as no loop's.
 
 The pull requests pages (ROADMAP M32, asked for by the operator, 2026-10-13): a PR is a subject of its own, so what
 the journal holds about one, spread over a ticket's units, its runs, the reviews (§21), and the decisions, is

@@ -138,9 +138,10 @@ relying on a permission they check.
   that recorded decisions, and every start from the web UI picked up within about a minute (`ticks.woken_by` is
   `starts`). Record the numbers in `MEASUREMENTS.md`.
 - **S35. Spend by what it bought** (M33). After a day of `canopy loop` against the real queue, read idle ticks' share
-  of the live overseer's spend from `canopy spend --days 1` and from the web UI's spend page, then from a query on the
-  journal: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd) FROM ticks WHERE dry_run = 0 AND started_at
-  >= date('now')`, the same UTC day. Expect all three to agree, and each day's total on the page to match the CLI's.
+  of the live overseer's spend from `canopy spend` and from the web UI's spend page, both over their default week, then
+  from a query on the journal over the same UTC days: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd)
+  FROM ticks WHERE dry_run = 0 AND started_at >= date('now', '-6 days')`. Expect all three to agree, and each day's
+  total on the page to match the CLI's.
 
 ## The web UI
 

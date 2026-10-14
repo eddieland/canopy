@@ -99,8 +99,12 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert (groups["idle"], groups["busy"], groups["hand_run"]) == ((1, 0.31), (1, 0.28), (0, None))
     assert found["idle_share"] == pytest.approx(0.31 / 0.59)
     assert sorted((w["by"], w["ticks"]) for w in found["woken"]) == [("start", 1), ("timer", 1)]
-    # What idle spend bought, each opening its tick's page.
-    assert [(t["id"], t["decisions"]) for t in found["idle_ticks"]] == [(2, 5)]
+    # What idle spend bought, each opening its tick's page, with what the loop said of it, as every tick carries.
+    assert [(t["id"], t["decisions"], t["idle"], t["woken_by"]) for t in found["idle_ticks"]] == [(2, 5, True, "timer")]
+    assert [(t["id"], t["idle"], t["woken_by"]) for t in c.get("/api/ticks").json()] == [
+        (2, True, "timer"),
+        (1, False, "start"),
+    ]
     assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "chores", "reviews"]
 
     assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default

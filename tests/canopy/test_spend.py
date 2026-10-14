@@ -169,16 +169,16 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     start = spend.window_start(now, 3).strftime("%Y-%m-%d")
     assert out[0] == f"Spend over 3 days, since {start} UTC, as the runtime reported it."
     assert out[2].split() == ["day", "overseer", "idle", "workers", "chores", "reviews", "dry", "run", "total"]
-    assert len([line for line in out if line[:4] == start[:4]]) == 3  # a line per day
+    days = [(spend.window_start(now, 3) + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(3)]
+    assert [line.split()[0] for line in out[3:6]] == days  # a line per day, oldest first
     assert out[6].split() == ["all", "$2.50", "$0.50", "$2.00", "$0.75", "$1.50", "$0.30", "$7.05"]
     words = [line.split() for line in out]
     assert ["idle", "3", "$0.50"] in words
     assert ["not", "idle", "2", "$1.50"] in words
     assert "Idle ticks were 20% of the live overseer's spend." in out
     assert ["timer", "3", "$0.50"] in words
-    assert out[-1] == (
-        "No cost reported: 1 of 8 overseer runs, 1 of 2 worker and split runs, 1 of 2 chore runs, 0 of 1 review runs."
-    )
+    # A kind whose every run reported a cost is left out.
+    assert out[-1] == "No cost reported: 1 of 8 overseer runs, 1 of 2 worker and split runs, 1 of 2 chore runs."
 
 
 def test_canopy_spend_json_is_the_breakdown_with_each_total(
@@ -199,3 +199,24 @@ def test_canopy_spend_reads_at_most_a_year(canopy_env: CanopyEnv) -> None:
     assert main(["spend", "--days", "0"]) == 2
     assert main(["spend", "--days", str(spend.MAX_DAYS + 1)]) == 2
     assert main(["spend", "--days", str(spend.MAX_DAYS)]) == 0
+
+
+def test_a_running_dry_run_is_never_the_live_overseers(tmp_path: Path, journals: Journals) -> None:
+    """A tick records its overseer's cost before it closes, so a dry run still acting is already priced."""
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, at(NOW, 0, 1), 0.5, status="running", dry_run=True)
+    tick(conn, at(NOW, 0, 2), 0.25, status="running")
+    found = spend.breakdown(conn, NOW, 1)
+    assert (found.totals.dry_run, found.totals.overseer) == (0.5, 0.25)
+    assert [g.ticks for g in found.ticks] == [0] * len(spend.GROUPS)  # neither has ended
+    assert found.unpriced[0] == spend.Unpriced(kind="overseer", runs=0, unpriced=0)
+
+
+def test_canopy_spend_says_when_every_run_reported_a_cost(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tick(canopy_env.journal(), at(noon_today(), 0), 0.25, idle=True, woken_by="timer")
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("Spend over 1 day, since ")
+    assert out[-1] == "Every run that ended reported a cost."

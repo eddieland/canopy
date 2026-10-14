@@ -691,6 +691,12 @@ class Tick(_Model):
     """What the overseer cost, in US dollars, when the runtime reported it (§13)."""
     decisions: int = 0
     """How many decisions it recorded so far."""
+    idle: bool | None = None
+    """Whether `canopy loop` found it idle (DESIGN §6, Idle pacing); None on a tick no loop ran, and until the loop
+    records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale."""
+    woken_by: str | None = None
+    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | run | key. None when
+    `idle` is."""
 
 
 class TickDetail(_Model):

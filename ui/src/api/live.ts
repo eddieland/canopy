@@ -23,6 +23,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             if (before !== undefined && holding(before) !== holding(event.runs)) {
                 void client.invalidateQueries({ queryKey: keys.worktrees, refetchType: 'active' })
             }
+            // A run that started or ended changes the spend page's counts of runs, even one that reported no cost.
+            if (before !== undefined && statuses(before) !== statuses(event.runs)) {
+                void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
+            }
             // A run a page holds is written whole; its transcript is read again only when its status moves, since a
             // run's events reach its log when it ends and its cost moves more often than that.
             for (const run of event.runs) {
@@ -94,6 +98,11 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         }
     }
+}
+
+/** Each run's state, as one comparable string: a run starting or ending changes it, a cost going up does not. */
+function statuses(runs: Run[]): string {
+    return runs.map((run) => `${run.id}:${run.state}`).join(',')
 }
 
 /** Which running runs hold which worktrees, as one comparable string: a cost going up leaves it alone. */

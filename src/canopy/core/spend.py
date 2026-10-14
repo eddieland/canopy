@@ -168,30 +168,40 @@ def idle_ticks(conn: sqlite3.Connection, since: str, limit: int = IDLE_TICKS) ->
 
 @dataclass(frozen=True)
 class _TickRow:
-    """Ticks of one day that share a group, a status, and a cause: how many, and what their overseers cost."""
+    """Ticks of one day that share a group, a status, and a cause: how many, their cost, and how many had none."""
 
     day: str
+    dry: bool
     group: Group | None
     woken_by: str | None
     ticks: int
     cost_usd: float | None
+    unpriced: int
+
+    @property
+    def live_loop(self) -> bool:
+        """Whether these ended live ticks the loop ran: what `woken_by` counts."""
+        return self.woken_by is not None and self.group not in {None, "dry_run"}
 
 
 def _tick_rows(conn: sqlite3.Connection, since: str) -> list[_TickRow]:
     rows = conn.execute(
-        "SELECT substr(started_at, 1, 10) AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd) "
+        "SELECT substr(started_at, 1, 10) AS day, dry_run, status, idle, woken_by, count(*), SUM(cost_usd), "
+        "count(*) - count(cost_usd) "
         "FROM ticks WHERE started_at >= ? GROUP BY day, dry_run, status, idle, woken_by",
         (since,),
     ).fetchall()
     return [
         _TickRow(
             day=str(day),
+            dry=bool(dry),
             group=_group(str(status), idle, dry=bool(dry)),
             woken_by=None if woken is None else str(woken),
             ticks=int(count),
             cost_usd=cost,
+            unpriced=int(unpriced),
         )
-        for day, dry, status, idle, woken, count, cost in rows
+        for day, dry, status, idle, woken, count, cost, unpriced in rows
     ]
 
 
@@ -208,13 +218,14 @@ def _group(status: str, idle: int | None, *, dry: bool) -> Group | None:
     return "idle" if idle else "busy"
 
 
-# Whether a tick row's cost counts toward the `overseer`, `idle`, or `dry_run` cost of its day.
+# Whether a tick row's cost counts toward the `overseer`, `idle`, or `dry_run` cost of its day. A dry run is never the
+# live overseer's, running or not: its cost is recorded before it closes.
 def _in_series(row: _TickRow, name: str) -> bool:
     if name == "dry_run":
-        return row.group == "dry_run"
+        return row.dry
     if name == "idle":
         return row.group == "idle"
-    return row.group != "dry_run"
+    return not row.dry
 
 
 def _groups(rows: list[_TickRow]) -> list[TickGroup]:
@@ -230,33 +241,20 @@ def _groups(rows: list[_TickRow]) -> list[TickGroup]:
 
 # The live ticks the loop ran, by what ended the wait before each, the most common first.
 def _woken(rows: list[_TickRow]) -> list[Woken]:
-    causes = sorted({r.woken_by for r in rows if r.woken_by is not None and r.group not in {None, "dry_run"}})
+    by_cause: dict[str, list[_TickRow]] = {}
+    for row in rows:
+        if row.live_loop and row.woken_by is not None:
+            by_cause.setdefault(row.woken_by, []).append(row)
     found = [
-        Woken(
-            by=cause,
-            ticks=sum(r.ticks for r in rows if r.woken_by == cause and r.group not in {None, "dry_run"}),
-            cost_usd=_sum([r.cost_usd for r in rows if r.woken_by == cause and r.group not in {None, "dry_run"}]),
-        )
-        for cause in causes
+        Woken(by=cause, ticks=sum(r.ticks for r in caused), cost_usd=_sum([r.cost_usd for r in caused]))
+        for cause, caused in sorted(by_cause.items())
     ]
     return sorted(found, key=lambda w: -w.ticks)
 
 
 def _unpriced(conn: sqlite3.Connection, since: str, rows: list[_TickRow]) -> list[Unpriced]:
     ended = [r for r in rows if r.group is not None]
-    found = [
-        Unpriced(
-            kind="overseer",
-            runs=sum(r.ticks for r in ended),
-            # A grouped row's sum is NULL only when none of its ticks reported a cost; count those ticks one by one.
-            unpriced=int(
-                conn.execute(
-                    "SELECT count(*) FROM ticks WHERE started_at >= ? AND status != 'running' AND cost_usd IS NULL",
-                    (since,),
-                ).fetchone()[0]
-            ),
-        )
-    ]
+    found = [Unpriced(kind="overseer", runs=sum(r.ticks for r in ended), unpriced=sum(r.unpriced for r in ended))]
     for kind, table in _TABLES.items():
         runs, unpriced = conn.execute(
             f"SELECT count(*), count(*) - count(cost_usd) FROM {table} "  # noqa: S608 (a fixed table)

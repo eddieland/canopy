@@ -109,8 +109,8 @@ def render(found: Breakdown) -> list[str]:
     )
     if not found.woken:
         lines.append("no tick canopy loop ran")
-    unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced)
-    lines.extend(["", f"No cost reported: {unpriced}."])
+    unpriced = ", ".join(f"{u.unpriced} of {u.runs} {KIND_LABELS[u.kind]}" for u in found.unpriced if u.unpriced)
+    lines.extend(["", f"No cost reported: {unpriced}." if unpriced else "Every run that ended reported a cost."])
     return lines
 
 

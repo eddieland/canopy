@@ -2670,6 +2670,12 @@ export type components = {
              */
             id: number;
             /**
+             * Idle
+             * @description Whether `canopy loop` found it idle (DESIGN §6, Idle pacing); None on a tick no loop ran, and until the loop
+             *     records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale.
+             */
+            idle: boolean | null;
+            /**
              * Session Id
              * @description The overseer's session, when the runtime reported it (§13).
              */
@@ -2690,6 +2696,12 @@ export type components = {
              * @description The overseer's summary of the tick: untrusted text.
              */
             summary: string | null;
+            /**
+             * Woken By
+             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | run | key. None when
+             *     `idle` is.
+             */
+            woken_by: string | null;
         };
         /**
          * TickDetail

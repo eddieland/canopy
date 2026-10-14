@@ -227,6 +227,8 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         decisions=decisions,
+        idle=None if row["idle"] is None else bool(row["idle"]),
+        woken_by=str(row["woken_by"]) if row["woken_by"] is not None else None,
     )
 
 
