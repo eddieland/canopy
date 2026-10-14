@@ -454,7 +454,10 @@ words included. Every model, field, path parameter, and named type is described;
 The event stream: each open stream holds its own journal connection and reads SQLite's `data_version` four times a second.
 It reads on a thread of its own, never on the server's event loop: a tick commits each decision it records, every open
 stream reads the lists again on each commit, and on a journal with months of history those reads, on the event loop,
-held up every other request while the overseer worked. When another connection has committed since, or the loop has
+held up every other request while the overseer worked. The route closes the connection, on that thread, from a
+dependency's teardown, which FastAPI runs however the stream ended: a client leaving while the first events were sent
+left the stream's generator suspended, never finished, and the connection open until the server exited. When another
+connection has committed since, or the loop has
 read its config again (§6), it reads the attention list, the runs, the tickets, the chores, the spend, the latest tick,
 and the pause again, and sends each that changed, whole: `attention.updated`, `runs.updated`,
 `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the windows move with the clock),

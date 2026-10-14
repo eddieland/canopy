@@ -2,6 +2,7 @@
 the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
 
 import asyncio
+import gc
 import json
 import re
 import sqlite3
@@ -9,6 +10,7 @@ import stat
 import threading
 import time
 from collections.abc import Iterator
+from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
 from unittest import mock
@@ -430,12 +432,13 @@ def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None
 
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
-        stream = live.events(backend, poll_seconds=0.01)
-        first = [await anext(stream) for _ in range(7)]
-        # A reload commits nothing to the journal: the stream sees it in the config it serves.
-        chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
-        backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
-        after = await asyncio.wait_for(anext(stream), timeout=5)
+        with live.stream(backend) as opened:
+            stream = opened.events(poll_seconds=0.01)
+            first = [await anext(stream) for _ in range(7)]
+            # A reload commits nothing to the journal: the stream sees it in the config it serves.
+            chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
+            backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)
+            after = await asyncio.wait_for(anext(stream), timeout=5)
         return first, after
 
     first, after = asyncio.run(first_and_after_a_reload())
@@ -467,6 +470,35 @@ def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, b
     lists = [e.root for e in found if isinstance(e.root, TicketsUpdated)]
     assert len(lists) == 2
     assert lists[1].tickets[0].key == "ABC-103"
+
+
+def test_a_stream_dropped_during_its_first_events_closes_its_connection(served: int) -> None:
+    """Issue 337: a client gone while the first events were still being sent left its journal connection open."""
+    real = Backend.open
+    opened: list[Context] = []
+    closed: list[Context] = []
+
+    @contextmanager
+    def counted(self: Backend) -> Iterator[Context]:
+        # The mock's writer and the other requests open connections of their own: only the streams' are counted.
+        stream = threading.current_thread().name.startswith("canopy-stream")
+        with real(self) as ctx:
+            if stream:
+                opened.append(ctx)
+            yield ctx
+        # Not reached when closing the connection raised, as it did off the thread that opened it.
+        if stream:
+            closed.append(ctx)
+
+    with mock.patch.object(Backend, "open", autospec=True, side_effect=counted):
+        for _ in range(10):
+            read_events(served, 1)
+        deadline = time.monotonic() + 10
+        while len(closed) < len(opened) and time.monotonic() < deadline:
+            gc.collect()
+            time.sleep(0.05)
+    assert len(opened) == 10
+    assert len(closed) == 10
 
 
 def test_a_streams_read_never_holds_up_a_request(served: int) -> None:
