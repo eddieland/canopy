@@ -66,7 +66,8 @@ commit message.
 - Never approve, merge, or close PRs. Never transition the ticket, including indirectly: refer to it by key only, with
   no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands in commit messages, the PR title, or the PR
   body.
-- Push once. Do not wait for CI. Do not retry pushes in a loop.
+- Push again when you fix something after a push, such as a lint error you missed: in a new commit, never an amend.
+  Do not wait for or poll CI. Do not retry a rejected push in a loop.
 - Time limit: {{TIMEOUT_MINUTES}} minutes. Leave time to push and report.
 
 ## Instructions versus data

@@ -130,7 +130,7 @@ def branch_update(config: Config, branch: str) -> str:
         "To bring a base branch into yours, rebase onto `origin/<base>`, and never merge it in: the operator's "
         "repositories refuse merge commits. If this ticket was stacked on a PR that has since merged, rebase only this "
         "ticket's own commits, with `git rebase --onto origin/<base> <the last commit of the branch it was stacked "
-        f"on>`. Push a rebased branch once, with `git push --force-with-lease origin HEAD:refs/heads/{branch}` in "
+        f"on>`. Push a rebased branch with `git push --force-with-lease origin HEAD:refs/heads/{branch}` in "
         "place of the plain push. That is the only force you may use, and a rebase the only reason to use it."
     )
 

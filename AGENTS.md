@@ -159,7 +159,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 - Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see HOST_ISOLATION.
 - A bot identity. MVP runs as the operator.
 - Anything that approves or merges PRs, or transitions tickets to Done.
-- Retry logic inside the worker. Workers push once and exit.
+- Retry logic inside the worker. A worker may push again for a fix it finds (D116), but never polls CI or retries a
+  rejected push.
 - Multi-machine coordination.
 
 ## Definition of done for a PR
