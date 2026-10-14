@@ -6,6 +6,7 @@ import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
+import { CostTotalRow } from '@/components/cost-total'
 import { Decisions } from '@/components/decisions'
 import { OrderToggle } from '@/components/order-toggle'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
@@ -59,7 +60,7 @@ function TicketPage() {
 }
 
 function Ticket({ detail }: { detail: TicketDetail }) {
-    const { ticket, units, runs, messages, decisions } = detail
+    const { ticket, units, runs, messages, decisions, cost } = detail
     const now = useNow()
     const tracker = useTicketUrl(ticket.key)
     const branchUrl = useBranchUrls()
@@ -123,6 +124,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             {units.map((unit) => (
                                 <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
                             ))}
+                            <CostTotalRow cost={cost} />
                         </dl>
                     </Panel>
                     <Panel>

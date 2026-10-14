@@ -24,6 +24,7 @@ from canopy.serve.schema import (
     ChoreSpendWindow,
     ChoreSummary,
     Comment,
+    CostTotal,
     Decision,
     LastTick,
     LoopState,
@@ -510,6 +511,18 @@ def ticket(ctx: Context, key: str) -> TicketDetail | None:
         runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
+        cost=_ticket_cost(ctx.conn, key),
+    )
+
+
+def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
+    row = db.ticket_cost(conn, key)
+    cost = row["cost_usd"]
+    return CostTotal(
+        runs=int(row["runs"]),
+        reviews=int(row["reviews"]),
+        priced=int(row["priced"]),
+        cost_usd=float(cost) if cost is not None else None,
     )
 
 
