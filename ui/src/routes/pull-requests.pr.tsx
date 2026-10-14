@@ -8,6 +8,7 @@ import { ApiError } from '@/api/client'
 import { pullRequestQuery } from '@/api/queries'
 import type { PullRequestDetail, ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
+import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { GrantLimits } from '@/components/grant-limits'
@@ -77,7 +78,7 @@ function Missing({ title, children }: { title: string; children: ReactNode }) {
 }
 
 function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: string }) {
-    const { pull_request: pr, review_limit: reviewLimit, runs, reviews, decisions } = detail
+    const { pull_request: pr, review_limit: reviewLimit, runs, reviews, decisions, cost } = detail
     return (
         <>
             <PageHeader
@@ -127,6 +128,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                                 <dd className="font-mono text-xs">{pr.phase}</dd>
                             </>
                         )}
+                        <CostTotalRow cost={cost} />
                     </dl>
                 </Panel>
                 <Panel data-testid="pull-request-runs">

@@ -7,11 +7,12 @@ pages (reviews.py), and the decisions naming it. Reads only; a rationale and a r
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db
 from canopy.serve.reviews import summary
-from canopy.serve.schema import PullRequest, PullRequestDetail
+from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail
 from canopy.serve.views import decision, limit, run
 
 if TYPE_CHECKING:
@@ -24,8 +25,6 @@ if TYPE_CHECKING:
 PULL_REQUESTS = 100
 PR_RUNS = 20
 PR_DECISIONS = 20
-# A ticket's runs read to find those that reported a PR: a ticket rarely has more, and the page shows at most 20.
-_TICKET_RUNS = 100
 
 
 def pull_requests(ctx: Context) -> list[PullRequest]:
@@ -60,9 +59,10 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     return PullRequestDetail(
         pull_request=found,
         review_limit=limit(reviewed, repo=found.repo) if reviewed is not None else None,
-        runs=[run(r, ctx.workspace.root) for r in runs],
+        runs=[run(r, ctx.workspace.root) for r in runs[:PR_RUNS]],
         reviews=[summary(r) for r in reviews],
         decisions=[decision(d) for d in decisions],
+        cost=_cost(runs, reviews),
     )
 
 
@@ -88,9 +88,17 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: list[sqli
 
 def _runs(conn: sqlite3.Connection, key: str, url: str) -> list[sqlite3.Row]:
     # A run names the PRs it pushed to in its result; one still running has no result yet, so it is kept as well.
-    found = [
+    # Every run of the ticket is read, not only the page's 20, so the PR's cost counts them all.
+    return [
         r
-        for r in db.runs_of(conn, key, _TICKET_RUNS)
+        for r in db.runs_of(conn, key, None)
         if r["status"] == "running" or url in contract.stored_prs(contract.stored_object(r["result_json"]))
     ]
-    return found[:PR_RUNS]
+
+
+def _cost(runs: list[sqlite3.Row], reviews: list[sqlite3.Row]) -> CostTotal:
+    # A run that pushed to two PRs, one per repository, counts on each one's page, and once on its ticket's.
+    costs = [float(r["cost_usd"]) for r in [*runs, *reviews] if r["cost_usd"] is not None]
+    return CostTotal(
+        runs=len(runs), reviews=len(reviews), priced=len(costs), cost_usd=math.fsum(costs) if costs else None
+    )

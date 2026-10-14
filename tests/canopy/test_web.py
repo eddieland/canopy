@@ -447,6 +447,31 @@ def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_and_30_da
     assert (month.hours, month.since, month.cost_usd) == (720, now - timedelta(days=30), pytest.approx(10.75))
 
 
+def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+    first = running_run(ctx, KEY)
+    assert c.get(f"/api/tickets/{KEY}").json()["cost"] == {"runs": 1, "reviews": 0, "priced": 0, "cost_usd": None}
+
+    second = running_run(ctx, KEY)
+    running_run(ctx, "PROJ-2")  # another ticket's
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    review = db.insert_review_run(
+        ctx.conn,
+        tick_id=tick_id,
+        pr_url="https://github.com/acme/web/pull/1",
+        sha="a" * 40,
+        ticket=KEY,
+        repo=None,
+        logs_dir=ctx.workspace.root,
+    )
+    for table, row_id, cost in (("runs", first, 1.25), ("runs", second, None), ("review_runs", review, 0.5)):
+        ctx.conn.execute(f"UPDATE {table} SET cost_usd = ? WHERE id = ?", (cost, row_id))  # noqa: S608
+    ctx.conn.execute("UPDATE ticks SET cost_usd = 3.0 WHERE id = ?", (tick_id,))  # the overseer's is the workspace's
+
+    cost = c.get(f"/api/tickets/{KEY}").json()["cost"]
+    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75)}
+
+
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get("/api/tick").json() == {"tick": None, "acknowledged": None}

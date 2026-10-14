@@ -300,6 +300,19 @@ class Limit(_Model):
     """The most runs of the kind it may have: the policy's limit plus `granted`."""
 
 
+class CostTotal(_Model):
+    """What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran."""
+
+    runs: int
+    """How many worker and split runs it counts, a running one included."""
+    reviews: int
+    """How many review runs it counts, a running one included."""
+    priced: int
+    """How many of those runs and review runs reported a cost."""
+    cost_usd: float | None = None
+    """What they cost, in US dollars; None when none reported a cost."""
+
+
 class TicketDetail(_Model):
     """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
@@ -316,6 +329,8 @@ class TicketDetail(_Model):
     """Its conversation: the latest 100 messages, oldest first."""
     decisions: list[Decision]
     """The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it."""
+    cost: CostTotal
+    """What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace."""
 
 
 class ChoreRun(_Model):
@@ -701,6 +716,8 @@ class TranscriptText(_Model):
     """Whether it is the model's reasoning rather than its answer."""
     cut: bool = False
     """Cut at the transcript's bound for one text."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptTool(_Model):
@@ -724,6 +741,8 @@ class TranscriptTool(_Model):
     """How long it took, in milliseconds, if the runtime said."""
     cut: bool = False
     """Its input or output was cut at the transcript's bound for one."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptTokens(_Model):
@@ -756,6 +775,8 @@ class TranscriptStep(_Model):
     """Every kind of token together."""
     split: TranscriptTokens | None = None
     """The tokens, each kind apart."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptError(_Model):
@@ -769,6 +790,8 @@ class TranscriptError(_Model):
     """The error's name, as the runtime gave it."""
     message: str
     """The error's message: untrusted."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 type TranscriptEntry = Annotated[
@@ -783,6 +806,20 @@ type TranscriptStatus = Annotated[
         "`--format json`). `no_log`: the log is missing, a symlink, or not a regular file."
     ),
 ]
+
+
+class TranscriptPrompt(_Model):
+    """The message canopy gave the runtime to start the session (DESIGN §22).
+
+    The first model call's input, but for the agent's definition and the runtime's own system prompt and tools, which
+    nothing records.
+    """
+
+    text: str
+    """The prompt as canopy rendered it, control characters dropped: untrusted in part, since it quotes tickets,
+    comments, and PRs."""
+    truncated: bool = False
+    """It holds more than the bound read."""
 
 
 class Transcript(_Model):
@@ -802,6 +839,8 @@ class Transcript(_Model):
     """A bound left something out."""
     unreadable: int = 0
     """How many events did not validate."""
+    prompt: TranscriptPrompt | None = None
+    """The session's prompt, kept beside the log, if canopy kept one and it could be read."""
 
 
 class TickOutput(_Model):
@@ -1103,6 +1142,8 @@ class PullRequestDetail(_Model):
     """Every review run of it, newest first; each opens its own page, with its findings on its diff."""
     decisions: list[Decision]
     """The latest 20 decisions naming it, across ticks, newest first."""
+    cost: CostTotal
+    """What every run it lists cost, not only the 20 shown, and every review run of it."""
 
 
 class AttentionUpdated(_Model):

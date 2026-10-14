@@ -241,6 +241,9 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
   there is the same ticket's.
+- **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
+  as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
+  (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
 - **The tickets list** keeps every column but the title at a fixed width: the key, the title in the free width, then
   the `public` or `private, started` chip, the phase (cut to fit, the whole on hover), the running run or `waiting on
   you`, and the age. So each row's chip, phase, and run line up whatever the others say.
@@ -308,7 +311,14 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
   same way to its tokens by kind, each a label and a readout on one line, and Open all leaves it closed. A runtime error
   is tinted `status-failed`. Open all and Close all are in the header, with the session id; above the rows, how many
-  tool calls, failed and refused ones, and model calls. A
+  tool calls, failed and refused ones, and model calls. A By call `Toggle` in the header, as Pretty is, groups the
+  rows by the model call they came from (`byCall` in `src/lib/transcript.ts`): each call a `Collapsible` row, its
+  number, what it did (its first text, then its tools by name, `read ×2`), an `unfinished` chip
+  when the session ended first, its reason as above, its tokens `in · out`, and its cost. It opens to an input and an
+  output section, each a `panel-label` with its tokens: the first call's input is the prompt canopy kept, in a block,
+  with a muted line saying what no file records; a later call's is each tool its predecessor called, a `RunDot`, the
+  tool, and its summary over its output's block. The output is the call's rows as above, in a bordered list. A call's
+  body is built only when opened, and Open all opens the calls. A
   run's id in a list (`run:N`) opens its page, which is the run's fields over its transcript, and a chore run's id
   (`#N`) its page, whose findings sit between the two; a tick's page has the overseer's under its decisions.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted
@@ -405,7 +415,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   hover), its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
   state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
-  a link out under it as a ticket's page has, then panels for its fields, the runs that pushed to it (`RunsTable`), its
+  a link out under it as a ticket's page has, then panels for its fields and total cost, the runs that pushed to it
+  (`RunsTable`), its
   reviews as rows each opening the review, and its decisions. A review's page links to its PR's (`its page in
   canopy`).
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut

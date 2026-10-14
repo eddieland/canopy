@@ -403,7 +403,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - It also serves a run's or tick's transcript (DESIGN §22): its session's events, read back from the run's log or
   the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
-  following links; nothing else under the state directory is read but a tick's output below.
+  following links; nothing else under the state directory is read but a tick's output below and the session's prompt.
+- With a transcript it serves the session's prompt, the `<id>.prompt` canopy wrote beside the log before the agent
+  started: what the agent command was given as `{prompt}`, a worker's or a chore's rendered prompt or a tick's state
+  block. It quotes ticket text, comments, PRs, and the operator's messages, untrusted as the journal is, and names
+  worktree paths. It is read the same way, at most 1 MiB, its control characters dropped, rendered as text.
 - It serves the end of a tick's output as written (DESIGN §22): at most its last 1 MiB, read the same way, its
   control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
   which may name the operator's paths and config, and every field of the overseer's events. A run's log is never

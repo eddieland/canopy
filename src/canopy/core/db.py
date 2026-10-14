@@ -1310,12 +1310,31 @@ def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return row
 
 
-def runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
-    """Return a ticket's latest `limit` runs, newest first."""
+def runs_of(conn: sqlite3.Connection, key: str, limit: int | None) -> list[sqlite3.Row]:
+    """Return a ticket's latest `limit` runs, newest first; with None, every one."""
+    # SQLite reads a negative LIMIT as none.
     return conn.execute(
         f"{_RUNS} WHERE r.ticket_key = ? ORDER BY r.id DESC LIMIT ?",
-        (key, limit),
+        (key, -1 if limit is None else limit),
     ).fetchall()
+
+
+def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
+    """Return what a ticket's runs and the review runs naming it cost, however long ago they ran (§13).
+
+    The row has `runs` and `reviews`, how many of each; `priced`, how many of them reported a cost; and `cost_usd`,
+    what those cost, NULL when none did. Not the overseer's: a tick's cost is the whole workspace's.
+    """
+    row: sqlite3.Row = conn.execute(
+        "SELECT r.n AS runs, v.n AS reviews, r.priced + v.priced AS priced, "
+        "  CASE WHEN r.priced + v.priced > 0 THEN coalesce(r.cost, 0) + coalesce(v.cost, 0) END AS cost_usd "
+        "FROM (SELECT count(*) AS n, count(cost_usd) AS priced, sum(cost_usd) AS cost FROM runs"
+        "  WHERE ticket_key = ?) r, "
+        "(SELECT count(*) AS n, count(cost_usd) AS priced, sum(cost_usd) AS cost FROM review_runs"
+        "  WHERE ticket_key = ?) v",
+        (key, key),
+    ).fetchone()
+    return row
 
 
 def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:

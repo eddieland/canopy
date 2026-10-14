@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import conversation, db
-from canopy.serve import mock, mock_reviews
+from canopy.serve import mock, mock_reviews, pull_requests
 from canopy.serve.backend import Backend
 from tests.canopy.test_serve import client
 
@@ -41,6 +41,31 @@ def test_a_prs_page_has_the_runs_that_pushed_to_it_its_reviews_and_its_decisions
     assert [r["id"] for r in page["reviews"]] == [4, 1]
     assert {d["action"] for d in page["decisions"]} == {"wait", "attention:needs_reviewer"}
     assert all(d["pr"] == mock_reviews.PR_88 for d in page["decisions"])
+
+
+def test_a_prs_cost_is_every_run_that_pushed_to_it_and_every_review_of_it(backend: Backend) -> None:
+    with backend.open() as ctx:
+        for table, row_id, cost in (("runs", 39, 1.5), ("review_runs", 1, None), ("review_runs", 4, 0.25)):
+            ctx.conn.execute(f"UPDATE {table} SET cost_usd = ? WHERE id = ?", (cost, row_id))  # noqa: S608
+    page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
+    assert page["cost"] == {"runs": 1, "reviews": 2, "priced": 2, "cost_usd": pytest.approx(1.75)}
+
+
+def test_a_prs_cost_counts_its_runs_past_the_20_its_page_lists(backend: Backend) -> None:
+    result = json.dumps({"status": "done", "prs": {"web": mock_reviews.PR_88}})
+    with backend.open() as ctx:
+        ctx.conn.execute("UPDATE review_runs SET cost_usd = NULL")
+        ctx.conn.execute("UPDATE runs SET cost_usd = 0.5 WHERE id = 39")
+        for _ in range(pull_requests.PR_RUNS):
+            ctx.conn.execute(
+                "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
+                "log_path, cost_usd) SELECT tick_id, ticket_key, kind, branch, started_at, ended_at, status, ?, "
+                "log_path, 1.0 FROM runs WHERE id = 39",
+                (result,),
+            )
+    page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
+    assert len(page["runs"]) == pull_requests.PR_RUNS
+    assert (page["cost"]["runs"], page["cost"]["cost_usd"]) == (pull_requests.PR_RUNS + 1, pytest.approx(20.5))
 
 
 def test_a_loop_pr_with_no_review_is_listed_with_the_run_working_it(backend: Backend) -> None:
@@ -76,6 +101,7 @@ def test_a_pr_only_decisions_name_has_a_page_and_anything_else_is_refused(backen
     assert pr not in {p["url"] for p in c.get("/api/pull-requests").json()}  # decisions are not a source
     page = c.get("/api/pull-request", params={"url": pr}).json()
     assert (page["runs"], page["reviews"], [d["action"] for d in page["decisions"]]) == ([], [], ["wait"])
+    assert page["cost"] == {"runs": 0, "reviews": 0, "priced": 0, "cost_usd": None}
     assert c.get("/api/pull-request", params={"url": "https://github.com/acme/web/pull/404"}).status_code == 404
     for bad in ("javascript:alert(1)", "https://example.test/a b", "https://" + "a" * 300):
         assert c.get("/api/pull-request", params={"url": bad}).status_code == 422
