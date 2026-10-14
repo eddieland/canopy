@@ -220,6 +220,10 @@ def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
     )
 
 
+def without_trailer(env: CanopyEnv) -> None:
+    env.write_user(env.user_file.read_text() + "\n[trust]\ncommit_trailer = false\n")
+
+
 @pytest.mark.parametrize("private", [False, True])
 @pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_shipped_prompts_that_commit_name_the_configured_trailer(
@@ -242,12 +246,93 @@ def test_with_a_custom_trailer_an_override_must_name_it(canopy_env: CanopyEnv, k
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
     assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
-    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_TRAILER\}\}"):
+    with pytest.raises(
+        prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_ATTRIBUTION\}\} or \{\{COMMIT_TRAILER\}\}"
+    ):
         prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_a_custom_trailer_an_older_override_naming_it_still_renders(canopy_env: CanopyEnv, kind: str) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add `{{COMMIT_TRAILER}}`\n")
+    with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+    assert text.endswith("add `Co-authored-by: Acme Agent <agent@acme.test>`\n")
+
+
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_the_trailer_off_shipped_prompts_add_none(canopy_env: CanopyEnv, kind: str, *, private: bool) -> None:
+    without_trailer(canopy_env)
+    values = {**VALUES, "CONVERSATION": "None."}
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "Co-authored-by" not in text
+    assert (
+        "Keep the agent runtime's attribution trailer on commits, if it adds one, and add no co-author trailer." in text
+    )
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_the_trailer_off_an_override_must_carry_the_attribution(canopy_env: CanopyEnv, kind: str) -> None:
+    # An older override that adds the trailer itself would keep adding the one the operator turned off: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add `{{COMMIT_TRAILER}}`\n")
+    without_trailer(canopy_env)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_ATTRIBUTION\}\}$"):
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}. {{COMMIT_ATTRIBUTION}}\n")
+    assert "add no co-author trailer" in prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), kind, VALUES
+    )
+
+
+def test_the_trailer_off_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+    without_trailer(canopy_env)
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
 
 
 def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+
+
+def with_rebase(env: CanopyEnv) -> None:
+    env.write_user(env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+
+
+@pytest.mark.parametrize("private", [False, True])
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_shipped_prompts_that_commit_say_how_to_bring_a_base_in(
+    canopy_env: CanopyEnv, kind: str, *, private: bool
+) -> None:
+    values = {**VALUES, "CONVERSATION": "None."}
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "merge `origin/<base>` into it. Never rebase" in text
+    assert "--force-with-lease" not in text
+    with_rebase(canopy_env)
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
+    assert "rebase onto `origin/<base>`, and never merge it in" in text
+    assert "`git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-work`" in text
+    assert "Never rebase" not in text
+
+
+@pytest.mark.parametrize("kind", prompts.COMMITS)
+def test_with_rebase_an_override_must_say_how_to_bring_a_base_in(canopy_env: CanopyEnv, kind: str) -> None:
+    # An override written for merging would make the merge commits the operator's repositories refuse: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; merge the base in\n")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    with_rebase(canopy_env)
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{BRANCH_UPDATE\}\}"):
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+
+
+def test_rebase_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+    with_rebase(canopy_env)
     prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
 
 

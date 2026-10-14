@@ -445,10 +445,16 @@ class Trust(Section):
     # the comments that carry them; user-only, so a shared file cannot pick marks that silence people's comments.
     comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
     comment_suffix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = ""
-    # Who a worker's commits name as co-author when the agent runtime adds no attribution trailer (TRUST_MODEL T5).
-    # User-only: the commits are the operator's, and a shared file must not credit agent work to a person.
+    # Whether a worker adds canopy's trailer to its commits when the agent runtime adds no attribution trailer, and whom
+    # it names as co-author (TRUST_MODEL T5). User-only: the commits are the operator's, and a shared file must neither
+    # credit agent work to a person nor strip the mark that tells it is an agent's.
+    commit_trailer: Annotated[StrictBool, Scope.USER] = True
     commit_trailer_name: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
     commit_trailer_email: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
+    # Whether workers bring a base branch in by rebasing, and push the result with a lease, instead of merging it
+    # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. User-only: a shared file must not let
+    # workers replace a branch's history.
+    rebase: Annotated[StrictBool, Scope.USER] = False
 
     @model_validator(mode="after")
     def _one_comment_mark(self) -> Trust:

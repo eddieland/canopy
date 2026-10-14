@@ -15,7 +15,9 @@ memory, and do not upgrade in passing.
 - Tailwind v4, configured in CSS (`src/index.css`, `src/styles/tokens.css`). There is no `tailwind.config.js`.
 - shadcn/ui on Radix, Vega style (`components.json`). Add components with `npx shadcn add <name>` and read
   `npx shadcn docs <name>`. If the registry is unreachable, port the source from shadcn's repository by hand as
-  `src/components/ui/button.tsx` was: style classes inlined, `dark:` overrides replaced with tokens.
+  `src/components/ui/button.tsx` was: style classes inlined, `dark:` overrides replaced with tokens. Those wrappers are
+  the only code that imports Radix, from the one `radix-ui` package; the lint refuses it, and any `@radix-ui/*`,
+  elsewhere. A control Radix has a primitive for uses its wrapper, never hand-written ARIA state (`DESIGN.md`).
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.

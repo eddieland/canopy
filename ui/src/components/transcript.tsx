@@ -10,12 +10,15 @@ import type {
     TranscriptTokens,
     TranscriptTool,
 } from '@/api/types'
+import { Copyable } from '@/components/copy-button'
 import { JsonTokens } from '@/components/json-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { Panel, PanelHeader, Placeholder } from '@/components/panel'
 import { Chip, RunDot } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Toggle } from '@/components/ui/toggle'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
 import { localTime } from '@/lib/time'
@@ -65,25 +68,26 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                 <span className="flex items-center gap-3">
                     {entries.length > 1 && <OrderToggle list="transcript" />}
                     {calls.calls.length > 0 && (
-                        <Button
-                            variant="ghost"
+                        <Toggle
                             size="xs"
-                            aria-pressed={grouped}
+                            pressed={grouped}
+                            onPressedChange={setGrouped}
                             title={grouped ? 'Show each event in order' : 'Group the events by model call'}
-                            className="aria-pressed:bg-surface-raised aria-pressed:text-foreground"
-                            onClick={() => setGrouped((g) => !g)}
                         >
                             <Rows3 />
                             By call
-                        </Button>
+                        </Toggle>
                     )}
                     {transcript?.session_id && (
-                        <span
-                            className="readout hidden text-xs text-muted-foreground sm:inline"
-                            title="open it with the runtime's tools too: opencode export <id>"
+                        <Copyable
+                            text={transcript.session_id}
+                            label="session id"
+                            className="readout hidden text-xs text-muted-foreground sm:inline-flex"
                         >
-                            session {transcript.session_id}
-                        </span>
+                            <span title="open it with the runtime's tools too: opencode export <id>">
+                                session {transcript.session_id}
+                            </span>
+                        </Copyable>
                     )}
                     {(tools || callView) && (
                         <span className="flex items-center">
@@ -403,17 +407,15 @@ function CallRow({
     start: string | null
     open: boolean
 }) {
-    const [shown, setShown] = useState(open)
     const end = call.end
     const split = end?.split ?? null
     const first = call.output[0]?.at ?? end?.at ?? null
     return (
-        <li data-testid="transcript-call">
-            <details open={open} className="group/call" onToggle={(e) => setShown(e.currentTarget.open)}>
-                <summary
+        <Collapsible asChild defaultOpen={open}>
+            <li data-testid="transcript-call" className="group/call">
+                <CollapsibleTrigger
                     className={cn(
-                        'flex cursor-pointer list-none items-center gap-3 px-3 py-2 hover:bg-surface-raised',
-                        '[&::-webkit-details-marker]:hidden',
+                        'flex w-full cursor-pointer items-center gap-3 px-3 py-2 text-left hover:bg-surface-raised',
                     )}
                 >
                     <When at={first} start={start} />
@@ -434,13 +436,15 @@ function CallRow({
                     <ChevronRight
                         className={cn(
                             'size-3.5 shrink-0 text-muted-foreground',
-                            'transition-transform group-open/call:rotate-90',
+                            'transition-transform group-data-[state=open]/call:rotate-90',
                         )}
                     />
-                </summary>
-                {shown && <CallBody call={call} prompt={prompt} start={start} split={split} />}
-            </details>
-        </li>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                    <CallBody call={call} prompt={prompt} start={start} split={split} />
+                </CollapsibleContent>
+            </li>
+        </Collapsible>
     )
 }
 

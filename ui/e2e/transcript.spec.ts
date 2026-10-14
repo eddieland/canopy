@@ -68,7 +68,7 @@ test('by call, each model call opens to what it was sent and what it did, as tex
     // The first call was sent the prompt canopy kept, and the rest no file records; its body is built when opened.
     const first = calls.nth(0)
     await expect(first.getByTestId('transcript-call-body')).toHaveCount(0)
-    await first.locator('summary').first().click()
+    await first.locator('[data-slot=collapsible-trigger]').click()
     const sent = first.getByRole('region', { name: 'call 1 input' })
     await expect(sent).toContainText('# canopy worker: implement')
     await expect(sent).toContainText('which no file records')
@@ -78,7 +78,7 @@ test('by call, each model call opens to what it was sent and what it did, as tex
     // A later call was sent what the call before it asked its tools for, a failed read's error and a file's markup
     // included, as characters.
     const second = calls.nth(1)
-    await second.locator('summary').first().click()
+    await second.locator('[data-slot=collapsible-trigger]').click()
     const returned = second.getByRole('region', { name: 'call 2 input' })
     await expect(returned).toContainText('call 1’s input and output, then what its tools returned:')
     await expect(returned).toContainText('return <input value={query}')

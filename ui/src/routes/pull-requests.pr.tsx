@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ExternalLink, GitPullRequest } from 'lucide-react'
+import { GitPullRequest } from 'lucide-react'
 import type { ReactNode } from 'react'
 
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { pullRequestQuery } from '@/api/queries'
 import type { PullRequestDetail, ReviewSummary } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { PageHeader, Panel, PanelHeader, PanelScroll, Placeholder } from '@/components/panel'
 import { ReviewLink } from '@/components/review-link'
@@ -113,7 +115,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         {pr.branch && (
                             <>
                                 <dt className="panel-label self-center">branch</dt>
-                                <dd className="font-mono text-xs break-all">{pr.branch}</dd>
+                                <dd className="min-w-0 font-mono text-xs">
+                                    <Copyable text={pr.branch} label="branch" />
+                                </dd>
                             </>
                         )}
                         {pr.phase && (
@@ -178,9 +182,8 @@ function PullRequestOut({ url }: { url: string }) {
                 className="max-w-full gap-1.5 font-mono text-xs font-normal text-accent"
             >
                 <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
-                    <GitPullRequest aria-hidden />
+                    <LinkOutIcon href={url} icon={GitPullRequest} className="size-4" />
                     <span className="truncate">{url.replace(/^https:\/\//u, '')}</span>
-                    <ExternalLink aria-hidden className="size-3" />
                 </a>
             </Button>
         </nav>
