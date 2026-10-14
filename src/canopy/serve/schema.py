@@ -71,6 +71,8 @@ class Meta(_Model):
     branch_urls: dict[str, str] = {}
     """Each repository's branch link template, by name: a branch's page on its host, with `{branch}` where its name
     goes, from `branch_url` or a GitHub `url`. A repository without one is left out."""
+    workspace_root: str
+    """The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole."""
 
 
 class Session(_Model):

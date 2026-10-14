@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useWholePath } from '@/hooks/use-whole-path'
 import { cn } from '@/lib/utils'
 
 /** How long the button shows what its last click did before it reads Copy again. */
@@ -33,6 +34,34 @@ export function Copyable({
             <span className="min-w-0 break-all">{children ?? text}</span>
             <CopyButton text={text} label={label} />
         </span>
+    )
+}
+
+/**
+ * A path the server shows from the workspace root, then a `CopyButton` that copies it whole, joined to the root the
+ * server's meta gives. Until the root is known there is no button, so a copy never puts the short path on the
+ * clipboard.
+ */
+export function CopyablePath({
+    path,
+    label,
+    children,
+}: {
+    /** The path as the server sent it: from the workspace root when under it, else whole. */
+    path: string
+    /** What the path is, in a few words: `log path`. */
+    label: string
+    /** What shows in place of `path`, when that is not the path itself. */
+    children?: ReactNode
+}) {
+    const whole = useWholePath()
+    if (whole === undefined) {
+        return <span className="min-w-0 break-all">{children ?? path}</span>
+    }
+    return (
+        <Copyable text={whole(path)} label={label}>
+            {children ?? path}
+        </Copyable>
     )
 }
 
