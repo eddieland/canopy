@@ -3,25 +3,31 @@ import { describe, expect, it } from 'vitest'
 import { clampGap, DEFAULTS, MAX_GAP, parseSettings, parseTopics, withTopic } from './ticker-settings'
 
 describe('parseSettings', () => {
-    it('defaults to a normal speed, no gap, and every topic when nothing is stored', () => {
+    it('defaults to on, a normal speed, no gap, and every topic when nothing is stored', () => {
         expect(parseSettings(null)).toEqual(DEFAULTS)
-        expect(DEFAULTS).toEqual({ speed: 'normal', gap: 0, hidden: [] })
+        expect(DEFAULTS).toEqual({ on: true, speed: 'normal', gap: 0, hidden: [] })
     })
 
     it('reads what was stored', () => {
-        expect(parseSettings('{"speed":"spicy","gap":5,"hidden":["tips"]}')).toEqual({
+        expect(parseSettings('{"on":false,"speed":"spicy","gap":5,"hidden":["tips"]}')).toEqual({
+            on: false,
             speed: 'spicy',
             gap: 5,
             hidden: ['tips'],
         })
-        expect(parseSettings('{"speed":"off","gap":0}')).toEqual({ speed: 'off', gap: 0, hidden: [] })
+    })
+
+    it('reads a ticker stored at the old Off speed as off, at the default speed', () => {
+        expect(parseSettings('{"speed":"off","gap":4}')).toEqual({ on: false, speed: 'normal', gap: 4, hidden: [] })
+        expect(parseSettings('{"on":true,"speed":"off"}')).toEqual({ ...DEFAULTS, on: false })
     })
 
     it('falls back field by field on anything it does not recognize', () => {
         expect(parseSettings('not json')).toEqual(DEFAULTS)
         expect(parseSettings('[]')).toEqual(DEFAULTS)
-        expect(parseSettings('{"speed":"ludicrous","gap":3}')).toEqual({ speed: 'normal', gap: 3, hidden: [] })
-        expect(parseSettings('{"speed":"slow","gap":"3"}')).toEqual({ speed: 'slow', gap: 0, hidden: [] })
+        expect(parseSettings('{"speed":"ludicrous","gap":3}')).toEqual({ ...DEFAULTS, gap: 3 })
+        expect(parseSettings('{"speed":"slow","gap":"3"}')).toEqual({ ...DEFAULTS, speed: 'slow' })
+        expect(parseSettings('{"on":"yes"}')).toEqual(DEFAULTS)
         expect(parseSettings('{"hidden":"tips"}')).toEqual(DEFAULTS)
     })
 })

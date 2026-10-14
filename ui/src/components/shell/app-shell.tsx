@@ -28,8 +28,8 @@ export const PAGE_SCROLLER = 'page'
 
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
- * spend, and a footer), the routed page, and Sprig in the corner once Settings turns it on. Signed out, the sign-in
- * page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), and the routed page. Signed
+ * out, the sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
  *
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
@@ -87,15 +87,17 @@ export function AppShell() {
             >
                 {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds sticks,
                     a column as tall as the window under the header (its 3rem row above), so the footer stays at the
-                    window's foot however long the page; the part above it scrolls on its own in a window too short. */}
+                    window's foot however long the page; the part above it scrolls on its own in a window too short.
+                    The room left between them is Sprig's, when it is on. */}
                 <aside className="border-r bg-surface/60">
                     <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
-                        <div className="panel-scroll min-h-0 flex-1">
+                        <div className="panel-scroll min-h-0">
                             <SearchBox />
                             <Nav />
                             <RailWorking />
                             <RailSpend />
                         </div>
+                        {buddy === 'on' ? <Buddy /> : <div className="flex-1" />}
                         <div className="pt-3">
                             <RailFooter />
                         </div>
@@ -109,7 +111,6 @@ export function AppShell() {
                     </ViewTransition>
                 </main>
             </div>
-            {buddy === 'on' && <Buddy />}
         </div>
     )
 }

@@ -11,7 +11,7 @@ marks what is live, selected, or the action to take; what is selected in a page 
 the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
 trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
-decoration, but the header ticker's flair. Both themes' neutrals carry the accent's indigo hue, so the canvas has
+decoration, but the fun's own (Fun, below). Both themes' neutrals carry the accent's indigo hue, so the canvas has
 color of its own: dark is a deep indigo slate, light a lavender grey and white. Dark is the one the operator lives in;
 neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
@@ -42,6 +42,8 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `syntax-key`, `-string`, `-number`, `-literal` | JSON's keys, strings, numbers, and literals, in agent output. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
+| `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
+| `buddy-leaf` | The sprig on Sprig's head. A green of its own, never `status-done`'s. |
 
 Rules:
 
@@ -101,27 +103,14 @@ Rules:
   runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else. The footer (the version) sits at the foot of the sticky column, so at the window's foot
-  however long the page; in a window too short for the rest, the part above it scrolls on its own. Sprig, when on,
-  stands just above the footer, never on it.
+  however long the page; in a window too short for the rest, the part above it scrolls on its own. The room left
+  between the blocks and the footer is Sprig's (Fun, below).
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
 - **Wide screens use the width** from `2xl`: the attention list widens, a ticket's page puts its conversation
   beside its actions, work, and runs, and a chore's page puts its notes beside its schedule, findings, and runs.
-- Between the header's name and its readouts, a ticker crawls joke headlines about programming and vibe coding, one
-  at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at both
-  ends. It is the header's one piece of fun: written here, never journal text. Tips for using canopy are mixed in
-  among the jokes, each opening with "Tip:" and without flair. Each headline is picked at random from the topics
-  turned on, never the one just shown, so a topic turns up as often as its share of the headlines. A tip names a
-  real key, command, or setting, in that command's own words; one that stops being true is fixed or dropped.
-  Settings sets its speed (Off, Slow, Normal, Spicy; Off hides it), the seconds between headlines (0 by default), and
-  its topics (Programming, Vibe coding, Tips), a checkbox each, all on by default. With every topic off the window is
-  gone, as with Off. A new topic is a name in `TICKER_TOPICS`, its headlines, and its label in Settings.
-- A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
-  `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
-  ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
-  headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
-  of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
+- Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
   `mock`), and the theme toggle, in three groups with a hairline rule between each: the pause, the readouts, the theme.
@@ -164,11 +153,65 @@ Rules:
 - **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Runs'
   violet to Worktrees' teal. It is static.
 
+## Fun
+
+canopy should be a little fun to use (PRODUCT.md), and the fun lives in a few named places, each written here, never
+journal text: the ticker, Sprig, and the empty inbox. They share these rules:
+
+- **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
+  leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
+  something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
+  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in.
+- **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`) or the accent, never a
+  status color, so nothing in it reads as a run's state.
+- **Fun honours reduced motion** (Motion, below): it holds still, and says the same.
+- **Settings has one Fun panel**: an on/off for each, as checkboxes, then each one's details. Everything in it is
+  kept in this browser (Themes, below).
+
+The ticker:
+
+- Between the header's name and its readouts, the ticker crawls joke headlines about programming and vibe coding,
+  one at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at
+  both ends. Tips for using canopy are mixed in among the jokes, each opening with "Tip:" and without flair. Each
+  headline is picked at random from the topics turned on, never the one just shown, so a topic turns up as often as
+  its share of the headlines. A tip names a real key, command, or setting, in that command's own words; one that
+  stops being true is fixed or dropped. A new topic is a name in `TICKER_TOPICS`, its headlines, and its label in
+  Settings.
+- It is on by default. Settings sets its speed (Slow, Normal, Spicy), the seconds between headlines (0 by default),
+  and its topics (Programming, Vibe coding, Tips), a checkbox each, all on by default. Off keeps the rest for when it
+  comes back on. With every topic off the window is gone, as with the ticker off.
+- Its window is the room the header leaves between its name and its readouts. Narrower than 16rem, too narrow to read
+  a few words of a headline in, the window is gone (`MIN_WIDTH_REM` in `src/components/shell/ticker.tsx`).
+- A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
+  `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
+  ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
+  headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
+  of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
+
+Sprig:
+
+- Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, at the foot of
+  the side rail, under a speech bubble offering a tip about the page. It is off until Settings turns it on. Its tips
+  are by page (`TIPS` in `src/lib/buddy.ts`): a set for each nav section (`src/lib/sections.ts`, so a new section
+  must get its own) and for the search page, then ones for anywhere. Every one is a joke, and none opens with "Tip:",
+  which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". Clicking Sprig, or
+  the bubble's Another tip, offers the next; the bubble closes with its button or after 20 seconds, and "Don't show
+  me tips again" turns Sprig off.
+- Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands
+  at the slot's foot. A slot too short for Sprig and its bubble leaves Sprig out. The bubble keeps its room once
+  closed, so closing it never brings in a Sprig that had no room. With the mock's three working runs, that is a
+  window about 1100px tall.
+
+The empty inbox:
+
+- With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`), in the
+  accent: the one drawing in a page made for its own sake.
+
 ## Motion
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, and the header's ticker. The keyframes and utilities are in `src/index.css`.
+a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -189,13 +232,16 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
   from the window's width as its pass begins and keeps it, so the readouts beside it changing width as a tick starts
   or ends never move it back or on. At rest the window is empty, between headlines.
 - Skeletons shimmer: a light passes over them.
-- With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`). It is
-  the one drawing made for its own sake, in the accent.
+- With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`, Fun
+  below).
+- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, and its eyes blink now and
+  then and look toward the pointer.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, pulses, ripples, and the drifting leaf are hidden, and the ticker shows its first headline in place. New
+  in place, pulses, ripples, and the drifting leaf are hidden, the ticker shows its first headline in place, and
+  Sprig's eyes hold still. New
   motion goes inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
@@ -211,8 +257,9 @@ a skeleton, the empty inbox, and the header's ticker. The keyframes and utilitie
 Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent means system) and synced across tabs.
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
-inline script and checks it against the store's key. The ticker's speed, gap, and hidden topics are kept the same
-way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), the key that sends a reply under `canopy-send-key`
+inline script and checks it against the store's key. Whether the ticker is on, its speed, gap, and hidden topics are
+kept the same way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), whether Sprig is on under
+`canopy-buddy` (`src/lib/buddy.ts`), the key that sends a reply under `canopy-send-key`
 (`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
 tabs. The ticker keeps the topics left out, not those shown, so a topic added later shows until it is turned off.
 

@@ -4,16 +4,18 @@ import { TICKER_TOPICS } from '@/lib/headlines'
 import type { TickerTopic } from '@/lib/headlines'
 
 /**
- * The header ticker's settings (src/components/shell/ticker.tsx): how fast a headline crawls, how many seconds the
- * window stays empty before the next one, and which topics it leaves out. Kept in localStorage like the theme, and
- * synced across tabs.
+ * The header ticker's settings (src/components/shell/ticker.tsx): whether it shows, how fast a headline crawls, how
+ * many seconds the window stays empty before the next one, and which topics it leaves out. Kept in localStorage like
+ * the theme, and synced across tabs.
  */
 
-/** How fast a headline crawls, or `off` for no ticker. */
-export type TickerSpeed = 'off' | 'slow' | 'normal' | 'spicy'
+/** How fast a headline crawls. */
+export type TickerSpeed = 'slow' | 'normal' | 'spicy'
 
 /** The ticker's settings as stored. */
 export interface TickerSettings {
+    /** Whether the ticker shows. Off keeps the rest, for when it is turned back on. */
+    on: boolean
     /** How fast a headline crawls. */
     speed: TickerSpeed
     /** Seconds between one headline leaving and the next arriving. */
@@ -27,15 +29,15 @@ export interface TickerSettings {
 
 /** Where localStorage keeps the settings, as JSON. */
 export const STORAGE_KEY = 'canopy-ticker'
-/** The settings until the operator changes them: a normal crawl, no gap between headlines, and every topic. */
-export const DEFAULTS: TickerSettings = { speed: 'normal', gap: 0, hidden: [] }
+/** The settings until the operator changes them: on, a normal crawl, no gap between headlines, and every topic. */
+export const DEFAULTS: TickerSettings = { on: true, speed: 'normal', gap: 0, hidden: [] }
 /** The longest gap, in seconds: ten minutes. */
 export const MAX_GAP = 600
 
 /** How far a headline crawls each second, in rem, so it keeps its pace as the interface grows on a large screen. */
-export const SPEED_REM: Record<Exclude<TickerSpeed, 'off'>, number> = { slow: 2.5, normal: 4.5, spicy: 9 }
+export const SPEED_REM: Record<TickerSpeed, number> = { slow: 2.5, normal: 4.5, spicy: 9 }
 
-const SPEEDS = new Set<string>(['off', 'slow', 'normal', 'spicy'])
+const SPEEDS = new Set<string>(['slow', 'normal', 'spicy'])
 
 function isSpeed(value: unknown): value is TickerSpeed {
     return typeof value === 'string' && SPEEDS.has(value)
@@ -73,8 +75,10 @@ export function parseSettings(raw: string | null): TickerSettings {
     if (typeof stored !== 'object' || stored === null) {
         return DEFAULTS
     }
-    const { speed, gap, hidden } = stored as Record<string, unknown>
+    const { on, speed, gap, hidden } = stored as Record<string, unknown>
     return {
+        // Off was once a speed: a ticker stored at that speed is off, at the default speed for when it comes back.
+        on: typeof on === 'boolean' ? on && speed !== 'off' : speed !== 'off',
         speed: isSpeed(speed) ? speed : DEFAULTS.speed,
         gap: clampGap(gap) ?? DEFAULTS.gap,
         hidden: parseTopics(hidden),
@@ -95,7 +99,7 @@ const listeners = new Set<() => void>()
 
 function announce(next: TickerSettings): void {
     const same = next.hidden.join() === snapshot.hidden.join()
-    if (next.speed === snapshot.speed && next.gap === snapshot.gap && same) {
+    if (next.on === snapshot.on && next.speed === snapshot.speed && next.gap === snapshot.gap && same) {
         return
     }
     snapshot = next

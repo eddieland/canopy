@@ -77,13 +77,39 @@ test('the header ticker crawls one headline at a time, at the speed and gap set 
     await page.getByTestId('ticker-gap').fill('5')
     await expect(headline).toHaveCSS('padding-right', `${5 * 9 * 16}px`)
 
-    await page.getByTestId('ticker-off').click()
+    await page.getByTestId('fun-ticker').click()
     await expect(ticker).toHaveCount(0)
     await page.reload()
     await settled(page)
     await expect(ticker).toHaveCount(0)
+    await expect(page.getByTestId('fun-ticker')).not.toBeChecked()
     await expect(page.getByTestId('ticker-gap')).toHaveValue('5')
     await expect(page.getByTestId('ticker-gap')).toBeDisabled()
+    await expect(page.getByTestId('ticker-spicy')).toBeDisabled()
+
+    // Back on, it keeps the speed and gap it had.
+    await page.getByTestId('fun-ticker').click()
+    await expect(ticker).toHaveAttribute('data-speed', 'spicy')
+    await expect(page.getByTestId('ticker-gap')).toBeEnabled()
+})
+
+test('the ticker steps out of a header with no room to read a headline in, and back in when there is', async ({
+    page,
+}) => {
+    await page.goto('attention')
+    await settled(page)
+    const ticker = page.getByTestId('ticker')
+    await expect(ticker).toBeVisible()
+
+    await page.setViewportSize({ width: 700, height: 800 })
+    await expect(ticker).toHaveCount(0)
+    // Its room stays, so the readouts keep their place at the header's end.
+    const header = await page.getByTestId('app-header').boundingBox()
+    const readouts = await page.getByTestId('live-readouts').boundingBox()
+    expect(readouts === null || header === null ? 0 : readouts.x).toBeGreaterThan((header?.width ?? 0) / 2)
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(ticker).toBeVisible()
 })
 
 test('the ticker holds its headline in place when the readouts beside it change width', async ({ page }) => {

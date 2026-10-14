@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
+import { useFits } from '@/hooks/use-fits'
 import { headlinesFor, nextIndex, parseHeadline } from '@/lib/headlines'
 import type { FlairColor, FlairEffect, Headline } from '@/lib/headlines'
 import { SPEED_REM, useTickerSettings } from '@/lib/ticker-settings'
@@ -28,42 +29,56 @@ const EFFECT: Record<FlairEffect, string> = {
     shake: 'flair-shake',
 }
 
+// The narrowest window a headline is worth crawling through, in rem: a few words of `text-xs` at a time.
+const MIN_WIDTH_REM = 16
+
 /**
  * The header's news ticker: joke headlines, with tips mixed in, crawling right to left, one at a time, each picked at
  * random from the topics turned on. Each enters at the window's right edge and leaves at its left; the window then
- * stays empty for the gap set in Settings before the next arrives. It holds still under the pointer. Off, or with
- * every topic turned off, the space stays and the window is gone. Under reduced motion it shows its first headline in
- * place. A headline may carry RuneScape chat flair (`flash2:wave:`), drawn by `Flair`.
+ * stays empty for the gap set in Settings before the next arrives. It holds still under the pointer. Under reduced
+ * motion it shows its first headline in place. A headline may carry RuneScape chat flair (`flash2:wave:`), drawn by
+ * `Flair`.
+ *
+ * The window is the room the header leaves between its name and its readouts. Turned off, with every topic turned
+ * off, or in a room too narrow to read a few words in (`MIN_WIDTH_REM`), the room stays and the window is gone.
  */
 export function Ticker() {
-    const { speed, gap, hidden } = useTickerSettings()
+    const { on, speed, gap, hidden } = useTickerSettings()
     const headlines = headlinesFor(hidden)
     // Picked once per pass, never during render: a re-render mid-crawl must not swap the headline under the reader.
     // Turning a topic off shrinks the list, and the pick wraps onto what is left.
     const [pass, setPass] = useState(() => ({ n: 0, pick: nextIndex(headlines.length, -1) }))
-    if (speed === 'off' || headlines.length === 0) {
-        return <div className="min-w-0 flex-1" />
-    }
-    const index = pass.pick % headlines.length
+    const [slot, fits] = useFits(roomToRead)
+    const index = pass.pick % Math.max(headlines.length, 1)
     const headline = parseHeadline(headlines[index] ?? '')
     return (
-        <div
-            role="marquee"
-            aria-label="Headlines"
-            className="ticker-window flex min-w-0 flex-1 items-center"
-            data-testid="ticker"
-            data-speed={speed}
-        >
-            {/* Keyed on the settings too: a change restarts the crawl with the new settings rather than jumping. */}
-            <Crawl
-                key={`${pass.n}:${speed}:${gap}:${hidden.join()}`}
-                headline={headline}
-                rate={SPEED_REM[speed]}
-                gap={gap}
-                onDone={() => setPass({ n: pass.n + 1, pick: nextIndex(headlines.length, index) })}
-            />
+        <div ref={slot} className="flex min-w-0 flex-1 self-stretch">
+            {on && fits && headlines.length > 0 && (
+                <div
+                    role="marquee"
+                    aria-label="Headlines"
+                    className="ticker-window flex min-w-0 flex-1 items-center"
+                    data-testid="ticker"
+                    data-speed={speed}
+                >
+                    {/* Keyed on the settings too: a change restarts the crawl with the new settings, not a jump. */}
+                    <Crawl
+                        key={`${pass.n}:${speed}:${gap}:${hidden.join()}`}
+                        headline={headline}
+                        rate={SPEED_REM[speed]}
+                        gap={gap}
+                        onDone={() => setPass({ n: pass.n + 1, pick: nextIndex(headlines.length, index) })}
+                    />
+                </div>
+            )}
         </div>
     )
+}
+
+/** Whether the header leaves the ticker a window wide enough to read a few words in. */
+function roomToRead(slot: HTMLElement): boolean {
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+    return slot.clientWidth >= MIN_WIDTH_REM * rem
 }
 
 /**
