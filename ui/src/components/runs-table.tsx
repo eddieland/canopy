@@ -9,6 +9,7 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -57,33 +58,37 @@ function TicketRow({ group }: { group: TicketRuns }) {
     const [open, setOpen] = useState(false)
     const { latest, earlier } = group
     return (
-        <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${latest.id}`}>
-            <RunBody run={latest} ticket />
-            {earlier.length > 0 && (
-                <div className={UNDER_TITLE}>
-                    <button
-                        type="button"
-                        aria-expanded={open}
-                        onClick={() => setOpen(!open)}
-                        className={cn(
-                            'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
-                            'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
-                        )}
-                    >
-                        {open
-                            ? 'hide earlier runs'
-                            : `${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
-                    </button>
-                </div>
-            )}
-            {open && (
-                <ul className="flex flex-col gap-1.5 pt-1" data-testid={`earlier-runs-${latest.ticket_key}`}>
-                    {earlier.map((run) => (
-                        <EarlierRow key={run.id} run={run} />
-                    ))}
-                </ul>
-            )}
-        </li>
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <li className="flex flex-col gap-1 px-3 py-2.5" data-testid={`run-${latest.id}`}>
+                <RunBody run={latest} ticket />
+                {earlier.length > 0 && (
+                    <>
+                        <div className={UNDER_TITLE}>
+                            <CollapsibleTrigger
+                                className={cn(
+                                    'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
+                                    'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
+                                )}
+                            >
+                                {open
+                                    ? 'hide earlier runs'
+                                    : `${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
+                            </CollapsibleTrigger>
+                        </div>
+                        <CollapsibleContent asChild>
+                            <ul
+                                className="flex flex-col gap-1.5 pt-1"
+                                data-testid={`earlier-runs-${latest.ticket_key}`}
+                            >
+                                {earlier.map((run) => (
+                                    <EarlierRow key={run.id} run={run} />
+                                ))}
+                            </ul>
+                        </CollapsibleContent>
+                    </>
+                )}
+            </li>
+        </Collapsible>
     )
 }
 
