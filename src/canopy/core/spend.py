@@ -280,7 +280,7 @@ def _woken(rows: list[_TickRow]) -> list[Woken]:
 
 
 # Idle ticks' share of what the live ticks that ended cost: a tick still running has reported its cost and has no
-# group yet, so it is in neither part.
+# group yet, so it is in neither part. None when they cost nothing or reported nothing, as no share of zero exists.
 def _idle_share(ticks: list[TickGroup]) -> float | None:
     live = _sum([g.cost_usd for g in ticks if g.group != "dry_run"])
     idle = next((g.cost_usd for g in ticks if g.group == "idle"), None)

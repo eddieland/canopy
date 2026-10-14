@@ -2378,7 +2378,8 @@ export type components = {
             days: number;
             /**
              * Idle Share
-             * @description Idle ticks' share of the live overseer's spend, from 0 to 1; None when the overseer reported no cost.
+             * @description Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
+             *     no cost, so there is nothing to share.
              */
             idle_share: number | null;
             /**

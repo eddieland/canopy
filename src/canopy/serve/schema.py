@@ -1040,7 +1040,8 @@ class SpendBreakdown(_Model):
     unpriced: list[SpendUnpriced]
     """A row per kind of run, in a fixed order: overseer, workers, chores, reviews."""
     idle_share: float | None = None
-    """Idle ticks' share of the live overseer's spend, from 0 to 1; None when the overseer reported no cost."""
+    """Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
+    no cost, so there is nothing to share."""
     idle_ticks: list[Tick]
     """The newest live idle ticks in the window, at most 20, newest first: what idle spend bought."""
 
