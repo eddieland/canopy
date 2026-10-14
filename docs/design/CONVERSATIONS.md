@@ -385,7 +385,8 @@ Signing in:
   `--rotate`. The loop reads it once, when it starts serving.
 - The browser gets it from the operator: the sign-in page asks for it once, in a password field a password manager
   can keep. `POST {base}/api/session` compares it in constant time; a wrong one is answered after a second and logged.
-  The delay slows one client guessing in turn, not many at once, so the secret's length is what stops guessing.
+  The delay slows one client guessing in turn, not many at once, so what stops guessing is a secret no one can
+  predict: the one `canopy secret` writes, or one as random if the operator writes their own.
 - A right one sets a session cookie, `canopy_session_<port>`: `HttpOnly`, `SameSite=Strict`, path `{base}/`, for 30
   days. A cookie, not the secret held by the page, since `EventSource` sends no headers. Its value is its issue time and
   a random nonce, signed with the secret (HMAC-SHA256). The server keeps no

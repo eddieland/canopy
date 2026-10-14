@@ -499,7 +499,7 @@ export type paths = {
          * Sign in
          * @description Sign in with the listener secret: a right one sets the session cookie for 30 days, and returns its token.
          *
-         *     A wrong one is answered after a second. Guesses sent at once are not throttled; the secret's length stops them.
+         *     A wrong one is answered after a second; guesses sent at once are not slowed, so the secret must be random.
          */
         post: operations["signIn"];
         /**

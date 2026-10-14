@@ -36,7 +36,7 @@ def session(request: Request, sessions: SessionsDep) -> Session:
 async def sign_in(body: SignIn, response: Response, sessions: SessionsDep) -> Session:
     """Sign in with the listener secret: a right one sets the session cookie for 30 days, and returns its token.
 
-    A wrong one is answered after a second. Guesses sent at once are not throttled; the secret's length stops them.
+    A wrong one is answered after a second; guesses sent at once are not slowed, so the secret must be random.
     """
     if not sessions.secret_matches(body.secret):
         _log.warning("web UI sign-in refused: not the listener secret")
