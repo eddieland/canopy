@@ -261,7 +261,7 @@ export type paths = {
         };
         /**
          * Get the server's meta
-         * @description The version of canopy serving, whether the data is mock, `tracker.ticket_url`, and the branch link templates.
+         * @description The server's version, whether its data is mock, `tracker.ticket_url`, link templates, and the workspace root.
          */
         get: operations["getMeta"];
         put?: never;
@@ -1669,6 +1669,11 @@ export type components = {
              * @description canopy's version, as the installed package reports it.
              */
             version: string;
+            /**
+             * Workspace Root
+             * @description The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole.
+             */
+            workspace_root: string;
         };
         /**
          * Pause
