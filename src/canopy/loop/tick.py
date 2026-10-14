@@ -201,8 +201,9 @@ def _run_overseer(
 ) -> tuple[str | None, agent_output.Usage | None]:
     """Run `overseer_cmd` with the state block `block` as its `{prompt}`.
 
-    Output goes to `<state_dir>/ticks/<id>.log`. The session is recorded on the tick at the first event that names it,
-    so a running tick shows it; the session and cost again when the overseer ends, failed or not.
+    Output goes to `<state_dir>/ticks/<id>.log`, and the block to `<id>.prompt` beside it first, for the transcript's
+    first model call (DESIGN §22). The session is recorded on the tick at the first event that names it, so a running
+    tick shows it; the session and cost again when the overseer ends, failed or not.
 
     Returns:
         Why it failed, None on success, and what it cost if the runtime reported it.
@@ -221,6 +222,9 @@ def _run_overseer(
     argv = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, f"tick {tick_id}")
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
+    out_dir = ctx.state_dir / "ticks"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    logs.write_private(out_dir / f"{tick_id}.prompt", block)
     try:
         result = ctx.runner.run(
             argv,
@@ -233,8 +237,6 @@ def _run_overseer(
         log.exception("overseer could not start", extra={"error": str(e)})
         return str(e), None
 
-    out_dir = ctx.state_dir / "ticks"
-    out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{tick_id}.log"
     logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 

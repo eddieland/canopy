@@ -52,6 +52,49 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await expect(page).toHaveURL(/\/tickets\/ABC-099$/u)
 })
 
+test('by call, each model call opens to what it was sent and what it did, as text', async ({ page }) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const toggle = transcript.getByRole('button', { name: 'By call' })
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    const calls = transcript.getByTestId('transcript-call')
+    await expect(calls).toHaveCount(3)
+    // A call's line is what it did: its first text, then its tools by name, counted.
+    await expect(calls.nth(0)).toContainText("I'll read the ticket, then the search box. · jira_get_issue, read ×2")
+    await expect(calls.nth(2)).toContainText('stop')
+
+    // The first call was sent the prompt canopy kept, and the rest no file records; its body is built when opened.
+    const first = calls.nth(0)
+    await expect(first.getByTestId('transcript-call-body')).toHaveCount(0)
+    await first.locator('[data-slot=collapsible-trigger]').click()
+    const sent = first.getByRole('region', { name: 'call 1 input' })
+    await expect(sent).toContainText('# canopy worker: implement')
+    await expect(sent).toContainText('which no file records')
+    const wrote = first.getByRole('region', { name: 'call 1 output' })
+    await expect(wrote.getByTestId('transcript-tool')).toHaveCount(3)
+
+    // A later call was sent what the call before it asked its tools for, a failed read's error and a file's markup
+    // included, as characters.
+    const second = calls.nth(1)
+    await second.locator('[data-slot=collapsible-trigger]').click()
+    const returned = second.getByRole('region', { name: 'call 2 input' })
+    await expect(returned).toContainText('call 1’s input and output, then what its tools returned:')
+    await expect(returned).toContainText('return <input value={query}')
+    await expect(returned).toContainText('File not found:')
+    await expect(transcript.locator('input')).toHaveCount(0)
+    await expect(second.getByRole('region', { name: 'call 2 output' })).toContainText('There is no search hook yet.')
+
+    await transcript.getByRole('button', { name: 'Close all' }).click()
+    await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(0)
+    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(3)
+
+    await toggle.click()
+    await expect(transcript.getByTestId('transcript-entries')).toBeVisible()
+})
+
 test("a failed run's transcript ends in the runtime's error, and a running one's waits for it to end", async ({
     page,
 }) => {

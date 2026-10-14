@@ -3,8 +3,11 @@
 A template with OpenCode's `--format json` prints one event per line, and canopy writes them, as printed, to the run's
 log or the tick's output file. This reads the events of one session back, in the order they were printed, as entries
 a page can show: the agent's text, its reasoning, each tool call with its input and output, each model call's cost,
-and the runtime's errors. A line that is not an event, or is another session's, is left out, so stderr, a setup
-command's output, and the harness's own lines never show as the agent's.
+and the runtime's errors, each numbered by the model call it came from. A line that is not an event, or is another
+session's, is left out, so stderr, a setup command's output, and the harness's own lines never show as the agent's.
+
+`prompt` reads the message canopy gave the runtime, which it keeps beside the log (`prompt_path`): the first model
+call's input, but for the agent's definition and the runtime's own system prompt and tools, which nothing prints.
 
 Everything here is agent output: untrusted, and unbounded until it is read. So the file is read only if it is a
 regular file and not a symlink, at most `MAX_BYTES` of it; each event is validated (D026); control characters are
@@ -17,6 +20,7 @@ leaves out. The same checks hold, at most `MAX_TAIL` of it is read, and its cont
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import stat
@@ -43,6 +47,8 @@ MAX_INPUT = 5_000
 MAX_NAME = 200
 # How much of the end of a file `tail` reads: far more than an overseer prints on stderr, and little enough to send.
 MAX_TAIL = 1024 * 1024
+# How much of a prompt `prompt` reads: far more than canopy renders, a tick's state block included.
+MAX_PROMPT = 1024 * 1024
 # Milliseconds since the epoch, as OpenCode stamps events: up to the year 9999.
 _MAX_MS = 253_402_300_799_999
 
@@ -108,12 +114,17 @@ class _Error(_Part):
 
 @dataclass(frozen=True)
 class Text:
-    """A finished piece of the agent's text, or of its reasoning when `reasoning`."""
+    """A finished piece of the agent's text, or of its reasoning when `reasoning`.
+
+    Every entry's `call` is the model call it came from, counted from 1 by the runtime's `step_start` events; None
+    before the first.
+    """
 
     at: datetime | None
     text: str
     reasoning: bool = False
     cut: bool = False
+    call: int | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +139,7 @@ class ToolCall:
     output: str
     duration_ms: int | None
     cut: bool = False
+    call: int | None = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +166,7 @@ class Step:
     reason: str | None
     cost_usd: float | None
     tokens: Tokens | None
+    call: int | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +176,7 @@ class Error:
     at: datetime | None
     name: str
     message: str
+    call: int | None = None
 
 
 type Entry = Text | ToolCall | Step | Error
@@ -175,6 +189,14 @@ class Transcript:
     entries: list[Entry] = field(default_factory=list[Entry])
     truncated: bool = False
     unreadable: int = 0
+
+
+@dataclass(frozen=True)
+class Prompt:
+    """The message canopy gave the runtime: at most `MAX_PROMPT` bytes of it, `truncated` when it holds more."""
+
+    text: str
+    truncated: bool
 
 
 @dataclass(frozen=True)
@@ -225,6 +247,26 @@ def tail(path: Path) -> Tail | None:
     return Tail(conversation.printable(data.decode("utf-8", errors="replace")), size, truncated)
 
 
+def prompt_path(log: Path) -> Path:
+    """Return where canopy keeps the prompt of the session whose events are in `log`: beside it, as `<id>.prompt`."""
+    return log.with_suffix(".prompt")
+
+
+def prompt(path: Path) -> Prompt | None:
+    """Read the prompt at `path`, from its start. None for any file `read` would refuse.
+
+    Returns:
+        At most `MAX_PROMPT` bytes of it as printable text, line breaks kept, and whether it holds more; or None.
+    """
+    fd = _open(path)
+    if fd is None:
+        return None
+    with os.fdopen(fd, "rb") as f:
+        data = f.read(MAX_PROMPT + 1)
+    truncated = len(data) > MAX_PROMPT
+    return Prompt(conversation.printable(data[:MAX_PROMPT].decode("utf-8", errors="replace")), truncated)
+
+
 def _open(path: Path) -> int | None:
     """A descriptor for reading the regular file at `path`, or None when it is missing, a symlink, or anything else.
 
@@ -246,9 +288,13 @@ def _parse(lines: list[str], session_id: str, *, truncated: bool) -> Transcript:
     entries: list[Entry] = []
     chars = 0
     unreadable = 0
+    call = 0
     for line in lines:
         event = agent_output.parse_event(line)
         if event is None or event["sessionID"] != session_id:
+            continue
+        if event["type"] == "step_start":
+            call += 1
             continue
         try:
             entry = _entry(event)
@@ -261,14 +307,14 @@ def _parse(lines: list[str], session_id: str, *, truncated: bool) -> Transcript:
         if len(entries) == MAX_ENTRIES or chars + size > MAX_CHARS:
             truncated = True
             break
-        entries.append(entry)
+        entries.append(dataclasses.replace(entry, call=call or None))
         chars += size
         truncated = truncated or (isinstance(entry, Text | ToolCall) and entry.cut)
     return Transcript(entries, truncated, unreadable)
 
 
 def _entry(event: dict[str, object]) -> Entry | None:
-    """One event as an entry, or None for a type a transcript leaves out (`step_start`, and any it does not know).
+    """One event as an entry, or None for a type a transcript leaves out (any it does not know).
 
     Returns:
         A `Text`, `ToolCall`, `Step`, or `Error` for the event's type, its text cut to the bounds; or None.

@@ -645,6 +645,8 @@ class TranscriptText(_Model):
     """Whether it is the model's reasoning rather than its answer."""
     cut: bool = False
     """Cut at the transcript's bound for one text."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptTool(_Model):
@@ -668,6 +670,8 @@ class TranscriptTool(_Model):
     """How long it took, in milliseconds, if the runtime said."""
     cut: bool = False
     """Its input or output was cut at the transcript's bound for one."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptTokens(_Model):
@@ -700,6 +704,8 @@ class TranscriptStep(_Model):
     """Every kind of token together."""
     split: TranscriptTokens | None = None
     """The tokens, each kind apart."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 class TranscriptError(_Model):
@@ -713,6 +719,8 @@ class TranscriptError(_Model):
     """The error's name, as the runtime gave it."""
     message: str
     """The error's message: untrusted."""
+    call: int | None = None
+    """The model call it came from, counted from 1, or None before the runtime started the first."""
 
 
 type TranscriptEntry = Annotated[
@@ -727,6 +735,20 @@ type TranscriptStatus = Annotated[
         "`--format json`). `no_log`: the log is missing, a symlink, or not a regular file."
     ),
 ]
+
+
+class TranscriptPrompt(_Model):
+    """The message canopy gave the runtime to start the session (DESIGN §22).
+
+    The first model call's input, but for the agent's definition and the runtime's own system prompt and tools, which
+    nothing records.
+    """
+
+    text: str
+    """The prompt as canopy rendered it, control characters dropped: untrusted in part, since it quotes tickets,
+    comments, and PRs."""
+    truncated: bool = False
+    """It holds more than the bound read."""
 
 
 class Transcript(_Model):
@@ -746,6 +768,8 @@ class Transcript(_Model):
     """A bound left something out."""
     unreadable: int = 0
     """How many events did not validate."""
+    prompt: TranscriptPrompt | None = None
+    """The session's prompt, kept beside the log, if canopy kept one and it could be read."""
 
 
 class TickOutput(_Model):

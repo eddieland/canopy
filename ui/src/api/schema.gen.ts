@@ -2535,6 +2535,8 @@ export type components = {
              * @default []
              */
             entries: components["schemas"]["TranscriptEntry"][];
+            /** @description The session's prompt, kept beside the log, if canopy kept one and it could be read. */
+            prompt: components["schemas"]["TranscriptPrompt"] | null;
             /**
              * Session Id
              * @description The runtime's session, if it reported one.
@@ -2568,6 +2570,11 @@ export type components = {
              */
             at: string | null;
             /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
+            /**
              * @description What the entry is. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
@@ -2584,6 +2591,27 @@ export type components = {
             name: string;
         };
         /**
+         * TranscriptPrompt
+         * @description The message canopy gave the runtime to start the session (DESIGN §22).
+         *
+         *     The first model call's input, but for the agent's definition and the runtime's own system prompt and tools, which
+         *     nothing records.
+         */
+        TranscriptPrompt: {
+            /**
+             * Text
+             * @description The prompt as canopy rendered it, control characters dropped: untrusted in part, since it quotes tickets,
+             *     comments, and PRs.
+             */
+            text: string;
+            /**
+             * Truncated
+             * @description It holds more than the bound read.
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
          * @description `read`: the log was read, whether or not it held any of the session's events yet (a running run's reach it when the run ends). `no_session`: the runtime reported no session (a template without `--format json`). `no_log`: the log is missing, a symlink, or not a regular file.
          * @enum {string}
          */
@@ -2598,6 +2626,11 @@ export type components = {
              * @description When the runtime reported it, if it said.
              */
             at: string | null;
+            /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
             /**
              * Cost Usd
              * @description What it cost, in US dollars.
@@ -2631,6 +2664,11 @@ export type components = {
              * @description When the runtime reported it, if it said.
              */
             at: string | null;
+            /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
             /**
              * Cut
              * @description Cut at the transcript's bound for one text.
@@ -2695,6 +2733,11 @@ export type components = {
              * @description When the runtime reported it, if it said.
              */
             at: string | null;
+            /**
+             * Call
+             * @description The model call it came from, counted from 1, or None before the runtime started the first.
+             */
+            call: number | null;
             /**
              * Cut
              * @description Its input or output was cut at the transcript's bound for one.
