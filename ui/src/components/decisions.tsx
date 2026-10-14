@@ -34,7 +34,10 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                 >
                     {byTick ? <TickLink id={decision.tick_id} /> : <Subject decision={decision} />}
                     <span className="flex min-w-0 items-center gap-3">
-                        <Chip className={TONE[actionTone(decision.action)]} word={decision.action} />
+                        <Chip
+                            className={cn(TONE[actionTone(decision.action)], 'min-w-0 shrink')}
+                            word={decision.action}
+                        />
                         {/* A PR that is the row's subject is named there already. */}
                         {decision.pr && (byTick || !prIsSubject(decision)) && <PullRequestLink url={decision.pr} />}
                     </span>

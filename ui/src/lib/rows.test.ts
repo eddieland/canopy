@@ -1,15 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { ROW_COLUMNS, rowLineFrom, rowTemplate } from './rows'
+import { ROW_COLUMNS, ROW_TIERS, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
+import type { RowKind, RowTier } from './rows'
+
+const FREE = 'minmax(8rem,1fr)'
+const KINDS = Object.keys(ROW_COLUMNS) as RowKind[]
 
 describe('rowTemplate', () => {
     it('names each column before its width, and the end after the last', () => {
-        expect(rowTemplate('chore')).toBe('[name] 10rem [state] minmax(0,1fr) [findings] 8rem [end]')
+        expect(rowTemplate('chore', 'lg')).toBe(`[name] 10rem [state] ${FREE} [findings] 8rem [end]`)
+    })
+
+    it('lends a column it leaves out its name to the next one shown, or to the end', () => {
+        expect(rowTemplate('chore')).toBe(`[name] 10rem [state] ${FREE} [findings end]`)
+        expect(rowTemplate('ticket', 'lg')).toBe(`[key] 6rem [title] ${FREE} [access phase run] 8rem [age] 4rem [end]`)
     })
 
     it('gives every kind exactly one free column, so its fixed ones line up row to row', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
-            expect(columns.filter(([, width]) => width === 'minmax(0,1fr)')).toHaveLength(1)
+            expect(columns.filter(([, width]) => width === FREE)).toHaveLength(1)
         }
     })
 
@@ -21,8 +30,71 @@ describe('rowTemplate', () => {
     })
 })
 
+describe('rowTiers', () => {
+    it('lets the phase go first on a ticket, then the chip, and keeps the title', () => {
+        const tiers = rowTiers('ticket')
+        expect(tiers.get('phase')).toBe('4xl')
+        expect(tiers.get('access')).toBe('2xl')
+        expect(tiers.has('title')).toBe(false)
+    })
+
+    it('fits every column a list shows at a tier in that tier, the free one at its floor', () => {
+        // A kind with an `auto` column cannot be summed, so none of its columns may give way.
+        const giving = KINDS.filter((kind) => rowTiers(kind).size > 0)
+        expect(giving.filter((kind) => Number.isNaN(least(kind, '4xl')))).toEqual([])
+        for (const kind of giving) {
+            for (const [tier, rem] of ROW_TIERS) {
+                expect(least(kind, tier), `${kind} at @${tier}`).toBeLessThanOrEqual(rem)
+            }
+        }
+    })
+
+    it('shows every column at the widest tier, which a list in a 1280px window reaches', () => {
+        for (const kind of KINDS) {
+            expect(() => rowTiers(kind)).not.toThrow()
+        }
+    })
+
+    it('never lets the free column give way, and orders the ones that do without a tie', () => {
+        const kinds: (readonly (readonly [string, string, number?])[])[] = Object.values(ROW_COLUMNS)
+        for (const columns of kinds) {
+            const orders = columns.flatMap(([, , order]) => (order === undefined ? [] : [order]))
+            expect(new Set(orders).size).toBe(orders.length)
+            expect(columns.filter(([, width, order]) => width === FREE && order !== undefined)).toEqual([])
+        }
+    })
+})
+
+describe('rowLayout', () => {
+    it("sets a template per tier the kind's columns change at, and hides each left-out column's cell", () => {
+        const { className, style } = rowLayout('chore')
+        expect(style).toEqual({ '--row': rowTemplate('chore'), '--row-lg': rowTemplate('chore', 'lg') })
+        expect(className.split(' ')).toEqual([
+            'grid-cols-(--row)',
+            '@lg:grid-cols-(--row-lg)',
+            '@max-lg:[&>:nth-child(3)]:hidden',
+        ])
+    })
+
+    it('needs no more places than index.css lists for Tailwind', () => {
+        for (const columns of Object.values(ROW_COLUMNS)) {
+            expect(columns.length).toBeLessThanOrEqual(7)
+        }
+    })
+})
+
 describe('rowLineFrom', () => {
     it('spans from the named column to the end', () => {
         expect(rowLineFrom('title')).toBe('col-[title/end]')
     })
 })
+
+/**
+ * The least room in rem a row of `kind` takes at `tier`: its columns' least widths, its gaps, and its padding. Not a
+ * number when a column is `auto`.
+ */
+function least(kind: RowKind, tier: RowTier): number {
+    const shown = [...rowTemplate(kind, tier).matchAll(/\] (\S+)/gu)].map((match) => match[1] ?? '')
+    const widths = shown.map((width) => Number(/([\d.]+)rem/u.exec(width)?.[1] ?? Number.NaN))
+    return widths.reduce((sum, width) => sum + width, 1.5 + 0.75 * (widths.length - 1))
+}

@@ -347,7 +347,9 @@ Served by `canopy loop` from a thread (D073):
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
   it, pull requests (below), chores (below), ticks (below), and search (below). The side rail shows the runs working now
   and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the loop is doing and
-  what it costs stay in view wherever the operator is.
+  what it costs stay in view wherever the operator is. In a window narrower than 1024px, as half of a second monitor
+  is, the rail is a strip of the nav's icons whose button opens it whole over the page, and each list shows the
+  columns its width has room for, its title always (`ui/DESIGN.md`).
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config

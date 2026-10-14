@@ -421,7 +421,10 @@ function Tool({
                         )}
                     </span>
                     {verdict === 'refused' && (
-                        <Chip className="border-status-failed/40 text-status-failed" word={`refused:${guard ?? ''}`} />
+                        <Chip
+                            className="min-w-0 shrink border-status-failed/40 text-status-failed"
+                            word={`refused:${guard ?? ''}`}
+                        />
                     )}
                     {entry.cut && <Chip>cut</Chip>}
                     <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">

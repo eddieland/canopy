@@ -115,6 +115,14 @@ Rules:
   version) sits at the foot of the sticky column, so at the window's foot however long the page; in a window too
   short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer is
   Sprig's (Fun, below).
+- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
+  rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to
+  a screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop
+  the strip opens the whole rail, the same column, as a sheet over the page (`Sheet`, a Radix dialog: Escape or a click
+  outside closes it, and the focus goes back to the button). It opens in its search box, so `/` opens it too. A link
+  followed or a search sent from it closes it, since the page it covered is leaving. The breakpoint is the viewport's,
+  as the rail's place is the window's; what a list shows is its own width's (Primitives, `ListRow`). Half a monitor,
+  about 820px, is the narrowest window the UI is made for; a phone's is not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -140,9 +148,10 @@ Rules:
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`,
   on `surface-raised` at half strength with its label in `foreground` at weight 500, so it stands apart from the rows
-  under it; half, so a ghost button's hover in it still shows. The page header's trail starts in its section's color;
-  a panel's label never takes one. A page's main list is named for its page's noun (Reviews on Reviews, Attention on
-  Attention), and a chore's notes are Notes.
+  under it; half, so a ghost button's hover in it still shows. In a panel too narrow for one line, what is on its
+  right wraps under the label. The page header's trail starts in its section's color; a panel's label never takes
+  one. A page's main list is named for its page's noun (Reviews on
+  Reviews, Attention on Attention), and a chore's notes are Notes.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
   query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
   a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
@@ -315,13 +324,22 @@ list, an empty state, or a skeleton by hand.
 
 - **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
   `src/lib/rows.ts`). Each column is a named grid line and a width; every one is fixed but one free column, which
-  takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The head line's
-  cells fill the columns in order, so a cell that may be empty still renders (an empty `span`). What goes under the
-  head line, a summary, its links, an earlier run, is a **`RowLine`** that spans from a named column to the row's end
-  (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A summary starts
-  under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's status, a
-  decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same kind with a
-  `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
+  takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The free column
+  never gets under 8rem: it holds the row's name, a ticket's title, which never vanishes.
+  **A narrow list lets columns go**, in the order its kind gives them (a third entry in `ROW_COLUMNS`, 1 first), so it
+  fits its panel wherever the panel sits: half a monitor, beside a ticket's thread. A column shows from the narrowest
+  of Tailwind's container sizes (`ROW_TIERS`, `@sm` to `@4xl`) with room for it, the columns that go after it, and
+  those that never do, the free one at its floor (`rowTiers`). The `Panel` is the container (`@container`), so a list
+  goes by its own width, not the window's. The row's template at each size is a custom property, and a column left
+  out hides the cell in its place (`rowLayout`); it lends its name to the next column shown, so a `RowLine` from it
+  still has a place. Every column shows at `@4xl`, which a list in a 1280px window reaches. `index.css` lists those
+  classes for Tailwind, since they are built at run time.
+  The head line's cells fill the columns in order, so a cell that may be empty still renders (an empty `span`). What
+  goes under the head line, a summary, its links, an earlier run, is a **`RowLine`** that spans from a named column to
+  the row's end (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A
+  summary starts under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's
+  status, a decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same
+  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
@@ -380,7 +398,10 @@ list, an empty state, or a skeleton by hand.
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
 - **The tickets list**: the key, the title in the free column, the `public` or `private, started` chip, the phase (cut
-  to fit, the whole on hover), the running run or `waiting on you`, and the age.
+  to fit, the whole on hover), the running run or `waiting on you`, and the age. Narrow, the phase goes first, then
+  the chip, then the age; the run, which says when the ticket waits on the operator, goes last. A run's list lets its
+  cost go first, then its age, then its id and chips; a review's its cost, its impact, its ticket, its age, then its
+  verdict; a PR's its working run, its age, then its review. Each kind's order is in `ROW_COLUMNS`.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word
   the journal stores (a reason, an action, a kind, a phase) goes in as `word` and reads as words: underscores become
   spaces and an action's prefix takes a space after its colon (`worker failed`, `attention: needs reviewer`), while

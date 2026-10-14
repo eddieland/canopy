@@ -114,25 +114,30 @@ export function PageHeader({
     )
 }
 
-/** A bordered panel on the surface color. Give it a fixed or minimum height when its content is async. */
+/**
+ * A bordered panel on the surface color. Give it a fixed or minimum height when its content is async. It is the
+ * container its list's rows measure, so they show the columns its width has room for (`rowLayout`).
+ */
 export function Panel({ className, ...props }: ComponentProps<'section'>) {
-    return <section className={cn('rounded-md border bg-surface', className)} {...props} />
+    return <section className={cn('@container rounded-md border bg-surface', className)} {...props} />
 }
 
 /**
  * A panel's title row: a label on the left, anything on the right. Half a step toward `surface-raised`, with its label
  * in `foreground`, so it reads as the head of the rows under it; half, so a ghost button's hover in it still shows.
+ * In a panel too narrow for both on one line, what is on the right wraps under the label.
  */
 export function PanelHeader({ label, children }: { label: string; children?: ReactNode }) {
     return (
         <div
             className={cn(
-                'flex h-9 items-center justify-between gap-3 border-b bg-surface-raised/50 px-3',
+                'flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-3 py-0.5',
+                'bg-surface-raised/50',
                 // Inside the panel's border, so a radius a pixel smaller than the panel's.
                 'first:rounded-t-[calc(var(--radius-md)-1px)]',
             )}
         >
-            <span className="panel-label font-medium text-foreground">{label}</span>
+            <span className="panel-label font-medium whitespace-nowrap text-foreground">{label}</span>
             {children}
         </div>
     )
