@@ -7,6 +7,7 @@ import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { RunDot } from '@/components/status'
 import { Skeleton } from '@/components/ui/skeleton'
+import { runRef } from '@/lib/refs'
 import { railRuns } from '@/lib/run-state'
 
 // Rows the rail lists before `+N more`: with the nav and the spend, four keep the sticky part within an 800px window.
@@ -33,7 +34,7 @@ export function RailWorking() {
                             <Link
                                 to="/runs/$id"
                                 params={{ id: String(run.id) }}
-                                title={`run:${run.id} ${run.kind}`}
+                                title={`${runRef(run.id)} ${run.kind}`}
                                 className="flex flex-col gap-0.5 rounded-sm px-2.5 py-1.5 hover:bg-surface-raised"
                                 data-testid={`rail-run-${run.id}`}
                             >

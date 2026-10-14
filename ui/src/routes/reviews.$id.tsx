@@ -15,7 +15,7 @@ import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { TrackerLink } from '@/components/tracker-link'
+import { reviewRef } from '@/lib/refs'
 import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
@@ -31,7 +31,7 @@ function ReviewPage() {
     // A review run's id is a positive number, as a run's is.
     const parsed = tickId(id)
     if (parsed === null) {
-        return <NoReview title={`review ${id}`}>not a review: its id is a positive number</NoReview>
+        return <NoReview title={reviewRef(id)}>not a review: its id is a positive number</NoReview>
     }
     return <Loaded id={parsed} />
 }
@@ -39,12 +39,12 @@ function ReviewPage() {
 function Loaded({ id }: { id: number }) {
     const { data, error } = useQuery(reviewQuery(id))
     if (error instanceof ApiError && error.status === 404) {
-        return <NoReview title={`review ${id}`}>{error.message}</NoReview>
+        return <NoReview title={reviewRef(id)}>{error.message}</NoReview>
     }
     if (data === undefined) {
         return (
             <>
-                <PageHeader title={`review ${id}`} />
+                <PageHeader title={reviewRef(id)} />
                 <Panel>
                     <PanelSkeleton rows={1} className="min-h-72" />
                 </Panel>
@@ -54,7 +54,7 @@ function Loaded({ id }: { id: number }) {
     const placed = placeFindings(data.findings, data.diff !== null)
     return (
         <>
-            <PageHeader title={`review ${data.review.id}`}>
+            <PageHeader title={reviewRef(data.review.id)}>
                 canopy&apos;s adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on
                 the diff, at the lines they name.
             </PageHeader>
@@ -116,10 +116,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
             </PanelHeader>
             <Fields>
                 <Field label="pull request" mono>
-                    <TrackerLink href={review.pr_url} />
-                    <PullRequestLink url={review.pr_url} className="ml-3 font-sans">
-                        its page in canopy
-                    </PullRequestLink>
+                    <PullRequestLink url={review.pr_url} className="text-sm" />
                 </Field>
                 <Field label="ticket">
                     {review.ticket_key === null ? (
@@ -171,7 +168,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                             {detail.runs.map((r) =>
                                 r.id === review.id ? (
                                     <span key={r.id} className="readout text-xs">
-                                        review {r.id}, {shortSha(r.sha)}
+                                        {reviewRef(r.id)}, {shortSha(r.sha)}
                                     </span>
                                 ) : (
                                     <span key={r.id} className="readout text-xs text-muted-foreground">

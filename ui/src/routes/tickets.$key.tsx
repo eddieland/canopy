@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
@@ -13,6 +12,7 @@ import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
@@ -193,19 +193,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
 function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; phase: string | null }) {
     return (
         <Field label={repo ? `PR in ${repo}` : 'PR'} mono className="flex items-baseline gap-3">
-            {pr ? (
-                <a
-                    href={pr}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-flex items-center gap-1 text-accent underline-offset-4 hover:underline"
-                >
-                    {pr.replace(/^https:\/\//u, '')}
-                    <LinkOutIcon href={pr} />
-                </a>
-            ) : (
-                'none recorded'
-            )}
+            {pr ? <PullRequestLink url={pr} className="text-sm" /> : 'none recorded'}
             {phase && <span className="text-muted-foreground">{phase}</span>}
         </Field>
     )

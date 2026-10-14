@@ -1,4 +1,3 @@
-import { LinkOutIcon } from '@/components/link-out-icon'
 import type { Decision } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
@@ -36,20 +35,8 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                     {byTick ? <TickLink id={decision.tick_id} /> : <Subject decision={decision} />}
                     <span className="flex min-w-0 items-center gap-3">
                         <Chip className={TONE[actionTone(decision.action)]} word={decision.action} />
-                        {decision.pr && (
-                            <a
-                                href={decision.pr}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                                className={cn(
-                                    'inline-flex min-w-0 items-center gap-1 truncate',
-                                    'font-mono text-xs text-accent underline-offset-4 hover:underline',
-                                )}
-                            >
-                                {decision.pr.replace(/^https:\/\//u, '')}
-                                <LinkOutIcon href={decision.pr} className="shrink-0" />
-                            </a>
-                        )}
+                        {/* A PR that is the row's subject is named there already. */}
+                        {decision.pr && (byTick || !prIsSubject(decision)) && <PullRequestLink url={decision.pr} />}
                     </span>
                     {byTick && <Age at={decision.at} className="text-right" />}
                     <RichText text={decision.rationale} lines={SUMMARY_LINES} className={rowLineFrom('action')} />
@@ -74,15 +61,16 @@ function Subject({ decision }: { decision: Decision }) {
         )
     }
     if (decision.pr !== null) {
-        return (
-            <PullRequestLink url={decision.pr} className={cell}>
-                pr
-            </PullRequestLink>
-        )
+        return <PullRequestLink url={decision.pr} className={cell} />
     }
     return (
         <span className={cn(cell, 'font-mono text-xs text-muted-foreground')} title={decision.subject}>
             {decision.subject}
         </span>
     )
+}
+
+/** Whether a decision is about a PR no ticket owns, so its subject is the PR. */
+function prIsSubject(decision: Decision): boolean {
+    return decision.chore === null && decision.ticket_key === null && decision.pr !== null
 }
