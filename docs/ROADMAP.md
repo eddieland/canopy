@@ -912,7 +912,19 @@ Accept: the tests above pass. Live: a working session re-measured (MEASUREMENTS)
 without a working `canopy`, no `overseer_failed` tick that recorded its decisions, and every web-UI start picked up
 within about a minute.
 
-Status: in progress.
+Status: done 2026-10-14.
+Learned:
+
+- Closed on the operator's request, with every fakes-based test above passing, before the live re-measurement Accept
+  describes, which is SCENARIOS S34.
+- A check beat putting this canopy's launcher first on the overseer's PATH: prepending catches only a missing `canopy`,
+  not a launcher whose environment is gone, and no install names its launcher reliably (DESIGN §6 step 5).
+- The first day's churn was mostly the overseer dropping attention items it could not see. It was settled in the
+  prompt, with its open items in the state block, not by the harness holding items until resolved (DESIGN §6 step 4).
+- A config reload does not end the wait: the operator declined it (2026-10-13).
+
+Next: S34's re-measurement, with S27's overnight run, is what M29 waits on. The `loop waits` lines' `churn` says
+whether the overseer still flaps after the prompt fix; further prompt changes follow only on a pattern in `decisions`.
 
 ## M29. Probe-gated overseer
 
