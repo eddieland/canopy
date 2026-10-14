@@ -508,13 +508,12 @@ The loop's own PRs, when `reviews.agent_prs` is true:
   comment, judged like any other.
 
 Settling, when `reviews.limits.settle_minutes` is above 0: a head is reviewed only once it has been the PR's head for
-that long, so that a human reviewer, a red check, or the next push can come first, and a PR pushed to often is reviewed
-once it goes quiet. The wait starts the first time you ask for a review of that head: the CLI refuses it as
-`settling`, which is expected and needs nothing more from you. `reviews.heads` lists each PR's newest head that you
-asked about and that has no `done` review, with `settles_at`. If the PR's head is listed there with `settles_at` later
-than `now`, record `canopy review wait --pr <URL> [--ticket <KEY>] --rationale "settling until <settles_at>"` instead
-of asking again. Ask for a review of any other unreviewed head that is ready for one, listed or not; a new push is a
-new head, and its wait starts over.
+that long, so that a red check or the next push can come first, and a PR pushed to often is reviewed once it goes
+quiet. The wait starts the first time you ask for a review of that head: the CLI refuses it as `settling`, which is
+expected and needs nothing more from you. `reviews.settling` lists the heads still settling, each with its PR, `sha`,
+and `settles_at`. If the PR's head is listed there, record `canopy review wait --pr <URL> [--ticket <KEY>] --rationale
+"settling until <settles_at>"` instead of asking again. Ask for a review of any other unreviewed head that is ready
+for one; a new push is a new head, and its wait starts over.
 
 PRs that `review.query` names (`reviews.query` is set): run that query each tick, in the VCS host's own search syntax,
 and keep only open PRs of this workspace's repositories, naming the repository with `--repo`.

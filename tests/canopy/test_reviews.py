@@ -17,7 +17,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, review_diff
 from canopy.core import review_result as result
-from canopy.core.config import load
+from canopy.core.config import ConfigError, load
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, lifelock_left, pool, worker_does
@@ -418,30 +418,50 @@ def test_with_settling_off_no_head_is_recorded(reviews: CanopyEnv, treehouse_sta
     assert conn.execute("SELECT count(*) FROM review_heads").fetchone()[0] == 0
 
 
-def test_the_state_block_shows_each_prs_newest_unreviewed_head(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path
-) -> None:
+def test_a_force_push_back_to_an_earlier_head_starts_its_wait_over(reviews: CanopyEnv) -> None:
+    settling(reviews)
+    conn = journal(reviews)
+    first, second = "a" * 40, "b" * 40
+    with in_tick(conn) as tick_id:
+        assert main(review(sha=first), runner=InlineRunner()) == 1
+        seen(conn, first, 60)
+        assert main(review(sha=second), runner=InlineRunner()) == 1
+        # Back to the first commit: it is the head from now, not from an hour ago.
+        assert main(review(sha=first), runner=InlineRunner()) == 1
+        assert [d[2] for d in decisions(conn, tick_id)] == ["refused:settling"] * 3
+        assert decisions(conn, tick_id)[2][3].startswith(f"{first[:12]} was first seen now ")
+    [row] = conn.execute("SELECT pr_url, sha FROM review_heads").fetchall()
+    assert tuple(row) == (PR, first)
+
+
+def test_the_state_block_shows_the_heads_still_settling(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
     settling(reviews)
     conn = journal(reviews)
     sha, other_pr = head(git_pool), f"{PR}0"
     with in_tick(conn):
         for pr, commit in ((PR, "a" * 40), (PR, sha), (other_pr, "c" * 40)):
             assert main(review(sha=commit, pr=pr), runner=InlineRunner()) == 1  # settling
-    seen(conn, sha, 31)
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
         assert main(["tick", "--dry-run"]) == 0
     section = state_block(agent_log)["reviews"]
     assert section["limits"]["settle_minutes"] == 30
-    # Newest first; PR's older head was superseded by the push after it.
-    assert [(h["pr"], h["sha"]) for h in section["heads"]] == [(other_pr, "c" * 40), (PR, sha)]
-    settled = section["heads"][1]
-    assert db.parse_time(settled["settles_at"]) - db.parse_time(settled["seen_at"]) == timedelta(minutes=30)
-    # Once its head is reviewed, a PR is in `prs`, not `heads`.
-    with reviewer_reports(CLEAN):
-        run_inline(conn, sha=sha)
+    # PR's first head was pushed over: only the newer one is its head.
+    assert {(h["pr"], h["sha"]) for h in section["settling"]} == {(other_pr, "c" * 40), (PR, sha)}
+    listed = next(h for h in section["settling"] if h["pr"] == PR)
+    assert db.parse_time(listed["settles_at"]) - db.parse_time(listed["seen_at"]) == timedelta(minutes=30)
+    # Settled, a head is no longer listed, reviewed or not.
+    seen(conn, sha, 31)
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
         assert main(["tick", "--dry-run"]) == 0
-    assert [h["pr"] for h in state_block(agent_log)["reviews"]["heads"]] == [other_pr]
+    assert [h["pr"] for h in state_block(agent_log)["reviews"]["settling"]] == [other_pr]
+
+
+def test_settle_minutes_is_at_most_a_week(reviews: CanopyEnv) -> None:
+    settling(reviews, minutes=7 * 24 * 60)
+    assert load(reviews.root, reviews.user_file).review.settle_minutes == 7 * 24 * 60
+    settling(reviews, minutes=7 * 24 * 60 + 1)
+    with pytest.raises(ConfigError, match="settle_minutes"):
+        load(reviews.root, reviews.user_file)
 
 
 @pytest.mark.parametrize(
@@ -608,7 +628,7 @@ def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, git_pool: GitPoo
     }
     assert section["running"] == []
     # With settling off, no head is recorded.
-    assert section["heads"] == []
+    assert section["settling"] == []
     [reviewed] = section["prs"]
     assert (reviewed["url"], reviewed["ticket"], reviewed["review_runs"]) == (PR, "PROJ-1", 1)
     latest = reviewed["latest"]

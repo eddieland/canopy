@@ -660,28 +660,29 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 
 `review.settle_minutes` delays a review until the PR's head commit has been its head for that long, as canopy saw it
 (asked for by the operator, 2026-10-14). It is a debounce: a push before then is a new head, whose wait starts over, so
-a PR a worker pushes to three times in twenty minutes is reviewed once, at its last commit, not three times. And it
-gives what a review should come after time to arrive first: a human reviewer's approval or requested changes, which
-move an agent PR out of `review_pending` (§7), and the next push a red check or a reviewer's comment brings.
+a PR a worker pushes to three times in twenty minutes is reviewed once, at its last commit, not three times. The wait
+also lets a red check, or a push answering a reviewer, replace the head before it is reviewed. For an agent PR it
+delays the human ask too: `needs_reviewer` is raised from `green_unreviewed`, which comes after the review (§7), so
+only a reviewer who reads the PR unprompted gets in first.
 
 - **The clock.** The harness cannot read the PR (principle 5), so it cannot know when a commit was pushed. It knows
-  when the overseer first asked `canopy review run` for the commit: the head's `seen_at` in `review_heads`, recorded
-  once per PR and commit and never moved. The overseer asks only once a head is ready to review, its checks passed,
-  so the wait runs from the first tick that saw it green. The commit's own dates are not used: an author sets them,
-  and a rebase or a late push keeps them.
-- **The guard.** `canopy review run` records the head as seen if it is new, then refuses `settling` until `seen_at`
-  plus `settle_minutes`. So the first request for every new head is refused, once, and that refusal starts its wait.
-  Changing `settle_minutes` moves every head's settle time, since it is read when checked, not stored.
-- **The state block.** `reviews.limits.settle_minutes`, and `reviews.heads`: for each PR, its newest head seen in the
-  last 14 days that has no `done` review, at most 50, newest first, with `seen_at` and `settles_at`. The overseer
-  records `canopy review wait` for a head listed with `settles_at` still ahead, rather than be refused again, and
-  asks for a review of any other unreviewed head: listed and settled, or not listed, whether new or seen too long ago
-  to be. So the listing's bounds can cost a refusal, never a review. A failed review leaves its head listed and
-  settled, so a retry does not wait again.
+  when the overseer asked `canopy review run` for the commit: `review_heads` keeps one row per PR, the head canopy last
+  saw and since when. The overseer asks only once a head is ready to review, its checks passed, so the wait runs
+  from the first tick that saw it green. A different commit replaces the row, a force push back to an earlier one
+  included, so its wait starts over. The commit's own dates are not used: an author sets them, and a rebase or a late
+  push keeps them.
+- **The guard.** `canopy review run` records the head if it is not the one the row holds, then refuses `settling`
+  until `seen_at` plus `settle_minutes`. So the first request for every new head is refused, once, and that refusal
+  starts its wait. Changing `settle_minutes` moves every head's settle time, since it is read when checked, not
+  stored. It is at most 10080, a week.
+- **The state block.** `reviews.limits.settle_minutes`, and `reviews.settling`: the heads still settling, newest
+  first, each with its PR, commit, `seen_at`, and `settles_at`. The overseer records `canopy review wait` for a PR
+  whose head is listed, rather than be refused again, and asks for a review of any other unreviewed head that is
+  ready for one. A head that settled, or whose review failed, is not listed: the next request runs the review.
 - **Pacing.** The earliest `settles_at` still ahead is a gate (§6, Idle pacing), so an idle loop wakes when a head
-  settles, not up to `loop.idle_max_minutes` later. A PR's older heads set no gate. `settling` is a refusal that lifts
-  by itself, so a tick that records it may be idle.
-- **Off.** At 0, nothing is recorded, `heads` is empty, and no review is refused `settling`.
+  settles, not up to `loop.idle_max_minutes` later. `settling` is a refusal that lifts by itself, so a tick that
+  records it may be idle.
+- **Off.** At 0, nothing is recorded, `settling` is empty, and no review is refused `settling`.
 
 The wait is at least `settle_minutes` from the push, plus up to one tick's wait before the overseer first sees the
 head green, plus up to one more before it sees the head settled; the settle gate keeps the second short.
@@ -696,7 +697,7 @@ reviewer. A repository that wants that needs a verdict it can trust, which waits
 ### The overseer's part
 
 The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
-the heads seen and not yet reviewed (Settling, above), and for each PR reviewed in the last 14 days (at most 50,
+the heads still settling (Settling, above), and for each PR reviewed in the last 14 days (at most 50,
 newest first) its URL, linked ticket, review runs so far, the review runs the operator granted it past the policy's
 limit if any (`granted`, §22), and latest run: id, commit, status, verdict, impact, the titles of the findings the
 operator has not dismissed and how many were (`dismissed_findings`, Dismissing a finding below), start and end, and
@@ -824,8 +825,8 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
 - `review_dismissals`: review run, finding number, when dismissed, and channel; at most one row per run and number.
-- `review_heads`: PR URL, commit, and when it was first seen; one row per PR and commit (0022). Written only by a live
-  tick's `review run`, and only with `settle_minutes` above 0.
+- `review_heads`: PR URL, the head commit canopy last saw, and since when; one row per PR (0022). Written only by a
+  live tick's `review run`, and only with `settle_minutes` above 0.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=` with the run's `reviewed_at`.
 
@@ -833,8 +834,7 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 
 Recorded in TRUST_MODEL with M11's human approval: T1 (the reviewer reads the most hostile text; what it writes is
 data; `review.query` authorizes and is user-only), T3 (`max_reviews`, `max_reviews_per_day`, `max_reviews_per_pr`,
-one review per commit, and the review timeout are controls in code; `settle_minutes` was added to them later, with the
-operator's approval), T4 (the harness runs nothing from the checkout,
+one review per commit, and the review timeout are controls in code), T4 (the harness runs nothing from the checkout,
 and the reviewer's working directory is outside it), T6 (the reviewer has no write tool; what it read leaves only
 through the journal and a resumed worker's prompt), T7 (every review key user-only except
 `policy.max_reviews_per_pr`), §6 (never submit a PR review; never push to or edit a PR the loop is only reviewing),

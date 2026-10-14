@@ -54,8 +54,8 @@ class LatestReview(TypedDict):
     reviewed_at: str | None
 
 
-class SeenHead(TypedDict):
-    """A PR's newest head commit the overseer asked to review, not yet reviewed `done`, and when a review may start."""
+class SettlingHead(TypedDict):
+    """A PR's head commit the overseer asked to review, still settling, and when a review of it may start."""
 
     pr: str
     sha: str
@@ -81,7 +81,7 @@ class ReviewsSection(TypedDict):
     low_impact: bool
     limits: Limits
     running: list[RunningReview]
-    heads: list[SeenHead]
+    settling: list[SettlingHead]
     prs: list[ReviewedPR]
 
 
@@ -117,14 +117,14 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
             for r in db.running_review_runs(conn)
         ],
         # Empty with settling off: no head is recorded then (DESIGN §21, Settling).
-        "heads": [
+        "settling": [
             {
                 "pr": h.pr,
                 "sha": h.sha,
                 "seen_at": db.format_time(h.seen_at),
                 "settles_at": db.format_time(h.settles_at),
             }
-            for h in settle.heads(conn, config, now - RECENT, MAX_PRS)
+            for h in settle.settling(conn, config, now)
         ],
         "prs": prs,
     }

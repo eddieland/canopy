@@ -1,9 +1,8 @@
 """When a PR's head commit may be reviewed: once it has been seen for `review.settle_minutes` (DESIGN §21, Settling).
 
 The clock starts the first time the overseer asks `canopy review run` for a head, which it does once the head's checks
-pass, so the wait gives a human reviewer, and any later push, time to come first. A new push is a new head and starts
-over, so a PR pushed to again and again is reviewed once it goes quiet, not at every commit. A dry run reads the clock
-but never starts it (D036).
+pass. A push is a new head and starts over, so a PR pushed to again and again is reviewed once it goes quiet, not at
+every commit. A dry run reads the clock but never starts it (D036).
 """
 
 from __future__ import annotations
@@ -48,15 +47,16 @@ def see(conn: sqlite3.Connection, config: Config, pr: str, sha: str, *, record: 
     return _head(config, pr, sha, db.parse_time(stamp or at))
 
 
-def heads(conn: sqlite3.Connection, config: Config, since: datetime, limit: int) -> list[Head]:
-    """Each PR's newest head seen since `since` with no `done` review of it, newest first, at most `limit`.
+def settling(conn: sqlite3.Connection, config: Config, now: datetime) -> list[Head]:
+    """The PR heads still settling at `now`, newest first: seen less than the settle time ago and not reviewed `done`.
 
     Returns:
-        The heads, settled or not; none when settling is off.
+        The heads; none when settling is off.
     """
     if not on(config):
         return []
-    rows = db.unreviewed_review_heads(conn, db.format_time(since), limit)
+    since = db.format_time(now - timedelta(minutes=config.review.settle_minutes))
+    rows = db.review_heads_seen_after(conn, since)
     return [_head(config, str(r["pr_url"]), str(r["sha"]), db.parse_time(str(r["seen_at"]))) for r in rows]
 
 
@@ -66,10 +66,7 @@ def next_settle(conn: sqlite3.Connection, config: Config, now: datetime) -> date
     Returns:
         The earliest settle time after `now`, or None if no head is settling.
     """
-    window = timedelta(minutes=config.review.settle_minutes)
-    # Every head still settling was seen within one settle time, and a PR has one newest head. SQLite's -1 is no limit.
-    found = heads(conn, config, now - window, limit=-1)
-    return min((h.settles_at for h in found if h.settles_at > now), default=None)
+    return min((h.settles_at for h in settling(conn, config, now)), default=None)
 
 
 def _head(config: Config, pr: str, sha: str, seen_at: datetime) -> Head:

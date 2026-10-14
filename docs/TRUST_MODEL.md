@@ -187,8 +187,7 @@ Controls in code, not prompts:
 - A tick that cannot acquire the lock exits immediately.
 - Reviews: one `done` review per commit, `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
   per PR with `canopy grant`), `capacity.max_reviews_per_day`, and
-  `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`. With
-  `review.settle_minutes`, no commit is reviewed until canopy has seen it as the PR's head for that long.
+  `capacity.max_reviews` at once within `capacity.max_workers`, each with `runtime.review_timeout_minutes`.
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
