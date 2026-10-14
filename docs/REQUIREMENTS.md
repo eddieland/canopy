@@ -193,13 +193,14 @@ named skill, and either reruns the failed jobs or reports the failure real, whic
 edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
 the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
 
-### R15. Tell every worker about a passing condition, for as long as it lasts
+### R15. Tell every run that builds or reads CI about a passing condition, for as long as it lasts
 
 Gap (M35). Written down 2026-10-14. When something outside the work goes wrong for a while (an artifact registry
-outage, so CI builds will likely fail), the operator should be able to say so once and have every worker hear it until
-it is over, without editing a file and remembering to edit it back. The overseer should hear it too, so it does not
-spend `fix-ci` attempts, which never reset (D030), on failures the notice explains. `paths.worker_instructions` (§12)
-carries text to every worker today, but it never lapses, the overseer never reads it, and nothing shows it is in force.
+outage, so CI builds will likely fail), the operator should be able to say so once and have every run that builds,
+tests, or reads CI hear it until it is over, without editing a file and remembering to edit it back. The overseer
+should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on failures the notice explains.
+`paths.worker_instructions` (§12) carries text to workers today, but it never lapses, the overseer, reviews, and chores
+never read it, and nothing shows it is in force.
 
 ## Nice to have
 
