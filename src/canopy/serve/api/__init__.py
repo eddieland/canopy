@@ -3,8 +3,9 @@
 Every route but `/session` needs a signed-in session: the cookie `POST /session` sets with the listener secret. A write
 (any method but GET and HEAD) also carries the session's token, from `GET /session`, as `X-Canopy-Token`, and an
 `Origin` naming this server. Writes go through the functions the CLI's verbs call, with channel `web`, so the guards
-are the same ones; a guard's refusal is a 409 naming it. A forget also carries the ticket's key as the operator typed
-it. A reload asks the loop to read its config again, as SIGHUP does; it writes nothing.
+are the same ones; a guard's refusal is a 409 naming it, and a write that waited out another writer's hold on the
+journal a 503 saying so. A forget also carries the ticket's key as the operator typed it. A reload asks the loop to read
+its config again, as SIGHUP does; it writes nothing.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ _RESOURCES = (overview, tickets, runs, ticks, chores, loop, worktrees, events, s
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.
 TAGS: list[dict[str, Any]] = [{"name": m.TAG, "description": m.__doc__} for m in (session, *_RESOURCES)]
 
-_signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses=refs.SIGNED_IN)
+_signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses={**refs.SIGNED_IN, **refs.BUSY})
 for _resource in _RESOURCES:
     _signed_in.include_router(_resource.router)
 
