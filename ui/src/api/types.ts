@@ -17,6 +17,8 @@ export type RunState = Schemas['RunState']
 export type TicketSummary = Schemas['TicketSummary']
 /** One ticket: what `canopy show` prints, and the latest decisions about it. */
 export type TicketDetail = Schemas['TicketDetail']
+/** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
+export type CostTotal = Schemas['CostTotal']
 /** One message in a ticket's conversation. */
 export type Message = Schemas['Message']
 /** A ticket's work in one repository: its PR and phase (DESIGN §18). */

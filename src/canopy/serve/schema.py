@@ -269,6 +269,19 @@ class Decision(_Model):
     when it was recorded."""
 
 
+class CostTotal(_Model):
+    """What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran."""
+
+    runs: int
+    """How many worker and split runs it counts, a running one included."""
+    reviews: int
+    """How many review runs it counts, a running one included."""
+    priced: int
+    """How many of those runs and review runs reported a cost."""
+    cost_usd: float | None = None
+    """What they cost, in US dollars; None when none reported a cost."""
+
+
 class TicketDetail(_Model):
     """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
@@ -282,6 +295,8 @@ class TicketDetail(_Model):
     """Its conversation: the latest 100 messages, oldest first."""
     decisions: list[Decision]
     """The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it."""
+    cost: CostTotal
+    """What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace."""
 
 
 class ChoreRun(_Model):
@@ -1069,6 +1084,8 @@ class PullRequestDetail(_Model):
     """Every review run of it, newest first; each opens its own page, with its findings on its diff."""
     decisions: list[Decision]
     """The latest 20 decisions naming it, across ticks, newest first."""
+    cost: CostTotal
+    """What every run it lists cost, not only the 20 shown, and every review run of it."""
 
 
 class AttentionUpdated(_Model):

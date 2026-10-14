@@ -241,6 +241,9 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
   there is the same ticket's.
+- **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
+  as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
+  (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
 - **The tickets list** keeps every column but the title at a fixed width: the key, the title in the free width, then
   the `public` or `private, started` chip, the phase (cut to fit, the whole on hover), the running run or `waiting on
   you`, and the age. So each row's chip, phase, and run line up whatever the others say.
@@ -405,7 +408,8 @@ tabs. The ticker keeps the topics left out, not those shown, so a topic added la
   hover), its ticket and title (or `no ticket`, muted), its unit's phase as a chip, then fixed-width readouts: the run
   working it now (a pulsing dot and `run:N`), its latest review (its state's dot, `review N`, and its verdict, in the
   state's color; `not reviewed` muted), and its age. Its page: the PR's address as the title with its phase as a chip,
-  a link out under it as a ticket's page has, then panels for its fields, the runs that pushed to it (`RunsTable`), its
+  a link out under it as a ticket's page has, then panels for its fields and total cost, the runs that pushed to it
+  (`RunsTable`), its
   reviews as rows each opening the review, and its decisions. A review's page links to its PR's (`its page in
   canopy`).
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut

@@ -1178,6 +1178,32 @@ export type components = {
             restart: string[];
         };
         /**
+         * CostTotal
+         * @description What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran.
+         */
+        CostTotal: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Priced
+             * @description How many of those runs and review runs reported a cost.
+             */
+            priced: number;
+            /**
+             * Reviews
+             * @description How many review runs it counts, a running one included.
+             */
+            reviews: number;
+            /**
+             * Runs
+             * @description How many worker and split runs it counts, a running one included.
+             */
+            runs: number;
+        };
+        /**
          * Decision
          * @description One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals.
          */
@@ -1646,6 +1672,8 @@ export type components = {
          * @description One PR: the runs that pushed to it, canopy's reviews of it, and the decisions that name it.
          */
         PullRequestDetail: {
+            /** @description What every run it lists cost, not only the 20 shown, and every review run of it. */
+            cost: components["schemas"]["CostTotal"];
             /**
              * Decisions
              * @description The latest 20 decisions naming it, across ticks, newest first.
@@ -2366,6 +2394,8 @@ export type components = {
          * @description One ticket: what `canopy show` prints, and the latest decisions about it.
          */
         TicketDetail: {
+            /** @description What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace. */
+            cost: components["schemas"]["CostTotal"];
             /**
              * Decisions
              * @description The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it.

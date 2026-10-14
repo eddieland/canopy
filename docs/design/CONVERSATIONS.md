@@ -403,7 +403,7 @@ The API, under `{base}/api`:
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13) |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
-| `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, and its latest 20 decisions |
+| `GET /tickets/{key}` | one ticket: what `canopy show` prints, its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
 | `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
@@ -418,7 +418,7 @@ The API, under `{base}/api`:
 | `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, each marked whether dismissed, the diff, and the PR's other runs; 404 for no such run |
 | `POST /reviews/{id}/dismissals` | `canopy dismiss review:ID N`, or with `undo` its `--undo`: no worker or tick acts on finding `N` (§21) |
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
-| `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs, and the latest 20 decisions naming it; 404 for one nothing names |
+| `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
@@ -514,6 +514,9 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 - A rationale is the overseer's text: untrusted, its control characters dropped and its line breaks kept, where
   `canopy decisions` prints it on one line. It was cut at 2000 characters when recorded (§6).
 - A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
+- A ticket's page shows its total cost (asked for by the operator, 2026-10-14), as the runtime reported it (§13): every
+  run of it, however long ago, and every review run that names it, with how many of each it counted and how many
+  reported nothing. Not the overseer's: a tick decides for the whole workspace, so its cost is no ticket's.
 - The tick's page names where the overseer's output is, `.canopy/ticks/<id>.log`, when the file exists, and shows its
   session's transcript under the decisions (below), and the file's end as written under that (The tick's output,
   below).
@@ -536,6 +539,8 @@ gathered on its page.
   and any of its ticket's runs still working, which has no result yet; its review runs, each opening its review's page
   with its findings on its diff; and the latest 20 decisions naming it. A decision about a PR no ticket owns links to
   its page, and so does a review's page.
+- A PR's page shows its total cost, as a ticket's does: every run it lists, past the 20 shown, and every review run of
+  it. A run that pushed to two PRs, one per repository, counts on each one's page, and once on its ticket's.
 - Reads only, and not on the event stream: the UI reads them again on `tick.updated` and `ticket.changed`. Nothing
   here writes to a PR. Everything shown is journal text the other pages already serve, so T8 is unchanged.
 
